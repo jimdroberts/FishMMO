@@ -189,7 +189,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="isPlayer">Whether the character is a player character.</param>
 		/// <param name="isOwner">Whether this client owns the character: the local player, or their pet.</param>
-		/// <param name="isTargeted">Whether the character is the local player's current target.</param>
+		/// <param name="isTargeted">Whether the character is the local player's current target — hovered, or pinned to the target frame.</param>
 		/// <param name="wasVisible">Whether the nameplate is currently up, which selects the exit distance.</param>
 		/// <param name="sqrDistance">Squared distance from the local player, in metres squared.</param>
 		/// <param name="npcRange">The NPC nameplate range, in metres; zero or less means target only.</param>
@@ -212,7 +212,7 @@ namespace FishMMO.Client
 				return true;
 			}
 
-			// The target frame owns the current target's labels.
+			// The target frame owns the current target's labels, hovered or pinned.
 			if (isTargeted)
 			{
 				return true;
@@ -262,6 +262,9 @@ namespace FishMMO.Client
 		private void Sweep()
 		{
 			Transform currentTarget = targetController != null ? targetController.Current.Target : null;
+			/* The pinned character counts as targeted for as long as the pin holds: its card is
+			 * up and its nameplate belongs with it, whatever the pointer is doing. */
+			Transform pinnedTarget = targetController != null ? targetController.PinnedTarget : null;
 
 			foreach (ICharacter character in BaseCharacter.ClientCharacters.Values)
 			{
@@ -281,7 +284,8 @@ namespace FishMMO.Client
 				bool isOwner = character.NetworkObject != null && character.NetworkObject.IsOwner;
 
 				bool wasVisible = nameLabel.gameObject.activeSelf;
-				bool isTargeted = currentTarget != null && ReferenceEquals(currentTarget, character.Transform);
+				bool isTargeted = (currentTarget != null && ReferenceEquals(currentTarget, character.Transform)) ||
+					(pinnedTarget != null && ReferenceEquals(pinnedTarget, character.Transform));
 
 				bool visible = Decide(
 					isPlayer,

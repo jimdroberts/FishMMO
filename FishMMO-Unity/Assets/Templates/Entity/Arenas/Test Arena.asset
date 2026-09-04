@@ -29,6 +29,7 @@ MonoBehaviour:
     Name: 
   - TeamSize: 3
     Name: 
+    Ranked: 1
   - TeamSize: 4
     Name: 
   - TeamSize: 8

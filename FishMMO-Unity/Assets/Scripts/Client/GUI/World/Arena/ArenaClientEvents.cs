@@ -26,9 +26,35 @@ namespace FishMMO.Client
 		/// <summary>The match ended, with the full result.</summary>
 		public static event Action<ArenaResultsBroadcast> OnMatchEnded;
 
+		/// <summary>Every match state the server sent, as it arrives. The scoreboard draws from this.</summary>
+		public static event Action<ArenaMatchStateBroadcast> OnMatchState;
+
+		/// <summary>A moment of play the server announced: a kill, a flag, a warning. Feeds the kill feed.</summary>
+		public static event Action<ArenaEventBroadcast> OnArenaEvent;
+
+		/// <summary>A ready check started or moved. The HUD's prompt draws from this.</summary>
+		public static event Action<ArenaReadyCheckBroadcast> OnReadyCheck;
+
+		/// <summary>The match the local player is in, or null when not in one. Set by the HUD from the state broadcast.</summary>
+		public static ArenaMatchStateBroadcast? Current { get; private set; }
+
+		/// <summary>True while the local player is standing in an arena match they have no seat in.</summary>
+		public static bool IsSpectating { get; internal set; }
+
 		internal static void RaiseCountdownTick(int secondsRemaining) => OnCountdownTick?.Invoke(secondsRemaining);
 		internal static void RaiseMatchLive() => OnMatchLive?.Invoke();
 		internal static void RaiseTeamScored(int team, int score) => OnTeamScored?.Invoke(team, score);
 		internal static void RaiseMatchEnded(ArenaResultsBroadcast results) => OnMatchEnded?.Invoke(results);
+		internal static void RaiseArenaEvent(ArenaEventBroadcast evt) => OnArenaEvent?.Invoke(evt);
+		internal static void RaiseReadyCheck(ArenaReadyCheckBroadcast check) => OnReadyCheck?.Invoke(check);
+
+		internal static void SetMatchState(ArenaMatchStateBroadcast? state)
+		{
+			Current = state;
+			if (state.HasValue)
+			{
+				OnMatchState?.Invoke(state.Value);
+			}
+		}
 	}
 }

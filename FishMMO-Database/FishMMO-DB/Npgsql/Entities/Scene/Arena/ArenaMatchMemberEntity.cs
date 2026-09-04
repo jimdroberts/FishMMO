@@ -31,5 +31,11 @@ namespace FishMMO.Database.Npgsql.Entities
 
 		/// <summary>Mode-specific score: kills in deathmatch, captures and holds in objective modes.</summary>
 		public int Score { get; set; }
+
+		/// <summary>Seat status: 0 seated, 1 vacated (left or never arrived) and open to backfill. See <c>ArenaSeatStatus</c>.</summary>
+		public int Status { get; set; }
+
+		/// <summary>Rating change written at the end of a ranked match, or 0.</summary>
+		public int RatingDelta { get; set; }
 	}
 }

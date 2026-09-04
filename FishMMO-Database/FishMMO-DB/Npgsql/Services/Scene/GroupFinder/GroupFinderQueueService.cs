@@ -498,6 +498,8 @@ namespace FishMMO.Database.Npgsql.Services
 			int teamSize,
 			DateTime pulsedSinceUtc,
 			int maxCandidates = 128,
+			ArenaRatingSource ratingSource = default,
+			ArenaComposeOptions composeOptions = default,
 			CancellationToken cancellationToken = default)
 		{
 			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
@@ -518,6 +520,8 @@ namespace FishMMO.Database.Npgsql.Services
 				string sceneTable = dbContext.GetTableName<SceneEntity>();
 				string matchTable = dbContext.GetTableName<ArenaMatchEntity>();
 				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
+				string ratingTable = dbContext.GetTableName<ArenaRatingEntity>();
+				string attributeTable = dbContext.GetTableName<CharacterAttributeEntity>();
 
 				int waiting = (int)GroupFinderQueueStatus.Waiting;
 				int matched = (int)GroupFinderQueueStatus.Matched;
@@ -525,10 +529,22 @@ namespace FishMMO.Database.Npgsql.Services
 				int loading = (int)SceneStatus.Loading;
 				int ready = (int)SceneStatus.Ready;
 
+				/* The rating column is a scalar subquery so the row lock stays on q alone; a JOIN
+				 * would lock rating rows too under FOR UPDATE. */
+				string ratingExpr = "0";
+				if (ratingSource.SeasonID > 0)
+				{
+					ratingExpr = $"COALESCE((SELECT r.rating FROM {ratingTable} r WHERE r.season_id = {{12}} AND r.character_id = q.character_id), {{13}})";
+				}
+				else if (ratingSource.AttributeTemplateID > 0)
+				{
+					ratingExpr = $"COALESCE((SELECT a.value FROM {attributeTable} a WHERE a.character_id = q.character_id AND a.template_id = {{12}} AND a.deleted = FALSE LIMIT 1), {{13}})";
+				}
+
 				/* 1. Lock the eligible waiters, oldest first. Same locking rationale as the
 				 * dungeon former. Eligibility is the arena's: no seat in a live match, no usable
 				 * dungeon or arena instance held. Party membership is fine here. */
-				var selectSql = $@"SELECT q.id, q.character_id, q.group_id
+				var selectSql = $@"SELECT q.id, q.character_id, q.group_id, {ratingExpr} AS rating
 					FROM {TableName} q
 					WHERE q.world_server_id = {{0}}
 						AND q.scene_type = {{1}}
@@ -553,11 +569,16 @@ namespace FishMMO.Database.Npgsql.Services
 				List<ArenaCandidate> candidates = await ReadRowsAsync(
 					dbContext,
 					selectSql,
-					new object[] { worldServerId, PvPSceneType, sceneName, format, waiting, pulsedSinceUtc, GroupSceneType, pending, loading, ready, (int)ArenaMatchStatus.Ended, candidateLimit },
-					reader => new ArenaCandidate(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2)),
+					new object[]
+					{
+						worldServerId, PvPSceneType, sceneName, format, waiting, pulsedSinceUtc, GroupSceneType, pending, loading, ready, (int)ArenaMatchStatus.Ended, candidateLimit,
+						ratingSource.SeasonID > 0 ? ratingSource.SeasonID : (object)(long)ratingSource.AttributeTemplateID,
+						ratingSource.DefaultRating,
+					},
+					reader => new ArenaCandidate(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2), Convert.ToInt32(reader.GetValue(3))),
 					cancellationToken).ConfigureAwait(false);
 
-				if (!ArenaMatchComposer.TryCompose(candidates, teamCount, teamSize, out List<ArenaSeat> seats))
+				if (!ArenaMatchComposer.TryCompose(candidates, teamCount, teamSize, composeOptions, out List<ArenaSeat> seats))
 				{
 					return ArenaMatchFormedData.None;
 				}
@@ -615,8 +636,8 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken).ConfigureAwait(false);
 
 				// 4. The seats.
-				var memberSql = $@"INSERT INTO {memberTable} (match_id, character_id, team, kills, deaths, score)
-					SELECT {{0}}, x.character_id, x.team, 0, 0, 0
+				var memberSql = $@"INSERT INTO {memberTable} (match_id, character_id, team, kills, deaths, score, status, rating_delta)
+					SELECT {{0}}, x.character_id, x.team, 0, 0, 0, 0, 0
 					FROM UNNEST({{1}}, {{2}}) AS x(character_id, team)";
 
 				int seated = await dbContext.Database.ExecuteSqlRawAsync(
@@ -649,6 +670,135 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return new ArenaMatchFormedData(true, matchId, instanceId.Value, seats);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<ArenaBackfillData>> TryBackfillArenaSeatAsync(
+			long worldServerId,
+			string sceneName,
+			int format,
+			DateTime pulsedSinceUtc,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName) || format < 0)
+			{
+				return DatabaseResult<ArenaBackfillData>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID, scene name and format are required.");
+			}
+
+			var result = await ExecuteTransactionAsync(async dbContext =>
+			{
+				string sceneTable = dbContext.GetTableName<SceneEntity>();
+				string matchTable = dbContext.GetTableName<ArenaMatchEntity>();
+				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
+
+				int waiting = (int)GroupFinderQueueStatus.Waiting;
+				int matched = (int)GroupFinderQueueStatus.Matched;
+				int pending = (int)SceneStatus.Pending;
+				int loading = (int)SceneStatus.Loading;
+				int ready = (int)SceneStatus.Ready;
+				int seated = (int)ArenaSeatStatus.Seated;
+				var now = DateTime.UtcNow;
+
+				/* 1. The neediest live match of this arena and format with an open window: the team
+				 * with the fewest seated players. Locked, so two servers cannot fill the same seat. */
+				var matchSql = $@"SELECT am.id, am.instance_id, t.team
+					FROM {matchTable} am
+					JOIN LATERAL (
+						SELECT g.team, COUNT(m.id) FILTER (WHERE m.status = {{4}}) AS seated
+						FROM generate_series(0, am.team_count - 1) AS g(team)
+						LEFT JOIN {memberTable} m ON m.match_id = am.id AND m.team = g.team
+						GROUP BY g.team
+						ORDER BY seated ASC, g.team ASC
+						LIMIT 1
+					) t ON TRUE
+					JOIN {sceneTable} s ON s.id = am.instance_id AND s.scene_status = {{6}}
+					WHERE am.world_server_id = {{0}}
+						AND am.scene_name = {{1}}
+						AND am.format = {{2}}
+						AND am.status = {{3}}
+						AND am.backfill_until_utc IS NOT NULL AND am.backfill_until_utc > {{5}}
+						AND t.seated < am.team_size
+					ORDER BY am.time_created
+					LIMIT 1
+					FOR UPDATE OF am";
+
+				var openings = await ReadRowsAsync(
+					dbContext,
+					matchSql,
+					new object[] { worldServerId, sceneName, format, (int)ArenaMatchStatus.Live, seated, now, ready },
+					reader => (matchId: reader.GetInt64(0), instanceId: reader.GetInt64(1), team: reader.GetInt32(2)),
+					cancellationToken).ConfigureAwait(false);
+
+				if (openings.Count == 0)
+				{
+					return ArenaBackfillData.None;
+				}
+
+				var opening = openings[0];
+
+				/* 2. The longest-waiting solo who is eligible and was never in this match (a
+				 * deserter does not backfill their own seat; the reconnect path reseats them). Solo
+				 * only: a group must play together and a single vacated seat cannot hold it. */
+				var waiterSql = $@"SELECT q.id, q.character_id
+					FROM {TableName} q
+					WHERE q.world_server_id = {{0}}
+						AND q.scene_type = {{1}}
+						AND q.scene_name = {{2}}
+						AND q.difficulty = {{3}}
+						AND q.status = {{4}}
+						AND q.group_id = 0
+						AND q.last_pulse >= {{5}}
+						AND NOT EXISTS (
+							SELECT 1 FROM {sceneTable} s
+							WHERE s.character_id = q.character_id
+								AND s.world_server_id = {{0}}
+								AND s.scene_type IN ({{6}}, {{1}})
+								AND s.scene_status IN ({{7}}, {{8}}, {{9}}))
+						AND NOT EXISTS (
+							SELECT 1 FROM {memberTable} m
+							JOIN {matchTable} am ON am.id = m.match_id
+							WHERE m.character_id = q.character_id AND (am.status < {{10}} OR am.id = {{11}}))
+					ORDER BY q.time_created, q.id
+					LIMIT 1
+					FOR UPDATE OF q";
+
+				var waiters = await ReadRowsAsync(
+					dbContext,
+					waiterSql,
+					new object[] { worldServerId, PvPSceneType, sceneName, format, waiting, pulsedSinceUtc, GroupSceneType, pending, loading, ready, (int)ArenaMatchStatus.Ended, opening.matchId },
+					reader => (rowId: reader.GetInt64(0), characterId: reader.GetInt64(1)),
+					cancellationToken).ConfigureAwait(false);
+
+				if (waiters.Count == 0)
+				{
+					return ArenaBackfillData.None;
+				}
+
+				var waiter = waiters[0];
+
+				// 3. The seat, then the queue row bound to the instance.
+				int inserted = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"INSERT INTO {memberTable} (match_id, character_id, team, kills, deaths, score, status, rating_delta)
+					VALUES ({{0}}, {{1}}, {{2}}, 0, 0, 0, {{3}}, 0)",
+					new object[] { opening.matchId, waiter.characterId, opening.team, seated },
+					cancellationToken).ConfigureAwait(false);
+
+				int claimed = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName} SET status = {{0}}, party_id = 0, instance_id = {{1}}, time_matched = {{2}} WHERE id = {{3}} AND status = {{4}}",
+					new object[] { matched, opening.instanceId, now, waiter.rowId, waiting },
+					cancellationToken).ConfigureAwait(false);
+
+				if (inserted != 1 || claimed != 1)
+				{
+					throw new DatabaseException(
+						$"Arena backfill of match {opening.matchId} seated {inserted} and claimed {claimed} rows. Rolling back.",
+						errorCode: DatabaseErrorCodes.StaleState);
+				}
+
+				return new ArenaBackfillData(true, opening.matchId, opening.instanceId, waiter.characterId, opening.team);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using UnityEngine;
@@ -7,12 +7,24 @@ using UnityEngine.UIElements;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit target frame. Shows the current target's name (faction-coloured), a health bar,
-	/// its faction standing, and strips of the buffs and debuffs the SERVER has chosen to show
-	/// observers. The overhead 3D label, outline and faction colouring are rendering-agnostic and
-	/// driven from here rather than from the visual tree.
+	/// UI Toolkit target frame: two cards side by side. The HOVER card follows the pointer, as
+	/// the frame always has; the PINNED card holds a character the player chose to track and stays
+	/// up until they release it, it dies, it despawns or it leaves range. Each card shows its
+	/// target's name (faction-coloured), a health bar, its faction standing, and strips of the
+	/// buffs and debuffs the SERVER has chosen to show observers. The overhead 3D label, outline
+	/// and faction colouring are rendering-agnostic and driven from here rather than from the
+	/// visual tree.
 	/// </summary>
 	/// <remarks>
+	/// <para>
+	/// <b>Two cards, one panel.</b> Action combat does not want a sticky target: abilities go
+	/// where the player aims, and the hover frame is the readout for that. What players asked
+	/// for is a way to keep ONE opponent's health and debuffs on screen while the pointer sweeps
+	/// across everyone else in the fight — so the pin is a second card, not a change to the
+	/// first. Nothing gameplay-authoritative reads either card. The two never show the same
+	/// character: when the pointer rests on the pinned character the hover card stands down,
+	/// because two identical cards say nothing that one does not.
+	/// </para>
 	/// <para>
 	/// <b>Change-driven.</b> <c>TargetController</c> re-raises <c>OnUpdateTarget</c> twenty times a
 	/// second for as long as the pointer rests on something, and this panel treated every one of
@@ -20,13 +32,15 @@ namespace FishMMO.Client
 	/// concatenations, a full reconcile of the buff strip and — worst — a destroy/recreate cycle of
 	/// the overhead 3D label, twenty times a second, for a target that had not changed. Everything
 	/// that depends only on WHICH target is resolved once, on the change; the update path only
-	/// re-reads the values that actually move.
+	/// re-reads the values that actually move. The pinned card gets no update event at all, so
+	/// its health is re-read from <see cref="OnTick"/> — an integer comparison per frame.
 	/// </para>
 	/// <para>
-	/// <b>Model / view split.</b> The displayed values live in fields; the elements belong to one
-	/// visual tree and are rebuilt from those fields in <c>OnAfterShow</c> / <c>OnAfterStarting</c>.
-	/// <c>UIDocument</c> re-clones the UXML on every enable, so a frame that wrote its content
-	/// before <c>Show()</c> — or cached elements across a hide/show — comes back blank.
+	/// <b>Model / view split.</b> The displayed values live in each card's fields; the elements
+	/// belong to one visual tree and are rebuilt from those fields in <c>OnAfterShow</c> /
+	/// <c>OnAfterStarting</c>. <c>UIDocument</c> re-clones the UXML on every enable, so a frame
+	/// that wrote its content before <c>Show()</c> — or cached elements across a hide/show — comes
+	/// back blank.
 	/// </para>
 	/// </remarks>
 	public class UITKTarget : UITKCharacterControl
@@ -34,28 +48,34 @@ namespace FishMMO.Client
 		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
 		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
 
-		/// <summary>Name of the target name label element.</summary>
+		/// <summary>Name of the card that follows the pointer.</summary>
+		private const string HOVER_CARD_NAME = "target-card-hover";
+
+		/// <summary>Name of the card that holds the pinned character.</summary>
+		private const string PINNED_CARD_NAME = "target-card-pinned";
+
+		/// <summary>Name of a card's target name label element.</summary>
 		private const string NAME_LABEL_NAME = "target-name";
 
-		/// <summary>Name of the target level badge element.</summary>
+		/// <summary>Name of a card's target level badge element.</summary>
 		private const string LEVEL_LABEL_NAME = "target-level";
 
-		/// <summary>Name of the target faction badge element.</summary>
+		/// <summary>Name of a card's target faction badge element.</summary>
 		private const string FACTION_LABEL_NAME = "target-faction";
 
-		/// <summary>Name of the target health fill element.</summary>
+		/// <summary>Name of a card's target health fill element.</summary>
 		private const string HEALTH_FILL_NAME = "target-health-fill";
 
-		/// <summary>Name of the target health bar container element.</summary>
+		/// <summary>Name of a card's target health bar container element.</summary>
 		private const string HEALTH_BAR_NAME = "target-health";
 
-		/// <summary>Name of the target health value label element.</summary>
+		/// <summary>Name of a card's target health value label element.</summary>
 		private const string HEALTH_TEXT_NAME = "target-health-text";
 
-		/// <summary>Name of the container that holds the target's buff icons.</summary>
+		/// <summary>Name of the container that holds a card's buff icons.</summary>
 		private const string BUFF_LIST_NAME = "target-buff-list";
 
-		/// <summary>Name of the container that holds the target's debuff icons.</summary>
+		/// <summary>Name of the container that holds a card's debuff icons.</summary>
 		private const string DEBUFF_LIST_NAME = "target-debuff-list";
 
 		/// <summary>USS class applied to each generated target buff group root.</summary>
@@ -84,7 +104,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Visual elements backing a single target buff icon. Pooled — never destroyed on a target
-		/// swap, only detached and re-bound.
+		/// swap, only detached and re-bound. The pool is shared by both cards.
 		/// </summary>
 		private sealed class BuffIcon
 		{
@@ -102,92 +122,168 @@ namespace FishMMO.Client
 			public bool IsDebuff;
 		}
 
-		/// <summary>Cached reference to the target name label element.</summary>
-		private Label nameLabel;
-		/// <summary>Cached reference to the target level badge element.</summary>
-		private Label levelLabel;
-		/// <summary>Cached reference to the target faction badge element.</summary>
-		private Label factionLabel;
-		/// <summary>Cached reference to the target health fill element.</summary>
-		private VisualElement healthFill;
-		/// <summary>Cached reference to the target health bar container element.</summary>
-		private VisualElement healthBar;
-		/// <summary>Cached reference to the target health value label element.</summary>
-		private Label healthText;
-		/// <summary>Cached reference to the target buff list container element.</summary>
-		private VisualElement buffList;
-		/// <summary>Cached reference to the target debuff list container element.</summary>
-		private VisualElement debuffList;
-
-		/// <summary>Overhead 3D label displayed above the target.</summary>
-		private UITKWorldLabel targetLabel;
-
-		#region Resolved target (recomputed only when the target actually changes)
-
-		/// <summary>The transform currently framed.</summary>
-		private Transform currentTarget;
-		/// <summary>The framed target's attribute controller, or null.</summary>
-		private ICharacterAttributeController targetAttributes;
-		/// <summary>The framed target's buff controller, or null.</summary>
-		private IBuffController targetBuffs;
-		/// <summary>The framed target's character component, or null.</summary>
-		private ICharacter targetCharacter;
-		/// <summary>The framed target's interactable component, or null.</summary>
-		private IInteractable targetInteractable;
-
-		#endregion
-
-		#region Displayed values (model)
-
-		/// <summary>The target's display name without the health annotation.</summary>
-		private string displayName = string.Empty;
-		/// <summary>The colour the name is drawn in, from faction standing.</summary>
-		private Color displayColor = Color.white;
-		/// <summary>The faction standing badge text, or empty when unknown.</summary>
-		private string displayFaction = string.Empty;
-		/// <summary>True when the target has a health resource to show.</summary>
-		private bool hasHealth;
-		/// <summary>The health bar fill fraction.</summary>
-		private float healthFraction;
-		/// <summary>The health value text, e.g. "412/900".</summary>
-		private string healthValueText = string.Empty;
-
 		/// <summary>
-		/// The last health numbers rendered, so the string is only rebuilt when they change.
+		/// One card of the frame: the elements it draws into, the target it has resolved, and the
+		/// values it shows. The hover and pinned cards are two instances of this with different
+		/// drivers; everything that renders a card is written once against it.
 		/// </summary>
-		/// <remarks>
-		/// The old frame rebuilt <c>"{CurrentValue}/{FinalValue}"</c> and appended it to the name
-		/// every update tick — two to three string allocations twenty times a second per hovered
-		/// target, all of them identical to the last set.
-		/// </remarks>
-		private int lastHealthCurrent = int.MinValue;
-		/// <summary>The last maximum health rendered.</summary>
-		private int lastHealthMax = int.MinValue;
+		private sealed class TargetCard
+		{
+			/// <summary>Name of the card's root element in the UXML.</summary>
+			public readonly string RootName;
 
-		#endregion
+			/// <summary>True for the card that holds the pinned character.</summary>
+			public readonly bool IsPinned;
 
-		#region Buff icon pool
+			public TargetCard(string rootName, bool isPinned)
+			{
+				RootName = rootName;
+				IsPinned = isPinned;
+			}
 
-		/// <summary>Icons currently attached to the buff strip.</summary>
-		private readonly List<BuffIcon> activeBuffIcons = new List<BuffIcon>();
-		/// <summary>Icons currently attached to the debuff strip.</summary>
-		private readonly List<BuffIcon> activeDebuffIcons = new List<BuffIcon>();
-		/// <summary>Detached icons available for reuse.</summary>
+			#region Elements (belong to the current visual tree)
+
+			/// <summary>The card's root element.</summary>
+			public VisualElement Root;
+			/// <summary>Cached reference to the name label element.</summary>
+			public Label NameLabel;
+			/// <summary>Cached reference to the level badge element.</summary>
+			public Label LevelLabel;
+			/// <summary>Cached reference to the faction badge element.</summary>
+			public Label FactionLabel;
+			/// <summary>Cached reference to the health fill element.</summary>
+			public VisualElement HealthFill;
+			/// <summary>Cached reference to the health bar container element.</summary>
+			public VisualElement HealthBar;
+			/// <summary>Cached reference to the health value label element.</summary>
+			public Label HealthText;
+			/// <summary>Cached reference to the buff list container element.</summary>
+			public VisualElement BuffList;
+			/// <summary>Cached reference to the debuff list container element.</summary>
+			public VisualElement DebuffList;
+
+			#endregion
+
+			#region Resolved target (recomputed only when the target actually changes)
+
+			/// <summary>The transform this card frames.</summary>
+			public Transform Target;
+			/// <summary>The framed target's attribute controller, or null.</summary>
+			public ICharacterAttributeController Attributes;
+			/// <summary>The framed target's buff controller, or null.</summary>
+			public IBuffController Buffs;
+			/// <summary>The framed target's character component, or null.</summary>
+			public ICharacter Character;
+			/// <summary>The framed target's interactable component, or null.</summary>
+			public IInteractable Interactable;
+
+			#endregion
+
+			#region Displayed values (model)
+
+			/// <summary>The target's display name without the health annotation.</summary>
+			public string DisplayName = string.Empty;
+			/// <summary>The colour the name is drawn in, from faction standing.</summary>
+			public Color DisplayColor = Color.white;
+			/// <summary>The faction standing badge text, or empty when unknown.</summary>
+			public string DisplayFaction = string.Empty;
+			/// <summary>True when the target has a health resource to show.</summary>
+			public bool HasHealth;
+			/// <summary>The health bar fill fraction.</summary>
+			public float HealthFraction;
+			/// <summary>The health value text, e.g. "412/900".</summary>
+			public string HealthValueText = string.Empty;
+
+			/// <summary>
+			/// The last health numbers rendered, so the string is only rebuilt when they change.
+			/// </summary>
+			/// <remarks>
+			/// The old frame rebuilt <c>"{CurrentValue}/{FinalValue}"</c> and appended it to the
+			/// name every update tick — two to three string allocations twenty times a second per
+			/// hovered target, all of them identical to the last set.
+			/// </remarks>
+			public int LastHealthCurrent = int.MinValue;
+			/// <summary>The last maximum health rendered.</summary>
+			public int LastHealthMax = int.MinValue;
+
+			#endregion
+
+			#region Buff strip
+
+			/// <summary>Icons currently attached to the buff strip.</summary>
+			public readonly List<BuffIcon> ActiveBuffIcons = new List<BuffIcon>();
+			/// <summary>Icons currently attached to the debuff strip.</summary>
+			public readonly List<BuffIcon> ActiveDebuffIcons = new List<BuffIcon>();
+
+			/// <summary>
+			/// The observed buff list this card last rendered, kept so a target swap can be drawn
+			/// after a tree rebuild without waiting for the next server push.
+			/// </summary>
+			public readonly List<ObservedBuffEntry> ObservedBuffModel = new List<ObservedBuffEntry>();
+
+			/// <summary>Unscaled time the observed list was captured, for the local countdown.</summary>
+			public float ObservedBuffCaptureTime;
+
+			#endregion
+
+			/// <summary>Overhead 3D label displayed above a framed interactable.</summary>
+			public UITKWorldLabel OverheadLabel;
+
+			/// <summary>
+			/// True while a target is resolved. Reference identity on purpose: a target that was
+			/// destroyed rather than released still counts until the card is released, so the
+			/// release path runs exactly once for it.
+			/// </summary>
+			public bool HasTarget => !ReferenceEquals(Target, null);
+
+			/// <summary>Queries this card's elements from a freshly cloned tree.</summary>
+			/// <param name="panelRoot">The panel's root element.</param>
+			public void QueryElements(VisualElement panelRoot)
+			{
+				Root = panelRoot?.Q(RootName);
+				NameLabel = Root?.Q<Label>(NAME_LABEL_NAME);
+				LevelLabel = Root?.Q<Label>(LEVEL_LABEL_NAME);
+				FactionLabel = Root?.Q<Label>(FACTION_LABEL_NAME);
+				HealthFill = Root?.Q(HEALTH_FILL_NAME);
+				HealthBar = Root?.Q(HEALTH_BAR_NAME);
+				HealthText = Root?.Q<Label>(HEALTH_TEXT_NAME);
+				BuffList = Root?.Q(BUFF_LIST_NAME);
+				DebuffList = Root?.Q(DEBUFF_LIST_NAME);
+			}
+
+			/// <summary>Drops the resolved target and every displayed value.</summary>
+			public void ClearModel()
+			{
+				Target = null;
+				Attributes = null;
+				Buffs = null;
+				Character = null;
+				Interactable = null;
+
+				DisplayName = string.Empty;
+				DisplayFaction = string.Empty;
+				DisplayColor = Color.white;
+				HasHealth = false;
+				HealthFraction = 0.0f;
+				HealthValueText = string.Empty;
+				LastHealthCurrent = int.MinValue;
+				LastHealthMax = int.MinValue;
+
+				ObservedBuffModel.Clear();
+			}
+		}
+
+		/// <summary>The card that follows the pointer.</summary>
+		private readonly TargetCard hoverCard = new TargetCard(HOVER_CARD_NAME, isPinned: false);
+
+		/// <summary>The card that holds the pinned character.</summary>
+		private readonly TargetCard pinnedCard = new TargetCard(PINNED_CARD_NAME, isPinned: true);
+
+		/// <summary>Detached icons available for reuse by either card.</summary>
 		private readonly List<BuffIcon> iconPool = new List<BuffIcon>();
 
 		/// <summary>
-		/// The observed buff list this panel last rendered, kept so a target swap can be drawn
-		/// after a tree rebuild without waiting for the next server push.
-		/// </summary>
-		private readonly List<ObservedBuffEntry> observedBuffModel = new List<ObservedBuffEntry>();
-
-		/// <summary>Unscaled time the observed list was captured, for the local countdown.</summary>
-		private float observedBuffCaptureTime;
-
-		#endregion
-
-		/// <summary>
-		/// Queries the target frame elements and subscribes to the observed-buff push.
+		/// Queries both cards' elements and subscribes to the observed-buff push.
 		/// </summary>
 		/// <remarks>
 		/// Re-runs on every tree rebuild. The pooled icons belong to the tree that was just
@@ -196,39 +292,27 @@ namespace FishMMO.Client
 		/// </remarks>
 		public override void OnStarting()
 		{
-			activeBuffIcons.Clear();
-			activeDebuffIcons.Clear();
+			hoverCard.ActiveBuffIcons.Clear();
+			hoverCard.ActiveDebuffIcons.Clear();
+			pinnedCard.ActiveBuffIcons.Clear();
+			pinnedCard.ActiveDebuffIcons.Clear();
 			iconPool.Clear();
 
-			nameLabel = null;
-			levelLabel = null;
-			factionLabel = null;
-			healthFill = null;
-			healthBar = null;
-			healthText = null;
-			buffList = null;
-			debuffList = null;
-
 			VisualElement root = Root;
-			if (root != null)
-			{
-				nameLabel = root.Q<Label>(NAME_LABEL_NAME);
-				levelLabel = root.Q<Label>(LEVEL_LABEL_NAME);
-				factionLabel = root.Q<Label>(FACTION_LABEL_NAME);
-				healthFill = root.Q(HEALTH_FILL_NAME);
-				healthBar = root.Q(HEALTH_BAR_NAME);
-				healthText = root.Q<Label>(HEALTH_TEXT_NAME);
-				buffList = root.Q(BUFF_LIST_NAME);
-				debuffList = root.Q(DEBUFF_LIST_NAME);
-			}
+			hoverCard.QueryElements(root);
+			pinnedCard.QueryElements(root);
 
 			/* There is no level anywhere in the character model — no column, no attribute template,
 			 * no broadcast field — so the badge has nothing to show. Hidden rather than left as a
 			 * permanently empty box holding layout open. It is wired and ready for the day a level
-			 * exists; SetLevel is the single place to fill it. */
-			if (levelLabel != null)
+			 * exists. */
+			if (hoverCard.LevelLabel != null)
 			{
-				levelLabel.style.display = DisplayStyle.None;
+				hoverCard.LevelLabel.style.display = DisplayStyle.None;
+			}
+			if (pinnedCard.LevelLabel != null)
+			{
+				pinnedCard.LevelLabel.style.display = DisplayStyle.None;
 			}
 
 			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
@@ -236,13 +320,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Releases the observed-buff subscription and the overhead label.
+		/// Releases the observed-buff subscription and the overhead labels.
 		/// </summary>
 		public override void OnDestroying()
 		{
 			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
 
-			ReleaseTargetLabel();
+			ReleaseOverheadLabel(hoverCard);
+			ReleaseOverheadLabel(pinnedCard);
 
 			base.OnDestroying();
 		}
@@ -261,9 +346,7 @@ namespace FishMMO.Client
 			if (Character != null &&
 				Character.TryGet(out ITargetController targetController))
 			{
-				targetController.OnChangeTarget -= TargetController_OnChangeTarget;
-				targetController.OnUpdateTarget -= TargetController_OnUpdateTarget;
-				targetController.OnClearTarget -= TargetController_OnClearTarget;
+				Unsubscribe(targetController);
 			}
 		}
 
@@ -276,14 +359,12 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out ITargetController targetController))
 			{
-				targetController.OnChangeTarget += TargetController_OnChangeTarget;
-				targetController.OnUpdateTarget += TargetController_OnUpdateTarget;
-				targetController.OnClearTarget += TargetController_OnClearTarget;
+				Subscribe(targetController);
 			}
 		}
 
 		/// <summary>
-		/// Unsubscribes from the target controller and releases the overhead label.
+		/// Unsubscribes from the target controller and releases both cards.
 		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
@@ -292,20 +373,40 @@ namespace FishMMO.Client
 			if (Character != null &&
 				Character.TryGet(out ITargetController targetController))
 			{
-				targetController.OnChangeTarget -= TargetController_OnChangeTarget;
-				targetController.OnUpdateTarget -= TargetController_OnUpdateTarget;
-				targetController.OnClearTarget -= TargetController_OnClearTarget;
+				Unsubscribe(targetController);
 			}
 
-			ClearTarget(null);
+			ReleaseCard(hoverCard, null);
+			ReleaseCard(pinnedCard, null);
 		}
 
 		/// <inheritdoc />
 		public override void OnQuitToLogin()
 		{
-			ClearTarget(null);
+			ReleaseCard(hoverCard, null);
+			ReleaseCard(pinnedCard, null);
 
 			base.OnQuitToLogin();
+		}
+
+		/// <summary>Attaches every handler this panel needs on the controller.</summary>
+		private void Subscribe(ITargetController targetController)
+		{
+			targetController.OnChangeTarget += TargetController_OnChangeTarget;
+			targetController.OnUpdateTarget += TargetController_OnUpdateTarget;
+			targetController.OnClearTarget += TargetController_OnClearTarget;
+			targetController.OnPinTarget += TargetController_OnPinTarget;
+			targetController.OnUnpinTarget += TargetController_OnUnpinTarget;
+		}
+
+		/// <summary>Detaches every handler <see cref="Subscribe"/> attached.</summary>
+		private void Unsubscribe(ITargetController targetController)
+		{
+			targetController.OnChangeTarget -= TargetController_OnChangeTarget;
+			targetController.OnUpdateTarget -= TargetController_OnUpdateTarget;
+			targetController.OnClearTarget -= TargetController_OnClearTarget;
+			targetController.OnPinTarget -= TargetController_OnPinTarget;
+			targetController.OnUnpinTarget -= TargetController_OnUnpinTarget;
 		}
 
 		/// <inheritdoc />
@@ -323,25 +424,46 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Animates the buff strips' remaining-duration fills.
+		/// Re-reads the pinned card's health and animates both cards' remaining-duration fills.
 		/// </summary>
 		/// <remarks>
-		/// The server pushes an observed-buff list only when the SET changes, so the countdown
-		/// between pushes is local. The entries carry the seconds remaining at send time; this
-		/// subtracts the time elapsed since. Skipped entirely when nothing is on screen.
+		/// The pinned card has no update event: the controller only re-reports what the pointer
+		/// is on. Its health is therefore polled here, and <see cref="RefreshHealth"/> makes that
+		/// two integer comparisons per frame until a number actually moves. The buff countdown is
+		/// local for both cards — the server pushes an observed-buff list only when the SET
+		/// changes, so the entries carry the seconds remaining at send time and this subtracts
+		/// the time elapsed since. Skipped entirely when nothing is on screen.
 		/// </remarks>
 		protected override void OnTick()
 		{
-			if (!Visible || observedBuffModel.Count == 0)
+			if (!Visible)
 			{
 				return;
 			}
 
-			float elapsed = Time.unscaledTime - observedBuffCaptureTime;
-
-			for (int i = 0; i < observedBuffModel.Count; ++i)
+			if (pinnedCard.HasTarget && RefreshHealth(pinnedCard))
 			{
-				ObservedBuffEntry entry = observedBuffModel[i];
+				ApplyHealthElements(pinnedCard);
+			}
+
+			TickBuffFills(hoverCard);
+			TickBuffFills(pinnedCard);
+		}
+
+		/// <summary>Advances one card's depleting buff fills.</summary>
+		/// <param name="card">The card whose strips to animate.</param>
+		private static void TickBuffFills(TargetCard card)
+		{
+			if (card.ObservedBuffModel.Count == 0)
+			{
+				return;
+			}
+
+			float elapsed = Time.unscaledTime - card.ObservedBuffCaptureTime;
+
+			for (int i = 0; i < card.ObservedBuffModel.Count; ++i)
+			{
+				ObservedBuffEntry entry = card.ObservedBuffModel[i];
 				if (entry.TotalSeconds <= 0.0f)
 				{
 					continue;
@@ -350,7 +472,7 @@ namespace FishMMO.Client
 				float remaining = entry.RemainingSeconds - elapsed;
 				float fraction = Mathf.Clamp01(remaining / entry.TotalSeconds);
 
-				BuffIcon icon = FindIcon(entry.TemplateID);
+				BuffIcon icon = FindIcon(card, entry.TemplateID);
 				if (icon?.Fill != null)
 				{
 					icon.Fill.style.height = Length.Percent(fraction * 100.0f);
@@ -358,18 +480,169 @@ namespace FishMMO.Client
 			}
 		}
 
+		#region Hover card drivers
+
 		/// <summary>
-		/// Updates the target frame and overhead label for a newly selected target.
+		/// Frames a newly hovered target in the hover card.
 		/// </summary>
 		/// <param name="target">The new target transform.</param>
 		public void TargetController_OnChangeTarget(Transform target)
 		{
 			if (target == null || UIManager.ControlHasFocus())
 			{
-				ClearTarget(null);
+				ReleaseCard(hoverCard, null);
 				return;
 			}
 
+			/* The pinned card already frames this character. The hover card stands down rather
+			 * than duplicating it: the controller's clear event for the previous hover target has
+			 * already run, so there is nothing to take down but the card itself. */
+			if (ReferenceEquals(target, pinnedCard.Target))
+			{
+				ReleaseCard(hoverCard, hoverCard.Target);
+				return;
+			}
+
+			if (!ResolveCard(hoverCard, target))
+			{
+				return;
+			}
+
+			PresentCard(hoverCard);
+			UpdateOverheadLabel(hoverCard);
+		}
+
+		/// <summary>
+		/// Handles a hover update — the same target, re-reported on the controller's poll.
+		/// </summary>
+		/// <param name="target">The target transform.</param>
+		/// <remarks>
+		/// This used to call straight into <see cref="TargetController_OnChangeTarget"/>, treating
+		/// twenty polls a second as twenty target changes. It now only re-reads what moves.
+		/// </remarks>
+		public void TargetController_OnUpdateTarget(Transform target)
+		{
+			if (target == null || UIManager.ControlHasFocus())
+			{
+				ReleaseCard(hoverCard, null);
+				return;
+			}
+
+			if (ReferenceEquals(target, pinnedCard.Target))
+			{
+				// Resting on the pinned character: its card is the pinned one.
+				if (hoverCard.HasTarget)
+				{
+					ReleaseCard(hoverCard, hoverCard.Target);
+				}
+				return;
+			}
+
+			if (!ReferenceEquals(target, hoverCard.Target))
+			{
+				// The controller reported an update for something we have not resolved yet —
+				// including the character that was pinned a moment ago and has just been released.
+				TargetController_OnChangeTarget(target);
+				return;
+			}
+
+			if (RefreshHealth(hoverCard))
+			{
+				ApplyHealthElements(hoverCard);
+			}
+		}
+
+		/// <summary>
+		/// Releases the hover card when the pointer leaves its target.
+		/// </summary>
+		/// <param name="lastTarget">The previous target transform, if any.</param>
+		public void TargetController_OnClearTarget(Transform lastTarget = null)
+		{
+			ReleaseCard(hoverCard, lastTarget);
+		}
+
+		#endregion
+
+		#region Pinned card drivers
+
+		/// <summary>
+		/// Frames a newly pinned character in the pinned card.
+		/// </summary>
+		/// <param name="target">The pinned transform.</param>
+		private void TargetController_OnPinTarget(Transform target)
+		{
+			if (target == null)
+			{
+				return;
+			}
+
+			if (!ResolveCard(pinnedCard, target))
+			{
+				return;
+			}
+
+			/* The player pinned the character the hover card was showing — the usual case, since
+			 * the key pins whatever is under the pointer. The hover card hands over rather than
+			 * duplicating; resolved into the pinned card FIRST so the release below sees the
+			 * character as still framed and leaves its nameplate up. */
+			if (ReferenceEquals(hoverCard.Target, target))
+			{
+				ReleaseCard(hoverCard, target);
+			}
+
+			PresentCard(pinnedCard);
+			ShowCharacterLabels(pinnedCard.Character, pinnedCard.DisplayColor);
+		}
+
+		/// <summary>
+		/// Releases the pinned card. The pointer may still be resting on the character that was
+		/// just released; the hover card stood down while it was pinned, and the controller's
+		/// next update re-frames it there.
+		/// </summary>
+		/// <param name="lastTarget">The released transform, or null when it was destroyed.</param>
+		private void TargetController_OnUnpinTarget(Transform lastTarget)
+		{
+			ReleaseCard(pinnedCard, lastTarget);
+		}
+
+		#endregion
+
+		/// <summary>
+		/// Re-renders the observed buff strips when the server pushes a new list for a framed
+		/// character.
+		/// </summary>
+		/// <param name="buffController">The controller whose observed list changed.</param>
+		private void BuffController_OnObservedBuffsChanged(IBuffController buffController)
+		{
+			/* Static event: fires for every character on the client. Only the framed ones matter.
+			 * This is the same class of bug the local buff strips had — an unscoped static buff
+			 * event painting every character's buffs onto one panel. */
+			if (buffController == null)
+			{
+				return;
+			}
+
+			if (ReferenceEquals(buffController, hoverCard.Buffs))
+			{
+				CaptureObservedBuffs(hoverCard);
+				ApplyBuffElements(hoverCard);
+			}
+			if (ReferenceEquals(buffController, pinnedCard.Buffs))
+			{
+				CaptureObservedBuffs(pinnedCard);
+				ApplyBuffElements(pinnedCard);
+			}
+		}
+
+		/// <summary>
+		/// Resolves a target into a card: the components that decide what the card can show,
+		/// the name and faction colour, the first health read and the buff capture.
+		/// </summary>
+		/// <param name="card">The card to fill.</param>
+		/// <param name="target">The transform to frame.</param>
+		/// <returns>False when the target is nothing a card can describe; the card is untouched.</returns>
+		private bool ResolveCard(TargetCard card, Transform target)
+		{
 			/* Resolved ONCE per target. Seven GetComponent calls is a fine price for a target
 			 * change and an absurd one twenty times a second, which is what the update path used
 			 * to pay by routing straight back into this method. */
@@ -392,28 +665,28 @@ namespace FishMMO.Client
 				characterAttributeController == null &&
 				sceneObjectNamer == null)
 			{
-				return;
+				return false;
 			}
 
-			currentTarget = target;
-			targetAttributes = characterAttributeController;
-			targetBuffs = buffController;
-			targetCharacter = character;
-			targetInteractable = interactable;
+			card.Target = target;
+			card.Attributes = characterAttributeController;
+			card.Buffs = buffController;
+			card.Character = character;
+			card.Interactable = interactable;
 
-			displayColor = Color.white;
-			displayFaction = string.Empty;
+			card.DisplayColor = Color.white;
+			card.DisplayFaction = string.Empty;
 
 			if (character != null &&
 				Character != null &&
 				Character.TryGet(out IFactionController factionController) &&
 				character.TryGet(out IFactionController targetFactionController))
 			{
-				displayColor = factionController.GetAllianceLevelColor(targetFactionController);
-				displayFaction = factionController.GetAllianceLevel(targetFactionController).ToString();
+				card.DisplayColor = factionController.GetAllianceLevelColor(targetFactionController);
+				card.DisplayFaction = factionController.GetAllianceLevel(targetFactionController).ToString();
 			}
 
-			displayName = interactable != null
+			card.DisplayName = interactable != null
 				? interactable.Name
 				: target.name.Replace("(Clone)", string.Empty);
 
@@ -423,103 +696,56 @@ namespace FishMMO.Client
 			 * dead one. Anything that does gain health later — a destructible structure, a siege
 			 * engine — starts showing a bar the moment it has the attribute, with no change
 			 * here. */
-			lastHealthCurrent = int.MinValue;
-			lastHealthMax = int.MinValue;
-			RefreshHealth();
+			card.LastHealthCurrent = int.MinValue;
+			card.LastHealthMax = int.MinValue;
+			RefreshHealth(card);
 
-			CaptureObservedBuffs();
+			CaptureObservedBuffs(card);
+			return true;
+		}
 
-			// Show() re-clones the tree, so the state above must be written AFTER it. OnAfterShow
-			// does exactly that; ApplyTargetState covers the already-visible case.
+		/// <summary>
+		/// Puts a freshly resolved card on screen.
+		/// </summary>
+		/// <param name="card">The card that was just resolved.</param>
+		/// <remarks>
+		/// Show() re-clones the tree, so the card's state must be written AFTER it. OnAfterShow
+		/// does exactly that, for both cards; ApplyCardState covers the already-visible case.
+		/// </remarks>
+		private void PresentCard(TargetCard card)
+		{
 			if (!Visible)
 			{
 				Show();
 			}
 			else
 			{
-				ApplyTargetState();
-			}
-
-			UpdateTargetLabel(target, character, interactable);
-		}
-
-		/// <summary>
-		/// Handles a target update — the same target, re-reported on the controller's poll.
-		/// </summary>
-		/// <param name="target">The target transform.</param>
-		/// <remarks>
-		/// This used to call straight into <see cref="TargetController_OnChangeTarget"/>, treating
-		/// twenty polls a second as twenty target changes. It now only re-reads what moves.
-		/// </remarks>
-		public void TargetController_OnUpdateTarget(Transform target)
-		{
-			if (target == null || UIManager.ControlHasFocus())
-			{
-				ClearTarget(null);
-				return;
-			}
-
-			if (!ReferenceEquals(target, currentTarget))
-			{
-				// The controller reported an update for something we have not resolved yet.
-				TargetController_OnChangeTarget(target);
-				return;
-			}
-
-			if (RefreshHealth())
-			{
-				ApplyHealthElements();
+				ApplyCardState(card);
 			}
 		}
 
 		/// <summary>
-		/// Hides the frame and overhead labels when the target is cleared.
+		/// Copies a framed character's server-filtered buff list into the card's model.
 		/// </summary>
-		/// <param name="lastTarget">The previous target transform, if any.</param>
-		public void TargetController_OnClearTarget(Transform lastTarget = null)
+		/// <param name="card">The card to capture into.</param>
+		private void CaptureObservedBuffs(TargetCard card)
 		{
-			ClearTarget(lastTarget);
-		}
-
-		/// <summary>
-		/// Re-renders the observed buff strips when the server pushes a new list for this target.
-		/// </summary>
-		/// <param name="buffController">The controller whose observed list changed.</param>
-		private void BuffController_OnObservedBuffsChanged(IBuffController buffController)
-		{
-			/* Static event: fires for every character on the client. Only the framed one matters.
-			 * This is the same class of bug the local buff strips had — an unscoped static buff
-			 * event painting every character's buffs onto one panel. */
-			if (targetBuffs == null || !ReferenceEquals(buffController, targetBuffs))
-			{
-				return;
-			}
-
-			CaptureObservedBuffs();
-			ApplyBuffElements();
-		}
-
-		/// <summary>
-		/// Copies the framed target's server-filtered buff list into the model.
-		/// </summary>
-		private void CaptureObservedBuffs()
-		{
-			observedBuffModel.Clear();
-			observedBuffCaptureTime = Time.unscaledTime;
+			card.ObservedBuffModel.Clear();
+			card.ObservedBuffCaptureTime = Time.unscaledTime;
 
 			/* Built from the target's real buff container. Every peer now holds the same entries —
 			 * an observer materialises them from the server's message and counts them down from its
 			 * own TimeManager — so there is no separate display list to read, and the remaining
 			 * seconds below are computed against THIS client's tick rather than re-based by however
 			 * long ago a message arrived. */
-			if (targetBuffs?.Buffs == null)
+			if (card.Buffs?.Buffs == null)
 			{
 				return;
 			}
 
-			uint currentTick = targetBuffs.GetCurrentDomainTick();
+			uint currentTick = card.Buffs.GetCurrentDomainTick();
 
-			foreach (Buff buff in targetBuffs.Buffs.Values)
+			foreach (Buff buff in card.Buffs.Buffs.Values)
 			{
 				BaseBuffTemplate template = buff?.Template;
 				if (template == null)
@@ -527,7 +753,7 @@ namespace FishMMO.Client
 					continue;
 				}
 
-				observedBuffModel.Add(new ObservedBuffEntry()
+				card.ObservedBuffModel.Add(new ObservedBuffEntry()
 				{
 					TemplateID = template.ID,
 					Stacks = buff.Stacks,
@@ -538,45 +764,45 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Re-reads the target's health, reporting whether the displayed numbers changed.
+		/// Re-reads a card's health, reporting whether the displayed numbers changed.
 		/// </summary>
+		/// <param name="card">The card to refresh.</param>
 		/// <returns>True if anything needs repainting.</returns>
-		private bool RefreshHealth()
+		private bool RefreshHealth(TargetCard card)
 		{
-			bool nowHasHealth = targetAttributes != null &&
-				targetAttributes.TryGetResourceAttribute(HealthAttributeID, out CharacterResourceAttribute health);
+			CharacterResourceAttribute resource = default;
+			bool nowHasHealth = card.Attributes != null &&
+				card.Attributes.TryGetResourceAttribute(HealthAttributeID, out resource);
 
 			if (!nowHasHealth)
 			{
-				bool changed = hasHealth;
-				hasHealth = false;
-				healthFraction = 0.0f;
-				healthValueText = string.Empty;
-				lastHealthCurrent = int.MinValue;
-				lastHealthMax = int.MinValue;
+				bool changed = card.HasHealth;
+				card.HasHealth = false;
+				card.HealthFraction = 0.0f;
+				card.HealthValueText = string.Empty;
+				card.LastHealthCurrent = int.MinValue;
+				card.LastHealthMax = int.MinValue;
 				return changed;
 			}
-
-			targetAttributes.TryGetResourceAttribute(HealthAttributeID, out CharacterResourceAttribute resource);
 
 			int current = Mathf.RoundToInt(resource.CurrentValue);
 			int max = resource.FinalValue;
 
-			if (hasHealth && current == lastHealthCurrent && max == lastHealthMax)
+			if (card.HasHealth && current == card.LastHealthCurrent && max == card.LastHealthMax)
 			{
 				return false;
 			}
 
-			hasHealth = true;
-			lastHealthCurrent = current;
-			lastHealthMax = max;
-			healthFraction = max > 0 ? Mathf.Clamp01(resource.CurrentValue / resource.FinalValueAsFloat) : 0.0f;
-			healthValueText = current + "/" + max;
+			card.HasHealth = true;
+			card.LastHealthCurrent = current;
+			card.LastHealthMax = max;
+			card.HealthFraction = max > 0 ? Mathf.Clamp01(resource.CurrentValue / resource.FinalValueAsFloat) : 0.0f;
+			card.HealthValueText = current + "/" + max;
 			return true;
 		}
 
 		/// <summary>
-		/// Writes the whole tracked target state into the current visual tree.
+		/// Writes both cards' tracked state into the current visual tree.
 		/// </summary>
 		/// <remarks>
 		/// Called from <see cref="OnAfterShow"/> and <see cref="OnAfterStarting"/>. On a panel's
@@ -586,69 +812,93 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void ApplyTargetState()
 		{
-			if (nameLabel != null)
-			{
-				nameLabel.text = displayName;
-				nameLabel.style.color = displayColor;
-			}
-
-			if (factionLabel != null)
-			{
-				factionLabel.text = displayFaction;
-				factionLabel.style.display = string.IsNullOrEmpty(displayFaction)
-					? DisplayStyle.None
-					: DisplayStyle.Flex;
-			}
-
-			ApplyHealthElements();
-			ApplyBuffElements();
+			ApplyCardState(hoverCard);
+			ApplyCardState(pinnedCard);
 		}
 
 		/// <summary>
-		/// Writes the tracked health values into the health elements.
+		/// Writes one card's tracked state into its elements, and shows or hides the card by
+		/// whether it frames anything.
 		/// </summary>
-		private void ApplyHealthElements()
+		/// <param name="card">The card to paint.</param>
+		private void ApplyCardState(TargetCard card)
 		{
-			if (healthBar != null)
+			if (card.Root != null)
 			{
-				healthBar.style.display = hasHealth ? DisplayStyle.Flex : DisplayStyle.None;
+				card.Root.style.display = card.HasTarget ? DisplayStyle.Flex : DisplayStyle.None;
 			}
-			if (healthFill != null)
-			{
-				healthFill.style.width = Length.Percent(Mathf.Clamp01(healthFraction) * 100.0f);
-			}
-			if (healthText != null)
-			{
-				// Was declared in the UXML and never written; the numbers were concatenated onto
-				// the name label instead, which is what made the name allocate every tick.
-				healthText.text = healthValueText;
-			}
-		}
 
-		/// <summary>
-		/// Reconciles the pooled buff/debuff icons with the observed-buff model.
-		/// </summary>
-		/// <remarks>
-		/// Icons are POOLED. A target swap detaches the icons the previous target was using and
-		/// re-binds them, so switching targets in a crowded fight allocates nothing: no
-		/// <c>VisualElement</c>, no callback closure, no style object. Only a target carrying more
-		/// buffs than any target so far grows the pool.
-		/// </remarks>
-		private void ApplyBuffElements()
-		{
-			if (buffList == null || debuffList == null)
+			if (!card.HasTarget)
 			{
 				return;
 			}
 
-			ReleaseIcons(activeBuffIcons);
-			ReleaseIcons(activeDebuffIcons);
-
-			float elapsed = Time.unscaledTime - observedBuffCaptureTime;
-
-			for (int i = 0; i < observedBuffModel.Count; ++i)
+			if (card.NameLabel != null)
 			{
-				ObservedBuffEntry entry = observedBuffModel[i];
+				card.NameLabel.text = card.DisplayName;
+				card.NameLabel.style.color = card.DisplayColor;
+			}
+
+			if (card.FactionLabel != null)
+			{
+				card.FactionLabel.text = card.DisplayFaction;
+				card.FactionLabel.style.display = string.IsNullOrEmpty(card.DisplayFaction)
+					? DisplayStyle.None
+					: DisplayStyle.Flex;
+			}
+
+			ApplyHealthElements(card);
+			ApplyBuffElements(card);
+		}
+
+		/// <summary>
+		/// Writes a card's tracked health values into its health elements.
+		/// </summary>
+		/// <param name="card">The card to paint.</param>
+		private static void ApplyHealthElements(TargetCard card)
+		{
+			if (card.HealthBar != null)
+			{
+				card.HealthBar.style.display = card.HasHealth ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+			if (card.HealthFill != null)
+			{
+				card.HealthFill.style.width = Length.Percent(Mathf.Clamp01(card.HealthFraction) * 100.0f);
+			}
+			if (card.HealthText != null)
+			{
+				// Was declared in the UXML and never written; the numbers were concatenated onto
+				// the name label instead, which is what made the name allocate every tick.
+				card.HealthText.text = card.HealthValueText;
+			}
+		}
+
+		/// <summary>
+		/// Reconciles a card's pooled buff/debuff icons with its observed-buff model.
+		/// </summary>
+		/// <param name="card">The card to paint.</param>
+		/// <remarks>
+		/// Icons are POOLED, and the pool is shared by both cards. A target swap detaches the
+		/// icons the previous target was using and re-binds them, so switching targets in a
+		/// crowded fight allocates nothing: no <c>VisualElement</c>, no callback closure, no
+		/// style object. Only a pair of targets carrying more buffs than any pair so far grows the
+		/// pool.
+		/// </remarks>
+		private void ApplyBuffElements(TargetCard card)
+		{
+			if (card.BuffList == null || card.DebuffList == null)
+			{
+				return;
+			}
+
+			ReleaseIcons(card.ActiveBuffIcons);
+			ReleaseIcons(card.ActiveDebuffIcons);
+
+			float elapsed = Time.unscaledTime - card.ObservedBuffCaptureTime;
+
+			for (int i = 0; i < card.ObservedBuffModel.Count; ++i)
+			{
+				ObservedBuffEntry entry = card.ObservedBuffModel[i];
 
 				BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(entry.TemplateID);
 				if (template == null)
@@ -665,38 +915,39 @@ namespace FishMMO.Client
 
 				if (template.IsDebuff)
 				{
-					debuffList.Add(icon.Root);
-					activeDebuffIcons.Add(icon);
+					card.DebuffList.Add(icon.Root);
+					card.ActiveDebuffIcons.Add(icon);
 				}
 				else
 				{
-					buffList.Add(icon.Root);
-					activeBuffIcons.Add(icon);
+					card.BuffList.Add(icon.Root);
+					card.ActiveBuffIcons.Add(icon);
 				}
 			}
 
-			buffList.style.display = activeBuffIcons.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
-			debuffList.style.display = activeDebuffIcons.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+			card.BuffList.style.display = card.ActiveBuffIcons.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+			card.DebuffList.style.display = card.ActiveDebuffIcons.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
 		}
 
 		/// <summary>
-		/// Finds the rendered icon for a template ID, or null.
+		/// Finds a card's rendered icon for a template ID, or null.
 		/// </summary>
+		/// <param name="card">The card whose strips to search.</param>
 		/// <param name="templateID">The buff template ID.</param>
-		private BuffIcon FindIcon(int templateID)
+		private static BuffIcon FindIcon(TargetCard card, int templateID)
 		{
-			for (int i = 0; i < activeBuffIcons.Count; ++i)
+			for (int i = 0; i < card.ActiveBuffIcons.Count; ++i)
 			{
-				if (activeBuffIcons[i].Template != null && activeBuffIcons[i].Template.ID == templateID)
+				if (card.ActiveBuffIcons[i].Template != null && card.ActiveBuffIcons[i].Template.ID == templateID)
 				{
-					return activeBuffIcons[i];
+					return card.ActiveBuffIcons[i];
 				}
 			}
-			for (int i = 0; i < activeDebuffIcons.Count; ++i)
+			for (int i = 0; i < card.ActiveDebuffIcons.Count; ++i)
 			{
-				if (activeDebuffIcons[i].Template != null && activeDebuffIcons[i].Template.ID == templateID)
+				if (card.ActiveDebuffIcons[i].Template != null && card.ActiveDebuffIcons[i].Template.ID == templateID)
 				{
-					return activeDebuffIcons[i];
+					return card.ActiveDebuffIcons[i];
 				}
 			}
 			return null;
@@ -781,7 +1032,7 @@ namespace FishMMO.Client
 		/// <param name="template">The buff template.</param>
 		/// <param name="stacks">Stack count above the base application.</param>
 		/// <param name="fraction">Remaining duration fraction (0-1).</param>
-		private void BindIcon(BuffIcon icon, BaseBuffTemplate template, int stacks, float fraction)
+		private static void BindIcon(BuffIcon icon, BaseBuffTemplate template, int stacks, float fraction)
 		{
 			icon.Template = template;
 
@@ -838,44 +1089,60 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Drops the framed target, releases its overhead labels and hides the frame.
+		/// Drops a card's framed target, releases its overhead labels, and hides the card — or
+		/// the whole frame, when the other card is empty too.
 		/// </summary>
+		/// <param name="card">The card to release.</param>
 		/// <param name="lastTarget">The previous target transform, if it is still alive.</param>
 		/// <remarks>
+		/// <para>
 		/// <paramref name="lastTarget"/> is tested with Unity's overloaded <c>!=</c>, which reports
 		/// a destroyed object as null — so a target that died rather than being deselected takes
-		/// the null path and no <c>GetComponent</c> is attempted on a destroyed object. The frame
+		/// the null path and no <c>GetComponent</c> is attempted on a destroyed object. The card
 		/// comes down either way, which is the whole point: it used to stay on the corpse.
+		/// </para>
+		/// <para>
+		/// A character the OTHER card still frames keeps its nameplate and outline: the pointer
+		/// leaving the pinned character must not take down labels the pin is holding up, and
+		/// releasing a pin while the pointer rests on that character must not either.
+		/// </para>
 		/// </remarks>
-		private void ClearTarget(Transform lastTarget)
+		private void ReleaseCard(TargetCard card, Transform lastTarget)
 		{
 			if (lastTarget != null)
 			{
-				Outline outline = lastTarget.GetComponent<Outline>();
-				if (outline != null)
-				{
-					outline.enabled = false;
-				}
+				TargetCard other = ReferenceEquals(card, hoverCard) ? pinnedCard : hoverCard;
+				bool framedElsewhere = ReferenceEquals(other.Target, lastTarget);
 
-				ICharacter character = lastTarget.GetComponent<ICharacter>();
-				if (character != null)
+				if (!framedElsewhere)
 				{
-					/* One rule for "does this nameplate stay up when it stops being the target",
-					 * shared with the sweep that puts nameplates up in the first place. It used
-					 * to be answered here alone — own character, own pet — and once NPCs in range
-					 * kept theirs too, answering it in two places meant an untargeted NPC beside
-					 * the player blinked off for a sweep before coming back. */
-					bool keepLabels = ClientNameplateDisplay.ShouldStayVisible(character);
-
-					if (!keepLabels)
+					Outline outline = lastTarget.GetComponent<Outline>();
+					if (outline != null)
 					{
-						if (character.CharacterNameLabel != null)
+						outline.enabled = false;
+					}
+
+					ICharacter character = lastTarget.GetComponent<ICharacter>();
+					if (character != null)
+					{
+						/* One rule for "does this nameplate stay up when it stops being the
+						 * target", shared with the sweep that puts nameplates up in the first
+						 * place. It used to be answered here alone — own character, own pet —
+						 * and once NPCs in range kept theirs too, answering it in two places meant
+						 * an untargeted NPC beside the player blinked off for a sweep before
+						 * coming back. */
+						bool keepLabels = ClientNameplateDisplay.ShouldStayVisible(character);
+
+						if (!keepLabels)
 						{
-							character.CharacterNameLabel.gameObject.SetActive(false);
-						}
-						if (character.CharacterGuildLabel != null)
-						{
-							character.CharacterGuildLabel.gameObject.SetActive(false);
+							if (character.CharacterNameLabel != null)
+							{
+								character.CharacterNameLabel.gameObject.SetActive(false);
+							}
+							if (character.CharacterGuildLabel != null)
+							{
+								character.CharacterGuildLabel.gameObject.SetActive(false);
+							}
 						}
 					}
 				}
@@ -883,81 +1150,95 @@ namespace FishMMO.Client
 
 			/* The original returned EARLY when the last target was the local player or their own
 			 * pet, so the overhead 3D label was never released and the frame never hid — it just
-			 * stopped updating. Keeping the nameplate visible and taking down the frame are
+			 * stopped updating. Keeping the nameplate visible and taking down the card are
 			 * separate decisions; only the first one depends on who the target was. */
-			ReleaseTargetLabel();
+			ReleaseOverheadLabel(card);
 
-			currentTarget = null;
-			targetAttributes = null;
-			targetBuffs = null;
-			targetCharacter = null;
-			targetInteractable = null;
+			card.ClearModel();
+			ReleaseIcons(card.ActiveBuffIcons);
+			ReleaseIcons(card.ActiveDebuffIcons);
 
-			displayName = string.Empty;
-			displayFaction = string.Empty;
-			displayColor = Color.white;
-			hasHealth = false;
-			healthFraction = 0.0f;
-			healthValueText = string.Empty;
-			lastHealthCurrent = int.MinValue;
-			lastHealthMax = int.MinValue;
-
-			observedBuffModel.Clear();
-			ReleaseIcons(activeBuffIcons);
-			ReleaseIcons(activeDebuffIcons);
-
-			Hide();
-		}
-
-		/// <summary>
-		/// Returns the overhead 3D label to the label pool.
-		/// </summary>
-		private void ReleaseTargetLabel()
-		{
-			if (targetLabel != null)
+			if (!hoverCard.HasTarget && !pinnedCard.HasTarget)
 			{
-				UITKLabelMaker.Cache(targetLabel);
-				targetLabel = null;
+				Hide();
+				return;
+			}
+
+			if (Visible)
+			{
+				ApplyCardState(card);
 			}
 		}
 
 		/// <summary>
-		/// Updates the overhead 3D label for the target, displaying name, title, and faction colour.
+		/// Returns a card's overhead 3D label to the label pool.
 		/// </summary>
-		/// <param name="target">The target transform.</param>
-		/// <param name="character">The character component, if present.</param>
-		/// <param name="interactable">The interactable component, if present.</param>
+		/// <param name="card">The card whose label to release.</param>
+		private static void ReleaseOverheadLabel(TargetCard card)
+		{
+			if (card.OverheadLabel != null)
+			{
+				UITKLabelMaker.Cache(card.OverheadLabel);
+				card.OverheadLabel = null;
+			}
+		}
+
+		/// <summary>
+		/// Turns a character's authored nameplates on, in the frame's faction colour.
+		/// </summary>
+		/// <param name="character">The character, or null for nothing.</param>
+		/// <param name="color">The faction colour to draw the name in.</param>
+		private static void ShowCharacterLabels(ICharacter character, Color color)
+		{
+			if (character == null)
+			{
+				return;
+			}
+
+			if (character.CharacterNameLabel != null)
+			{
+				character.CharacterNameLabel.gameObject.SetActive(true);
+				character.CharacterNameLabel.color = color;
+			}
+			if (character.CharacterGuildLabel != null)
+			{
+				character.CharacterGuildLabel.gameObject.SetActive(true);
+			}
+		}
+
+		/// <summary>
+		/// Updates the overhead 3D label for a card's target: a character's authored nameplates
+		/// in its faction colour, or a pooled caption over an interactable.
+		/// </summary>
+		/// <param name="card">The card whose target to label.</param>
 		/// <remarks>
-		/// Only reached from the CHANGE path now. It destroys and recreates a pooled GameObject
+		/// Only reached from the CHANGE path. It destroys and recreates a pooled GameObject
 		/// label, and the update path used to run it twenty times a second for a target that had
 		/// not moved or changed — a destroy/create cycle per tick of hover.
 		/// </remarks>
-		private void UpdateTargetLabel(Transform target, ICharacter character, IInteractable interactable)
+		private void UpdateOverheadLabel(TargetCard card)
 		{
-			ReleaseTargetLabel();
+			ReleaseOverheadLabel(card);
 
-			Color color = Color.grey;
-
-			if (character != null)
+			Transform target = card.Target;
+			if (target == null)
 			{
+				return;
+			}
+
+			if (card.Character != null)
+			{
+				Color color = Color.grey;
 				if (Character != null &&
 					Character.TryGet(out IFactionController factionController) &&
-					character.TryGet(out IFactionController targetFactionController))
+					card.Character.TryGet(out IFactionController targetFactionController))
 				{
 					color = factionController.GetAllianceLevelColor(targetFactionController);
 				}
 
-				if (character.CharacterNameLabel != null)
-				{
-					character.CharacterNameLabel.gameObject.SetActive(true);
-					character.CharacterNameLabel.color = color;
-				}
-				if (character.CharacterGuildLabel != null)
-				{
-					character.CharacterGuildLabel.gameObject.SetActive(true);
-				}
+				ShowCharacterLabels(card.Character, color);
 			}
-			else if (interactable != null)
+			else if (card.Interactable != null)
 			{
 				Vector3 newPos = target.position;
 
@@ -971,27 +1252,27 @@ namespace FishMMO.Client
 
 				newPos.y += colliderHeight;
 
-				string label = interactable.Name;
+				string label = card.Interactable.Name;
 
-				if (!string.IsNullOrWhiteSpace(interactable.Title))
+				if (!string.IsNullOrWhiteSpace(card.Interactable.Title))
 				{
-					string hex = interactable.TitleColor.ToHex();
+					string hex = card.Interactable.TitleColor.ToHex();
 					if (!string.IsNullOrWhiteSpace(hex))
 					{
-						label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
+						label += $"\r\n<<color=#{hex}>{card.Interactable.Title}</color>>";
 					}
 				}
 
-				targetLabel = UITKLabelMaker.Display3D(label, newPos, color, 0.25f, 0.0f, true);
-				if (targetLabel != null && targetLabel.Label != null)
+				card.OverheadLabel = UITKLabelMaker.Display3D(label, newPos, Color.grey, 0.25f, 0.0f, true);
+				if (card.OverheadLabel != null && card.OverheadLabel.Label != null)
 				{
 					/* Pooled labels are ungrouped by default because their transform root is the
 					 * pool. This one is pinned over a specific object, so it opts into that
 					 * object's nameplate stack explicitly — with a sort order above the authored
 					 * nameplates (name 0, guild 10) so the caption stacks on top of them instead
 					 * of painting through them. */
-					targetLabel.Label.GroupAnchor = target.root;
-					targetLabel.Label.SortOrder = 100;
+					card.OverheadLabel.Label.GroupAnchor = target.root;
+					card.OverheadLabel.Label.SortOrder = 100;
 				}
 			}
 		}

@@ -1,0 +1,25 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIArenaScoreboard.uss" />
+    <ui:VisualElement name="scoreboard-root" class="scoreboard-root">
+        <ui:VisualElement name="scoreboard-panel" class="fish-panel scoreboard-panel">
+
+            <ui:VisualElement class="fish-panel__header scoreboard-header">
+                <ui:VisualElement class="fish-panel__icon scoreboard-header__icon" />
+                <ui:VisualElement class="scoreboard-header__titles">
+                    <ui:Label text="SCOREBOARD" class="fish-panel__title" />
+                    <ui:Label name="scoreboard-subtitle" text="" class="fish-panel__subtitle" />
+                </ui:VisualElement>
+                <ui:Label name="scoreboard-clock" text="" class="fish-label fish-label--numeric scoreboard-clock" />
+                <ui:Button name="scoreboard-close-btn" text="✕" class="fish-close-btn scoreboard-close-btn" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="scoreboard-scroll" class="fish-scroll scoreboard-scroll">
+                <!-- One block per team. Built at runtime from the match state. -->
+                <ui:VisualElement name="scoreboard-teams" class="scoreboard-teams" />
+                <ui:Label name="scoreboard-empty" text="You are not in an arena match." class="fish-empty scoreboard-empty" />
+            </ui:ScrollView>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

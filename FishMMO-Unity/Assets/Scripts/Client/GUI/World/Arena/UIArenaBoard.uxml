@@ -13,6 +13,18 @@
                 <ui:Button name="arena-close-btn" text="✕" class="fish-close-btn arena-close-btn" />
             </ui:VisualElement>
 
+            <!-- Queue / History / Leaderboard. -->
+            <ui:VisualElement name="arena-views" class="arena-tabs arena-views">
+                <ui:Button name="arena-view-queue" text="Queue" class="fish-tab fish-tab--active arena-view-tab" />
+                <ui:Button name="arena-view-history" text="History" class="fish-tab arena-view-tab" />
+                <ui:Button name="arena-view-board" text="Leaderboard" class="fish-tab arena-view-tab" />
+            </ui:VisualElement>
+
+            <!-- The player's season standing. -->
+            <ui:VisualElement name="arena-profile" class="fish-well arena-profile">
+                <ui:Label name="arena-profile-text" text="" class="fish-hint arena-profile__text" />
+            </ui:VisualElement>
+
             <!-- One tab per arena the board offers. Built at runtime. -->
             <ui:VisualElement name="arena-tabs" class="arena-tabs" />
 
@@ -38,6 +50,11 @@
             <ui:VisualElement name="arena-queue" class="fish-well arena-queue arena-queue--hidden">
                 <ui:Label name="arena-queue-text" text="" class="fish-hint arena-queue__text" />
             </ui:VisualElement>
+
+            <!-- History and leaderboard lists; hidden on the Queue view. -->
+            <ui:ScrollView name="arena-list-scroll" class="fish-scroll arena-list-scroll arena-list-scroll--hidden">
+                <ui:VisualElement name="arena-list" class="arena-list" />
+            </ui:ScrollView>
 
             <ui:VisualElement name="panel-footer" class="fish-panel__footer arena-footer">
                 <ui:Label text="Stay at the board while queued." class="fish-hint arena-footer__hint" />

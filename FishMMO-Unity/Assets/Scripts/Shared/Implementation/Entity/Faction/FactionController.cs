@@ -1081,6 +1081,16 @@ namespace FishMMO.Shared
 		/// <returns>A <see cref="Color"/> representing the alliance level.</returns>
 		public Color GetAllianceLevelColor(IFactionController otherFactionController)
 		{
+			/* Inside an arena a seated character is drawn in their team's colour, whichever side the
+			 * viewer is on, so both teams read the same colours on nameplates, target frames and
+			 * scoreboards. Whether they may be attacked is still the alliance's question, answered
+			 * by GetAllianceLevel; this is only what they look like. */
+			if (otherFactionController?.Character != null &&
+				ArenaTeamRegistry.TryGetTeamColor(otherFactionController.Character, out Color teamColor))
+			{
+				return teamColor;
+			}
+
 			if (IsAggressive || otherFactionController.IsAggressive)
 			{
 				return TinyColor.ToUnityColor(TinyColor.red);

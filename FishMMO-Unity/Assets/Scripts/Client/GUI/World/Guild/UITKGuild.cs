@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -1176,7 +1177,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Invites the current target, or prompts for a name, to the guild.
+		/// Invites the hovered or pinned target, or prompts for a name, to the guild.
 		/// </summary>
 		public void OnButtonInviteToGuild()
 		{
@@ -1185,10 +1186,15 @@ namespace FishMMO.Client
 				guildController.ID > 0 &&
 				Client.NetworkManager.IsClientStarted)
 			{
-				if (Character.TryGet(out ITargetController targetController) &&
-					targetController.Current.Target != null)
+				if (Character.TryGet(out ITargetController targetController))
 				{
-					IPlayerCharacter targetCharacter = targetController.Current.Target.GetComponent<IPlayerCharacter>();
+					/* The hovered character first, then the pinned one. The pointer is on this
+					 * button when it fires, so the hover target is usually empty — and the
+					 * pinned card is exactly the player's way of saying "this one" ahead of time. */
+					Transform target = targetController.Current.Target != null
+						? targetController.Current.Target
+						: targetController.PinnedTarget;
+					IPlayerCharacter targetCharacter = target != null ? target.GetComponent<IPlayerCharacter>() : null;
 					if (targetCharacter != null)
 					{
 						Client.Broadcast(new GuildInviteBroadcast()

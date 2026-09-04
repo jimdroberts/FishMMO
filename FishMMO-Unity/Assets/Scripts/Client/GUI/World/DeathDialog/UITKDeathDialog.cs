@@ -169,6 +169,10 @@ namespace FishMMO.Client
 		/// <summary>True while a death inside a live arena is waiting on the server's respawn.</summary>
 		private bool arenaRespawnPending;
 
+		/// <summary>Who killed the player in the arena, for the recap; empty when nobody did.</summary>
+		private string arenaKillerName;
+		private int arenaKillerTeam = -1;
+
 		/// <summary>
 		/// A death inside a live arena. The server respawns the player itself, at their team's
 		/// spawn, after the arena's delay — so the dialog shows the wait and offers nothing, since
@@ -179,6 +183,8 @@ namespace FishMMO.Client
 			EnsureElementsBound();
 			arenaRespawnPending = true;
 			arenaRespawnAt = msg.SecondsUntilRespawn > 0 ? Time.unscaledTime + msg.SecondsUntilRespawn : 0f;
+			arenaKillerName = msg.KillerName ?? string.Empty;
+			arenaKillerTeam = msg.KillerTeam;
 			currentResurrectorID = 0;
 			SetResurrectVisible(false);
 			ClearAwaitingRevive();
@@ -193,13 +199,16 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			string recap = string.IsNullOrEmpty(arenaKillerName)
+				? "You have died."
+				: (arenaKillerTeam >= 0 ? $"Killed by {arenaKillerName} (Team {arenaKillerTeam + 1})." : $"Killed by {arenaKillerName}.");
 			if (arenaRespawnAt <= 0f)
 			{
-				messageLabel.text = "You have been eliminated.\nThe match continues without you.";
+				messageLabel.text = $"{recap}\nYou have been eliminated. The match continues without you.";
 				return;
 			}
 			int seconds = Mathf.Max(0, Mathf.CeilToInt(arenaRespawnAt - Time.unscaledTime));
-			messageLabel.text = $"You have died.\nRespawning in {seconds}…";
+			messageLabel.text = $"{recap}\nRespawning in {seconds}…";
 		}
 
 		/// <summary>Shows the dialog, binding its elements on first use.</summary>

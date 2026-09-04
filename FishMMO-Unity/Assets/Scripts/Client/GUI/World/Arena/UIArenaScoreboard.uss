@@ -1,0 +1,145 @@
+/*
+    UIArenaScoreboard.uss
+    Layout for the arena scoreboard. Colours come from FishMMO-Theme.uss; team colours are
+    data and are written inline by ArenaTeamStyle. Sizes are written against the 1200x800
+    reference resolution declared by Assets/UI Toolkit/PanelSettings.asset.
+*/
+
+.scoreboard-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.scoreboard-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 520px;
+    max-height: 80%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.scoreboard-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.scoreboard-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.scoreboard-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.scoreboard-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.scoreboard-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.scoreboard-clock {
+    margin-right: 8px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.scoreboard-close-btn {
+    flex-shrink: 0;
+}
+
+/* ── Teams ──────────────────────────────────────────────── */
+
+.scoreboard-scroll {
+    flex-grow: 1;
+    min-height: 80px;
+}
+
+.scoreboard-teams {
+    flex-direction: column;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+}
+
+/* A team block. The left border carries the team colour, set inline. */
+.scoreboard-team {
+    margin-bottom: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-left-width: 3px;
+    flex-shrink: 0;
+}
+
+.scoreboard-team__header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 22px;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.scoreboard-team__title {
+    flex-shrink: 0;
+}
+
+.scoreboard-team__score {
+    min-width: 36px;
+    -unity-text-align: middle-center;
+}
+
+.scoreboard-columns {
+    flex-direction: row;
+    align-items: center;
+    height: 16px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.scoreboard-row {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.scoreboard-col--name  { flex-grow: 1; overflow: hidden; }
+.scoreboard-col--num   { width: 40px; flex-shrink: 0; -unity-text-align: middle-center; }
+.scoreboard-col--score { width: 56px; flex-shrink: 0; -unity-text-align: middle-right; }
+
+.scoreboard-empty {
+    margin-top: 18px;
+    margin-bottom: 18px;
+    white-space: normal;
+}

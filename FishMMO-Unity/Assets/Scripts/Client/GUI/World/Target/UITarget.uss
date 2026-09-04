@@ -1,33 +1,63 @@
-﻿/*
+/*
     UITarget.uss
     Layout for the target frame. Colours come from FishMMO-Theme.uss; the buff
     icons reuse the .buff-group classes from UIBuffContainer.uss.
 
-    Level, name and faction on one line above a health bar. Level leads because
-    it is the first thing that decides whether a fight is worth taking; faction
-    trails because it is a qualifier on the name, not on the threat.
+    Two cards in a row: the PINNED card on the left, the HOVER card on the right.
+    Each card is level, name and faction on one line above a health bar, then the
+    buff and debuff strips. Level leads because it is the first thing that decides
+    whether a fight is worth taking; faction trails because it is a qualifier on
+    the name, not on the threat. C# shows and hides each card by whether it frames
+    anything, so the row re-centres on one card or two.
 */
 
 /*
     Anchored explicitly. Each panel is its own UIDocument whose root fills the
     screen, so a root with a size but no position resolves to the top-left
-    corner. Top-centre, matching the uGUI target frame.
+    corner. Top-centre, matching the uGUI target frame. The root itself paints
+    nothing: it is only the row the cards sit in.
 */
 .target-panel {
     position: absolute;
     left: 50%;
     top: 6%;
     translate: -50% 0;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+    flex-shrink: 0;
+    background-color: var(--clear);
+}
+
+.target-card {
     width: 260px;
     flex-direction: column;
     flex-shrink: 0;
     padding: 7px;
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+/*
+    The pinned card is told apart by its top edge: gold instead of the panel
+    brand accent, so a glance says which card is the one that will not move.
+*/
+.target-card--pinned {
+    border-top-color: var(--gold);
 }
 
 .target-top {
     flex-direction: row;
     align-items: center;
     margin-bottom: 5px;
+    flex-shrink: 0;
+}
+
+.target-pin-badge {
+    height: 15px;
+    padding-left: 5px;
+    padding-right: 5px;
+    margin-right: 7px;
     flex-shrink: 0;
 }
 

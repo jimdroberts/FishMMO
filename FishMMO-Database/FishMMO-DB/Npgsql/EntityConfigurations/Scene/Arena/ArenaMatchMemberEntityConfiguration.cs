@@ -22,6 +22,8 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.Kills).IsRequired().HasDefaultValue(0);
 			builder.Property(e => e.Deaths).IsRequired().HasDefaultValue(0);
 			builder.Property(e => e.Score).IsRequired().HasDefaultValue(0);
+			builder.Property(e => e.Status).IsRequired().HasDefaultValue(0);
+			builder.Property(e => e.RatingDelta).IsRequired().HasDefaultValue(0);
 
 			// One seat per character per match.
 			builder.HasIndex(e => new { e.MatchID, e.CharacterID }).IsUnique();

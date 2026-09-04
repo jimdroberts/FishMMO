@@ -309,6 +309,10 @@ namespace FishMMO.Shared
 		PartyNotPresent = 17,
 		/// <summary>A party member is inside an instance, holds one, or is seated in a live arena match.</summary>
 		PartyMemberBusy = 18,
+		/// <summary>Locked out of the arena queue for deserting a match or declining a ready check.</summary>
+		QueueLocked = 19,
+		/// <summary>Ranked arenas: a pre-made party must fill a whole team of the format.</summary>
+		PartyMustFillTeam = 20,
 	}
 
 	/// <summary>

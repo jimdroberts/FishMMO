@@ -7,6 +7,23 @@
         <ui:Label name="arenahud-clock" text="" class="fish-label fish-label--numeric arenahud-clock" />
         <ui:Label name="arenahud-hint" text="" class="fish-hint arenahud-hint" />
         <ui:VisualElement name="arenahud-objectives" class="arenahud-objectives" />
+
+        <!-- Ready check: shown only during that phase. -->
+        <ui:VisualElement name="arenahud-ready" class="fish-well arenahud-ready arenahud-ready--hidden">
+            <ui:Label name="arenahud-ready-text" text="" class="fish-label arenahud-ready__text" />
+            <ui:VisualElement class="arenahud-ready__actions">
+                <ui:Button name="arenahud-ready-accept" text="Accept" class="fish-button fish-button--primary arenahud-ready__btn" />
+                <ui:Button name="arenahud-ready-decline" text="Decline" class="fish-button arenahud-ready__btn" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Spectator: shown only to a player with no seat. -->
+        <ui:Button name="arenahud-freecam" text="Free camera" class="fish-button arenahud-freecam arenahud-freecam--hidden" />
+
         <ui:Label name="arenahud-countdown" text="" class="arenahud-countdown arenahud-countdown--hidden" picking-mode="Ignore" />
     </ui:VisualElement>
+
+    <!-- Kill feed and announcer, right of centre, outside the strip. -->
+    <ui:VisualElement name="arenahud-feed" class="arenahud-feed" picking-mode="Ignore" />
+    <ui:Label name="arenahud-announce" text="" class="arenahud-announce arenahud-announce--hidden" picking-mode="Ignore" />
 </ui:UXML>

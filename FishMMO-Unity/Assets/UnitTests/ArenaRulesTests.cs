@@ -226,5 +226,149 @@ namespace FishMMO.UnitTests
 			CollectionAssert.AreEquivalent(keys, ArenaRules.ResolveTeamSpawnKeys(keys, "Team9"));
 			CollectionAssert.AreEquivalent(keys, ArenaRules.ResolveTeamSpawnKeys(keys, null));
 		}
+
+		// ── Composer: rating band and balance ───────────────────────────────
+
+		private static ArenaCandidate R(long id, int rating, long group = 0) => new ArenaCandidate(id, id * 10, group, rating);
+
+		[Test]
+		public void Compose_Band_ExcludesFarRatings()
+		{
+			// Anchor 1500; 2200 is outside a 300 band, so only three fit and no 2v2 forms.
+			var candidates = new[] { R(1, 1500), R(2, 2200), R(3, 1600), R(4, 1400) };
+			Assert.IsFalse(ArenaMatchComposer.TryCompose(candidates, 2, 2, new ArenaComposeOptions(300, false), out _));
+			// A wider band admits them.
+			Assert.IsTrue(ArenaMatchComposer.TryCompose(candidates, 2, 2, new ArenaComposeOptions(800, false), out _));
+		}
+
+		[Test]
+		public void Compose_Band_AnchoredOnLongestWaiter()
+		{
+			// The first in line is the anchor even when everyone else clusters elsewhere.
+			var candidates = new[] { R(1, 2400), R(2, 1500), R(3, 1500), R(4, 1500), R(5, 1500) };
+			Assert.IsFalse(ArenaMatchComposer.TryCompose(candidates, 2, 2, new ArenaComposeOptions(200, false), out _));
+		}
+
+		[Test]
+		public void Compose_Balance_SplitsHighAndLow()
+		{
+			// Two strong, two weak: balancing puts one strong on each side.
+			var candidates = new[] { R(1, 2000), R(2, 2000), R(3, 1000), R(4, 1000) };
+			Assert.IsTrue(ArenaMatchComposer.TryCompose(candidates, 2, 2, new ArenaComposeOptions(0, true), out List<ArenaSeat> seats));
+			int team0 = 0, team1 = 0;
+			foreach (ArenaSeat seat in seats)
+			{
+				int rating = seat.RowID <= 2 ? 2000 : 1000;
+				if (seat.Team == 0) team0 += rating; else team1 += rating;
+			}
+			Assert.AreEqual(team0, team1);
+		}
+
+		[Test]
+		public void Compose_Balance_KeepsGroupsTogether()
+		{
+			var candidates = new[] { R(1, 1900, group: 7), R(2, 1100, group: 7), R(3, 1500), R(4, 1500) };
+			Assert.IsTrue(ArenaMatchComposer.TryCompose(candidates, 2, 2, new ArenaComposeOptions(0, true), out List<ArenaSeat> seats));
+			int groupTeam = -1;
+			foreach (ArenaSeat seat in seats)
+			{
+				if (seat.RowID == 1 || seat.RowID == 2)
+				{
+					if (groupTeam < 0) groupTeam = seat.Team;
+					Assert.AreEqual(groupTeam, seat.Team, "a pre-made pair was split");
+				}
+			}
+		}
+
+		[Test]
+		public void Compose_Balance_StillFirstCome()
+		{
+			// Six waiters, four seats: the first four play, whatever the ratings of the last two.
+			var candidates = new[] { R(1, 1000), R(2, 1000), R(3, 1000), R(4, 1000), R(5, 3000), R(6, 3000) };
+			Assert.IsTrue(ArenaMatchComposer.TryCompose(candidates, 2, 2, new ArenaComposeOptions(0, true), out List<ArenaSeat> seats));
+			foreach (ArenaSeat seat in seats)
+			{
+				Assert.LessOrEqual(seat.RowID, 4);
+			}
+		}
+
+		// ── Rating ──────────────────────────────────────────────────────────
+
+		[Test]
+		public void Rating_Expected_IsSymmetric()
+		{
+			Assert.AreEqual(0.5, ArenaRating.Expected(1500, 1500), 1e-9);
+			Assert.AreEqual(1.0, ArenaRating.Expected(1700, 1500) + ArenaRating.Expected(1500, 1700), 1e-9);
+			Assert.Greater(ArenaRating.Expected(1700, 1500), 0.5);
+		}
+
+		[Test]
+		public void Rating_Delta_EqualOpponents_HalfK()
+		{
+			Assert.AreEqual(16, ArenaRating.Delta(1500, 1500, 1.0, 32));
+			Assert.AreEqual(-16, ArenaRating.Delta(1500, 1500, 0.0, 32));
+			Assert.AreEqual(0, ArenaRating.Delta(1500, 1500, 0.5, 32));
+		}
+
+		[Test]
+		public void Rating_Delta_UpsetPaysMore()
+		{
+			int underdogWin = ArenaRating.Delta(1200, 1800, 1.0, 32);
+			int favouriteWin = ArenaRating.Delta(1800, 1200, 1.0, 32);
+			Assert.Greater(underdogWin, favouriteWin);
+			Assert.GreaterOrEqual(favouriteWin, 1, "a win is never worth nothing");
+		}
+
+		[Test]
+		public void Rating_KFactor_PlacementThenSettled()
+		{
+			Assert.AreEqual(64, ArenaRating.KFactor(0, 10, 32, 64));
+			Assert.AreEqual(64, ArenaRating.KFactor(9, 10, 32, 64));
+			Assert.AreEqual(32, ArenaRating.KFactor(10, 10, 32, 64));
+			Assert.AreEqual(3, ArenaRating.PlacementGamesRemaining(7, 10));
+			Assert.AreEqual(0, ArenaRating.PlacementGamesRemaining(12, 10));
+		}
+
+		[Test]
+		public void Rating_Resolve_TeamMatesMoveTogether_AndFloorHolds()
+		{
+			var members = new List<(long, int, int, int)> { (1, 0, 1500, 20), (2, 0, 1500, 20), (3, 1, 1500, 20), (4, 1, 110, 20) };
+			var result = ArenaRating.Resolve(members, winnerTeam: 0, placementGames: 10, k: 32, placementK: 64);
+			Assert.AreEqual(4, result.Count);
+			Assert.AreEqual(result[0].delta, result[1].delta, "team-mates get the same change");
+			Assert.Greater(result[0].delta, 0);
+			Assert.Less(result[2].delta, 0);
+			Assert.GreaterOrEqual(result[3].newRating, ArenaRating.MinimumRating, "the floor holds");
+		}
+
+		[Test]
+		public void Rating_Resolve_Draw_IsHalf()
+		{
+			var members = new List<(long, int, int, int)> { (1, 0, 1500, 20), (2, 1, 1500, 20) };
+			var result = ArenaRating.Resolve(members, winnerTeam: -1, placementGames: 10, k: 32, placementK: 64);
+			Assert.AreEqual(0, result[0].delta);
+			Assert.AreEqual(0, result[1].delta);
+		}
+
+		[Test]
+		public void Rating_Band_WidensWithWaitAndCaps()
+		{
+			Assert.AreEqual(0, ArenaRating.ResolveBand(0, 5, 100, 1000), "0 base disables the band");
+			Assert.AreEqual(150, ArenaRating.ResolveBand(150, 5, 0, 1000));
+			Assert.AreEqual(450, ArenaRating.ResolveBand(150, 5, 60, 1000));
+			Assert.AreEqual(1000, ArenaRating.ResolveBand(150, 5, 6000, 1000));
+		}
+
+		// ── Dropped flags ───────────────────────────────────────────────────
+
+		[Test]
+		public void DroppedFlag_OwnerReturns_EnemyPicksUp_CarrierCannot()
+		{
+			Assert.AreEqual(ArenaFlagAction.Return, ArenaRules.ResolveDroppedFlagTouch(flagTeam: 0, actorTeam: 0, actorCarriesFlag: false));
+			Assert.AreEqual(ArenaFlagAction.Return, ArenaRules.ResolveDroppedFlagTouch(flagTeam: 0, actorTeam: 0, actorCarriesFlag: true));
+			Assert.AreEqual(ArenaFlagAction.PickUp, ArenaRules.ResolveDroppedFlagTouch(flagTeam: 0, actorTeam: 1, actorCarriesFlag: false));
+			Assert.AreEqual(ArenaFlagAction.None, ArenaRules.ResolveDroppedFlagTouch(flagTeam: 0, actorTeam: 1, actorCarriesFlag: true));
+			Assert.AreEqual(ArenaFlagAction.None, ArenaRules.ResolveDroppedFlagTouch(flagTeam: 0, actorTeam: -1, actorCarriesFlag: false));
+		}
 	}
 }

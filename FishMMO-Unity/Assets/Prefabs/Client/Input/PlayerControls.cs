@@ -413,6 +413,26 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                     ""priority"": 0
                 },
                 {
+                    ""name"": ""ArenaScoreboard"",
+                    ""type"": ""Button"",
+                    ""id"": ""a7c3e1f2-4b5d-4e6f-8a9b-0c1d2e3f4a5b"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false,
+                    ""priority"": 0
+                },
+                {
+                    ""name"": ""PinTarget"",
+                    ""type"": ""Button"",
+                    ""id"": ""c6ea4eee-1188-43fe-abb1-4470065b3bb8"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false,
+                    ""priority"": 0
+                },
+                {
                     ""name"": ""Pet"",
                     ""type"": ""Button"",
                     ""id"": ""f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1b6"",
@@ -952,6 +972,28 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""b8d4f2a3-5c6e-4f70-9bac-1d2e3f4a5b6c"",
+                    ""path"": ""<Keyboard>/b"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""ArenaScoreboard"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""5f9b8368-54a9-4b25-a0fc-6ba7579c08a6"",
+                    ""path"": ""<Keyboard>/f"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""PinTarget"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""d1e25b82-2d5f-42ae-9b2f-76a0862085591"",
                     ""path"": ""<Keyboard>/v"",
                     ""interactions"": """",
@@ -1391,6 +1433,8 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         m_Player_Minimap = m_Player.FindAction("Minimap", throwIfNotFound: true);
         m_Player_WorldMap = m_Player.FindAction("WorldMap", throwIfNotFound: true);
         m_Player_Lore = m_Player.FindAction("Lore", throwIfNotFound: true);
+        m_Player_ArenaScoreboard = m_Player.FindAction("ArenaScoreboard", throwIfNotFound: true);
+        m_Player_PinTarget = m_Player.FindAction("PinTarget", throwIfNotFound: true);
         m_Player_Pet = m_Player.FindAction("Pet", throwIfNotFound: true);
         m_Player_Options = m_Player.FindAction("Options", throwIfNotFound: true);
         m_Player_Menu = m_Player.FindAction("Menu", throwIfNotFound: true);
@@ -1517,6 +1561,8 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Minimap;
     private readonly InputAction m_Player_WorldMap;
     private readonly InputAction m_Player_Lore;
+    private readonly InputAction m_Player_ArenaScoreboard;
+    private readonly InputAction m_Player_PinTarget;
     private readonly InputAction m_Player_Pet;
     private readonly InputAction m_Player_Options;
     private readonly InputAction m_Player_Menu;
@@ -1660,6 +1706,14 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @Lore => m_Wrapper.m_Player_Lore;
         /// <summary>
+        /// Provides access to the underlying input action "Player/ArenaScoreboard".
+        /// </summary>
+        public InputAction @ArenaScoreboard => m_Wrapper.m_Player_ArenaScoreboard;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/PinTarget".
+        /// </summary>
+        public InputAction @PinTarget => m_Wrapper.m_Player_PinTarget;
+        /// <summary>
         /// Provides access to the underlying input action "Player/Pet".
         /// </summary>
         public InputAction @Pet => m_Wrapper.m_Player_Pet;
@@ -1793,6 +1847,12 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
             @Lore.started += instance.OnLore;
             @Lore.performed += instance.OnLore;
             @Lore.canceled += instance.OnLore;
+            @ArenaScoreboard.started += instance.OnArenaScoreboard;
+            @ArenaScoreboard.performed += instance.OnArenaScoreboard;
+            @ArenaScoreboard.canceled += instance.OnArenaScoreboard;
+            @PinTarget.started += instance.OnPinTarget;
+            @PinTarget.performed += instance.OnPinTarget;
+            @PinTarget.canceled += instance.OnPinTarget;
             @Pet.started += instance.OnPet;
             @Pet.performed += instance.OnPet;
             @Pet.canceled += instance.OnPet;
@@ -1909,6 +1969,12 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
             @Lore.started -= instance.OnLore;
             @Lore.performed -= instance.OnLore;
             @Lore.canceled -= instance.OnLore;
+            @ArenaScoreboard.started -= instance.OnArenaScoreboard;
+            @ArenaScoreboard.performed -= instance.OnArenaScoreboard;
+            @ArenaScoreboard.canceled -= instance.OnArenaScoreboard;
+            @PinTarget.started -= instance.OnPinTarget;
+            @PinTarget.performed -= instance.OnPinTarget;
+            @PinTarget.canceled -= instance.OnPinTarget;
             @Pet.started -= instance.OnPet;
             @Pet.performed -= instance.OnPet;
             @Pet.canceled -= instance.OnPet;
@@ -2394,6 +2460,20 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnLore(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "ArenaScoreboard" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnArenaScoreboard(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "PinTarget" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPinTarget(InputAction.CallbackContext context);
         /// <summary>
         /// Method invoked when associated input action "Pet" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
         /// </summary>

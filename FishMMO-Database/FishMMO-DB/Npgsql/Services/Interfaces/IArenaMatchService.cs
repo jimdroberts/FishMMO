@@ -74,5 +74,30 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// scene server's stale sweep, so it does not depend on the server that lost the match.
 		/// </remarks>
 		Task<DatabaseResult<int>> CancelAbandonedAsync(DateTime createdBeforeUtc, int maxRows = 64, CancellationToken cancellationToken = default);
+
+		/// <summary>A character's most recent matches, newest first, each with their own seat.</summary>
+		Task<DatabaseResult<IReadOnlyList<ArenaHistoryData>>> FetchRecentForCharacterAsync(long characterId, int limit, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Marks a seat vacated so the backfill may fill it, keeping the leaver's row for history.
+		/// </summary>
+		/// <returns>True when the seat was seated and is now vacated.</returns>
+		Task<DatabaseResult<bool>> MarkSeatVacatedAsync(long matchId, long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Re-seats a vacated character who came back inside the reconnect grace, if their seat was not
+		/// filled meanwhile.
+		/// </summary>
+		/// <returns>True when the seat was vacated and is theirs again.</returns>
+		Task<DatabaseResult<bool>> ReseatAsync(long matchId, long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>Opens (or closes, with null) the window during which vacated seats may be backfilled.</summary>
+		Task<DatabaseResult<bool>> SetBackfillWindowAsync(long matchId, DateTime? untilUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>Writes the rating change each seat earned in a ranked match.</summary>
+		Task<DatabaseResult<int>> UpdateMemberRatingDeltasAsync(long matchId, IReadOnlyList<(long characterId, int ratingDelta)> deltas, CancellationToken cancellationToken = default);
+
+		/// <summary>Stamps a match as ranked in a season. Called once, right after it forms, before it goes live.</summary>
+		Task<DatabaseResult<bool>> SetRankedAsync(long matchId, long seasonId, CancellationToken cancellationToken = default);
 	}
 }

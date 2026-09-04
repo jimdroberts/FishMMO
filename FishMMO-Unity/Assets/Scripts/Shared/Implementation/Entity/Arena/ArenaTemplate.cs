@@ -39,6 +39,10 @@ namespace FishMMO.Shared
 		/// <summary>Optional display name; "2v2" is generated when empty.</summary>
 		[Tooltip("Optional tab name. Empty generates e.g. 2v2 from the team count and size.")]
 		public string Name;
+
+		/// <summary>Whether matches at this format move season ratings and match within a rating band.</summary>
+		[Tooltip("Ranked: matches move the season rating, are matched within a rating band that widens with wait time, and a pre-made party must be the whole team.")]
+		public bool Ranked;
 	}
 
 	/// <summary>
@@ -59,6 +63,25 @@ namespace FishMMO.Shared
 
 		/// <summary>Triggers invoked on the local player at that moment.</summary>
 		[Tooltip("Triggers invoked on the local player's character at that moment.")]
+		public List<Trigger> Triggers = new List<Trigger>();
+	}
+
+	/// <summary>
+	/// Triggers that fire on each client when a kind of event happens in the match.
+	/// </summary>
+	[Serializable]
+	public class ArenaEventCue
+	{
+		/// <summary>Which moment.</summary>
+		[Tooltip("The moment this cue fires for.")]
+		public ArenaEventKind Kind;
+
+		/// <summary>Fire only on the actor's own client (e.g. a personal killing-spree fanfare).</summary>
+		[Tooltip("Fire only on the actor's own client. Otherwise every client in the arena fires it.")]
+		public bool ActorOnly;
+
+		/// <summary>Triggers invoked on the local player at that moment.</summary>
+		[Tooltip("Triggers invoked on the local player's character at that moment. ArenaEventData carries the kind, value, and whether the local player is the actor or the target.")]
 		public List<Trigger> Triggers = new List<Trigger>();
 	}
 
@@ -142,13 +165,53 @@ namespace FishMMO.Shared
 		[Min(10)]
 		public int GatheringTimeoutSeconds = 90;
 
+		[Tooltip("Seconds every player has to accept the ready check once everyone has arrived. 0 skips the check.")]
+		[Min(0)]
+		public int ReadyCheckSeconds = 20;
+
+		[Tooltip("Seconds a player who disconnects from a live match may reconnect and keep their seat. 0 forfeits at once.")]
+		[Min(0)]
+		public int ReconnectGraceSeconds = 60;
+
+		[Tooltip("Seconds after going live during which a vacated seat is filled from the queue. 0 disables backfill.")]
+		[Min(0)]
+		public int BackfillWindowSeconds = 60;
+
 		[Tooltip("Seconds the results screen stays before everyone is returned to the world.")]
 		[Min(3)]
 		public int ResultsSeconds = 15;
 
+		[Header("Penalties")]
+		[Tooltip("Minutes a player is locked out of the arena queue for leaving a live match. 0 for no lock.")]
+		[Min(0)]
+		public int DeserterLockMinutes = 15;
+
+		[Tooltip("Minutes a player is locked out of the arena queue for declining, or not answering, a ready check. 0 for no lock.")]
+		[Min(0)]
+		public int DeclineLockMinutes = 5;
+
+		[Header("Flags")]
+		[Tooltip("Capture the Flag: seconds a dropped flag lies on the ground before returning to its stand by itself.")]
+		[Min(1)]
+		public int FlagDropSeconds = 20;
+
+		[Tooltip("Capture the Flag: metres within which a player standing by a dropped flag picks it up (enemy) or returns it (owner).")]
+		[Min(0.5f)]
+		public float FlagPickupRadius = 2.0f;
+
+		[Tooltip("Capture the Flag: optional prefab attached above a carrier's head on clients. Empty uses a simple tinted marker.")]
+		public GameObject FlagCarrierVisualPrefab;
+
+		[Tooltip("Capture the Flag: optional prefab placed where a dropped flag lies on clients. Empty uses a simple tinted marker.")]
+		public GameObject DroppedFlagVisualPrefab;
+
 		[Header("Spawns")]
 		[Tooltip("Per team, the name prefix of the scene's respawn points that belong to that team.")]
 		public List<string> TeamSpawnPrefixes = new List<string> { "Team1", "Team2" };
+
+		[Header("Teams")]
+		[Tooltip("Per team, the colour used for nameplates, target frames, scoreboards and results. Teams beyond the list take the default palette.")]
+		public List<Color> TeamColors = new List<Color>(ArenaTeamColors.Defaults);
 
 		[Header("Rating")]
 		[Tooltip("PvP rank points awarded to every member of the winning team.")]
@@ -159,12 +222,65 @@ namespace FishMMO.Shared
 		[Min(0)]
 		public int LossRankPoints = 5;
 
+		[Header("Ranked")]
+		[Tooltip("Ranked: games a character plays at the placement K-factor before their rating is shown as final.")]
+		[Min(0)]
+		public int PlacementGames = 10;
+
+		[Tooltip("Ranked: Elo K-factor once placed.")]
+		[Min(1)]
+		public int RatingK = 32;
+
+		[Tooltip("Ranked: Elo K-factor during placement.")]
+		[Min(1)]
+		public int PlacementK = 64;
+
+		[Tooltip("Ranked: rating band around the longest waiter at zero wait. 0 disables banding.")]
+		[Min(0)]
+		public int RatingBandBase = 150;
+
+		[Tooltip("Ranked: points the band widens by per second waited.")]
+		[Min(0)]
+		public int RatingBandGrowthPerSecond = 5;
+
+		[Tooltip("Ranked: widest the band ever gets. 0 for no ceiling.")]
+		[Min(0)]
+		public int RatingBandMax = 1000;
+
+		[Tooltip("Balance teams by rating when composing a match from solo and party units. Uses the season rating for ranked formats and the PvP Rank attribute otherwise.")]
+		public bool BalanceTeams = true;
+
+		[Header("Announcer")]
+		[Tooltip("Kills without dying that count as a killing spree. 0 disables spree announcements.")]
+		[Min(0)]
+		public int KillingSpreeThreshold = 3;
+
+		[Tooltip("Points from the score limit at which the near-limit announcement fires. 0 disables it.")]
+		[Min(0)]
+		public int NearScoreLimitPoints = 3;
+
+		[Tooltip("Seconds left on the clock at which a time warning fires. Empty disables them.")]
+		public List<int> TimeWarningSeconds = new List<int> { 60, 30, 10 };
+
 		[Header("Client cues")]
 		[Tooltip("Triggers fired on each player's client at seconds of the start countdown. 0 fires at the start.")]
 		public List<ArenaCountdownCue> CountdownCues = new List<ArenaCountdownCue>();
 
 		[Tooltip("Triggers fired on each player's client when the match ends, before the results screen.")]
 		public List<Trigger> MatchEndTriggers = new List<Trigger>();
+
+		[Tooltip("Triggers fired on each player's client for moments of play: kills, sprees, flags, warnings.")]
+		public List<ArenaEventCue> EventCues = new List<ArenaEventCue>();
+
+		[Header("Reward hooks (server)")]
+		[Tooltip("Triggers run on the server for every present member of the winning team when the match ends. Reward systems author these; nothing ships in them.")]
+		public List<Trigger> WinRewardTriggers = new List<Trigger>();
+
+		[Tooltip("Triggers run on the server for every present member of a losing team when the match ends.")]
+		public List<Trigger> LossRewardTriggers = new List<Trigger>();
+
+		[Tooltip("Triggers run on the server for every present member when the match is drawn.")]
+		public List<Trigger> DrawRewardTriggers = new List<Trigger>();
 
 		[NonSerialized]
 		private Sprite loadedIcon;
@@ -189,6 +305,12 @@ namespace FishMMO.Shared
 				return index == 0;
 			}
 			return index >= 0 && index < Formats.Count;
+		}
+
+		/// <summary>Whether a format is ranked. Out-of-range formats are unranked.</summary>
+		public bool IsRankedFormat(int index)
+		{
+			return Formats != null && index >= 0 && index < Formats.Count && Formats[index] != null && Formats[index].Ranked;
 		}
 
 		/// <summary>Seats per team at a format index, or 1 when the arena declares no formats.</summary>
@@ -232,6 +354,28 @@ namespace FishMMO.Shared
 			}
 			string prefix = TeamSpawnPrefixes[team];
 			return string.IsNullOrWhiteSpace(prefix) ? null : prefix;
+		}
+
+		/// <summary>The colour a team is drawn in: the authored one, or the default palette's.</summary>
+		public Color GetTeamColor(int team)
+		{
+			if (TeamColors != null && team >= 0 && team < TeamColors.Count)
+			{
+				return TeamColors[team];
+			}
+			return ArenaTeamColors.Default(team);
+		}
+
+		/// <summary>Every team's colour, in team order, for publishing to the team registry.</summary>
+		public Color[] ResolveTeamColors()
+		{
+			int count = Math.Max(2, TeamCount);
+			var colors = new Color[count];
+			for (int t = 0; t < count; ++t)
+			{
+				colors[t] = GetTeamColor(t);
+			}
+			return colors;
 		}
 
 		/// <summary>Human-readable mode name.</summary>

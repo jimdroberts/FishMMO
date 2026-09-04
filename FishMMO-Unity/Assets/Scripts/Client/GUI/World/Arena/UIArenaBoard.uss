@@ -83,6 +83,106 @@
     display: none;
 }
 
+.arena-views {
+    padding-top: 6px;
+    padding-bottom: 2px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--abyss-400);
+}
+
+.arena-view-tab {
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+/* A ranked format tab carries a small mark, set inline as a suffix; this colours it. */
+.arena-format-tab--ranked {
+    border-color: var(--brand-500);
+}
+
+/* ── Profile strip ──────────────────────────────────────── */
+
+.arena-profile {
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-top: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.arena-profile__text {
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.arena-profile--locked {
+    border-color: var(--danger-500);
+}
+
+.arena-hidden {
+    display: none;
+}
+
+/* ── History and leaderboard lists ──────────────────────── */
+
+.arena-list-scroll {
+    flex-grow: 1;
+    min-height: 120px;
+    max-height: 360px;
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-bottom: 6px;
+}
+
+.arena-list-scroll--hidden {
+    display: none;
+}
+
+.arena-list {
+    flex-direction: column;
+}
+
+.arena-list__columns {
+    flex-direction: row;
+    align-items: center;
+    height: 16px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.arena-list__row {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-left-width: 3px;
+    flex-shrink: 0;
+}
+
+.arena-list__row--mine {
+    background-color: var(--brand-lo);
+}
+
+.arena-col--rank  { width: 28px; flex-shrink: 0; -unity-text-align: middle-center; }
+.arena-col--name  { flex-grow: 1; overflow: hidden; }
+.arena-col--num   { width: 46px; flex-shrink: 0; -unity-text-align: middle-center; }
+.arena-col--wide  { width: 84px; flex-shrink: 0; -unity-text-align: middle-center; }
+
+.arena-list__empty {
+    margin-top: 14px;
+    margin-bottom: 14px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
 /* ── About ──────────────────────────────────────────────── */
 
 .arena-about {

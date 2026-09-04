@@ -51,6 +51,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public event Action<Transform> OnClearTarget;
 
+		/// <inheritdoc />
+		public event Action<Transform> OnPinTarget;
+
+		/// <inheritdoc />
+		public event Action<Transform> OnUnpinTarget;
+
 		[Header("ECA - Target")]
 		[Tooltip("Triggers invoked when the character acquires a new target.")]
 		[SerializeField]
@@ -81,6 +87,121 @@ namespace FishMMO.Shared
 			HasClientSelectedTarget = true;
 		}
 
+		#region Pinned target
+
+		/// <summary>
+		/// The pinned transform, held as a plain reference so a destroyed target is still
+		/// distinguishable from "nothing pinned" — see <see cref="lastReportedTarget"/> for why
+		/// Unity's overloaded <c>==</c> cannot make that distinction.
+		/// </summary>
+		private Transform pinnedTarget;
+
+		/// <summary>The pinned target's character, resolved once at pin time.</summary>
+		private ICharacter pinnedCharacter;
+
+		/// <summary>The pinned target's damage controller, or null when it has no health to lose.</summary>
+		private ICharacterDamageController pinnedDamageController;
+
+		/// <inheritdoc />
+		public Transform PinnedTarget => pinnedTarget != null ? pinnedTarget : null;
+
+		/// <inheritdoc />
+		public bool TogglePinnedTarget()
+		{
+			if (!base.IsOwner)
+			{
+				return false;
+			}
+
+			Transform hovered = Current.Target != null ? Current.Target : null;
+
+			/* Nothing under the pointer, or the pinned character itself: the key means "let go".
+			 * A key that only ever pinned would need a second key to release, and the natural
+			 * gesture for "stop tracking this one" is to point at it and press again. */
+			if (hovered == null || ReferenceEquals(hovered, pinnedTarget))
+			{
+				ClearPinnedTarget();
+				return false;
+			}
+
+			return TryPinTarget(hovered);
+		}
+
+		/// <inheritdoc />
+		public bool TryPinTarget(Transform target)
+		{
+			if (!base.IsOwner || target == null)
+			{
+				return false;
+			}
+
+			/* Characters only. A signpost or a portal is worth hovering and naming, but a pin
+			 * exists to follow something through a fight, and the pinned card has nothing to
+			 * count down for scenery. The interact key keeps reading the hover target, so
+			 * pinning never gets between the player and a door. */
+			ICharacter character = target.GetComponent<ICharacter>();
+			if (character == null ||
+				character.NetworkObject == null ||
+				!character.NetworkObject.IsSpawned)
+			{
+				return false;
+			}
+
+			// The hover trace already pushes through the caster; a pin on oneself would be a
+			// health bar the player already has, at the top of the screen.
+			if (Character != null && character.ID == Character.ID)
+			{
+				return false;
+			}
+
+			if (ReferenceEquals(target, pinnedTarget))
+			{
+				return true;
+			}
+
+			ClearPinnedTarget();
+
+			pinnedTarget = target;
+			pinnedCharacter = character;
+			character.TryGet(out pinnedDamageController);
+
+			OnPinTarget?.Invoke(target);
+			return true;
+		}
+
+		/// <inheritdoc />
+		public void ClearPinnedTarget()
+		{
+			if (ReferenceEquals(pinnedTarget, null))
+			{
+				return;
+			}
+
+			/* Normalised through Unity's overloaded == so a subscriber is never handed a destroyed
+			 * transform whose members would throw; the release still fires, with null, because
+			 * the card must come down either way. */
+			Transform released = pinnedTarget != null ? pinnedTarget : null;
+
+			pinnedTarget = null;
+			pinnedCharacter = null;
+			pinnedDamageController = null;
+
+			OnUnpinTarget?.Invoke(released);
+		}
+
+		/// <summary>
+		/// Drops the pin without raising the release event. For teardown paths where the
+		/// subscribers are being cleared as well.
+		/// </summary>
+		private void ForgetPinnedTarget()
+		{
+			pinnedTarget = null;
+			pinnedCharacter = null;
+			pinnedDamageController = null;
+		}
+
+		#endregion
+
 		/// <summary>
 		/// Clears client-reported target state on despawn/pool reuse: the next occupant of a
 		/// pooled object must not inherit the previous player's target frame.
@@ -90,6 +211,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 			ClientSelectedTargetObjectId = 0;
 			HasClientSelectedTarget = false;
+			ForgetPinnedTarget();
 #if !UNITY_SERVER
 			hasSentTargetSelection = false;
 			lastSentTargetObjectId = 0;
@@ -156,9 +278,12 @@ namespace FishMMO.Shared
 			OnChangeTarget = null;
 			OnUpdateTarget = null;
 			OnClearTarget = null;
+			OnPinTarget = null;
+			OnUnpinTarget = null;
 			Last = default;
 			Current = default;
 			lastReportedTarget = null;
+			ForgetPinnedTarget();
 		}
 
 		/// <summary>
@@ -253,11 +378,49 @@ namespace FishMMO.Shared
 					}
 				}
 
+				ValidatePinnedTarget();
+
 				/* Every trace tick, not only on change: a change swallowed by the rate limit
-				 * below is naturally retried here until it goes through. */
-				MaybeReportTargetSelection(resolvedTarget);
+				 * below is naturally retried here until it goes through.
+				 *
+				 * The pinned target takes precedence over the hovered one. The report exists so
+				 * the streaming budget never evicts the opponent the player is engaged with, and
+				 * a pin is the most explicit statement of engagement the player can make — the
+				 * pointer will sweep across a dozen other characters while they fight it. */
+				MaybeReportTargetSelection(!ReferenceEquals(pinnedTarget, null) ? pinnedTarget : resolvedTarget);
 			}
 			nextTick -= Time.deltaTime;
+		}
+
+		/// <summary>
+		/// Releases the pin when the pinned target can no longer be followed — see
+		/// <see cref="PinnedTargetRules"/> for the rule.
+		/// </summary>
+		/// <remarks>
+		/// Runs on the trace tick rather than every frame: the facts it reads move no faster than
+		/// that, and the release it may raise is a UI change that nobody can see sooner.
+		/// </remarks>
+		private void ValidatePinnedTarget()
+		{
+			if (ReferenceEquals(pinnedTarget, null))
+			{
+				return;
+			}
+
+			bool isDestroyed = pinnedTarget == null;
+			bool isSpawned = !isDestroyed &&
+				pinnedCharacter != null &&
+				pinnedCharacter.NetworkObject != null &&
+				pinnedCharacter.NetworkObject.IsSpawned;
+			bool isAlive = pinnedDamageController == null || pinnedDamageController.IsAlive;
+			float sqrDistance = isDestroyed
+				? float.PositiveInfinity
+				: (pinnedTarget.position - transform.position).sqrMagnitude;
+
+			if (PinnedTargetRules.ShouldRelease(isDestroyed, isSpawned, isAlive, sqrDistance, PinnedTargetRules.RELEASE_DISTANCE))
+			{
+				ClearPinnedTarget();
+			}
 		}
 
 		/// <summary>
@@ -265,7 +428,7 @@ namespace FishMMO.Shared
 		/// <see cref="TargetSelectionBroadcast"/> for why the server wants it and how it verifies
 		/// the claim. Characters only: hovering scenery or nothing reports 0.
 		/// </summary>
-		/// <param name="resolvedTarget">The transform the frame currently shows, or null.</param>
+		/// <param name="resolvedTarget">The transform the frame currently follows — the pinned target when one is held, else the hovered one — or null.</param>
 		private void MaybeReportTargetSelection(Transform resolvedTarget)
 		{
 			if (base.NetworkManager == null || base.ClientManager == null || !base.IsClientStarted)

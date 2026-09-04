@@ -26,6 +26,47 @@ namespace FishMMO.Shared.Core
 		/// The current target information.
 		/// </summary>
 		TargetInfo Current { get; }
+
+		/// <summary>
+		/// Event triggered on the owning client when a target is pinned.
+		/// </summary>
+		event Action<Transform> OnPinTarget;
+		/// <summary>
+		/// Event triggered on the owning client when the pinned target is released. The argument
+		/// is the released transform, or null when it was destroyed out from under the pin.
+		/// </summary>
+		event Action<Transform> OnUnpinTarget;
+
+		/// <summary>
+		/// The character the owning client has pinned to its target frame, or null.
+		/// </summary>
+		/// <remarks>
+		/// A pin is a HUD concept: the pinned card stays up while the pointer wanders, so the
+		/// player can follow one opponent through a fight. It is never a combat target — ability
+		/// acquisition stays a server-side raycast from the replicated aim — and it lives on the
+		/// owning client only. On the server this is always null.
+		/// </remarks>
+		Transform PinnedTarget { get; }
+
+		/// <summary>
+		/// Pins the hovered character, or releases the pin when nothing — or the pinned character
+		/// itself — is under the pointer. Owning client only.
+		/// </summary>
+		/// <returns>True when a target is pinned after the call.</returns>
+		bool TogglePinnedTarget();
+
+		/// <summary>
+		/// Pins a specific character. Refused for non-characters, unspawned objects and the
+		/// player's own character. Owning client only.
+		/// </summary>
+		/// <param name="target">The transform to pin.</param>
+		/// <returns>True when the target is pinned after the call.</returns>
+		bool TryPinTarget(Transform target);
+
+		/// <summary>
+		/// Releases the pinned target, if any.
+		/// </summary>
+		void ClearPinnedTarget();
 		/// <summary>
 		/// Updates the target based on the given origin, direction, and max distance.
 		/// </summary>

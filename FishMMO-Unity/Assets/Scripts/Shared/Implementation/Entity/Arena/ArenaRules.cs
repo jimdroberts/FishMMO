@@ -24,6 +24,8 @@ namespace FishMMO.Shared
 		Home = 0,
 		/// <summary>Being carried by an enemy.</summary>
 		Carried = 1,
+		/// <summary>Lying where its carrier died or left. Its own team returns it; an enemy picks it up.</summary>
+		Dropped = 2,
 	}
 
 	/// <summary>What an interaction with a flag stand does.</summary>
@@ -35,6 +37,8 @@ namespace FishMMO.Shared
 		PickUp = 1,
 		/// <summary>Deliver the carried enemy flag at the own stand: a capture.</summary>
 		Capture = 2,
+		/// <summary>Return a dropped flag of the actor's own team to its stand.</summary>
+		Return = 3,
 	}
 
 	/// <summary>The outcome of interacting with a control point.</summary>
@@ -234,6 +238,29 @@ namespace FishMMO.Shared
 			}
 
 			return standFlag == ArenaFlagState.Home && !actorCarriesFlag ? ArenaFlagAction.PickUp : ArenaFlagAction.None;
+		}
+
+		/// <summary>
+		/// What touching a dropped flag lying on the ground does for one player.
+		/// </summary>
+		/// <param name="flagTeam">Team the flag belongs to.</param>
+		/// <param name="actorTeam">The touching player's team, or -1 when not seated.</param>
+		/// <param name="actorCarriesFlag">Whether the player is already carrying an enemy flag.</param>
+		/// <remarks>
+		/// Its own team returns it home with a touch; an enemy not already carrying a flag picks it
+		/// up and carries on. Nobody carries two.
+		/// </remarks>
+		public static ArenaFlagAction ResolveDroppedFlagTouch(int flagTeam, int actorTeam, bool actorCarriesFlag)
+		{
+			if (actorTeam < 0)
+			{
+				return ArenaFlagAction.None;
+			}
+			if (actorTeam == flagTeam)
+			{
+				return ArenaFlagAction.Return;
+			}
+			return actorCarriesFlag ? ArenaFlagAction.None : ArenaFlagAction.PickUp;
 		}
 
 		/// <summary>

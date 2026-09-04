@@ -44,6 +44,15 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>Winning team index, or -1 when undecided or drawn.</summary>
 		public int WinnerTeam { get; set; }
 
+		/// <summary>Whether this match moves ratings.</summary>
+		public bool Ranked { get; set; }
+
+		/// <summary>Season the match counts towards, or 0 for an unranked match.</summary>
+		public long SeasonID { get; set; }
+
+		/// <summary>Until when a vacated seat may be filled from the queue (UTC), or null.</summary>
+		public DateTime? BackfillUntilUtc { get; set; }
+
 		/// <summary>When the match was formed (UTC).</summary>
 		public DateTime TimeCreated { get; set; }
 

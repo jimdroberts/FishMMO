@@ -139,6 +139,12 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<ArenaMatchEntity> ArenaMatches { get; set; }
 		/// <summary>Seats in arena matches.</summary>
 		public DbSet<ArenaMatchMemberEntity> ArenaMatchMembers { get; set; }
+		/// <summary>Ranked arena seasons.</summary>
+		public DbSet<ArenaSeasonEntity> ArenaSeasons { get; set; }
+		/// <summary>Per-season ranked arena ratings.</summary>
+		public DbSet<ArenaRatingEntity> ArenaRatings { get; set; }
+		/// <summary>Arena queue locks.</summary>
+		public DbSet<ArenaPenaltyEntity> ArenaPenalties { get; set; }
 		/// <summary>Chat messages.</summary>
 		public DbSet<ChatEntity> Chat { get; set; }
 

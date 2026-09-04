@@ -238,6 +238,25 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			int teamSize,
 			DateTime pulsedSinceUtc,
 			int maxCandidates = 128,
+			ArenaRatingSource ratingSource = default,
+			ArenaComposeOptions composeOptions = default,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Seats the longest-waiting eligible waiter for an arena in a live match of that arena and
+		/// format that has a vacated seat and an open backfill window.
+		/// </summary>
+		/// <remarks>
+		/// One transaction: the match row is locked, the vacancy re-counted under the lock, the
+		/// oldest waiter locked and bound to the instance, and a new seated member row inserted.
+		/// Ranked matches take waiters from the same (ranked) format only, because the format is
+		/// what the queue row records.
+		/// </remarks>
+		Task<DatabaseResult<ArenaBackfillData>> TryBackfillArenaSeatAsync(
+			long worldServerId,
+			string sceneName,
+			int format,
+			DateTime pulsedSinceUtc,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>

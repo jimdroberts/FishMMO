@@ -25,6 +25,9 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.TeamSize).IsRequired();
 			builder.Property(e => e.Status).IsRequired().HasDefaultValue(0);
 			builder.Property(e => e.WinnerTeam).IsRequired().HasDefaultValue(-1);
+			builder.Property(e => e.Ranked).IsRequired().HasDefaultValue(false);
+			builder.Property(e => e.SeasonID).IsRequired().HasDefaultValue(0L);
+			builder.Property(e => e.BackfillUntilUtc).IsRequired(false);
 			builder.Property(e => e.TimeStarted).IsRequired(false);
 			builder.Property(e => e.TimeEnded).IsRequired(false);
 
@@ -33,6 +36,9 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			// Live-match lookups and history queries by world.
 			builder.HasIndex(e => new { e.WorldServerID, e.Status });
+
+			// Backfill: live matches of one arena at one format with a window still open.
+			builder.HasIndex(e => new { e.WorldServerID, e.SceneName, e.Format, e.Status });
 		}
 	}
 }

@@ -187,6 +187,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			/// <summary>Earliest time the pump may try to late-join this waiter into an open run.</summary>
 			public DateTime NextBackfillAttemptUtc;
+
+			/// <summary>When this server registered the entry, for the arena's widening rating band.</summary>
+			public DateTime QueuedAtUtc;
+
+			/// <summary>Arena: whether the format is ranked.</summary>
+			public bool Ranked;
+
+			/// <summary>Arena: balance teams by rating when composing.</summary>
+			public bool BalanceTeams;
+
+			/// <summary>Arena: rating band parameters, from the template.</summary>
+			public int RatingBandBase;
+			public int RatingBandGrowth;
+			public int RatingBandMax;
+
+			/// <summary>Arena: template id of the PvP Rank attribute, for unranked balancing; 0 when unresolved.</summary>
+			public int RankAttributeTemplateID;
 		}
 
 		/// <summary>
@@ -208,6 +225,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public int GroupSize;
 			public float HealthPCT;
 			public bool BackfillDue;
+			public DateTime QueuedAtUtc;
+			public bool Ranked;
+			public bool BalanceTeams;
+			public int RatingBandBase;
+			public int RatingBandGrowth;
+			public int RatingBandMax;
+			public int RankAttributeTemplateID;
 		}
 
 		/// <summary>This server's queued characters, by character ID. Main thread only.</summary>
@@ -797,6 +821,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					GroupSize = entry.GroupSize,
 					HealthPCT = healthPCT,
 					BackfillDue = entry.State == GroupFinderState.Waiting && now >= entry.NextBackfillAttemptUtc,
+					QueuedAtUtc = entry.QueuedAtUtc,
+					Ranked = entry.Ranked,
+					BalanceTeams = entry.BalanceTeams,
+					RatingBandBase = entry.RatingBandBase,
+					RatingBandGrowth = entry.RatingBandGrowth,
+					RatingBandMax = entry.RatingBandMax,
+					RankAttributeTemplateID = entry.RankAttributeTemplateID,
 				});
 			}
 

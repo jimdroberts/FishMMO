@@ -162,10 +162,10 @@ namespace FishMMO.Client
 				{
 					for (int t = 0; t < results.TeamScores.Length; ++t)
 					{
-						Label score = new Label($"Team {t + 1}  {results.TeamScores[t]}");
+						Label score = new Label((t == results.WinnerTeam ? "★ " : string.Empty) + $"Team {t + 1}  {results.TeamScores[t]}");
 						score.AddToClassList("fish-badge");
-						score.AddToClassList(t == results.WinnerTeam ? "fish-badge--good" : (t == results.YourTeam ? "fish-badge--accent" : "fish-badge--danger"));
 						score.AddToClassList("results-score");
+						ArenaTeamStyle.Apply(score, template != null ? template.GetTeamColor(t) : ArenaTeamColors.Default(t));
 						scoresRow.Add(score);
 					}
 				}
@@ -176,9 +176,18 @@ namespace FishMMO.Client
 
 			if (rankLabel != null)
 			{
-				rankLabel.text = results.RankDelta == 0
+				string rank = results.RankDelta == 0
 					? "PvP rank unchanged"
 					: (results.RankDelta > 0 ? $"PvP rank +{results.RankDelta}" : $"PvP rank {results.RankDelta}");
+				if (results.Ranked)
+				{
+					string delta = results.RatingDelta > 0 ? $"+{results.RatingDelta}" : results.RatingDelta.ToString();
+					string placement = results.PlacementGamesRemaining > 0
+						? $" · {results.PlacementGamesRemaining} placement {(results.PlacementGamesRemaining == 1 ? "game" : "games")} left"
+						: string.Empty;
+					rank = $"{rank}   ·   Rating {results.NewRating} ({delta}){placement}";
+				}
+				rankLabel.text = rank;
 			}
 
 			ApplyReturn();
@@ -193,6 +202,7 @@ namespace FishMMO.Client
 			}
 			pedestal.Clear();
 
+			ArenaTemplate template = results.ArenaTemplateID != 0 ? ArenaTemplate.Get<ArenaTemplate>(results.ArenaTemplateID) : null;
 			ArenaMemberEntry[] placements = results.Placements ?? new ArenaMemberEntry[0];
 			int[] order = { 1, 0, 2 };
 			foreach (int index in order)
@@ -210,7 +220,8 @@ namespace FishMMO.Client
 				Label name = new Label("…");
 				name.AddToClassList("fish-label");
 				name.AddToClassList("results-podium__name");
-				if (entry.CharacterID == Character?.ID) name.AddToClassList("fish-label--accent");
+				name.style.color = template != null ? template.GetTeamColor(entry.Team) : ArenaTeamColors.Default(entry.Team);
+				if (entry.CharacterID == Character?.ID) name.AddToClassList("fish-text--bold");
 				column.Add(name);
 				RequestName(entry.CharacterID, name);
 
@@ -240,6 +251,7 @@ namespace FishMMO.Client
 			}
 			list.Clear();
 
+			ArenaTemplate template = results.ArenaTemplateID != 0 ? ArenaTemplate.Get<ArenaTemplate>(results.ArenaTemplateID) : null;
 			ArenaMemberEntry[] placements = results.Placements ?? new ArenaMemberEntry[0];
 			for (int i = 0; i < placements.Length; ++i)
 			{
@@ -263,6 +275,7 @@ namespace FishMMO.Client
 				Label team = new Label($"T{entry.Team + 1}");
 				team.AddToClassList("fish-row__meta");
 				team.AddToClassList("results-row__team");
+				team.style.color = template != null ? template.GetTeamColor(entry.Team) : ArenaTeamColors.Default(entry.Team);
 				row.Add(team);
 
 				Label kd = new Label($"{entry.Kills} / {entry.Deaths}");

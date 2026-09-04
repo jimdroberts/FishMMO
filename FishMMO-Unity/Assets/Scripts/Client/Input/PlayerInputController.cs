@@ -262,6 +262,7 @@ namespace FishMMO.Client
 
 			// Player action callbacks
 			Controls.Player.Interact.performed += OnInteractPerformed;
+			Controls.Player.PinTarget.performed += OnPinTargetPerformed;
 			Controls.Player.ToggleFirstPerson.performed += OnToggleFirstPersonPerformed;
 			Controls.Player.ToggleMouseMode.performed += OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed += OnCancelPerformed;
@@ -280,6 +281,7 @@ namespace FishMMO.Client
 			Controls.Player.Minimap.performed += OnMinimapPerformed;
 			Controls.Player.WorldMap.performed += OnWorldMapPerformed;
 			Controls.Player.Lore.performed += OnLorePerformed;
+			Controls.Player.ArenaScoreboard.performed += OnArenaScoreboardPerformed;
 			Controls.Player.Pet.performed += OnPetPerformed;
 			Controls.Player.Options.performed += OnOptionsPerformed;
 			Controls.Player.Menu.performed += OnMenuPerformed;
@@ -310,6 +312,7 @@ namespace FishMMO.Client
 
 			// Player action callbacks
 			Controls.Player.Interact.performed -= OnInteractPerformed;
+			Controls.Player.PinTarget.performed -= OnPinTargetPerformed;
 			Controls.Player.ToggleFirstPerson.performed -= OnToggleFirstPersonPerformed;
 			Controls.Player.ToggleMouseMode.performed -= OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed -= OnCancelPerformed;
@@ -328,6 +331,7 @@ namespace FishMMO.Client
 			Controls.Player.Minimap.performed -= OnMinimapPerformed;
 			Controls.Player.WorldMap.performed -= OnWorldMapPerformed;
 			Controls.Player.Lore.performed -= OnLorePerformed;
+			Controls.Player.ArenaScoreboard.performed -= OnArenaScoreboardPerformed;
 			Controls.Player.Pet.performed -= OnPetPerformed;
 			Controls.Player.Options.performed -= OnOptionsPerformed;
 			Controls.Player.Menu.performed -= OnMenuPerformed;
@@ -400,7 +404,8 @@ namespace FishMMO.Client
 					return false;
 				}
 			}
-			return !PlayerInputController.MouseMode && !UIManager.InputControlHasFocus();
+			// A spectating game master flying the free camera is not driving their character.
+			return !PlayerInputController.MouseMode && !UIManager.InputControlHasFocus() && !ArenaSpectatorCamera.Active;
 		}
 
 		/// <summary>
@@ -469,7 +474,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void LateUpdate()
 		{
-			if (Character.KCCPlayer.CharacterCamera == null)
+			if (Character.KCCPlayer.CharacterCamera == null || ArenaSpectatorCamera.Active)
 			{
 				return;
 			}
@@ -733,6 +738,30 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Callback for the pin-target key: pins the hovered character to the target frame's
+		/// pinned card, or releases the pin when nothing — or the pinned character itself — is
+		/// under the pointer.
+		/// </summary>
+		/// <remarks>
+		/// Purely a HUD action. The pin never steers an ability: acquisition stays a server-side
+		/// raycast from the replicated aim, so this key changes what the player is SHOWN, not what
+		/// they hit. That is why it carries no rate limit and sends nothing of its own — the
+		/// controller folds the pin into the advisory target report it already makes.
+		/// </remarks>
+		private void OnPinTargetPerformed(InputAction.CallbackContext context)
+		{
+			if (TypingIntoField) return;
+			if (!CanUpdateInput() || UIManager.ControlHasFocus()) return;
+
+			if (!Character.TryGet(out ITargetController targetController))
+			{
+				return;
+			}
+
+			targetController.TogglePinnedTarget();
+		}
+
+		/// <summary>
 		/// Callback for toggling first-person camera mode.
 		/// </summary>
 		private void OnToggleFirstPersonPerformed(InputAction.CallbackContext context)
@@ -909,6 +938,21 @@ namespace FishMMO.Client
 		{
 			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UILore");
+		}
+
+		/// <summary>
+		/// Callback for the arena scoreboard shortcut.
+		/// </summary>
+		/// <remarks>
+		/// A key of its own because it is used in the middle of a fight: the scoreboard is glanced
+		/// at and dismissed while playing, so it does not release the cursor and must not need the
+		/// menu. Outside a match it opens with a note saying so rather than doing nothing, so the
+		/// key never reads as broken.
+		/// </remarks>
+		private void OnArenaScoreboardPerformed(InputAction.CallbackContext context)
+		{
+			if (TypingIntoField) return;
+			UIManager.ToggleVisibility("UIArenaScoreboard");
 		}
 
 		private void OnPetPerformed(InputAction.CallbackContext context)

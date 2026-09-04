@@ -14,6 +14,9 @@ namespace FishMMO.Shared
 	/// had not yet landed a cast on: in an over-budget crowd, the intended opponent could be
 	/// evicted at the exact moment the player engaged. This message closes that gap by telling
 	/// the server what the player's frame shows, at most a few times a second, only on change.
+	/// When the player has PINNED a character to the frame, that character is what is reported,
+	/// whatever the pointer is resting on: the pin is the clearest statement of engagement the
+	/// client can make, and the pointer sweeps across everyone else during the fight.
 	/// </para>
 	/// <para>
 	/// <b>Keyed on <c>NetworkObject.ObjectId</c>, not the character id.</b> The ObjectId is

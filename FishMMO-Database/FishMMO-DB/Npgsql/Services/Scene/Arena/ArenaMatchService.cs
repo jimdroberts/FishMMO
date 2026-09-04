@@ -248,6 +248,179 @@ namespace FishMMO.Database.Npgsql.Services
 			return result;
 		}
 
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<ArenaHistoryData>>> FetchRecentForCharacterAsync(long characterId, int limit, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult<IReadOnlyList<ArenaHistoryData>>.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than zero.");
+			}
+
+			limit = Math.Clamp(limit, 1, 100);
+
+			var result = await ExecuteReadAsync<IReadOnlyList<ArenaHistoryData>>(async dbContext =>
+			{
+				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
+
+				// Finished matches only: a live one is on the HUD, not in the history.
+				var seatSql = $@"SELECT m.* FROM {memberTable} m
+					JOIN {TableName} am ON am.id = m.match_id
+					WHERE m.character_id = {{0}} AND am.status >= {{1}}
+					ORDER BY am.time_created DESC, m.id DESC
+					LIMIT {{2}}";
+				var seats = await dbContext.ArenaMatchMembers
+					.FromSqlRaw(seatSql, characterId, (int)ArenaMatchStatus.Ended, limit)
+					.AsNoTracking()
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				if (seats.Count == 0)
+				{
+					return Array.Empty<ArenaHistoryData>();
+				}
+
+				long[] matchIds = seats.Select(x => x.MatchID).Distinct().ToArray();
+				var matches = await dbContext.ArenaMatches
+					.FromSqlRaw($@"SELECT * FROM {TableName} WHERE id = ANY({{0}})", matchIds)
+					.AsNoTracking()
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var byId = matches.ToDictionary(x => x.ID, MapMatch);
+
+				var lines = new List<ArenaHistoryData>(seats.Count);
+				foreach (ArenaMatchMemberEntity seat in seats)
+				{
+					if (byId.TryGetValue(seat.MatchID, out ArenaMatchData match))
+					{
+						lines.Add(new ArenaHistoryData(match, MapMember(seat)));
+					}
+				}
+				return lines;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<bool>> MarkSeatVacatedAsync(long matchId, long characterId, CancellationToken cancellationToken = default)
+		{
+			return SetSeatStatusAsync(matchId, characterId, ArenaSeatStatus.Vacated, ArenaSeatStatus.Seated, cancellationToken);
+		}
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<bool>> ReseatAsync(long matchId, long characterId, CancellationToken cancellationToken = default)
+		{
+			return SetSeatStatusAsync(matchId, characterId, ArenaSeatStatus.Seated, ArenaSeatStatus.Vacated, cancellationToken);
+		}
+
+		private async Task<DatabaseResult<bool>> SetSeatStatusAsync(long matchId, long characterId, ArenaSeatStatus to, ArenaSeatStatus from, CancellationToken cancellationToken)
+		{
+			if (matchId <= 0 || characterId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Match and character IDs must be greater than zero.");
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
+
+				/* State-asserting: only a seated seat vacates, only a vacated one is retaken, and
+				 * only while the match is not over. A reconnect that races a backfill loses cleanly
+				 * because the backfill inserts a new seated row for the newcomer and this row stays
+				 * vacated; the team-count check in the backfill SQL is what keeps them exclusive. */
+				var sql = $@"UPDATE {memberTable} m
+					SET status = {{2}}
+					FROM {TableName} am
+					WHERE am.id = m.match_id AND m.match_id = {{0}} AND m.character_id = {{1}}
+						AND m.status = {{3}} AND am.status < {{4}}";
+
+				int affected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { matchId, characterId, (int)to, (int)from, (int)ArenaMatchStatus.Ended },
+					cancellationToken).ConfigureAwait(false);
+
+				return affected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> SetBackfillWindowAsync(long matchId, DateTime? untilUtc, CancellationToken cancellationToken = default)
+		{
+			if (matchId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Match ID must be greater than zero.");
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				int affected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName} SET backfill_until_utc = {{1}} WHERE id = {{0}} AND status < {{2}}",
+					new object[] { matchId, (object)untilUtc ?? DBNull.Value, (int)ArenaMatchStatus.Ended },
+					cancellationToken).ConfigureAwait(false);
+				return affected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> UpdateMemberRatingDeltasAsync(long matchId, IReadOnlyList<(long characterId, int ratingDelta)> deltas, CancellationToken cancellationToken = default)
+		{
+			if (matchId <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Match ID must be greater than zero.");
+			}
+
+			if (deltas == null || deltas.Count == 0)
+			{
+				return DatabaseResult<int>.Success(0);
+			}
+
+			int count = Math.Min(deltas.Count, MaxBatchIds);
+			var characters = new long[count];
+			var values = new int[count];
+			for (int i = 0; i < count; ++i)
+			{
+				characters[i] = deltas[i].characterId;
+				values[i] = deltas[i].ratingDelta;
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
+				var sql = $@"UPDATE {memberTable} AS m
+					SET rating_delta = v.rating_delta
+					FROM UNNEST({{1}}, {{2}}) AS v(character_id, rating_delta)
+					WHERE m.match_id = {{0}} AND m.character_id = v.character_id";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { matchId, characters, values }, cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> SetRankedAsync(long matchId, long seasonId, CancellationToken cancellationToken = default)
+		{
+			if (matchId <= 0 || seasonId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Match and season IDs must be greater than zero.");
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				int affected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName} SET ranked = TRUE, season_id = {{1}} WHERE id = {{0}} AND status < {{2}}",
+					new object[] { matchId, seasonId, (int)ArenaMatchStatus.Live },
+					cancellationToken).ConfigureAwait(false);
+				return affected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
 		private static long[] Distinct(IReadOnlyList<long> ids)
 		{
 			if (ids == null || ids.Count == 0)
@@ -269,12 +442,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 		private static ArenaMatchData MapMatch(ArenaMatchEntity e)
 		{
-			return new ArenaMatchData(e.ID, e.WorldServerID, e.InstanceID, e.SceneName, e.TemplateID, e.Format, e.TeamCount, e.TeamSize, e.Status, e.WinnerTeam, e.TimeCreated, e.TimeStarted, e.TimeEnded);
+			return new ArenaMatchData(e.ID, e.WorldServerID, e.InstanceID, e.SceneName, e.TemplateID, e.Format, e.TeamCount, e.TeamSize, e.Status, e.WinnerTeam, e.TimeCreated, e.TimeStarted, e.TimeEnded, e.Ranked, e.SeasonID, e.BackfillUntilUtc);
 		}
 
 		private static ArenaMatchMemberData MapMember(ArenaMatchMemberEntity e)
 		{
-			return new ArenaMatchMemberData(e.ID, e.MatchID, e.CharacterID, e.Team, e.Kills, e.Deaths, e.Score);
+			return new ArenaMatchMemberData(e.ID, e.MatchID, e.CharacterID, e.Team, e.Kills, e.Deaths, e.Score, e.Status, e.RatingDelta);
 		}
 	}
 }

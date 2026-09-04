@@ -38,6 +38,7 @@ The Target system provides raycast-based targeting for FishMMO characters. It ha
 - Self-hit avoidance with automatic re-raycast past the player's own collider
 - Configurable physics layer mask for target filtering
 - Event-driven notifications: `OnChangeTarget`, `OnUpdateTarget`, `OnClearTarget`
+- Client-side **pinned target** beside the hover target: `TogglePinnedTarget` / `TryPinTarget` / `ClearPinnedTarget`, with `OnPinTarget` / `OnUnpinTarget` events and a pure release rule in `PinnedTargetRules`
 - Lightweight `TargetInfo` value-type struct for zero-allocation target state
 - Configurable tick rate (`TARGET_UPDATE_RATE`) to control update frequency
 - Maximum target distance clamping (`MAX_TARGET_DISTANCE`)
@@ -72,6 +73,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 |------------------------|---------|--------------------------------------------------|
 | `MAX_TARGET_DISTANCE`  | `50.0f` | Maximum allowed raycast distance                 |
 | `TARGET_UPDATE_RATE`   | `0.05f` | Seconds between target update ticks (client-side)|
+| `PinnedTargetRules.RELEASE_DISTANCE` | `75.0f` | Distance beyond which a pinned target is released; wider than acquisition so a chased target keeps its card |
 
 ### Inspector Fields
 
@@ -112,6 +114,12 @@ This is an integrated module within the FishMMO project. No separate installatio
 | `OnUpdateTarget` | `event Action<Transform>`                                 | Fired when the same target is re-validated          |
 | `OnClearTarget`  | `event Action<Transform>`                                 | Fired when the previous target is deselected        |
 | `UpdateTarget`   | `TargetInfo UpdateTarget(Vector3, Vector3, float)`        | Performs a raycast and returns updated target info   |
+| `PinnedTarget`   | `Transform`                                               | The character the owning client pinned to its frame, or null; always null on the server |
+| `OnPinTarget`    | `event Action<Transform>`                                 | Fired on the owning client when a character is pinned |
+| `OnUnpinTarget`  | `event Action<Transform>`                                 | Fired when the pin is released; null when the target was destroyed |
+| `TogglePinnedTarget` | `bool TogglePinnedTarget()`                            | Pins the hovered character, or releases the pin when nothing (or the pinned character) is hovered |
+| `TryPinTarget`   | `bool TryPinTarget(Transform)`                            | Pins a specific character; refused for non-characters, unspawned objects and oneself |
+| `ClearPinnedTarget` | `void ClearPinnedTarget()`                             | Releases the pin |
 
 ### Client-Side Update Loop
 
@@ -122,6 +130,17 @@ On the client (`!UNITY_SERVER`), `Update()` runs at `TARGET_UPDATE_RATE`:
 3. Compares `Current.Target` with `Last.Target`:
    - **Target changed**: Invokes `OnClearTarget` for the old target, then `OnChangeTarget` for the new.
    - **Target unchanged**: Invokes `OnUpdateTarget` for the current target.
+
+### Pinned Target
+
+The hover target is the right readout for action combat — abilities go where the player aims — but it vanishes the moment the pointer moves, which makes it useless for following one opponent through a fight. The pin is a second, client-only target that lives beside the hover target rather than replacing it:
+
+1. The `PinTarget` input action (`F` by default) calls `TogglePinnedTarget()`: it pins the character under the pointer, or releases the pin when the pointer is on nothing or on the pinned character itself.
+2. Only spawned characters other than the player can be pinned. Scenery and interactables stay hover-only, so pinning never gets between the player and a door.
+3. Each trace tick the controller asks `PinnedTargetRules.ShouldRelease` whether the pin still holds. It is released when the target is destroyed or despawned on this client, when it dies, or when it moves beyond `RELEASE_DISTANCE` (75 m, deliberately wider than the 50 m acquisition range so a target pinned at the edge does not flicker). Nothing else releases it — not the pointer, not a panel opening.
+4. The pinned target takes precedence in the advisory `TargetSelectionBroadcast`, so the streaming budget never evicts the character the player is tracking.
+
+**The pin is never a combat target.** Ability acquisition remains a server-side lag-compensated raycast from the replicated aim; the pin only changes what the player is shown. `UITKTarget` draws it as a second card beside the hover card, `ClientNameplateDisplay` keeps its nameplate up, and the party and guild invite buttons fall back to it when nothing is hovered.
 
 ### Self-Hit Avoidance
 
@@ -135,7 +154,7 @@ This prevents the player from always targeting themselves when the camera is beh
 ### External Integration Points
 
 - **Ability System** — `AbilityController` calls `ITargetController.UpdateTarget()` to resolve the target before spawning ability objects. `AbilityObject.Spawn()` and `SetAbilitySpawnPosition()` use `TargetInfo` to determine projectile aim direction and ground-targeted ability placement.
-- **UI System** — Subscribes to `OnChangeTarget`, `OnUpdateTarget`, and `OnClearTarget` to display target frames, health bars, name labels, and outline highlights.
+- **UI System** — Subscribes to `OnChangeTarget`, `OnUpdateTarget`, and `OnClearTarget` to display target frames, health bars, name labels, and outline highlights; and to `OnPinTarget` / `OnUnpinTarget` for the pinned card.
 - **PlayerCharacter** — `TargetController` is a `[RequireComponent]` on `PlayerCharacter`, ensuring every player entity has targeting capability.
 
 ### Cleanup
@@ -148,6 +167,8 @@ This prevents the player from always targeting themselves when the camera is beh
 |-------|---------------|-----------------|
 | Target selection | Hover mouse over a targetable entity, observe target frame UI | `OnChangeTarget` fires, UI displays target info |
 | Target clear | Move mouse away from all entities | `OnClearTarget` fires, UI hides target info |
+| Pin target | Hover a character and press `F` | `OnPinTarget` fires; the pinned card stays up while the pointer moves away |
+| Pin release | Press `F` with nothing (or the pinned character) hovered; or let the target die, despawn or pass 75 m | `OnUnpinTarget` fires, the pinned card comes down |
 | Self-hit avoidance | Position camera behind character, hover over distant entity | Target resolves to distant entity, not self |
 | Layer mask filtering | Set `LayerMask` to exclude a layer, hover over entity on that layer | Entity is not targeted |
 | Server-side targeting | Use ability on server, check `UpdateTarget` return | `TargetInfo` contains correct target and hit position |

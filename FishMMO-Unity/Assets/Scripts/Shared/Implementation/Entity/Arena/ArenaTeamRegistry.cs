@@ -30,6 +30,7 @@ namespace FishMMO.Shared
 		{
 			public readonly Dictionary<long, int> TeamByCharacter = new Dictionary<long, int>();
 			public bool Live;
+			public UnityEngine.Color[] TeamColors;
 		}
 
 		private static readonly Dictionary<int, Entry> entriesBySceneHandle = new Dictionary<int, Entry>();
@@ -39,6 +40,16 @@ namespace FishMMO.Shared
 		/// <param name="teamByCharacter">Character to team index.</param>
 		/// <param name="live">Whether play is on.</param>
 		public static void Publish(int sceneHandle, IReadOnlyDictionary<long, int> teamByCharacter, bool live)
+		{
+			Publish(sceneHandle, teamByCharacter, live, null);
+		}
+
+		/// <summary>Records or replaces the roster for a scene, with the colours its teams are drawn in.</summary>
+		/// <param name="sceneHandle">Scene the arena runs in.</param>
+		/// <param name="teamByCharacter">Character to team index.</param>
+		/// <param name="live">Whether play is on.</param>
+		/// <param name="teamColors">Colour per team, or null to keep the previous colours or the default palette.</param>
+		public static void Publish(int sceneHandle, IReadOnlyDictionary<long, int> teamByCharacter, bool live, UnityEngine.Color[] teamColors)
 		{
 			if (sceneHandle == 0)
 			{
@@ -60,6 +71,49 @@ namespace FishMMO.Shared
 				}
 			}
 			entry.Live = live;
+			if (teamColors != null)
+			{
+				entry.TeamColors = teamColors;
+			}
+		}
+
+		/// <summary>
+		/// The colour a character is drawn in because of the team they sit on, when they stand in
+		/// an arena and hold a seat.
+		/// </summary>
+		/// <remarks>
+		/// Consulted by the alliance colour, so nameplates and target frames show team colours
+		/// inside an arena without knowing what an arena is. Spectators and strangers have no seat
+		/// and fall through to the ordinary colouring.
+		/// </remarks>
+		public static bool TryGetTeamColor(ICharacter character, out UnityEngine.Color color)
+		{
+			color = default;
+			if (character?.GameObject == null)
+			{
+				return false;
+			}
+
+			int handle = character.GameObject.scene.handle;
+			if (!entriesBySceneHandle.TryGetValue(handle, out Entry entry) ||
+				!entry.TeamByCharacter.TryGetValue(character.ID, out int team))
+			{
+				return false;
+			}
+
+			color = GetTeamColor(handle, team);
+			return true;
+		}
+
+		/// <summary>The colour of a team in a scene: the published one, else the default palette's.</summary>
+		public static UnityEngine.Color GetTeamColor(int sceneHandle, int team)
+		{
+			if (entriesBySceneHandle.TryGetValue(sceneHandle, out Entry entry) &&
+				entry.TeamColors != null && team >= 0 && team < entry.TeamColors.Length)
+			{
+				return entry.TeamColors[team];
+			}
+			return ArenaTeamColors.Default(team);
 		}
 
 		/// <summary>Turns play on or off for a scene without changing its roster.</summary>
