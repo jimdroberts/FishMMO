@@ -115,6 +115,25 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void ReleasingTheInputBlursWhatActuallyHasFocus()
+		{
+			/* A TextField delegates focus to an inner text element, so the focused element is a
+			 * CHILD of the field and Blur() on the field itself can be a no-op. Focus then survives
+			 * the release: EnableChatInput returns early on every later press so chat cannot be
+			 * reopened, and the panel keeps asking for the cursor so mouse mode never dismisses.
+			 * Reported as sending one line and then being unable to send another. */
+			string source = ReadSource(ChatPath);
+
+			string release = MethodBody(source, "private void ReleaseInputFocus", "private bool IsInputFocused");
+			LogAssert.IsTrue(release.Contains("focusedElement"),
+				"the release must blur the element the focus controller actually names");
+
+			string keys = MethodBody(source, "private void OnInputKeyDown", "private void OnInputFocusOut");
+			LogAssert.IsFalse(keys.Contains("inputField.Blur()"),
+				"the key handler must release through ReleaseInputFocus, not the field alone");
+		}
+
+		[Test]
 		public void SenderlessRowsDoNotCarryAnEmptyLabel()
 		{
 			/* The row wraps, and a hidden child still counts as a flex item — it opened an empty
