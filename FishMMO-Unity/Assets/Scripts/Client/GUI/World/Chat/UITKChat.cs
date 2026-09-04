@@ -596,6 +596,38 @@ namespace FishMMO.Client
 		/// <summary>
 		/// True when the chat input field currently holds keyboard focus.
 		/// </summary>
+		/// <summary>Releases keyboard focus from the input, whichever element actually holds it.</summary>
+		/// <remarks>
+		/// A TextField delegates focus to an inner text element, so the focused element is a CHILD
+		/// of the field and calling Blur() on the field itself can be a no-op -- the field was never
+		/// the focused element. Focus then survives the "release", <see cref="IsInputFocused"/> stays
+		/// true forever, and two things follow from it: EnableChatInput returns early on every later
+		/// press so chat cannot be reopened, and the panel keeps asking for the cursor so mouse mode
+		/// never auto-dismisses. Reported as sending one line and then being unable to send another
+		/// until the cursor was toggled by hand, which is what cleared the stale focus.
+		///
+		/// Blurs the element the focus controller actually names, then the field, so it releases
+		/// whichever of the two is holding on.
+		/// </remarks>
+		private void ReleaseInputFocus()
+		{
+			if (inputField == null)
+			{
+				return;
+			}
+
+			VisualElement focused = inputField.panel?.focusController?.focusedElement as VisualElement;
+			if (focused != null && IsSelfOrDescendant(focused, inputField))
+			{
+				focused.Blur();
+			}
+
+			inputField.Blur();
+		}
+
+		/// <summary>
+		/// True when the chat input field currently holds keyboard focus.
+		/// </summary>
 		private bool IsInputFocused =>
 			inputField != null &&
 			inputField.panel != null &&
@@ -667,7 +699,7 @@ namespace FishMMO.Client
 					 * hit Escape or click the world. Escape was given this treatment and Enter was
 					 * not, which is why sending one chat line silently disabled the game. */
 					inputReleasedOnFrame = Time.frameCount;
-					inputField.Blur();
+					ReleaseInputFocus();
 					evt.StopPropagation();
 					break;
 
@@ -678,7 +710,7 @@ namespace FishMMO.Client
 					 * means "stop typing", which is what every other game means by it. */
 					inputField.value = "";
 					ResetInputHistoryCursor();
-					inputField.Blur();
+					ReleaseInputFocus();
 					evt.StopPropagation();
 					break;
 

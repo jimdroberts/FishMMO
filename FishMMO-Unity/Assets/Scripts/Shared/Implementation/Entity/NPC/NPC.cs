@@ -966,6 +966,12 @@ namespace FishMMO.Shared
 				// NPCs don't craft abilities so there's no DB-assigned ID.
 				Ability ability = new Ability((long)template.ID, template);
 				abilityController.LearnAbility(ability);
+
+				/* What an NPC actually walks away knowing. The AI's ability picker chooses from
+				 * exactly this set, so an NPC that learns nothing here cannot attack whatever its
+				 * archetype or rotation says -- and that failure is otherwise invisible: the mob
+				 * still aggroes, still chases and still repositions, it simply never swings. */
+				Log.Debug("NPC", $"'{name}' learned ability '{template.name}' (ID {template.ID}).");
 			}
 		}
 
