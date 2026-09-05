@@ -31,7 +31,8 @@ MonoBehaviour:
     HeadScale: 1
   InitialAttributes: {fileID: 0}
   InitialFaction: {fileID: 0}
-  StartingAbilities: []
+  StartingAbilities:
+  - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
   StartingInventoryItems: []
   StartingEquipment: []
   Naming:

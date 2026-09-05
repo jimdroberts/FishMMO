@@ -339,7 +339,10 @@ namespace FishMMO.Shared
 			if (settings.RequiresBiome && (biome == null || biome.Naming == null || !biome.Naming.IsUsable))
 			{
 				error = biome == null
-					? $"{settings.Mode} names need a biome: set one, or place the object where the scene's biome map covers"
+					/* Names the Biome field rather than saying "a biome", so the message points at the
+					 * thing to change. The two ways out are a field on this object and a property of
+					 * where it sits, and the reader has to be told which is which. */
+					? $"{settings.Mode} names need a biome. Set the Biome field, or place the object where the scene's biome map covers."
 					: $"biome '{biome.name}' has no naming data";
 				return false;
 			}
