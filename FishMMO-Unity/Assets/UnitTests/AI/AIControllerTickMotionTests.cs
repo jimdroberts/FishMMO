@@ -86,6 +86,60 @@ namespace FishMMO.UnitTests.AI
 		}
 
 		[Test]
+		public void MeasuredTickSpeed_IsAppliedDisplacementOverTheTick()
+		{
+			Vector3 before = new Vector3(10f, 2f, -4f);
+			Vector3 after = before + new Vector3(Constants.Character.RunSpeed * TickDelta, 0f, 0f);
+
+			float speedSqr = AIController.MeasureTickSpeedSqr(before, after, TickDelta);
+
+			Assert.That(Mathf.Sqrt(speedSqr), Is.EqualTo(Constants.Character.RunSpeed).Within(1e-4f));
+		}
+
+		[Test]
+		public void MeasuredTickSpeed_ClampedStepReadsAsNotMoving_WalkingStepReadsAsMoving()
+		{
+			float threshold = AIController.STUCK_SPEED_THRESHOLD * AIController.STUCK_SPEED_THRESHOLD;
+			Vector3 origin = Vector3.one;
+
+			// The mesh projection put the transform back where it started: no movement, whatever the agent's velocity says.
+			Assert.That(AIController.MeasureTickSpeedSqr(origin, origin, TickDelta), Is.LessThanOrEqualTo(threshold));
+
+			// A tick of walking clears the threshold with room to spare.
+			Vector3 walked = origin + AIController.ResolveTickStep(Vector3.forward * Constants.Character.WalkSpeed, TickDelta);
+			Assert.That(AIController.MeasureTickSpeedSqr(origin, walked, TickDelta), Is.GreaterThan(threshold));
+		}
+
+		[Test]
+		public void MeasuredTickSpeed_IsZeroForANonPositiveTick()
+		{
+			Assert.That(AIController.MeasureTickSpeedSqr(Vector3.zero, Vector3.one, 0f), Is.EqualTo(0f));
+			Assert.That(AIController.MeasureTickSpeedSqr(Vector3.zero, Vector3.one, -TickDelta), Is.EqualTo(0f));
+		}
+
+		[Test]
+		public void OffMeshReseat_FirstAttemptIsImmediate_ThenOncePerInterval()
+		{
+			float timer = 0f;
+			const float interval = AIController.OFF_MESH_RESEAT_INTERVAL;
+
+			Assert.That(AIController.ShouldAttemptReseat(ref timer, TickDelta, interval), Is.True, "an agent found off the mesh is re-seated on that tick");
+
+			int attempts = 0;
+			int ticks = Mathf.RoundToInt(interval / TickDelta) * 3;
+			for (int i = 0; i < ticks; ++i)
+			{
+				if (AIController.ShouldAttemptReseat(ref timer, TickDelta, interval))
+				{
+					attempts++;
+				}
+			}
+
+			// Three intervals of ticks, one attempt per interval — not one per tick.
+			Assert.That(attempts, Is.EqualTo(3));
+		}
+
+		[Test]
 		public void TickHeading_NoTurnAtZeroAngularSpeed()
 		{
 			bool changed = AIController.ResolveTickHeading(Quaternion.identity, Vector3.right * 3f, 0f, TickDelta, out Quaternion result);

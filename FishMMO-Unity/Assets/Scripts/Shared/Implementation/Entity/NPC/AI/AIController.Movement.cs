@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Speed below which an agent that is supposed to be moving counts as not moving.
 		/// </summary>
-		private const float STUCK_SPEED_THRESHOLD = 0.05f;
+		public const float STUCK_SPEED_THRESHOLD = 0.05f;
 
 		/// <summary>
 		/// Seconds of no progress before the NPC is considered stuck.
@@ -111,6 +111,7 @@ namespace FishMMO.Shared
 			stuckRecoveryAttempts = 0;
 			RequestedDestination = Vector3.zero;
 			LastPathWasPartial = false;
+			measuredTickSpeedSqr = 0f;
 		}
 
 		/// <summary>
@@ -263,10 +264,14 @@ namespace FishMMO.Shared
 			}
 
 			/* Wanting to move but not moving. desiredVelocity is what the agent would like to do;
-			 * velocity is what it is managing. A large gap between them for several seconds means
-			 * something physical is in the way — terrain, a prop, or a knot of other agents. */
+			 * measuredTickSpeedSqr is how fast the transform actually went last tick. The agent's own
+			 * velocity is not the second half of that comparison any more: with crowd avoidance off
+			 * and no physics on an NPC, nothing ever blocks the simulated velocity, so it reported
+			 * "moving" for an NPC whose every step the NavMesh projection clamped back to the same
+			 * point (a separation push into a mesh edge, a mesh that changed under it). The applied
+			 * displacement is what an observer sees, so it is what counts. */
 			bool wantsToMove = Agent.desiredVelocity.sqrMagnitude > (STUCK_SPEED_THRESHOLD * STUCK_SPEED_THRESHOLD);
-			bool isMoving = Agent.velocity.sqrMagnitude > (STUCK_SPEED_THRESHOLD * STUCK_SPEED_THRESHOLD);
+			bool isMoving = measuredTickSpeedSqr > (STUCK_SPEED_THRESHOLD * STUCK_SPEED_THRESHOLD);
 
 			// A partial path that has been walked out is also stuck: the agent stopped somewhere
 			// it was not sent, and standing there produces neither movement nor arrival.

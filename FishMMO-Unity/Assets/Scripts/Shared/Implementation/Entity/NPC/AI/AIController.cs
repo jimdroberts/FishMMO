@@ -5,6 +5,7 @@ using UnityEngine.AI;
 using FishNet.Connection;
 using FishNet.Object;
 using FishMMO.Shared.Core;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -657,6 +658,33 @@ namespace FishMMO.Shared
 		/// </summary>
 		private Vector3 separationVelocity;
 
+		/// <summary>
+		/// Seconds between attempts to put an agent that has left the NavMesh back on it.
+		/// </summary>
+		public const float OFF_MESH_RESEAT_INTERVAL = 1.0f;
+
+		/// <summary>
+		/// Countdown to the next off-mesh re-seat attempt. See <see cref="RecoverIfOffMesh"/>.
+		/// </summary>
+		private float offMeshReseatTimer;
+
+		/// <summary>
+		/// True once the current off-mesh episode has been logged, so a lost NPC warns once, not once a second.
+		/// </summary>
+		private bool offMeshWarned;
+
+		/// <summary>
+		/// Squared speed the transform actually moved at over the last network tick, in (m/s)².
+		/// </summary>
+		/// <remarks>
+		/// Measured from the displacement <see cref="StepAgent"/> applied after the NavMesh
+		/// projection, not from <see cref="NavMeshAgent.velocity"/>. With crowd avoidance off
+		/// (<see cref="InitializeOnce"/>) nothing ever blocks the agent's simulated velocity, so it
+		/// cannot tell a walking NPC from one whose step the mesh projection keeps clamping to the
+		/// same point; the displacement can. Read by <see cref="GetMovementProgress"/>.
+		/// </remarks>
+		private float measuredTickSpeedSqr;
+
 		/// <summary>Scratch buffer for the separation overlap query. Grown on demand.</summary>
 		private Collider[] separationHits = new Collider[16];
 
@@ -969,6 +997,8 @@ namespace FishMMO.Shared
 			Kite.Clear();
 			MaxOffensiveReach = 0f;
 			separationVelocity = Vector3.zero;
+			offMeshReseatTimer = 0f;
+			offMeshWarned = false;
 			stateClock = default;
 			aggressionTickTimer = 0f;
 			cachedTargetHalfHeight = 0f;
@@ -1014,6 +1044,9 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
+			// An agent off the mesh cannot step, path or arrive. Put it back before anything asks it to.
+			RecoverIfOffMesh(networkTickDelta);
 
 			// Apply this tick's slice of agent motion before anything reads the position.
 			StepAgent(networkTickDelta);
@@ -2207,15 +2240,18 @@ namespace FishMMO.Shared
 		{
 			if (!AgentIsUsable() || tickDelta <= 0f)
 			{
+				measuredTickSpeedSqr = 0f;
 				return;
 			}
 
 			Transform t = Character.Transform;
+			Vector3 before = t.position;
 
 			// Off-mesh links are traversed by the agent itself; just follow it.
 			if (Agent.isOnOffMeshLink)
 			{
 				t.position = Agent.nextPosition;
+				measuredTickSpeedSqr = MeasureTickSpeedSqr(before, t.position, tickDelta);
 				return;
 			}
 
@@ -2227,8 +2263,11 @@ namespace FishMMO.Shared
 			/* Re-seat the simulation on the transform even when the step is zero: anything that
 			 * moved the transform directly (a platform, a scripted placement) would otherwise
 			 * leave the agent believing it is somewhere else. */
-			Agent.nextPosition = t.position + step;
+			Agent.nextPosition = before + step;
 			t.position = Agent.nextPosition;
+
+			// What the mesh let through, not what was asked for: the stuck detector reads this.
+			measuredTickSpeedSqr = MeasureTickSpeedSqr(before, t.position, tickDelta);
 
 			if (LookTarget == null && ResolveTickHeading(t.rotation, velocity, Agent.angularSpeed, tickDelta, out Quaternion heading))
 			{
@@ -2243,6 +2282,92 @@ namespace FishMMO.Shared
 		public static Vector3 ResolveTickStep(Vector3 velocity, float tickDelta)
 		{
 			return velocity * tickDelta;
+		}
+
+		/// <summary>
+		/// The squared speed a displacement over one tick amounts to.
+		/// </summary>
+		/// <remarks>Separated so the stuck detector's input can be asserted directly.</remarks>
+		/// <param name="before">Position at the start of the tick.</param>
+		/// <param name="after">Position the tick actually reached, after NavMesh projection.</param>
+		/// <param name="tickDelta">Seconds per tick.</param>
+		/// <returns>Squared metres per second; zero for a non-positive tick.</returns>
+		public static float MeasureTickSpeedSqr(Vector3 before, Vector3 after, float tickDelta)
+		{
+			if (tickDelta <= 0f)
+			{
+				return 0f;
+			}
+			return (after - before).sqrMagnitude / (tickDelta * tickDelta);
+		}
+
+		/// <summary>
+		/// Re-seats an enabled agent that is no longer on the NavMesh, once per
+		/// <see cref="OFF_MESH_RESEAT_INTERVAL"/> until it lands.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// With <c>updatePosition</c> off nothing else ever does this. A NavMeshAgent places itself
+		/// on the mesh only when it is enabled; after that, a failed <see cref="WarpTo"/> (a spawn
+		/// point with no mesh within reach) or the mesh going away underneath it (a stacked instance
+		/// of the same scene unloading removes its copy of the NavMeshData, and the agent may have
+		/// been standing on that copy) leaves <c>isOnNavMesh</c> false for good. Every guard in this
+		/// class then reads <see cref="AgentIsUsable"/> as false: no step, no destination, no
+		/// arrival — an NPC frozen mid-stride until the pool recycles it.
+		/// </para>
+		/// <para>
+		/// Where it stands first, so a recovered NPC does not visibly teleport; home only when there
+		/// is no mesh anywhere near it, which is what the leash would do anyway.
+		/// </para>
+		/// </remarks>
+		/// <param name="tickDelta">Seconds per network tick.</param>
+		private void RecoverIfOffMesh(float tickDelta)
+		{
+			if (Agent == null || !Agent.isActiveAndEnabled || Agent.isOnNavMesh)
+			{
+				offMeshReseatTimer = 0f;
+				offMeshWarned = false;
+				return;
+			}
+
+			if (!ShouldAttemptReseat(ref offMeshReseatTimer, tickDelta, OFF_MESH_RESEAT_INTERVAL))
+			{
+				return;
+			}
+
+			Vector3 standing = Character.Transform.position;
+			Vector3 fallback = Home;
+			bool reseated = WarpTo(standing) || (fallback != Vector3.zero && fallback != standing && WarpTo(fallback));
+
+			if (!reseated && !offMeshWarned)
+			{
+				offMeshWarned = true;
+				Log.Warning("AIController", $"{gameObject.name} is off the NavMesh at {standing} with no mesh within reach of it or its home {fallback}; retrying every {OFF_MESH_RESEAT_INTERVAL:0.#}s.");
+			}
+		}
+
+		/// <summary>
+		/// Counts down between off-mesh re-seat attempts and reports when one is due.
+		/// </summary>
+		/// <remarks>
+		/// Separated so the cadence can be asserted directly. The first call of an episode is due
+		/// at once (the timer is zero when the agent is on the mesh); every later one waits
+		/// <paramref name="interval"/>, so a hopeless NPC costs one widening NavMesh sample a second,
+		/// not thirty.
+		/// </remarks>
+		/// <param name="timer">Seconds until the next attempt; rearmed to <paramref name="interval"/> when one is due.</param>
+		/// <param name="tickDelta">Seconds since the previous call.</param>
+		/// <param name="interval">Seconds between attempts.</param>
+		/// <returns>True when an attempt should be made now.</returns>
+		public static bool ShouldAttemptReseat(ref float timer, float tickDelta, float interval)
+		{
+			timer -= tickDelta;
+			if (timer > 0f)
+			{
+				return false;
+			}
+			timer = interval;
+			return true;
 		}
 
 		/// <summary>
