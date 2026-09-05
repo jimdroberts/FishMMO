@@ -77,6 +77,21 @@ namespace FishMMO.Shared
 		public static event Action OnApplyClientBootSettings;
 
 		/// <summary>
+		/// Raised once, at the start of a standalone client's shutdown, before any teardown and
+		/// at least one frame before the process quits.
+		/// </summary>
+		/// <remarks>
+		/// Exists so the launcher can return the window to its own size before exit — a
+		/// standalone player creates its next window in the mode it recorded at the previous
+		/// quit, and this process always quits from the game. The frame guarantee matters:
+		/// <c>Screen.SetResolution</c> takes effect at the end of the frame it is requested in,
+		/// so a handler's mode change is only recorded if the quit waits for that frame.
+		/// <see cref="PerformAsyncShutdown"/> yields once before it does anything else for that
+		/// reason. Not raised in the editor, which has no window to size, or on a server.
+		/// </remarks>
+		public static event Action OnClientShutdownStarting;
+
+		/// <summary>
 		/// Indicates if shutdown is currently being initiated.
 		/// </summary>
 		private static bool isInitiatingShutdown = false;
@@ -191,6 +206,20 @@ namespace FishMMO.Shared
 			}
 			isInitiatingShutdown = true;
 
+#if !UNITY_EDITOR && !UNITY_SERVER
+			/* First, before anything is released: a handler that changes the display mode needs
+			 * the window and the render state intact. Isolated so a handler that throws cannot
+			 * stop the process from quitting. */
+			try
+			{
+				OnClientShutdownStarting?.Invoke();
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"[MainBootstrapSystem] A shutdown-starting handler failed: {ex}. Continuing shutdown.");
+			}
+#endif
+
 			// Perform Graphics Cleanup. Synchronous by design — see GraphicsCleanup.
 			Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
 			GraphicsCleanup();
@@ -228,6 +257,14 @@ namespace FishMMO.Shared
 		private async Task PerformAsyncShutdown()
 		{
 			Debug.Log("[MainBootstrapSystem] PerformAsyncShutdown started.");
+
+			/* One frame, unconditionally, so a display mode requested by OnClientShutdownStarting
+			 * is applied — and therefore recorded by Unity for the next launch — before
+			 * Application.Quit below. The continuation is posted to Unity's synchronization
+			 * context and runs in the next frame's update, after the current frame has ended and
+			 * processed the pending mode switch. The awaits below may complete synchronously, so
+			 * they cannot be relied on to provide that frame. */
+			await Task.Yield();
 
 			try
 			{

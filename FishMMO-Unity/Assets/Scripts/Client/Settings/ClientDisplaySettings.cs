@@ -78,7 +78,19 @@ namespace FishMMO.Client
 		public static void ApplySaved()
 		{
 			ApplySavedQualityLevel();
-			ApplySavedDisplayMode();
+
+			/* Not the display mode when the launcher owns the window. The launcher and the game
+			 * share one process, and this runs during the first scene's Awake — before the launcher
+			 * scene has even loaded. Applying the saved game mode here put the window into
+			 * fullscreen behind the splash screen only for the launcher to shrink it again seconds
+			 * later (issue #221). The launcher applies the same saved mode itself at hand-off, in
+			 * ClientLauncher.RestoreGameDisplayMode, so nothing is lost by waiting. The editor and
+			 * WebGL boot straight into the game, and keep the boot-time apply. */
+			if (!LauncherWindow.IsActive)
+			{
+				ApplySavedDisplayMode();
+			}
+
 			ApplySavedVSync();
 			ApplySavedAnisotropicFiltering();
 			ApplySavedFrameRate();
