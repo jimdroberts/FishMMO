@@ -67,11 +67,31 @@ namespace FishMMO.Client
 	///   drawn at once; over budget, the nearest survive and the rest are hidden. Combined with
 	///   the spawn budget in <see cref="UITKLabelMaker"/> this bounds the cost of a large AoE —
 	///   or of a server that sends more labels than a client can reasonably draw.
+	///
+	/// <para><b>Execution order is part of the contract.</b> Projection reads the camera transform,
+	/// and the camera is placed in <c>PlayerInputController.LateUpdate</c> (and
+	/// <c>ArenaSpectatorCamera.LateUpdate</c>). Both of those components are added to objects that
+	/// appear at world entry, long after this layer's own scene loads, so with a default execution
+	/// order Unity ran this LateUpdate FIRST and every label was projected against the camera
+	/// transform left over from the previous frame. That is not a constant lag: the owner's
+	/// character transform is written only on the network tick (30 Hz) and the camera is locked to
+	/// it, so the camera's per-frame delta is zero on most frames and a whole tick of travel on the
+	/// frames right after a tick — the stale read turned that into a tick-rate shimmer on every
+	/// world label whenever the player moved, while the meshes those labels sit above rendered
+	/// correctly. The positive order below puts this pass after every camera writer; UI Toolkit
+	/// repaints in <c>PostLateUpdate</c>, so the styles written here still land in the same
+	/// frame.</para>
 	/// </remarks>
+	[DefaultExecutionOrder(ExecutionOrder)]
 	[DisallowMultipleComponent]
 	[RequireComponent(typeof(UIDocument))]
 	public sealed class UITKWorldLabelLayer : MonoBehaviour
 	{
+		/// <summary>
+		/// Runs this layer's <c>LateUpdate</c> after every camera writer's. See the class remarks.
+		/// </summary>
+		public const int ExecutionOrder = 1000;
+
 		/// <summary>USS class applied to the positioning element of every projected label.</summary>
 		private const string ANCHOR_CLASS = "world-label-anchor";
 
@@ -305,6 +325,16 @@ namespace FishMMO.Client
 		/// A label 60 metres away moves a fraction of a panel point per frame, so updating it at a
 		/// third of the rate is invisible and removes two thirds of its per-frame cost. Nearby
 		/// labels — the ones a player is actually reading — are never staggered.
+		/// <para>
+		/// That premise holds only while the CAMERA is still. Distance damps how fast a label
+		/// crosses the screen when the labelled character moves; it does nothing at all when the
+		/// viewer moves, and a camera turning at 180°/s sweeps a distant label across a third of
+		/// the screen in three frames. Staggering through that is not an invisible saving, it is a
+		/// three-frame staircase on the one kind of content — small, high-contrast text — that
+		/// shows it most. So the stride is gated on <see cref="cameraStill"/>: it keeps the whole
+		/// saving in the case it was written for, a player standing in a crowd, and gets out of the
+		/// way the moment the view moves.
+		/// </para>
 		/// </remarks>
 		[Tooltip("Distance past which labels reposition every Nth frame instead of every frame. 0 = off.")]
 		[Min(0.0f)]
@@ -314,6 +344,27 @@ namespace FishMMO.Client
 		[Tooltip("Frame stride for distant labels. 1 = every frame.")]
 		[Min(1)]
 		public int DistantUpdateInterval = 3;
+
+		/// <summary>Camera position at the end of the previous projection pass.</summary>
+		private Vector3 lastCameraPosition;
+
+		/// <summary>Camera rotation at the end of the previous projection pass.</summary>
+		private Quaternion lastCameraRotation = Quaternion.identity;
+
+		/// <summary>True while the camera has not measurably moved or turned since the last pass.</summary>
+		/// <remarks>
+		/// The gate on the distant-label stride — see <see cref="DistantLodDistance"/>. The
+		/// thresholds are deliberately tiny: this asks "is the view holding still", not "is the
+		/// view moving slowly", because a slow drift staggered at a third of the rate still reads
+		/// as a staircase rather than as motion.
+		/// </remarks>
+		private bool cameraStill;
+
+		/// <summary>Squared metres of camera travel per frame below which the view counts as still.</summary>
+		private const float CAMERA_STILL_SQR_DISTANCE = 1e-8f;
+
+		/// <summary>Degrees of camera rotation per frame below which the view counts as still.</summary>
+		private const float CAMERA_STILL_DEGREES = 0.001f;
 
 		/// <summary>
 		/// Panel-point margin outside the panel within which a label is still drawn.
@@ -672,7 +723,9 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// LateUpdate rather than Update so the camera has already moved this frame — projecting
 		/// against last frame's camera transform makes labels visibly lag the world they are
-		/// pinned to whenever the player turns.
+		/// pinned to whenever the player turns. LateUpdate alone is not enough to get that: the
+		/// camera writers are also LateUpdate, and the execution order on the class is what puts
+		/// this pass after them. See the class remarks.
 		/// </remarks>
 		private void LateUpdate()
 		{
@@ -707,7 +760,15 @@ namespace FishMMO.Client
 
 			Vector3 cameraPosition = camera.transform.position;
 			Vector3 cameraForward = camera.transform.forward;
+			Quaternion cameraRotation = camera.transform.rotation;
 			int frame = Time.frameCount;
+
+			/* Measured once for the whole pass rather than per label: every label shares the one
+			 * camera, and the answer decides only whether the distant-label stride is allowed. */
+			cameraStill = (cameraPosition - lastCameraPosition).sqrMagnitude <= CAMERA_STILL_SQR_DISTANCE &&
+				Quaternion.Angle(cameraRotation, lastCameraRotation) <= CAMERA_STILL_DEGREES;
+			lastCameraPosition = cameraPosition;
+			lastCameraRotation = cameraRotation;
 
 			// Panel points per world unit at one unit of distance, for perspective font scaling.
 			float pointsPerUnitAtOne = camera.orthographic
@@ -773,7 +834,7 @@ namespace FishMMO.Client
 				 * grouped label also still joins the stacking pass, off its stored base position:
 				 * its own projection can wait, but its slot in the stack cannot, or a neighbour
 				 * appearing mid-stride would draw straight through it. */
-				bool distant = DistantLodDistance > 0.0f && distance > DistantLodDistance;
+				bool distant = cameraStill && DistantLodDistance > 0.0f && distance > DistantLodDistance;
 				if (distant && DistantUpdateInterval > 1 && binding.Displayed &&
 					frame - binding.LastMoveFrame < DistantUpdateInterval)
 				{
