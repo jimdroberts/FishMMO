@@ -2,8 +2,11 @@ using System.Collections.Generic;
 
 namespace FishMMO.Shared.NameGeneration
 {
-	/// <summary>Category of title to generate.</summary>
-	public enum TitleType { Any, Honorific, Epithet, Rank, Legend, Occupation }
+	/// <summary>
+	/// Category of title to generate. <see cref="None"/> asks for no title at all;
+	/// it is last so authored <c>TitleTemplate.Category</c> values keep their ints.
+	/// </summary>
+	public enum TitleType { Any, Honorific, Epithet, Rank, Legend, Occupation, None }
 
 	/// <summary>
 	/// The social register a title belongs to. A banker wants a Civil title, a

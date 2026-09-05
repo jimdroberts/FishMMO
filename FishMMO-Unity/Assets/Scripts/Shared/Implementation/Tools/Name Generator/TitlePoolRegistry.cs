@@ -12,6 +12,8 @@ namespace FishMMO.Shared.NameGeneration
 	public static class TitlePoolRegistry
 	{
 		private static readonly List<TitlePoolTemplate> pools = new List<TitlePoolTemplate>();
+		/// <summary>Merged against when a race refuses shared trades; keeps that path's trimming and de-duplication identical.</summary>
+		private static readonly List<TitlePoolTemplate> NoPools = new List<TitlePoolTemplate>();
 		private static readonly Dictionary<string, RaceTitles> mergedTitles = new Dictionary<string, RaceTitles>(StringComparer.Ordinal);
 		private static readonly Dictionary<string, string[]> mergedPlaces = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
@@ -78,6 +80,8 @@ namespace FishMMO.Shared.NameGeneration
 		/// A race's own titles followed by those of every pool serving its category, each list
 		/// de-duplicated case-insensitively. The race's own titles come first so its flavour is
 		/// never lost to a pool; a race with no pools gets its own titles back unchanged.
+		/// Trades are the one exception: a race with <see cref="RaceNamingData.AllowGenericOccupations"/>
+		/// off takes none from a pool, so a slime is no more a pool's ferryman than the grammar's potter.
 		/// </summary>
 		public static RaceTitles TitlesFor(RaceTemplate race)
 		{
@@ -108,7 +112,11 @@ namespace FishMMO.Shared.NameGeneration
 					Epithet = Merge(own.Epithet, applicable, p => p.Epithet),
 					Rank = Merge(own.Rank, applicable, p => p.Rank),
 					Legend = Merge(own.Legend, applicable, p => p.Legend),
-					Occupational = Merge(own.Occupational, applicable, p => p.Occupational),
+					// A race that refuses generic trades refuses shared ones too. Its own
+					// authored trades still stand: those are a deliberate choice about that race.
+					Occupational = Merge(own.Occupational,
+						race.Naming.AllowGenericOccupations ? applicable : NoPools,
+						p => p.Occupational),
 				};
 			}
 			mergedTitles[key] = merged;

@@ -274,6 +274,39 @@ namespace FishMMO.UnitTests
 				"Generate Full should produce at least one title.");
 		}
 
+		[Test]
+		public void TitleTypeNone_IsOffered_AndSilencesGenerateFull()
+		{
+			DropdownField titleType = root.Q<DropdownField>("title-type-field");
+			Assert.AreEqual(nameof(TitleType.Any), titleType.choices[0], "Any stays the default.");
+			Assert.AreEqual(nameof(TitleType.None), titleType.choices[1], "None should sit right after Any.");
+			CollectionAssert.AreEquivalent(Enum.GetNames(typeof(TitleType)), titleType.choices);
+
+			VisualElement titleOptions = root.Q<VisualElement>("title-options-group");
+			SetCount(12);
+
+			window.SetTitleType(TitleType.None);
+			Assert.AreEqual(nameof(TitleType.None), titleType.value);
+			Assert.AreEqual(DisplayStyle.None, titleOptions.style.display.value, "Register/length/profession only shape a title.");
+			window.GenerateResults(fullCharacters: true);
+			Assert.AreEqual(12, Rows().Count);
+			Assert.IsFalse(Rows().Any(r => r.Q<Label>(className: "result-title") != null),
+				"Generate Full with TitleType None should produce no titles.");
+
+			root.Q<Toggle>("hybrid-toggle").value = true;
+			window.GenerateResults(fullCharacters: true);
+			Assert.AreEqual(12, Rows().Count);
+			Assert.IsFalse(Rows().Any(r => r.Q<Label>(className: "result-title") != null),
+				"Hybrid Generate Full with TitleType None should produce no titles.");
+			root.Q<Toggle>("hybrid-toggle").value = false;
+
+			window.SetTitleType(TitleType.Any);
+			Assert.AreEqual(DisplayStyle.Flex, titleOptions.style.display.value);
+			window.GenerateResults(fullCharacters: true);
+			Assert.IsTrue(Rows().Any(r => r.Q<Label>(className: "result-title") != null),
+				"Switching back to Any should restore titles.");
+		}
+
 		/// <summary>Only characters have titles, so the button is meaningless elsewhere.</summary>
 		[Test]
 		public void GenerateFull_IsHiddenOutsideCharacters()

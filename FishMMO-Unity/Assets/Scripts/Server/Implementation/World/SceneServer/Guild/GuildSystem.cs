@@ -2216,6 +2216,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						await Log.Warning("GuildSystem", $"LeaveGuildAsync guild update delete failed (GuildID={guildID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
 					}
+
+					/* Any land the guild held goes back to the world with it.
+					 *
+					 * Plot ownership carries no foreign key — the owner columns use zero for "none",
+					 * which has nothing to point at — so nothing in the schema notices the guild has
+					 * gone. Left alone, those plots stay owned by an identifier no guild answers to:
+					 * unclaimable because they are owned, and untaxable because guild land is
+					 * deferred rather than charged, which is to say removed from the game
+					 * permanently and silently.
+					 *
+					 * Done here rather than in the housing system because this is where a guild
+					 * stops existing, and a sweep looking for orphans would have to enumerate every
+					 * guild-owned plot in the world to find the few that had been abandoned. */
+					if (Server.Database.ServiceRegistry.TryGet(out IPlotService plotService))
+					{
+						DatabaseResult<int> plotReleaseResult = await plotService.ReleaseAllForGuildAsync(guildID);
+						if (!plotReleaseResult.IsSuccess)
+						{
+							await Log.Warning("GuildSystem", $"LeaveGuildAsync guild plot release failed (GuildID={guildID}): {plotReleaseResult.ErrorCode} - {plotReleaseResult.ErrorMessage}");
+						}
+						else if (plotReleaseResult.Data > 0)
+						{
+							await Log.Debug("GuildSystem", $"Released {plotReleaseResult.Data} plot(s) held by disbanded GuildID={guildID}.");
+						}
+					}
 				}
 				else
 				{

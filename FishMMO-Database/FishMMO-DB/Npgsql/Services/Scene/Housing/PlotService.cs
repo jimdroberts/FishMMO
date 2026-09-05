@@ -21,8 +21,12 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc />
-		public async Task<DatabaseResult<int>> RegisterAsync(string sceneName, IReadOnlyList<string> plotKeys, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> RegisterAsync(long worldServerID, string sceneName, IReadOnlyList<string> plotKeys, CancellationToken cancellationToken = default)
 		{
+			if (worldServerID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "World server ID must be greater than zero.");
+			}
 			if (string.IsNullOrWhiteSpace(sceneName))
 			{
 				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Scene name must not be empty.");
@@ -53,22 +57,22 @@ namespace FishMMO.Database.Npgsql.Services
 				 * the same land, so conflicts are the normal case rather than an error. The
 				 * conflict has to be a no-op rather than an update: an update would write over the
 				 * ownership of a plot somebody already lives on, every time a server restarts. */
-				string sql = $@"INSERT INTO {TableName} (scene_name, plot_key, owner_character_id, owner_guild_id, version, time_created)
-					SELECT {{0}}, u.plot_key, 0, 0, 1, {{1}}
-					FROM UNNEST({{2}}::text[]) AS u(plot_key)
-					ON CONFLICT (scene_name, plot_key) DO NOTHING";
+				string sql = $@"INSERT INTO {TableName} (world_server_id, scene_name, plot_key, owner_character_id, owner_guild_id, state, version, time_created)
+					SELECT {{0}}, {{1}}, u.plot_key, 0, 0, 0, 1, {{2}}
+					FROM UNNEST({{3}}::text[]) AS u(plot_key)
+					ON CONFLICT (world_server_id, scene_name, plot_key) DO NOTHING";
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { sceneName, now, keys },
+					new object[] { worldServerID, sceneName, now, keys },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc />
-		public async Task<DatabaseResult<List<PlotData>>> FetchBySceneAsync(string sceneName, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<List<PlotData>>> FetchBySceneAsync(long worldServerID, string sceneName, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(sceneName))
+			if (worldServerID <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
 				return DatabaseResult<List<PlotData>>.Success(new List<PlotData>());
 			}
@@ -77,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				List<PlotEntity> plots = await dbContext.Plots
 					.AsNoTracking()
-					.Where(e => e.SceneName == sceneName)
+					.Where(e => e.WorldServerID == worldServerID && e.SceneName == sceneName)
 					.OrderBy(e => e.PlotKey)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
@@ -129,7 +133,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc />
-		public async Task<DatabaseResult<int>> TryClaimAsync(long plotID, long ownerCharacterID, long ownerGuildID, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> TryClaimAsync(long plotID, long ownerCharacterID, long ownerGuildID, DateTime? taxDueUtc, int claimedState = 1, CancellationToken cancellationToken = default)
 		{
 			if (plotID <= 0)
 			{
@@ -158,19 +162,32 @@ namespace FishMMO.Database.Npgsql.Services
 				 * unowned land, both writes would succeed, and the second would silently evict the
 				 * first, who has already paid. Whoever gets the 1 back is the owner; everybody else
 				 * has to be told no. */
+				/* The NOT EXISTS clause is the design's "one house per player", asked in the same
+				 * statement that takes the plot so a claim cannot be judged against a house the
+				 * character acquired a moment later.
+				 *
+				 * It is not the whole enforcement. Two claims on two scene servers can both read no
+				 * existing house and both pass this; the partial unique index on owner_character_id
+				 * is what turns the second into an error rather than a second house. This clause is
+				 * here so the ordinary case — a player who simply already owns somewhere — comes
+				 * back as zero rows, which the caller already knows how to report, rather than as a
+				 * constraint violation it would have to translate. */
 				string sql = $@"UPDATE {TableName}
-					SET owner_character_id = {{1}}, owner_guild_id = {{2}}, time_claimed = {{3}}, version = version + 1
-					WHERE id = {{0}} AND owner_character_id = 0 AND owner_guild_id = 0";
+					SET owner_character_id = {{1}}, owner_guild_id = {{2}}, state = {{5}}, time_claimed = {{3}}, tax_due_utc = {{4}}, tax_delinquent_since_utc = NULL, version = version + 1
+					WHERE id = {{0}} AND owner_character_id = 0 AND owner_guild_id = 0
+					  AND ({{1}} = 0 OR NOT EXISTS (
+							SELECT 1 FROM {TableName} held WHERE held.owner_character_id = {{1}}
+					  ))";
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { plotID, ownerCharacterID, ownerGuildID, now },
+					new object[] { plotID, ownerCharacterID, ownerGuildID, now, (object)taxDueUtc ?? DBNull.Value, claimedState },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc />
-		public async Task<DatabaseResult<int>> ReleaseAsync(long plotID, long expectedOwnerCharacterID, long expectedOwnerGuildID, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> ReleaseAsync(long plotID, long expectedOwnerCharacterID, long expectedOwnerGuildID, int releasedState = 0, CancellationToken cancellationToken = default)
 		{
 			if (plotID <= 0)
 			{
@@ -187,12 +204,172 @@ namespace FishMMO.Database.Npgsql.Services
 				 * while the plot changed hands would otherwise evict its new owner, and the player
 				 * who sent it would never know they had done it. */
 				string sql = $@"UPDATE {TableName}
-					SET owner_character_id = 0, owner_guild_id = 0, time_claimed = NULL, version = version + 1
+					SET owner_character_id = 0, owner_guild_id = 0, state = {{3}}, time_claimed = NULL, tax_due_utc = NULL, tax_delinquent_since_utc = NULL, version = version + 1
 					WHERE id = {{0}} AND owner_character_id = {{1}} AND owner_guild_id = {{2}}";
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { plotID, expectedOwnerCharacterID, expectedOwnerGuildID },
+					new object[] { plotID, expectedOwnerCharacterID, expectedOwnerGuildID, releasedState },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
+		public async Task<DatabaseResult<int>> TrySetStateAsync(long plotID, int expectedState, int newState, long expectedOwnerCharacterID, long expectedOwnerGuildID, CancellationToken cancellationToken = default)
+		{
+			if (plotID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Plot ID must be greater than zero.");
+			}
+			if (expectedState == newState)
+			{
+				/* A transition to the state the plot is already in would report success having done
+				 * nothing, and a caller waiting on the row count to tell it whether it won a race
+				 * would read that as having lost one. */
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "The new state must differ from the expected one.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* Pinned to both the state being left and the owner leaving it, so a transition
+				 * computed from a stale read cannot land.
+				 *
+				 * The owner matters as much as the state here. "Finish building" arriving a moment
+				 * after the plot was reclaimed for unpaid tax would otherwise mark somebody else's
+				 * land — or freshly abandoned land — as occupied, and the state would then describe
+				 * a house that is not there. */
+				string sql = $@"UPDATE {TableName}
+					SET state = {{2}}, version = version + 1
+					WHERE id = {{0}} AND state = {{1}} AND owner_character_id = {{3}} AND owner_guild_id = {{4}}";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { plotID, expectedState, newState, expectedOwnerCharacterID, expectedOwnerGuildID },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
+		public async Task<DatabaseResult<int>> BackfillTaxDueAsync(long worldServerID, DateTime firstDueUtc, CancellationToken cancellationToken = default)
+		{
+			if (worldServerID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "World server ID must be greater than zero.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* IS NULL is what makes this idempotent, and it runs on every scene resolve so that
+				 * matters. A plot already being billed keeps the date it has; only land claimed
+				 * while tax was off is given one. */
+				string sql = $@"UPDATE {TableName}
+					SET tax_due_utc = {{1}}, version = version + 1
+					WHERE world_server_id = {{0}}
+					  AND owner_character_id <> 0
+					  AND tax_due_utc IS NULL";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { worldServerID, firstDueUtc },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
+		public async Task<DatabaseResult<List<PlotData>>> FetchTaxDueAsync(long worldServerID, DateTime asOfUtc, int limit, CancellationToken cancellationToken = default)
+		{
+			if (worldServerID <= 0 || limit < 1)
+			{
+				return DatabaseResult<List<PlotData>>.Success(new List<PlotData>());
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				List<PlotEntity> plots = await dbContext.Plots
+					.AsNoTracking()
+					.Where(e => e.WorldServerID == worldServerID &&
+								e.TaxDueUtc != null &&
+								e.TaxDueUtc <= asOfUtc)
+					.OrderBy(e => e.TaxDueUtc)
+					.Take(limit)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				return MapMany(plots);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
+		public async Task<DatabaseResult<int>> TryAdvanceTaxAsync(long plotID, DateTime expectedDueUtc, DateTime nextDueUtc, CancellationToken cancellationToken = default)
+		{
+			if (plotID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Plot ID must be greater than zero.");
+			}
+			if (nextDueUtc <= expectedDueUtc)
+			{
+				/* A next date that is not later would leave the plot permanently due, charging the
+				 * owner on every sweep forever. */
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "The next tax date must be later than the one being replaced.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* Pinned to the date the caller read. Several scene servers may host this world and
+				 * all see the plot come due at once; only the one whose expected date still matches
+				 * wins, so the period produces one charge rather than one per server. */
+				string sql = $@"UPDATE {TableName}
+					SET tax_due_utc = {{2}}, version = version + 1
+					WHERE id = {{0}} AND tax_due_utc = {{1}}";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { plotID, expectedDueUtc, nextDueUtc },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
+		public async Task<DatabaseResult<int>> MarkTaxDelinquentAsync(long plotID, DateTime delinquentSinceUtc, CancellationToken cancellationToken = default)
+		{
+			if (plotID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Plot ID must be greater than zero.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* IS NULL in the WHERE clause is what keeps the grace clock running from the first
+				 * miss. Without it every later failure would reset the date and an owner who never
+				 * pays would never run out of grace. */
+				string sql = $@"UPDATE {TableName}
+					SET tax_delinquent_since_utc = {{1}}, version = version + 1
+					WHERE id = {{0}} AND tax_delinquent_since_utc IS NULL";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { plotID, delinquentSinceUtc },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
+		public async Task<DatabaseResult<int>> ClearTaxDelinquencyAsync(long plotID, CancellationToken cancellationToken = default)
+		{
+			if (plotID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Plot ID must be greater than zero.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				string sql = $@"UPDATE {TableName}
+					SET tax_delinquent_since_utc = NULL, version = version + 1
+					WHERE id = {{0}} AND tax_delinquent_since_utc IS NOT NULL";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { plotID },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
@@ -208,7 +385,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				string sql = $@"UPDATE {TableName}
-					SET owner_guild_id = 0, time_claimed = NULL, version = version + 1
+					SET owner_guild_id = 0, state = 0, time_claimed = NULL, tax_due_utc = NULL, tax_delinquent_since_utc = NULL, version = version + 1
 					WHERE owner_guild_id = {{0}}";
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
@@ -226,7 +403,7 @@ namespace FishMMO.Database.Npgsql.Services
 			List<PlotData> results = new List<PlotData>(plots.Count);
 			foreach (PlotEntity plot in plots)
 			{
-				results.Add(new PlotData(plot.ID, plot.SceneName, plot.PlotKey, plot.OwnerCharacterID, plot.OwnerGuildID, plot.TimeClaimed));
+				results.Add(new PlotData(plot.ID, plot.WorldServerID, plot.SceneName, plot.PlotKey, plot.OwnerCharacterID, plot.OwnerGuildID, plot.TimeClaimed, plot.TaxDueUtc, plot.TaxDelinquentSinceUtc, plot.State));
 			}
 			return results;
 		}

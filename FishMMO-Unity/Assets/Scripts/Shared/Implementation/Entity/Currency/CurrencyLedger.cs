@@ -76,5 +76,16 @@ namespace FishMMO.Shared
 
 		/// <summary>The fee for founding a guild. Issue #186.</summary>
 		GuildCreation = 8,
+
+		/// <summary>
+		/// Buying something back out of a house vault after land was reclaimed.
+		/// </summary>
+		/// <remarks>
+		/// Its own reason rather than folded into <see cref="LandTax"/>. They are the same system
+		/// but not the same sink, and telling them apart is the point of recording a reason at all:
+		/// tax measures what holding land costs, while this measures what losing it costs — and a
+		/// designer tuning one wants to see the other move separately.
+		/// </remarks>
+		HouseVaultFee = 9,
 	}
 }

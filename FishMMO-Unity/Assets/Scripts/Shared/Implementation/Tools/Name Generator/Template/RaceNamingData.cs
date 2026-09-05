@@ -29,7 +29,7 @@ namespace FishMMO.Shared.NameGeneration
 
 		public SerializableRaceCitySuffixes CitySuffixes = new();
 
-		[Tooltip("Whether Civil titles may draw trades from the grammar's generic list when this race lists none. Off for monsters: a slime is never a potter.")]
+		[Tooltip("Whether this race may take trades it did not author itself, from the shared title pools or the grammar's generic list. Off for monsters: a slime is never a potter, nor a pool's ferryman.")]
 		public bool AllowGenericOccupations = true;
 
 		private RacePhonology runtimePhonology;

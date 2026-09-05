@@ -130,7 +130,7 @@ namespace FishMMO.Shared.NameGeneration
 			DeterministicRNG rng, TitleMemory memory = null)
 		{
 			options ??= new TitleOptions();
-			if (!RaceRegistry.TryGetTitles(race, out RaceTitles titles))
+			if (options.TitleType == TitleType.None || !RaceRegistry.TryGetTitles(race, out RaceTitles titles))
 			{
 				return ("", "");
 			}

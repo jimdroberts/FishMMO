@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -183,6 +184,55 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		/// <summary>
+		/// The flag means "this race takes no trade it did not author itself".
+		/// It used to gate only the grammar's generic list, so a monster still
+		/// inherited every trade in the shared pools — a Dire Wolf could be
+		/// titled Hunter, a Slime Ferryman or Rope-maker.
+		/// </summary>
+		[Test]
+		public void TradeRefusingRaces_InheritNoTradesFromSharedPools()
+		{
+			foreach (string race in new[] { "Slime", "Dire Wolf", "Kraken" })
+			{
+				Assert.IsTrue(RaceRegistry.TryGet(race, out RaceTemplate template), $"{race} is not registered.");
+				Assert.IsFalse(template.Naming.AllowGenericOccupations, $"{race} is expected to refuse generic trades.");
+				Assert.IsTrue(RaceRegistry.TryGetTitles(race, out RaceTitles titles));
+				CollectionAssert.IsEmpty(titles.Occupational, $"{race} inherited trades from a shared title pool.");
+			}
+
+			// A race that does take trades still gets the pool's.
+			Assert.IsTrue(RaceRegistry.TryGetTitles("human", out RaceTitles human));
+			CollectionAssert.IsNotEmpty(human.Occupational, "Trade-taking races should still inherit pooled trades.");
+		}
+
+		/// <summary>
+		/// A word is either an office or a trade, never both: a monster honestly
+		/// titled with a shared honorific must not read as one working a trade.
+		/// "Steward" was in both lists, which is what made
+		/// <see cref="Monsters_NeverTakeGenericTrades"/> fail on a legitimate title.
+		/// </summary>
+		[Test]
+		public void NoSharedHonorific_IsAlsoAGenericTrade()
+		{
+			var trades = new HashSet<string>(NameGrammar.GenericOccupations, StringComparer.OrdinalIgnoreCase);
+			foreach (TitlePoolTemplate pool in TitlePoolRegistry.All)
+			{
+				RaceTitles titles = pool.RuntimeTitles;
+				IEnumerable<string> honorifics = (titles.Honorific ?? Empty)
+					.Concat(titles.HonorificMasculine ?? Empty)
+					.Concat(titles.HonorificFeminine ?? Empty);
+				foreach (string honorific in honorifics)
+				{
+					Assert.IsFalse(trades.Contains(honorific.Trim()),
+						$"'{honorific}' is an honorific in '{pool.name}' and a generic trade; " +
+						"keep it in one list or the other.");
+				}
+			}
+		}
+
+		private static readonly string[] Empty = new string[0];
+
 		[Test]
 		public void DwarfOccupations_ComeFromTheRace()
 		{
@@ -214,6 +264,28 @@ namespace FishMMO.UnitTests
 			var titles = Titles(400, new NameRequest { Race = "human", Gender = CharacterGender.Male, MaxTitleLength = 40, AllowCompoundTitle = true });
 			Assert.Greater(titles.Count(t => Regex.IsMatch(t, @", (the |who )")), 5, "Compounding never happened.");
 			Assert.AreEqual(0, titles.Count(t => t.Length > 40));
+		}
+
+		[Test]
+		public void TitleTypeNone_YieldsNoTitle_AndLeavesTheNameUntouched()
+		{
+			Assert.AreEqual(0, Titles(50, new NameRequest { Race = "human", TitleType = TitleType.None }).Count(t => t.Length > 0),
+				"TitleType.None should never produce a title.");
+
+			// The title is skipped before any RNG draw, so a None request names exactly like a NameOnly one.
+			for (int seed = 1; seed <= 20; seed++)
+			{
+				CharacterEntry none = new NameGenerator(seed).Generate(new NameRequest { Race = "elf", TitleType = TitleType.None });
+				CharacterEntry nameOnly = new NameGenerator(seed).Generate(new NameRequest { Race = "elf", NameOnly = true });
+				Assert.AreEqual(nameOnly.FullName, none.FullName);
+				Assert.AreEqual("", none.Title);
+				Assert.AreEqual("", none.TitleCategory);
+				Assert.AreEqual(none.FullName, none.FullTitle, "FullTitle should collapse to the bare name.");
+			}
+
+			CharacterEntry hybrid = new NameGenerator(3).Generate(new HybridRequest { RaceA = "orc", RaceB = "dwarf", TitleType = TitleType.None });
+			Assert.IsFalse(string.IsNullOrEmpty(hybrid.Name));
+			Assert.AreEqual("", hybrid.Title, "Hybrids should honour TitleType.None too.");
 		}
 
 		// ── Repetition and determinism ────────────────────────────────

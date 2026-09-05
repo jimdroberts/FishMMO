@@ -438,6 +438,7 @@ namespace FishMMO.Shared
 		{
 			switch (policy)
 			{
+				case NamingTitlePolicy.None: return TitleType.None;
 				case NamingTitlePolicy.Honorific: return TitleType.Honorific;
 				case NamingTitlePolicy.Epithet: return TitleType.Epithet;
 				case NamingTitlePolicy.Rank: return TitleType.Rank;

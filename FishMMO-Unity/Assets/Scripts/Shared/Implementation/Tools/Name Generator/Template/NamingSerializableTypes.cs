@@ -168,7 +168,7 @@ namespace FishMMO.Shared.NameGeneration
 		public string[] Epithet;
 		public string[] Rank;
 		public string[] Legend;
-		[Tooltip("Trades and callings of this race: Runesmith, Brewer. The grammar's generic occupations are used when empty.")]
+		[Tooltip("Trades and callings of this race: Runesmith, Brewer. When empty, the shared pools and then the grammar's generic occupations fill in, unless AllowGenericOccupations is off.")]
 		public string[] Occupational;
 
 		public RaceTitles ToRuntime() => new()

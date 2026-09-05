@@ -27,6 +27,7 @@ namespace FishMMO.Shared.NameGeneration
 		/// <summary>Optional cross-race modifier key (e.g. "ashen", "bloodborn", "tidebound").</summary>
 		public string Modifier { get; set; }
 		public CharacterGender Gender { get; set; } = CharacterGender.Unspecified;
+		/// <summary>Category of title to draw; <see cref="TitleType.None"/> skips the title like <see cref="NameOnly"/>.</summary>
 		public TitleType TitleType { get; set; } = TitleType.Any;
 		/// <summary>Social register of the title: Civil for townsfolk and traders, Martial for soldiers, Mythic for legends.</summary>
 		public TitleRegister Register { get; set; } = TitleRegister.Any;
@@ -116,6 +117,7 @@ namespace FishMMO.Shared.NameGeneration
 		public string CultureA { get; set; }
 		public string CultureB { get; set; }
 		public CharacterGender Gender { get; set; } = CharacterGender.Unspecified;
+		/// <summary>Category of title to draw; <see cref="TitleType.None"/> yields an untitled hybrid.</summary>
 		public TitleType TitleType { get; set; } = TitleType.Any;
 		public TitleRegister Register { get; set; } = TitleRegister.Any;
 		public string Profession { get; set; }

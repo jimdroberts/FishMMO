@@ -86,6 +86,8 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		private DropdownField registerField;
 		private TextField professionField;
 		private IntegerField maxTitleField;
+		/// <summary>Register, length budget and profession — everything that only shapes a title.</summary>
+		private VisualElement titleOptionsGroup;
 		private DropdownField cityTypeField;
 		private DropdownField poiTypeField;
 		private DropdownField itemTypeField;
@@ -326,12 +328,16 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			var titleCol = new VisualElement();
 			titleCol.AddToClassList("field-col");
 			titleCol.Add(FieldLabel("Title Type"));
-			titleTypeField = new DropdownField(Enum.GetNames(typeof(TitleType)).ToList(), 0) { name = "title-type-field" };
+			titleTypeField = new DropdownField(TitleTypeChoices(), 0) { name = "title-type-field" };
 			titleTypeField.labelElement.style.display = DisplayStyle.None;
+			titleTypeField.tooltip = "None generates no title, even for Generate Full.";
+			titleTypeField.RegisterValueChangedCallback(_ => RefreshTitleFields());
 			titleCol.Add(titleTypeField);
 			row.Add(titleCol);
 
 			characterGroup.Add(row);
+
+			titleOptionsGroup = new VisualElement { name = "title-options-group" };
 
 			var titleRow = new VisualElement();
 			titleRow.AddToClassList("field-row");
@@ -354,13 +360,14 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			maxCol.Add(maxTitleField);
 			titleRow.Add(maxCol);
 
-			characterGroup.Add(titleRow);
+			titleOptionsGroup.Add(titleRow);
 
-			characterGroup.Add(FieldLabel("Profession (optional)"));
+			titleOptionsGroup.Add(FieldLabel("Profession (optional)"));
 			professionField = new TextField { value = "", name = "profession-field" };
 			professionField.labelElement.style.display = DisplayStyle.None;
 			professionField.tooltip = "Fills the {profession} slot of Civil titles, e.g. 'Banker'.";
-			characterGroup.Add(professionField);
+			titleOptionsGroup.Add(professionField);
+			characterGroup.Add(titleOptionsGroup);
 
 			hybridToggle = new Toggle("Hybrid Mode") { value = false, name = "hybrid-toggle" };
 			hybridToggle.tooltip = "Blend the phonology of two races into one name.";
@@ -639,6 +646,31 @@ namespace FishMMO.Shared.NameGeneration.Editor
 
 			BuildCategoryList();
 			RefreshResults();
+		}
+
+		/// <summary>
+		/// Any first (the default), then None, then the concrete categories —
+		/// so "no title" sits where a user looking to switch it off will find it.
+		/// </summary>
+		private static List<string> TitleTypeChoices()
+		{
+			var choices = new List<string> { nameof(TitleType.Any), nameof(TitleType.None) };
+			choices.AddRange(Enum.GetNames(typeof(TitleType)).Where(n => !choices.Contains(n)));
+			return choices;
+		}
+
+		/// <summary>Pick a title type the way the dropdown does, including hiding the title-only fields for <see cref="TitleType.None"/>.</summary>
+		public void SetTitleType(TitleType titleType)
+		{
+			titleTypeField.SetValueWithoutNotify(titleType.ToString());
+			RefreshTitleFields();
+		}
+
+		/// <summary>Register, length budget and profession only shape a title; hide them when there is none.</summary>
+		private void RefreshTitleFields()
+		{
+			bool titled = titleTypeField.value != nameof(TitleType.None);
+			titleOptionsGroup.style.display = titled ? DisplayStyle.Flex : DisplayStyle.None;
 		}
 
 		private void GenerateCharacters(bool fullCharacters)

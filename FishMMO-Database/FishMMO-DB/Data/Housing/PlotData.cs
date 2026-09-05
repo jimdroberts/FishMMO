@@ -16,6 +16,9 @@ namespace FishMMO.Database.Data
 		/// <summary>Primary key.</summary>
 		public readonly long ID;
 
+		/// <summary>The world server this land belongs to.</summary>
+		public readonly long WorldServerID;
+
 		/// <summary>The Unity scene the plot's foundation is authored in.</summary>
 		public readonly string SceneName;
 
@@ -28,17 +31,36 @@ namespace FishMMO.Database.Data
 		/// <summary>The owning guild, or zero.</summary>
 		public readonly long OwnerGuildID;
 
+		/// <summary>
+		/// Where the plot is in its lifecycle, as a <c>FishMMO.Shared.PlotState</c> value.
+		/// </summary>
+		/// <remarks>
+		/// An integer for the same reason the owner arrives as two columns: this assembly cannot
+		/// reference the shared enum. Callers cast, and <c>PlotStateParityTests</c> pins the pairing.
+		/// </remarks>
+		public readonly int State;
+
 		/// <summary>When the current owner claimed the plot, or null while unclaimed.</summary>
 		public readonly DateTime? TimeClaimed;
 
-		public PlotData(long id, string sceneName, string plotKey, long ownerCharacterID, long ownerGuildID, DateTime? timeClaimed)
+		/// <summary>When the next tax payment falls due, or null while unowned.</summary>
+		public readonly DateTime? TaxDueUtc;
+
+		/// <summary>When the owner first failed to pay, or null while up to date.</summary>
+		public readonly DateTime? TaxDelinquentSinceUtc;
+
+		public PlotData(long id, long worldServerID, string sceneName, string plotKey, long ownerCharacterID, long ownerGuildID, DateTime? timeClaimed, DateTime? taxDueUtc = null, DateTime? taxDelinquentSinceUtc = null, int state = 0)
 		{
 			ID = id;
+			WorldServerID = worldServerID;
 			SceneName = sceneName;
 			PlotKey = plotKey;
 			OwnerCharacterID = ownerCharacterID;
 			OwnerGuildID = ownerGuildID;
 			TimeClaimed = timeClaimed;
+			TaxDueUtc = taxDueUtc;
+			TaxDelinquentSinceUtc = taxDelinquentSinceUtc;
+			State = state;
 		}
 	}
 }

@@ -2,7 +2,10 @@ using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using FishNet.Connection;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -20,7 +23,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// destruction of unpaid plots.</para>
 	/// </remarks>
 	[CreateAssetMenu(fileName = "HousingSystem", menuName = "FishMMO/Server/SceneServer/Housing System", order = 1)]
-	public class HousingSystem : ServerBehaviour, IHousingSystem
+	[RequiresDataContainer(typeof(HousingSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
+	public partial class HousingSystem : ServerBehaviour, IHousingSystem
 	{
 		/// <summary>
 		/// Who may own land and housing on this server.
@@ -68,14 +73,81 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Housing enabled. Ownership mode: {this.ownershipMode} " +
 				$"(player: {this.AllowsPlayerOwnership}, guild: {this.AllowsGuildOwnership}).");
 
+			SubscribeToPlots();
+			RegisterHousingBroadcasts();
+			SubscribeToCharacterLifecycle();
+
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		/// <summary>
-		/// Nothing to release: this stage holds configuration only, and subscribes to nothing.
+		/// Releases the foundation subscriptions taken during initialization.
 		/// </summary>
+		/// <remarks>
+		/// Unconditional, unlike the subscribe. The mode is read once at startup, but a static event
+		/// outlives this object either way, and unsubscribing something that was never subscribed is
+		/// free — where leaving a dead handler attached is a scene server that keeps answering claim
+		/// requests after it has been torn down.
+		/// </remarks>
 		public override void OnDeinitialize()
 		{
+			UnregisterHousingBroadcasts();
+			UnsubscribeFromCharacterLifecycle();
+			UnsubscribeFromPlots();
+		}
+
+		/// <summary>
+		/// Watches for characters leaving, so their build sessions do not outlive them.
+		/// </summary>
+		/// <remarks>
+		/// A build session is closed by the owner saying they are done, and a player who
+		/// disconnects, crashes or is kicked says nothing at all. Without this the plot stays shut
+		/// until the sweep times it out — and the owner, logging back in, finds land they cannot
+		/// enter because of a session they still hold and cannot reach.
+		///
+		/// <para>Both events are needed. A disconnect is a player leaving; a despawn is a character
+		/// being taken out of the world without one, which is what a hand-off to another scene
+		/// server looks like from here.</para>
+		/// </remarks>
+		private void SubscribeToCharacterLifecycle()
+		{
+			if (Server?.BehaviourRegistry == null ||
+				!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				Log.Warning("HousingSystem", "No character system found; build sessions will only close on their timeout.");
+				return;
+			}
+
+			characterSystem.OnDisconnect += CharacterSystem_OnCharacterLeft;
+			characterSystem.OnDespawnCharacter += CharacterSystem_OnCharacterLeft;
+		}
+
+		/// <summary>
+		/// Stops watching for characters leaving.
+		/// </summary>
+		private void UnsubscribeFromCharacterLifecycle()
+		{
+			if (Server?.BehaviourRegistry == null ||
+				!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				return;
+			}
+
+			characterSystem.OnDisconnect -= CharacterSystem_OnCharacterLeft;
+			characterSystem.OnDespawnCharacter -= CharacterSystem_OnCharacterLeft;
+		}
+
+		/// <summary>
+		/// Closes whatever a departing character was holding open.
+		/// </summary>
+		private void CharacterSystem_OnCharacterLeft(NetworkConnection conn, IPlayerCharacter player)
+		{
+			if (player == null)
+			{
+				return;
+			}
+
+			EndBuildingFor(player.ID);
 		}
 	}
 }

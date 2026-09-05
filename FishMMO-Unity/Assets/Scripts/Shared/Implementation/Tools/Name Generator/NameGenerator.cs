@@ -72,7 +72,7 @@ namespace FishMMO.Shared.NameGeneration
 				(familyName, _, _) = NameBuilder.Build(phonology, CharacterGender.Unspecified, draw);
 			}
 
-			if (!req.NameOnly)
+			if (!req.NameOnly && req.TitleType != TitleType.None)
 			{
 				(title, titleCategory) = TitleBuilder.Build(race.NamingKey, TitleOptionsFor(req), meaning, draw,
 					string.IsNullOrEmpty(req.RegionSeed) ? titleMemory : null);
@@ -213,9 +213,13 @@ namespace FishMMO.Shared.NameGeneration
 
 			var (name, meaning, fragments) = NameBuilder.Build(hybrid, req.Gender, draw);
 
-			string titleRace = draw.NextDouble() < req.Dominance ? raceA.NamingKey : raceB.NamingKey;
-			var (title, titleCategory) = TitleBuilder.Build(titleRace, TitleOptionsFor(req), meaning, draw,
-				string.IsNullOrEmpty(req.RegionSeed) ? titleMemory : null);
+			string title = "", titleCategory = "";
+			if (req.TitleType != TitleType.None)
+			{
+				string titleRace = draw.NextDouble() < req.Dominance ? raceA.NamingKey : raceB.NamingKey;
+				(title, titleCategory) = TitleBuilder.Build(titleRace, TitleOptionsFor(req), meaning, draw,
+					string.IsNullOrEmpty(req.RegionSeed) ? titleMemory : null);
+			}
 
 			return new CharacterEntry
 			{
