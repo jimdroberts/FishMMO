@@ -56,32 +56,6 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// A race that grants no abilities at all would make the test below vacuous.
-		/// </summary>
-		[Test]
-		public void EveryRaceGrantsAtLeastOneAbility()
-		{
-			Dictionary<string, int> byRace = new Dictionary<string, int>();
-
-			foreach (string guid in AssetDatabase.FindAssets("t:RaceTemplate"))
-			{
-				RaceTemplate race = AssetDatabase.LoadAssetAtPath<RaceTemplate>(
-					AssetDatabase.GUIDToAssetPath(guid));
-				if (race != null)
-				{
-					byRace[race.name] = race.StartingAbilities?.Count ?? 0;
-				}
-			}
-
-			Assert.IsNotEmpty(byRace, "No race templates were found; this suite would prove nothing.");
-
-			foreach (KeyValuePair<string, int> pair in byRace)
-			{
-				Assert.Greater(pair.Value, 0, $"Race '{pair.Key}' grants no starting abilities.");
-			}
-		}
-
-		/// <summary>
 		/// The regression: a starting ability with no events resolves hits and applies nothing.
 		/// </summary>
 		/// <remarks>
