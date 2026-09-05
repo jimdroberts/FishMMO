@@ -20,7 +20,7 @@ MonoBehaviour:
   IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
   WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
   PatrolState: {fileID: 0}
-  ReturnHomeState: {fileID: 0}
+  ReturnHomeState: {fileID: 11400000, guid: b84f263b6aaadc40b9179f69c75abdf0, type: 2}
   RetreatState: {fileID: 0}
   DeadState: {fileID: 0}
   Personality: {fileID: 0}
