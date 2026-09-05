@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Crater
+  m_EditorClassIdentifier: 
+  BiomeKey: crater
+  DisplayName: Crater
+  Phonology:
+    Onsets:
+    - Gor
+    - Kra
+    - Sha
+    - Sto
+    - Dra
+    - Mor
+    - Ash
+    - Bre
+    - Hol
+    - Gri
+    - Kel
+    - Vel
+    - Thr
+    - Roc
+    - Imp
+    Nuclei:
+    - a
+    - o
+    - u
+    - ar
+    - or
+    - ax
+    - ur
+    Codas:
+    - crater
+    - impact
+    - rim
+    - basin
+    - bowl
+    - scar
+    - strike
+    - blast
+    - ring
+    - pit
+    Middles:
+    - an
+    - or
+    - al
+    - ar
+    - er
+    SyllMin: 2
+    SyllMax: 3
+    DungeonSuffixes:
+    - Crater
+    - Basin
+    - Pit
+    - Shaft
+    - Hollow
+    - Chamber
+    - Rift
+    - Chasm
+    - Cave
+    - Void
+    - Tunnel
+    - Passage
+    - Gallery
+    - Den
+    - Lair
+    - Crevice
+    - Pocket
+    - Alcove
+    - Foundation
+    - Mine
+    - Grotto
+    - Abyss
+    DungeonPrefixes:
+    - The Impact
+    - The Shattered
+    - The Scorched
+    - The Ancient
+    - The Sky-scarred
+    - The Glassed
+    - The Anomalous
+    - The Sunken
+    - The Massive
+    - The Mysterious
+    - The Alien
+    - The Star-born
+    - The Cataclysmic
+    - The Primordial
+    - The Meteor-struck
+    - The Devastated
+    - The Ring-walled
+    - The Mineral-rich
+    - The Magnetic
+    - The Cosmic
+    POISuffixes:
+    - Crater-rim
+    - Impact-site
+    - Glass-field
+    - Ejecta-mound
+    - Shatter-zone
+    - Central-peak
+    - Ring-wall
+    - Debris-field
+    - Meteorite-fragment
+    - Shock-quartz
+    - Melt-rock
+    - Impact-lake
+    - Anomaly-zone
+    - Mineral-deposit
+    - Magnetized-stone
+    - Flash-glass
+    - Tektite-field
+    - Breccia-wall
+    - Uplift-peak
+    - Star-stone
+    Adjectives:
+    - Impact-scarred
+    - Shattered
+    - Scorched
+    - Sky-scarred
+    - Glassed
+    - Anomalous
+    - Ancient
+    - Massive
+    - Mysterious
+    - Alien
+    - Star-born
+    - Cataclysmic
+    - Primordial
+    - Meteor-struck
+    - Devastated
+    - Ring-walled
+    - Mineral-rich
+    - Magnetic
+    - Cosmic
+    - Otherworldly
+    - Violent
+    - Breathtaking
+    Description: 'Impact or volcanic craters — scarred earth, strange minerals, mystery'

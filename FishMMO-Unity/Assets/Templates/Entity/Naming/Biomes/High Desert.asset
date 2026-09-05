@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: High Desert
+  m_EditorClassIdentifier: 
+  BiomeKey: highdesert
+  DisplayName: High Desert
+  Phonology:
+    Onsets:
+    - Zan
+    - Kha
+    - Sha
+    - Raz
+    - Dha
+    - Tar
+    - Bre
+    - Win
+    - Gri
+    - Sto
+    - Dri
+    - Sal
+    - Bri
+    - Kel
+    - Hol
+    Nuclei:
+    - a
+    - i
+    - u
+    - ar
+    - ai
+    - or
+    - ur
+    Codas:
+    - dust
+    - wind
+    - stone
+    - mesa
+    - sage
+    - dry
+    - flat
+    - ridge
+    - sand
+    - scrub
+    Middles:
+    - al
+    - ar
+    - an
+    - or
+    - er
+    SyllMin: 2
+    SyllMax: 3
+    DungeonSuffixes:
+    - Pit
+    - Cave
+    - Hollow
+    - Crack
+    - Shaft
+    - Tunnel
+    - Den
+    - Crevice
+    - Burrow
+    - Lair
+    - Chamber
+    - Passage
+    - Gallery
+    - Grotto
+    - Mine
+    - Alcove
+    - Pocket
+    - Foundation
+    - Shelter
+    - Overhang
+    - Spring-cave
+    - Cistern
+    DungeonPrefixes:
+    - The Wind-carved
+    - The Sun-scorched
+    - The High
+    - The Dry
+    - The Ancient
+    - The Exposed
+    - The Dust-filled
+    - The Lonely
+    - The Stark
+    - The Cold-night
+    - The Arid
+    - The Sage-scented
+    - The Juniper-studded
+    - The Alkali
+    - The Elevation
+    - The Frost-and-sun
+    - The Rattlesnake
+    - The Wide-sky
+    - The Mesa-top
+    - The Erosion-carved
+    POISuffixes:
+    - Mesa
+    - Dry-lake
+    - Sage-flat
+    - Dust-devil
+    - Wind-arch
+    - Sun-stone
+    - Alkali-flat
+    - Desert-spring
+    - Juniper-stand
+    - Pinyon-grove
+    - Dry-wash
+    - Salt-pan
+    - Petroglyph-rock
+    - Erosion-pillar
+    - Night-sky-point
+    - Cold-spring
+    - Lizard-rock
+    - Raptor-cliff
+    - Drought-crack
+    - Canyon-rim
+    Adjectives:
+    - Wind-carved
+    - Sun-scorched
+    - High
+    - Dry
+    - Exposed
+    - Dust-filled
+    - Lonely
+    - Stark
+    - Cold-night
+    - Arid
+    - Sage-scented
+    - Juniper-studded
+    - Alkali
+    - Elevation-swept
+    - Frost-and-sun
+    - Wide-sky
+    - Mesa-top
+    - Erosion-carved
+    - Rugged
+    - Austere
+    - Mineral-rich
+    - Vast
+    Description: 'High altitude desert — cold nights, hot days, sparse sage, wind-carved rock'

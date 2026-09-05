@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Swamp
+  m_EditorClassIdentifier: 
+  BiomeKey: swamp
+  DisplayName: Swamp
+  Phonology:
+    Onsets:
+    - Fen
+    - Bog
+    - Mur
+    - Gor
+    - Slu
+    - Dra
+    - Hag
+    - Wil
+    - Rot
+    - Kra
+    - Sha
+    - Gri
+    - Vel
+    - Thi
+    - Mor
+    Nuclei:
+    - u
+    - o
+    - a
+    - ur
+    - og
+    - ow
+    - ul
+    Codas:
+    - mire
+    - bog
+    - fen
+    - rot
+    - muck
+    - gul
+    - sludge
+    - murk
+    - marsh
+    - ooze
+    Middles:
+    - ur
+    - og
+    - ul
+    - ow
+    - an
+    SyllMin: 1
+    SyllMax: 2
+    DungeonSuffixes:
+    - Mire
+    - Bog
+    - Hollow
+    - Pit
+    - Sinkhole
+    - Den
+    - Pool
+    - Morass
+    - Quagmire
+    - Hole
+    - Marsh
+    - Slough
+    - Wallow
+    - Gulch
+    - Fen
+    - Drainage
+    - Muck-pit
+    - Tar-pool
+    - Seep
+    - Pocket
+    - Stagnation
+    - Sump
+    DungeonPrefixes:
+    - The Fetid
+    - The Rotting
+    - The Sunken
+    - The Bubbling
+    - The Choking
+    - The Reeking
+    - The Murky
+    - The Drowned
+    - The Stagnant
+    - The Poisonous
+    - The Sludge-filled
+    - The Methane-choked
+    - The Oozing
+    - The Putrid
+    - The Bog-haunted
+    - The Leech-infested
+    - The Festering
+    - The Miasmic
+    - The Mold-covered
+    - The Tar-black
+    POISuffixes:
+    - Bog-light
+    - Dead-tree
+    - Mud-pool
+    - Reed-bed
+    - Moss-log
+    - Gas-vent
+    - Stagnant-pool
+    - Rot-mound
+    - Leech-pond
+    - Frog-hollow
+    - Cypress-knee
+    - Lily-pad-pool
+    - Will-o-wisp
+    - Peat-bank
+    - Fungus-log
+    - Cattail-grove
+    - Turtle-shell-mound
+    - Heron-roost
+    - Quicksand
+    - Algae-bloom
+    Adjectives:
+    - Fetid
+    - Rotting
+    - Sunken
+    - Bubbling
+    - Choking
+    - Reeking
+    - Murky
+    - Drowned
+    - Stagnant
+    - Putrid
+    - Poisonous
+    - Sludge-filled
+    - Methane-choked
+    - Oozing
+    - Bog-haunted
+    - Leech-infested
+    - Festering
+    - Miasmic
+    - Mold-covered
+    - Tar-black
+    - Waterlogged
+    - Squelching
+    Description: 'Stinking wetland — bubbling methane, sinking ground, rot everywhere'

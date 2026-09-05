@@ -22,12 +22,12 @@
   <Project Path="QuickOutline.csproj" />
   <Project Path="FishMMO.Client.Security.Editor.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
+  <Project Path="FishMMO.Shared.NameGenerator.Editor.csproj" />
   <Project Path="FishMMO.Shared.Map.Editor.csproj" />
   <Project Path="FishMMO.MockContent.Editor.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="FishMMO.Client.GUI.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />

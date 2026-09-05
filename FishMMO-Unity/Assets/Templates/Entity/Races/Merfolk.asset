@@ -1,0 +1,311 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Merfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Flowing and liquid — the sound of tides, coral bells, and deep currents'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ael
+      - Cor
+      - Del
+      - Lir
+      - Mar
+      - Ner
+      - Oce
+      - Pel
+      - Riv
+      - Sal
+      - Tir
+      - Und
+      - Wav
+      - Yrl
+      - Zeph
+      - Aqu
+      - Bri
+      - Flo
+      - Gil
+      - Kai
+      Nuclei:
+      - a
+      - ea
+      - ia
+      - ua
+      - ei
+      - ai
+      - oa
+      Codas:
+      - al
+      - ine
+      - eal
+      - ria
+      - wave
+      - tide
+      - reef
+      - pearl
+      - ael
+      - ora
+      Middles:
+      - el
+      - al
+      - il
+      - ar
+      - er
+      SyllMin: 2
+      SyllMax: 4
+      FeminineSuffixes:
+      - ine
+      - eal
+      - ia
+      - a
+      MasculineSuffixes:
+      - al
+      - or
+      - ean
+      - ius
+      Description: 'Flowing and liquid — the sound of tides, coral bells, and deep currents'
+      Tags:
+      - Tide-names
+      - Coral-bonds
+      - Depth-marks
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: coral
+      Phonology:
+        Onsets:
+        - Ael
+        - Bri
+        - Cor
+        - Del
+        - Flo
+        - Gil
+        - Kai
+        - Lir
+        - Mar
+        - Ner
+        - Pel
+        - Riv
+        - Sal
+        - Tir
+        - Wav
+        Nuclei:
+        - a
+        - ea
+        - ia
+        - ai
+        - ei
+        - oa
+        - ua
+        Codas:
+        - al
+        - ine
+        - eal
+        - ria
+        - wave
+        - reef
+        - pearl
+        - ora
+        - ael
+        - tide
+        Middles:
+        - el
+        - al
+        - il
+        - ar
+        - er
+        SyllMin: 2
+        SyllMax: 4
+        FeminineSuffixes:
+        - ine
+        - pearl
+        - ia
+        - a
+        MasculineSuffixes:
+        - al
+        - reef
+        - eal
+        Description: 'Coral Merfolk — tropical, bright, reef-dwelling'
+        Tags:
+        - Reef-names
+        - Coral-bonds
+        - Sun-marks
+        WeightedCodas: []
+    - CultureKey: deep
+      Phonology:
+        Onsets:
+        - Aby
+        - Cth
+        - Dra
+        - Glu
+        - Kra
+        - Mur
+        - Nau
+        - Pla
+        - Squ
+        - Thr
+        - Und
+        - Voi
+        - Zel
+        - Gor
+        - Lur
+        Nuclei:
+        - u
+        - o
+        - ua
+        - uo
+        - uu
+        - ou
+        - ul
+        Codas:
+        - uth
+        - ulm
+        - orm
+        - usk
+        - oom
+        - undr
+        - abyss
+        - ulk
+        - urn
+        - oth
+        Middles:
+        - ul
+        - ur
+        - un
+        - um
+        - uo
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - uth
+        - a
+        - ulm
+        MasculineSuffixes:
+        - usk
+        - orm
+        - oom
+        Description: 'Deep Merfolk — abyssal, dark, pressure-forged'
+        Tags:
+        - Abyss-names
+        - Pressure-bonds
+        - Trench-marks
+        WeightedCodas: []
+    Places:
+    - the Coral Throne
+    - Deepstratum
+    - the Pearl Gates
+    - Tidehaven
+    - the Abyssal Trench
+    - the Sunken Court
+    - Reefspire
+    - the Kelp Cathedrals
+    Titles:
+      Honorific:
+      - Tidekeeper
+      - Coral-crown
+      - Deepwarden
+      - Pearl-voice
+      - Wavecaller
+      - Reef-sovereign
+      - Current-speaker
+      Epithet:
+      - the Deepborn
+      - the Tide-kissed
+      - the Pearl-eyed
+      - the Current-rider
+      - the Coral-touched
+      - the Ever-flowing
+      - the Storm-caller
+      - the Abyss-gazer
+      Rank:
+      - Sovereign of the Coral Throne
+      - High Keeper of the Abyssal Trench
+      - Voice of the Tides
+      - Warden of the Pearl Gates
+      - Admiral of the Deep Currents
+      - Guardian of the Kelp Cathedrals
+      Legend:
+      - Who Sang the Tides to Sleep
+      - Who Swam to the Bottom of the World
+      - Who United the Seven Seas
+      - Who Spoke with the Leviathan
+      - Whose Voice Calmed the Great Maelstrom
+    CitySuffixes:
+      Capital:
+      - throne
+      - spire
+      - reef
+      - palace
+      - dome
+      - atoll
+      - depths
+      Fortress:
+      - wall
+      - guard
+      - shell
+      - ward
+      - gate
+      - barrier
+      - trench
+      Village:
+      - cove
+      - pool
+      - grotto
+      - bed
+      - shallows
+      - nook
+      - hollow
+      Port:
+      - harbor
+      - dock
+      - tide
+      - inlet
+      - bay
+      - lagoon
+      - berth
+      Sacred:
+      - shrine
+      - font
+      - well
+      - altar
+      - pearl
+      - coral-ring
+      - sanctum
+      Ruin:
+      - wreck
+      - abyss
+      - depth
+      - ruin
+      - void
+      - hollow
+      - silt

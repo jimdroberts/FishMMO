@@ -1,61 +1,40 @@
-﻿using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Object;
 using FishNet.Connection;
 using FishNet.Serializing;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Name caches for a specific generated character gender.
-	/// </summary>
-	[System.Serializable]
-	public class GenderedNameCacheSet
-	{
-		/// <summary>
-		/// Gender this name set applies to.
-		/// </summary>
-		public CharacterGender Gender = CharacterGender.Unspecified;
-
-		/// <summary>
-		/// Cache of possible first names.
-		/// </summary>
-		public NameCache FirstNames;
-
-		/// <summary>
-		/// Cache of possible last names.
-		/// </summary>
-		public NameCache LastNames;
-	}
-
-	/// <summary>
-	/// Assigns a generated name to a scene object using gender-specific name caches.
-	/// Handles network payloads for name synchronization.
+	/// Gives a scene object a generated name — a character, city, dungeon, point of interest or
+	/// legendary item name — from the name generator, using the object's race and the settings
+	/// authored on the prefab.
+	///
+	/// <para>The server rolls a seed and a gender and ships those (4 + 1 bytes); every peer then
+	/// regenerates the same name from the same templates, so the name itself never crosses the wire.
+	/// The race comes from the object's <see cref="IFactionController"/> unless the settings override
+	/// it, which is how one prefab names itself correctly at any spawner.</para>
 	/// </summary>
 	public class SceneObjectNamer : NetworkBehaviour
 	{
-		/// <summary>
-		/// Gender-specific name cache sets.
-		/// </summary>
-		public List<GenderedNameCacheSet> GenderedNames = new List<GenderedNameCacheSet>();
+		[SerializeField]
+		private SceneObjectNamingSettings settings = new SceneObjectNamingSettings();
 
 		/// <summary>
-		/// The selected first name index for this object's name.
+		/// The seed the name is generated from. Zero means no name was generated and the authored
+		/// name stands.
 		/// </summary>
-		private int firstNameID = -1;
-		/// <summary>
-		/// The selected last name index for this object's name.
-		/// </summary>
-		private int lastNameID = -1;
+		private int nameSeed;
 
 		/// <summary>
-		/// The selected gender for this object's generated name.
+		/// The gender behind a character name; also what <see cref="NPC"/> picks its model set with.
 		/// </summary>
 		private CharacterGender selectedGender = CharacterGender.Unspecified;
 
 		/// <summary>
-		/// True once this object has selected name payload values.
+		/// True once the seed and gender have been rolled (server) or received (client).
 		/// </summary>
 		private bool nameGenerated;
 
@@ -65,9 +44,34 @@ namespace FishMMO.Shared
 		private string authoredName;
 
 		/// <summary>
-		/// The selected gender for this object's generated name.
+		/// The name the generator produced, or null while the authored name stands.
+		/// </summary>
+		private string generatedName;
+
+		/// <summary>
+		/// The authored naming settings.
+		/// </summary>
+		public SceneObjectNamingSettings Settings => settings;
+
+		/// <summary>
+		/// The gender behind this object's generated name.
 		/// </summary>
 		public CharacterGender SelectedGender => selectedGender;
+
+		/// <summary>
+		/// The seed the name was generated from, or zero when none was.
+		/// </summary>
+		public int NameSeed => nameSeed;
+
+		/// <summary>
+		/// The generated name, or null while the authored name stands.
+		/// </summary>
+		public string GeneratedName => generatedName;
+
+		/// <summary>
+		/// The name this object currently shows: the generated one when there is one, else the authored one.
+		/// </summary>
+		public string DisplayName => string.IsNullOrEmpty(generatedName) ? authoredName : generatedName;
 
 		/// <summary>
 		/// Captures the authored name so a pooled reuse has something to fall back to.
@@ -78,13 +82,33 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called when the server starts. Randomizes name IDs for the object name.
+		/// Rolls the seed and gender, then applies the name. Runs on every spawn including pool reuse.
 		/// </summary>
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
 
 			GenerateNameIfNeeded();
+			ApplyGeneratedName();
+		}
+
+		/// <summary>
+		/// Applies the name received in the payload.
+		/// </summary>
+		/// <remarks>
+		/// Not done in <see cref="ReadPayload"/>: this behaviour precedes <c>FactionController</c> in
+		/// every NPC prefab's component order, so when its payload is read the faction has not yet read
+		/// the race a spawner may have overridden. By the time start callbacks run every behaviour's
+		/// payload has been read and the race is correct.
+		/// </remarks>
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+
+			if (!base.IsServerInitialized)
+			{
+				ApplyGeneratedName();
+			}
 		}
 
 		/// <summary>
@@ -94,16 +118,13 @@ namespace FishMMO.Shared
 		/// <para>
 		/// <see cref="nameGenerated"/> is a once-only latch and <see cref="GenerateNameIfNeeded"/>
 		/// returns early on it, so without this every NPC that ever came out of a given pool slot
-		/// wore the name the first occupant drew — on the server, in the spawn payload, and
-		/// therefore on every client's name label too. A pool of eight skeletons produced eight
-		/// distinct names for the lifetime of the scene no matter how many hundreds of skeletons
-		/// were spawned from it.
+		/// would wear the name the first occupant drew — on the server, in the spawn payload, and
+		/// therefore on every client's name label too.
 		/// </para>
 		/// <para>
-		/// The GameObject name is put back rather than left alone. Re-generation normally
-		/// overwrites it, but a prefab with no name sets configured — or one whose sets are
-		/// empty — makes <see cref="ApplyGeneratedName"/> return without writing anything, and
-		/// the previous occupant's name would then survive as this object's identity.
+		/// The GameObject name is put back rather than left alone: a prefab whose settings cannot
+		/// produce a name makes <see cref="ApplyGeneratedName"/> keep the current name, and the
+		/// previous occupant's name would then survive as this object's identity.
 		/// </para>
 		/// </remarks>
 		/// <param name="asServer">True if called on the server.</param>
@@ -112,9 +133,9 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			nameGenerated = false;
-			firstNameID = -1;
-			lastNameID = -1;
+			nameSeed = 0;
 			selectedGender = CharacterGender.Unspecified;
+			generatedName = null;
 
 			if (!string.IsNullOrEmpty(authoredName))
 			{
@@ -123,7 +144,8 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Ensures name payload values have been generated and returns the selected gender.
+		/// Ensures the seed and gender have been rolled and returns the gender. Server only; on a
+		/// client the gender arrives in the payload.
 		/// </summary>
 		/// <returns>The selected generated name gender.</returns>
 		public CharacterGender EnsureGeneratedGender()
@@ -133,22 +155,20 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Reads the name IDs from the network and sets the object name accordingly.
+		/// Reads the seed and gender. Always consumes exactly five bytes, so the behaviours after this
+		/// one in the payload stay aligned whatever the values are.
 		/// </summary>
 		/// <param name="connection">Network connection.</param>
 		/// <param name="reader">Network reader for payload.</param>
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			firstNameID = reader.ReadInt32();
-			lastNameID = reader.ReadInt32();
+			nameSeed = reader.ReadInt32();
 			selectedGender = (CharacterGender)reader.ReadUInt8Unpacked();
 			nameGenerated = true;
-
-			ApplyGeneratedName();
 		}
 
 		/// <summary>
-		/// Writes the name IDs to the network for synchronization.
+		/// Writes the seed and gender: four bytes plus one, in place of a name string.
 		/// </summary>
 		/// <param name="connection">Network connection.</param>
 		/// <param name="writer">Network writer for payload.</param>
@@ -156,13 +176,12 @@ namespace FishMMO.Shared
 		{
 			GenerateNameIfNeeded();
 
-			writer.WriteInt32(firstNameID);
-			writer.WriteInt32(lastNameID);
+			writer.WriteInt32(nameSeed);
 			writer.WriteUInt8Unpacked((byte)selectedGender);
 		}
 
 		/// <summary>
-		/// Generates name payload values once on the server.
+		/// Rolls the seed and gender once on the server.
 		/// </summary>
 		private void GenerateNameIfNeeded()
 		{
@@ -171,166 +190,45 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			GenderedNameCacheSet nameSet = SelectRandomGenderedNameSet();
-			NameCache firstNames = nameSet == null ? null : nameSet.FirstNames;
-			NameCache lastNames = nameSet == null ? null : nameSet.LastNames;
-
-			selectedGender = nameSet == null ? CharacterGender.Unspecified : nameSet.Gender;
-			firstNameID = GetRandomNameIndex(firstNames);
-			lastNameID = GetRandomNameIndex(lastNames);
+			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<IFactionController>());
+			nameSeed = SceneObjectNameResolver.DeriveSeed(settings, authoredName);
+			selectedGender = settings.Mode == SceneObjectNamingMode.Character
+				? SceneObjectNameResolver.ResolveGender(settings.GenderPolicy, race, SceneObjectNameResolver.GenderRng(nameSeed))
+				: CharacterGender.Unspecified;
 			nameGenerated = true;
 		}
 
 		/// <summary>
-		/// Applies the generated name to the object and client label.
+		/// Regenerates the name from the seed and gender and applies it to the object and, on a
+		/// client, to its name label. Keeps the authored name when the settings cannot name the object.
 		/// </summary>
 		private void ApplyGeneratedName()
 		{
-			GenderedNameCacheSet nameSet = GetNameSet(selectedGender);
-			NameCache firstNames = nameSet == null ? null : nameSet.FirstNames;
-			NameCache lastNames = nameSet == null ? null : nameSet.LastNames;
-
-			if (firstNameID < 0 ||
-				firstNames == null ||
-				firstNames.Names == null ||
-				firstNames.Names.Count < 1 ||
-				firstNameID >= firstNames.Names.Count)
+			if (!nameGenerated || nameSeed == 0)
 			{
 				return;
 			}
-			string characterName = firstNames.Names[firstNameID];
 
-			if (lastNameID < 0 ||
-				lastNames == null ||
-				lastNames.Names == null ||
-				lastNames.Names.Count < 1 ||
-				lastNameID >= lastNames.Names.Count)
+			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<IFactionController>());
+			if (!SceneObjectNameResolver.TryBuild(settings, race, nameSeed, selectedGender, out string name, out string error))
 			{
+				Log.Warning("SceneObjectNamer", $"'{authoredName}' keeps its authored name: {error}.");
 				return;
 			}
-			characterName += $" {lastNames.Names[lastNameID]}";
 
-			// Assign the generated name to the GameObject
-			this.gameObject.name = characterName.Trim();
+			generatedName = name;
+			gameObject.name = name;
 
 #if !UNITY_SERVER
-			/* "if present" applies to the label as well as the character.
-			 *
-			 * CharacterNameLabel is assigned from a prefab's label object and is left null
-			 * on a character that has none — every NPC prefab in the project ships that way,
-			 * and three of them (Banker, General Merchant, Ability Crafter) carry this
-			 * component. Testing only the character therefore threw a NullReferenceException
-			 * per named NPC on the client, out of the middle of naming.
-			 *
-			 * This is the same omission Interactable.Awake had against CharacterGuildLabel. */
+			/* The label is optional on a character, and a character is optional on the object: the
+			 * three interactable NPC prefabs carry this component with a label, a Switch carries it
+			 * with neither. */
 			ICharacter character = transform.GetComponent<ICharacter>();
-			if (character != null &&
-				character.CharacterNameLabel != null)
+			if (character != null && character.CharacterNameLabel != null)
 			{
-				character.CharacterNameLabel.text = this.gameObject.name;
+				character.CharacterNameLabel.text = name;
 			}
 #endif
-		}
-
-		/// <summary>
-		/// Selects a random valid gendered name set.
-		/// </summary>
-		/// <returns>A random valid gendered name set, or null when none are configured.</returns>
-		private GenderedNameCacheSet SelectRandomGenderedNameSet()
-		{
-			if (GenderedNames == null || GenderedNames.Count < 1)
-			{
-				return null;
-			}
-
-			int validCount = 0;
-			for (int i = 0; i < GenderedNames.Count; i++)
-			{
-				if (IsValidNameSet(GenderedNames[i]))
-				{
-					validCount++;
-				}
-			}
-
-			if (validCount < 1)
-			{
-				return null;
-			}
-
-			int selectedIndex = DeterministicRNG.Shared.Range(0, validCount);
-			int currentIndex = 0;
-			for (int i = 0; i < GenderedNames.Count; i++)
-			{
-				GenderedNameCacheSet nameSet = GenderedNames[i];
-				if (!IsValidNameSet(nameSet))
-				{
-					continue;
-				}
-
-				if (currentIndex == selectedIndex)
-				{
-					return nameSet;
-				}
-				currentIndex++;
-			}
-
-			return null;
-		}
-
-		/// <summary>
-		/// Gets the name set for the selected gender.
-		/// </summary>
-		/// <param name="gender">The selected gender.</param>
-		/// <returns>The matching valid name set, or null when none exists.</returns>
-		private GenderedNameCacheSet GetNameSet(CharacterGender gender)
-		{
-			if (gender == CharacterGender.Unspecified || GenderedNames == null)
-			{
-				return null;
-			}
-
-			for (int i = 0; i < GenderedNames.Count; i++)
-			{
-				GenderedNameCacheSet nameSet = GenderedNames[i];
-				if (nameSet != null && nameSet.Gender == gender && IsValidNameSet(nameSet))
-				{
-					return nameSet;
-				}
-			}
-
-			return null;
-		}
-
-		/// <summary>
-		/// Returns true if a gendered name set has usable name caches.
-		/// </summary>
-		/// <param name="nameSet">The name set to validate.</param>
-		/// <returns>True if the name set can generate a complete name.</returns>
-		private bool IsValidNameSet(GenderedNameCacheSet nameSet)
-		{
-			return nameSet != null &&
-				HasNames(nameSet.FirstNames) &&
-				HasNames(nameSet.LastNames);
-		}
-
-		/// <summary>
-		/// Gets a random name index from a cache.
-		/// </summary>
-		/// <param name="nameCache">The name cache.</param>
-		/// <returns>A valid random index, or -1 when no names exist.</returns>
-		private int GetRandomNameIndex(NameCache nameCache)
-		{
-			return HasNames(nameCache) ? DeterministicRNG.Shared.Range(0, nameCache.Names.Count) : -1;
-		}
-
-		/// <summary>
-		/// Returns true if a name cache has at least one name.
-		/// </summary>
-		/// <param name="nameCache">The name cache.</param>
-		/// <returns>True if the cache has names.</returns>
-		private bool HasNames(NameCache nameCache)
-		{
-			return nameCache != null && nameCache.Names != null && nameCache.Names.Count > 0;
 		}
 	}
 }

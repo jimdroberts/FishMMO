@@ -1,0 +1,244 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Dragonborn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Clipped draconic speech — proud, resonant, breath-marked'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bhak
+      - Drak
+      - Ghar
+      - Khal
+      - Myr
+      - Nhar
+      - Prak
+      - Rhas
+      - Shar
+      - Thar
+      - Vhaz
+      - Zhar
+      - Bren
+      - Dor
+      - Gresh
+      - Kren
+      - Lor
+      - Nax
+      - Qor
+      - Wrex
+      Nuclei:
+      - a
+      - o
+      - ax
+      - or
+      - ur
+      - ar
+      - ix
+      Codas:
+      - ax
+      - ir
+      - or
+      - ash
+      - ek
+      - ark
+      - orn
+      - usk
+      - rax
+      - eth
+      Middles:
+      - ar
+      - or
+      - ax
+      - ir
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ira
+      - asha
+      - eth
+      MasculineSuffixes:
+      - ax
+      - ir
+      - orn
+      - ash
+      Description: 'Clipped draconic speech — proud, resonant, breath-marked'
+      Tags:
+      - Clutch-names
+      - Breath-bonds
+      - Ancestor-marks
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: clanskar
+      Phonology:
+        Onsets:
+        - Arj
+        - Bhar
+        - Dra
+        - Gar
+        - Hes
+        - Kri
+        - Mogh
+        - Nek
+        - Rakh
+        - Sal
+        - Thra
+        - Varr
+        - Xaar
+        - Yor
+        - Zath
+        Nuclei:
+        - a
+        - o
+        - ar
+        - ir
+        - or
+        Codas:
+        - ash
+        - arr
+        - axx
+        - vor
+        - kan
+        - rrax
+        - tharr
+        - soth
+        - krith
+        - viss
+        Middles:
+        - ar
+        - or
+        - ur
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - iss
+        - axx
+        - ana
+        MasculineSuffixes:
+        - arr
+        - ash
+        - vor
+        Description: 'Clanskar — proud lineage, clan-honor, flame-oath'
+        Tags:
+        - Clan-names
+        - Flame-bonds
+        - Oath-marks
+        WeightedCodas: []
+    Places:
+    - the Scale-Hall
+    - Breath Keep
+    - Clutch-Haven
+    - the Dragon Council
+    - Wyrmspire
+    - 'the Ancestor''s Roost'
+    - the Flame Sanctum
+    Titles:
+      Honorific:
+      - Clutch-elder
+      - Scale-lord
+      - Breath-keeper
+      - Wyrm-speaker
+      - Flame-warden
+      - Ancestor-voice
+      Epithet:
+      - the Dragonborn
+      - the Scale-proud
+      - the Fire-blooded
+      - the Honored
+      - the Storm-breathed
+      - the Ancestral
+      - the Roar-blessed
+      - the Wyrmkin
+      Rank:
+      - Champion of the Dragon Council
+      - High Protector of the Clutch
+      - First Breath of the Season
+      - Keeper of the Draconic Code
+      - Elder of the Scale-Hall
+      - 'Voice of the Ancestor''s Roost'
+      Legend:
+      - Who Spoke the Dragon Tongue at Birth
+      - Who Breathed Fire That Melted a Fortress
+      - Who Was Blessed by an Ancient Wyrm
+      - Whose Scales Turned a Thousand Blades
+      - Who Hatched from an Egg of Living Flame
+    CitySuffixes:
+      Capital:
+      - roost
+      - keep
+      - hall
+      - spire
+      - throne
+      - clutch
+      - bastion
+      Fortress:
+      - wall
+      - gate
+      - guard
+      - fang
+      - scale
+      - rampart
+      - ward
+      Village:
+      - nest
+      - den
+      - camp
+      - hollow
+      - clearing
+      - clutch
+      - ground
+      Port:
+      - dock
+      - bay
+      - shore
+      - basin
+      - inlet
+      - landing
+      Sacred:
+      - flame
+      - altar
+      - pyre
+      - shrine
+      - hoard
+      - ember
+      - sanctum
+      Ruin:
+      - fall
+      - ash
+      - scar
+      - bone
+      - ruin
+      - char
+      - waste

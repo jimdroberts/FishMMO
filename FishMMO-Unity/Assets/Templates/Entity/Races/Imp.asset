@@ -1,0 +1,101 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Imp
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Shrill, mocking — familiar-speech'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grik
+      - Piz
+      - Niz
+      - Skib
+      - Trik
+      - Bex
+      - Viz
+      - Piq
+      Nuclei:
+      - i
+      - e
+      - a
+      Codas:
+      - tik
+      - rix
+      - pix
+      - zik
+      - bit
+      Middles:
+      - ik
+      - zi
+      - pi
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - ix
+      - a
+      - ette
+      MasculineSuffixes:
+      - ik
+      - us
+      - et
+      Description: 'Shrill, mocking — familiar-speech'
+      Tags:
+      - Familiar-bonds
+      - Pact-names
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - Scrib Hole
+    - the Inkwell
+    - Pactwick
+    - 'Shrieker''s Nook'
+    Titles:
+      Honorific:
+      - Little Lord
+      - Pocket-devil
+      Epithet:
+      - the Needletongued
+      - the Sticky-fingered
+      - the Inkstained
+      Rank:
+      - Familiar of the Third Circle
+      Legend:
+      - 'Who Pocketed the Wizard''s True Name'
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

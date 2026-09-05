@@ -1,0 +1,304 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Dark Elf
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Sibilant and sharp — dark vowels, venomous endings'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Viz
+      - Mal
+      - Driz
+      - Xan
+      - Sor
+      - Zak
+      - Vel
+      - Niz
+      - Jez
+      - Taz
+      - Rizz
+      - Sab
+      - Quil
+      - Pha
+      - Orb
+      - Ulv
+      - Tran
+      - Saz
+      - Vrax
+      - Drak
+      Nuclei:
+      - a
+      - i
+      - o
+      - iz
+      - az
+      - ul
+      - ir
+      Codas:
+      - zan
+      - ith
+      - tor
+      - vyn
+      - rax
+      - dra
+      - xis
+      - nax
+      - rath
+      - vex
+      Middles:
+      - az
+      - iz
+      - ul
+      - ax
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - zan
+      - ith
+      - xis
+      - vyn
+      MasculineSuffixes:
+      - tor
+      - rax
+      - dra
+      - nax
+      Description: 'Sibilant and sharp — dark vowels, venomous endings'
+      Tags:
+      - House names
+      - Spider-bonds
+      - Poison titles
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: shadowcaster
+      Phonology:
+        Onsets:
+        - Umbr
+        - Noct
+        - Cypr
+        - Gloam
+        - Dusk
+        - Hal
+        - Sab
+        - Thys
+        - Vae
+        - Lyth
+        - Myst
+        - Orr
+        - Pall
+        - Quel
+        - Razh
+        Nuclei:
+        - u
+        - o
+        - y
+        - au
+        - ou
+        - yl
+        Codas:
+        - umbra
+        - noir
+        - pall
+        - shroud
+        - hex
+        - dirge
+        - glyph
+        - wane
+        - bind
+        - maw
+        Middles:
+        - or
+        - ur
+        - ul
+        - yr
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - umbra
+        - glyph
+        - oire
+        MasculineSuffixes:
+        - pall
+        - bind
+        - wane
+        Description: 'Shadowcaster — arcane exiles, glyph-bound nomads'
+        Tags:
+        - Glyph-names
+        - Pact-bonds
+        - Shade-marks
+        WeightedCodas: []
+    - CultureKey: spidercourt
+      Phonology:
+        Onsets:
+        - Vel
+        - Xyl
+        - Zar
+        - Drith
+        - Neth
+        - Phar
+        - Sil
+        - Thren
+        - Vex
+        - Xan
+        - Yss
+        - Zeph
+        - Drex
+        - Kryl
+        - Myr
+        Nuclei:
+        - y
+        - i
+        - e
+        - ae
+        - yn
+        - ei
+        Codas:
+        - ryn
+        - yx
+        - eth
+        - ith
+        - arn
+        - ess
+        - rix
+        - yth
+        - zar
+        - thul
+        Middles:
+        - yl
+        - il
+        - en
+        - ar
+        SyllMin: 3
+        SyllMax: 4
+        FeminineSuffixes:
+        - essa
+        - yx
+        - rina
+        MasculineSuffixes:
+        - ryn
+        - rix
+        - thul
+        Description: 'Spider Court — matriarchal, whispered, venomed'
+        Tags:
+        - House-matron
+        - Web-bonds
+        - Venom-oaths
+        WeightedCodas: []
+    Places:
+    - House Vel
+    - the Obsidian Spire
+    - Gloomreach
+    - the Silk Court
+    - the Underdark
+    - the Web Throne
+    - Nighthollow
+    - the Poison Gardens
+    Titles:
+      Honorific:
+      - Matron
+      - Patron
+      - Highblade
+      - Venom-tongue
+      - Shadowweave
+      - Silklord
+      Epithet:
+      - the Poisonkissed
+      - the Unseen
+      - the Spiderblessed
+      - the Ruthless
+      - the Shadowborn
+      - the Web-dancer
+      - the Betrayer
+      - the Night-eyed
+      - the Silk-veiled
+      Rank:
+      - First Blade of House Vel
+      - High Priestess of the Spider Queen
+      - Assassin-Primarch
+      - Keeper of the Sacred Venom
+      - Mistress of the Obsidian Tower
+      - Voice of the Underdark
+      Legend:
+      - Who Slew a Goddess
+      - Who Betrayed the Surface World
+      - Whose Name is Spoken in Whispers
+      - Who Walked Out of the Underdark Alone
+      - Who Wove a Web That Trapped a God
+    CitySuffixes:
+      Capital:
+      - spire
+      - throne
+      - web
+      - court
+      - citadel
+      - nexus
+      - vault
+      Fortress:
+      - ward
+      - fang
+      - gate
+      - bastion
+      - guard
+      - barricade
+      - web
+      Village:
+      - den
+      - hollow
+      - grotto
+      - cavern
+      - niche
+      - alcove
+      - burrow
+      Port:
+      - pool
+      - dock
+      - canal
+      - basin
+      - flow
+      - reservoir
+      Sacred:
+      - shrine
+      - altar
+      - web
+      - sanctum
+      - fane
+      - chalice
+      Ruin:
+      - fall
+      - blight
+      - void
+      - scar
+      - hollow
+      - ruin
+      - dust

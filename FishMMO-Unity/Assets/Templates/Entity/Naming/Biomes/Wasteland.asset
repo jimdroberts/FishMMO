@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Wasteland
+  m_EditorClassIdentifier: 
+  BiomeKey: wasteland
+  DisplayName: Wasteland
+  Phonology:
+    Onsets:
+    - Ash
+    - Gor
+    - Kra
+    - Sha
+    - Dra
+    - Mor
+    - Gri
+    - Wra
+    - Hol
+    - Rot
+    - Vel
+    - Thr
+    - Bre
+    - Fen
+    - Nul
+    Nuclei:
+    - a
+    - o
+    - u
+    - ar
+    - or
+    - ur
+    - ax
+    Codas:
+    - ash
+    - waste
+    - rot
+    - dust
+    - blight
+    - ruin
+    - char
+    - rust
+    - slag
+    - bone
+    Middles:
+    - an
+    - or
+    - ul
+    - ar
+    - ax
+    SyllMin: 1
+    SyllMax: 2
+    DungeonSuffixes:
+    - Pit
+    - Crater
+    - Ruin
+    - Shell
+    - Hollow
+    - Shaft
+    - Collapse
+    - Grave
+    - Maw
+    - Sinkhole
+    - Den
+    - Chamber
+    - Tunnel
+    - Passage
+    - Lair
+    - Vault
+    - Tomb
+    - Crypt
+    - Foundation
+    - Cellar
+    - Bunker
+    - Remnant
+    DungeonPrefixes:
+    - The Blighted
+    - The Ruined
+    - The Toxic
+    - The Dead
+    - The Forsaken
+    - The Ashen
+    - The Scarred
+    - The Lifeless
+    - The Corrupted
+    - The Barren
+    - The Desolate
+    - The Poisoned
+    - The Irradiated
+    - The Cursed
+    - The Abandoned
+    - The Decayed
+    - The Plague-ravaged
+    - The Charred
+    - The Wasted
+    - The Hopeless
+    POISuffixes:
+    - Ruin
+    - Crater
+    - Dead-zone
+    - Waste-pit
+    - Ash-field
+    - Rust-hulk
+    - Slag-heap
+    - Bone-yard
+    - Scorch-mark
+    - Bleached-skeleton
+    - Toxic-pool
+    - Collapsed-building
+    - Shattered-monument
+    - Dead-forest
+    - Poison-spring
+    - Blighted-earth
+    - Rust-field
+    - Char-pit
+    - Grave-marker
+    - Desolation-point
+    Adjectives:
+    - Blighted
+    - Ruined
+    - Toxic
+    - Dead
+    - Forsaken
+    - Ashen
+    - Scarred
+    - Lifeless
+    - Barren
+    - Corrupted
+    - Poisoned
+    - Irradiated
+    - Cursed
+    - Abandoned
+    - Decayed
+    - Plague-ravaged
+    - Charred
+    - Wasted
+    - Hopeless
+    - Desolate
+    - Blackened
+    - Devastated
+    Description: 'Barren wasteland — nothing lives, nothing grows, only ruin remains'

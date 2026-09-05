@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Glacier
+  m_EditorClassIdentifier: 
+  BiomeKey: glacier
+  DisplayName: Glacier
+  Phonology:
+    Onsets:
+    - Gla
+    - Fro
+    - Cry
+    - Bre
+    - Kel
+    - Nim
+    - Bor
+    - Hri
+    - Isk
+    - Sno
+    - Dri
+    - Vre
+    - Hol
+    - Thr
+    - Vin
+    Nuclei:
+    - i
+    - a
+    - o
+    - ir
+    - al
+    - or
+    - ia
+    Codas:
+    - frost
+    - glacier
+    - crevasse
+    - moulin
+    - serac
+    - moraine
+    - firn
+    - berg
+    - field
+    - flow
+    Middles:
+    - ri
+    - al
+    - or
+    - im
+    - el
+    SyllMin: 2
+    SyllMax: 3
+    DungeonSuffixes:
+    - Crevasse
+    - Moulin
+    - Cavern
+    - Tunnel
+    - Grotto
+    - Shaft
+    - Chamber
+    - Hollow
+    - Rift
+    - Chasm
+    - Gallery
+    - Passage
+    - Vault
+    - Pit
+    - Alcove
+    - Pocket
+    - Den
+    - Abyss
+    - Chimney
+    - Throat
+    - Cathedral
+    - Hall
+    DungeonPrefixes:
+    - The Glacial
+    - The Grinding
+    - The Ancient
+    - The Creaking
+    - The Blue
+    - The Crushing
+    - The Frozen
+    - The Slow
+    - The Immense
+    - The Pristine
+    - The Deadly
+    - The Calving
+    - The Advancing
+    - The Retreating
+    - The Millennia-old
+    - The Pressure-carved
+    - The Ice-blue
+    - The Groaning
+    - The Massive
+    - The Relentless
+    POISuffixes:
+    - Crevasse
+    - Serac
+    - Moulin
+    - Ice-fall
+    - Moraine
+    - Glacial-lake
+    - Firn-field
+    - Ice-bridge
+    - Glacial-erratic
+    - Kettle-lake
+    - Esker
+    - Drumlin
+    - Ice-cave
+    - Blue-ice-wall
+    - Glacial-flour-lake
+    - Nunatak
+    - Meltwater-stream
+    - Cirque
+    - Hanging-glacier
+    - Bergschrund
+    Adjectives:
+    - Glacial
+    - Grinding
+    - Creaking
+    - Blue
+    - Crushing
+    - Ancient
+    - Slow
+    - Immense
+    - Pristine
+    - Deadly
+    - Calving
+    - Advancing
+    - Retreating
+    - Millennia-old
+    - Pressure-carved
+    - Ice-blue
+    - Groaning
+    - Massive
+    - Relentless
+    - Majestic
+    - Unforgiving
+    - Eternal
+    Description: 'Glacial ice — crevasses, blue ice, grinding movement, deadly beauty'

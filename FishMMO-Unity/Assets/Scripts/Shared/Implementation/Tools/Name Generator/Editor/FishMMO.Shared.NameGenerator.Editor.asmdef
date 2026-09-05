@@ -1,0 +1,18 @@
+{
+    "name": "FishMMO.Shared.NameGenerator.Editor",
+    "rootNamespace": "FishMMO.Shared.NameGeneration.Editor",
+    "references": [
+        "FishMMO.Shared"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,1168 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59532a17d958b43e58664bb8be4328a9, type: 3}
+  m_Name: Name Grammar
+  m_EditorClassIdentifier: 
+  MeaningOnsets:
+  - Key: Ael
+    Value: silver-
+  - Key: Syl
+    Value: wind-
+  - Key: Thal
+    Value: star-
+  - Key: Mal
+    Value: dark-
+  - Key: Driz
+    Value: storm-
+  - Key: Grak
+    Value: blood-
+  - Key: Bor
+    Value: iron-
+  - Key: Ash
+    Value: ashen-
+  - Key: Aur
+    Value: golden-
+  - Key: Eth
+    Value: soul-
+  - Key: Bell
+    Value: bright-
+  - Key: Azh
+    Value: shadow-
+  - Key: Lua
+    Value: moon-
+  - Key: Aer
+    Value: breath-
+  - Key: Brax
+    Value: bone-
+  - Key: Fizz
+    Value: spark-
+  - Key: Tink
+    Value: gear-
+  - Key: Cor
+    Value: coral-
+  - Key: Kal
+    Value: storm-
+  - Key: Nag
+    Value: serpent-
+  - Key: Vlad
+    Value: blood-
+  - Key: Pan
+    Value: wild-
+  - Key: Berg
+    Value: mountain-
+  - Key: Kib
+    Value: tunnel-
+  - Key: Bac
+    Value: vine-
+  - Key: Hor
+    Value: horn-
+  - Key: Lir
+    Value: tide-
+  - Key: Sar
+    Value: scale-
+  - Key: Dra
+    Value: fang-
+  - Key: Gal
+    Value: ancient-
+  - Key: Hel
+    Value: death-
+  - Key: Mir
+    Value: dream-
+  - Key: Rav
+    Value: night-
+  - Key: Pra
+    Value: holy-
+  - Key: Vis
+    Value: venom-
+  - Key: Dha
+    Value: sacred-
+  - Key: Kra
+    Value: war-
+  - Key: Xan
+    Value: exile-
+  - Key: Zen
+    Value: calm-
+  MeaningCodas:
+  - Key: iel
+    Value: light
+  - Key: wen
+    Value: song
+  - Key: dir
+    Value: blade
+  - Key: mir
+    Value: dream
+  - Key: las
+    Value: leaf
+  - Key: rak
+    Value: rage
+  - Key: urg
+    Value: strength
+  - Key: ash
+    Value: fire
+  - Key: ith
+    Value: weave
+  - Key: ix
+    Value: venom
+  - Key: eth
+    Value: death
+  - Key: bell
+    Value: call
+  - Key: fin
+    Value: wing
+  - Key: azar
+    Value: doom
+  - Key: or
+    Value: crown
+  - Key: ael
+    Value: dawn
+  - Key: wick
+    Value: craft
+  - Key: dale
+    Value: home
+  - Key: bury
+    Value: hearth
+  - Key: tide
+    Value: deep
+  - Key: orn
+    Value: endurance
+  - Key: iss
+    Value: venom
+  - Key: ax
+    Value: thunder
+  - Key: os
+    Value: honor
+  - Key: sha
+    Value: wisdom
+  - Key: ov
+    Value: blood-kin
+  - Key: reef
+    Value: calm
+  - Key: ox
+    Value: fury
+  - Key: usk
+    Value: endurance
+  - Key: pearl
+    Value: treasure
+  - Key: 'on'
+    Value: greatness
+  - Key: us
+    Value: valor
+  - Key: im
+    Value: bound
+  - Key: ar
+    Value: resolve
+  - Key: ine
+    Value: grace
+  - Key: ra
+    Value: flame
+  - Key: al
+    Value: keeper
+  - Key: ik
+    Value: cunning
+  MeaningMiddles:
+  - Key: ith
+    Value: of hidden
+  - Key: al
+    Value: of ancient
+  - Key: el
+    Value: of the
+  - Key: an
+    Value: between
+  - Key: er
+    Value: through
+  - Key: ir
+    Value: beneath
+  - Key: or
+    Value: over
+  - Key: ar
+    Value: within
+  - Key: ul
+    Value: under
+  - Key: ri
+    Value: of swift
+  - Key: du
+    Value: of deep
+  - Key: ga
+    Value: of war
+  - Key: ro
+    Value: of stone
+  - Key: az
+    Value: of shadow
+  - Key: xi
+    Value: of venom
+  - Key: si
+    Value: of silk
+  - Key: ka
+    Value: of bone
+  - Key: ru
+    Value: of blood
+  - Key: ss
+    Value: of venom
+  - Key: ya
+    Value: of the wild
+  - Key: ra
+    Value: of flame
+  - Key: 'no'
+    Value: of the void
+  - Key: wa
+    Value: of water
+  - Key: mo
+    Value: of earth
+  - Key: ba
+    Value: of the forge
+  - Key: la
+    Value: of song
+  - Key: ki
+    Value: of cunning
+  - Key: ni
+    Value: of night
+  - Key: pi
+    Value: of the small
+  - Key: ti
+    Value: of the quick
+  - Key: au
+    Value: of gold
+  - Key: in
+    Value: of the chosen
+  MeaningTitleBias:
+  - Key: silver
+    Value: honorific
+  - Key: golden
+    Value: honorific
+  - Key: blood
+    Value: epithet
+  - Key: war
+    Value: epithet
+  - Key: shadow
+    Value: epithet
+  - Key: venom
+    Value: epithet
+  - Key: bone
+    Value: legend
+  - Key: doom
+    Value: legend
+  - Key: death
+    Value: legend
+  - Key: fire
+    Value: legend
+  - Key: iron
+    Value: rank
+  - Key: stone
+    Value: rank
+  - Key: ancient
+    Value: honorific
+  - Key: swift
+    Value: epithet
+  - Key: moon
+    Value: honorific
+  - Key: star
+    Value: honorific
+  - Key: storm
+    Value: epithet
+  - Key: dark
+    Value: legend
+  - Key: coral
+    Value: honorific
+  - Key: serpent
+    Value: legend
+  - Key: spark
+    Value: rank
+  - Key: tunnel
+    Value: epithet
+  - Key: horn
+    Value: epithet
+  - Key: tide
+    Value: honorific
+  - Key: mountain
+    Value: rank
+  - Key: vine
+    Value: epithet
+  - Key: craft
+    Value: rank
+  - Key: fang
+    Value: legend
+  - Key: dream
+    Value: honorific
+  - Key: night
+    Value: legend
+  - Key: holy
+    Value: honorific
+  - Key: cunning
+    Value: epithet
+  - Key: calm
+    Value: honorific
+  - Key: exile
+    Value: legend
+  CityPrefixes:
+  - Old
+  - New
+  - Great
+  - Upper
+  - Lower
+  - North
+  - South
+  - East
+  - West
+  - High
+  - Deep
+  - Far
+  - Near
+  - Inner
+  - Outer
+  - Lost
+  - Hidden
+  - Ancient
+  CitySuffixMeanings:
+  - Key: hold
+    Value: stronghold
+  - Key: haven
+    Value: sanctuary
+  - Key: crown
+    Value: seat of power
+  - Key: spire
+    Value: tower-city
+  - Key: keep
+    Value: fortress
+  - Key: reach
+    Value: frontier
+  - Key: wall
+    Value: defended
+  - Key: guard
+    Value: watchtower
+  - Key: fort
+    Value: military outpost
+  - Key: gate
+    Value: gateway
+  - Key: bastion
+    Value: bulwark
+  - Key: tower
+    Value: sentinel
+  - Key: shire
+    Value: pastoral land
+  - Key: bury
+    Value: settlement
+  - Key: ton
+    Value: town
+  - Key: ham
+    Value: homestead
+  - Key: dale
+    Value: valley
+  - Key: field
+    Value: open land
+  - Key: port
+    Value: harbor-city
+  - Key: harbor
+    Value: safe waters
+  - Key: quay
+    Value: dock-city
+  - Key: shrine
+    Value: holy site
+  - Key: altar
+    Value: sacred ground
+  - Key: sanctum
+    Value: hallowed place
+  - Key: fall
+    Value: fallen glory
+  - Key: rest
+    Value: final place
+  - Key: hollow
+    Value: empty ruin
+  - Key: forge
+    Value: crafting heart
+  - Key: hall
+    Value: great gathering
+  - Key: throne
+    Value: seat of rule
+  - Key: mine
+    Value: deep works
+  - Key: vein
+    Value: rich tunnels
+  - Key: anvil
+    Value: sacred forge
+  - Key: glade
+    Value: forest clearing
+  - Key: grove
+    Value: sacred woodland
+  - Key: vale
+    Value: sheltered valley
+  - Key: court
+    Value: seat of judgment
+  - Key: bower
+    Value: sheltered place
+  - Key: glen
+    Value: hidden valley
+  - Key: roost
+    Value: 'dragon''s perch'
+  - Key: peak
+    Value: mountain summit
+  - Key: aerie
+    Value: sky fortress
+  - Key: web
+    Value: silk citadel
+  - Key: hive
+    Value: colony heart
+  - Key: nest
+    Value: breeding ground
+  - Key: drift
+    Value: ethereal crossing
+  - Key: veil
+    Value: boundary-place
+  - Key: echo
+    Value: memory-site
+  - Key: crypt
+    Value: tomb-city
+  - Key: tomb
+    Value: burial ground
+  - Key: moor
+    Value: desolate place
+  - Key: ring
+    Value: gathering circle
+  - Key: bloom
+    Value: flowering heart
+  - Key: petal
+    Value: garden-city
+  - Key: pit
+    Value: infernal depth
+  - Key: furnace
+    Value: fire-city
+  - Key: abyss
+    Value: bottomless chasm
+  - Key: works
+    Value: workshop-city
+  - Key: gear
+    Value: mechanical heart
+  - Key: hub
+    Value: central works
+  - Key: green
+    Value: peaceful commons
+  - Key: market
+    Value: trade center
+  - Key: hearth
+    Value: warm home
+  - Key: run
+    Value: open plains
+  - Key: steppe
+    Value: endless grassland
+  - Key: plain
+    Value: vast flatland
+  - Key: labyrinth
+    Value: maze-city
+  - Key: arena
+    Value: trial-ground
+  - Key: maze
+    Value: winding halls
+  - Key: reef
+    Value: coral city
+  - Key: dome
+    Value: undersea shelter
+  - Key: atoll
+    Value: ring-island
+  - Key: temple
+    Value: sacred heart
+  - Key: coil
+    Value: serpent-city
+  - Key: palace
+    Value: grand dwelling
+  - Key: oasis
+    Value: desert refuge
+  - Key: mirage
+    Value: illusory city
+  - Key: lamp
+    Value: wish-bound place
+  - Key: warren
+    Value: tunnel-city
+  - Key: hoard
+    Value: treasure-den
+  - Key: dig
+    Value: ever-deepening mine
+  - Key: summit
+    Value: highest point
+  - Key: crest
+    Value: ridge-city
+  - Key: ridge
+    Value: mountain spine
+  - Key: canopy
+    Value: treetop city
+  - Key: heart
+    Value: forest core
+  - Key: root
+    Value: deep foundation
+  - Key: castle
+    Value: noble fortress
+  - Key: manor
+    Value: lordly estate
+  - Key: estate
+    Value: noble grounds
+  FallbackCitySuffixes:
+  - hold
+  - haven
+  - gate
+  - fall
+  - stead
+  BiomeMeaningOnsets:
+  - Key: Thr
+    Value: ancient
+  - Key: Gor
+    Value: dark
+  - Key: Sha
+    Value: shadow
+  - Key: Vel
+    Value: hidden
+  - Key: Kra
+    Value: broken
+  - Key: Mor
+    Value: death
+  - Key: Dra
+    Value: dragon
+  - Key: Sil
+    Value: silver
+  - Key: Gol
+    Value: golden
+  - Key: Fen
+    Value: marsh
+  - Key: Fro
+    Value: frozen
+  - Key: Vol
+    Value: fire
+  - Key: Cor
+    Value: coral
+  - Key: Zan
+    Value: sand
+  - Key: Bri
+    Value: bright
+  - Key: Obs
+    Value: obsidian
+  - Key: Mos
+    Value: moss
+  - Key: Cry
+    Value: crystal
+  - Key: Ash
+    Value: ashen
+  - Key: Hol
+    Value: hollow
+  - Key: Sto
+    Value: stone
+  - Key: Wra
+    Value: wraith
+  - Key: Lum
+    Value: luminous
+  - Key: Bre
+    Value: wind
+  - Key: Thi
+    Value: thorn
+  - Key: Ver
+    Value: green
+  - Key: Mar
+    Value: marble
+  - Key: Abi
+    Value: abyssal
+  - Key: Rui
+    Value: ruined
+  - Key: Tid
+    Value: tidal
+  BiomeMeaningCodas:
+  - Key: maw
+    Value: devourer
+  - Key: hold
+    Value: stronghold
+  - Key: fall
+    Value: fallen
+  - Key: deep
+    Value: depths
+  - Key: gate
+    Value: gateway
+  - Key: mire
+    Value: swamp
+  - Key: tomb
+    Value: burial
+  - Key: peak
+    Value: summit
+  - Key: root
+    Value: foundation
+  - Key: web
+    Value: trap
+  - Key: eye
+    Value: watcher
+  - Key: bone
+    Value: death
+  - Key: veil
+    Value: hidden
+  - Key: claw
+    Value: predator
+  - Key: nest
+    Value: lair
+  - Key: forge
+    Value: creation
+  - Key: frost
+    Value: frozen
+  - Key: tide
+    Value: ocean
+  - Key: flame
+    Value: burning
+  - Key: sand
+    Value: desert
+  - Key: vine
+    Value: overgrown
+  - Key: moss
+    Value: ancient
+  - Key: ash
+    Value: destroyed
+  - Key: mist
+    Value: obscured
+  POITypeSuffixes:
+  - Key: landmark
+    Values:
+    - Stone
+    - Marker
+    - Pillar
+    - Monolith
+    - Cairn
+    - Obelisk
+    - Column
+    - Stele
+  - Key: camp
+    Values:
+    - Camp
+    - Rest
+    - Bivouac
+    - Shelter
+    - Haven
+    - Outpost
+    - Lodge
+    - Fire-ring
+  - Key: shrine
+    Values:
+    - Shrine
+    - Altar
+    - Sanctum
+    - Chapel
+    - Fane
+    - Reliquary
+    - Font
+    - Prayer-stone
+  - Key: tower
+    Values:
+    - Tower
+    - Spire
+    - Watchtower
+    - Turret
+    - Lookout
+    - Beacon
+    - Minaret
+    - Pylon
+  - Key: bridge
+    Values:
+    - Bridge
+    - Crossing
+    - Span
+    - Arch
+    - Overpass
+    - Causeway
+    - Viaduct
+    - Ford
+  - Key: clearing
+    Values:
+    - Clearing
+    - Glade
+    - Opening
+    - Dell
+    - Hollow
+    - Grove
+    - Meadow
+    - Circle
+  - Key: spring
+    Values:
+    - Spring
+    - Well
+    - Pool
+    - Font
+    - Stream
+    - Source
+    - Basin
+    - Seep
+  - Key: cave
+    Values:
+    - Cave
+    - Grotto
+    - Cavern
+    - Den
+    - Hollow
+    - Crevice
+    - Tunnel
+    - Alcove
+  - Key: monument
+    Values:
+    - Monument
+    - Statue
+    - Effigy
+    - Memorial
+    - Colossus
+    - Totem
+    - Idol
+    - Relic
+  - Key: wreck
+    Values:
+    - Wreck
+    - Ruin
+    - Debris
+    - Hulk
+    - Remnant
+    - Shell
+    - Skeleton
+    - Husk
+  Ordinals:
+  - First
+  - Second
+  - Third
+  - Fourth
+  - Fifth
+  - Sixth
+  - Seventh
+  - Eighth
+  - Ninth
+  - Tenth
+  - Twelfth
+  - Seventeenth
+  - Twenty-First
+  - Last
+  - Youngest
+  - Eldest
+  PossessivePronouns:
+  - his
+  - her
+  - their
+  - the
+  PlaceEpithetPatterns:
+  - 'of {0}'
+  - 'from {0}'
+  - 'born in {0}'
+  - 'bane of {0}'
+  - 'guardian of {0}'
+  - 'last seen in {0}'
+  - 'exiled from {0}'
+  - 'sworn to {0}'
+  - 'pride of {0}'
+  - 'scourge of {0}'
+  - 'risen from {0}'
+  - 'child of {0}'
+  - 'wanderer of {0}'
+  - 'herald of {0}'
+  ComposedAdjectives:
+  - Iron
+  - Stone
+  - Flame
+  - Shadow
+  - Moon
+  - Star
+  - Storm
+  - Blood
+  - Bone
+  - Silver
+  - Gold
+  - Dream
+  - Night
+  - Frost
+  - Sun
+  - Ash
+  - Ember
+  - Thorn
+  - Silk
+  - Void
+  - Hollow
+  - Tide
+  - Wind
+  - Song
+  - Pale
+  - Swift
+  - Silent
+  - Seven
+  - Twice
+  - Ever
+  ComposedQualifiers:
+  - touched
+  - wrought
+  - born
+  - sworn
+  - bound
+  - broken
+  - forged
+  - crowned
+  - kissed
+  - wreathed
+  - shod
+  - scarred
+  - tested
+  - blessed
+  - marked
+  - cursed
+  - graced
+  - haunted
+  - hearted
+  - handed
+  - eyed
+  - tongued
+  - voiced
+  - footed
+  DeedVerbs:
+  - Slew
+  - Broke
+  - Sealed
+  - Shattered
+  - Defied
+  - Outran
+  - Outlasted
+  - Tamed
+  - Bound
+  - Freed
+  - Burned
+  - Drowned
+  - Raised
+  - Toppled
+  - Crowned
+  - Hunted
+  - Guarded
+  - Carried
+  - Held
+  - Led
+  - Charged
+  - Wrestled
+  - Reclaimed
+  - Unmade
+  - Silenced
+  - Awakened
+  - Forged
+  - Healed
+  - Sang to
+  - Spoke with
+  - Hid from
+  - Survived
+  - Stole
+  - Returned
+  - Named
+  - Summoned
+  - Banished
+  - Rebuilt
+  DeedObjects:
+  - a dragon
+  - the Crimson Drake
+  - the Iron Gate
+  - the Ember Moors
+  - the Sunken Host
+  - an army
+  - the Pale Legion
+  - the Black Flame
+  - the Twin Moons
+  - the Bone Tyrant
+  - a goddess
+  - the Thousand
+  - the Eastern Horde
+  - the Silver Court
+  - a lich-king
+  - the Storm
+  - the Long Winter
+  - the First Wyrm
+  - the Shadow Pact
+  - the Cursed Blade
+  - the Hollow King
+  - a titan
+  - the Old Covenant
+  - the Serpent Throne
+  - the Siege
+  - the Frozen Tide
+  - the Burning March
+  - the Silent Choir
+  - the Gloom
+  - the Binding
+  - the Hungering Mist
+  - the Maw
+  - the Ashen Horde
+  - a wyrm of legend
+  - the Oathbreaker
+  UniversalPlaces:
+  - the Eastern Gate
+  - the Black Field
+  - Hollow Hill
+  - the Bone Moors
+  - Stormwatch
+  - the Ember Pass
+  - Ashfell
+  - the Ruinspire
+  - the Frozen Vale
+  - the Shattered Coast
+  - the Final Wall
+  - the Lost Kingdom
+  - the Forgotten Vale
+  - the Cinder Reach
+  - the Shrouded Pass
+  - the Thousand Steps
+  - the Rift
+  - the Weeping Keep
+  - the Burning Bridge
+  - the Hollow Fields
+  BattleQualifiers:
+  - Battle
+  - Siege
+  - Fall
+  - Charge
+  - Last Stand
+  - Breach
+  - Reckoning
+  - Sunrise
+  - Long Night
+  - Great Ruin
+  - Red Dawn
+  - Vigil
+  - Breaking
+  - Silence
+  - Rout
+  - Crossing
+  EraQualifiers:
+  - Long Winter
+  - Age of Ash
+  - First Age
+  - Sundered Years
+  - Broken Centuries
+  - Wyrm Wars
+  - Silent Age
+  - Fallen Years
+  - Second Sundering
+  - Red Summer
+  - Age of the Pale Moon
+  - Crown War
+  - Shadow Decade
+  - Reclamation
+  - Fever Years
+  Outcomes:
+  - lived to tell of it
+  - vanished before dawn
+  - returned with a prize
+  - bargained for the stars
+  - came home changed
+  - held the line
+  - walked away unmarked
+  - paid the price
+  - was sung of for a century
+  - was never seen again
+  - broke the curse
+  - bound the maker
+  - kept the oath
+  - wept for the fallen
+  - spoke the true name
+  - shut the gate forever
+  ItemTypeSuffixes:
+  - Key: weapon
+    Values:
+    - bane
+    - cleaver
+    - edge
+    - fang
+    - fury
+    - render
+    - reaver
+    - slayer
+    - spike
+    - splitter
+    - strike
+    - thorn
+    - wrath
+  - Key: armor
+    Values:
+    - aegis
+    - bastion
+    - bulwark
+    - guard
+    - mantle
+    - plate
+    - shell
+    - shield
+    - ward
+    - wall
+    - veil
+    - carapace
+  - Key: artifact
+    Values:
+    - eye
+    - heart
+    - crown
+    - orb
+    - sigil
+    - stone
+    - star
+    - flame
+    - shard
+    - mark
+    - seal
+    - core
+  - Key: relic
+    Values:
+    - tear
+    - shard
+    - remnant
+    - echo
+    - vestige
+    - token
+    - fragment
+    - bone
+    - rune
+    - glyph
+    - ember
+    - wisp
+  - Key: trinket
+    Values:
+    - charm
+    - pendant
+    - ring
+    - brooch
+    - talisman
+    - locket
+    - bauble
+    - fetish
+    - amulet
+    - torc
+    - anklet
+    - pin
+  ItemTypeNouns:
+  - Key: weapon
+    Values:
+    - Blade
+    - Sword
+    - Axe
+    - Mace
+    - Spear
+    - Bow
+    - Hammer
+    - Dagger
+    - Halberd
+    - Glaive
+    - Scythe
+    - Lance
+  - Key: armor
+    Values:
+    - Plate
+    - Mail
+    - Helm
+    - Gauntlets
+    - Greaves
+    - Cuirass
+    - Pauldrons
+    - Crown
+    - Boots
+    - Bracers
+    - Mantle
+    - Shield
+  - Key: artifact
+    Values:
+    - Eye
+    - Heart
+    - Crown
+    - Orb
+    - Codex
+    - Tome
+    - Chalice
+    - Scepter
+    - Mirror
+    - Lantern
+    - Hourglass
+    - Compass
+  - Key: relic
+    Values:
+    - Shard
+    - Fragment
+    - Bone
+    - Skull
+    - Tooth
+    - Tear
+    - Feather
+    - Scale
+    - Claw
+    - Horn
+    - Vial
+    - Phylactery
+  - Key: trinket
+    Values:
+    - Ring
+    - Pendant
+    - Brooch
+    - Amulet
+    - Charm
+    - Talisman
+    - Locket
+    - Torc
+    - Circlet
+    - Anklet
+    - Earring
+    - Bead
+  ItemGenericNouns:
+  - Relic
+  - Artifact
+  - Treasure
+  - Heirloom
+  - Token
+  ItemEpithets:
+  - the Undying
+  - the Accursed
+  - the Eternal
+  - the Shattered
+  - the Forgotten
+  - the Unbroken
+  - the Radiant
+  - the Bound
+  - the Fallen
+  - the Hollow
+  - the Silent
+  - the Burning
+  - the Sundered
+  - the Last
+  - the Crimson
+  - the Pale
+  - the Veiled
+  - the Iron
+  - the Gilded
+  - the Ashen
+  - the Starborn
+  - the Dread
+  - the Blessed
+  - the Forsaken
+  ItemLegendaryPrefixes:
+  - The Ancient
+  - The Cursed
+  - The Lost
+  - The Legendary
+  - The Fabled
+  - The Mythic
+  - The Sacred
+  - The Dreaded
+  - The Hallowed
+  - The Forbidden
+  - The Blessed
+  - The Twilight
+  - The Primordial
+  - The Awakened
+  - The Shattered
+  - The Eternal
+  ItemHeroRelations:
+  - '''s'
+  - '''s Lost'
+  - '''s Cursed'
+  - '''s Final'
+  - '''s Last'
+  - '''s Broken'
+  - '''s Eternal'
+  - '''s Forgotten'
+  - '''s Fallen'
+  ItemPlaceRelations:
+  - of
+  - from
+  - beneath
+  - within
+  - beyond
+  - above

@@ -38,7 +38,7 @@ The Interactable system is a server-authoritative, template-driven framework for
 - Fourteen concrete interactable types: AbilityCrafter, Banker, Bindstone, CapturePoint, Container, DialogueInteractable, DungeonEntrance, GatheringNode, LoreObject, Mailbox, Merchant, Shrine, Switch, Teleporter, WorldItem
 - Server-authoritative validation with `sqrMagnitude`-based range checks (no square root)
 - Template-driven configuration via ScriptableObjects per interactable type
-- Scene-object registration and deterministic naming via `SceneObjectNamer`
+- Scene-object registration and generated naming via `SceneObjectNamer` (name generator, seeded per spawn; 5 bytes on the wire)
 - Object pooling support through `ISpawnable` and `ObjectSpawner` integration
 - Client-side floating title/name label rendering with customizable color
 - Achievement integration on most interactable types
@@ -118,7 +118,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 1. **Create a new interactable** — Add one of the concrete interactable components (e.g., `Merchant`, `GatheringNode`, `Container`) to a GameObject in a scene.
 2. **Assign a template** — For template-driven types, create the matching ScriptableObject (e.g., `MerchantTemplate`, `GatheringNodeTemplate`) and assign it to the component's `Template` field.
 3. **Set interaction range** — Adjust the `InteractionRange` field on the component (default: 3.5 units).
-4. **Ensure SceneObjectNamer** — Types like `AbilityCrafter`, `Banker`, `Merchant`, and `Container` require `SceneObjectNamer` (added automatically via `[RequireComponent]`).
+4. **Ensure SceneObjectNamer** — Types like `AbilityCrafter`, `Banker`, `Merchant`, and `Container` require `SceneObjectNamer` (added automatically via `[RequireComponent]`). With default settings it names the object from its `FactionController` race; set a Race Override, a Biome, or another mode (City / Dungeon / Point of Interest / Item) on the component for anything else.
 5. **Server registration** — On the server, the interactable registers itself in `Awake()` via `SceneObject.Register()`. On the client, registration happens in `ReadPayload()` after receiving the object's `ID`.
 
 ## Configuration

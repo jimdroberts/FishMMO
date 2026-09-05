@@ -1,0 +1,100 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Locathah
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Fish-folk — burbling and cautious
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Lok
+      - Cha
+      - Sshi
+      - Pah
+      - Vel
+      - Ka
+      - Thu
+      - Ruk
+      Nuclei:
+      - a
+      - u
+      - i
+      Codas:
+      - thah
+      - shek
+      - kor
+      - mak
+      - nal
+      Middles:
+      - ka
+      - tu
+      - ri
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ena
+      - ishi
+      MasculineSuffixes:
+      - ak
+      - or
+      - thah
+      Description: Fish-folk — burbling and cautious
+      Tags:
+      - Current-names
+      - Reef-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Gillmarket
+    - Reefside Lodge
+    - the Abyssal Trench
+    - Kelp-green Shelf
+    Titles:
+      Honorific:
+      - Gill-speaker
+      - Current-reader
+      Epithet:
+      - the Silver-scaled
+      - the Cautious
+      Rank:
+      - Reader of the Gillmarket
+      Legend:
+      - Who Hid the Village from the Sahuagin Raid
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

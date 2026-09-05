@@ -1,0 +1,102 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Wendigo
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Algonquian-inflected winter-spirit cadence — cold hunger
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Wen
+      - Pahk
+      - Atc
+      - Miskw
+      - Kan
+      - Man
+      - Shin
+      - Hoci
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      Codas:
+      - digo
+      - owiss
+      - nabi
+      - uskinga
+      Middles:
+      - ci
+      - an
+      - wa
+      SyllMin: 3
+      SyllMax: 4
+      FeminineSuffixes:
+      - a
+      - sita
+      - kwe
+      MasculineSuffixes:
+      - go
+      - bou
+      - nigan
+      Description: Algonquian-inflected winter-spirit cadence — cold hunger
+      Tags:
+      - Hunger-names
+      - Frost-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - Winter-Starve Camp
+    - the North Tree-line
+    - Whisper-in-Snow
+    - Cold Hollow
+    Titles:
+      Honorific:
+      - Hunger-speaker
+      - North-keeper
+      Epithet:
+      - the Ever-hungry
+      - the Wind-throated
+      - the Snow-eyed
+      Rank:
+      - Keeper of Cold Hollow
+      Legend:
+      - Who Ate and Ate and Was Never Filled
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

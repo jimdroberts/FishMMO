@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Volcanic Temple
+  m_EditorClassIdentifier: 
+  BiomeKey: volcanictemple
+  DisplayName: Volcanic Temple
+  Phonology:
+    Onsets:
+    - Vol
+    - Pyr
+    - Ash
+    - Dra
+    - Gor
+    - Mol
+    - Sco
+    - Bri
+    - Kel
+    - Fla
+    - Obs
+    - Fen
+    - Kra
+    - Thr
+    - Mag
+    Nuclei:
+    - a
+    - o
+    - u
+    - ax
+    - or
+    - al
+    - ur
+    Codas:
+    - thar
+    - maw
+    - ash
+    - gor
+    - forge
+    - flame
+    - deep
+    - rok
+    - char
+    - xul
+    Middles:
+    - al
+    - or
+    - ax
+    - ru
+    - ok
+    SyllMin: 2
+    SyllMax: 3
+    DungeonSuffixes:
+    - Temple
+    - Sanctum
+    - Shrine
+    - Altar
+    - Crucible
+    - Forge
+    - Pyre
+    - Cathedral
+    - Fane
+    - Chamber
+    - Vault
+    - Crypt
+    - Hall
+    - Chapel
+    - Throne-room
+    - Observatory
+    - Treasury
+    - Gallery
+    - Passage
+    - Sanctum-forge
+    - Ritual-chamber
+    - Inner-flame
+    DungeonPrefixes:
+    - The Burning
+    - The Infernal
+    - The Molten
+    - The Sacred
+    - The Fire-blessed
+    - The Ash-wreathed
+    - The Eternal
+    - The Volcanic
+    - The Obsidian
+    - The Flame-lit
+    - The Lava-moated
+    - The Sulfurous
+    - The Smoke-shrouded
+    - 'The Fire-god''s'
+    - The Magma-hearted
+    - The Pyroclastic
+    - The Ember-crowned
+    - The Scorching
+    - The Hellfire
+    - The Incandescent
+    POISuffixes:
+    - Fire-altar
+    - Lava-font
+    - Obsidian-idol
+    - Flame-pillar
+    - Ash-shrine
+    - Char-totem
+    - Magma-basin
+    - Heat-rune
+    - Ember-throne
+    - Pyroclast-arch
+    - Sulfur-garden
+    - Forge-hearth
+    - Cinder-circle
+    - Basalt-stele
+    - Fire-glyph
+    - Lava-cascade
+    - Obsidian-mirror
+    - Flame-mosaic
+    - Smoke-column
+    - Ash-altar
+    Adjectives:
+    - Burning
+    - Infernal
+    - Molten
+    - Sacred
+    - Fire-blessed
+    - Ash-wreathed
+    - Eternal
+    - Volcanic
+    - Scorching
+    - Incandescent
+    - Obsidian
+    - Flame-lit
+    - Lava-moated
+    - Sulfurous
+    - Smoke-shrouded
+    - Pyroclastic
+    - Ember-crowned
+    - Hellfire
+    - Magma-hearted
+    - Charred
+    - Blistering
+    - Glowing
+    Description: 'Temple built within a volcano — fire worship, lava channels, obsidian'

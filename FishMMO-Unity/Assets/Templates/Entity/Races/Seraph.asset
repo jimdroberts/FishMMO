@@ -1,0 +1,97 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Seraph
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Six-winged harmonic chant
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sera
+      - Ophan
+      - Ce
+      - Meta
+      - Sand
+      - Meta
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      Codas:
+      - phim
+      - niel
+      - tron
+      - oth
+      Middles:
+      - ra
+      - na
+      - li
+      SyllMin: 3
+      SyllMax: 4
+      FeminineSuffixes:
+      - iel
+      - a
+      - ael
+      MasculineSuffixes:
+      - phim
+      - tron
+      - iel
+      Description: Six-winged harmonic chant
+      Tags:
+      - Throne-names
+      - Fire-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Throne Room
+    - the Burning Wheel
+    - the Seventh Gate
+    Titles:
+      Honorific:
+      - Throne
+      - Burning One
+      Epithet:
+      - the Six-winged
+      - the Throne-fire
+      Rank:
+      - Warden of the Throne
+      Legend:
+      - Who Sang the Chord That Burnt the Heretic
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

@@ -1,0 +1,58 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <Style src="NameGeneratorWindow.uss" />
+    <ui:VisualElement name="root" class="root">
+
+        <!-- Toolbar -->
+        <uie:Toolbar name="toolbar" class="toolbar">
+            <ui:Label text="Name Generator" class="toolbar-title" />
+            <ui:VisualElement class="toolbar-spacer" />
+            <uie:ToolbarButton name="generate-button" text="Generate" class="toolbar-button toolbar-button--primary" tooltip="Generate a batch for the selected category." />
+            <uie:ToolbarButton name="generate-full-button" text="Generate Full" class="toolbar-button" tooltip="Characters only: also generate a title for each name." />
+        </uie:Toolbar>
+
+        <!-- Main Content Area -->
+        <ui:VisualElement name="main-content" class="main-content">
+
+            <!-- Left Panel: Category List -->
+            <ui:VisualElement name="category-panel" class="category-panel">
+                <ui:Label text="Categories" class="panel-header" />
+                <ui:ScrollView name="category-scroll" class="category-scroll">
+                    <ui:VisualElement name="category-list" class="category-list" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <!-- Resizer -->
+            <ui:VisualElement name="left-resizer" class="resizer" />
+
+            <!-- Middle Panel: Settings -->
+            <ui:VisualElement name="settings-panel" class="settings-panel">
+                <ui:Label text="Settings" class="panel-header" />
+                <ui:ScrollView name="settings-scroll" class="settings-scroll">
+                    <ui:VisualElement name="settings-content" class="settings-content" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <!-- Resizer -->
+            <ui:VisualElement name="right-resizer" class="resizer" />
+
+            <!-- Right Panel: Results -->
+            <ui:VisualElement name="results-panel" class="results-panel">
+                <ui:VisualElement name="results-header-row" class="results-header-row">
+                    <ui:Label name="results-header" text="Results" class="panel-header" />
+                    <ui:Button name="copy-button" text="Copy All" class="results-action" tooltip="Copy every result in this list to the system clipboard, one per line." />
+                    <ui:Button name="export-button" text="Export CSV" class="results-action" tooltip="Write the results to a .csv file (name, type, race/biome, meaning) for use in a spreadsheet or an import script." />
+                    <ui:Button name="clear-button" text="Clear" class="results-action results-action--danger" tooltip="Discard the results in every category." />
+                </ui:VisualElement>
+                <ui:ScrollView name="results-scroll" class="results-scroll">
+                    <ui:VisualElement name="results-list" class="results-list" />
+                </ui:ScrollView>
+                <ui:Label name="results-count-label" text="" class="results-count-label" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- Status Bar -->
+        <ui:Label name="status-bar" text="Ready" class="status-bar" />
+
+    </ui:VisualElement>
+</ui:UXML>

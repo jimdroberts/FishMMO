@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Scree
+  m_EditorClassIdentifier: 
+  BiomeKey: scree
+  DisplayName: Scree
+  Phonology:
+    Onsets:
+    - Sto
+    - Gri
+    - Cra
+    - Roc
+    - Sha
+    - Kel
+    - Bre
+    - Hol
+    - Mor
+    - Sli
+    - Dri
+    - Bou
+    - Thr
+    - Nor
+    - Gor
+    Nuclei:
+    - a
+    - o
+    - e
+    - ar
+    - or
+    - ag
+    - ur
+    Codas:
+    - stone
+    - rock
+    - slide
+    - rubble
+    - shard
+    - grit
+    - chip
+    - talus
+    - fall
+    - debris
+    Middles:
+    - an
+    - or
+    - al
+    - er
+    - ar
+    SyllMin: 1
+    SyllMax: 2
+    DungeonSuffixes:
+    - Slide
+    - Collapse
+    - Pit
+    - Crack
+    - Fissure
+    - Shaft
+    - Gap
+    - Hollow
+    - Chute
+    - Rubble-cave
+    - Den
+    - Chamber
+    - Passage
+    - Tunnel
+    - Pocket
+    - Alcove
+    - Crawl-space
+    - Crevice
+    - Lair
+    - Shelter
+    - Foundation
+    - Overhang
+    DungeonPrefixes:
+    - The Unstable
+    - The Shifting
+    - The Treacherous
+    - The Crumbling
+    - The Loose
+    - The Shattered
+    - The Avalanche
+    - The Fractured
+    - The Rattling
+    - The Dangerous
+    - The Steep
+    - The Gray
+    - The Rock-slide
+    - The Boulder-choked
+    - The Perilous
+    - The Ankle-breaking
+    - The Grinding
+    - The Collapsing
+    - The Precarious
+    - The Debris-filled
+    POISuffixes:
+    - Talus-field
+    - Rock-slide
+    - Boulder-pile
+    - Shingle-slope
+    - Gravel-fan
+    - Stone-chute
+    - Debris-field
+    - Loose-face
+    - Cairn
+    - Rock-glacier
+    - Terminal-moraine
+    - Frost-shatter
+    - Fallen-cliff
+    - Pebble-stream
+    - Stone-river
+    - Slide-path
+    - Erosion-scar
+    - Rock-fall
+    - Scramble-route
+    - Unstable-ledge
+    Adjectives:
+    - Unstable
+    - Shifting
+    - Treacherous
+    - Crumbling
+    - Loose
+    - Shattered
+    - Dangerous
+    - Steep
+    - Gray
+    - Rattling
+    - Boulder-choked
+    - Perilous
+    - Ankle-breaking
+    - Grinding
+    - Collapsing
+    - Precarious
+    - Debris-filled
+    - Fractured
+    - Sliding
+    - Harsh
+    - Wind-blown
+    - Inhospitable
+    Description: 'Loose rock slopes — unstable footing, avalanche danger, shifting stone'

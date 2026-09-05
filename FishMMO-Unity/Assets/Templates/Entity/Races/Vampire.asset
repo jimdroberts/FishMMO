@@ -1,0 +1,189 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Vampire
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Elegant and Slavic — aristocratic dread, each syllable a velvet blade'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Vlad
+      - Mir
+      - Sar
+      - Dra
+      - Kov
+      - Nar
+      - Rav
+      - Sil
+      - Vor
+      - Zel
+      - Ash
+      - Bal
+      - Cyr
+      - Eth
+      - Gal
+      - Isk
+      - Kal
+      - Laz
+      - Mor
+      - Nik
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      - ae
+      - ei
+      Codas:
+      - mir
+      - ov
+      - ish
+      - ael
+      - eth
+      - ius
+      - arn
+      - esh
+      - nik
+      - orn
+      Middles:
+      - al
+      - an
+      - el
+      - ir
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ina
+      - iel
+      - essa
+      MasculineSuffixes:
+      - mir
+      - ov
+      - ius
+      - arn
+      Description: 'Elegant and Slavic — aristocratic dread, each syllable a velvet blade'
+      Tags:
+      - Blood-names
+      - Court-bonds
+      - Night-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Crimson Court
+    - Nighthollow
+    - the Blood Keep
+    - Shadowmere
+    - the Pale Estate
+    - the Ebony Hall
+    - Castle Duskmoor
+    Titles:
+      Honorific:
+      - Blood-lord
+      - Night-sovereign
+      - Eternal One
+      - Crimson Duke
+      - Shadow-count
+      - Pale Monarch
+      Epithet:
+      - the Deathless
+      - the Pale
+      - the Ever-hungry
+      - the Night-blessed
+      - the Blood-crowned
+      - the Ancient Terror
+      - the Velvet-tongued
+      - the Moonlit Predator
+      Rank:
+      - Sovereign of the Crimson Court
+      - Elder of the First Blood
+      - Lord of the Endless Night
+      - Keeper of the Blood Chalice
+      - High Prince of Shadows
+      - Master of the Pale Estate
+      Legend:
+      - Who Has Lived Since the First Kingdom
+      - Who Drained a King
+      - Whose Thirst Cannot Be Slaked
+      - Who Remembers the Sun and Chose the Dark
+      - Who Built an Empire That Only Wakes at Night
+    CitySuffixes:
+      Capital:
+      - court
+      - castle
+      - manor
+      - estate
+      - hall
+      - citadel
+      - throne
+      Fortress:
+      - wall
+      - gate
+      - tower
+      - guard
+      - keep
+      - bastion
+      - ward
+      Village:
+      - hollow
+      - vale
+      - moor
+      - shade
+      - hamlet
+      - dell
+      - field
+      Port:
+      - dock
+      - harbor
+      - cove
+      - bay
+      - wharf
+      - landing
+      Sacred:
+      - crypt
+      - altar
+      - sanctum
+      - vault
+      - shrine
+      - chalice
+      - fane
+      Ruin:
+      - ruin
+      - dust
+      - ash
+      - decay
+      - void
+      - hollow
+      - waste

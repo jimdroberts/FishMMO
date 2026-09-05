@@ -1,0 +1,189 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Djinn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Arabic-inspired flow — smoke and wind, wishes and ancient flame'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Azr
+      - Bah
+      - Dja
+      - Fah
+      - Gha
+      - Haq
+      - Ib
+      - Jal
+      - Kha
+      - Lam
+      - Mah
+      - Nas
+      - Qas
+      - Rah
+      - Sal
+      - Tar
+      - Wah
+      - Yaq
+      - Zah
+      - Sha
+      Nuclei:
+      - a
+      - i
+      - u
+      - aa
+      - ii
+      - uu
+      - ai
+      Codas:
+      - im
+      - ar
+      - ud
+      - an
+      - ir
+      - ash
+      - ael
+      - iq
+      - um
+      - ib
+      Middles:
+      - al
+      - ar
+      - an
+      - ir
+      - ul
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ina
+      - iah
+      - een
+      MasculineSuffixes:
+      - im
+      - ar
+      - ud
+      - ir
+      Description: 'Arabic-inspired flow — smoke and wind, wishes and ancient flame'
+      Tags:
+      - Wish-names
+      - Lamp-bonds
+      - Element-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Brass Palace
+    - Smokehollow
+    - the Wishvault
+    - Sandfire Oasis
+    - the Wind Court
+    - the Eternal Lamp
+    - the Mirage Spire
+    Titles:
+      Honorific:
+      - Wish-keeper
+      - Flame-eternal
+      - Wind-sovereign
+      - Smoke-lord
+      - Essence-bound
+      - Storm-caller
+      Epithet:
+      - the Infinite
+      - the Smokeless Fire
+      - the Wish-granter
+      - the Ever-shifting
+      - the Unbound
+      - the Elemental
+      - the Sand-voiced
+      - the Mirage-weaver
+      Rank:
+      - Lord of the Brass Lamp
+      - Keeper of the Last Wish
+      - Sovereign of the Smokeless Flame
+      - Elder of the Wind Court
+      - Voice of the Desert Storm
+      - Guardian of the Eternal Lamp
+      Legend:
+      - Who Granted a Wish That Changed the World
+      - Who Escaped the Binding Lamp
+      - Whose Flame Has Burned Since Before Time
+      - Who Made the Desert Bloom
+      - Who Carries the Memory of Every Wish Ever Made
+    CitySuffixes:
+      Capital:
+      - palace
+      - spire
+      - oasis
+      - court
+      - dome
+      - citadel
+      - mirage
+      Fortress:
+      - wall
+      - gate
+      - tower
+      - guard
+      - seal
+      - ward
+      - bastion
+      Village:
+      - oasis
+      - camp
+      - tent
+      - clearing
+      - well
+      - spring
+      - shade
+      Port:
+      - harbor
+      - dock
+      - bay
+      - inlet
+      - cove
+      - lagoon
+      Sacred:
+      - shrine
+      - lamp
+      - altar
+      - font
+      - sanctum
+      - flame
+      - well
+      Ruin:
+      - dust
+      - sand
+      - ruin
+      - mirage
+      - void
+      - scar
+      - waste

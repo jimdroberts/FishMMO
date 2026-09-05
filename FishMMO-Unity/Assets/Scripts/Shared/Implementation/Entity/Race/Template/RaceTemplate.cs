@@ -2,6 +2,7 @@
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using FishMMO.Logging;
+using FishMMO.Shared.NameGeneration;
 
 namespace FishMMO.Shared
 {
@@ -69,11 +70,21 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// ScriptableObject template for defining a playable race, including models, attributes, starting abilities, inventory, and equipment.
+	/// ScriptableObject template for a race: models, attributes, starting abilities, inventory and
+	/// equipment for playable races, and the naming data the name generator draws on for every race.
+	/// A race with <see cref="Playable"/> off exists only to name things — it has no prefab or models,
+	/// is skipped by character creation, and loads no placeholder model.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Race", menuName = "FishMMO/Character/Race/Race", order = 1)]
 	public class RaceTemplate : CachedScriptableObject<RaceTemplate>, ICachedObject
 	{
+		/// <summary>
+		/// True for a race players can create and NPCs can be built from. False for a naming-only race:
+		/// character creation skips it and no placeholder model is loaded for it.
+		/// </summary>
+		[Tooltip("Off for a naming-only race: no prefab or models, hidden from character creation.")]
+		public bool Playable = true;
+
 		/// <summary>
 		/// The prefab for the race.
 		/// </summary>
@@ -127,9 +138,33 @@ namespace FishMMO.Shared
 		public List<EquippableItemTemplate> StartingEquipment = new List<EquippableItemTemplate>();
 
 		/// <summary>
+		/// Phonology, cultures, titles, places and city suffixes the name generator uses for this race.
+		/// </summary>
+		[Header("Naming")]
+		public RaceNamingData Naming = new RaceNamingData();
+
+		private string namingKey;
+
+		/// <summary>
 		/// The name of the race (from the ScriptableObject name).
 		/// </summary>
 		public string Name { get { return this.name; } }
+
+		/// <summary>
+		/// Key the name generator files this race under: the asset name lowercased with everything but
+		/// letters removed, so "Wood Elf" is requested as "woodelf".
+		/// </summary>
+		public string NamingKey
+		{
+			get
+			{
+				if (namingKey == null)
+				{
+					namingKey = GeneratorUtility.NormalizeRace(this.name);
+				}
+				return namingKey;
+			}
+		}
 
 		/// <summary>
 		/// Gets the model reference for the given index, or the placeholder if out of range or models are missing.
@@ -313,8 +348,15 @@ namespace FishMMO.Shared
 		{
 			base.OnLoad(typeName, resourceName, resourceID);
 
+			namingKey = null;
+			RaceRegistry.Register(this);
+
 #if !UNITY_SERVER
-			LoadPlaceholderModel();
+			// A naming-only race has no model to preload, and would only warn that it has none.
+			if (Playable)
+			{
+				LoadPlaceholderModel();
+			}
 #endif
 		}
 
@@ -326,8 +368,13 @@ namespace FishMMO.Shared
 		/// <param name="resourceID">The resource ID.</param>
 		public override void OnUnload(string typeName, string resourceName, int resourceID)
 		{
+			RaceRegistry.Unregister(this);
+
 #if !UNITY_SERVER
-			UnloadPlaceholderModel();
+			if (Playable)
+			{
+				UnloadPlaceholderModel();
+			}
 #endif
 
 			base.OnUnload(typeName, resourceName, resourceID);

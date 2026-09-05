@@ -1,0 +1,183 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Arachnid
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Clicking and hissing — sibilants and fricatives, venomous precision'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sith
+      - Vex
+      - Xis
+      - Skri
+      - Zel
+      - Nith
+      - Phal
+      - Chit
+      - Spir
+      - Skul
+      - Vel
+      - Shri
+      - Kith
+      - Drit
+      - Fith
+      - Grit
+      - Hith
+      - Jith
+      - Lith
+      - Mith
+      Nuclei:
+      - i
+      - e
+      - it
+      - ix
+      - is
+      - ith
+      Codas:
+      - ith
+      - ix
+      - is
+      - el
+      - ar
+      - iss
+      - eks
+      - ral
+      - skis
+      - nel
+      Middles:
+      - ri
+      - xi
+      - si
+      - ki
+      - li
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - ith
+      - ix
+      - el
+      MasculineSuffixes:
+      - is
+      - ral
+      - eks
+      Description: 'Clicking and hissing — sibilants and fricatives, venomous precision'
+      Tags:
+      - Web-names
+      - Venom-marks
+      - Hunt-titles
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Silk Caverns
+    - Webhollow
+    - the Hive
+    - the Labyrinth
+    - Venomreach
+    - 'the Spinner''s Cathedral'
+    - the Eight-Fold Web
+    Titles:
+      Honorific:
+      - Webmaster
+      - Venom-kin
+      - Spindlegrace
+      - Silkwarden
+      - Fang-priest
+      Epithet:
+      - the Eight-eyed
+      - the Patient
+      - the Unseen Hunter
+      - the Silkborn
+      - the Venom-blessed
+      - the Web-sovereign
+      - the Trap-weaver
+      Rank:
+      - First Spinner of the Hive
+      - Keeper of the Sacred Web
+      - Hunter-Primarch
+      - Queen of the Silk Court
+      - Weaver of Fates
+      - Architect of the Eight-Fold Web
+      Legend:
+      - Who Webbed an Entire City
+      - Who Has Not Missed a Hunt in a Century
+      - Whose Venom Has No Antidote
+      - Who Wove the Great Labyrinth
+      - Who Spun a Trap That Caught Time Itself
+    CitySuffixes:
+      Capital:
+      - web
+      - hive
+      - nexus
+      - spire
+      - throne
+      - cathedral
+      - core
+      Fortress:
+      - ward
+      - wall
+      - silk
+      - guard
+      - trap
+      - barricade
+      - shell
+      Village:
+      - nest
+      - den
+      - hollow
+      - burrow
+      - cluster
+      - niche
+      - alcove
+      Port:
+      - pool
+      - basin
+      - flow
+      - cistern
+      - reservoir
+      - seep
+      Sacred:
+      - shrine
+      - altar
+      - web
+      - silk-sanctum
+      - fane
+      - egg-vault
+      Ruin:
+      - husk
+      - shell
+      - ruin
+      - hollow
+      - void
+      - dust
+      - tatter

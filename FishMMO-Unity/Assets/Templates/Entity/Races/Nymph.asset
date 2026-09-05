@@ -1,0 +1,103 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Nymph
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Greek mythic cadence — beautiful but dangerous
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Arethu
+      - Echo
+      - Kalli
+      - Daph
+      - Thet
+      - Syri
+      - Eury
+      - Cal
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      Codas:
+      - sa
+      - pe
+      - ine
+      - nia
+      - opis
+      - leia
+      Middles:
+      - ri
+      - ly
+      - 'no'
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - sa
+      - ine
+      - leia
+      MasculineSuffixes:
+      - us
+      - os
+      - 'on'
+      Description: Greek mythic cadence — beautiful but dangerous
+      Tags:
+      - Spring-names
+      - River-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Sacred Pool
+    - 'Echo''s Glen'
+    - Daphnid Spring
+    - Laurel-Wreathed Court
+    Titles:
+      Honorific:
+      - Lady of the Pool
+      - Spring-daughter
+      Epithet:
+      - the Laurel-crowned
+      - the Echo-voiced
+      Rank:
+      - Lady of the Sacred Pool
+      Legend:
+      - Who Enchanted the Hero into Seven Years of Song
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

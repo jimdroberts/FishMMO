@@ -1,0 +1,103 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Gargoyle
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Grotesque-Latin — stone watcher
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grim
+      - Gar
+      - Belf
+      - Notre
+      - Chim
+      - Sto
+      - Fly
+      - Obs
+      Nuclei:
+      - a
+      - o
+      - u
+      - y
+      Codas:
+      - goyle
+      - thar
+      - gal
+      - stryx
+      - dros
+      Middles:
+      - ar
+      - or
+      - ri
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - stryx
+      - isha
+      MasculineSuffixes:
+      - goyle
+      - dros
+      - us
+      - ric
+      Description: Grotesque-Latin — stone watcher
+      Tags:
+      - Watcher-names
+      - Ledge-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Cathedral Ledge
+    - Chimera Walk
+    - Belfry Perch
+    - Night-Rail
+    Titles:
+      Honorific:
+      - Eave-warden
+      - Ledge-lord
+      Epithet:
+      - the Stone-eyed
+      - the Weather-worn
+      - the Ever-watching
+      Rank:
+      - Warden of the Cathedral Ledge
+      Legend:
+      - 'Who Woke on the Worst Night in the City''s History'
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

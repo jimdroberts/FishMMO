@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Abyss
+  m_EditorClassIdentifier: 
+  BiomeKey: abyss
+  DisplayName: Abyss
+  Phonology:
+    Onsets:
+    - Abi
+    - Vor
+    - Nul
+    - Sha
+    - Dra
+    - Kra
+    - Mor
+    - Vel
+    - Gor
+    - Thr
+    - Wra
+    - Hol
+    - Obs
+    - Fen
+    - Eth
+    Nuclei:
+    - a
+    - o
+    - u
+    - oth
+    - ul
+    - ux
+    - ax
+    Codas:
+    - maw
+    - void
+    - abyss
+    - deep
+    - 'null'
+    - gor
+    - thr
+    - vex
+    - oth
+    - rax
+    Middles:
+    - ul
+    - ax
+    - or
+    - oth
+    - az
+    SyllMin: 2
+    SyllMax: 3
+    DungeonSuffixes:
+    - Abyss
+    - Void
+    - Maw
+    - Chasm
+    - Pit
+    - Rift
+    - Tear
+    - Breach
+    - Expanse
+    - Oblivion
+    - Vortex
+    - Maelstrom
+    - Fissure
+    - Hollow
+    - Depth
+    - Gullet
+    - Netherness
+    - Fracture
+    - Emptiness
+    - Fundament
+    - Sink
+    - Throat
+    DungeonPrefixes:
+    - The Endless
+    - The Lightless
+    - The Screaming
+    - The Hungering
+    - The Formless
+    - The Devouring
+    - The Bottomless
+    - The Nameless
+    - The Yawning
+    - The All-consuming
+    - The Eternal
+    - The Maddening
+    - The Whispering
+    - The Void-touched
+    - The Unfathomable
+    - The World-ending
+    - The Soul-crushing
+    - The Nihilistic
+    - The Primordial
+    - The Inescapable
+    POISuffixes:
+    - Ledge
+    - Precipice
+    - Brink
+    - Rift-edge
+    - Void-stone
+    - Shadow-pool
+    - Dark-font
+    - Null-marker
+    - Abyss-mouth
+    - Void-gate
+    - Darkness-well
+    - Madness-stone
+    - Whisper-point
+    - Echo-chasm
+    - Null-field
+    - Gravity-rift
+    - Shadow-pillar
+    - Emptiness-throne
+    - Doom-ledge
+    - Oblivion-mark
+    Adjectives:
+    - Endless
+    - Lightless
+    - Hungering
+    - Formless
+    - Devouring
+    - Bottomless
+    - Nameless
+    - Crushing
+    - Terrifying
+    - Absolute
+    - Maddening
+    - Whispering
+    - Unfathomable
+    - Soul-crushing
+    - Nihilistic
+    - Primordial
+    - Inescapable
+    - All-consuming
+    - Void-touched
+    - Yawning
+    - Eternal
+    - Suffocating
+    Description: 'Unfathomable depths — darkness beyond darkness, madness at the edge'

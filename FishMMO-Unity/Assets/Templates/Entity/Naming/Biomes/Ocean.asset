@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Ocean
+  m_EditorClassIdentifier: 
+  BiomeKey: ocean
+  DisplayName: Ocean
+  Phonology:
+    Onsets:
+    - Mar
+    - Tid
+    - Cor
+    - Del
+    - Lir
+    - Ner
+    - Oce
+    - Pel
+    - Sal
+    - Wav
+    - Und
+    - Bri
+    - Kel
+    - Aqu
+    - Flo
+    Nuclei:
+    - a
+    - ea
+    - ia
+    - ua
+    - ei
+    - ai
+    - oa
+    Codas:
+    - al
+    - ine
+    - eal
+    - ria
+    - tide
+    - reef
+    - pearl
+    - wave
+    - ora
+    - deep
+    Middles:
+    - el
+    - al
+    - il
+    - ar
+    - er
+    SyllMin: 2
+    SyllMax: 3
+    DungeonSuffixes:
+    - Trench
+    - Grotto
+    - Cavern
+    - Rift
+    - Hollow
+    - Depth
+    - Chasm
+    - Vault
+    - Temple
+    - Ruin
+    - Shipwreck
+    - Abyss
+    - Crevice
+    - Tunnel
+    - Chamber
+    - Passage
+    - Coral-cave
+    - Whirlpool
+    - Den
+    - Tomb
+    - Gallery
+    - Alcove
+    DungeonPrefixes:
+    - The Sunken
+    - The Drowned
+    - The Abyssal
+    - The Tidal
+    - The Coral
+    - The Deep
+    - The Salt-cursed
+    - The Forgotten
+    - The Barnacled
+    - The Pressure-crushed
+    - The Bioluminescent
+    - The Ancient
+    - The Wave-shattered
+    - The Silt-buried
+    - The Kelp-choked
+    - The Current-swept
+    - 'The Leviathan''s'
+    - The Pearl-encrusted
+    - The Reef-hidden
+    - The Storm-sunken
+    POISuffixes:
+    - Reef
+    - Atoll
+    - Kelp-forest
+    - Shipwreck
+    - Coral-arch
+    - Tide-pool
+    - Whirlpool
+    - Sea-mount
+    - Sunken-ship
+    - Deep-vent
+    - Jellyfish-bloom
+    - Whale-bone
+    - Sea-cave
+    - Anemone-field
+    - Starfish-bed
+    - Barnacle-cluster
+    - Current-channel
+    - Phosphor-pool
+    - Sand-garden
+    - Trench-wall
+    Adjectives:
+    - Sunken
+    - Drowned
+    - Abyssal
+    - Tidal
+    - Coral
+    - Deep
+    - Salt-cursed
+    - Pressure-crushed
+    - Bioluminescent
+    - Ancient
+    - Barnacled
+    - Wave-shattered
+    - Silt-buried
+    - Kelp-choked
+    - Current-swept
+    - Pearl-encrusted
+    - Storm-sunken
+    - Vast
+    - Mysterious
+    - Dark
+    - Fathomless
+    - Turbulent
+    Description: 'Deep ocean — crushing depths, sunken temples, bioluminescent wonder'

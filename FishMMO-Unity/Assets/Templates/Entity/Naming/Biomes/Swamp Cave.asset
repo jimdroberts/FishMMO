@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Swamp Cave
+  m_EditorClassIdentifier: 
+  BiomeKey: swampcave
+  DisplayName: Swamp Cave
+  Phonology:
+    Onsets:
+    - Fen
+    - Bog
+    - Mur
+    - Gor
+    - Dra
+    - Sha
+    - Gri
+    - Kra
+    - Vel
+    - Thi
+    - Hol
+    - Rot
+    - Slu
+    - Mor
+    - Hag
+    Nuclei:
+    - u
+    - o
+    - a
+    - ur
+    - og
+    - ul
+    - ow
+    Codas:
+    - mire
+    - bog
+    - deep
+    - rot
+    - muck
+    - gul
+    - murk
+    - rok
+    - gor
+    - fen
+    Middles:
+    - ur
+    - og
+    - ul
+    - an
+    - or
+    SyllMin: 1
+    SyllMax: 2
+    DungeonSuffixes:
+    - Cavern
+    - Grotto
+    - Hollow
+    - Pit
+    - Tunnel
+    - Den
+    - Burrow
+    - Sinkhole
+    - Hole
+    - Depth
+    - Chamber
+    - Passage
+    - Pool
+    - Shaft
+    - Crevice
+    - Lair
+    - Alcove
+    - Gallery
+    - Pocket
+    - Throat
+    - Crawl-space
+    - Seep
+    DungeonPrefixes:
+    - The Dripping
+    - The Fetid
+    - The Flooded
+    - The Mossy
+    - The Dark
+    - The Reeking
+    - The Winding
+    - The Moist
+    - The Sludge-filled
+    - The Fungus-lit
+    - The Leech-infested
+    - The Suffocating
+    - The Bog-connected
+    - The Root-choked
+    - The Mud-walled
+    - The Stagnant
+    - The Cramped
+    - The Toxic
+    - The Slime-coated
+    - The Dank
+    POISuffixes:
+    - Drip-pool
+    - Moss-shelf
+    - Bog-stream
+    - Slime-wall
+    - Rot-column
+    - Muck-pool
+    - Fungus-shelf
+    - Damp-ledge
+    - Blind-fish-pool
+    - Frog-den
+    - Root-curtain
+    - Mud-stalagmite
+    - Fungus-garden
+    - Echo-pool
+    - Drip-curtain
+    - Slime-formation
+    - Cave-moss
+    - Mold-ceiling
+    - Wet-ledge
+    - Mushroom-cluster
+    Adjectives:
+    - Dripping
+    - Fetid
+    - Flooded
+    - Mossy
+    - Reeking
+    - Winding
+    - Moist
+    - Slippery
+    - Slimy
+    - Cramped
+    - Sludge-filled
+    - Fungus-lit
+    - Leech-infested
+    - Suffocating
+    - Root-choked
+    - Mud-walled
+    - Stagnant
+    - Toxic
+    - Slime-coated
+    - Dank
+    - Claustrophobic
+    - Putrid
+    Description: 'Underground swamp system — flooded tunnels, fungus, slimy walls'

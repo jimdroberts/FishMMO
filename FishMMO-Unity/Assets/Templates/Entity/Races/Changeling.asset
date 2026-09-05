@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Changeling
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Slippery vowels — many-named drift of identity
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Vai
+      - Sel
+      - Ny
+      - Mir
+      - Ka
+      - Lu
+      - Ev
+      - Chi
+      Nuclei:
+      - a
+      - e
+      - i
+      - y
+      Codas:
+      - le
+      - na
+      - ra
+      - lin
+      - mir
+      - sse
+      Middles:
+      - an
+      - ir
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ra
+      - lla
+      - ine
+      MasculineSuffixes:
+      - an
+      - in
+      - or
+      Description: Slippery vowels — many-named drift of identity
+      Tags:
+      - Borrowed-names
+      - Mask-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Mirror Quarter
+    - Nameless Street
+    - the Shifting Court
+    - the Glassless Inn
+    Titles:
+      Honorific:
+      - The-One-Who-Was
+      - Maskbearer
+      Epithet:
+      - the Many-faced
+      - the Unnamed
+      - the Reflection
+      Rank:
+      - Herald of the Shifting Court
+      Legend:
+      - 'Who Wore the King''s Face for a Year Without Being Noticed'
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

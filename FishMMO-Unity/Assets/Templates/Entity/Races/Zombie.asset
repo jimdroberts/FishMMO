@@ -1,0 +1,100 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Zombie
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Moaning and incomplete — reanimated speech
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Rot
+      - Slag
+      - Dreg
+      - Lur
+      - Mor
+      - Shal
+      - Gnaw
+      - Pal
+      Nuclei:
+      - o
+      - u
+      - a
+      Codas:
+      - rot
+      - muk
+      - slog
+      - dur
+      - gak
+      Middles:
+      - ro
+      - mu
+      - ga
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - a
+      - eria
+      - ita
+      MasculineSuffixes:
+      - ot
+      - uk
+      - og
+      Description: Moaning and incomplete — reanimated speech
+      Tags:
+      - Rise-names
+      - Grave-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Slow Horde
+    - Pestilence Quarter
+    - Rotten Commons
+    - 'Shambler''s Crossing'
+    Titles:
+      Honorific:
+      - Risen
+      - Shambler-lord
+      Epithet:
+      - the Moaning
+      - the Pale-fleshed
+      Rank:
+      - First Risen of the Pestilence Quarter
+      Legend:
+      - Whose Horde Drowned the Walled City in Flesh
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

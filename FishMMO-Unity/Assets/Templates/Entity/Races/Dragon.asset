@@ -1,0 +1,324 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Dragon
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Ancient and resonant — the sound of mountain-shaking thunder
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Aur
+      - Brax
+      - Chron
+      - Draek
+      - Eld
+      - Fyr
+      - Gorm
+      - Hrak
+      - Ix
+      - Jhak
+      - Krak
+      - Lor
+      - Morx
+      - Nax
+      - Ork
+      - Phryx
+      - Quar
+      - Ryx
+      - Thrax
+      - Zax
+      Nuclei:
+      - ax
+      - or
+      - ix
+      - ur
+      - ae
+      - yx
+      - rak
+      Codas:
+      - ax
+      - ix
+      - or
+      - ux
+      - rak
+      - rax
+      - thax
+      - nax
+      - mox
+      - gax
+      Middles:
+      - ra
+      - or
+      - ax
+      - ix
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - ax
+      - ix
+      - ael
+      MasculineSuffixes:
+      - or
+      - ux
+      - rak
+      Description: Ancient and resonant — the sound of mountain-shaking thunder
+      Tags:
+      - Hoard-names
+      - Breath-marks
+      - Age-titles
+      WeightedCodas:
+      - Item: zurax
+        Weight: 1
+      - Item: thrymox
+        Weight: 1
+      - Item: ax
+        Weight: 10
+      - Item: ix
+        Weight: 8
+      - Item: or
+        Weight: 7
+      - Item: ux
+        Weight: 5
+      - Item: rak
+        Weight: 6
+      - Item: rax
+        Weight: 5
+      - Item: thax
+        Weight: 3
+      - Item: nax
+        Weight: 4
+      - Item: mox
+        Weight: 3
+      - Item: gax
+        Weight: 2
+    Cultures:
+    - CultureKey: ancestral
+      Phonology:
+        Onsets:
+        - Alduin
+        - Bahamut
+        - Chronoth
+        - Drakar
+        - Emberax
+        - Fyrrax
+        - Glaur
+        - Hyperion
+        - Izrath
+        - Jorm
+        - Kragoth
+        - Lethys
+        - Mordrax
+        - Nerythax
+        - Oxilith
+        Nuclei:
+        - a
+        - o
+        - au
+        - ae
+        - yr
+        - ith
+        Codas:
+        - ax
+        - ith
+        - oth
+        - rax
+        - yrr
+        - ion
+        - ax
+        - umh
+        - oran
+        - ryth
+        Middles:
+        - ar
+        - or
+        - ur
+        - yl
+        SyllMin: 3
+        SyllMax: 5
+        FeminineSuffixes:
+        - ix
+        - ryx
+        - ith
+        MasculineSuffixes:
+        - ax
+        - rax
+        - oth
+        Description: 'Ancestral — elder wyrms, ten-syllable deep-names'
+        Tags:
+        - True-names
+        - Doom-bonds
+        - Age-marks
+        WeightedCodas: []
+    - CultureKey: wyvernic
+      Phonology:
+        Onsets:
+        - Ska
+        - Vri
+        - Zark
+        - Kyx
+        - Nyz
+        - Tal
+        - Vex
+        - Ryl
+        - Skra
+        - Thak
+        - Vyr
+        - Zar
+        - Kel
+        - Nor
+        - Skyth
+        Nuclei:
+        - a
+        - i
+        - y
+        - ar
+        - yr
+        Codas:
+        - yx
+        - rak
+        - kar
+        - zor
+        - viss
+        - mar
+        - eth
+        - krith
+        - tor
+        - vryn
+        Middles:
+        - yr
+        - ar
+        - or
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - yx
+        - iss
+        - ena
+        MasculineSuffixes:
+        - rak
+        - tor
+        - vryn
+        Description: 'Wyvernic — swift lineage, hunters, sky-lords'
+        Tags:
+        - Eyrie-names
+        - Hunt-bonds
+        - Wing-marks
+        WeightedCodas: []
+    Places:
+    - the Bone Mountains
+    - Flamecrest
+    - the Sovereign Peaks
+    - the Great Vault
+    - Ashenmaw
+    - the Roost of Ages
+    - the Wyrm Conclave
+    Titles:
+      Honorific:
+      - the Ancient
+      - Wyrmfather
+      - Scalemother
+      - Flamekeeper
+      - Vaultlord
+      - Sovereign Wyrm
+      Epithet:
+      - the Undying
+      - the World-breaker
+      - the Sleepless
+      - the Hoardmaster
+      - the Centuries-old
+      - the Magnificent
+      - the Terrible
+      - the Sky-sovereign
+      - the Storm-winged
+      Rank:
+      - Elder of the Draconic Council
+      - Keeper of the First Flame
+      - Sovereign of the Eastern Reaches
+      - Lord of the Bone Mountains
+      - Apex of the Age
+      - Voice of the Wyrm Conclave
+      Legend:
+      - Who Razed Three Kingdoms
+      - Who Has Slept Since Before the Age of Men
+      - Whose Hoard Spans a Mountain
+      - Who Spoke with Gods and Found Them Wanting
+      - Who Breathed Fire That Created a Desert
+      - Who Was Ancient When the Elves Were Young
+    CitySuffixes:
+      Capital:
+      - roost
+      - peak
+      - throne
+      - aerie
+      - spire
+      - vault
+      - maw
+      Fortress:
+      - guard
+      - fang
+      - wall
+      - gate
+      - bastion
+      - claw
+      - scale
+      Village:
+      - nest
+      - cave
+      - hollow
+      - den
+      - clutch
+      - lair
+      - niche
+      Port:
+      - lake
+      - shore
+      - bay
+      - inlet
+      - pool
+      - cove
+      Sacred:
+      - flame
+      - altar
+      - sanctum
+      - pyre
+      - shrine
+      - hoard
+      - ember
+      Ruin:
+      - fall
+      - ash
+      - scar
+      - bone
+      - ruin
+      - char
+      - waste

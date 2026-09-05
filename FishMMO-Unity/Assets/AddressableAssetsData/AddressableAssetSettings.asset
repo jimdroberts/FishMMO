@@ -15,7 +15,7 @@ MonoBehaviour:
   m_DefaultGroup: 9f41fb9c2f019e548ad7e95d00d2093e
   m_currentHash:
     serializedVersion: 2
-    Hash: d8af4c4403cc7356c26342977e3f8254
+    Hash: ca16579095ca4e139c1b84f6cb1f007a
   m_DisableWriteTypeTree: 0
   m_OptimizeCatalogSize: 0
   m_BuildRemoteCatalog: 0
@@ -131,7 +131,6 @@ MonoBehaviour:
     m_ProfileVersion: 1
   m_LabelTable:
     m_LabelNames:
-    - NameCache
     - Shared_Static_Permanent
     - Client_Static_Permanent
     - Server_Static_Permanent

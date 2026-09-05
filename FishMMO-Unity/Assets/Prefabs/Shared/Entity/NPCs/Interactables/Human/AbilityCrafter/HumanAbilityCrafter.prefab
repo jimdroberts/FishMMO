@@ -151,13 +151,20 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
-  GenderedNames:
-  - Gender: 1
-    FirstNames: {fileID: 11400000, guid: e352d8d4481b57449bb4fea6f0b10695, type: 2}
-    LastNames: {fileID: 11400000, guid: 71dd0b181f700604296224b69bb18e94, type: 2}
-  - Gender: 2
-    FirstNames: {fileID: 11400000, guid: feab58756cafd3843bd5ab41652f2c56, type: 2}
-    LastNames: {fileID: 11400000, guid: 71dd0b181f700604296224b69bb18e94, type: 2}
+  settings:
+    Mode: 0
+    RaceOverrideID: 0
+    Culture: 
+    ModifierID: 0
+    GenderPolicy: 0
+    NameFormat: 1
+    TitlePolicy: 0
+    BiomeID: 0
+    CityType: 0
+    POIType: 0
+    ItemType: 0
+    RegionSeed: 
+    ObjectSeed: 
 --- !u!114 &-3382641068409518765
 MonoBehaviour:
   m_ObjectHideFlags: 0

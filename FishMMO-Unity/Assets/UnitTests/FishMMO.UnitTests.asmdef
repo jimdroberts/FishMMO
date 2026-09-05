@@ -12,7 +12,8 @@
         "Unity.TextMeshPro",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.Addressables",
-        "FishMMO.Shared.Tools.Editor"
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Shared.NameGenerator.Editor"
     ],
     "includePlatforms": [
         "Editor"

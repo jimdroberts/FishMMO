@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
   m_Name: Human
   m_EditorClassIdentifier: 
+  Playable: 1
   Prefab: {fileID: 4573496687782621821, guid: 793ad9eb498a9224989b975a594d5a38, type: 3}
   PlaceholderModel:
     m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
@@ -26,3 +27,417 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
   StartingInventoryItems: []
   StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Al
+      - Ber
+      - Car
+      - Dal
+      - Ed
+      - Fer
+      - Gar
+      - Han
+      - Jar
+      - Kel
+      - Lan
+      - Mar
+      - Nor
+      - Or
+      - Par
+      - Rad
+      - Sar
+      - Tor
+      - Var
+      - Wal
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      - ar
+      - er
+      - or
+      Codas:
+      - ric
+      - mund
+      - bert
+      - win
+      - hard
+      - ald
+      - olf
+      - red
+      - vin
+      - ton
+      Middles:
+      - an
+      - en
+      - in
+      - 'on'
+      - ul
+      - ar
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ia
+      - ine
+      - elyn
+      MasculineSuffixes:
+      - ic
+      - ard
+      - mund
+      - win
+      Description: 'Common tongue — varied, adaptable, Germanic and Latin-influenced'
+      Tags:
+      - Short forms
+      - Trade names
+      - Place surnames
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: desert
+      Phonology:
+        Onsets:
+        - Ahr
+        - Bah
+        - Dha
+        - Fah
+        - Gha
+        - Hal
+        - Jas
+        - Kha
+        - Mal
+        - Nas
+        - Qas
+        - Rah
+        - Sal
+        - Tar
+        - Zah
+        Nuclei:
+        - a
+        - i
+        - u
+        - aa
+        - ai
+        - uu
+        - ei
+        Codas:
+        - im
+        - ar
+        - ud
+        - an
+        - ir
+        - ash
+        - iq
+        - um
+        - ib
+        - ad
+        Middles:
+        - al
+        - ar
+        - an
+        - ir
+        - ul
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - a
+        - ina
+        - iah
+        - een
+        MasculineSuffixes:
+        - im
+        - ar
+        - ud
+        - ir
+        Description: 'Arabic-inspired — desert wind, trade roads, starlit courts'
+        Tags:
+        - Caravan names
+        - Trade titles
+        - Sand-marks
+        WeightedCodas: []
+    - CultureKey: eastern
+      Phonology:
+        Onsets:
+        - Aki
+        - Hiro
+        - Kai
+        - Min
+        - Ren
+        - Shi
+        - Tai
+        - Yuu
+        - Zen
+        - Ryu
+        - Sei
+        - Kou
+        - Mei
+        - Nao
+        - Sho
+        Nuclei:
+        - a
+        - i
+        - u
+        - o
+        - ai
+        - ei
+        - ou
+        Codas:
+        - ro
+        - ta
+        - ki
+        - shi
+        - ra
+        - mi
+        - to
+        - ka
+        - 'no'
+        - ri
+        Middles:
+        - 'no'
+        - wa
+        - ya
+        - mo
+        - ri
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - ko
+        - mi
+        - ka
+        - na
+        MasculineSuffixes:
+        - ro
+        - ta
+        - shi
+        - to
+        Description: 'East-Asian inspired — precise, balanced, elegant'
+        Tags:
+        - Family names
+        - Honor titles
+        - Nature-marks
+        WeightedCodas: []
+    - CultureKey: nordic
+      Phonology:
+        Onsets:
+        - Bjorn
+        - Sven
+        - Thor
+        - Sig
+        - Ulf
+        - Rag
+        - Hald
+        - Ing
+        - Frey
+        - Arn
+        - Heid
+        - Kel
+        - Brun
+        - Grim
+        - Sten
+        Nuclei:
+        - a
+        - e
+        - i
+        - o
+        - u
+        - ar
+        - or
+        Codas:
+        - mund
+        - ard
+        - rik
+        - ulf
+        - ald
+        - heim
+        - gard
+        - sten
+        - vald
+        - bjorn
+        Middles:
+        - an
+        - en
+        - or
+        - ar
+        - un
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - hild
+        - run
+        - dis
+        - borg
+        - gerd
+        MasculineSuffixes:
+        - mund
+        - rik
+        - ulf
+        - ald
+        Description: 'Norse-inspired — frost, iron, and saga'
+        Tags:
+        - Clan names
+        - Saga titles
+        - Frost-marks
+        WeightedCodas: []
+    - CultureKey: roman
+      Phonology:
+        Onsets:
+        - Aur
+        - Cas
+        - Dec
+        - Flav
+        - Gai
+        - Jul
+        - Luc
+        - Marc
+        - Oct
+        - Pub
+        - Quin
+        - Reg
+        - Ser
+        - Tib
+        - Val
+        Nuclei:
+        - a
+        - i
+        - u
+        - ae
+        - iu
+        - au
+        - ei
+        Codas:
+        - ius
+        - us
+        - ix
+        - ax
+        - um
+        - an
+        - ons
+        - as
+        - es
+        Middles:
+        - il
+        - el
+        - al
+        - an
+        - ul
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - ia
+        - a
+        - ina
+        - illa
+        MasculineSuffixes:
+        - us
+        - ius
+        - ix
+        Description: 'Latin-inspired — senatorial, structured, imperial'
+        Tags:
+        - House names
+        - Legion titles
+        - Imperial marks
+        WeightedCodas: []
+    Places:
+    - Ashford
+    - Kingshold
+    - Ravenspire
+    - Thornwall
+    - the Eastern March
+    - the Iron Coast
+    - Whitehaven
+    - the Golden Fields
+    - Stormwatch Keep
+    - Dragonfall Bridge
+    Titles:
+      Honorific:
+      - Sir
+      - Dame
+      - Lord
+      - Lady
+      - Master
+      - Mistress
+      - Captain
+      - Commander
+      - Councilor
+      - Seneschal
+      Epithet:
+      - the Bold
+      - the Wise
+      - the Swift
+      - the Just
+      - the Unyielding
+      - the Wanderer
+      - the Steadfast
+      - the Ironhanded
+      - the Merciful
+      - the Cunning
+      - the Dragon-touched
+      - the Twice-crowned
+      Rank:
+      - Knight of the Realm
+      - High Warden
+      - First Blade
+      - Grand Marshal
+      - Elder of the Council
+      - Vanguard Captain
+      - Keeper of the Keys
+      - Shield-Commander of the Iron Coast
+      Legend:
+      - Slayer of the Crimson Drake
+      - Who Held the Eastern Gate
+      - Breaker of the Siege
+      - Who Walked Through Fire
+      - Last of the Old Guard
+      - Who Named the Storm
+      - Who United the Five Kingdoms
+      - Who Spoke with Dragons and Lived
+    CitySuffixes:
+      Capital:
+      - hold
+      - haven
+      - crown
+      - spire
+      - keep
+      - reach
+      - minster
+      Fortress:
+      - wall
+      - guard
+      - fort
+      - gate
+      - bastion
+      - tower
+      - bulwark
+      Village:
+      - shire
+      - bury
+      - ton
+      - ham
+      - dale
+      - field
+      - stead
+      Port:
+      - port
+      - harbor
+      - quay
+      - landing
+      - wharf
+      - cove
+      - bay
+      Sacred:
+      - shrine
+      - altar
+      - priory
+      - chapel
+      - sanctum
+      - temple
+      Ruin:
+      - fall
+      - rest
+      - hollow
+      - end
+      - barrow
+      - scar
+      - waste

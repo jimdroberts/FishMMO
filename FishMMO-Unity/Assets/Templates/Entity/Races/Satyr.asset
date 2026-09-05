@@ -1,0 +1,246 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Satyr
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Musical and dancing — Greek pastoral warmth, revelry in every syllable'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bac
+      - Cyr
+      - Dion
+      - Fau
+      - Gla
+      - Hel
+      - Jas
+      - Kyr
+      - Lyr
+      - Mar
+      - Nik
+      - Orl
+      - Pan
+      - Rhy
+      - Sil
+      - Tyr
+      - Xan
+      - Zan
+      - Phil
+      - Mel
+      Nuclei:
+      - a
+      - o
+      - e
+      - i
+      - ai
+      - ei
+      - ou
+      Codas:
+      - os
+      - us
+      - ys
+      - is
+      - an
+      - 'on'
+      - el
+      - as
+      - eus
+      - ion
+      Middles:
+      - an
+      - el
+      - or
+      - in
+      - ar
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ia
+      - eia
+      - is
+      MasculineSuffixes:
+      - os
+      - us
+      - 'on'
+      - eus
+      Description: 'Musical and dancing — Greek pastoral warmth, revelry in every syllable'
+      Tags:
+      - Revel-names
+      - Song-bonds
+      - Dance-marks
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: revelry
+      Phonology:
+        Onsets:
+        - Ar
+        - Bac
+        - Dio
+        - Eph
+        - Faun
+        - Gal
+        - Hyp
+        - Iol
+        - Lyc
+        - Men
+        - Orph
+        - Pan
+        - Rhe
+        - Syl
+        - Tib
+        Nuclei:
+        - a
+        - e
+        - i
+        - o
+        - au
+        - io
+        Codas:
+        - ion
+        - os
+        - us
+        - es
+        - ius
+        - anth
+        - yr
+        - as
+        - ix
+        - eus
+        Middles:
+        - al
+        - an
+        - 'on'
+        - el
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - ia
+        - ne
+        - ys
+        MasculineSuffixes:
+        - os
+        - ion
+        - eus
+        Description: 'Revelry — wine-wit, pipe-songs, goat-measured step'
+        Tags:
+        - Grove-revel
+        - Song-bonds
+        - Vine-marks
+        WeightedCodas: []
+    Places:
+    - the Revelwood
+    - Vinehollow
+    - 'Pan''s Grove'
+    - the Wild Court
+    - Moonlit Glade
+    - the Dancing Green
+    - the Thornberry Thicket
+    Titles:
+      Honorific:
+      - Revel-master
+      - Song-keeper
+      - Wine-lord
+      - Grove-dancer
+      - Mirth-bringer
+      - Pipe-caller
+      Epithet:
+      - the Ever-dancing
+      - the Wild-hearted
+      - the Song-drunk
+      - the Untamed
+      - the Joy-bringer
+      - the Pan-blessed
+      - the Wine-soaked
+      - the Hoof-quick
+      Rank:
+      - Master of the Great Revel
+      - Keeper of the Sacred Vine
+      - First Piper of the Grove
+      - Elder of the Wild Court
+      - Voice of the Green Dance
+      - Lord of the Dancing Green
+      Legend:
+      - Who Danced for Seven Days
+      - Who Made a God Laugh
+      - Whose Song Brought Rain After a Century of Drought
+      - Who Drank the River Dry
+      - Who Played a Song So Beautiful That Trees Wept
+    CitySuffixes:
+      Capital:
+      - court
+      - grove
+      - ring
+      - glade
+      - hall
+      - bower
+      - throne
+      Fortress:
+      - hedge
+      - thorn
+      - wall
+      - guard
+      - bower
+      - thicket
+      - maze
+      Village:
+      - glen
+      - hollow
+      - dell
+      - clearing
+      - grove
+      - meadow
+      - garden
+      Port:
+      - spring
+      - brook
+      - pool
+      - bank
+      - ford
+      - falls
+      Sacred:
+      - grove
+      - ring
+      - altar
+      - font
+      - circle
+      - shrine
+      - glade
+      Ruin:
+      - wilt
+      - hollow
+      - dust
+      - blight
+      - ruin
+      - husk
+      - fade

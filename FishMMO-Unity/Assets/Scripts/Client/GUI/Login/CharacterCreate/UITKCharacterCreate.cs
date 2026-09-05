@@ -344,7 +344,8 @@ namespace FishMMO.Client
 			Dictionary<int, RaceTemplate> raceTemplates = RaceTemplate.GetCache<RaceTemplate>();
 			foreach (KeyValuePair<int, RaceTemplate> pair in raceTemplates)
 			{
-				if (pair.Value.Prefab == null)
+				// Naming-only races carry phonology for the name generator and nothing a player could pick.
+				if (!pair.Value.Playable || pair.Value.Prefab == null)
 				{
 					continue;
 				}

@@ -1,0 +1,149 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce50bfca9fd04123990a195ecb482050, type: 3}
+  m_Name: Wetlands
+  m_EditorClassIdentifier: 
+  BiomeKey: wetlands
+  DisplayName: Wetlands
+  Phonology:
+    Onsets:
+    - Fen
+    - Bog
+    - Mur
+    - Ree
+    - Wil
+    - Hag
+    - Rot
+    - Slu
+    - Gri
+    - Mar
+    - Dra
+    - Sha
+    - Kel
+    - Thi
+    - Mor
+    Nuclei:
+    - u
+    - o
+    - a
+    - ur
+    - og
+    - ow
+    - ul
+    Codas:
+    - marsh
+    - fen
+    - bog
+    - mire
+    - reed
+    - muck
+    - silt
+    - pool
+    - sludge
+    - ooze
+    Middles:
+    - ur
+    - og
+    - ul
+    - ow
+    - an
+    SyllMin: 1
+    SyllMax: 2
+    DungeonSuffixes:
+    - Mire
+    - Hollow
+    - Sinkhole
+    - Pool
+    - Den
+    - Bog
+    - Burrow
+    - Pit
+    - Quagmire
+    - Morass
+    - Fen
+    - Marsh
+    - Passage
+    - Chamber
+    - Tunnel
+    - Seep
+    - Slough
+    - Wallow
+    - Drainage
+    - Gulch
+    - Pocket
+    - Sump
+    DungeonPrefixes:
+    - The Waterlogged
+    - The Marshy
+    - The Flooded
+    - The Reed-choked
+    - The Sunken
+    - The Rotting
+    - The Murky
+    - The Fetid
+    - The Peat-dark
+    - The Mist-shrouded
+    - The Squelching
+    - The Boggy
+    - The Sodden
+    - The Teeming
+    - The Green
+    - The Spongy
+    - The Mosquito-thick
+    - The Oozing
+    - The Stagnant
+    - The Fog-bound
+    POISuffixes:
+    - Reed-bed
+    - Bog-pool
+    - Mud-flat
+    - Fen-bridge
+    - Marsh-light
+    - Heron-roost
+    - Lily-pond
+    - Peat-bank
+    - Cattail-stand
+    - Frog-chorus
+    - Mosquito-cloud
+    - Crane-nest
+    - Duck-blind
+    - Otter-slide
+    - Muskrat-lodge
+    - Bog-cotton
+    - Sphagnum-mound
+    - Bittern-hide
+    - Dragonfly-pool
+    - Sedge-meadow
+    Adjectives:
+    - Waterlogged
+    - Marshy
+    - Reed-choked
+    - Murky
+    - Fetid
+    - Stagnant
+    - Misty
+    - Soggy
+    - Teeming
+    - Green
+    - Peat-dark
+    - Mist-shrouded
+    - Squelching
+    - Boggy
+    - Sodden
+    - Spongy
+    - Mosquito-thick
+    - Oozing
+    - Fog-bound
+    - Verdant
+    - Primordial
+    - Humid
+    Description: 'Marshes and swamps — waterlogged ground, reeds, mist-shrouded hollows'

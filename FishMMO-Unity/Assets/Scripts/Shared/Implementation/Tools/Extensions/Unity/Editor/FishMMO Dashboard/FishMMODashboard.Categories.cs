@@ -202,13 +202,30 @@ namespace FishMMO.Shared
 				"Assets/Templates/Entity/Quests",
 				"FishMMO/Character/Quest/Quest");
 
-			AddCategory<RaceTemplate>("Races", "Character",
-				"Assets/Templates/Entity/Races",
-				"FishMMO/Character/Race/Race");
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Races",
+				Group = "Character",
+				AssetType = typeof(RaceTemplate),
+				DefaultAssetDirectory = "Assets/Templates/Entity/Races",
+				CreateAssetMenuName = "FishMMO/Character/Race/Race",
+				// Playable races first; the naming-only library (phonology, no prefab) below them.
+				GetGroupLabel = asset => asset is RaceTemplate race && race.Playable ? "Playable" : "Naming Library",
+				GetSortOrder = asset => asset is RaceTemplate race && race.Playable ? 0 : 1,
+			});
 
-			AddCategory<NameCache>("Name Cache", "Character",
-				"Assets/Templates/Entity/Names",
-				"FishMMO/Character/Name Cache");
+			// ── Naming ── (race naming lives on the Race templates above)
+			AddCategory<FishMMO.Shared.NameGeneration.BiomeNamingTemplate>("Biome Naming", "Naming",
+				"Assets/Templates/Entity/Naming/Biomes",
+				"FishMMO/Naming/Biome Naming");
+
+			AddCategory<FishMMO.Shared.NameGeneration.NameModifierTemplate>("Name Modifiers", "Naming",
+				"Assets/Templates/Entity/Naming/Modifiers",
+				"FishMMO/Naming/Name Modifier");
+
+			AddCategory<FishMMO.Shared.NameGeneration.NameGrammarTemplate>("Name Grammar", "Naming",
+				"Assets/Templates/Entity/Naming",
+				"FishMMO/Naming/Name Grammar");
 
 			// ── Items ──
 			categories.Add(new TemplateCategory

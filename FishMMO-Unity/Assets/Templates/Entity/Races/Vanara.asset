@@ -1,0 +1,102 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Vanara
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Monkey-folk with Sanskrit cadence — epic, playful'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ha
+      - Nila
+      - Su
+      - Anga
+      - Ri
+      - Ba
+      - Pra
+      - Gan
+      Nuclei:
+      - a
+      - i
+      - u
+      Codas:
+      - man
+      - gad
+      - shan
+      - van
+      - prab
+      Middles:
+      - na
+      - ri
+      - va
+      SyllMin: 3
+      SyllMax: 4
+      FeminineSuffixes:
+      - a
+      - la
+      - vi
+      MasculineSuffixes:
+      - van
+      - gad
+      - man
+      - dra
+      Description: 'Monkey-folk with Sanskrit cadence — epic, playful'
+      Tags:
+      - Tree-names
+      - Leap-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - Kishkindha
+    - the Vine Bridges
+    - Banyan Court
+    - Leaf-Crown Hall
+    Titles:
+      Honorific:
+      - Sri
+      - Rama-friend
+      Epithet:
+      - the Swift
+      - the Tail-talker
+      - the Treetop-king
+      Rank:
+      - Lord of Kishkindha
+      Legend:
+      - Who Leapt the Sea and Lived to Tell It
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []

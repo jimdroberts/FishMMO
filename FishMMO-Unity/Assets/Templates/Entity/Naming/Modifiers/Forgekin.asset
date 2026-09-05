@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b4bceafe11a43543b16a9d67852436e, type: 3}
+  m_Name: Forgekin
+  m_EditorClassIdentifier: 
+  ModifierKey: forgekin
+  DisplayName: Forgekin
+  Description: Raised at the great forges
+  Bias: 0.35
+  OnsetAdditions:
+  - Bran
+  - Dorn
+  - Hamm
+  - Thak
+  - Grum
+  - Brund
+  - Krag
+  - Anv
+  CodaAdditions:
+  - forge
+  - anvil
+  - hammer
+  - ember
+  - iron
+  - sten
+  MiddleAdditions:
+  - ru
+  - ga
+  Tags:
+  - Forgekin
+  - Hammer-sworn
+  - Iron-blood
