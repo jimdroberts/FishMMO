@@ -261,6 +261,11 @@ namespace FishMMO.Client
 		/// </summary>
 		private void Sweep()
 		{
+#if UNITY_SERVER
+			/* Nameplates are a client view. BaseCharacter.ClientCharacters does not exist in a server
+			 * build, and there is nothing to draw for anyway. */
+			return;
+#else
 			Transform currentTarget = targetController != null ? targetController.Current.Target : null;
 			/* The pinned character counts as targeted for as long as the pin holds: its card is
 			 * up and its nameplate belongs with it, whatever the pointer is doing. */
@@ -319,6 +324,7 @@ namespace FishMMO.Client
 					guildLabel.gameObject.SetActive(visible);
 				}
 			}
+		#endif
 		}
 
 		/// <summary>Squared distance from the local player to a character, in metres squared.</summary>

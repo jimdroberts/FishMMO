@@ -40,6 +40,11 @@ namespace FishMMO.Client
 		/// <summary>Brings the drawn flags into line with a match state.</summary>
 		public static void Apply(ArenaMatchStateBroadcast state, ArenaTemplate template)
 		{
+#if UNITY_SERVER
+			/* Arena flag markers are a client view. BaseCharacter.ClientCharacters does not exist
+			 * in a server build, and a server draws no markers. */
+			return;
+#else
 			if (state.Objectives == null || state.Phase == ArenaMatchPhase.Ended || state.Phase == ArenaMatchPhase.Cancelled)
 			{
 				Clear();
@@ -104,6 +109,7 @@ namespace FishMMO.Client
 			{
 				Remove(id);
 			}
+		#endif
 		}
 
 		/// <summary>Destroys every marker.</summary>
