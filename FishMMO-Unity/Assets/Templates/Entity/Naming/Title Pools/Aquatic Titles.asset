@@ -1,0 +1,107 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Aquatic Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Aquatic
+  Titles:
+    Honorific:
+    - Tide-warden
+    - Reef-keeper
+    - Deep-speaker
+    - Wave-caller
+    - Pearl-master
+    - Current-reader
+    - Wreck-lord
+    - Kelp-elder
+    - Shoal-herder
+    - Salt-priest
+    - Bell-diver
+    HonorificMasculine:
+    - Sea-lord
+    - Tide-father
+    HonorificFeminine:
+    - Sea-lady
+    - Tide-mother
+    Epithet:
+    - the Deep-dwelling
+    - the Pearl-eyed
+    - the Tide-borne
+    - the Salt-scarred
+    - the Wreck-hunting
+    - the Current-swift
+    - the Coral-crowned
+    - the Storm-swum
+    - the Never-surfacing
+    - the Kelp-haired
+    - the Cold-blooded
+    - the Foam-born
+    - the Whale-friend
+    - the Sunken
+    - the Moon-tided
+    - the Reef-sharp
+    - the Trench-black
+    - the Bell-hearing
+    - the Net-breaker
+    - the Shell-armoured
+    - the Drowned and Returned
+    - the Lagoon-still
+    - the Gale-ridden
+    Rank:
+    - Warden of the Tide Gate
+    - Keeper of the Coral Throne
+    - Speaker for the Deep Trench
+    - Lord of the Kelp Halls
+    - Master of the Pearl Shoals
+    - Guardian of the Wreck Field
+    - Pilot of the Whale Road
+    - Priest of the Salt Cathedral
+    - Elder of the Drowned Court
+    - Rider of the Black Current
+    - Diver of the Sunken Bell
+    - Reeve of the Still Lagoon
+    Legend:
+    - Who Calmed the Great Maelstrom
+    - Who Sang the Fleet onto the Rocks
+    - 'Who Rode the Whale Road to the World''s Edge'
+    - Who Raised the Sunken Bell
+    - Who Drowned the Slaver Captain
+    - Who Swam Beneath the Ice to the Other Sea
+    - 'Who Wrestled the Kraken''s Arm'
+    - Who Found the Pearl of the Deep Trench
+    - Who Guided the Lost Ship Home
+    - Who Held the Tide Gate Against the Storm
+    - Who Married the Current
+    - Who Built the Coral Throne
+    Occupational:
+    - Pearl-diver
+    - Net-mender
+    - Kelp-farmer
+    - Shell-carver
+    - Tide-reader
+    - Wreck-salvager
+    - Current-pilot
+    - Reef-tender
+  Places:
+  - the Drowned Court
+  - the Coral Throne
+  - the Deep Trench
+  - the Kelp Halls
+  - the Pearl Shoals
+  - the Wreck Field
+  - the Tide Gate
+  - the Whale Road
+  - the Still Lagoon
+  - the Salt Cathedral
+  - the Black Current
+  - the Sunken Bell

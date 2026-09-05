@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Beast Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Beast
+  Titles:
+    Honorific:
+    - Alpha
+    - Old One
+    - Broodmother
+    - Terror of the Fold
+    - Nest-lord
+    - Den-keeper
+    - Great Hunter
+    - Man-eater
+    - Herd-taker
+    - Stalker
+    - Bull
+    - Matriarch
+    HonorificMasculine:
+    - Sire
+    - Old Bull
+    HonorificFeminine:
+    - Dam
+    - Old Cow
+    Epithet:
+    - the Man-eater
+    - the Many-scarred
+    - the One-eyed
+    - the Broad-backed
+    - the Hungry
+    - the Unkillable
+    - the Night-stalker
+    - the Cattle-taker
+    - the Trap-breaker
+    - the Grey-muzzled
+    - the Red-jawed
+    - the Thunder-hoofed
+    - the Silent Death
+    - the Fence-leaper
+    - the Old and Terrible
+    - the Bone-cruncher
+    - the Fast-as-arrows
+    - the Winter-starved
+    - the Sun-basking
+    - the Mud-wallowing
+    - the Fear of Shepherds
+    - the Long-in-the-tooth
+    - the Ever-circling
+    Rank:
+    - Lord of the Kill Ground
+    - Terror of the Old Nest
+    - Keeper of the Deep Den
+    - Master of the Bone Hollow
+    - Bull of the Night Meadow
+    - Stalker of the Thorn Thicket
+    - King of the Carrion Field
+    - Matriarch of the Black Burrow
+    - Watcher on the Sun Rock
+    - Ruler of the High Perch
+    Legend:
+    - Who Killed Nine Hunters
+    - Who Was Shot Twelve Times and Lived
+    - 'Who Ate the Baron''s Hounds'
+    - Who Carried Off the Village Bell
+    - Who Broke the Iron Trap
+    - Who Outlived Three Generations of Farmers
+    - Who Took the Bridge-toll in Blood
+    - 'Who Was Named in the Shepherds'' Curse'
+    - Who Dragged the Boat Under
+    - Who Slept in the Chapel and Was Not Disturbed
+    - Who Emptied the Kill Ground
+    - Who Chased the Wolves from the Wallow
+    Occupational:
+    - Hunter
+    - Nest-builder
+    - Carrion-finder
+    - Burrower
+    - Night-prowler
+    - Herd-culler
+  Places:
+  - the Deep Den
+  - the Kill Ground
+  - the Old Nest
+  - the Bone Hollow
+  - the Thorn Thicket
+  - the Wallow
+  - the Carrion Field
+  - the Sun Rock
+  - the Black Burrow
+  - the Night Meadow
+  - the Broken Fence
+  - the High Perch

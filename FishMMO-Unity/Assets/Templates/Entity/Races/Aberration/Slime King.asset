@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Slime King
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Vast crowned oozes that absorb whole warrens — glooping, regal names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Glo
+      - Blo
+      - Slo
+      - Squ
+      - Gloo
+      - Kin
+      - Crow
+      - Ooz
+      - Drip
+      - Splo
+      - Gru
+      - Blub
+      - Roy
+      - Gurg
+      Nuclei:
+      - oo
+      - u
+      - o
+      - uu
+      - ou
+      Codas:
+      - op
+      - ub
+      - orp
+      - ip
+      - oosh
+      - ug
+      - ubb
+      - orb
+      Middles:
+      - gl
+      - bl
+      - pl
+      - ug
+      SyllMin: 1
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - oob
+      - orb
+      MasculineSuffixes:
+      - op
+      - ub
+      - ug
+      Description: 'Vast crowned oozes that absorb whole warrens — glooping, regal names'
+      Tags:
+      - Ooze-names
+      - Crown-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Absorbed Warren
+    - Gloopthrone
+    - the Dissolved Court
+    - the Puddle Kingdom
+    - Slimehold
+    - the Swallowed Stair
+    - the Crown Pool
+    Titles:
+      Honorific:
+      - Ooze-king
+      - Throne-glooper
+      - Court-dissolver
+      - Kingdom-puddler
+      - Pool-crown
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Crowned
+      - the All-absorbing
+      - the Slow-and-royal
+      - the Warren-swallowing
+      - the Glistening
+      - the Never-full
+      - the Court-dissolving
+      - the Puddle-throned
+      Rank:
+      - King of the Absorbed Warren
+      - Glooper of Gloopthrone
+      - Dissolver of the Dissolved Court
+      - Puddler of the Puddle Kingdom
+      - Crown of the Crown Pool
+      Legend:
+      - Who Absorbed the Goblin Warren and Its King
+      - Who Dissolved the Iron Crown and Wore the Puddle
+      - Who Swallowed the Stair and the Tower Above It
+      - Who Was Cut in Half and Ruled Two Kingdoms
+      - Who Ate the Adventurers and Their Map
+      Occupational:
+      - Warren-absorber
+      - Court-dissolver
+      - Puddle-ruler
+    CitySuffixes:
+      Capital:
+      - throne
+      - hold
+      - kingdom
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - pool
+      - warren
+      - stair
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -830221931
+    Weight: 2
+  - BiomeID: 719042512
+    Weight: 1.5
+  - BiomeID: 173642607
+    Weight: 1

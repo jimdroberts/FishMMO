@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Redcap
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Murderous border fey in blood-dyed caps — harsh, short names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Rek
+      - Skul
+      - Dun
+      - Grim
+      - Bloo
+      - Kap
+      - Murr
+      - Vrek
+      - Tarn
+      - Hask
+      - Brog
+      - Cul
+      - Nig
+      - Sledd
+      Nuclei:
+      - a
+      - u
+      - o
+      - e
+      - i
+      Codas:
+      - ap
+      - ash
+      - ock
+      - ur
+      - eth
+      - ik
+      - orn
+      - ag
+      Middles:
+      - ur
+      - ag
+      - ok
+      - ik
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ash
+      - ag
+      MasculineSuffixes:
+      - ap
+      - ock
+      - ur
+      Description: 'Murderous border fey in blood-dyed caps — harsh, short names'
+      Tags:
+      - Cap-names
+      - Border-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bloody Tower
+    - the Border Stones
+    - Skullbridge
+    - the Dye Vat
+    - the Killing Field
+    - Ruincap
+    - the Iron Boots
+    Titles:
+      Honorific:
+      - Tower-keeper
+      - Border-reaver
+      - Cap-dyer
+      - Bridge-toll
+      - Field-warden
+      - Blood-elder
+      - Boot-master
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Red-capped
+      - the Iron-shod
+      - the Never-tired
+      - the Border-haunting
+      - the Fresh-dyed
+      - the Quick-with-the-pike
+      - the Grinning
+      - the Long-toothed
+      Rank:
+      - Keeper of the Bloody Tower
+      - Reaver of the Border Stones
+      - Toll of Skullbridge
+      - Warden of the Killing Field
+      - Dyer of the Dye Vat
+      Legend:
+      - Who Dyed the Cap Three Times in One Night
+      - 'Who Ran Down the Knight''s Horse in Iron Boots'
+      - Who Haunted the Border Tower for Six Centuries
+      - Who Was Read the Holy Word and Lost a Tooth
+      - Who Fought the Bog Troll for the Bridge
+      Occupational:
+      - Pike-sharpener
+      - Cap-dyer
+      - Tower-haunter
+      - Toll-reaver
+    CitySuffixes:
+      Capital:
+      - tower
+      - bridge
+      - stones
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - cap
+      - vat
+      - field
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: -857237992
+    Weight: 3
+  - BiomeID: -835082438
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1

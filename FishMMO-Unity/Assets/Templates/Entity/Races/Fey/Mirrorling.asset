@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Mirrorling
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Reflection fey of still water and glass — doubled, echoing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mir
+      - Gla
+      - Sil
+      - Twin
+      - Echo
+      - Pool
+      - Sheen
+      - Vel
+      - Lis
+      - Ael
+      - Ori
+      - Sel
+      - Nim
+      - Crys
+      Nuclei:
+      - i
+      - a
+      - e
+      - ae
+      - ee
+      Codas:
+      - ith
+      - ell
+      - ine
+      - ora
+      - ael
+      - ess
+      - el
+      - ee
+      Middles:
+      - li
+      - ri
+      - el
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ael
+      MasculineSuffixes:
+      - el
+      - ess
+      - ith
+      Description: 'Reflection fey of still water and glass — doubled, echoing names'
+      Tags:
+      - Reflection-names
+      - Glass-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Still Pool
+    - Glasshall
+    - the Twin Bridge
+    - the Other Room
+    - Sheenwater
+    - the Echo Court
+    - the Backwards Stair
+    Titles:
+      Honorific:
+      - Pool-warden
+      - Glass-herald
+      - Twin-keeper
+      - Echo-elder
+      - Sheen-mother
+      - Stair-father
+      - Other-speaker
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Doubled
+      - the Reflected
+      - the Left-handed Twin
+      - the Glass-eyed
+      - the Never-quite-there
+      - the Pool-still
+      - the Backwards-walking
+      - the Echo-voiced
+      Rank:
+      - Warden of the Still Pool
+      - Herald of Glasshall
+      - Keeper of the Twin Bridge
+      - Elder of the Echo Court
+      - Speaker of the Other Room
+      Legend:
+      - 'Who Stepped Out of the Queen''s Mirror'
+      - Who Traded Places with Their Reflection and Regretted It
+      - Who Broke the Glass and Became Seven
+      - Who Walked the Backwards Stair to the Bottom
+      - Who Answered Every Echo
+      Occupational:
+      - Glass-polisher
+      - Pool-stiller
+      - Echo-catcher
+      - Twin-finder
+    CitySuffixes:
+      Capital:
+      - hall
+      - pool
+      - court
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - glass
+      - room
+      - stair
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 247344987
+    Weight: 3
+  - BiomeID: 2117371294
+    Weight: 1.5
+  - BiomeID: 18062707
+    Weight: 1.5
+  - BiomeID: -1693619367
+    Weight: 1

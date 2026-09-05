@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bronze Golem
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Construct
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Verdigris-green bronze guardians — ringing, cast names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bron
+      - Ver
+      - Cast
+      - Bell
+      - Ring
+      - Ten
+      - Ald
+      - Mor
+      - Dur
+      - Klang
+      - Gild
+      - Pat
+      - Ton
+      - Sol
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - or
+      Codas:
+      - um
+      - ax
+      - orn
+      - ik
+      - ast
+      - ung
+      - urn
+      - eck
+      Middles:
+      - k
+      - g
+      - t
+      - 'on'
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ora
+      - um
+      MasculineSuffixes:
+      - um
+      - ax
+      - orn
+      Description: 'Verdigris-green bronze guardians — ringing, cast names'
+      Tags:
+      - Bronze-names
+      - Bell-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bell Foundry
+    - Verdigris Hall
+    - the Cast Yard
+    - the Ringing Gate
+    - Bronzewatch
+    - the Green Patina
+    - the Mould Room
+    Titles:
+      Honorific:
+      - Gate-ringer
+      - Foundry-warden
+      - Yard-sentinel
+      - Hall-guard
+      - Mould-keeper
+      - Bell-mother
+      - Cast-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Verdigris-green
+      - the Bell-voiced
+      - the Cast-in-one-pour
+      - the Ringing
+      - the Gate-standing
+      - the Patina-crowned
+      - the Never-tarnished-within
+      - the Hollow-sounding
+      Rank:
+      - Ringer of the Ringing Gate
+      - Warden of the Bell Foundry
+      - Sentinel of the Cast Yard
+      - Guard of Verdigris Hall
+      - Keeper of the Mould Room
+      Legend:
+      - Who Rang the Alarm by Striking Their Own Chest
+      - Who Stood in the Rain Four Centuries and Turned Green
+      - Who Held the Gate Against the Siege Ram
+      - Who Was Melted for Cannon and Re-cast by the Enemy
+      - Who Rang the Hour Every Hour Since the Founding
+      Occupational:
+      - Gate-guard
+      - Hour-ringer
+      - Yard-watcher
+    CitySuffixes:
+      Capital:
+      - foundry
+      - hall
+      - yard
+      Fortress:
+      - gate
+      - wall
+      - bastion
+      - vault
+      Village:
+      - gate
+      - room
+      - watch
+      Port:
+      - dock
+      - crane
+      - wharf
+      Sacred:
+      - anvil
+      - forge
+      - maker
+      - altar
+      Ruin:
+      - rust
+      - scrap
+      - heap
+      - fall
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 3
+  - BiomeID: 18062707
+    Weight: 2
+  - BiomeID: -835082438
+    Weight: 2
+  - BiomeID: 1056999638
+    Weight: 1

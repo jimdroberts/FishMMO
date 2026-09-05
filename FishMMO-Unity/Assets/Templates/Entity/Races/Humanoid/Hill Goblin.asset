@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hill Goblin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Upland goblins — quick, cackling names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Skab
+      - Nib
+      - Grit
+      - Zik
+      - Pok
+      - Rak
+      - Snig
+      - Kib
+      - Vak
+      - Tozz
+      - Brik
+      - Yag
+      - Mek
+      - Splig
+      Nuclei:
+      - i
+      - a
+      - e
+      - o
+      - u
+      Codas:
+      - it
+      - ak
+      - ok
+      - ick
+      - ug
+      - azz
+      - ip
+      - ek
+      Middles:
+      - ik
+      - ag
+      - ok
+      - ri
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ik
+      - ie
+      MasculineSuffixes:
+      - ak
+      - it
+      - ug
+      Description: 'Upland goblins — quick, cackling names'
+      Tags:
+      - Cackle-names
+      - Rock-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Rock Warren
+    - Scrabble Ridge
+    - the Goat Path
+    - Pebbleheap
+    - the Loot Cave
+    - the Ambush Bend
+    - Snaggle Hill
+    Titles:
+      Honorific:
+      - Warren-boss
+      - Ridge-chief
+      - Loot-keeper
+      - Goat-master
+      - Ambush-elder
+      - Cave-mother
+      - Pebble-counter
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Quick-fingered
+      - the Rock-hopping
+      - the Loud
+      - the Never-caught
+      - the Goat-riding
+      - the Loot-mad
+      - the Ridge-born
+      - the Cackling
+      Rank:
+      - Boss of the Rock Warren
+      - Chief of Scrabble Ridge
+      - Keeper of the Loot Cave
+      - Master of the Goat Path
+      - Elder of Snaggle Hill
+      Legend:
+      - 'Who Stole the Baron''s Boots While He Wore Them'
+      - Who Rode a Goat Off the Cliff and Lived
+      - Who Filled the Loot Cave in One Summer
+      - Who Ambushed the Ambushers
+      - Who Counted Every Pebble of Pebbleheap
+      Occupational:
+      - Goat-herder
+      - Trap-setter
+      - Loot-sorter
+      - Rock-thrower
+      - Scrap-smith
+    CitySuffixes:
+      Capital:
+      - warren
+      - ridge
+      - heap
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - hole
+      - nook
+      - bend
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 3
+  - BiomeID: 1156965030
+    Weight: 2
+  - BiomeID: 1275219499
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1

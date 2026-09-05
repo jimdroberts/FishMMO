@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Elder Giant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'The oldest giants, mountain-born before kingdoms — names like slow bells'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Orm
+      - Vael
+      - Thrun
+      - Gald
+      - Hael
+      - Brond
+      - Ulm
+      - Skarn
+      - Dor
+      - Tael
+      - Mor
+      - Rund
+      - Kael
+      - Vorn
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - ei
+      Codas:
+      - und
+      - ath
+      - orr
+      - eld
+      - ost
+      - um
+      - ir
+      - ael
+      Middles:
+      - or
+      - um
+      - ael
+      - 'on'
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - und
+      MasculineSuffixes:
+      - und
+      - eld
+      - orr
+      Description: 'The oldest giants, mountain-born before kingdoms — names like slow bells'
+      Tags:
+      - Age-names
+      - Bell-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the First Hearth
+    - the Sleeping Range
+    - the Bell of Ages
+    - Worldroot
+    - the Long Memory
+    - the Stone Council
+    - the Hall Before Kings
+    Titles:
+      Honorific:
+      - First-thane
+      - Age-lord
+      - Memory-keeper
+      - Council-elder
+      - Root-warden
+      - World-mother
+      - Bell-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Older than Kingdoms
+      - the Slow-remembering
+      - the World-shouldered
+      - the Bell-voiced
+      - the Never-kneeling
+      - the Stone-wise
+      - the First-woken
+      - the Mountain-fathering
+      Rank:
+      - Thane of the First Hearth
+      - Lord of the Sleeping Range
+      - Keeper of the Bell of Ages
+      - Elder of the Stone Council
+      - Warden of Worldroot
+      Legend:
+      - Who Remembers the First Sunrise
+      - Who Raised the Mountains as a Wall
+      - Who Taught the Dwarves to Count
+      - Who Rang the Bell of Ages Once
+      - Who Sleeps Still Beneath the Range
+      Occupational:
+      - Memory-keeper
+      - Range-shaper
+      - Council-speaker
+      - Bell-warden
+    CitySuffixes:
+      Capital:
+      - hearth
+      - council
+      - hall
+      Fortress:
+      - wall
+      - gate
+      - rampart
+      - boulder
+      Village:
+      - fold
+      - memory
+      - ring
+      Port:
+      - landing
+      - strand
+      - shelf
+      Sacred:
+      - stone
+      - cairn
+      - altar
+      - table
+      Ruin:
+      - fall
+      - rubble
+      - tumble
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 2
+  - BiomeID: 1645414801
+    Weight: 1
+  - BiomeID: -544771122
+    Weight: 1

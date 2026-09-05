@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Giant Bat
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Cave-roof bats the size of men — screeching, leathery names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Skree
+      - Vesp
+      - Nok
+      - Flit
+      - Umb
+      - Squee
+      - Dus
+      - Kir
+      - Zib
+      - Nyx
+      - Chit
+      - Wing
+      - Skra
+      - Vel
+      Nuclei:
+      - i
+      - ee
+      - a
+      - u
+      - o
+      Codas:
+      - ix
+      - eek
+      - ith
+      - ak
+      - ell
+      - ur
+      - ip
+      - orr
+      Middles:
+      - ki
+      - ri
+      - ul
+      - ee
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ix
+      - eek
+      MasculineSuffixes:
+      - ak
+      - ur
+      - orr
+      Description: 'Cave-roof bats the size of men — screeching, leathery names'
+      Tags:
+      - Screech-names
+      - Roost-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Black Roost
+    - Screechvault
+    - the Guano Lake
+    - the Dusk Mouth
+    - Wingdark
+    - the Blood Ledge
+    - the Hanging Dark
+    Titles:
+      Honorific:
+      - Roost-lord
+      - Vault-matriarch
+      - Dusk-terror
+      - Ledge-hanger
+      - Dark-warden
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Leather-winged
+      - the Screeching
+      - the Dusk-pouring
+      - the Blood-drinking
+      - the Roof-hanging
+      - the Cave-born
+      - the Moon-crossing
+      - the Never-still
+      Rank:
+      - Lord of the Black Roost
+      - Matriarch of Screechvault
+      - Terror of the Dusk Mouth
+      - Warden of the Hanging Dark
+      - Hanger of the Blood Ledge
+      Legend:
+      - Who Drank the Bull Dry
+      - Who Blotted Out the Moon Over the Village
+      - Who Carried the Child Off and Brought It Back
+      - Who Screeched the Wall Down
+      - Who Hung in the Cathedral for a Century
+      Occupational:
+      - Dusk-hunter
+      - Roof-hanger
+      - Blood-taker
+    CitySuffixes:
+      Capital:
+      - roost
+      - vault
+      - dark
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - ledge
+      - mouth
+      - lake
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -830221931
+    Weight: 2
+  - BiomeID: 155940630
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1

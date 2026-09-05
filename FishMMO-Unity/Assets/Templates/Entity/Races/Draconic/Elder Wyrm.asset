@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Elder Wyrm
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Draconic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'The oldest wyrms, mountain-sized and half-asleep — vast, slow names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Vael
+      - Orm
+      - Thrun
+      - Gald
+      - Drak
+      - Hael
+      - Ulm
+      - Skarn
+      - Mor
+      - Tael
+      - Rund
+      - Kael
+      - Vorn
+      - Brond
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - ei
+      Codas:
+      - ax
+      - und
+      - ath
+      - orr
+      - eld
+      - ost
+      - ael
+      - ir
+      Middles:
+      - or
+      - um
+      - ael
+      - 'on'
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - und
+      MasculineSuffixes:
+      - ax
+      - und
+      - eld
+      Description: 'The oldest wyrms, mountain-sized and half-asleep — vast, slow names'
+      Tags:
+      - Age-names
+      - Sleep-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the First Roost
+    - the Sleeping Hoard
+    - the Mountain Nest
+    - Ageclaw
+    - the Ember of Ages
+    - the Bone-of-the-World Spire
+    - the Long Sleep
+    Titles:
+      Honorific:
+      - First-wyrm
+      - Age-lord
+      - Sleeping-hoard-keeper
+      - Mountain-matriarch
+      - Ember-warden
+      - World-bone-master
+      - Sleep-elder
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Older than Kingdoms
+      - the Mountain-sized
+      - the Half-asleep
+      - the First-hatched
+      - the Age-scaled
+      - the Slow-remembering
+      - the World-bone-crowned
+      - the Never-fully-woken
+      Rank:
+      - Lord of the First Roost
+      - Keeper of the Sleeping Hoard
+      - Matriarch of Ageclaw
+      - Warden of the Ember of Ages
+      - Master of the Bone-of-the-World Spire
+      Legend:
+      - Who Remembers the First Fire
+      - Who Slept So Long a Kingdom Rose on Their Back
+      - Who Hoarded the First Coins Ever Struck
+      - Who Woke Once and Ended an Age
+      - Who Taught the Mountains to Smoke
+      Occupational:
+      - Age-keeper
+      - Hoard-sleeper
+      - Mountain-warden
+    CitySuffixes:
+      Capital:
+      - roost
+      - hoard
+      - nest
+      Fortress:
+      - crag
+      - ledge
+      - perch
+      - aerie
+      Village:
+      - claw
+      - ember
+      - sleep
+      Port:
+      - shelf
+      - strand
+      - cove
+      Sacred:
+      - egg
+      - fire
+      - ash
+      - altar
+      Ruin:
+      - bones
+      - ash
+      - cinder
+      - fall
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: -1474826537
+    Weight: 2
+  - BiomeID: 493502347
+    Weight: 1.5
+  - BiomeID: 596668801
+    Weight: 1

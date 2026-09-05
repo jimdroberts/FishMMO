@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hellhound
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Fire-breathing hounds of the pit — snarling, smoke-hoarse names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Hel
+      - Bra
+      - Scor
+      - Fang
+      - Cind
+      - Bay
+      - Sulph
+      - Kal
+      - Mor
+      - Howl
+      - Brim
+      - Ash
+      - Gnar
+      - Pyr
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      Codas:
+      - ak
+      - ar
+      - ulf
+      - ash
+      - orr
+      - un
+      - ith
+      - ang
+      Middles:
+      - ar
+      - ul
+      - og
+      - an
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ora
+      - ith
+      MasculineSuffixes:
+      - ak
+      - ulf
+      - ang
+      Description: 'Fire-breathing hounds of the pit — snarling, smoke-hoarse names'
+      Tags:
+      - Pit-names
+      - Bay-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Brass Kennel
+    - the Sulphur Road
+    - 'the Burning Ledger''s Gate'
+    - Pitbay
+    - 'the Ash Throne''s Step'
+    - the Hunt of Souls
+    - the Chain Post
+    Titles:
+      Honorific:
+      - Kennel-lord
+      - Road-hound
+      - Gate-guard
+      - Hunt-leader
+      - Chain-warden
+      - Pit-mother
+      - Brass-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Fire-breathing
+      - the Sulphur-breathed
+      - the Chain-bound
+      - the Soul-hunting
+      - the Brass-collared
+      - the Never-lost-a-scent
+      - the Pit-born
+      - the Snarling
+      Rank:
+      - Lord of the Brass Kennel
+      - Hound of the Sulphur Road
+      - 'Guard of the Burning Ledger''s Gate'
+      - Leader of the Hunt of Souls
+      - Warden of the Chain Post
+      Legend:
+      - Who Ran the Oath-breaker Down Across Three Worlds
+      - Who Guarded the Brass Gate Without Sleeping
+      - Who Bayed the Village into the Pit
+      - Who Broke the Chain and Came Back Anyway
+      - Who Ate the Contract and the Signatory
+      Occupational:
+      - Gate-guard
+      - Soul-hunter
+      - Chain-warden
+    CitySuffixes:
+      Capital:
+      - kennel
+      - gate
+      - post
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - road
+      - step
+      - hunt
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: -1042859854
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1

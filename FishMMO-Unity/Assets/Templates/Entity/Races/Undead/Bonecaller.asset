@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bonecaller
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Skeletal sorcerers who rouse the buried — rattling, chanting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Oss
+      - Nekr
+      - Cran
+      - Vaal
+      - Thul
+      - Mor
+      - Skel
+      - Rax
+      - Vor
+      - Kaz
+      - Sarn
+      - Drel
+      - Nyth
+      - Oth
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - y
+      Codas:
+      - oth
+      - ax
+      - ull
+      - ith
+      - eth
+      - ir
+      - orr
+      - ael
+      Middles:
+      - ra
+      - th
+      - ul
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ael
+      MasculineSuffixes:
+      - ax
+      - ull
+      - orr
+      Description: 'Skeletal sorcerers who rouse the buried — rattling, chanting names'
+      Tags:
+      - Bone-names
+      - Chant-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bone Pulpit
+    - Rattlehall
+    - the Roused Ground
+    - the Marrow Vault
+    - Callmound
+    - the Standing Dead
+    - the Bone Bell
+    Titles:
+      Honorific:
+      - Bone-caller
+      - Marrow-warden
+      - Pulpit-elder
+      - Vault-lord
+      - Ground-rouser
+      - Rattle-mother
+      - Bell-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Bone-calling
+      - the Rattle-voiced
+      - the Marrow-wise
+      - the Ground-rousing
+      - the Hollow-chanting
+      - the Never-buried
+      - the Skull-crowned
+      - the Grave-commanding
+      Rank:
+      - Caller of the Bone Pulpit
+      - Warden of the Marrow Vault
+      - Elder of Rattlehall
+      - Rouser of the Roused Ground
+      - Lord of the Standing Dead
+      Legend:
+      - Who Called Every Grave of the Valley in One Night
+      - Who Rang the Bone Bell and the Battlefield Stood
+      - Who Was Killed by Their Own Roused and Rose Again
+      - Who Chanted the Barrow Open
+      - Who Commanded the Standing Dead for an Age
+      Occupational:
+      - Bone-caller
+      - Grave-opener
+      - Marrow-reader
+      - Skull-carver
+    CitySuffixes:
+      Capital:
+      - pulpit
+      - hall
+      - vault
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - mound
+      - ground
+      - bell
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 621224406
+    Weight: 3
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 1.5
+  - BiomeID: -567058185
+    Weight: 1

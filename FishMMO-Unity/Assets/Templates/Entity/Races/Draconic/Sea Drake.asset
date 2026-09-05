@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sea Drake
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Draconic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Finned drakes of the coastal caves — surging, wet-scaled names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Thal
+      - Sar
+      - Brin
+      - Kel
+      - Vor
+      - Drak
+      - Nyss
+      - Mar
+      - Tid
+      - Wael
+      - Skel
+      - Ryn
+      - Dros
+      - Hol
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - oa
+      Codas:
+      - ax
+      - ith
+      - oth
+      - ess
+      - und
+      - ir
+      - ael
+      - orm
+      Middles:
+      - ar
+      - ul
+      - ae
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ess
+      MasculineSuffixes:
+      - ax
+      - und
+      - orm
+      Description: 'Finned drakes of the coastal caves — surging, wet-scaled names'
+      Tags:
+      - Fin-names
+      - Tide-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Tide Cave
+    - Finreach
+    - the Wreck Hoard
+    - the Salt Roost
+    - Brineclaw
+    - the Surging Ledge
+    - the Drowned Spire
+    Titles:
+      Honorific:
+      - Tide-drake
+      - Cave-lord
+      - Wreck-warden
+      - Fin-elder
+      - Salt-matriarch
+      - Surge-master
+      - Spire-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Fin-crested
+      - the Tide-surging
+      - the Salt-scaled
+      - the Wreck-hoarding
+      - the Wave-breathing
+      - the Cave-born
+      - the Ship-sinking
+      - the Brine-eyed
+      Rank:
+      - Lord of the Tide Cave
+      - Warden of the Wreck Hoard
+      - Matriarch of Finreach
+      - Master of the Surging Ledge
+      - Keeper of the Drowned Spire
+      Legend:
+      - Who Sank the Treasure Fleet and Kept It
+      - Who Rode the Storm Surge Over the Sea Wall
+      - Who Nested in the Drowned Spire
+      - Who Fought the Kraken for the Tide Cave
+      - Who Breathed the Fog That Hid the Coast
+      Occupational:
+      - Wreck-diver
+      - Tide-scout
+      - Salt-roost-warden
+      - Hoard-keeper
+    CitySuffixes:
+      Capital:
+      - cave
+      - reach
+      - spire
+      Fortress:
+      - crag
+      - ledge
+      - perch
+      - aerie
+      Village:
+      - roost
+      - ledge
+      - claw
+      Port:
+      - shelf
+      - strand
+      - cove
+      Sacred:
+      - egg
+      - fire
+      - ash
+      - altar
+      Ruin:
+      - bones
+      - ash
+      - cinder
+      - fall
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 646460858
+    Weight: 3
+  - BiomeID: 1508835452
+    Weight: 2
+  - BiomeID: 1496239796
+    Weight: 1.5
+  - BiomeID: 1384639345
+    Weight: 1

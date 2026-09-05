@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Mountain Giant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Grey highland giants — slow, avalanche-rumble names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grond
+      - Kar
+      - Thrum
+      - Bol
+      - Dur
+      - Skarn
+      - Orm
+      - Hald
+      - Brakk
+      - Tul
+      - Mog
+      - Verd
+      - Ron
+      - Gald
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - or
+      Codas:
+      - und
+      - ath
+      - orr
+      - ok
+      - um
+      - eld
+      - ar
+      - ost
+      Middles:
+      - or
+      - um
+      - ak
+      - ol
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - und
+      - orra
+      MasculineSuffixes:
+      - und
+      - ok
+      - eld
+      Description: 'Grey highland giants — slow, avalanche-rumble names'
+      Tags:
+      - Peak-names
+      - Rumble-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Grey Shoulder
+    - Rockthrone
+    - the Scree Steps
+    - the Eagle Ledge
+    - Thunderfold
+    - the Old Cairn
+    - the Snow Hearth
+    Titles:
+      Honorific:
+      - Peak-thane
+      - Ledge-lord
+      - Cairn-elder
+      - Scree-warden
+      - Snow-hearth-keeper
+      - Rock-mother
+      - Shoulder-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Grey-shouldered
+      - the Slow-speaking
+      - the Rock-patient
+      - the Avalanche-footed
+      - the Cloud-headed
+      - the Old as the Peak
+      - the Wide-handed
+      - the Never-hurried
+      Rank:
+      - Thane of the Grey Shoulder
+      - Lord of Rockthrone
+      - Warden of the Scree Steps
+      - Keeper of the Snow Hearth
+      - Elder of the Old Cairn
+      Legend:
+      - 'Who Carried the Glacier''s Boulder to the Valley'
+      - Who Sat Still So Long the Eagles Nested on Them
+      - Who Stopped the Avalanche with a Shoulder
+      - Who Cut the Scree Steps in a Season
+      - Who Spoke Once in a Century and Was Right
+      Occupational:
+      - Boulder-setter
+      - Step-cutter
+      - Eagle-warden
+      - Cairn-raiser
+      - Ice-hewer
+    CitySuffixes:
+      Capital:
+      - throne
+      - shoulder
+      - hearth
+      Fortress:
+      - wall
+      - gate
+      - rampart
+      - boulder
+      Village:
+      - ledge
+      - fold
+      - cairn
+      Port:
+      - landing
+      - strand
+      - shelf
+      Sacred:
+      - stone
+      - cairn
+      - altar
+      - table
+      Ruin:
+      - fall
+      - rubble
+      - tumble
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -138594552
+    Weight: 3
+  - BiomeID: -1474826537
+    Weight: 2
+  - BiomeID: 1275219499
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 1

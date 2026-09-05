@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Lantern Ghost
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Wandering lights that lead travellers astray — flickering, soft names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Lan
+      - Flick
+      - Wil
+      - Glim
+      - Wan
+      - Lur
+      - Mar
+      - Fen
+      - Lum
+      - Ill
+      - Sha
+      - Dus
+      - Gli
+      - Hol
+      Nuclei:
+      - a
+      - ae
+      - ei
+      - o
+      - ie
+      Codas:
+      - ow
+      - isp
+      - eer
+      - ith
+      - ine
+      - ell
+      - aw
+      - ere
+      Middles:
+      - sh
+      - th
+      - el
+      - li
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ere
+      MasculineSuffixes:
+      - eer
+      - ow
+      - ith
+      Description: 'Wandering lights that lead travellers astray — flickering, soft names'
+      Tags:
+      - Lantern-names
+      - Stray-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Stray Path
+    - Lanternfen
+    - the Wrong Turning
+    - the Bog Light
+    - Glimmerhollow
+    - 'the Lost Traveller''s Rest'
+    - the Mist Lamp
+    Titles:
+      Honorific:
+      - Path-leader
+      - Lantern-warden
+      - Turning-keeper
+      - Light-lord
+      - Rest-elder
+      - Fen-mother
+      - Mist-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Flickering
+      - the Path-leading
+      - the Never-caught-up-with
+      - the Bog-lit
+      - the Mist-born
+      - the Wrong-turning
+      - the Soft-shining
+      - the Traveller-taking
+      Rank:
+      - Leader of the Stray Path
+      - Warden of Lanternfen
+      - Keeper of the Wrong Turning
+      - Lord of the Bog Light
+      - 'Elder of the Lost Traveller''s Rest'
+      Legend:
+      - Who Led the Whole Wedding Party into the Bog
+      - Who Was Followed by the Tax-collector to the Wrong Turning
+      - Who Lit the Way Home for the Lost Child and Took the Guide Instead
+      - Who Flickered in the Same Window Every Night for Ninety Years
+      - Who Was a Lantern Once and Remembers
+      Occupational:
+      - Path-mislead
+      - Fen-lighter
+      - Rest-keeper
+    CitySuffixes:
+      Capital:
+      - fen
+      - path
+      - light
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - hollow
+      - turning
+      - rest
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: -1123947451
+    Weight: 1.5
+  - BiomeID: 247344987
+    Weight: 1

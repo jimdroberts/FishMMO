@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Rock Tortoise
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Boulder-shelled tortoises older than roads — slow, grinding names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Tor
+      - Shel
+      - Dol
+      - Bol
+      - Stone
+      - Grum
+      - Orm
+      - Kar
+      - Rund
+      - Tul
+      - Mog
+      - Hald
+      - Brok
+      - Slow
+      Nuclei:
+      - o
+      - u
+      - a
+      - or
+      - ar
+      Codas:
+      - um
+      - ath
+      - orr
+      - ok
+      - und
+      - eld
+      - ar
+      - ost
+      Middles:
+      - or
+      - um
+      - ol
+      - ak
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - und
+      - orra
+      MasculineSuffixes:
+      - um
+      - ok
+      - eld
+      Description: 'Boulder-shelled tortoises older than roads — slow, grinding names'
+      Tags:
+      - Shell-names
+      - Age-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Sunning Stone
+    - the Old Shell
+    - Slowfield
+    - the Boulder Road
+    - the Moss Back
+    - Tortoisemere
+    - the Long Sleep
+    Titles:
+      Honorific:
+      - Shell-elder
+      - Stone-sitter
+      - Road-blocker
+      - Moss-carrier
+      - Sleep-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Boulder-shelled
+      - the Slow as Years
+      - the Moss-backed
+      - the Road-blocking
+      - the Unhurried
+      - the Older than the Road
+      - the Sun-sitting
+      - the Unbroken
+      Rank:
+      - Elder of the Old Shell
+      - Sitter of the Sunning Stone
+      - Blocker of the Boulder Road
+      - Carrier of the Moss Back
+      - Keeper of the Long Sleep
+      Legend:
+      - Who Was Mistaken for a Hill for Sixty Years
+      - Who Carried the Shrine on Their Back Across the Field
+      - Who Outlived the Road Built Around Them
+      - Who Was Struck by the Siege Engine and Blinked
+      - Who Crossed the Field in a Lifetime
+      Occupational:
+      - Road-sitter
+      - Moss-grower
+      - Field-crosser
+    CitySuffixes:
+      Capital:
+      - shell
+      - stone
+      - field
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - back
+      - mere
+      - road
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1156965030
+    Weight: 3
+  - BiomeID: 1655673647
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 1384639345
+    Weight: 1

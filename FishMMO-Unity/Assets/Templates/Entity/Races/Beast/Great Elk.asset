@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Great Elk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Vast antlered elk of the high forest — deep, bugling names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bug
+      - Ant
+      - Hart
+      - Elk
+      - Bran
+      - Vel
+      - Orm
+      - Tal
+      - Roan
+      - Fern
+      - Bell
+      - Kor
+      - Sar
+      - Thal
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - e
+      Codas:
+      - orn
+      - und
+      - ath
+      - el
+      - ow
+      - ael
+      - orm
+      - ir
+      Middles:
+      - or
+      - an
+      - el
+      - um
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ora
+      MasculineSuffixes:
+      - orn
+      - und
+      - orm
+      Description: 'Vast antlered elk of the high forest — deep, bugling names'
+      Tags:
+      - Antler-names
+      - Bugle-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the High Meadow
+    - the Bugling Vale
+    - the Antler Bone-yard
+    - the Winter Yard
+    - Frostfern
+    - the River Crossing
+    - the Moss Lick
+    Titles:
+      Honorific:
+      - Bull of the Vale
+      - Herd-lead
+      - Antler-crown
+      - Winter-yard-keeper
+      - Crossing-lord
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Wide-antlered
+      - the Bugling
+      - the Snow-wading
+      - the Herd-first
+      - the River-crossing
+      - the Moss-fed
+      - the Wolf-scorning
+      - the Ancient
+      Rank:
+      - Bull of the Bugling Vale
+      - Lord of the High Meadow
+      - Keeper of the Winter Yard
+      - Master of the River Crossing
+      - Crown of the Antler Bone-yard
+      Legend:
+      - 'Who Carried a Hunter''s Hut on Their Antlers'
+      - Who Led the Herd Through the Avalanche
+      - Who Trampled the Wolf-pack Flat
+      - Who Crossed the River in Full Flood
+      - Who Shed Antlers Wider Than a Door
+      Occupational:
+      - Herd-leader
+      - Snow-breaker
+      - Lick-finder
+    CitySuffixes:
+      Capital:
+      - vale
+      - meadow
+      - yard
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - lick
+      - crossing
+      - fern
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 144196518
+    Weight: 3
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: 187749268
+    Weight: 1

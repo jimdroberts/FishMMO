@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Gravewalker
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Restless dead who patrol the burial grounds — shuffling, muttering names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grav
+      - Shuf
+      - Mut
+      - Sod
+      - Bur
+      - Tomb
+      - Mould
+      - Clay
+      - Dus
+      - Mor
+      - Wor
+      - Cold
+      - Dros
+      - Hum
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - oo
+      Codas:
+      - oth
+      - ug
+      - ash
+      - urn
+      - eth
+      - ull
+      - orr
+      - um
+      Middles:
+      - ur
+      - og
+      - um
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - urn
+      - ull
+      MasculineSuffixes:
+      - oth
+      - ug
+      - orr
+      Description: 'Restless dead who patrol the burial grounds — shuffling, muttering names'
+      Tags:
+      - Grave-names
+      - Patrol-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Burial Ground
+    - Shufflemound
+    - the Night Round
+    - the Open Grave
+    - Claywalk
+    - 'the Sexton''s Gate'
+    - the Mould Row
+    Titles:
+      Honorific:
+      - Ground-walker
+      - Round-keeper
+      - Gate-warden
+      - Row-elder
+      - Grave-lord
+      - Clay-mother
+      - Mould-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Grave-patrolling
+      - the Clay-caked
+      - the Never-resting
+      - the Night-rounding
+      - the Mould-grown
+      - the Muttering
+      - the Shuffling
+      - the Sexton-scaring
+      Rank:
+      - Walker of the Burial Ground
+      - Keeper of the Night Round
+      - 'Warden of the Sexton''s Gate'
+      - Elder of the Mould Row
+      - Lord of the Open Grave
+      Legend:
+      - Who Walked the Round Every Night Since the Burial
+      - Who Chased the Grave-robbers into Their Own Hole
+      - Who Filled the Open Grave with the Sexton
+      - Who Muttered the Names of Every Buried
+      - Who Stood at the Gate Through the Long Winter
+      Occupational:
+      - Ground-patroller
+      - Gate-stander
+      - Robber-chaser
+    CitySuffixes:
+      Capital:
+      - ground
+      - mound
+      - row
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - grave
+      - walk
+      - gate
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 621224406
+    Weight: 2
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: 173642607
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 1

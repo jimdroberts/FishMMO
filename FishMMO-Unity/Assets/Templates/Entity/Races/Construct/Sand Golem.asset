@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sand Golem
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Construct
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Shifting desert constructs — hissing, pouring names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sand
+      - Dun
+      - Sift
+      - Hiss
+      - Pour
+      - Grit
+      - Kher
+      - Zal
+      - Sahr
+      - Dust
+      - Grain
+      - Tam
+      - Nab
+      - Sil
+      Nuclei:
+      - a
+      - u
+      - aa
+      - i
+      - o
+      Codas:
+      - im
+      - ar
+      - eth
+      - ud
+      - ash
+      - an
+      - ir
+      - oum
+      Middles:
+      - ra
+      - um
+      - ha
+      - al
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ima
+      - ura
+      MasculineSuffixes:
+      - im
+      - ar
+      - ud
+      Description: 'Shifting desert constructs — hissing, pouring names'
+      Tags:
+      - Sand-names
+      - Shift-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Shifting Wall
+    - Dunewatch
+    - the Buried Gate
+    - the Sand Clock
+    - Siftvault
+    - the Pouring Stair
+    - the Glass Threshold
+    Titles:
+      Honorific:
+      - Wall-shifter
+      - Gate-warden
+      - Clock-keeper
+      - Vault-sentinel
+      - Stair-pourer
+      - Dune-mother
+      - Grit-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Shifting
+      - the Pouring
+      - the Wind-rebuilt
+      - the Buried-and-risen
+      - the Grit-eyed
+      - the Never-the-same-shape
+      - the Hourglass-hearted
+      - the Dune-born
+      Rank:
+      - Shifter of the Shifting Wall
+      - Warden of the Buried Gate
+      - Keeper of the Sand Clock
+      - Sentinel of Siftvault
+      - Pourer of the Pouring Stair
+      Legend:
+      - Who Was Scattered by the Storm and Gathered by Dawn
+      - Who Buried the Tomb-robbers Under Themselves
+      - Who Poured Through the Keyhole to Guard the Room
+      - 'Who Guarded the Buried Gate Through Ten Dunes'' Passing'
+      - Who Became Glass in the Lightning and Guarded On
+      Occupational:
+      - Gate-guard
+      - Storm-scatterer
+      - Tomb-keeper
+    CitySuffixes:
+      Capital:
+      - wall
+      - watch
+      - vault
+      Fortress:
+      - gate
+      - wall
+      - bastion
+      - vault
+      Village:
+      - gate
+      - clock
+      - stair
+      Port:
+      - dock
+      - crane
+      - wharf
+      Sacred:
+      - anvil
+      - forge
+      - maker
+      - altar
+      Ruin:
+      - rust
+      - scrap
+      - heap
+      - fall
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -941601695
+    Weight: 3
+  - BiomeID: 992717471
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 525873855
+    Weight: 1

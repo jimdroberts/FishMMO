@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Stormling
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Small wind-sprites of the gust and squall — whistling, darting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gus
+      - Whis
+      - Squa
+      - Skir
+      - Flit
+      - Aer
+      - Zeph
+      - Dart
+      - Wyn
+      - Puff
+      - Bree
+      - Vent
+      - Whir
+      - Kes
+      Nuclei:
+      - i
+      - a
+      - e
+      - o
+      - ae
+      Codas:
+      - ith
+      - el
+      - ist
+      - ee
+      - ael
+      - yn
+      - ess
+      - ir
+      Middles:
+      - li
+      - ri
+      - el
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ie
+      MasculineSuffixes:
+      - el
+      - ist
+      - yn
+      Description: 'Small wind-sprites of the gust and squall — whistling, darting names'
+      Tags:
+      - Gust-names
+      - Squall-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Gust Corner
+    - Squallhollow
+    - the Whistling Chimney
+    - the Weathervane
+    - Breezewell
+    - the Draught Court
+    - the First Breath
+    Titles:
+      Honorific:
+      - Corner-warden
+      - Chimney-whistler
+      - Vane-turner
+      - Draught-master
+      - Breath-elder
+      - Squall-mother
+      - Gust-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Whistling
+      - the Darting
+      - the Chimney-born
+      - the Vane-turning
+      - the Never-still
+      - the Hat-stealing
+      - the Draughty
+      - the First-breath-woken
+      Rank:
+      - Warden of the Gust Corner
+      - Whistler of the Whistling Chimney
+      - Turner of the Weathervane
+      - Master of the Draught Court
+      - Elder of the First Breath
+      Legend:
+      - Who Stole Every Hat at the Fair
+      - Who Whistled Through the Keyhole All Winter
+      - Who Turned the Weathervane Against the Wind
+      - Who Blew the Candles Out at the Coronation
+      - Who Was the First Breath of the World
+      Occupational:
+      - Vane-turner
+      - Sail-filler
+      - Chimney-whistler
+    CitySuffixes:
+      Capital:
+      - corner
+      - court
+      - well
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - hollow
+      - chimney
+      - vane
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: 646460858
+    Weight: 2
+  - BiomeID: -1474826537
+    Weight: 2
+  - BiomeID: -1951431387
+    Weight: 1

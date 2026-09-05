@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Wall Crawler
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Things that live inside the walls of old houses — scratching, muffled names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Scra
+      - Tch
+      - Behin
+      - Plas
+      - Latt
+      - Wains
+      - Nyth
+      - Hol
+      - Ithl
+      - Skri
+      - Mur
+      - Vresh
+      - Tik
+      - Ossk
+      Nuclei:
+      - i
+      - u
+      - a
+      - e
+      - o
+      Codas:
+      - ith
+      - ick
+      - ull
+      - ash
+      - oth
+      - iss
+      - ek
+      - yl
+      Middles:
+      - ss
+      - ri
+      - th
+      - ik
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - iss
+      - yl
+      MasculineSuffixes:
+      - ick
+      - ull
+      - ek
+      Description: 'Things that live inside the walls of old houses — scratching, muffled names'
+      Tags:
+      - Wall-names
+      - Scratch-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Hollow Wall
+    - Behindplaster
+    - the Scratching Room
+    - the Lath Gallery
+    - Wainscotdeep
+    - the Space Between Floors
+    - the Chimney Void
+    Titles:
+      Honorific:
+      - Wall-lord
+      - Plaster-warden
+      - Room-scratcher
+      - Gallery-matriarch
+      - Void-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Wall-dwelling
+      - the Scratching
+      - the Never-seen
+      - the Plaster-thin
+      - the Between-floors
+      - the Lath-limbed
+      - the Muffled
+      - the Chimney-voiced
+      Rank:
+      - Lord of the Hollow Wall
+      - Warden of Behindplaster
+      - Scratcher of the Scratching Room
+      - Matriarch of the Lath Gallery
+      - Keeper of the Chimney Void
+      Legend:
+      - Who Scratched the Same Wall for Ninety Years
+      - Who Was Plastered Over and Scratched Through
+      - 'Who Learned the Family''s Names Through the Wall'
+      - Who Came Out Once at the Wake
+      - Who Grew Through Three Storeys Between the Laths
+      Occupational:
+      - Wall-scratcher
+      - Void-dweller
+      - Lath-climber
+    CitySuffixes:
+      Capital:
+      - wall
+      - gallery
+      - void
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - room
+      - plaster
+      - floor
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 3
+  - BiomeID: 18062707
+    Weight: 2
+  - BiomeID: 621224406
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 1

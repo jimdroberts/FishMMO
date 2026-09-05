@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Plague Walker
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Pestilent dead that carry the sickness — rasping, coughing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Plag
+      - Cough
+      - Rasp
+      - Fest
+      - Blist
+      - Pox
+      - Sick
+      - Mor
+      - Ras
+      - Buboe
+      - Fev
+      - Wheez
+      - Rot
+      - Sput
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - i
+      Codas:
+      - oth
+      - ash
+      - urn
+      - ek
+      - ull
+      - orr
+      - eth
+      - ug
+      Middles:
+      - ur
+      - og
+      - el
+      - ak
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - urn
+      - ull
+      MasculineSuffixes:
+      - oth
+      - ek
+      - orr
+      Description: 'Pestilent dead that carry the sickness — rasping, coughing names'
+      Tags:
+      - Plague-names
+      - Cart-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Plague Pit
+    - Feverhollow
+    - the Cart Road
+    - the Shut Gate
+    - Poxfield
+    - the Burning Ground
+    - the Last Ward
+    Titles:
+      Honorific:
+      - Pit-warden
+      - Cart-driver
+      - Gate-shutter
+      - Ward-lord
+      - Fever-elder
+      - Pox-mother
+      - Cough-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Pestilent
+      - the Buboe-marked
+      - the Cart-following
+      - the Fever-hot
+      - the Never-cured
+      - the Gate-shut-against
+      - the Rasping
+      - the Sickness-bringing
+      Rank:
+      - Warden of the Plague Pit
+      - Driver of the Cart Road
+      - Shutter of the Shut Gate
+      - Lord of the Last Ward
+      - Elder of Feverhollow
+      Legend:
+      - Who Walked from Village to Village and Left None Standing
+      - Who Rose from the Plague Pit Still Coughing
+      - Who Drove the Cart Through the Shut Gate
+      - Who Breathed on the Bishop
+      - Who Burned and Walked Out of the Fire
+      Occupational:
+      - Cart-driver
+      - Pit-filler
+      - Gate-knocker
+    CitySuffixes:
+      Capital:
+      - pit
+      - ward
+      - field
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - hollow
+      - road
+      - gate
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 525873855
+    Weight: 3
+  - BiomeID: -2037808285
+    Weight: 1.5
+  - BiomeID: -857237992
+    Weight: 1.5
+  - BiomeID: 719042512
+    Weight: 1

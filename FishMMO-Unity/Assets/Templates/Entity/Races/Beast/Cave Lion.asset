@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Cave Lion
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Pale lion of the deep caves — echoing, low names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Cav
+      - Pal
+      - Rho
+      - Leo
+      - Umb
+      - Gol
+      - Ras
+      - Nem
+      - Tar
+      - Dus
+      - Sar
+      - Kor
+      - Hol
+      - Vash
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - e
+      Codas:
+      - ar
+      - 'on'
+      - ath
+      - um
+      - orr
+      - ir
+      - ael
+      - ess
+      Middles:
+      - ra
+      - 'on'
+      - ul
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - ael
+      MasculineSuffixes:
+      - ar
+      - 'on'
+      - um
+      Description: 'Pale lion of the deep caves — echoing, low names'
+      Tags:
+      - Echo-names
+      - Pale-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bone Chamber
+    - Paleden
+    - the Echo Kill
+    - the Torch-shy Passage
+    - Roarvault
+    - the Deep Larder
+    - the Painted Wall
+    Titles:
+      Honorific:
+      - Vault-lord
+      - Chamber-matriarch
+      - Echo-roarer
+      - Passage-stalker
+      - Larder-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Pale-maned
+      - the Torch-shy
+      - the Echo-roaring
+      - the Cave-born
+      - the Bone-strewn
+      - the Deep-sleeping
+      - the Painted
+      - the Never-seen-by-day
+      Rank:
+      - Lord of Roarvault
+      - Matriarch of the Bone Chamber
+      - Stalker of the Torch-shy Passage
+      - Keeper of the Deep Larder
+      - Roarer of the Echo Kill
+      Legend:
+      - Who Ate the Torch-bearers and Left the Torches
+      - Who Roared the Cave-in Down on the Miners
+      - Who Slept on the Painted Wall for an Age
+      - Who Dragged the Bear into the Dark
+      - Who Was Painted by the Ones It Ate
+      Occupational:
+      - Passage-stalker
+      - Bone-piler
+      - Dark-hunter
+    CitySuffixes:
+      Capital:
+      - vault
+      - chamber
+      - den
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - passage
+      - larder
+      - wall
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 1.5
+  - BiomeID: 1275219499
+    Weight: 1
+  - BiomeID: -540190004
+    Weight: 1

@@ -1,0 +1,122 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Ettin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Two-headed argument — stereo-speech
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gug
+      - Mog
+      - Bark
+      - Thraz
+      - Krug
+      - Vogg
+      - Bol
+      - Dum
+      - Gu
+      - Mu
+      - Bu
+      - Thru
+      Nuclei:
+      - a
+      - o
+      - u
+      - uk
+      - ok
+      Codas:
+      - grok
+      - zog
+      - bash
+      - thrak
+      - mok
+      - uk
+      - ok
+      - ak
+      Middles:
+      - og
+      - uk
+      - oz
+      - ug
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ogga
+      - uga
+      MasculineSuffixes:
+      - ok
+      - ug
+      - oz
+      Description: Two-headed argument — stereo-speech
+      Tags:
+      - Twin-names
+      - Bicephalic-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - Twin-Peak Pass
+    - the Two-Heads Camp
+    - Bickering Glen
+    Titles:
+      Honorific:
+      - Both-Heads
+      - Twin-chief
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Two-voiced
+      - the Self-arguing
+      Rank:
+      - Chief of Twin-Peak Pass
+      Legend:
+      - Whose Two Heads Made Peace on Their Deathbed
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: -138594552
+    Weight: 1

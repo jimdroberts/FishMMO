@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bearfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Broad, slow-spoken bear people — deep names with rounded ends'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bru
+      - Grom
+      - Hon
+      - Urs
+      - Bor
+      - Mag
+      - Rum
+      - Kod
+      - Bal
+      - Thum
+      - Orm
+      - Gruff
+      - Dun
+      - Ber
+      Nuclei:
+      - a
+      - o
+      - u
+      - oo
+      - ar
+      Codas:
+      - un
+      - ar
+      - oth
+      - um
+      - ak
+      - orr
+      - ash
+      - ug
+      Middles:
+      - ro
+      - um
+      - ar
+      - 'on'
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - una
+      - orra
+      MasculineSuffixes:
+      - un
+      - ak
+      - orr
+      Description: 'Broad, slow-spoken bear people — deep names with rounded ends'
+      Tags:
+      - Honey-names
+      - Den-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Honey Hollow
+    - Broadden
+    - the Salmon Ledge
+    - the Winter Sleep
+    - Clawmark Oak
+    - the Berry Slope
+    - Thundercave
+    Titles:
+      Honorific:
+      - Den-elder
+      - Honey-warden
+      - Ledge-keeper
+      - Sleep-guardian
+      - Oak-marker
+      - Berry-mother
+      - Thunder-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Broad-shouldered
+      - the Honey-fond
+      - the Slow to Rise
+      - the Winter-sleeping
+      - the Salmon-quick
+      - the Thick-furred
+      - the Deep-voiced
+      - the Oak-scratching
+      Rank:
+      - Elder of Broadden
+      - Warden of the Honey Hollow
+      - Keeper of the Salmon Ledge
+      - Guardian of the Winter Sleep
+      - Marker of Clawmark Oak
+      Legend:
+      - Who Carried the Fallen Tree Off the Trapped Cub
+      - Who Slept Through the War and Woke to Peace
+      - Who Caught Forty Salmon in a Morning
+      - Who Marked the Oak Higher Than Any Bear
+      - Who Shared the Honey with the Starving Village
+      Occupational:
+      - Honey-gatherer
+      - Salmon-fisher
+      - Den-builder
+      - Berry-picker
+      - Log-lifter
+    CitySuffixes:
+      Capital:
+      - den
+      - hollow
+      - ledge
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - den
+      - slope
+      - cave
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: 144196518
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1.5
+  - BiomeID: -138594552
+    Weight: 1

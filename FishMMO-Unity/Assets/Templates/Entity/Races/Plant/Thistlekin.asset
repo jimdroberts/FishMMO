@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Thistlekin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Plant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Prickly small folk of the waste ground — spiky, buzzing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Thist
+      - Prick
+      - Burr
+      - Spik
+      - Nett
+      - Down
+      - Purp
+      - Bris
+      - Sting
+      - Fluf
+      - Seed
+      - Wast
+      - Cro
+      - Gors
+      Nuclei:
+      - i
+      - e
+      - a
+      - u
+      - o
+      Codas:
+      - le
+      - et
+      - ick
+      - ish
+      - ash
+      - ock
+      - ee
+      - er
+      Middles:
+      - li
+      - ri
+      - el
+      - is
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ie
+      - et
+      MasculineSuffixes:
+      - ick
+      - ock
+      - er
+      Description: 'Prickly small folk of the waste ground — spiky, buzzing names'
+      Tags:
+      - Prickle-names
+      - Waste-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Waste Ground
+    - Burrhollow
+    - the Purple Field
+    - the Seed Wind
+    - Pricklecourt
+    - the Goldfinch Larder
+    - the Roadside Verge
+    Titles:
+      Honorific:
+      - Ground-warden
+      - Hollow-elder
+      - Field-purpler
+      - Wind-seeder
+      - Court-master
+      - Burr-mother
+      - Down-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Prickly
+      - the Purple-crowned
+      - the Waste-ground-born
+      - the Wind-seeded
+      - the Never-grazed
+      - the Burr-sticking
+      - the Downy
+      - the Goldfinch-friend
+      Rank:
+      - Warden of the Waste Ground
+      - Elder of Burrhollow
+      - Purpler of the Purple Field
+      - Seeder of the Seed Wind
+      - Master of Pricklecourt
+      Legend:
+      - Who Grew on the Battlefield and Was the Only Thing That Did
+      - 'Who Stuck to the King''s Cloak and Rode to the Capital'
+      - Who Fed the Goldfinches Through the Famine
+      - Who Seeded the Whole Verge in a Single Gust
+      - 'Who Pricked the Invader''s Bare Feet at the Ford'
+      Occupational:
+      - Seed-scatterer
+      - Verge-keeper
+      - Burr-sticker
+      - Finch-feeder
+    CitySuffixes:
+      Capital:
+      - ground
+      - court
+      - field
+      Fortress:
+      - bramble
+      - thorn
+      - hedge
+      - wall
+      Village:
+      - hollow
+      - verge
+      - larder
+      Port:
+      - bank
+      - reed
+      - ford
+      Sacred:
+      - oak
+      - ring
+      - root
+      - well
+      Ruin:
+      - rot
+      - stump
+      - blight
+      - ash
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1156965030
+    Weight: 3
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: -540190004
+    Weight: 1

@@ -1,0 +1,109 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Undead Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Undead
+  Titles:
+    Honorific:
+    - Barrow-lord
+    - Grave-warden
+    - Crypt-keeper
+    - Shroud-bearer
+    - Bone-elder
+    - Night-herald
+    - Cold-hand
+    - Dust-speaker
+    - Candle-snuffer
+    - Tomb-sentinel
+    - Pale Chancellor
+    HonorificMasculine:
+    - Deathless Lord
+    - Barrow-king
+    HonorificFeminine:
+    - Deathless Lady
+    - Barrow-queen
+    Epithet:
+    - the Undying
+    - the Grave-cold
+    - the Hollow-eyed
+    - the Unburied
+    - the Ever-watchful
+    - the Dust-crowned
+    - the Long-dead
+    - the Shroud-wrapped
+    - the Twice-buried
+    - the Sleepless
+    - the Bone-white
+    - the Candle-lit
+    - the Unmourned
+    - the Patient Dead
+    - the Coffin-born
+    - the Winding-sheeted
+    - the Cold-breathed
+    - the Forgotten and Returned
+    - the Worm-wise
+    - the Grave-loyal
+    - the Tomb-silent
+    - the Death-denied
+    - the Rot-proof
+    - the Night-walking
+    - the Old Bones
+    Rank:
+    - Lord of the Barrow Downs
+    - Warden of the Silent Crypt
+    - Keeper of the Forgotten Vault
+    - Master of the Hollow Tower
+    - Marshal of the Grave Road
+    - Reeve of the Bone Orchard
+    - Chancellor of the Cold Chapel
+    - Hangman of Gallows Hill
+    - Sentinel of the Black Cairn
+    - Ferryman of the Shroud Marsh
+    - Steward of the Sleeping Halls
+    - Bearer of the Last Candle
+    Legend:
+    - Who Rose on the Third Night
+    - Who Would Not Stay Buried
+    - Who Walked Out of the Bone Orchard
+    - Who Held the Grave Road Against the Living
+    - Who Snuffed the Last Candle
+    - Who Remembered Every Name in the Crypt
+    - Who Died at Gallows Hill and Came Back for the Rope
+    - Who Guarded the Vault for a Thousand Years
+    - 'Who Answered the Necromancer''s Call and Ate Him'
+    - Who Wept Dust
+    - Who Wore the Winding-sheet as a Crown
+    - Who Cursed the Bell that Would Not Toll
+    Occupational:
+    - Grave-digger
+    - Bone-sorter
+    - Shroud-weaver
+    - Coffin-wright
+    - Candle-keeper
+    - Crypt-sweeper
+    - Tomb-scribe
+    - Bell-toller
+  Places:
+  - the Barrow Downs
+  - the Silent Crypt
+  - the Hollow Tower
+  - the Grave Road
+  - the Bone Orchard
+  - the Cold Chapel
+  - the Forgotten Vault
+  - the Gallows Hill
+  - the Black Cairn
+  - the Shroud Marsh
+  - the Sleeping Halls
+  - the Last Candle

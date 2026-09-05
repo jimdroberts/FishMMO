@@ -1,0 +1,124 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Serpentfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Snake-blooded humanoids ranging from scaled priests to fully serpentine abominations, bound to a decayed empire and the hungry serpent gods it still feeds.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ssi
+      - Sss
+      - Sar
+      - Yth
+      - Sne
+      - Zhi
+      - Ssyth
+      - Nag
+      - Vess
+      - Hiss
+      - Thes
+      - Zar
+      Nuclei:
+      - a
+      - i
+      - y
+      - iss
+      - e
+      Codas:
+      - ssa
+      - th
+      - ri
+      - zha
+      - nosh
+      - ith
+      - yss
+      - ess
+      Middles:
+      - ssi
+      - ya
+      - nu
+      - th
+      SyllMin: 3
+      SyllMax: 4
+      FeminineSuffixes:
+      - issa
+      - ra
+      - neth
+      MasculineSuffixes:
+      - oth
+      - ros
+      - iss
+      Description: Hissing serpent-tongue — ancient temple script
+      Tags:
+      - Coiled-names
+      - Serpent-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Spiral Ziggurat
+    - Coil-Pillar Temple
+    - the Fang-Pools
+    - Sarnath of the Serpents
+    Titles:
+      Honorific:
+      - High-Priest of the Coils
+      - Serpent-born
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Fanged
+      - the Coil-patterned
+      - the Poison-tongued
+      Rank:
+      - Abomination of the Spiral Ziggurat
+      Legend:
+      - 'Who Swallowed a Rival''s Whole Temple'
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1640008461
+    Weight: 2
+  - BiomeID: 1056999638
+    Weight: 2
+  - BiomeID: 719042512
+    Weight: 1
+  - BiomeID: -941601695
+    Weight: 0.5

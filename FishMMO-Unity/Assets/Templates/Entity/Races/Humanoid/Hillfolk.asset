@@ -1,0 +1,181 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hillfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Terraced-hill farmers — short, hearty names ending in stops'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bob
+      - Tam
+      - Ged
+      - Wat
+      - Hob
+      - Nib
+      - Rud
+      - Pip
+      - Col
+      - Mag
+      - Dod
+      - Hen
+      - Kit
+      - Rob
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      Codas:
+      - kin
+      - ock
+      - et
+      - ard
+      - ott
+      - ley
+      - in
+      - ob
+      Middles:
+      - er
+      - in
+      - ol
+      - ot
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ie
+      - et
+      MasculineSuffixes:
+      - ock
+      - ard
+      - ob
+      Description: 'Terraced-hill farmers — short, hearty names ending in stops'
+      Tags:
+      - Terrace-names
+      - Harvest-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Ten Terraces
+    - Applecross
+    - the Mill Bend
+    - Harrowfield
+    - the Cider House
+    - Long Furrow
+    - the Harvest Cross
+    Titles:
+      Honorific:
+      - Terrace-reeve
+      - Harvest-master
+      - Mill-keeper
+      - Orchard-warden
+      - Hedge-elder
+      - Cider-mother
+      - Furrow-judge
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Broad-backed
+      - the Apple-cheeked
+      - the Early-rising
+      - the Hedge-wise
+      - the Cider-merry
+      - the Plough-strong
+      - the Weather-eyed
+      - the Never-hungry
+      Rank:
+      - Reeve of the Ten Terraces
+      - Master of the Mill Bend
+      - Warden of Applecross
+      - Judge of the Harvest Cross
+      - Elder of Harrowfield
+      Legend:
+      - Who Brought In the Harvest Before the Flood
+      - Who Grew the Apple That Fed a Village
+      - Who Built the Ten Terraces Alone
+      - Who Kept the Mill Turning Through the Drought
+      - Who Out-drank the Hill Giant
+      Occupational:
+      - Ploughman
+      - Orchard-keeper
+      - Cider-maker
+      - Hedge-layer
+      - Miller
+    CitySuffixes:
+      Capital:
+      - ford
+      - field
+      - cross
+      - bend
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - cot
+      - croft
+      - furrow
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 3
+  - BiomeID: -2037808285
+    Weight: 3
+  - BiomeID: 1655673647
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1

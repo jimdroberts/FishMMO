@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Frost Wolf
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'White wolves of the snow-line — howling, ice-clear names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Isk
+      - Ulf
+      - Frost
+      - Howl
+      - Skol
+      - Rime
+      - Vint
+      - Gar
+      - Hrim
+      - Snar
+      - Kal
+      - Wulf
+      - Bran
+      - Sleet
+      Nuclei:
+      - a
+      - i
+      - u
+      - ei
+      - o
+      Codas:
+      - ak
+      - ir
+      - ulf
+      - ost
+      - ith
+      - ar
+      - und
+      - eth
+      Middles:
+      - ik
+      - ol
+      - ur
+      - ra
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ild
+      - ka
+      MasculineSuffixes:
+      - ak
+      - ulf
+      - und
+      Description: 'White wolves of the snow-line — howling, ice-clear names'
+      Tags:
+      - Howl-names
+      - Snow-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the White Pack-stone
+    - Icehowl
+    - the Snow-line Den
+    - the Frozen Kill
+    - Rimeridge
+    - the Long Night Run
+    - the Blizzard Hollow
+    Titles:
+      Honorific:
+      - Pack-alpha
+      - Snow-line-lord
+      - Blizzard-runner
+      - Kill-warden
+      - Rime-matriarch
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the White-pelted
+      - the Blizzard-howling
+      - the Snow-line-born
+      - the Night-running
+      - the Ice-toothed
+      - the Never-cold
+      - the Pack-first
+      - the Frost-eyed
+      Rank:
+      - Alpha of Icehowl
+      - Lord of the Snow-line Den
+      - Runner of the Long Night Run
+      - Warden of the Frozen Kill
+      - Matriarch of Rimeridge
+      Legend:
+      - Who Ran the Sledge Down Across the Ice
+      - Who Howled Through the Longest Night
+      - 'Who Led the Pack Around the Frost Giant''s Hall'
+      - Who Dug the Frozen Kill Out of the Drift
+      - Who Fought the Snow Troll for the Den
+      Occupational:
+      - Sledge-chaser
+      - Drift-digger
+      - Night-runner
+    CitySuffixes:
+      Capital:
+      - den
+      - ridge
+      - stone
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - hollow
+      - kill
+      - run
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1645414801
+    Weight: 3
+  - BiomeID: 187749268
+    Weight: 2
+  - BiomeID: 144196518
+    Weight: 2
+  - BiomeID: -212386137
+    Weight: 1

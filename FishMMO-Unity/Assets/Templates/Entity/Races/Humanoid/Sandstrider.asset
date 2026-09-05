@@ -1,0 +1,183 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sandstrider
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Desert nomads — long vowels and clipped ends, names carried between wells'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sah
+      - Rak
+      - Tam
+      - Ib
+      - Zal
+      - Kher
+      - Nam
+      - Ul
+      - Dar
+      - Sef
+      - Yal
+      - Hab
+      - Mir
+      - Qas
+      Nuclei:
+      - a
+      - i
+      - u
+      - aa
+      - ee
+      - oo
+      Codas:
+      - im
+      - ar
+      - esh
+      - ud
+      - an
+      - ir
+      - oum
+      - ath
+      - eq
+      Middles:
+      - ra
+      - li
+      - um
+      - ha
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ima
+      - ira
+      MasculineSuffixes:
+      - im
+      - ar
+      - oud
+      Description: 'Desert nomads — long vowels and clipped ends, names carried between wells'
+      Tags:
+      - Well-names
+      - Star-roads
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Seven Wells
+    - the Salt Caravan Road
+    - the Dune Sea
+    - Wind-gate
+    - the Star Compass
+    - the Red Cistern
+    - the Last Palm
+    Titles:
+      Honorific:
+      - Well-keeper
+      - Caravan-master
+      - Star-reader
+      - Dune-elder
+      - Water-judge
+      - Tent-mother
+      - Wind-speaker
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Sun-dark
+      - the Well-wise
+      - the Long-walking
+      - the Sand-blind
+      - the Star-guided
+      - the Dune-born
+      - the Thirst-proof
+      - the Cool of Night
+      Rank:
+      - Keeper of the Seven Wells
+      - Master of the Salt Caravan
+      - Judge of the Red Cistern
+      - Reader of the Star Compass
+      - Warden of Wind-gate
+      Legend:
+      - Who Crossed the Dune Sea Without Water
+      - Who Found the Eighth Well
+      - Who Outwaited the Sandstorm for Nine Days
+      - Who Traded Salt for a Kingdom
+      - Who Led the Caravan by Starlight Alone
+      Occupational:
+      - Camel-driver
+      - Well-digger
+      - Salt-cutter
+      - Tent-weaver
+      - Star-navigator
+    CitySuffixes:
+      Capital:
+      - well
+      - oasis
+      - gate
+      - caravanserai
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - tents
+      - camp
+      - cistern
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -941601695
+    Weight: 3
+  - BiomeID: 992717471
+    Weight: 2
+  - BiomeID: 240303103
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1

@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Flesh Weaver
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Things that stitch bodies into new shapes — wet, needling names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Stit
+      - Weav
+      - Seam
+      - Need
+      - Flesh
+      - Graft
+      - Sut
+      - Vresh
+      - Ithl
+      - Nyth
+      - Ossr
+      - Thra
+      - Kthu
+      - Mur
+      Nuclei:
+      - i
+      - u
+      - a
+      - e
+      - o
+      Codas:
+      - ith
+      - ull
+      - iss
+      - ax
+      - oth
+      - ek
+      - yl
+      - urq
+      Middles:
+      - ss
+      - th
+      - ri
+      - ul
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - iss
+      - yl
+      MasculineSuffixes:
+      - ax
+      - ull
+      - urq
+      Description: 'Things that stitch bodies into new shapes — wet, needling names'
+      Tags:
+      - Stitch-names
+      - Graft-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Stitching Room
+    - Graftvault
+    - the Seam Gallery
+    - the Wet Table
+    - Needledeep
+    - the Unfinished Ward
+    - the Pattern Book
+    Titles:
+      Honorific:
+      - Room-stitcher
+      - Vault-grafter
+      - Gallery-seamer
+      - Table-keeper
+      - Ward-warden
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Stitching
+      - the Graft-handed
+      - the Wet-fingered
+      - the Pattern-mad
+      - the Never-finished
+      - the Seam-showing
+      - the Needle-limbed
+      - the Shape-changing
+      Rank:
+      - Stitcher of the Stitching Room
+      - Grafter of Graftvault
+      - Seamer of the Seam Gallery
+      - Keeper of the Wet Table
+      - Warden of the Unfinished Ward
+      Legend:
+      - Who Stitched the Regiment Into One Soldier
+      - Who Grafted Wings Onto the Bishop
+      - Who Was Unstitched and Sewed Itself Back
+      - Who Filled the Pattern Book with the Village
+      - Who Made the Perfect Shape and Ate It
+      Occupational:
+      - Body-stitcher
+      - Graft-maker
+      - Pattern-keeper
+    CitySuffixes:
+      Capital:
+      - room
+      - vault
+      - gallery
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - table
+      - ward
+      - book
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -830221931
+    Weight: 3
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: 173642607
+    Weight: 2
+  - BiomeID: -857237992
+    Weight: 1

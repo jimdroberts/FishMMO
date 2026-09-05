@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Frostling
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Small cold-sprites of the winter window — tinkling, chill names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fro
+      - Isk
+      - Rime
+      - Chi
+      - Glis
+      - Kri
+      - Sil
+      - Snow
+      - Nix
+      - Hoar
+      - Sleet
+      - Brist
+      - Twin
+      - Pell
+      Nuclei:
+      - i
+      - e
+      - a
+      - ei
+      - y
+      Codas:
+      - ith
+      - le
+      - ik
+      - ine
+      - el
+      - ist
+      - ee
+      - yn
+      Middles:
+      - li
+      - ri
+      - ki
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ith
+      MasculineSuffixes:
+      - ik
+      - el
+      - yn
+      Description: 'Small cold-sprites of the winter window — tinkling, chill names'
+      Tags:
+      - Frost-names
+      - Window-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Frost Window
+    - Iciclehollow
+    - the Cold Sill
+    - the Snow Bed
+    - Rimewell
+    - the Chill Court
+    - the First Snowflake
+    Titles:
+      Honorific:
+      - Window-warden
+      - Sill-herald
+      - Snow-keeper
+      - Chill-master
+      - Flake-elder
+      - Frost-mother
+      - Rime-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Tinkling
+      - the Window-frosting
+      - the Chill-fingered
+      - the Snow-born
+      - the Never-warm
+      - the Icicle-hanging
+      - the Brittle
+      - the First-flake-woken
+      Rank:
+      - Warden of the Frost Window
+      - Herald of the Cold Sill
+      - Keeper of the Snow Bed
+      - Master of the Chill Court
+      - Elder of the First Snowflake
+      Legend:
+      - Who Frosted Every Window of the City in One Night
+      - Who Hung the Longest Icicle from the Bell Tower
+      - 'Who Chilled the Baron''s Bath'
+      - Who Hid Spring Under the Snow Bed
+      - Who Was the First Snowflake of the Year
+      Occupational:
+      - Window-froster
+      - Icicle-hanger
+      - Snow-keeper
+    CitySuffixes:
+      Capital:
+      - window
+      - court
+      - well
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - hollow
+      - sill
+      - bed
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1645414801
+    Weight: 3
+  - BiomeID: 187749268
+    Weight: 2
+  - BiomeID: 1018971064
+    Weight: 1.5
+  - BiomeID: 144196518
+    Weight: 1

@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Frostsprite
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Winter fey who paint the frost — tinkling, brittle names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fro
+      - Isk
+      - Rime
+      - Glis
+      - Kri
+      - Sil
+      - Snow
+      - Twin
+      - Bri
+      - Sleet
+      - Nix
+      - Hoar
+      - Chi
+      - Pell
+      Nuclei:
+      - i
+      - e
+      - a
+      - ei
+      - y
+      Codas:
+      - ith
+      - le
+      - ik
+      - ine
+      - el
+      - ist
+      - ee
+      - yn
+      Middles:
+      - li
+      - ri
+      - ki
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ith
+      MasculineSuffixes:
+      - ik
+      - el
+      - yn
+      Description: 'Winter fey who paint the frost — tinkling, brittle names'
+      Tags:
+      - Frost-names
+      - Window-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Frost Window
+    - Icicle Court
+    - the Rime Meadow
+    - Snowlight
+    - the Frozen Pond
+    - the Hoar Gate
+    - Sleetfall
+    Titles:
+      Honorific:
+      - Frost-painter
+      - Window-herald
+      - Icicle-warden
+      - Rime-elder
+      - Pond-keeper
+      - Snow-mother
+      - Hoar-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Frost-fingered
+      - the Brittle
+      - the Window-painting
+      - the Gone-by-spring
+      - the Icicle-bright
+      - the Cold-quick
+      - the Snow-light
+      - the Rime-crowned
+      Rank:
+      - Herald of Icicle Court
+      - Painter of the Frost Window
+      - Warden of the Rime Meadow
+      - Keeper of the Frozen Pond
+      - Elder of Snowlight
+      Legend:
+      - Who Painted Ferns on Every Window in the City
+      - Who Froze the Waterfall Mid-fall
+      - Who Hid Spring in an Icicle
+      - Who Skated the Frozen Pond Into a Map
+      - Who Melted at the First Kiss and Came Back Next Winter
+      Occupational:
+      - Frost-painter
+      - Icicle-hanger
+      - Pond-freezer
+      - Snowflake-cutter
+    CitySuffixes:
+      Capital:
+      - court
+      - window
+      - meadow
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - pond
+      - light
+      - fall
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 1645414801
+    Weight: 3
+  - BiomeID: 187749268
+    Weight: 2
+  - BiomeID: -212386137
+    Weight: 1.5
+  - BiomeID: 144196518
+    Weight: 1

@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Nightkin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Cave-city dwellers — hushed names, dark vowels, no hard endings'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Nym
+      - Vel
+      - Shol
+      - Dus
+      - Mir
+      - Sel
+      - Umb
+      - Lorn
+      - Hush
+      - Kae
+      - Ven
+      - Thal
+      - Sil
+      - Orr
+      Nuclei:
+      - o
+      - u
+      - a
+      - i
+      - oo
+      Codas:
+      - en
+      - ol
+      - ur
+      - ish
+      - an
+      - ae
+      - orm
+      - el
+      Middles:
+      - ol
+      - un
+      - ir
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ae
+      - ira
+      MasculineSuffixes:
+      - en
+      - ur
+      - orm
+      Description: 'Cave-city dwellers — hushed names, dark vowels, no hard endings'
+      Tags:
+      - Lantern-names
+      - Echo-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Lantern Market
+    - Echo Hall
+    - the Blind Stair
+    - the Glow Gardens
+    - Deepwell
+    - the Whisper Gallery
+    - the Mushroom Terraces
+    Titles:
+      Honorific:
+      - Lantern-warden
+      - Echo-speaker
+      - Stair-keeper
+      - Glow-tender
+      - Deep-reeve
+      - Whisper-mother
+      - Fungus-master
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Wide-eyed
+      - the Soft-footed
+      - the Lantern-born
+      - the Echo-wise
+      - the Sun-shy
+      - the Deep-patient
+      - the Glow-touched
+      - the Never-lost in the Dark
+      Rank:
+      - Warden of the Lantern Market
+      - Speaker of Echo Hall
+      - Keeper of the Blind Stair
+      - Reeve of Deepwell
+      - Tender of the Glow Gardens
+      Legend:
+      - Who Mapped the Whisper Gallery by Ear
+      - Who Lit the Lantern Market with a Single Flame
+      - Who Climbed the Blind Stair Carrying the Sick
+      - Who Grew the Mushroom Terraces
+      - Who Saw the Sun and Chose the Dark
+      Occupational:
+      - Lantern-maker
+      - Mushroom-farmer
+      - Echo-mapper
+      - Glow-moss-tender
+      - Stair-cutter
+    CitySuffixes:
+      Capital:
+      - hall
+      - well
+      - gallery
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - hollow
+      - terrace
+      - lamp
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -830221931
+    Weight: 1
+  - BiomeID: 1018971064
+    Weight: 0.5
+  - BiomeID: -138594552
+    Weight: 0.5

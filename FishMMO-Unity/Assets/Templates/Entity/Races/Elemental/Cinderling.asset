@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Cinderling
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Small fire-sprites of the hearth and forge — popping, spitting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Cind
+      - Pop
+      - Spit
+      - Emb
+      - Spark
+      - Ash
+      - Flick
+      - Kal
+      - Sizz
+      - Crack
+      - Sear
+      - Puff
+      - Glow
+      - Coal
+      Nuclei:
+      - i
+      - a
+      - o
+      - e
+      - u
+      Codas:
+      - ik
+      - ith
+      - el
+      - ash
+      - ok
+      - et
+      - ing
+      - er
+      Middles:
+      - li
+      - ri
+      - ol
+      - ik
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ie
+      MasculineSuffixes:
+      - ik
+      - ok
+      - er
+      Description: 'Small fire-sprites of the hearth and forge — popping, spitting names'
+      Tags:
+      - Cinder-names
+      - Hearth-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Hearth Grate
+    - Emberhollow
+    - the Forge Chimney
+    - the Spark Bed
+    - Cinderwell
+    - the Bellows Court
+    - the Last Coal
+    Titles:
+      Honorific:
+      - Grate-warden
+      - Chimney-herald
+      - Spark-keeper
+      - Bellows-master
+      - Coal-elder
+      - Hearth-mother
+      - Forge-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Popping
+      - the Spark-quick
+      - the Hearth-born
+      - the Chimney-climbing
+      - the Never-out
+      - the Coal-red
+      - the Spitting
+      - the Bellows-fed
+      Rank:
+      - Warden of the Hearth Grate
+      - Herald of the Forge Chimney
+      - Keeper of the Spark Bed
+      - Master of the Bellows Court
+      - Elder of the Last Coal
+      Legend:
+      - Who Kept the Hearth Lit Through the Winter of Knives
+      - 'Who Set the Baker''s Beard Alight and Was Forgiven'
+      - Who Climbed the Chimney and Lit the Beacon
+      - Who Hid in the Last Coal Until Spring
+      - 'Who Sparked the Forge That Made the King''s Sword'
+      Occupational:
+      - Hearth-keeper
+      - Forge-lighter
+      - Coal-tender
+      - Chimney-sweep
+    CitySuffixes:
+      Capital:
+      - hearth
+      - forge
+      - court
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - hollow
+      - well
+      - grate
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 2
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: 155940630
+    Weight: 1

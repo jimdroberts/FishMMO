@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Eelfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Sinuous mud-channel people — slick, sibilant names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Eel
+      - Sli
+      - Mur
+      - Sss
+      - Wrig
+      - Nyss
+      - Vel
+      - Sar
+      - Lur
+      - Glis
+      - Thal
+      - Ish
+      - Kel
+      - Mor
+      Nuclei:
+      - i
+      - e
+      - a
+      - u
+      - oo
+      Codas:
+      - ish
+      - iss
+      - el
+      - ur
+      - ath
+      - ess
+      - ith
+      - oon
+      Middles:
+      - li
+      - ss
+      - ur
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - iss
+      - ess
+      MasculineSuffixes:
+      - el
+      - ur
+      - ath
+      Description: 'Sinuous mud-channel people — slick, sibilant names'
+      Tags:
+      - Slick-names
+      - Channel-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Mud Channel
+    - Slickhollow
+    - the Eel Pit
+    - the Night Migration
+    - Wriggleford
+    - the Silt Court
+    - the Drowned Willow
+    Titles:
+      Honorific:
+      - Channel-elder
+      - Pit-warden
+      - Silt-reeve
+      - Night-swimmer
+      - Willow-keeper
+      - Slick-mother
+      - Migration-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Slick-skinned
+      - the Mud-hidden
+      - the Night-swimming
+      - the Never-held
+      - the Silt-born
+      - the Long-bodied
+      - the Shock-touched
+      - the Channel-wise
+      Rank:
+      - Elder of the Mud Channel
+      - Warden of the Eel Pit
+      - Reeve of the Silt Court
+      - Keeper of the Drowned Willow
+      - Swimmer of the Night Migration
+      Legend:
+      - 'Who Slipped Through the Fisher''s Hands Ninety Times'
+      - Who Swam to the Far Sea and Back to Breed
+      - Who Shocked the Pike Dead
+      - Who Lived in the Drowned Willow a Century
+      - Who Crossed the Meadow Overland in the Rain
+      Occupational:
+      - Channel-digger
+      - Silt-sifter
+      - Night-fisher
+      - Willow-tender
+    CitySuffixes:
+      Capital:
+      - channel
+      - pit
+      - court
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - hollow
+      - ford
+      - silt
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 888339253
+    Weight: 3
+  - BiomeID: 2117371294
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 2
+  - BiomeID: 719042512
+    Weight: 1

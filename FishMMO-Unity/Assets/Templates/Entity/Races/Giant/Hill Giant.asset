@@ -1,0 +1,122 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hill Giant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Plain, thumping, dim-witted giant-speech'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mog
+      - Grog
+      - Bork
+      - Gul
+      - Orm
+      - Dum
+      - Baz
+      - Grun
+      - Bom
+      - Mo
+      - Gro
+      - Bo
+      Nuclei:
+      - a
+      - o
+      - u
+      - ok
+      - uk
+      Codas:
+      - mak
+      - dur
+      - bog
+      - gar
+      - lob
+      - ok
+      - uk
+      - ak
+      Middles:
+      - ma
+      - bu
+      - gr
+      - om
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - uga
+      - mug
+      MasculineSuffixes:
+      - ak
+      - og
+      - mar
+      Description: 'Plain, thumping, dim-witted giant-speech'
+      Tags:
+      - Dung-names
+      - Mound-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - Mud Mound
+    - Bogbelly Camp
+    - the Tall Hill
+    - Gumpton
+    Titles:
+      Honorific:
+      - Big-Chief
+      - Mound-boss
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Stinky
+      - the Slow
+      - the Ham-fisted
+      Rank:
+      - Chief of the Tall Hill
+      Legend:
+      - Who Flattened the Village by Sitting on It
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 3
+  - BiomeID: 1655673647
+    Weight: 1
+  - BiomeID: 1156965030
+    Weight: 1

@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Molefolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Blind-eyed tunnelling mole people — soft, earthy names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mol
+      - Dig
+      - Tun
+      - Wor
+      - Bur
+      - Sof
+      - Vel
+      - Nub
+      - Dun
+      - Clod
+      - Gru
+      - Tal
+      - Pud
+      - Loam
+      Nuclei:
+      - u
+      - o
+      - a
+      - e
+      - i
+      Codas:
+      - ub
+      - un
+      - et
+      - ol
+      - ash
+      - um
+      - ith
+      - ock
+      Middles:
+      - u
+      - o
+      - el
+      - um
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ie
+      - um
+      MasculineSuffixes:
+      - ub
+      - un
+      - ock
+      Description: 'Blind-eyed tunnelling mole people — soft, earthy names'
+      Tags:
+      - Tunnel-names
+      - Root-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Deep Furrow
+    - Molehill Manor
+    - the Root Cellar Road
+    - the Worm Market
+    - Softloam
+    - the Blind Turn
+    - Tunnelend
+    Titles:
+      Honorific:
+      - Tunnel-elder
+      - Furrow-warden
+      - Cellar-keeper
+      - Worm-reeve
+      - Loam-master
+      - Dig-mother
+      - Root-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Blind-eyed
+      - the Soft-furred
+      - the Ever-digging
+      - the Loam-brown
+      - the Root-wise
+      - the Never-above
+      - the Worm-fed
+      - the Broad-pawed
+      Rank:
+      - Elder of the Deep Furrow
+      - Warden of Molehill Manor
+      - Keeper of the Root Cellar Road
+      - Reeve of the Worm Market
+      - Master of the Blind Turn
+      Legend:
+      - Who Tunnelled Under the Castle Wall in a Night
+      - Who Found the Buried King by Touch
+      - Who Dug Through the Mountain Because It Was There
+      - Who Ate a Thousand Worms and Wanted More
+      - Who Surfaced Once and Did Not Like It
+      Occupational:
+      - Tunneller
+      - Worm-farmer
+      - Root-cutter
+      - Cellar-digger
+      - Loam-sifter
+    CitySuffixes:
+      Capital:
+      - furrow
+      - manor
+      - market
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - hill
+      - turn
+      - end
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -2037808285
+    Weight: 3
+  - BiomeID: 1655673647
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 1.5
+  - BiomeID: -540190004
+    Weight: 1

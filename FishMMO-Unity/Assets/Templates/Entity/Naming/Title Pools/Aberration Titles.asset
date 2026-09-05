@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Aberration Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Aberration
+  Titles:
+    Honorific:
+    - Whisperer
+    - Eye-lord
+    - Deep-dreamer
+    - Wall-walker
+    - Brood-master
+    - Hunger
+    - Unseen
+    - Mind-eater
+    - Spawn-keeper
+    - Gnawer
+    - Wrong-one
+    - Many-voiced
+    HonorificMasculine:
+    - Sire of the Pool
+    HonorificFeminine:
+    - Dam of the Pool
+    Epithet:
+    - the Many-eyed
+    - the Formless
+    - the Ever-hungry
+    - the Dream-born
+    - the Wrong-shaped
+    - the Wall-crawling
+    - the Whispering
+    - the Unblinking
+    - the Sideways
+    - the Spawn-heavy
+    - the Mind-touched
+    - the Glass-skinned
+    - the Unnamed
+    - the Gnawing
+    - the Light-fearing
+    - the Slow-dissolving
+    - the Patient in the Dark
+    - the Between-things
+    - the Mouth-that-Speaks
+    - the Nine-limbed
+    - the Never-seen-twice
+    - the Deep-dreaming
+    - the Pool-born
+    Rank:
+    - Lord of the Eye Pit
+    - Dreamer of the Dreaming Deep
+    - Keeper of the Spawning Pool
+    - Warden of the Hollow Behind the Wall
+    - Voice of the Whisper Vault
+    - Master of the Unlit Chamber
+    - Gnawer of the Gnawed Passage
+    - Climber of the Sideways Stair
+    - Watcher at the Wrong Angle
+    - Mother of the Glass Womb
+    - Host of the Hunger Hall
+    - Sleeper in the Nameless Crack
+    Legend:
+    - Who Ate the Cartographer and Learned the Map
+    - Who Dreamed the Tower into the Sea
+    - Who Whispered a City Mad
+    - Who Came Through the Wall That Had No Door
+    - Who Dissolved the Iron Door
+    - Who Was Seen Once and Never Again
+    - Who Hatched in the Well and Drank the Village
+    - Who Spoke in the Voice of the Dead Priest
+    - Who Filled the Vault with Eyes
+    - Who Was Cut in Half and Became Two
+    - Who Learned Every Name and Forgot Its Own
+    - Who Waited in the Dark for a Thousand Years
+    Occupational:
+    - Brood-tender
+    - Wall-borer
+    - Dream-eater
+    - Pool-stirrer
+    - Eye-collector
+    - Whisper-carrier
+  Places:
+  - the Wrong Angle
+  - the Eye Pit
+  - the Dreaming Deep
+  - the Hollow Behind the Wall
+  - the Unlit Chamber
+  - the Spawning Pool
+  - the Gnawed Passage
+  - the Whisper Vault
+  - the Sideways Stair
+  - the Nameless Crack
+  - the Glass Womb
+  - the Hunger Hall

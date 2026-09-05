@@ -21,6 +21,8 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		private readonly Button button;
 		private readonly string title;
 		private List<string> choices;
+		/// <summary>Optional group per choice (parallel to <see cref="choices"/>); null shows a flat list.</summary>
+		private List<string> groups;
 		private int index;
 
 		/// <summary>Raised when the selection changes, with the new display text.</summary>
@@ -34,10 +36,12 @@ namespace FishMMO.Shared.NameGeneration.Editor
 
 		public IReadOnlyList<string> Choices => choices;
 
-		public SearchableDropdownField(string title, IEnumerable<string> choices, int initialIndex = 0)
+		/// <param name="groups">Optional group name per choice; choices sharing a group nest under it in the menu (search still spans everything).</param>
+		public SearchableDropdownField(string title, IEnumerable<string> choices, int initialIndex = 0, IEnumerable<string> groups = null)
 		{
 			this.title = string.IsNullOrEmpty(title) ? "Select" : title;
 			this.choices = choices == null ? new List<string>() : new List<string>(choices);
+			this.groups = groups == null ? null : new List<string>(groups);
 			index = this.choices.Count == 0 ? -1 : Mathf.Clamp(initialIndex, 0, this.choices.Count - 1);
 
 			AddToClassList("ng-picker");
@@ -47,9 +51,10 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		}
 
 		/// <summary>Replace the choice list, selecting <paramref name="selectIndex"/>.</summary>
-		public void SetChoices(IEnumerable<string> newChoices, int selectIndex = 0)
+		public void SetChoices(IEnumerable<string> newChoices, int selectIndex = 0, IEnumerable<string> newGroups = null)
 		{
 			choices = newChoices == null ? new List<string>() : new List<string>(newChoices);
+			groups = newGroups == null ? null : new List<string>(newGroups);
 			index = choices.Count == 0 ? -1 : Mathf.Clamp(selectIndex, 0, choices.Count - 1);
 			button.text = Value;
 		}
@@ -109,7 +114,8 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			}
 
 			Rect anchor = button.worldBound;
-			var dropdown = new StringAdvancedDropdown(new AdvancedDropdownState(), title, choices, OnPicked)
+			var dropdown = new StringAdvancedDropdown(new AdvancedDropdownState(), title, choices,
+				groups != null && groups.Count == choices.Count ? groups : null, OnPicked)
 			{
 				// Keep the popup at least as wide as the field it drops from.
 				MinimumSize = new Vector2(Mathf.Max(anchor.width, 220f), 320f),
@@ -129,11 +135,12 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			SetIndex(picked);
 		}
 
-		/// <summary>Flat, searchable list of strings.</summary>
+		/// <summary>Searchable list of strings, flat or nested one level under group names.</summary>
 		private sealed class StringAdvancedDropdown : AdvancedDropdown
 		{
 			private readonly string title;
 			private readonly List<string> items;
+			private readonly List<string> groups;
 			private readonly Action<AdvancedDropdownItem> onPicked;
 
 			public Vector2 MinimumSize
@@ -143,19 +150,43 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			}
 
 			public StringAdvancedDropdown(AdvancedDropdownState state, string title,
-				List<string> items, Action<AdvancedDropdownItem> onPicked) : base(state)
+				List<string> items, List<string> groups, Action<AdvancedDropdownItem> onPicked) : base(state)
 			{
 				this.title = title;
 				this.items = items;
+				this.groups = groups;
 				this.onPicked = onPicked;
 			}
 
 			protected override AdvancedDropdownItem BuildRoot()
 			{
 				var root = new AdvancedDropdownItem(title);
+				if (groups == null)
+				{
+					for (int i = 0; i < items.Count; i++)
+					{
+						root.AddChild(new IndexedItem(items[i], i));
+					}
+					return root;
+				}
+
+				// One submenu per group, in order of first appearance; ungrouped entries stay at the top level.
+				var byGroup = new Dictionary<string, AdvancedDropdownItem>(StringComparer.Ordinal);
 				for (int i = 0; i < items.Count; i++)
 				{
-					root.AddChild(new IndexedItem(items[i], i));
+					string group = groups[i];
+					if (string.IsNullOrEmpty(group))
+					{
+						root.AddChild(new IndexedItem(items[i], i));
+						continue;
+					}
+					if (!byGroup.TryGetValue(group, out AdvancedDropdownItem parent))
+					{
+						parent = new AdvancedDropdownItem(group);
+						byGroup[group] = parent;
+						root.AddChild(parent);
+					}
+					parent.AddChild(new IndexedItem(items[i], i));
 				}
 				return root;
 			}

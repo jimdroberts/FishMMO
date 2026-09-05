@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Poltergeist
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Furniture-hurling house spirits — rattling, banging names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Rat
+      - Bang
+      - Knock
+      - Clat
+      - Thud
+      - Rap
+      - Hurl
+      - Slam
+      - Crash
+      - Tip
+      - Tap
+      - Rumbl
+      - Shak
+      - Clink
+      Nuclei:
+      - a
+      - o
+      - u
+      - i
+      - e
+      Codas:
+      - et
+      - ock
+      - ash
+      - ump
+      - ith
+      - orr
+      - ang
+      - eth
+      Middles:
+      - a
+      - o
+      - ur
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ora
+      MasculineSuffixes:
+      - ock
+      - orr
+      - ang
+      Description: 'Furniture-hurling house spirits — rattling, banging names'
+      Tags:
+      - Rattle-names
+      - House-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Rattling Attic
+    - Bangfield House
+    - the Thrown Chair
+    - the Knocking Wall
+    - Slamgate
+    - the Upstairs Room
+    - the Loud Cellar
+    Titles:
+      Honorific:
+      - Attic-lord
+      - Wall-knocker
+      - Chair-thrower
+      - Cellar-warden
+      - Room-elder
+      - House-mother
+      - Bang-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Furniture-hurling
+      - the Wall-knocking
+      - the Never-quiet
+      - the Attic-born
+      - the Door-slamming
+      - the Plate-breaking
+      - the Unseen
+      - the Loud
+      Rank:
+      - Lord of the Rattling Attic
+      - Knocker of the Knocking Wall
+      - Thrower of the Thrown Chair
+      - Warden of the Loud Cellar
+      - Elder of Bangfield House
+      Legend:
+      - 'Who Threw the Bishop''s Chair Through the Window'
+      - Who Knocked the Alphabet Every Night for a Year
+      - Who Broke Every Plate in the House Twice
+      - Who Slammed the Door on the Exorcist
+      - Who Moved the Whole House Three Feet Left
+      Occupational:
+      - Chair-thrower
+      - Wall-knocker
+      - Plate-breaker
+    CitySuffixes:
+      Capital:
+      - house
+      - attic
+      - cellar
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - room
+      - wall
+      - gate
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 3
+  - BiomeID: 18062707
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 1.5
+  - BiomeID: 621224406
+    Weight: 1

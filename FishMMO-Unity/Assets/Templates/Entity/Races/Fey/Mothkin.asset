@@ -1,0 +1,176 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Mothkin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Dusk-winged fey drawn to flame — hushed, powdery names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Moth
+      - Dus
+      - Vel
+      - Sil
+      - Nyx
+      - Fla
+      - Wisp
+      - Lun
+      - Pow
+      - Ash
+      - Tw
+      - Hush
+      - Sel
+      - Umb
+      Nuclei:
+      - a
+      - u
+      - o
+      - e
+      - y
+      Codas:
+      - ith
+      - wing
+      - ell
+      - ust
+      - en
+      - ae
+      - orr
+      - yn
+      Middles:
+      - us
+      - el
+      - in
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ae
+      - ust
+      MasculineSuffixes:
+      - en
+      - orr
+      - wing
+      Description: 'Dusk-winged fey drawn to flame — hushed, powdery names'
+      Tags:
+      - Dusk-names
+      - Flame-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Candle Shrine
+    - Duskmeadow
+    - the Powder Court
+    - the Hearth Window
+    - Lampfall
+    - the Velvet Hollow
+    - the Moon Lantern
+    Titles:
+      Honorific:
+      - Dusk-herald
+      - Flame-warden
+      - Powder-elder
+      - Window-watcher
+      - Lamp-keeper
+      - Velvet-mother
+      - Moon-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Dust-winged
+      - the Flame-drawn
+      - the Dusk-born
+      - the Soft-spoken
+      - the Lamp-circling
+      - the Velvet-eyed
+      - the Night-still
+      - the Candle-brave
+      Rank:
+      - Herald of Duskmeadow
+      - Warden of the Candle Shrine
+      - Elder of the Powder Court
+      - Keeper of the Moon Lantern
+      - Watcher of the Hearth Window
+      Legend:
+      - Who Flew Into the Fire and Out Again
+      - Who Carried the Message Across the Dark Wood
+      - 'Who Powdered the Sleeping Giant''s Eyes'
+      - Who Circled the Lighthouse Until Dawn
+      - Who Was Mistaken for the Moon
+      Occupational:
+      - Powder-gatherer
+      - Lamp-circler
+      - Dusk-scout
+      - Silk-spinner
+    CitySuffixes:
+      Capital:
+      - court
+      - shrine
+      - lantern
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - hollow
+      - meadow
+      - window
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: -2037808285
+    Weight: 1

@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Reefborn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Coral-grown people of the warm shallows — bright, clicking names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Cor
+      - Ree
+      - Bri
+      - Pol
+      - Ana
+      - Tid
+      - Shel
+      - Kal
+      - Sun
+      - Lir
+      - Ael
+      - Fan
+      - Ory
+      - Nem
+      Nuclei:
+      - a
+      - i
+      - o
+      - e
+      - ee
+      Codas:
+      - ith
+      - el
+      - ora
+      - ee
+      - ell
+      - ine
+      - al
+      - ess
+      Middles:
+      - li
+      - ri
+      - al
+      - ee
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ora
+      MasculineSuffixes:
+      - el
+      - al
+      - ess
+      Description: 'Coral-grown people of the warm shallows — bright, clicking names'
+      Tags:
+      - Coral-names
+      - Sun-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Coral Court
+    - Brightreef
+    - the Sun Shelf
+    - the Anemone Gardens
+    - Polypholm
+    - the Warm Shallows
+    - the Parrotfish Market
+    Titles:
+      Honorific:
+      - Reef-elder
+      - Shelf-warden
+      - Garden-keeper
+      - Shallows-reeve
+      - Market-herald
+      - Coral-mother
+      - Sun-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Coral-grown
+      - the Sun-warmed
+      - the Bright-scaled
+      - the Reef-born
+      - the Never-cold
+      - the Garden-tending
+      - the Colour-bright
+      - the Shallows-quick
+      Rank:
+      - Elder of the Coral Court
+      - Warden of the Sun Shelf
+      - Keeper of the Anemone Gardens
+      - Reeve of the Warm Shallows
+      - Herald of the Parrotfish Market
+      Legend:
+      - Who Grew a Reef Around the Sunken City
+      - Who Held the Shelf Against the Bleaching
+      - Who Traded Pearls with the Surface and Was Cheated Only Once
+      - Who Tended the Gardens Through the Storm Season
+      - Who Sang the Coral to Spawn
+      Occupational:
+      - Coral-grower
+      - Pearl-farmer
+      - Shell-trader
+      - Garden-tender
+      - Shelf-guard
+    CitySuffixes:
+      Capital:
+      - court
+      - reef
+      - shelf
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - holm
+      - shallows
+      - gardens
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1552223677
+    Weight: 3
+  - BiomeID: 1508835452
+    Weight: 2
+  - BiomeID: 1496239796
+    Weight: 1.5
+  - BiomeID: 1384639345
+    Weight: 1

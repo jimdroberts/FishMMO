@@ -1,0 +1,136 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Imp
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Shrill, mocking — familiar-speech'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grik
+      - Piz
+      - Niz
+      - Skib
+      - Trik
+      - Bex
+      - Viz
+      - Piq
+      - Gri
+      - Pi
+      - Ni
+      - Ski
+      - Tri
+      - Bi
+      - Vi
+      - Gre
+      - Pe
+      - Ne
+      Nuclei:
+      - i
+      - e
+      - a
+      - ik
+      - ek
+      Codas:
+      - tik
+      - rix
+      - pix
+      - zik
+      - bit
+      - ik
+      - ek
+      - ak
+      - ix
+      - ex
+      - ax
+      - it
+      Middles:
+      - ik
+      - zi
+      - pi
+      - ig
+      - eg
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - ix
+      - a
+      - ette
+      MasculineSuffixes:
+      - ik
+      - us
+      - et
+      Description: 'Shrill, mocking — familiar-speech'
+      Tags:
+      - Familiar-bonds
+      - Pact-names
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - Scrib Hole
+    - the Inkwell
+    - Pactwick
+    - 'Shrieker''s Nook'
+    Titles:
+      Honorific:
+      - Pocket-devil
+      HonorificMasculine:
+      - Little Lord
+      HonorificFeminine:
+      - Little Lady
+      Epithet:
+      - the Needletongued
+      - the Sticky-fingered
+      - the Inkstained
+      Rank:
+      - Familiar of the Third Circle
+      Legend:
+      - 'Who Pocketed the Wizard''s True Name'
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 1
+  - BiomeID: 155940630
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 1

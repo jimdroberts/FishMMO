@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Nightmare
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Flame-maned black steeds of the pit — galloping, ember-hoofed names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Nox
+      - Mar
+      - Gal
+      - Emb
+      - Dus
+      - Shad
+      - Hoof
+      - Bral
+      - Cind
+      - Vor
+      - Mor
+      - Hael
+      - Sulph
+      - Ryn
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - ei
+      Codas:
+      - oth
+      - ath
+      - und
+      - orr
+      - eth
+      - ir
+      - ael
+      - ull
+      Middles:
+      - or
+      - an
+      - ae
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - und
+      MasculineSuffixes:
+      - oth
+      - orr
+      - ull
+      Description: 'Flame-maned black steeds of the pit — galloping, ember-hoofed names'
+      Tags:
+      - Hoof-names
+      - Flame-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Ember Stable
+    - the Sulphur Road
+    - the Night Gallop
+    - the Ash Paddock
+    - Hoofpit
+    - the Burning Bridle
+    - the Last Ride
+    Titles:
+      Honorific:
+      - Stable-lord
+      - Road-runner
+      - Gallop-leader
+      - Paddock-warden
+      - Bridle-breaker
+      - Ember-mother
+      - Ash-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Flame-maned
+      - the Ember-hoofed
+      - the Night-galloping
+      - the Never-bridled
+      - the Smoke-breathed
+      - the Pit-born
+      - the Rider-burning
+      - the Shadow-black
+      Rank:
+      - Lord of the Ember Stable
+      - Runner of the Sulphur Road
+      - Leader of the Night Gallop
+      - Warden of the Ash Paddock
+      - Breaker of the Burning Bridle
+      Legend:
+      - Who Carried the Damned Knight Nine Nights Without Stopping
+      - Who Burned the Bridle Off
+      - Who Galloped Across the Sea on Its Own Smoke
+      - Who Threw the Devil Who Tried to Ride
+      - Who Left Hoofprints of Fire on the Cathedral Floor
+      Occupational:
+      - Rider-carrier
+      - Road-runner
+      - Stable-guard
+    CitySuffixes:
+      Capital:
+      - stable
+      - paddock
+      - pit
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - road
+      - gallop
+      - bridle
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: -1042859854
+    Weight: 1.5
+  - BiomeID: 599899035
+    Weight: 1

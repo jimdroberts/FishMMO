@@ -1,0 +1,107 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Outsider Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Outsider
+  Titles:
+    Honorific:
+    - Herald
+    - Emissary
+    - Oath-binder
+    - Contract-keeper
+    - Gate-warden
+    - Choir-leader
+    - Flame-bearer
+    - Judge of Souls
+    - Tempter
+    - Bright Sentinel
+    - Ledger-lord
+    - Wing-marshal
+    HonorificMasculine:
+    - Prince of the Pit
+    - Lord of the Choir
+    HonorificFeminine:
+    - Princess of the Pit
+    - Lady of the Choir
+    Epithet:
+    - the Oath-bound
+    - the Bright-winged
+    - the Sulphur-breathed
+    - the Contract-wise
+    - the Unfallen
+    - the Fallen
+    - the Brass-tongued
+    - the Radiant
+    - the Ledger-eyed
+    - the Ever-tempting
+    - the Sworn to Silence
+    - the Flame-crowned
+    - the Merciless
+    - the Merciful
+    - the Gate-keeping
+    - the Twice-damned
+    - the Star-forged
+    - the Ash-winged
+    - the Judgement-bearing
+    - the Honey-voiced
+    - the Chain-bound
+    - the Dawn-blessed
+    - the Night-sold
+    Rank:
+    - Warden of the Brass Gate
+    - Keeper of the Burning Ledger
+    - Voice of the Choir of Dawn
+    - Master of the Pit of Contracts
+    - Climber of the Seven Stairs
+    - Marshal of the Court of Wings
+    - Heir of the Ash Throne
+    - Guardian of the Silver Threshold
+    - Sentinel of the Bright Bastion
+    - Toll-taker of the Sulphur Road
+    - Binder of the Hall of Oaths
+    - 'Judge at the Ninth Circle''s Edge'
+    Legend:
+    - Who Bought a Kingdom for a Single Soul
+    - Who Guarded the Silver Threshold Against the Host
+    - Who Read Every Name in the Burning Ledger
+    - Who Refused the Fall
+    - Who Fell and Climbed Back
+    - Who Sang at the Dawn of the World
+    - Who Tricked the Tempter
+    - Who Held the Brass Gate Shut for an Age
+    - Who Carried the Oath Through Fire
+    - Who Bargained with the Bright Ones and Won
+    - Who Broke the Chain of Contracts
+    - Who Wept for the Damned
+    Occupational:
+    - Contract-scribe
+    - Oath-witness
+    - Gate-keeper
+    - Soul-weigher
+    - Choir-singer
+    - Flame-carrier
+    - Ledger-keeper
+  Places:
+  - the Brass Gate
+  - the Burning Ledger
+  - the Choir of Dawn
+  - the Pit of Contracts
+  - the Seven Stairs
+  - the Court of Wings
+  - the Ash Throne
+  - the Silver Threshold
+  - 'the Ninth Circle''s Edge'
+  - the Bright Bastion
+  - the Sulphur Road
+  - the Hall of Oaths

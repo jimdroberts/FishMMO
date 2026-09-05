@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Headless Rider
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Riders who carry their heads or none — galloping, hollow names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gal
+      - Hoof
+      - Ride
+      - Mor
+      - Nox
+      - Dul
+      - Brand
+      - Dus
+      - Thun
+      - Ker
+      - Vor
+      - Sar
+      - Rond
+      - Hael
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - ae
+      Codas:
+      - oth
+      - ath
+      - und
+      - orr
+      - eth
+      - ir
+      - ael
+      - ull
+      Middles:
+      - or
+      - an
+      - ae
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - und
+      MasculineSuffixes:
+      - oth
+      - orr
+      - ull
+      Description: 'Riders who carry their heads or none — galloping, hollow names'
+      Tags:
+      - Gallop-names
+      - Road-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Night Road
+    - Hoofbeat Bridge
+    - the Dropped Head
+    - the Coach Gate
+    - Gallowsford
+    - 'the Black Mare''s Stable'
+    - the Last Mile
+    Titles:
+      Honorific:
+      - Road-rider
+      - Bridge-crosser
+      - Gate-keeper
+      - Stable-lord
+      - Mile-warden
+      - Night-mother
+      - Hoof-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Headless
+      - the Head-carrying
+      - the Night-galloping
+      - the Bridge-crossing
+      - the Coach-chasing
+      - the Never-dismounting
+      - the Hollow-laughing
+      - the Road-bound
+      Rank:
+      - Rider of the Night Road
+      - Crosser of Hoofbeat Bridge
+      - Keeper of the Coach Gate
+      - 'Lord of the Black Mare''s Stable'
+      - Warden of the Last Mile
+      Legend:
+      - Who Rode the Coach Off the Bridge
+      - Who Carried Their Head Under One Arm and Laughed with It
+      - Who Chased the Schoolmaster Nine Miles
+      - Who Rode Every Night Since the Battle
+      - Who Lost the Head and Kept the Horse
+      Occupational:
+      - Road-rider
+      - Coach-chaser
+      - Gate-knocker
+    CitySuffixes:
+      Capital:
+      - road
+      - bridge
+      - gate
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - ford
+      - stable
+      - mile
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: 621224406
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 1

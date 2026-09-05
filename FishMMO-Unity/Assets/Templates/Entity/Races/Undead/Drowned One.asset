@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Drowned One
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'The waterlogged dead who walk the shore — gurgling, bloated names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Glub
+      - Drown
+      - Bloat
+      - Wrack
+      - Salt
+      - Mur
+      - Sunk
+      - Kel
+      - Brine
+      - Gurg
+      - Sod
+      - Wael
+      - Mor
+      - Dros
+      Nuclei:
+      - o
+      - u
+      - a
+      - oo
+      - aw
+      Codas:
+      - oth
+      - ug
+      - ull
+      - ash
+      - oon
+      - orr
+      - ub
+      - eth
+      Middles:
+      - ub
+      - oo
+      - ur
+      - og
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - oob
+      - ull
+      MasculineSuffixes:
+      - oth
+      - ug
+      - orr
+      Description: 'The waterlogged dead who walk the shore — gurgling, bloated names'
+      Tags:
+      - Drowned-names
+      - Tide-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - 'the Widows'' Beach'
+    - the Drowned Chapel
+    - the Wreck Walk
+    - Saltgrave
+    - the Tide-line
+    - the Bell Wreck
+    - the Sodden Pier
+    Titles:
+      Honorific:
+      - Shore-walker
+      - Wreck-warden
+      - Tide-sentinel
+      - Chapel-keeper
+      - Pier-lord
+      - Bell-ringer
+      - Salt-elder
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Waterlogged
+      - the Bloated
+      - the Tide-returned
+      - the Salt-preserved
+      - the Weed-haired
+      - the Bell-hearing
+      - the Never-buried
+      - the Sodden
+      Rank:
+      - 'Walker of the Widows'' Beach'
+      - Warden of the Wreck Walk
+      - Sentinel of the Tide-line
+      - Keeper of the Drowned Chapel
+      - Lord of the Sodden Pier
+      Legend:
+      - Who Walked Out of the Sea Nine Years After the Wreck
+      - Who Rang the Bell Wreck at Every Storm
+      - Who Dragged the Captain Down to Join the Crew
+      - Who Guarded the Drowned Chapel Against the Tide
+      - Who Returned Every Tide for a Century
+      Occupational:
+      - Wreck-walker
+      - Bell-ringer
+      - Tide-sentinel
+      - Pier-haunter
+    CitySuffixes:
+      Capital:
+      - chapel
+      - pier
+      - walk
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - beach
+      - line
+      - grave
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1384639345
+    Weight: 3
+  - BiomeID: 646460858
+    Weight: 2
+  - BiomeID: 888339253
+    Weight: 1.5
+  - BiomeID: 173642607
+    Weight: 1

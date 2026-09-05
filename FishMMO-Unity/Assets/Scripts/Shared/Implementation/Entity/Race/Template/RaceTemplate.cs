@@ -141,6 +141,15 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Phonology, cultures, titles, places and city suffixes the name generator uses for this race.
 		/// </summary>
+		/// <summary>
+		/// Broad family the race belongs to — Humanoid, Undead, Aquatic, Elemental… Title pools
+		/// serve categories, the Dashboard groups by it, and spawners can ask for a category. The
+		/// asset's folder under Templates/Entity/Races mirrors it for browsing.
+		/// </summary>
+		[Header("Classification")]
+		[Tooltip("Broad family: Humanoid, Giant, Fey, Beastfolk, Beast, Draconic, Aquatic, Undead, Construct, Elemental, Outsider, Plant, Aberration. Title pools serve categories.")]
+		public string Category;
+
 		[Header("Naming")]
 		public RaceNamingData Naming = new RaceNamingData();
 

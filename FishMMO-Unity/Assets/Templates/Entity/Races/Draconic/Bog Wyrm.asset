@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bog Wyrm
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Draconic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Wingless mire-wyrms — gurgling, sunken names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Murk
+      - Slud
+      - Wyr
+      - Gulm
+      - Brog
+      - Fenn
+      - Thurk
+      - Orm
+      - Mudd
+      - Skum
+      - Glob
+      - Drab
+      - Bul
+      - Sarn
+      Nuclei:
+      - u
+      - o
+      - a
+      - oo
+      - ug
+      Codas:
+      - orm
+      - ug
+      - oth
+      - umb
+      - ash
+      - urn
+      - ull
+      - og
+      Middles:
+      - ub
+      - um
+      - og
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - umb
+      - oog
+      MasculineSuffixes:
+      - orm
+      - ug
+      - urn
+      Description: 'Wingless mire-wyrms — gurgling, sunken names'
+      Tags:
+      - Mire-names
+      - Coil-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Sunken Roost
+    - Murkcoil
+    - the Drowned Hoard
+    - the Peat Nest
+    - Mireclaw
+    - the Bubbling Lair
+    - the Rotted Spire
+    Titles:
+      Honorific:
+      - Mire-wyrm
+      - Peat-lord
+      - Drowned-hoard-keeper
+      - Coil-matriarch
+      - Bubble-master
+      - Rot-warden
+      - Sunken-elder
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Mud-scaled
+      - the Wingless
+      - the Peat-breathing
+      - the Slow-coiling
+      - the Drowned-hoarding
+      - the Bubble-eyed
+      - the Rot-crowned
+      - the Never-surfacing
+      Rank:
+      - Lord of the Sunken Roost
+      - Keeper of the Drowned Hoard
+      - Matriarch of Murkcoil
+      - Master of the Bubbling Lair
+      - Warden of the Rotted Spire
+      Legend:
+      - Who Swallowed the Causeway Whole
+      - Who Slept Beneath the Village for a Century
+      - Who Breathed the Fever Fog
+      - Who Coiled the Barge Down into the Peat
+      - Who Hoarded Drowned Gold and Drowned Men
+      Occupational:
+      - Peat-breather
+      - Causeway-coiler
+      - Fog-maker
+      - Hoard-sinker
+    CitySuffixes:
+      Capital:
+      - roost
+      - coil
+      - spire
+      Fortress:
+      - crag
+      - ledge
+      - perch
+      - aerie
+      Village:
+      - nest
+      - lair
+      - claw
+      Port:
+      - shelf
+      - strand
+      - cove
+      Sacred:
+      - egg
+      - fire
+      - ash
+      - altar
+      Ruin:
+      - bones
+      - ash
+      - cinder
+      - fall
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 1.5
+  - BiomeID: -830221931
+    Weight: 1

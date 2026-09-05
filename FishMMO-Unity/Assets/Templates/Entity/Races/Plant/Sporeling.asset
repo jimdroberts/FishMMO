@@ -1,0 +1,164 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sporeling
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Plant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'A walking fungus, cap and all, that speaks in spore-clouds and tends vast rotting gardens beneath the earth.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Myc
+      - Spor
+      - Puff
+      - Mold
+      - Gill
+      - Cap
+      - Tru
+      - Mush
+      - Lich
+      - Fung
+      - My
+      - Spy
+      - Py
+      - Gy
+      - Cy
+      - Try
+      - Ly
+      - Fy
+      Nuclei:
+      - oo
+      - o
+      - u
+      - a
+      - ae
+      Codas:
+      - oom
+      - us
+      - ell
+      - ith
+      - or
+      - ax
+      - ule
+      - ora
+      - ym
+      - om
+      - um
+      - im
+      Middles:
+      - r
+      - m
+      - l
+      - ym
+      - om
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - a
+      - ella
+      MasculineSuffixes:
+      - us
+      - or
+      Description: 'Puffing, soft — muffled consonants'
+      Tags:
+      - Plant
+      - Monster
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Fungal Deep
+    - the Thorn Wall
+    - the Rot Garden
+    - the Choking Vine
+    - Mushroom Hollow
+    Titles:
+      Honorific:
+      - Old-root
+      - Spore-mother
+      - Thorn-elder
+      - Grove-warden
+      HonorificMasculine:
+      - Root-father
+      HonorificFeminine:
+      - Root-mother
+      Epithet:
+      - the Creeping
+      - the Overgrown
+      - the Rooted
+      - the Blooming
+      - the Choking
+      - the Patient
+      - the Thorned
+      - the Mossy
+      - the Spore-cloaked
+      - the Cap-crowned
+      Rank:
+      - Warden of the Fungal Deep
+      - Keeper of the Thorn Wall
+      - Elder of the Rot Garden
+      - Voice of the Choking Vine
+      Legend:
+      - Who Grew Through the Castle
+      - Who Strangled the Old Oak
+      - Who Bloomed in Winter
+      - Who Took the Village Back
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - grove
+      - bloom
+      Fortress:
+      - thorn
+      - wall
+      Village:
+      - patch
+      - hollow
+      Port:
+      - fen
+      Sacred:
+      - ring
+      Ruin:
+      - rot
+      - mould
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: -1640008461
+    Weight: 1.5
+  - BiomeID: -2077848218
+    Weight: 1
+  - BiomeID: -830221931
+    Weight: 1

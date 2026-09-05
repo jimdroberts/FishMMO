@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Dire Boar
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Monstrous tusked boar — grunting, brutal names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grun
+      - Tusk
+      - Bris
+      - Rut
+      - Gor
+      - Thack
+      - Snor
+      - Brak
+      - Wart
+      - Rund
+      - Hog
+      - Kar
+      - Bor
+      - Mud
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      Codas:
+      - ak
+      - usk
+      - ug
+      - orr
+      - ash
+      - unt
+      - ik
+      - ath
+      Middles:
+      - ur
+      - og
+      - ar
+      - un
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - usk
+      - ora
+      MasculineSuffixes:
+      - ak
+      - ug
+      - unt
+      Description: 'Monstrous tusked boar — grunting, brutal names'
+      Tags:
+      - Tusk-names
+      - Charge-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Broken Fence
+    - the Root Field
+    - the Deep Wallow
+    - Tuskbreak
+    - the Trampled Orchard
+    - the Killing Thicket
+    - Gorehollow
+    Titles:
+      Honorific:
+      - Terror of the Orchard
+      - Tusk-king
+      - Thicket-lord
+      - Wallow-master
+      - Fence-breaker
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Tusk-scarred
+      - the Fence-breaking
+      - the Orchard-ruining
+      - the Unstoppable
+      - the Mud-armoured
+      - the Hound-killer
+      - the Root-tearer
+      - the Charging
+      Rank:
+      - Terror of the Trampled Orchard
+      - King of the Root Field
+      - Lord of the Killing Thicket
+      - Master of the Deep Wallow
+      - Breaker of the Broken Fence
+      Legend:
+      - Who Killed Nine Hounds and the Huntsman
+      - Who Ploughed the Field by Accident
+      - 'Who Broke Through the Castle''s Kitchen Door'
+      - Who Was Speared Seven Times and Ran On
+      - 'Who Ate the Baron''s Orchard in a Week'
+      Occupational:
+      - Root-tearer
+      - Fence-breaker
+      - Wallow-digger
+    CitySuffixes:
+      Capital:
+      - thicket
+      - field
+      - wallow
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - hollow
+      - fence
+      - break
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: 719042512
+    Weight: 1
+  - BiomeID: -2037808285
+    Weight: 1

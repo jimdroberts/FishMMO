@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Stagfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Antlered forest people — proud, resonant names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Cer
+      - Hart
+      - Ant
+      - Bran
+      - Rowan
+      - Elk
+      - Vel
+      - Fal
+      - Orn
+      - Tal
+      - Hind
+      - Bell
+      - Roe
+      - Sar
+      Nuclei:
+      - a
+      - e
+      - o
+      - u
+      - ae
+      Codas:
+      - ath
+      - orn
+      - el
+      - und
+      - ael
+      - ith
+      - an
+      - ow
+      Middles:
+      - er
+      - al
+      - 'on'
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ind
+      MasculineSuffixes:
+      - orn
+      - und
+      - ath
+      Description: 'Antlered forest people — proud, resonant names'
+      Tags:
+      - Antler-names
+      - Glade-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bellowing Glade
+    - Hartsmere
+    - the Antler Ring
+    - the Rut Hill
+    - Velvetwood
+    - the Fern Court
+    - Roebank
+    Titles:
+      Honorific:
+      - Glade-lord
+      - Antler-elder
+      - Herd-warden
+      - Fern-reeve
+      - Rut-champion
+      - Hind-mother
+      - Hart-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Broad-antlered
+      - the Bellowing
+      - the Velvet-shed
+      - the Glade-born
+      - the High-stepping
+      - the Fern-quiet
+      - the Proud-necked
+      - the Never-cornered
+      Rank:
+      - Lord of the Bellowing Glade
+      - Elder of the Antler Ring
+      - Warden of Hartsmere
+      - Champion of the Rut Hill
+      - Reeve of Velvetwood
+      Legend:
+      - 'Who Locked Antlers with the King''s Champion and Won'
+      - Who Led the Herd Across the Frozen Mere
+      - Who Carried the Wounded Knight on Their Back
+      - Who Bellowed the Wolves Away
+      - Who Shed Antlers of Gold
+      Occupational:
+      - Herd-warden
+      - Antler-carver
+      - Fern-gatherer
+      - Glade-keeper
+      - Bark-stripper
+    CitySuffixes:
+      Capital:
+      - glade
+      - mere
+      - ring
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - bank
+      - court
+      - wood
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 2
+  - BiomeID: 144196518
+    Weight: 1

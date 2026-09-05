@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Phantom
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Half-seen apparitions — thin, fading names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Pha
+      - Vei
+      - Fad
+      - Mist
+      - Sha
+      - Umb
+      - Wan
+      - Dim
+      - Ghas
+      - Pal
+      - Ael
+      - Nyx
+      - Hush
+      - Lorn
+      Nuclei:
+      - a
+      - e
+      - i
+      - ae
+      - o
+      Codas:
+      - ith
+      - ael
+      - ess
+      - el
+      - orr
+      - ine
+      - eth
+      - ora
+      Middles:
+      - el
+      - ae
+      - li
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ine
+      MasculineSuffixes:
+      - el
+      - orr
+      - eth
+      Description: 'Half-seen apparitions — thin, fading names'
+      Tags:
+      - Fade-names
+      - Veil-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Fading Hall
+    - Veilcourt
+    - the Half-seen Stair
+    - the Cold Corridor
+    - Mistgallery
+    - the Empty Chair
+    - the Long Window
+    Titles:
+      Honorific:
+      - Hall-haunter
+      - Veil-warden
+      - Stair-walker
+      - Corridor-lord
+      - Gallery-elder
+      - Mist-mother
+      - Window-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Half-seen
+      - the Fading
+      - the Veil-thin
+      - the Corridor-walking
+      - the Cold-passing
+      - the Never-quite-there
+      - the Window-watching
+      - the Mist-born
+      Rank:
+      - Haunter of the Fading Hall
+      - Warden of Veilcourt
+      - Walker of the Half-seen Stair
+      - Lord of the Cold Corridor
+      - Elder of Mistgallery
+      Legend:
+      - Who Was Seen in Every Window of the Palace at Once
+      - Who Walked Through the Wall That Was Not There in Life
+      - Who Faded at the Question and Returned at the Answer
+      - Who Sat in the Empty Chair for a Century
+      - Who Passed Through the Wedding Unnoticed
+      Occupational:
+      - Corridor-walker
+      - Window-watcher
+      - Veil-keeper
+    CitySuffixes:
+      Capital:
+      - hall
+      - court
+      - gallery
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - stair
+      - corridor
+      - window
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 18062707
+    Weight: 3
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: -1693619367
+    Weight: 1.5
+  - BiomeID: 621224406
+    Weight: 1

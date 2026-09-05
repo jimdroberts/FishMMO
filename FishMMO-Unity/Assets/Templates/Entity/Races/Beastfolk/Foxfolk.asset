@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Foxfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Quick, clever fox people — bright, sly names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Vix
+      - Rey
+      - Tod
+      - Sly
+      - Kit
+      - Rus
+      - Fen
+      - Bri
+      - Nik
+      - Tam
+      - Zor
+      - Vul
+      - Pip
+      - Ren
+      Nuclei:
+      - i
+      - e
+      - a
+      - o
+      - u
+      Codas:
+      - ix
+      - en
+      - et
+      - ash
+      - ard
+      - el
+      - ick
+      - ory
+      Middles:
+      - ri
+      - el
+      - in
+      - ar
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ix
+      - ie
+      MasculineSuffixes:
+      - en
+      - et
+      - ard
+      Description: 'Quick, clever fox people — bright, sly names'
+      Tags:
+      - Sly-names
+      - Den-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Hen-house Road
+    - Slyden
+    - the Bramble Gate
+    - the Moonlit Field
+    - Foxford
+    - the Quick Hollow
+    - 'the Hunter''s Blind'
+    Titles:
+      Honorific:
+      - Den-master
+      - Road-warden
+      - Gate-elder
+      - Field-reeve
+      - Trick-mother
+      - Ford-keeper
+      - Hollow-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Quick-witted
+      - the Bright-brushed
+      - the Never-cornered
+      - the Hen-house-wise
+      - the Moon-red
+      - the Silent-pawed
+      - the Sly-eyed
+      - the Twice-escaped
+      Rank:
+      - Master of Slyden
+      - Warden of the Hen-house Road
+      - Elder of the Bramble Gate
+      - Reeve of the Moonlit Field
+      - Keeper of Foxford
+      Legend:
+      - 'Who Stole the Hunt''s Own Hounds'
+      - Who Talked the Farmer Out of His Hens
+      - 'Who Crossed the River on the Crocodile''s Back'
+      - 'Who Emptied the Hunter''s Blind of Hunters'
+      - Who Outfoxed the Fox-god
+      Occupational:
+      - Hen-taker
+      - Riddle-seller
+      - Trail-doubler
+      - Burrow-digger
+      - Pelt-brusher
+    CitySuffixes:
+      Capital:
+      - den
+      - ford
+      - gate
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - hollow
+      - field
+      - earth
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -439598380
+    Weight: 3
+  - BiomeID: -2037808285
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1.5
+  - BiomeID: 1655673647
+    Weight: 1

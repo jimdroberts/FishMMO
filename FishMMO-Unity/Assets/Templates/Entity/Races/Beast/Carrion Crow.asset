@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Carrion Crow
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Great crows that follow armies — cawing, harsh names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Kraw
+      - Caw
+      - Corv
+      - Rook
+      - Nok
+      - Grak
+      - Tal
+      - Bran
+      - Mor
+      - Ska
+      - Jak
+      - Hoar
+      - Rav
+      - Cluk
+      Nuclei:
+      - a
+      - o
+      - u
+      - aw
+      - ee
+      Codas:
+      - ak
+      - aw
+      - orr
+      - ith
+      - ash
+      - ek
+      - ull
+      - ock
+      Middles:
+      - ka
+      - ra
+      - or
+      - aw
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - aw
+      - ora
+      MasculineSuffixes:
+      - ak
+      - orr
+      - ock
+      Description: 'Great crows that follow armies — cawing, harsh names'
+      Tags:
+      - Caw-names
+      - Battle-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Battlefield Roost
+    - Gallowstree
+    - the Bone Field
+    - the Rook Tower
+    - Cawmoor
+    - the Siege Lines
+    - the Plague Pit
+    Titles:
+      Honorific:
+      - Roost-lord
+      - Gallows-sitter
+      - Field-cleaner
+      - Tower-matriarch
+      - Siege-follower
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Battle-following
+      - the Gallows-perched
+      - the Bone-picking
+      - the Black-winged
+      - the Never-hungry-after-war
+      - the Tower-roosting
+      - the Cawing
+      - the Death-wise
+      Rank:
+      - Lord of the Battlefield Roost
+      - Sitter of Gallowstree
+      - Cleaner of the Bone Field
+      - Matriarch of the Rook Tower
+      - Follower of the Siege Lines
+      Legend:
+      - Who Followed the Army from the Muster to the Grave
+      - 'Who Picked the Crown from the Dead King''s Head'
+      - Who Roosted on the Gallows Through the Plague Year
+      - Who Cawed the Ambush Warning and Was Ignored
+      - Who Ate Better Than the Generals
+      Occupational:
+      - Field-cleaner
+      - Gallows-watcher
+      - Army-follower
+    CitySuffixes:
+      Capital:
+      - roost
+      - tower
+      - field
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - tree
+      - moor
+      - pit
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 525873855
+    Weight: 3
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: -1951431387
+    Weight: 1.5
+  - BiomeID: -857237992
+    Weight: 1

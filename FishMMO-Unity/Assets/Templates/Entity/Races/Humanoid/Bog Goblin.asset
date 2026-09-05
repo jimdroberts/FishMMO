@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bog Goblin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Marsh goblins — squelching, nasal names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Snog
+      - Glib
+      - Muk
+      - Frog
+      - Nub
+      - Squib
+      - Grub
+      - Wib
+      - Plog
+      - Zub
+      - Nog
+      - Blib
+      - Skwee
+      - Drib
+      Nuclei:
+      - u
+      - o
+      - i
+      - oo
+      - a
+      Codas:
+      - ub
+      - og
+      - ib
+      - uk
+      - ash
+      - ip
+      - oog
+      - ek
+      Middles:
+      - ub
+      - og
+      - ib
+      - uk
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ib
+      - oog
+      MasculineSuffixes:
+      - ub
+      - og
+      - uk
+      Description: 'Marsh goblins — squelching, nasal names'
+      Tags:
+      - Squelch-names
+      - Frog-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Sunken Warren
+    - Frogmarket
+    - the Leech Path
+    - Mudnest
+    - the Stink Bog
+    - the Reed Ambush
+    - Squelchhollow
+    Titles:
+      Honorific:
+      - Bog-boss
+      - Frog-chief
+      - Leech-keeper
+      - Mud-elder
+      - Stink-warden
+      - Nest-mother
+      - Reed-lurker
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Mud-caked
+      - the Frog-eating
+      - the Never-dry
+      - the Leech-covered
+      - the Quick-in-the-reeds
+      - the Stink-proof
+      - the Squelching
+      - the Bog-born
+      Rank:
+      - Boss of the Sunken Warren
+      - Chief of Frogmarket
+      - Keeper of the Leech Path
+      - Elder of Mudnest
+      - Warden of the Stink Bog
+      Legend:
+      - Who Ate a Frog the Size of a Dog
+      - Who Sank the Knight in the Stink Bog
+      - Who Lived a Year Underwater Breathing Through a Reed
+      - 'Who Stole the Bog Troll''s Dinner'
+      - Who Built Frogmarket on a Floating Log
+      Occupational:
+      - Frog-catcher
+      - Reed-cutter
+      - Leech-farmer
+      - Mud-brick-maker
+      - Lure-maker
+    CitySuffixes:
+      Capital:
+      - warren
+      - nest
+      - bog
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - hollow
+      - hut
+      - reed
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: -830221931
+    Weight: 1

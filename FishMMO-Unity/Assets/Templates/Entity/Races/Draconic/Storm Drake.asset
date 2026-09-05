@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Storm Drake
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Draconic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Cloud-riding drakes of the high peaks — crackling, thunderous names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Thun
+      - Vael
+      - Skir
+      - Kor
+      - Bral
+      - Drak
+      - Aer
+      - Gal
+      - Ryn
+      - Tor
+      - Zar
+      - Vent
+      - Mael
+      - Hael
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - ei
+      Codas:
+      - ax
+      - ith
+      - orr
+      - und
+      - eth
+      - ir
+      - ael
+      - oss
+      Middles:
+      - or
+      - al
+      - ae
+      - ir
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ira
+      MasculineSuffixes:
+      - ax
+      - und
+      - orr
+      Description: 'Cloud-riding drakes of the high peaks — crackling, thunderous names'
+      Tags:
+      - Storm-names
+      - Wing-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Thunder Roost
+    - Galeclaw
+    - the Lightning Hoard
+    - the Cloud Ledge
+    - Stormreach
+    - the Wind Spire
+    - the Rain Nest
+    Titles:
+      Honorific:
+      - Storm-drake
+      - Gale-lord
+      - Lightning-warden
+      - Cloud-matriarch
+      - Wind-master
+      - Rain-keeper
+      - Thunder-elder
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Storm-scaled
+      - the Lightning-breathing
+      - the Cloud-riding
+      - the Thunder-voiced
+      - the Gale-winged
+      - the Rain-crowned
+      - the Peak-born
+      - the Never-grounded
+      Rank:
+      - Lord of the Thunder Roost
+      - Warden of the Lightning Hoard
+      - Matriarch of Galeclaw
+      - Master of the Wind Spire
+      - Keeper of the Rain Nest
+      Legend:
+      - Who Rode the Hurricane Across the Sea
+      - Who Struck the Tower with Its Own Lightning
+      - Who Nested in the Thunderhead
+      - Who Brought the Rain to the Dry Year
+      - Who Fought the Storm Giant Above the Clouds
+      Occupational:
+      - Storm-rider
+      - Lightning-catcher
+      - Cloud-scout
+      - Rain-caller
+    CitySuffixes:
+      Capital:
+      - roost
+      - reach
+      - spire
+      Fortress:
+      - crag
+      - ledge
+      - perch
+      - aerie
+      Village:
+      - ledge
+      - nest
+      - claw
+      Port:
+      - shelf
+      - strand
+      - cove
+      Sacred:
+      - egg
+      - fire
+      - ash
+      - altar
+      Ruin:
+      - bones
+      - ash
+      - cinder
+      - fall
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 1.5
+  - BiomeID: 1645414801
+    Weight: 1

@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Blightbloom
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Plant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Sickly flowers that spread rot — sweet, decaying names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bligh
+      - Rot
+      - Sweet
+      - Wilt
+      - Pet
+      - Fung
+      - Mold
+      - Bloo
+      - Sick
+      - Pol
+      - Dros
+      - Wan
+      - Fad
+      - Sap
+      Nuclei:
+      - i
+      - a
+      - e
+      - o
+      - oo
+      Codas:
+      - oom
+      - us
+      - ell
+      - ith
+      - or
+      - ax
+      - ule
+      - ora
+      Middles:
+      - r
+      - m
+      - l
+      - ot
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ora
+      - ell
+      MasculineSuffixes:
+      - us
+      - ith
+      - ax
+      Description: 'Sickly flowers that spread rot — sweet, decaying names'
+      Tags:
+      - Bloom-names
+      - Rot-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Rotting Garden
+    - Wiltmeadow
+    - the Sweet Grave
+    - the Blighted Orchard
+    - Petalrot
+    - the Sick Field
+    - the Last Bloom
+    Titles:
+      Honorific:
+      - Garden-rotter
+      - Meadow-wilter
+      - Grave-bloomer
+      - Orchard-blighter
+      - Field-sickener
+      - Petal-mother
+      - Rot-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Sweet-smelling
+      - the Rot-spreading
+      - the Blighted
+      - the Wilting
+      - the Sickly-bright
+      - the Never-pruned
+      - the Grave-fed
+      - the Poison-petalled
+      Rank:
+      - Rotter of the Rotting Garden
+      - Wilter of Wiltmeadow
+      - Bloomer of the Sweet Grave
+      - Blighter of the Blighted Orchard
+      - Sickener of the Sick Field
+      Legend:
+      - Who Rotted the Royal Garden in a Night
+      - Who Bloomed on the Plague Grave and Smelled of Honey
+      - Who Blighted the Orchard That Fed the City
+      - 'Who Wilted the Bride''s Bouquet at the Altar'
+      - Who Spread from One Petal to the Whole Valley
+      Occupational:
+      - Garden-rotter
+      - Spore-spreader
+      - Petal-poisoner
+    CitySuffixes:
+      Capital:
+      - garden
+      - meadow
+      - orchard
+      Fortress:
+      - bramble
+      - thorn
+      - hedge
+      - wall
+      Village:
+      - grave
+      - field
+      - bloom
+      Port:
+      - bank
+      - reed
+      - ford
+      Sacred:
+      - oak
+      - ring
+      - root
+      - well
+      Ruin:
+      - rot
+      - stump
+      - blight
+      - ash
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2037808285
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 1.5
+  - BiomeID: 173642607
+    Weight: 1

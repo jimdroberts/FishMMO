@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hyenafolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Cackling scavenger people of the dry grass — laughing, barked names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Kak
+      - Hyu
+      - Gna
+      - Yip
+      - Rakh
+      - Tesh
+      - Skoll
+      - Jak
+      - Nag
+      - Whoop
+      - Grin
+      - Zak
+      - Kib
+      - Yol
+      Nuclei:
+      - a
+      - i
+      - u
+      - e
+      - o
+      Codas:
+      - ak
+      - ash
+      - ee
+      - orr
+      - ith
+      - ug
+      - ek
+      - ik
+      Middles:
+      - ka
+      - ya
+      - ri
+      - ol
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ee
+      - ika
+      MasculineSuffixes:
+      - ak
+      - ug
+      - ek
+      Description: 'Cackling scavenger people of the dry grass — laughing, barked names'
+      Tags:
+      - Laugh-names
+      - Bone-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Laughing Den
+    - Bonepile
+    - the Dry Wash
+    - the Carrion Court
+    - Whoopridge
+    - the Night Grass
+    - Grinhollow
+    Titles:
+      Honorific:
+      - Den-matriarch
+      - Laugh-leader
+      - Bone-warden
+      - Wash-elder
+      - Court-reeve
+      - Grin-mother
+      - Carrion-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Laughing
+      - the Bone-cracking
+      - the Night-grass-born
+      - the Never-hungry-long
+      - the Grinning
+      - the Pack-loud
+      - the Dry-wash-quick
+      - the Carrion-wise
+      Rank:
+      - Matriarch of the Laughing Den
+      - Warden of Bonepile
+      - Elder of the Dry Wash
+      - Reeve of the Carrion Court
+      - Leader of Whoopridge
+      Legend:
+      - Who Laughed the Lion Off the Kill
+      - 'Who Cracked the Giant''s Thighbone'
+      - Who Followed the Army and Ate Better Than It
+      - Who Whooped Until the Village Fled
+      - 'Who Stole the Hunter''s Dinner From His Fire'
+      Occupational:
+      - Bone-cracker
+      - Carrion-finder
+      - Night-scout
+      - Grass-burner
+      - Skull-cleaner
+    CitySuffixes:
+      Capital:
+      - den
+      - pile
+      - court
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - wash
+      - hollow
+      - ridge
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1911521020
+    Weight: 3
+  - BiomeID: 1156965030
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 1655673647
+    Weight: 1

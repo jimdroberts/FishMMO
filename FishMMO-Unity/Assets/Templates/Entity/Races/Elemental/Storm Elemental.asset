@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Storm Elemental
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Living tempest — roaring, gusting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Thun
+      - Gal
+      - Vael
+      - Skir
+      - Roar
+      - Gust
+      - Aer
+      - Bral
+      - Mael
+      - Tor
+      - Zar
+      - Hael
+      - Vent
+      - Ryn
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - ei
+      Codas:
+      - ith
+      - orr
+      - und
+      - eth
+      - ir
+      - ael
+      - oss
+      - ax
+      Middles:
+      - or
+      - al
+      - ae
+      - ir
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ira
+      MasculineSuffixes:
+      - orr
+      - und
+      - ax
+      Description: 'Living tempest — roaring, gusting names'
+      Tags:
+      - Storm-names
+      - Gust-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Storm Anvil
+    - the Howling Rift
+    - the Lightning Field
+    - Galedeep
+    - the Thunder Column
+    - the Eye
+    - the First Wind
+    Titles:
+      Honorific:
+      - Storm-voice
+      - Gale-rider
+      - Rift-herald
+      - Lightning-warden
+      - Thunder-heart
+      - Wind-mother
+      - Eye-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ever-roaring
+      - the Gale-shaped
+      - the Lightning-quick
+      - the Thunder-shouldered
+      - the Rift-born
+      - the Never-calm
+      - the Eye-still
+      - the First-wind-woken
+      Rank:
+      - Voice of the Storm Anvil
+      - Rider of the Howling Rift
+      - Herald of the Lightning Field
+      - Heart of the Thunder Column
+      - Keeper of the Eye
+      Legend:
+      - Who Drank the Storm and Became It
+      - Who Rode the Lightning Down to the Sea
+      - Who Howled the Fleet Apart
+      - Who Held the Eye Still for a Day
+      - Who Was the First Wind of the World
+      Occupational:
+      - Storm-caller
+      - Wind-herder
+      - Lightning-catcher
+    CitySuffixes:
+      Capital:
+      - anvil
+      - rift
+      - column
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - field
+      - deep
+      - eye
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 2
+  - BiomeID: 1496239796
+    Weight: 1.5
+  - BiomeID: 646460858
+    Weight: 1

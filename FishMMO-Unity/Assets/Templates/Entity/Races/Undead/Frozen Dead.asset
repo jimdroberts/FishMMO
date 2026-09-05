@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Frozen Dead
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Ice-locked dead of the high passes — creaking, brittle names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Isk
+      - Frost
+      - Creak
+      - Rime
+      - Hrim
+      - Kol
+      - Brit
+      - Stif
+      - Glac
+      - Vint
+      - Sleet
+      - Nak
+      - Ulv
+      - Skel
+      Nuclei:
+      - a
+      - i
+      - u
+      - ei
+      - o
+      Codas:
+      - ak
+      - ir
+      - ost
+      - ith
+      - ar
+      - und
+      - eth
+      - ulf
+      Middles:
+      - ik
+      - ol
+      - ur
+      - ra
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ild
+      - isk
+      MasculineSuffixes:
+      - ak
+      - ost
+      - und
+      Description: 'Ice-locked dead of the high passes — creaking, brittle names'
+      Tags:
+      - Ice-names
+      - Pass-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Frozen Pass
+    - Rimegrave
+    - the Ice-locked Camp
+    - the Crevasse Dead
+    - Stiffwatch
+    - the White Column
+    - the Last Fire
+    Titles:
+      Honorific:
+      - Pass-warden
+      - Camp-lord
+      - Crevasse-keeper
+      - Column-elder
+      - Watch-sentinel
+      - Ice-mother
+      - Rime-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ice-locked
+      - the Creaking
+      - the Frost-preserved
+      - the Pass-haunting
+      - the Never-thawed
+      - the Brittle
+      - the White-faced
+      - the Camp-still
+      Rank:
+      - Warden of the Frozen Pass
+      - Lord of the Ice-locked Camp
+      - Keeper of the Crevasse Dead
+      - Elder of the White Column
+      - Sentinel of Stiffwatch
+      Legend:
+      - Who Froze at the Fire and Rose When It Died
+      - Who Marched the Column Through the Blizzard for a Century
+      - Who Climbed Out of the Crevasse Still Roped
+      - Who Guarded the Pass Against the Living Since the Lost Expedition
+      - Who Creaked Once and the Avalanche Answered
+      Occupational:
+      - Pass-guard
+      - Column-marcher
+      - Camp-keeper
+    CitySuffixes:
+      Capital:
+      - pass
+      - camp
+      - column
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - grave
+      - watch
+      - fire
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -212386137
+    Weight: 3
+  - BiomeID: 1645414801
+    Weight: 2
+  - BiomeID: -567058185
+    Weight: 2
+  - BiomeID: -1474826537
+    Weight: 1

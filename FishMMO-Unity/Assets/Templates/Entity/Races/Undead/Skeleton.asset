@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Skeleton
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Clattering Latinate — dry bone-speech
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mor
+      - Cal
+      - Osse
+      - Cran
+      - Tib
+      - Pha
+      - Nec
+      - Oss
+      - Mo
+      - Co
+      - Cro
+      - To
+      Nuclei:
+      - a
+      - o
+      - e
+      - i
+      - oll
+      Codas:
+      - bone
+      - skull
+      - rib
+      - nos
+      - dor
+      - oll
+      - all
+      - ell
+      Middles:
+      - os
+      - ca
+      - ne
+      - om
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ossa
+      - ette
+      MasculineSuffixes:
+      - us
+      - os
+      - mor
+      Description: Clattering ossuary-chant — dry bone-speech
+      Tags:
+      - Bone-names
+      - Animation-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bone Reliquary
+    - Osseous Hall
+    - the White Crypt
+    - Rib-Arch Temple
+    Titles:
+      Honorific:
+      - Bone-captain
+      HonorificMasculine:
+      - Osseous-lord
+      HonorificFeminine:
+      - Osseous-lady
+      Epithet:
+      - the White
+      - the Jaw-broken
+      - the Tireless
+      Rank:
+      - Captain of the Bone Reliquary
+      Legend:
+      - Who Held the Bridge Without Flesh or Breath
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: -567058185
+    Weight: 1
+  - BiomeID: 173642607
+    Weight: 1

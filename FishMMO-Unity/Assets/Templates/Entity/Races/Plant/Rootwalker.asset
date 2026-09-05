@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Rootwalker
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Plant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Ambulatory tree-roots that surface at night — creaking, earthy names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Root
+      - Tap
+      - Bur
+      - Del
+      - Tub
+      - Grub
+      - Hol
+      - Und
+      - Dig
+      - Clod
+      - Loam
+      - Tan
+      - Wor
+      - Ash
+      Nuclei:
+      - u
+      - o
+      - a
+      - e
+      - oo
+      Codas:
+      - oth
+      - ug
+      - ash
+      - urn
+      - eth
+      - ull
+      - orr
+      - um
+      Middles:
+      - ur
+      - og
+      - um
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - urn
+      - ull
+      MasculineSuffixes:
+      - oth
+      - ug
+      - orr
+      Description: 'Ambulatory tree-roots that surface at night — creaking, earthy names'
+      Tags:
+      - Root-names
+      - Soil-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Surfacing Ground
+    - Tapdeep
+    - the Night Orchard
+    - the Uprooted Road
+    - Loamwalk
+    - the Cellar Crack
+    - the Buried Well
+    Titles:
+      Honorific:
+      - Ground-surfacer
+      - Deep-elder
+      - Orchard-walker
+      - Road-uprooter
+      - Crack-warden
+      - Loam-mother
+      - Well-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Night-walking
+      - the Soil-dark
+      - the Slow-creaking
+      - the Road-uprooting
+      - the Deep-tapping
+      - the Never-seen-by-day
+      - the Cellar-cracking
+      - the Buried-and-risen
+      Rank:
+      - Surfacer of the Surfacing Ground
+      - Elder of Tapdeep
+      - Walker of the Night Orchard
+      - Uprooter of the Uprooted Road
+      - Warden of the Cellar Crack
+      Legend:
+      - Who Walked the Orchard to the Other Side of the Hill Overnight
+      - Who Cracked the Castle Cellar from Below
+      - Who Drank the Buried Well Dry
+      - Who Uprooted the Road and Replanted It Elsewhere
+      - Who Surfaced in the Church
+      Occupational:
+      - Soil-turner
+      - Well-finder
+      - Cellar-cracker
+    CitySuffixes:
+      Capital:
+      - ground
+      - deep
+      - orchard
+      Fortress:
+      - bramble
+      - thorn
+      - hedge
+      - wall
+      Village:
+      - walk
+      - crack
+      - well
+      Port:
+      - bank
+      - reed
+      - ford
+      Sacred:
+      - oak
+      - ring
+      - root
+      - well
+      Ruin:
+      - rot
+      - stump
+      - blight
+      - ash
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -2037808285
+    Weight: 2
+  - BiomeID: -439598380
+    Weight: 1.5
+  - BiomeID: 596668801
+    Weight: 1

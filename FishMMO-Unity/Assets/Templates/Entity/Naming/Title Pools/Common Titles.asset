@@ -1,0 +1,116 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Common Titles
+  m_EditorClassIdentifier: 
+  Categories: []
+  Titles:
+    Honorific:
+    - Wanderer
+    - Elder
+    - Warden
+    - Keeper
+    - Envoy
+    - Speaker
+    - Sentinel
+    - Steward
+    - Pathfinder
+    - Chronicler
+    - Oathkeeper
+    - Watcher
+    HonorificMasculine:
+    - Goodman
+    - Father
+    HonorificFeminine:
+    - Goodwife
+    - Mother
+    Epithet:
+    - the Unyielding
+    - the Far-travelled
+    - the Quiet
+    - the Steadfast
+    - the Restless
+    - the Patient
+    - the Unbowed
+    - the Grey-eyed
+    - the Long-remembered
+    - the Twice-returned
+    - the Weather-worn
+    - the Sharp-tongued
+    - the Kind
+    - the Watchful
+    - the Unhurried
+    - the Road-wise
+    - the Night-born
+    - the Dawn-woken
+    - the Half-forgotten
+    - the Star-counted
+    - the Nine-lived
+    - the Storm-tested
+    - the Stone-hearted
+    - the Bright-handed
+    - the Well-travelled
+    - the Lantern-bearing
+    Rank:
+    - Warden of the Old Road
+    - Keeper of the Crossroads
+    - Speaker for the Far Marches
+    - Sentinel of the Silent Pass
+    - Steward of the Long Water
+    - Chronicler of the Grey Hills
+    - Envoy to the Wandering Fair
+    - Marshal of the Ninefold Bridge
+    - Master of the Last Inn
+    - Reeve of the Low Country
+    - Watcher of the Ember Reach
+    - Elder of the Broken Coast
+    - Oathkeeper of the Crossroads
+    - Pathfinder of the Far Marches
+    Legend:
+    - Who Walked the Old Road End to End
+    - Who Outstayed the Winter of Knives
+    - Who Crossed the Long Water on Foot
+    - Who Kept the Lantern Lit
+    - Who Was Counted Dead Twice
+    - Who Traded with the Wandering Fair and Won
+    - Who Held the Silent Pass Alone
+    - Who Named the Nameless Hill
+    - Who Slept a Year and Woke Wiser
+    - 'Who Answered the Stranger''s Riddle'
+    - Who Carried the Message Through the Storm
+    - Who Refused the Crown Three Times
+    - Who Mended the Ninefold Bridge
+    - Who Found the Road That Was Not There
+    Occupational:
+    - Courier
+    - Cartographer
+    - Storyteller
+    - Lamplighter
+    - Ferryman
+    - Toll-keeper
+    - Wayfinder
+    - Chandler
+    - Rope-maker
+    - Well-digger
+  Places:
+  - the Old Road
+  - the Crossroads
+  - the Far Marches
+  - the Broken Coast
+  - the Grey Hills
+  - the Long Water
+  - the Ninefold Bridge
+  - the Wandering Fair
+  - the Last Inn
+  - the Silent Pass
+  - the Ember Reach
+  - the Low Country

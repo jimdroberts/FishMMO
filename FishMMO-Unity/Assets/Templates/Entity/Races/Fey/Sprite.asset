@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sprite
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Tiny winged fey — bright, tinkling names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Tin
+      - Fli
+      - Pip
+      - Bri
+      - Glim
+      - Dew
+      - Twi
+      - Mab
+      - Zee
+      - Lil
+      - Fen
+      - Nix
+      - Wisp
+      - Pim
+      Nuclei:
+      - i
+      - e
+      - a
+      - y
+      - ee
+      Codas:
+      - kle
+      - ip
+      - et
+      - ling
+      - ee
+      - ith
+      - le
+      - ix
+      Middles:
+      - li
+      - ti
+      - fi
+      - ri
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ie
+      - ith
+      MasculineSuffixes:
+      - ip
+      - et
+      - ix
+      Description: 'Tiny winged fey — bright, tinkling names'
+      Tags:
+      - Wing-names
+      - Dew-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Dew Court
+    - Thistledown
+    - the Bluebell Ring
+    - Moth-light
+    - the Acorn Hall
+    - the Spider-silk Bridge
+    - Petalfall
+    Titles:
+      Honorific:
+      - Wing-herald
+      - Dew-warden
+      - Petal-elder
+      - Bell-ringer
+      - Silk-weaver
+      - Acorn-keeper
+      - Moth-rider
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Dew-winged
+      - the Quick-as-light
+      - the Bell-voiced
+      - the Petal-light
+      - the Moth-riding
+      - the Never-still
+      - the Acorn-small
+      - the Bright-eyed
+      Rank:
+      - Herald of the Dew Court
+      - Warden of the Bluebell Ring
+      - Keeper of the Acorn Hall
+      - Weaver of the Spider-silk Bridge
+      - Elder of Thistledown
+      Legend:
+      - Who Rode a Moth Through the Storm
+      - 'Who Stole the Miller''s Wedding Ring and Gave It Back Twice'
+      - Who Rang Every Bluebell in the Ring
+      - 'Who Slept in the Cat''s Ear for a Winter'
+      - Who Wove the Bridge in a Night
+      Occupational:
+      - Dew-gatherer
+      - Silk-spinner
+      - Moth-tamer
+      - Petal-painter
+      - Bell-tuner
+    CitySuffixes:
+      Capital:
+      - court
+      - ring
+      - hall
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - nook
+      - down
+      - light
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: -439598380
+    Weight: 1.5
+  - BiomeID: -1486751517
+    Weight: 1

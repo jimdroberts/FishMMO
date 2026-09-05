@@ -1,0 +1,260 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hellborn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Mortals whose bloodline carries an infernal bargain: horns, tails, eyes like coals, and a reputation they did nothing to earn.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ash
+      - Bel
+      - Cri
+      - Dez
+      - Emi
+      - Fal
+      - Gra
+      - Hel
+      - Ira
+      - Jev
+      - Kal
+      - Lev
+      - Mor
+      - Nek
+      - Ori
+      - Raz
+      - Siv
+      - Tar
+      - Val
+      - Zer
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      - ae
+      - ei
+      Codas:
+      - ius
+      - ath
+      - el
+      - orn
+      - ix
+      - ash
+      - eth
+      - al
+      - or
+      - iel
+      Middles:
+      - an
+      - el
+      - ar
+      - or
+      - ir
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ia
+      - iel
+      - eth
+      MasculineSuffixes:
+      - ius
+      - or
+      - ix
+      - ash
+      Description: Mortal elegance touched by an infernal edge — sharp meets smooth
+      Tags:
+      - Brand-names
+      - Pact-marks
+      - Defiance-titles
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: infernalheir
+      Phonology:
+        Onsets:
+        - Ard
+        - Bael
+        - Cass
+        - Dam
+        - Eris
+        - Fen
+        - Glar
+        - Hex
+        - Inf
+        - Klar
+        - Lev
+        - Morn
+        - Nyx
+        - Or
+        - Phan
+        Nuclei:
+        - a
+        - e
+        - i
+        - ae
+        - io
+        - yr
+        Codas:
+        - ion
+        - ael
+        - mor
+        - yx
+        - arth
+        - oth
+        - is
+        - rell
+        - anth
+        - eus
+        Middles:
+        - al
+        - el
+        - ar
+        - or
+        SyllMin: 2
+        SyllMax: 4
+        FeminineSuffixes:
+        - ia
+        - ella
+        - yx
+        MasculineSuffixes:
+        - ion
+        - mor
+        - eus
+        Description: 'Infernal Heir — named by bloodline bargain, inheritance-marked'
+        Tags:
+        - Heir-names
+        - Blood-bonds
+        - Debt-marks
+        WeightedCodas: []
+    Places:
+    - the Ember Quarter
+    - Ashfall
+    - the Branded Way
+    - Hellsmouth
+    - the Outcast Court
+    - the Smoldering Gate
+    - Cinderholm
+    Titles:
+      Honorific:
+      - Hellborn
+      - Soul-branded
+      - Infernal Grace
+      - Ashwalker
+      - Ember-touched
+      - Defiance-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Twice-cursed
+      - the Unrepentant
+      - the Flame-blooded
+      - the Scorned
+      - the Defiant
+      - the Unchained
+      - the Oath-broken
+      - the Ember-eyed
+      Rank:
+      - Voice of the Outcast Court
+      - Keeper of Infernal Secrets
+      - First of the Branded
+      - Warden of the Ember Path
+      - High Pariah of the Smoldering Gate
+      - Speaker for the Scorned
+      Legend:
+      - Who Defied Their Infernal Patron
+      - Who Turned Hellfire into Salvation
+      - Whose Blood Burns and Yet They Stand
+      - Who Made Peace Between Heaven and Hell
+      - Who Broke Their Chains and Forged a Crown
+      Occupational:
+      - Pact-scribe
+      - Alchemist
+      - Broker
+      - Fortune-teller
+    CitySuffixes:
+      Capital:
+      - haven
+      - hold
+      - spire
+      - court
+      - enclave
+      - citadel
+      - quarter
+      Fortress:
+      - wall
+      - gate
+      - ward
+      - guard
+      - bastion
+      - tower
+      - keep
+      Village:
+      - camp
+      - hollow
+      - stead
+      - clearing
+      - quarter
+      - nook
+      - refuge
+      Port:
+      - port
+      - dock
+      - harbor
+      - landing
+      - wharf
+      - cove
+      Sacred:
+      - shrine
+      - sanctum
+      - altar
+      - brand
+      - pact-circle
+      - fane
+      Ruin:
+      - fall
+      - ash
+      - scar
+      - ruin
+      - void
+      - char
+      - blight
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: -1042859854
+    Weight: 1

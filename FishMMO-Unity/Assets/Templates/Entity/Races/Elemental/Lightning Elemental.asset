@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Lightning Elemental
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Living lightning — crackling, instant names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Zap
+      - Ark
+      - Crak
+      - Volt
+      - Spark
+      - Flash
+      - Zith
+      - Bril
+      - Skir
+      - Thun
+      - Ryz
+      - Fulg
+      - Jag
+      - Snap
+      Nuclei:
+      - i
+      - a
+      - e
+      - y
+      - ae
+      Codas:
+      - ith
+      - ax
+      - ik
+      - ess
+      - el
+      - ang
+      - yn
+      - orr
+      Middles:
+      - ik
+      - ri
+      - el
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ess
+      MasculineSuffixes:
+      - ax
+      - ik
+      - ang
+      Description: 'Living lightning — crackling, instant names'
+      Tags:
+      - Spark-names
+      - Flash-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Lightning Field
+    - the Struck Tower
+    - the Arc Column
+    - Sparkdeep
+    - the Storm Anvil
+    - the Bright Instant
+    - the First Flash
+    Titles:
+      Honorific:
+      - Arc-voice
+      - Flash-herald
+      - Field-warden
+      - Tower-striker
+      - Spark-heart
+      - Volt-mother
+      - Bolt-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Instant
+      - the Crackling
+      - the Tower-striking
+      - the Never-twice-in-one-place
+      - the Bright-blinding
+      - the Storm-born
+      - the Jagged
+      - the First-flash-woken
+      Rank:
+      - Voice of the Arc Column
+      - Herald of the Bright Instant
+      - Warden of the Lightning Field
+      - Striker of the Struck Tower
+      - Heart of Sparkdeep
+      Legend:
+      - Who Struck the Same Tower Nine Times
+      - Who Lit the Night for One Instant and Was Remembered for Ages
+      - Who Ran the Iron Road from Peak to Sea
+      - Who Set the Forest Alight with a Touch
+      - Who Was the First Flash of the World
+      Occupational:
+      - Tower-striker
+      - Spark-carrier
+      - Storm-runner
+    CitySuffixes:
+      Capital:
+      - field
+      - tower
+      - column
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - deep
+      - anvil
+      - instant
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 2
+  - BiomeID: -1951431387
+    Weight: 1.5
+  - BiomeID: 1496239796
+    Weight: 1

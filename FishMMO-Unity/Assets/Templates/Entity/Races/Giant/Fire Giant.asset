@@ -1,0 +1,125 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Fire Giant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Forge-bellow and ember-anger — basso Nordic cadence
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bre
+      - Mug
+      - Ign
+      - Brann
+      - Lav
+      - Furn
+      - Ra
+      - Skal
+      - Grom
+      - Cinder
+      - Hol
+      - Vulk
+      Nuclei:
+      - u
+      - a
+      - o
+      - ur
+      - ou
+      Codas:
+      - tur
+      - brand
+      - flame
+      - aal
+      - mor
+      - ash
+      - urn
+      - ok
+      Middles:
+      - ur
+      - ra
+      - mo
+      - lg
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - brann
+      - hilda
+      MasculineSuffixes:
+      - ur
+      - mor
+      - ak
+      - brand
+      Description: Forge-bellow and ember-anger — basso forge-hall cadence
+      Tags:
+      - Ember-names
+      - Forge-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Brass Forge
+    - 'Smelter''s Keep'
+    - Cinderhall
+    - the Ash Citadel
+    Titles:
+      Honorific: []
+      HonorificMasculine:
+      - Forge-king
+      - Ember-lord
+      HonorificFeminine:
+      - Forge-queen
+      - Ember-lady
+      Epithet:
+      - the Molten
+      - the Brass-armored
+      - the Ember-eyed
+      Rank:
+      - King of the Ash Citadel
+      Legend:
+      - Whose Hammer Broke the Mountain in Two
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 155940630
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 1

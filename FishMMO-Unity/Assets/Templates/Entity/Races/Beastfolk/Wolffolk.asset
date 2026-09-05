@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Wolffolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Pack-bound wolf people — growled, clipped names with long howled vowels'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gar
+      - Har
+      - Rul
+      - Vor
+      - Ulf
+      - Skar
+      - Bral
+      - Kor
+      - Tal
+      - Wulf
+      - Rak
+      - Sar
+      - Howl
+      - Grae
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      - oo
+      Codas:
+      - fang
+      - ar
+      - ulf
+      - rak
+      - var
+      - un
+      - th
+      - ash
+      Middles:
+      - a
+      - o
+      - ar
+      - ul
+      SyllMin: 1
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ya
+      - ith
+      MasculineSuffixes:
+      - ar
+      - ok
+      - ulf
+      Description: 'Pack-bound wolf people — growled, clipped names with long howled vowels'
+      Tags:
+      - Pack-names
+      - Moon-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Howling Ridge
+    - Greyden
+    - the Moon Rock
+    - the Long Hunt
+    - Fangwater
+    - the Winter Den
+    - the Pack Stone
+    Titles:
+      Honorific:
+      - Pack-alpha
+      - Howl-leader
+      - Den-warden
+      - Moon-caller
+      - Hunt-elder
+      - Fang-mother
+      - Grey-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Grey-pelted
+      - the Moon-howling
+      - the Pack-first
+      - the Long-running
+      - the Winter-lean
+      - the Fang-quick
+      - the Night-eyed
+      - the Never-alone
+      Rank:
+      - Alpha of the Howling Ridge
+      - Warden of Greyden
+      - Caller of the Moon Rock
+      - Elder of the Winter Den
+      - Leader of the Long Hunt
+      Legend:
+      - Who Ran Down the Elk Across Three Valleys
+      - Who Howled the Blizzard Silent
+      - Who Fought the Bear for the Den and Shared It
+      - Who Led the Pack Through the Burning Forest
+      - 'Who Refused the Hunters'' Collar'
+      Occupational:
+      - Tracker
+      - Hide-tanner
+      - Den-digger
+      - Howl-singer
+      - Elk-driver
+    CitySuffixes:
+      Capital:
+      - den
+      - ridge
+      - rock
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - den
+      - hollow
+      - stone
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 144196518
+    Weight: 3
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: 187749268
+    Weight: 1.5
+  - BiomeID: -540190004
+    Weight: 1

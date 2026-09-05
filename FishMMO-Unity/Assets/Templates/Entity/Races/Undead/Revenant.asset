@@ -1,0 +1,126 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Revenant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Grim, focused monotone — one purpose remains'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Kor
+      - Vir
+      - Dris
+      - Vel
+      - Hael
+      - Kael
+      - Umbra
+      - Rae
+      - Ko
+      - Vo
+      - Dro
+      - Ho
+      Nuclei:
+      - a
+      - e
+      - i
+      - u
+      - or
+      Codas:
+      - mir
+      - nos
+      - thar
+      - dor
+      - ven
+      - or
+      - ir
+      - er
+      Middles:
+      - ra
+      - mi
+      - ve
+      - ok
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - rae
+      - elle
+      MasculineSuffixes:
+      - mir
+      - or
+      - nos
+      Description: 'Grim, focused monotone — one purpose remains'
+      Tags:
+      - Vengeance-names
+      - Grave-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Unquiet Grave
+    - Oath-mound
+    - Purpose Hollow
+    - Broken Vow Tomb
+    Titles:
+      Honorific:
+      - Oath-ridden
+      - Purpose-bound
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Returned
+      - the Vengeance-bound
+      - the Single-minded
+      Rank:
+      - Warden of the Unquiet Grave
+      Legend:
+      - Who Returned to Kill the One Who Killed Them
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: -835082438
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: -567058185
+    Weight: 1
+  - BiomeID: 173642607
+    Weight: 1

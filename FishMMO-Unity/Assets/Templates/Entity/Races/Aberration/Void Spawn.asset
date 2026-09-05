@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Void Spawn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Things from the gap between stars — silent, impossible names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Voi
+      - Xoth
+      - Nyar
+      - Ulq
+      - Zzith
+      - Kthar
+      - Ithl
+      - Vresh
+      - Ossk
+      - Thru
+      - Nul
+      - Yss
+      - Qhal
+      - Zhorr
+      Nuclei:
+      - u
+      - a
+      - o
+      - y
+      - i
+      Codas:
+      - oth
+      - ax
+      - ull
+      - urq
+      - thk
+      - yl
+      - iss
+      - ithl
+      Middles:
+      - ss
+      - th
+      - ul
+      - yy
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - yl
+      - iss
+      MasculineSuffixes:
+      - oth
+      - ax
+      - urq
+      Description: 'Things from the gap between stars — silent, impossible names'
+      Tags:
+      - Void-names
+      - Star-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Gap Between Stars
+    - Nullreach
+    - the Fallen Fragment
+    - the Silent Crater
+    - Voidwell
+    - the Wrong Constellation
+    - the Empty Sky
+    Titles:
+      Honorific:
+      - Gap-dweller
+      - Reach-lord
+      - Fragment-warden
+      - Crater-sleeper
+      - Sky-emptier
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Star-fallen
+      - the Silent
+      - the Impossible-angled
+      - the Gap-born
+      - the Never-quite-here
+      - the Crater-sleeping
+      - the Constellation-wrong
+      - the Light-eating
+      Rank:
+      - Dweller of the Gap Between Stars
+      - Lord of Nullreach
+      - Warden of the Fallen Fragment
+      - Sleeper of the Silent Crater
+      - Emptier of the Empty Sky
+      Legend:
+      - Who Fell with the Star and Did Not Die
+      - Who Ate the Light of the Lighthouse
+      - Who Rearranged the Constellation to Spell Its Name
+      - Who Slept in the Crater Until the Astronomers Came
+      - Who Was Seen and the Seer Forgot How to Speak
+      Occupational:
+      - Light-eater
+      - Crater-sleeper
+      - Star-watcher
+    CitySuffixes:
+      Capital:
+      - gap
+      - reach
+      - crater
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - well
+      - fragment
+      - sky
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 493502347
+    Weight: 3
+  - BiomeID: -1141955836
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 992717471
+    Weight: 1

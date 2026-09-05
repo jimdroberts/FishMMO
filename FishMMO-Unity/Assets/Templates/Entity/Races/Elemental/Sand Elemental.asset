@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sand Elemental
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Living desert wind — hissing, sifting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sahr
+      - Dun
+      - Sift
+      - Hiss
+      - Zal
+      - Kher
+      - Grit
+      - Wind
+      - Tam
+      - Nab
+      - Sil
+      - Dust
+      - Sand
+      - Mir
+      Nuclei:
+      - a
+      - u
+      - aa
+      - i
+      - o
+      Codas:
+      - im
+      - ar
+      - eth
+      - ud
+      - ash
+      - an
+      - ir
+      - oum
+      Middles:
+      - ra
+      - um
+      - ha
+      - al
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ima
+      - ura
+      MasculineSuffixes:
+      - im
+      - ar
+      - ud
+      Description: 'Living desert wind — hissing, sifting names'
+      Tags:
+      - Sand-names
+      - Sift-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Glass Plain
+    - the Dune Heart
+    - the Sifting Column
+    - Sanddeep
+    - the Sun Anvil
+    - the Wind Road
+    - the First Grain
+    Titles:
+      Honorific:
+      - Dune-voice
+      - Grain-herald
+      - Column-heart
+      - Sand-warden
+      - Sun-keeper
+      - Wind-mother
+      - Grit-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ever-sifting
+      - the Wind-shaped
+      - the Dune-born
+      - the Glass-making
+      - the Never-still
+      - the Sun-hot
+      - the Hissing
+      - the First-grain-woken
+      Rank:
+      - Voice of the Dune Heart
+      - Herald of the First Grain
+      - Heart of the Sifting Column
+      - Warden of the Glass Plain
+      - Keeper of the Sun Anvil
+      Legend:
+      - Who Buried the Caravan and Uncovered It a Century Later
+      - Who Turned the Battlefield to Glass
+      - Who Sifted Through the Keyhole and Filled the Palace
+      - Who Rode the Wind Road Around the World
+      - Who Was the First Grain of the World
+      Occupational:
+      - Dune-shaper
+      - Glass-maker
+      - Wind-rider
+    CitySuffixes:
+      Capital:
+      - plain
+      - heart
+      - column
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - deep
+      - road
+      - grain
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -941601695
+    Weight: 3
+  - BiomeID: 992717471
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 525873855
+    Weight: 1

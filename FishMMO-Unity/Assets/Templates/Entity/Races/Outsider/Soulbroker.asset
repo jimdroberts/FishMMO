@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Soulbroker
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Silver-tongued contract fiends — smooth, sibilant names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sil
+      - Ver
+      - Mal
+      - Zar
+      - Ast
+      - Sath
+      - Bel
+      - Nyx
+      - Vel
+      - Mer
+      - Seph
+      - Kyr
+      - Dam
+      - Ish
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      Codas:
+      - el
+      - ias
+      - ith
+      - ess
+      - ael
+      - urn
+      - ira
+      - oth
+      Middles:
+      - ri
+      - li
+      - za
+      - ve
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - ira
+      MasculineSuffixes:
+      - el
+      - ias
+      - urn
+      Description: 'Silver-tongued contract fiends — smooth, sibilant names'
+      Tags:
+      - Contract-names
+      - Ledger-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Burning Ledger
+    - the Contract Floor
+    - 'the Silver Threshold''s Shadow'
+    - Brokerhall
+    - the Signing Room
+    - 'the Sulphur Road''s Toll'
+    - the Fine Print
+    Titles:
+      Honorific:
+      - Ledger-keeper
+      - Contract-scribe
+      - Floor-broker
+      - Hall-master
+      - Signing-witness
+      - Toll-mother
+      - Print-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Silver-tongued
+      - the Contract-wise
+      - the Honey-voiced
+      - the Never-outbargained
+      - the Ledger-eyed
+      - the Fine-print-reading
+      - the Soul-weighing
+      - the Smiling
+      Rank:
+      - Keeper of the Burning Ledger
+      - Broker of the Contract Floor
+      - Master of Brokerhall
+      - Witness of the Signing Room
+      - Reader of the Fine Print
+      Legend:
+      - Who Bought a Kingdom for a Single Soul
+      - Who Sold the Same Soul Three Times
+      - Who Wrote the Contract No Lawyer Could Break
+      - 'Who Was Outbargained Once by a Farmer''s Daughter'
+      - Who Read the Fine Print to the Damned
+      Occupational:
+      - Contract-scribe
+      - Soul-weigher
+      - Ledger-keeper
+      - Fine-print-reader
+    CitySuffixes:
+      Capital:
+      - hall
+      - floor
+      - ledger
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - room
+      - toll
+      - print
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: 18062707
+    Weight: 2
+  - BiomeID: -1042859854
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 1

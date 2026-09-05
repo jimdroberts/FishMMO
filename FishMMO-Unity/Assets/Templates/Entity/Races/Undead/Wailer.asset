@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Wailer
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Keening dead whose cry foretells death — wailing, long-voweled names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Wai
+      - Keen
+      - Cri
+      - Moan
+      - Lam
+      - Ull
+      - Shri
+      - Mor
+      - Sor
+      - Wee
+      - Dol
+      - Nys
+      - Ael
+      - Grie
+      Nuclei:
+      - a
+      - ee
+      - ai
+      - o
+      - u
+      Codas:
+      - ail
+      - een
+      - ine
+      - ith
+      - ora
+      - el
+      - ess
+      - oon
+      Middles:
+      - ai
+      - el
+      - ee
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ora
+      MasculineSuffixes:
+      - el
+      - ess
+      - oon
+      Description: 'Keening dead whose cry foretells death — wailing, long-voweled names'
+      Tags:
+      - Wail-names
+      - Omen-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Keening Rock
+    - Wailmoor
+    - the Omen Window
+    - the Widow Walk
+    - Lamentford
+    - the Crying Ford
+    - the Last Breath
+    Titles:
+      Honorific:
+      - Rock-keener
+      - Omen-bringer
+      - Window-wailer
+      - Walk-warden
+      - Ford-crier
+      - Grief-mother
+      - Lament-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Keening
+      - the Omen-voiced
+      - the Death-foretelling
+      - the Long-crying
+      - the Window-haunting
+      - the Never-comforted
+      - the Grief-born
+      - the Wailing
+      Rank:
+      - Keener of the Keening Rock
+      - Bringer of the Omen Window
+      - Warden of the Widow Walk
+      - Crier of the Crying Ford
+      - Elder of Wailmoor
+      Legend:
+      - Who Wailed Before Every Death of the House for Nine Generations
+      - 'Who Cried the King''s Death a Year Early'
+      - Who Keened So Long the Rock Split
+      - Who Was Heard Across Three Counties
+      - Who Wept the Ford Full
+      Occupational:
+      - Death-crier
+      - Window-keener
+      - Grief-keeper
+    CitySuffixes:
+      Capital:
+      - rock
+      - moor
+      - window
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - walk
+      - ford
+      - breath
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: -567058185
+    Weight: 2
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: -2077848218
+    Weight: 1

@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Crystal Golem
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Construct
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Faceted gemstone constructs — chiming, refracting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Crys
+      - Fac
+      - Shard
+      - Prism
+      - Quartz
+      - Gleam
+      - Kal
+      - Sil
+      - Lum
+      - Ael
+      - Ori
+      - Gem
+      - Vitr
+      - Clar
+      Nuclei:
+      - i
+      - a
+      - e
+      - ae
+      - y
+      Codas:
+      - ith
+      - el
+      - ine
+      - ess
+      - ael
+      - yn
+      - ora
+      - ax
+      Middles:
+      - li
+      - ri
+      - el
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ael
+      MasculineSuffixes:
+      - el
+      - ax
+      - yn
+      Description: 'Faceted gemstone constructs — chiming, refracting names'
+      Tags:
+      - Facet-names
+      - Light-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Prism Hall
+    - Shardwatch
+    - the Facet Gate
+    - the Light Vault
+    - Quartzstair
+    - the Refracting Threshold
+    - the Geode Room
+    Titles:
+      Honorific:
+      - Hall-refractor
+      - Gate-facet
+      - Vault-warden
+      - Stair-sentinel
+      - Threshold-guard
+      - Prism-mother
+      - Shard-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Faceted
+      - the Light-splitting
+      - the Chiming
+      - the Never-clouded
+      - the Geode-born
+      - the Sharp-edged
+      - the Sun-catching
+      - the Flawless
+      Rank:
+      - Refractor of the Prism Hall
+      - Facet of the Facet Gate
+      - Warden of the Light Vault
+      - Sentinel of Quartzstair
+      - Guard of the Refracting Threshold
+      Legend:
+      - Who Turned the Sunbeam into a Blade
+      - Who Chimed the Alarm Across the Mountain
+      - Who Was Shattered and Regrew in the Geode
+      - Who Blinded the Army with One Facet
+      - Who Guarded the Light Vault in Darkness
+      Occupational:
+      - Light-bender
+      - Vault-guard
+      - Chime-warden
+    CitySuffixes:
+      Capital:
+      - hall
+      - vault
+      - room
+      Fortress:
+      - gate
+      - wall
+      - bastion
+      - vault
+      Village:
+      - gate
+      - stair
+      - threshold
+      Port:
+      - dock
+      - crane
+      - wharf
+      Sacred:
+      - anvil
+      - forge
+      - maker
+      - altar
+      Ruin:
+      - rust
+      - scrap
+      - heap
+      - fall
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: 1018971064
+    Weight: 2
+  - BiomeID: 493502347
+    Weight: 1.5
+  - BiomeID: 18062707
+    Weight: 1

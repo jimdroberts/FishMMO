@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Mosskin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Plant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Gentle moss-people of the damp stones — soft, hushed names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mos
+      - Lich
+      - Fern
+      - Dam
+      - Hush
+      - Sof
+      - Gree
+      - Vel
+      - Wet
+      - Peat
+      - Sto
+      - Cush
+      - Dew
+      - Shade
+      Nuclei:
+      - o
+      - u
+      - a
+      - e
+      - oo
+      Codas:
+      - oom
+      - us
+      - ell
+      - ith
+      - or
+      - ax
+      - ule
+      - ora
+      Middles:
+      - r
+      - m
+      - l
+      - os
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ora
+      - ell
+      MasculineSuffixes:
+      - us
+      - ith
+      - ax
+      Description: 'Gentle moss-people of the damp stones — soft, hushed names'
+      Tags:
+      - Moss-names
+      - Damp-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Damp Steps
+    - Mosscushion
+    - the Green Stone
+    - the Shaded Wall
+    - Softhollow
+    - the Dripping Grotto
+    - the Old Log
+    Titles:
+      Honorific:
+      - Steps-keeper
+      - Stone-elder
+      - Wall-warden
+      - Grotto-tender
+      - Log-mother
+      - Cushion-father
+      - Shade-herald
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Soft-spoken
+      - the Damp-loving
+      - the Slow-spreading
+      - the Green-skinned
+      - the Shade-dwelling
+      - the Stone-cushioning
+      - the Never-hurried
+      - the Dew-drinking
+      Rank:
+      - Keeper of the Damp Steps
+      - Elder of the Green Stone
+      - Warden of the Shaded Wall
+      - Tender of the Dripping Grotto
+      - Mother of the Old Log
+      Legend:
+      - Who Cushioned the Falling Climber
+      - Who Grew Over the Battlefield and Softened It
+      - Who Kept the Grotto Damp Through the Drought
+      - Who Spread from One Stone to the Whole Wall in a Patient Century
+      - Who Slept on the Old Log Until It Was Soil
+      Occupational:
+      - Stone-cushioner
+      - Dew-gatherer
+      - Wall-greener
+      - Grotto-keeper
+    CitySuffixes:
+      Capital:
+      - stone
+      - grotto
+      - wall
+      Fortress:
+      - bramble
+      - thorn
+      - hedge
+      - wall
+      Village:
+      - hollow
+      - steps
+      - log
+      Port:
+      - bank
+      - reed
+      - ford
+      Sacred:
+      - oak
+      - ring
+      - root
+      - well
+      Ruin:
+      - rot
+      - stump
+      - blight
+      - ash
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: -2077848218
+    Weight: 1.5
+  - BiomeID: -1486751517
+    Weight: 1

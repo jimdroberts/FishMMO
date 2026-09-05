@@ -1,0 +1,179 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Snow Troll
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'White-furred northern trolls — hissing, ice-cracking names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Hrisk
+      - Frak
+      - Skulg
+      - Isk
+      - Grul
+      - Vrost
+      - Kalg
+      - Snurr
+      - Brisk
+      - Thulg
+      - Rimm
+      - Dusk
+      - Krav
+      - Ulg
+      Nuclei:
+      - u
+      - i
+      - a
+      - o
+      - ei
+      Codas:
+      - isk
+      - ulg
+      - ak
+      - orr
+      - ir
+      - ost
+      - eth
+      - ung
+      Middles:
+      - ur
+      - ik
+      - ol
+      - ag
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - isk
+      - urn
+      MasculineSuffixes:
+      - ulg
+      - ak
+      - orr
+      Description: 'White-furred northern trolls — hissing, ice-cracking names'
+      Tags:
+      - Ice-names
+      - Fur-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Frozen Lair
+    - Whitemaw
+    - the Ice Bridge
+    - Sleetstone
+    - the Bone Cache
+    - the Howling Ledge
+    - Rimehold
+    Titles:
+      Honorific:
+      - Ice-chief
+      - Bridge-troll
+      - Cache-keeper
+      - Ledge-lord
+      - Storm-elder
+      - Sleet-mother
+      - Rime-warden
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the White-furred
+      - the Ice-toothed
+      - the Storm-walking
+      - the Never-thawed
+      - the Avalanche-voiced
+      - the Fur-thick
+      - the Frost-blind
+      - the Cold-sleeping
+      Rank:
+      - Chief of Whitemaw
+      - Troll of the Ice Bridge
+      - Keeper of the Bone Cache
+      - Lord of the Howling Ledge
+      - Warden of Rimehold
+      Legend:
+      - 'Who Ate the Frost Giant''s Dog and Then the Frost Giant'
+      - Who Slept in the Glacier for a Century
+      - Who Broke the Ice Bridge to End the War
+      - Who Walked into the Blizzard and Came Back with a Bear
+      - Who Bit the Sun
+      Occupational:
+      - Bone-cacher
+      - Ice-breaker
+      - Bridge-guard
+      - Bear-hunter
+    CitySuffixes:
+      Capital:
+      - maw
+      - hold
+      - cache
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - ledge
+      - lair
+      - hollow
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1645414801
+    Weight: 3
+  - BiomeID: -212386137
+    Weight: 2
+  - BiomeID: 187749268
+    Weight: 1.5
+  - BiomeID: 1018971064
+    Weight: 1

@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Tidewalker
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Coastal salt-folk — names like gull-cries and rope-knots
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gul
+      - Tarn
+      - Wesk
+      - Har
+      - Brin
+      - Kel
+      - Mor
+      - Sal
+      - Ren
+      - Pell
+      - Dun
+      - Cor
+      - Wren
+      - Skel
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      Codas:
+      - ick
+      - ar
+      - en
+      - ith
+      - ock
+      - ell
+      - orn
+      - ay
+      Middles:
+      - er
+      - ar
+      - en
+      - ol
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ell
+      - wen
+      MasculineSuffixes:
+      - ick
+      - ar
+      - orn
+      Description: Coastal salt-folk — names like gull-cries and rope-knots
+      Tags:
+      - Tide-names
+      - Net-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Salt Stair
+    - Gullhaven
+    - the Wreck Road
+    - the Rope Walk
+    - Netmend
+    - the Tide Bell
+    - Brine Cross
+    Titles:
+      Honorific:
+      - Harbour-reeve
+      - Net-master
+      - Tide-reader
+      - Wreck-warden
+      - Bell-keeper
+      - Salt-elder
+      - Boat-mother
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Salt-cured
+      - the Rope-handed
+      - the Tide-wise
+      - the Gull-voiced
+      - the Never-drowned
+      - the Wreck-lucky
+      - the Brine-eyed
+      - the Storm-hardened
+      Rank:
+      - Reeve of Gullhaven
+      - Master of the Rope Walk
+      - Warden of the Wreck Road
+      - Keeper of the Tide Bell
+      - Elder of Netmend
+      Legend:
+      - Who Pulled Twelve Sailors from the Wreck
+      - Who Rang the Tide Bell Through the Great Storm
+      - Who Sailed Around the Iron Coast in a Cockle-boat
+      - Who Mended the Net That Caught the Sea Serpent
+      - Who Salted Fish Enough for the Winter of Knives
+      Occupational:
+      - Net-mender
+      - Boat-builder
+      - Salt-panner
+      - Rope-walker
+      - Fish-smoker
+    CitySuffixes:
+      Capital:
+      - haven
+      - quay
+      - stair
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - cove
+      - strand
+      - walk
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 646460858
+    Weight: 3
+  - BiomeID: 1384639345
+    Weight: 2
+  - BiomeID: 888339253
+    Weight: 1.5
+  - BiomeID: 1508835452
+    Weight: 1

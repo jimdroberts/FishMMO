@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Lava Elemental
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Living molten rock — glowing, slow-pouring names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Lav
+      - Mag
+      - Molt
+      - Pyr
+      - Kal
+      - Emb
+      - Vulk
+      - Sear
+      - Brim
+      - Scor
+      - Ign
+      - Cald
+      - Flow
+      - Cind
+      Nuclei:
+      - a
+      - ae
+      - o
+      - io
+      - u
+      Codas:
+      - ax
+      - ion
+      - ar
+      - ith
+      - eth
+      - uss
+      - aze
+      - orn
+      Middles:
+      - r
+      - l
+      - th
+      - ak
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ara
+      MasculineSuffixes:
+      - ax
+      - orn
+      - uss
+      Description: 'Living molten rock — glowing, slow-pouring names'
+      Tags:
+      - Lava-names
+      - Flow-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Molten Throne
+    - the Cinder Sea
+    - the Ember Heart
+    - Magmadeep
+    - the Ash Column
+    - the Slow Flow
+    - the First Fire
+    Titles:
+      Honorific:
+      - Flow-warden
+      - Molten-voice
+      - Cinder-lord
+      - Ember-heart
+      - Ash-herald
+      - Magma-mother
+      - Fire-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Slow-pouring
+      - the White-hot
+      - the Molten-hearted
+      - the Cinder-crowned
+      - the Never-cooled
+      - the Stone-melting
+      - the Glowing
+      - the First-fire-woken
+      Rank:
+      - Warden of the Molten Throne
+      - Voice of the Cinder Sea
+      - Heart of the Ember Heart
+      - Herald of the Ash Column
+      - Keeper of the Slow Flow
+      Legend:
+      - Who Poured Through the City and Made It Stone
+      - Who Melted the Iron Gate by Leaning
+      - 'Who Slept in the Volcano''s Throat for an Age'
+      - Who Boiled the Cinder Sea
+      - Who Was the First Fire of the World
+      Occupational:
+      - Flow-shaper
+      - Stone-melter
+      - Forge-heart
+    CitySuffixes:
+      Capital:
+      - throne
+      - sea
+      - heart
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - deep
+      - column
+      - flow
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 155940630
+    Weight: 2
+  - BiomeID: 493502347
+    Weight: 2
+  - BiomeID: -1042859854
+    Weight: 1

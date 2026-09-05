@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Reedfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Marsh-dwellers on stilts — sibilant, damp names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sedge
+      - Rush
+      - Mar
+      - Sal
+      - Wisp
+      - Tal
+      - Fen
+      - Bul
+      - Osp
+      - Lin
+      - Hes
+      - Cray
+      - Dab
+      - Mer
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - ee
+      Codas:
+      - ish
+      - esh
+      - ar
+      - ell
+      - en
+      - ith
+      - ock
+      - ard
+      Middles:
+      - el
+      - is
+      - ar
+      - en
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ell
+      - ish
+      MasculineSuffixes:
+      - ar
+      - en
+      - ock
+      Description: 'Marsh-dwellers on stilts — sibilant, damp names'
+      Tags:
+      - Reed-names
+      - Stilt-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Stilt Town
+    - Eelmarket
+    - the Punt Road
+    - the Heron Watch
+    - Sedgehaven
+    - the Drowned Chapel
+    - the Reed Maze
+    Titles:
+      Honorific:
+      - Punt-master
+      - Eel-warden
+      - Stilt-reeve
+      - Reed-elder
+      - Heron-watcher
+      - Marsh-priest
+      - Weir-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Web-footed
+      - the Reed-thin
+      - the Mist-eyed
+      - the Never-lost
+      - the Eel-slippery
+      - the Damp-booted
+      - the Fever-proof
+      - the Heron-still
+      Rank:
+      - Master of the Punt Road
+      - Warden of Eelmarket
+      - Reeve of the Stilt Town
+      - Watcher of the Heron Watch
+      - Keeper of the Reed Maze
+      Legend:
+      - Who Punted Through the Reed Maze Blind
+      - Who Caught the Eel as Long as a Boat
+      - Who Raised the Stilt Town After the Flood
+      - 'Who Found the Drowned Chapel''s Bell'
+      - Who Outwaited the Fever Summer
+      Occupational:
+      - Eel-catcher
+      - Punt-builder
+      - Reed-thatcher
+      - Weir-tender
+      - Peat-digger
+    CitySuffixes:
+      Capital:
+      - stilts
+      - weir
+      - haven
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - punt
+      - reed
+      - hut
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -2077848218
+    Weight: 3
+  - BiomeID: 719042512
+    Weight: 2
+  - BiomeID: 888339253
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 1

@@ -723,11 +723,11 @@ MonoBehaviour:
   - Category: 1
     Register: 1
     Pattern: '{honorific}'
-    Weight: 50
+    Weight: 38
   - Category: 1
     Register: 1
     Pattern: '{honorific:place} of {place}'
-    Weight: 20
+    Weight: 26
   - Category: 1
     Register: 1
     Pattern: '{honorific:ordinal}, {ordinal} of {pronoun} Name'
@@ -739,19 +739,19 @@ MonoBehaviour:
   - Category: 2
     Register: 0
     Pattern: '{epithet}'
-    Weight: 45
+    Weight: 32
   - Category: 2
     Register: 0
     Pattern: 'the {adjective}-{qualifier}'
-    Weight: 25
+    Weight: 30
   - Category: 2
     Register: 0
     Pattern: '{epithet} of {place}'
-    Weight: 8
+    Weight: 14
   - Category: 2
     Register: 0
     Pattern: '{epithet} from {place}'
-    Weight: 4
+    Weight: 6
   - Category: 2
     Register: 0
     Pattern: '{epithet}, bane of {place}'
@@ -768,38 +768,46 @@ MonoBehaviour:
     Register: 0
     Pattern: '{epithet}, exiled from {place}'
     Weight: 3
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet}, {adjective}-{qualifier}'
+    Weight: 6
+  - Category: 2
+    Register: 0
+    Pattern: 'the {adjective}-{qualifier} of {place}'
+    Weight: 10
   - Category: 3
     Register: 2
     Pattern: '{rank}'
-    Weight: 50
+    Weight: 40
   - Category: 3
     Register: 2
     Pattern: '{rank:noplace} of {place}'
-    Weight: 20
+    Weight: 28
   - Category: 3
     Register: 2
     Pattern: '{ordinal} {rank}'
-    Weight: 10
+    Weight: 12
   - Category: 4
     Register: 3
     Pattern: '{legend}'
-    Weight: 40
+    Weight: 30
   - Category: 4
     Register: 3
     Pattern: 'Who {deed} {object}'
-    Weight: 15
+    Weight: 18
   - Category: 4
     Register: 3
     Pattern: 'Who {deed} {object} at {place}'
-    Weight: 15
+    Weight: 18
   - Category: 4
     Register: 3
     Pattern: 'Who {deed} {object} in the {era}'
-    Weight: 10
+    Weight: 12
   - Category: 4
     Register: 3
     Pattern: 'Who {deed} {object} and {outcome}'
-    Weight: 10
+    Weight: 12
   - Category: 4
     Register: 3
     Pattern: 'Who {deed} {object} at the {battle} of {place}'
@@ -819,7 +827,7 @@ MonoBehaviour:
   - Category: 5
     Register: 1
     Pattern: '{occupation}'
-    Weight: 25
+    Weight: 20
   - Category: 5
     Register: 1
     Pattern: 'Master {occupation}'
@@ -827,7 +835,7 @@ MonoBehaviour:
   - Category: 5
     Register: 1
     Pattern: '{occupation} of {place}'
-    Weight: 10
+    Weight: 16
   - Category: 5
     Register: 1
     Pattern: 'Guild {occupation}'

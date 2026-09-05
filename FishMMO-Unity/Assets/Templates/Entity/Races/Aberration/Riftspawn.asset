@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Riftspawn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Shifting things born where the world tears — crackling, unstable names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Rif
+      - Tear
+      - Shif
+      - Zzith
+      - Warp
+      - Ulq
+      - Xoth
+      - Nyar
+      - Crak
+      - Vresh
+      - Thru
+      - Ithl
+      - Qhal
+      - Ossk
+      Nuclei:
+      - a
+      - u
+      - o
+      - y
+      - i
+      Codas:
+      - oth
+      - ax
+      - urq
+      - thk
+      - yl
+      - iss
+      - ull
+      - ithl
+      Middles:
+      - ss
+      - th
+      - ul
+      - yy
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - yl
+      - iss
+      MasculineSuffixes:
+      - ax
+      - urq
+      - oth
+      Description: 'Shifting things born where the world tears — crackling, unstable names'
+      Tags:
+      - Rift-names
+      - Shift-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Torn Place
+    - Riftmouth
+    - the Shifting Floor
+    - the Unstable Stair
+    - Warpwell
+    - the Crackling Edge
+    - the Wound in the World
+    Titles:
+      Honorific:
+      - Rift-lord
+      - Mouth-warden
+      - Floor-shifter
+      - Stair-unstabler
+      - Edge-crackler
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ever-shifting
+      - the Rift-born
+      - the Never-one-shape
+      - the Crackling
+      - the Edge-walking
+      - the Torn
+      - the Unstable
+      - the World-wound-woken
+      Rank:
+      - Lord of the Torn Place
+      - Warden of Riftmouth
+      - Shifter of the Shifting Floor
+      - Unstabler of the Unstable Stair
+      - Crackler of the Crackling Edge
+      Legend:
+      - Who Came Through the Tear and Could Not Go Back
+      - Who Shifted Through Nine Shapes in a Breath
+      - Who Walked the Crackling Edge and Widened It
+      - Who Was Sealed in the Rift and Seeped Out
+      - Who Made the Floor Forget to Be a Floor
+      Occupational:
+      - Edge-walker
+      - Shape-shifter
+      - Rift-seeper
+    CitySuffixes:
+      Capital:
+      - place
+      - mouth
+      - floor
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - well
+      - stair
+      - edge
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 493502347
+    Weight: 3
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: -1141955836
+    Weight: 2
+  - BiomeID: 681889367
+    Weight: 1

@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bone Wyrm
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Skeletal dragons roused from the hoard — rattling, cavernous names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Oss
+      - Drak
+      - Skel
+      - Vaal
+      - Thul
+      - Mor
+      - Rax
+      - Cran
+      - Vor
+      - Kaz
+      - Nekr
+      - Sarn
+      - Bon
+      - Oth
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - y
+      Codas:
+      - ax
+      - oth
+      - ull
+      - ith
+      - eth
+      - ir
+      - orr
+      - ael
+      Middles:
+      - ra
+      - th
+      - ul
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ael
+      MasculineSuffixes:
+      - ax
+      - ull
+      - orr
+      Description: 'Skeletal dragons roused from the hoard — rattling, cavernous names'
+      Tags:
+      - Bone-names
+      - Hoard-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bone Roost
+    - Rattlespire
+    - the Dead Hoard
+    - the Rib Cave
+    - Skullclaw
+    - the Wingless Ledge
+    - the Marrow Nest
+    Titles:
+      Honorific:
+      - Bone-wyrm
+      - Dead-hoard-keeper
+      - Roost-lord
+      - Rib-matriarch
+      - Marrow-warden
+      - Skull-elder
+      - Rattle-master
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Fleshless
+      - the Rattling
+      - the Hoard-roused
+      - the Wingless
+      - the Rib-caged
+      - the Never-truly-slain
+      - the Marrow-hungry
+      - the Skull-crowned
+      Rank:
+      - Lord of the Bone Roost
+      - Keeper of the Dead Hoard
+      - Matriarch of the Rib Cave
+      - Warden of the Marrow Nest
+      - Master of Rattlespire
+      Legend:
+      - Who Rose from the Hoard When the Thief Touched It
+      - Who Breathed Dust Instead of Fire
+      - Who Rattled the Tower Down
+      - Who Was Slain Thrice and Reassembled
+      - Who Guards the Gold It Cannot Spend
+      Occupational:
+      - Hoard-guard
+      - Rib-rattler
+      - Dust-breather
+    CitySuffixes:
+      Capital:
+      - roost
+      - spire
+      - cave
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - ledge
+      - nest
+      - claw
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: 621224406
+    Weight: 2
+  - BiomeID: -567058185
+    Weight: 1.5
+  - BiomeID: 155940630
+    Weight: 1

@@ -1,0 +1,194 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Half-Elf
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Blend of elvish flow and human weight
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ael
+      - Mar
+      - Thal
+      - Ber
+      - Syl
+      - Kar
+      - Eld
+      - Far
+      - Gal
+      - Lan
+      - Ith
+      - Nor
+      - Quel
+      - Sar
+      - Var
+      Nuclei:
+      - a
+      - ae
+      - e
+      - ie
+      - o
+      - ia
+      - ar
+      Codas:
+      - iel
+      - ric
+      - wen
+      - ald
+      - mir
+      - ton
+      - ias
+      - win
+      - dir
+      - son
+      Middles:
+      - an
+      - el
+      - ar
+      - it
+      - en
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - iel
+      - a
+      - wen
+      - ine
+      MasculineSuffixes:
+      - ric
+      - mir
+      - ald
+      Description: Blend of elvish flow and human weight
+      Tags:
+      - Blended roots
+      - Traveler-names
+      - Heritage marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Threshold
+    - Bridgetown
+    - the Twilight Road
+    - the Border March
+    - Heritageholm
+    - the Divided Court
+    Titles:
+      Honorific:
+      - Pathfinder
+      - Bridgewalker
+      - Twiceborn
+      - Heritage-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - of Two Bloods
+      - the Betweener
+      - the Rootless
+      - the Bridge-born
+      - of Neither World
+      - the Wandering
+      - the Twice-blessed
+      - the Horizon-walker
+      Rank:
+      - Envoy of Both Courts
+      - Ambassador of the Threshold
+      - Walker Between Worlds
+      - Voice of the Divided
+      - Keeper of Two Tongues
+      Legend:
+      - Who United the Divided Halls
+      - Who Walked Both Paths
+      - Child of Two Sunsets
+      - Who Spoke for Both Courts
+      - Who Bridged the Mortal and the Eternal
+      Occupational:
+      - Merchant
+      - Scribe
+      - Diplomat
+      - Minstrel
+      - Cartographer
+      - Healer
+    CitySuffixes:
+      Capital:
+      - hold
+      - haven
+      - bridge
+      - reach
+      - crossing
+      - spire
+      Fortress:
+      - wall
+      - guard
+      - gate
+      - tower
+      - bastion
+      - ward
+      Village:
+      - dale
+      - field
+      - stead
+      - crossing
+      - grove
+      - shire
+      Port:
+      - port
+      - harbor
+      - crossing
+      - wharf
+      - cove
+      - landing
+      Sacred:
+      - shrine
+      - sanctum
+      - court
+      - altar
+      - chapel
+      Ruin:
+      - fall
+      - rest
+      - hollow
+      - scar
+      - end
+      - fade
+  BiomeAffinities:
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 2
+  - BiomeID: -1951431387
+    Weight: 1
+  - BiomeID: -2037808285
+    Weight: 1
+  - BiomeID: -1123947451
+    Weight: 1

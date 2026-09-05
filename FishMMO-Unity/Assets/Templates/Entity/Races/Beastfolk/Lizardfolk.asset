@@ -1,0 +1,208 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Lizardfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Hissing and clicking — cold precision, predatory patience'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ssar
+      - Keth
+      - Zith
+      - Thar
+      - Skex
+      - Razz
+      - Hiss
+      - Jex
+      - Krix
+      - Nax
+      - Sith
+      - Vex
+      - Xal
+      - Zek
+      - Drak
+      - Grix
+      - Kaz
+      - Rix
+      - Sax
+      - Thex
+      Nuclei:
+      - a
+      - i
+      - e
+      - ix
+      - ax
+      - iss
+      - eth
+      Codas:
+      - iss
+      - eth
+      - ax
+      - ix
+      - ek
+      - ath
+      - eks
+      - azz
+      - ith
+      - usk
+      - ass
+      - ess
+      Middles:
+      - ss
+      - zz
+      - kk
+      - xx
+      - th
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - iss
+      - eth
+      - a
+      MasculineSuffixes:
+      - ax
+      - ix
+      - ek
+      Description: 'Hissing and clicking — cold precision, predatory patience'
+      Tags:
+      - Scale-names
+      - Brood-bonds
+      - Sun-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Deepfen
+    - Blackwater Swamp
+    - Sun-Stone Nest
+    - the Great Basking
+    - Scale-Hall
+    - the Brood Pits
+    - Fangmire
+    Titles:
+      Honorific:
+      - Scale-elder
+      - Brood-keeper
+      - Sun-basker
+      - Swamp-warden
+      HonorificMasculine:
+      - Fang-lord
+      HonorificFeminine:
+      - Fang-lady
+      - Clutch-mother
+      Epithet:
+      - the Cold-blooded
+      - the Patient Hunter
+      - the Scale-hard
+      - the Sun-blessed
+      - the Unseen Predator
+      - the Ancient-scaled
+      - the Still-water
+      - the Fang-ready
+      Rank:
+      - Elder of the Great Nest
+      - First Hunter of the Swamp
+      - Keeper of the Sacred Eggs
+      - Warden of the Deepfen
+      - Scale-chief of the Brood Pits
+      - Guardian of Sun-Stone Nest
+      Legend:
+      - Who Devoured a War Party Alone
+      - Who Has Shed a Thousand Skins
+      - Whose Patience Outlasted a Siege
+      - Who Remembers the Time Before Warm-bloods
+      - Who Hatched in the Age of Dragons
+      Occupational:
+      - Egg-tender
+      - Bone-carver
+      - Marsh-hunter
+      - Hide-worker
+    CitySuffixes:
+      Capital:
+      - nest
+      - throne
+      - den
+      - scale-hall
+      - basking
+      - clutch
+      - domain
+      Fortress:
+      - wall
+      - fang
+      - spike
+      - guard
+      - gate
+      - rampart
+      - barrier
+      Village:
+      - nest
+      - pool
+      - mud
+      - clearing
+      - camp
+      - hollow
+      - den
+      Port:
+      - bank
+      - ford
+      - pool
+      - shallows
+      - wade
+      - basin
+      Sacred:
+      - altar
+      - sun-stone
+      - shrine
+      - egg-vault
+      - circle
+      - totem
+      Ruin:
+      - ruin
+      - scar
+      - dust
+      - hollow
+      - ash
+      - waste
+      - husk
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2019209325
+    Weight: 2
+  - BiomeID: -1640008461
+    Weight: 1.5
+  - BiomeID: -2077848218
+    Weight: 1
+  - BiomeID: 888339253
+    Weight: 1

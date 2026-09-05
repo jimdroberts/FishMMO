@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Giant Eagle
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Vast eagles of the peaks — piercing, wind-cut names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Aer
+      - Skr
+      - Tal
+      - Kel
+      - Vent
+      - Sky
+      - Cael
+      - Per
+      - Strix
+      - Ael
+      - Wind
+      - Kir
+      - Sol
+      - Hawk
+      Nuclei:
+      - a
+      - i
+      - o
+      - au
+      - ae
+      Codas:
+      - 'on'
+      - ax
+      - wing
+      - talon
+      - ir
+      - ael
+      - eth
+      - or
+      Middles:
+      - er
+      - or
+      - ae
+      - il
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ira
+      MasculineSuffixes:
+      - 'on'
+      - ax
+      - or
+      Description: 'Vast eagles of the peaks — piercing, wind-cut names'
+      Tags:
+      - Wing-names
+      - Peak-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Eyrie Crag
+    - the Thermal Road
+    - Talonpeak
+    - the Wind Ledge
+    - the Lamb Field
+    - Skyreach
+    - the Bone Nest
+    Titles:
+      Honorific:
+      - Crag-lord
+      - Eyrie-matriarch
+      - Sky-warden
+      - Talon-elder
+      - Thermal-rider
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Wide-winged
+      - the Far-seeing
+      - the Sky-lord
+      - the Lamb-taker
+      - the Storm-riding
+      - the Peak-born
+      - the Talon-sharp
+      - the Sun-circling
+      Rank:
+      - Lord of the Eyrie Crag
+      - Matriarch of Talonpeak
+      - Warden of Skyreach
+      - Rider of the Thermal Road
+      - Keeper of the Wind Ledge
+      Legend:
+      - Who Carried Off the Shepherd with the Sheep
+      - Who Flew Above the Storm
+      - Who Fought the Wyvern and Kept the Crag
+      - Who Saw the Ship Sink from the Peak
+      - 'Who Nested on the King''s Tower'
+      Occupational:
+      - Peak-watcher
+      - Sky-scout
+      - Lamb-taker
+    CitySuffixes:
+      Capital:
+      - crag
+      - peak
+      - reach
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - ledge
+      - nest
+      - road
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 1.5
+  - BiomeID: 1139958860
+    Weight: 1

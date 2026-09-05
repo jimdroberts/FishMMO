@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Owlfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Night-watching owl people — soft, hooting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Hoo
+      - Tyt
+      - Str
+      - Ath
+      - Nok
+      - Sil
+      - Whoo
+      - Ori
+      - Bub
+      - Ul
+      - Sar
+      - Tal
+      - Nyx
+      - Bran
+      Nuclei:
+      - oo
+      - o
+      - u
+      - a
+      - i
+      Codas:
+      - hoot
+      - ith
+      - oo
+      - ar
+      - ix
+      - el
+      - orn
+      - oth
+      Middles:
+      - oo
+      - ri
+      - el
+      - ul
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - oo
+      MasculineSuffixes:
+      - orn
+      - ix
+      - oth
+      Description: 'Night-watching owl people — soft, hooting names'
+      Tags:
+      - Night-names
+      - Watch-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Hollow Oak
+    - Nightwatch
+    - the Silent Wing
+    - the Mouse Meadow
+    - Hootreach
+    - the Moon Perch
+    - the Pellet Ring
+    Titles:
+      Honorific:
+      - Night-warden
+      - Perch-elder
+      - Wing-keeper
+      - Watch-master
+      - Moon-reader
+      - Oak-mother
+      - Hoot-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Round-eyed
+      - the Silent-winged
+      - the Night-wise
+      - the Head-turning
+      - the Mouse-quick
+      - the Hollow-dwelling
+      - the Moon-perched
+      - the Never-sleeping
+      Rank:
+      - Warden of Nightwatch
+      - Elder of the Hollow Oak
+      - Keeper of the Silent Wing
+      - Master of the Moon Perch
+      - Reeve of the Mouse Meadow
+      Legend:
+      - Who Watched the Border for a Hundred Nights
+      - 'Who Heard the Thief''s Heartbeat Through the Wall'
+      - Who Flew Silent Past the Dragon
+      - Who Counted Every Mouse in the Meadow
+      - Who Answered the Riddle of the Moon
+      Occupational:
+      - Night-watcher
+      - Mouse-catcher
+      - Feather-quill-maker
+      - Pellet-reader
+      - Lookout
+    CitySuffixes:
+      Capital:
+      - oak
+      - watch
+      - perch
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - hollow
+      - wing
+      - reach
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: 144196518
+    Weight: 1.5
+  - BiomeID: -2037808285
+    Weight: 1

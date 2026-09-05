@@ -1,0 +1,322 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Wood Elf
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Earthy consonants, nature sounds — bark, wind, and leaf'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ath
+      - Bran
+      - Cael
+      - Dun
+      - Elor
+      - Fer
+      - Glin
+      - Hal
+      - Ith
+      - Loth
+      - Moth
+      - Nim
+      - Pin
+      - Quel
+      - Rinn
+      - Sorn
+      - Tal
+      - Urf
+      - Veth
+      - Oak
+      Nuclei:
+      - o
+      - a
+      - or
+      - ar
+      - un
+      - 'on'
+      - an
+      Codas:
+      - orn
+      - ath
+      - in
+      - las
+      - oth
+      - ir
+      - weth
+      - rin
+      - dar
+      - moth
+      Middles:
+      - an
+      - or
+      - al
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - ath
+      - rin
+      - a
+      - or
+      MasculineSuffixes:
+      - orn
+      - ir
+      - dar
+      Description: 'Earthy consonants, nature sounds — bark, wind, and leaf'
+      Tags:
+      - Grove-names
+      - Beast-bonds
+      - Season marks
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: barkborn
+      Phonology:
+        Onsets:
+        - Fern
+        - Moss
+        - Oak
+        - Thorn
+        - Willow
+        - Brier
+        - Hazel
+        - Root
+        - Grove
+        - Vine
+        - Pine
+        - Bramble
+        - Yew
+        - Elm
+        - Ash
+        Nuclei:
+        - a
+        - e
+        - i
+        - ae
+        - ea
+        - io
+        Codas:
+        - leaf
+        - root
+        - bark
+        - grove
+        - thorn
+        - bloom
+        - moss
+        - vine
+        - shade
+        - hollow
+        Middles:
+        - il
+        - en
+        - or
+        - ar
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - bloom
+        - leaf
+        - vine
+        - wen
+        MasculineSuffixes:
+        - bark
+        - root
+        - thorn
+        - shade
+        Description: 'Barkborn — inward-turned, ring-counted memory, moss-speech'
+        Tags:
+        - Grove-names
+        - Silent-bonds
+        - Root-oaths
+        WeightedCodas: []
+    - CultureKey: glaivewarden
+      Phonology:
+        Onsets:
+        - Aril
+        - Ber
+        - Cael
+        - Drin
+        - Esh
+        - Fael
+        - Glin
+        - Hael
+        - Iol
+        - Kael
+        - Lor
+        - Miri
+        - Nae
+        - Orn
+        - Pir
+        Nuclei:
+        - a
+        - e
+        - i
+        - o
+        - ae
+        - ie
+        Codas:
+        - thor
+        - veil
+        - glade
+        - spear
+        - guard
+        - strike
+        - hunt
+        - bane
+        - mark
+        - eye
+        Middles:
+        - al
+        - el
+        - il
+        - an
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - veil
+        - glade
+        - wen
+        MasculineSuffixes:
+        - guard
+        - spear
+        - thor
+        Description: 'Glaivewarden — martial forest order, patrol-cant'
+        Tags:
+        - Patrol-names
+        - Blade-oaths
+        - Hunt-marks
+        WeightedCodas: []
+    Places:
+    - the Heartwood
+    - Mosshollow
+    - the Old Groves
+    - Ferndeep
+    - the Canopy
+    - the Rootways
+    - Thornveil
+    - the Whispering Glade
+    Titles:
+      Honorific:
+      - Grovekeeper
+      - Rootspeaker
+      - Leafwarden
+      - Barkwhisper
+      - Thornguard
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - of the Deep Wood
+      - the Unseen
+      - the Thornwalker
+      - the Wolfriend
+      - the Canopy-born
+      - the Root-deep
+      - the Moss-footed
+      - the Wind-listener
+      Rank:
+      - Elder of the Heartwood Grove
+      - Speaker for the Old Trees
+      - Warden of the Green Path
+      - Keeper of the Ancient Groves
+      - First Ranger of the Canopy
+      Legend:
+      - Who Spoke with the Last Treefolk
+      - Who Hid a Thousand Refugees
+      - Whose Arrows Never Missed
+      - Who Tamed the Forest Fire
+      - Who Grew a Forest in a Single Night
+      Occupational:
+      - Bowyer
+      - Tracker
+      - Glade-warden
+      - Herbalist
+      - Beekeeper
+      - Bark-scribe
+      - Fletcher
+    CitySuffixes:
+      Capital:
+      - canopy
+      - heart
+      - root
+      - crown
+      - bough
+      - arch
+      - nest
+      Fortress:
+      - thorn
+      - bark
+      - guard
+      - wall
+      - bower
+      - watch
+      - thicket
+      Village:
+      - hollow
+      - glen
+      - moss
+      - fern
+      - brook
+      - clearing
+      - burrow
+      Port:
+      - bank
+      - ford
+      - pool
+      - weir
+      - bend
+      - shallows
+      Sacred:
+      - grove
+      - bloom
+      - ring
+      - font
+      - root
+      - seed
+      - altar
+      Ruin:
+      - rot
+      - fall
+      - wilt
+      - ash
+      - blight
+      - husk
+      - stump
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1640008461
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1

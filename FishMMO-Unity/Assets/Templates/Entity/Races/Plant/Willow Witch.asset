@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Willow Witch
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Plant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Weeping-willow spirits of the riverbank — trailing, sighing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Wil
+      - Weep
+      - Sal
+      - Trail
+      - Sigh
+      - Bend
+      - Riv
+      - Wisp
+      - Lin
+      - Grie
+      - Sway
+      - Bank
+      - Osier
+      - Wyl
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - ee
+      Codas:
+      - ow
+      - eth
+      - ell
+      - ine
+      - ith
+      - ora
+      - el
+      - ae
+      Middles:
+      - el
+      - li
+      - ae
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ow
+      - ine
+      MasculineSuffixes:
+      - eth
+      - el
+      - ith
+      Description: 'Weeping-willow spirits of the riverbank — trailing, sighing names'
+      Tags:
+      - Willow-names
+      - Bank-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Weeping Bank
+    - Willowbend
+    - the Trailing Pool
+    - the Sighing Grove
+    - Osierford
+    - 'the Drowned Maiden''s Tree'
+    - the Bent Court
+    Titles:
+      Honorific:
+      - Bank-weeper
+      - Bend-warden
+      - Pool-trailer
+      - Grove-sigher
+      - Ford-keeper
+      - Willow-mother
+      - Osier-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Weeping
+      - the Trailing-haired
+      - the Bank-rooted
+      - the Sighing
+      - the River-bending
+      - the Never-dry-eyed
+      - the Basket-giving
+      - the Green-veiled
+      Rank:
+      - Weeper of the Weeping Bank
+      - Warden of Willowbend
+      - Trailer of the Trailing Pool
+      - Sigher of the Sighing Grove
+      - Keeper of Osierford
+      Legend:
+      - Who Wept the River Into Flood
+      - Who Caught the Drowning Maiden in Their Branches and Kept Her
+      - Who Bent Over the Ford to Hide the Fugitives
+      - Who Gave Baskets to the Whole Village and Asked Only Silence
+      - Who Sighed the Mill to Sleep
+      Occupational:
+      - Basket-giver
+      - Bank-holder
+      - Osier-weaver
+      - Grove-keeper
+    CitySuffixes:
+      Capital:
+      - bank
+      - bend
+      - grove
+      Fortress:
+      - bramble
+      - thorn
+      - hedge
+      - wall
+      Village:
+      - pool
+      - ford
+      - court
+      Port:
+      - bank
+      - reed
+      - ford
+      Sacred:
+      - oak
+      - ring
+      - root
+      - well
+      Ruin:
+      - rot
+      - stump
+      - blight
+      - ash
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 2117371294
+    Weight: 3
+  - BiomeID: 247344987
+    Weight: 2
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: 888339253
+    Weight: 1

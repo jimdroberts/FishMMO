@@ -1,0 +1,171 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Kelp Lurker
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Ambush predators of the kelp forests — swaying, hushed names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Kelp
+      - Sway
+      - Lur
+      - Wrack
+      - Tang
+      - Hush
+      - Fron
+      - Sil
+      - Mur
+      - Glis
+      - Deep
+      - Sar
+      - Vel
+      - Thal
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - i
+      Codas:
+      - ish
+      - el
+      - ur
+      - ath
+      - oon
+      - ess
+      - ith
+      - orr
+      Middles:
+      - el
+      - ur
+      - lo
+      - ss
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - ith
+      MasculineSuffixes:
+      - el
+      - ur
+      - orr
+      Description: 'Ambush predators of the kelp forests — swaying, hushed names'
+      Tags:
+      - Kelp-names
+      - Sway-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Kelp Cathedral
+    - Swayholt
+    - the Frond Ambush
+    - the Tangle Deep
+    - Lurkreach
+    - 'the Diver''s Grave'
+    - the Drifting Wall
+    Titles:
+      Honorific:
+      - Kelp-lurker
+      - Frond-lord
+      - Tangle-matriarch
+      - Grave-keeper
+      - Wall-drifter
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Kelp-veiled
+      - the Slow-swaying
+      - the Diver-taking
+      - the Frond-hidden
+      - the Tangle-born
+      - the Patient-in-the-Green
+      - the Never-seen-until
+      - the Drift-walking
+      Rank:
+      - Lurker of the Kelp Cathedral
+      - Lord of the Frond Ambush
+      - Matriarch of the Tangle Deep
+      - 'Keeper of the Diver''s Grave'
+      - Drifter of the Drifting Wall
+      Legend:
+      - Who Took Every Pearl-diver of the Cove
+      - Who Swayed Unseen Beneath the Fleet for a Season
+      - Who Tangled the Sea Drake in Kelp
+      - Who Grew the Kelp Cathedral Around Its Prey
+      - Who Waited a Year for One Diver
+      Occupational:
+      - Kelp-tangler
+      - Diver-taker
+      - Frond-drifter
+    CitySuffixes:
+      Capital:
+      - cathedral
+      - holt
+      - deep
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - reach
+      - wall
+      - grave
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 1508835452
+    Weight: 3
+  - BiomeID: -1552223677
+    Weight: 2
+  - BiomeID: 1476749746
+    Weight: 1.5
+  - BiomeID: 646460858
+    Weight: 1

@@ -1,0 +1,171 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Giant Crab
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'House-sized shore crabs — clacking, hollow names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Klak
+      - Karr
+      - Shel
+      - Crus
+      - Skut
+      - Tid
+      - Pinch
+      - Rok
+      - Bar
+      - Grip
+      - Mol
+      - Chit
+      - Snap
+      - Wrack
+      Nuclei:
+      - a
+      - o
+      - u
+      - ee
+      - i
+      Codas:
+      - ak
+      - ock
+      - ash
+      - ull
+      - ith
+      - orr
+      - ek
+      - um
+      Middles:
+      - ka
+      - ol
+      - ur
+      - ak
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ock
+      - ika
+      MasculineSuffixes:
+      - ak
+      - orr
+      - um
+      Description: 'House-sized shore crabs — clacking, hollow names'
+      Tags:
+      - Clack-names
+      - Shell-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Boat-crushing Rock
+    - Snaprock
+    - the Tide-pool Throne
+    - the Sideways Shelf
+    - Shellmound
+    - the Moult Cave
+    - the Wreck Reef
+    Titles:
+      Honorific:
+      - Rock-crusher
+      - Tide-pool-lord
+      - Shell-elder
+      - Reef-matriarch
+      - Moult-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Boat-crushing
+      - the Hard-shelled
+      - the Sideways
+      - the Big-clawed
+      - the Barnacle-backed
+      - the Tide-pool-born
+      - the Never-dislodged
+      - the Moulting
+      Rank:
+      - Crusher of the Boat-crushing Rock
+      - Lord of the Tide-pool Throne
+      - Elder of Shellmound
+      - Matriarch of the Wreck Reef
+      - Keeper of the Moult Cave
+      Legend:
+      - Who Crushed the Fishing Boat and Ate the Catch
+      - Who Held the Lighthouse Rock Through the Storm
+      - Who Snipped the Anchor Chain
+      - Who Moulted a Shell Big Enough to Live In
+      - Who Walked Sideways Through the Harbour Wall
+      Occupational:
+      - Rock-holder
+      - Wreck-picker
+      - Shell-grower
+    CitySuffixes:
+      Capital:
+      - rock
+      - throne
+      - mound
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - pool
+      - shelf
+      - cave
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 646460858
+    Weight: 3
+  - BiomeID: 1384639345
+    Weight: 2
+  - BiomeID: -1552223677
+    Weight: 1.5
+  - BiomeID: 1508835452
+    Weight: 1

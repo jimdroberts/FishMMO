@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Ashen Dead
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'The burned dead of the cinder fields — crackling, smoke-hoarse names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ash
+      - Cind
+      - Char
+      - Emb
+      - Sear
+      - Smok
+      - Kal
+      - Burn
+      - Soot
+      - Coal
+      - Vol
+      - Scor
+      - Brim
+      - Dus
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - ir
+      Codas:
+      - ith
+      - ar
+      - ok
+      - ash
+      - urn
+      - oss
+      - ang
+      - eth
+      Middles:
+      - ar
+      - ir
+      - ol
+      - ak
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ara
+      MasculineSuffixes:
+      - ok
+      - urn
+      - ang
+      Description: 'The burned dead of the cinder fields — crackling, smoke-hoarse names'
+      Tags:
+      - Ash-names
+      - Pyre-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Pyre Field
+    - Cindergrave
+    - the Burned Village
+    - the Smoke Column
+    - Charmound
+    - the Ember Road
+    - the Cold Hearth
+    Titles:
+      Honorific:
+      - Pyre-warden
+      - Field-walker
+      - Column-lord
+      - Village-keeper
+      - Hearth-elder
+      - Ash-mother
+      - Smoke-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Burned
+      - the Ash-crowned
+      - the Smoke-hoarse
+      - the Cinder-eyed
+      - the Pyre-risen
+      - the Never-cooled
+      - the Charred
+      - the Soot-fingered
+      Rank:
+      - Warden of the Pyre Field
+      - Walker of Cindergrave
+      - Lord of the Smoke Column
+      - Keeper of the Burned Village
+      - Elder of the Cold Hearth
+      Legend:
+      - Who Rose from the Pyre Before It Cooled
+      - Who Walked Back into the Burned Village and Waited
+      - Who Carried the Ember Road Alight for a Century
+      - Who Smothered the Fire-giant with Ash
+      - Who Breathed Smoke into the Living
+      Occupational:
+      - Pyre-tender
+      - Ash-walker
+      - Ember-carrier
+    CitySuffixes:
+      Capital:
+      - field
+      - mound
+      - column
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - village
+      - road
+      - hearth
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 493502347
+    Weight: 1.5
+  - BiomeID: 599899035
+    Weight: 1

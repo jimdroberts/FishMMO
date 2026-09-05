@@ -1,0 +1,106 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Giant Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Giant
+  Titles:
+    Honorific:
+    - Thane
+    - Hearth-lord
+    - Peak-warden
+    - Stone-speaker
+    - Boulder-chief
+    - Sky-caller
+    - Cairn-keeper
+    - Wall-builder
+    - Storm-herald
+    - Old Bones
+    - Mountain-father
+    HonorificMasculine:
+    - Jarl-of-the-Peaks
+    - Thunder-son
+    HonorificFeminine:
+    - Peak-mother
+    - Thunder-daughter
+    Epithet:
+    - the Mountain-shouldered
+    - the Cloud-headed
+    - the Slow to Anger
+    - the Earth-shaking
+    - the Old as Stone
+    - the Wide-striding
+    - the Hearth-warm
+    - the Sky-tall
+    - the Boulder-fisted
+    - the Ice-bearded
+    - the Far-throwing
+    - the Thunder-voiced
+    - the Long-remembering
+    - the Unmoved
+    - the Cliff-born
+    - the Root-deep
+    - the Snow-crowned
+    - the Avalanche-maker
+    - the Gentle for a Giant
+    - the Bridge-of-Backs
+    - the Stone-eater
+    - the Never-kneeling
+    Rank:
+    - Thane of the Thunder Steps
+    - Warden of the Broken Peaks
+    - Hearth-lord of the High Hearth
+    - Keeper of the Skull Cairn
+    - Builder of the Long Wall
+    - Chief of the Boulder Fields
+    - Voice of the Stone Table
+    - Master of the Roaring Gap
+    - Lord of the Cloud Meadows
+    - Smith of the Sky-anvil
+    - Elder of the Hall of Echoes
+    - First-born of the Old Frost
+    Legend:
+    - 'Who Threw the Mountain''s Crown into the Sea'
+    - Who Carried a Village to Safety
+    - Who Wrestled the Avalanche
+    - Who Bridged the Roaring Gap with Their Back
+    - Who Slept Through the Age of Kings
+    - Who Drank the Lake Dry
+    - Who Built the Long Wall in a Single Winter
+    - Who Broke the Thunder with a Fist
+    - Who Counted Every Stone of the Broken Peaks
+    - Who Outsang the Storm
+    - 'Who Carried the Sun''s Weight for a Day'
+    - Who Made the Sky-anvil Ring
+    Occupational:
+    - Boulder-hurler
+    - Wall-raiser
+    - Cloud-herder
+    - Cairn-builder
+    - Ice-hewer
+    - Peak-shepherd
+    - Storm-smith
+    - Bone-carver
+  Places:
+  - the Thunder Steps
+  - the Skull Cairn
+  - the High Hearth
+  - the Broken Peaks
+  - the Long Wall
+  - the Old Frost
+  - the Cloud Meadows
+  - the Stone Table
+  - the Roaring Gap
+  - the Boulder Fields
+  - the Sky-anvil
+  - the Hall of Echoes

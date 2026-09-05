@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Deepfin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Merfolk of the lightless trench — pressure-slow, glowing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Aby
+      - Thal
+      - Nyr
+      - Vess
+      - Deep
+      - Lum
+      - Sar
+      - Oth
+      - Kel
+      - Mor
+      - Ith
+      - Glow
+      - Sel
+      - Dros
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - oo
+      Codas:
+      - oth
+      - ith
+      - ess
+      - ael
+      - oon
+      - ir
+      - ull
+      - ara
+      Middles:
+      - lo
+      - ul
+      - ae
+      - th
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ara
+      MasculineSuffixes:
+      - oth
+      - ir
+      - ull
+      Description: 'Merfolk of the lightless trench — pressure-slow, glowing names'
+      Tags:
+      - Trench-names
+      - Glow-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Trench Court
+    - Glowhall
+    - the Black Water
+    - the Vent Gardens
+    - Pressurereach
+    - the Bone Rain
+    - the Last Light
+    Titles:
+      Honorific:
+      - Trench-elder
+      - Glow-warden
+      - Vent-keeper
+      - Black-water-reeve
+      - Light-herald
+      - Pressure-mother
+      - Bone-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Glow-lured
+      - the Trench-born
+      - the Slow-as-pressure
+      - the Lightless
+      - the Vent-warmed
+      - the Bone-rain-fed
+      - the Never-surfacing
+      - the Cold-eyed
+      Rank:
+      - Elder of the Trench Court
+      - Warden of Glowhall
+      - Keeper of the Vent Gardens
+      - Reeve of the Black Water
+      - Herald of the Last Light
+      Legend:
+      - Who Swam Up to See the Sun and Went Blind
+      - Who Farmed the Vent Gardens Through the Cold Century
+      - Who Lured the Kraken with a Single Light
+      - Who Caught the Bone Rain in a Net
+      - Who Sang in the Black Water and Was Answered
+      Occupational:
+      - Vent-farmer
+      - Glow-tender
+      - Bone-gatherer
+      - Pressure-scout
+    CitySuffixes:
+      Capital:
+      - court
+      - hall
+      - reach
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - water
+      - gardens
+      - light
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -770075463
+    Weight: 3
+  - BiomeID: 1154569601
+    Weight: 2
+  - BiomeID: 458680092
+    Weight: 2
+  - BiomeID: -1141955836
+    Weight: 1

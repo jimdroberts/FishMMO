@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Carrion Bloat
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Gas-swollen floating things that feed on the dead — wet, bursting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bloa
+      - Gas
+      - Swel
+      - Flo
+      - Rot
+      - Burs
+      - Puff
+      - Mur
+      - Glis
+      - Drif
+      - Vresh
+      - Ithl
+      - Sput
+      - Ossk
+      Nuclei:
+      - o
+      - u
+      - a
+      - oo
+      - i
+      Codas:
+      - oth
+      - ug
+      - ull
+      - ash
+      - oom
+      - orr
+      - ub
+      - eth
+      Middles:
+      - ub
+      - oo
+      - ur
+      - og
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - oob
+      - ull
+      MasculineSuffixes:
+      - oth
+      - ug
+      - orr
+      Description: 'Gas-swollen floating things that feed on the dead — wet, bursting names'
+      Tags:
+      - Bloat-names
+      - Drift-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Drifting Field
+    - Bloatmarsh
+    - the Burst Court
+    - the Carrion Cloud
+    - Gasdeep
+    - the Rot Wind
+    - the Floating Grave
+    Titles:
+      Honorific:
+      - Field-drifter
+      - Marsh-lord
+      - Court-burster
+      - Cloud-matriarch
+      - Wind-rider
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Gas-swollen
+      - the Drifting
+      - the Bursting
+      - the Carrion-fed
+      - the Rot-scented
+      - the Never-landing
+      - the Cloud-born
+      - the Wet-skinned
+      Rank:
+      - Drifter of the Drifting Field
+      - Lord of Bloatmarsh
+      - Burster of the Burst Court
+      - Matriarch of the Carrion Cloud
+      - Rider of the Rot Wind
+      Legend:
+      - Who Drifted Over the Battlefield and Fed for a Month
+      - Who Burst Over the Wedding
+      - Who Floated Into the Cathedral and Would Not Leave
+      - Who Swelled to the Size of a Barn
+      - Who Followed the Plague Cart Like a Kite
+      Occupational:
+      - Carrion-drifter
+      - Gas-swaller
+      - Wind-rider
+    CitySuffixes:
+      Capital:
+      - field
+      - marsh
+      - court
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - cloud
+      - deep
+      - grave
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 525873855
+    Weight: 3
+  - BiomeID: 719042512
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 173642607
+    Weight: 1

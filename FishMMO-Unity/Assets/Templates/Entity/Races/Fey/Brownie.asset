@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Brownie
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Household fey of hearth and hob — homely, clucking names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Hob
+      - Nob
+      - Tib
+      - Dob
+      - Mag
+      - Wat
+      - Pib
+      - Sim
+      - Gob
+      - Tuck
+      - Hen
+      - Bran
+      - Pud
+      - Nab
+      Nuclei:
+      - a
+      - o
+      - u
+      - i
+      - e
+      Codas:
+      - kin
+      - ock
+      - et
+      - ub
+      - in
+      - ie
+      - ard
+      - ley
+      Middles:
+      - er
+      - in
+      - ub
+      - ol
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - ie
+      - a
+      - et
+      MasculineSuffixes:
+      - kin
+      - ock
+      - ub
+      Description: 'Household fey of hearth and hob — homely, clucking names'
+      Tags:
+      - Hearth-names
+      - Chore-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Warm Hob
+    - the Cream Bowl
+    - Under-stair
+    - the Loom Corner
+    - the Milk Step
+    - the Boot Rack
+    - Broomcupboard
+    Titles:
+      Honorific:
+      - Hob-keeper
+      - Hearth-elder
+      - Cream-warden
+      - Loom-master
+      - Stair-sweeper
+      - Milk-mother
+      - Broom-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Unseen
+      - the Early-rising
+      - the Cream-fed
+      - the Never-thanked
+      - the Quick-sweeping
+      - the Hearth-warm
+      - the Boot-mending
+      - the Offended-by-gifts
+      Rank:
+      - Keeper of the Warm Hob
+      - Warden of the Cream Bowl
+      - Master of the Loom Corner
+      - Elder of Under-stair
+      - Sweeper of the Milk Step
+      Legend:
+      - Who Mended Every Shoe in the Village Overnight
+      - Who Left When Given a Coat and Came Back for the Cream
+      - Who Churned Butter for Nine Generations
+      - Who Swept the Castle in a Single Night
+      - 'Who Turned the Lazy Maid''s Hair to Straw'
+      Occupational:
+      - Shoe-mender
+      - Butter-churner
+      - Floor-sweeper
+      - Loom-tender
+      - Fire-banker
+    CitySuffixes:
+      Capital:
+      - hearth
+      - hob
+      - hall
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - stair
+      - corner
+      - cupboard
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -2037808285
+    Weight: 3
+  - BiomeID: -1951431387
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1.5
+  - BiomeID: -1486751517
+    Weight: 1

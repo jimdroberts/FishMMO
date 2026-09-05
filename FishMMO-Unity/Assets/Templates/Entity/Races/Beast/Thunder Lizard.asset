@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Thunder Lizard
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Colossal horned lizards of the hot lowlands — booming, guttural names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Thun
+      - Grak
+      - Boom
+      - Kor
+      - Rhun
+      - Tor
+      - Brak
+      - Vol
+      - Drum
+      - Sar
+      - Mog
+      - Zar
+      - Hul
+      - Gron
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      Codas:
+      - oth
+      - ak
+      - orr
+      - und
+      - ash
+      - ok
+      - um
+      - ang
+      Middles:
+      - ur
+      - og
+      - ar
+      - um
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - und
+      - ora
+      MasculineSuffixes:
+      - ak
+      - orr
+      - ang
+      Description: 'Colossal horned lizards of the hot lowlands — booming, guttural names'
+      Tags:
+      - Boom-names
+      - Horn-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Trampled Plain
+    - Boomvalley
+    - the Horn Lock
+    - the Mud River
+    - Thunderfoot Crossing
+    - the Fern Sea
+    - the Bone Plain
+    Titles:
+      Honorific:
+      - Plain-shaker
+      - Horn-lord
+      - Valley-boomer
+      - Herd-mountain
+      - Crossing-crusher
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ground-shaking
+      - the Horn-crowned
+      - the Fern-eating
+      - the Mud-wading
+      - the Tree-toppling
+      - the Booming
+      - the Herd-mountain
+      - the Slow-turning
+      Rank:
+      - Shaker of the Trampled Plain
+      - Lord of the Horn Lock
+      - Boomer of Boomvalley
+      - Crusher of Thunderfoot Crossing
+      - Mountain of the Fern Sea
+      Legend:
+      - Who Flattened the Fort by Walking Through It
+      - Who Locked Horns for Three Days
+      - Who Waded the Mud River Against the Flood
+      - Who Ate the Fern Sea Bare
+      - Who Toppled the Watchtower by Scratching
+      Occupational:
+      - Fern-grazer
+      - Ground-shaker
+      - Herd-guard
+    CitySuffixes:
+      Capital:
+      - plain
+      - valley
+      - lock
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - river
+      - sea
+      - crossing
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1640008461
+    Weight: 3
+  - BiomeID: -1911521020
+    Weight: 2
+  - BiomeID: -2077848218
+    Weight: 1.5
+  - BiomeID: -2019209325
+    Weight: 1

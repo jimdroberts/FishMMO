@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Gloomcrawler
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Eyeless many-legged things of the lightless deep — clicking, wrong names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gloo
+      - Skit
+      - Xith
+      - Vresh
+      - Nyth
+      - Kthu
+      - Ulq
+      - Zzir
+      - Thra
+      - Oss
+      - Vlas
+      - Grik
+      - Ithl
+      - Sszk
+      Nuclei:
+      - i
+      - u
+      - a
+      - o
+      - y
+      Codas:
+      - ith
+      - ax
+      - ull
+      - oth
+      - thk
+      - urq
+      - iss
+      - yl
+      Middles:
+      - ss
+      - sy
+      - vy
+      - th
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - iss
+      - yl
+      MasculineSuffixes:
+      - ax
+      - ull
+      - urq
+      Description: 'Eyeless many-legged things of the lightless deep — clicking, wrong names'
+      Tags:
+      - Crawl-names
+      - Lightless-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Lightless Crawl
+    - Clickvault
+    - the Wrong Stair
+    - the Egg Gallery
+    - Gloomdeep
+    - the Skittering Wall
+    - the Sideways Passage
+    Titles:
+      Honorific:
+      - Crawl-lord
+      - Vault-clicker
+      - Stair-warden
+      - Gallery-matriarch
+      - Wall-skitterer
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Eyeless
+      - the Many-legged
+      - the Clicking
+      - the Wrong-jointed
+      - the Lightless-born
+      - the Wall-crawling
+      - the Never-seen-whole
+      - the Egg-heavy
+      Rank:
+      - Lord of the Lightless Crawl
+      - Clicker of Clickvault
+      - Warden of the Wrong Stair
+      - Matriarch of the Egg Gallery
+      - Skitterer of the Skittering Wall
+      Legend:
+      - Who Crawled Up the Well and Into the Nursery
+      - Who Clicked the Miners Mad
+      - Who Laid Eggs in the Cathedral Vault
+      - Who Was Cut in Half and Both Halves Crawled Away
+      - Who Skittered Across the Ceiling Above the Sleeping King
+      Occupational:
+      - Wall-crawler
+      - Egg-tender
+      - Dark-clicker
+    CitySuffixes:
+      Capital:
+      - crawl
+      - vault
+      - gallery
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - stair
+      - wall
+      - passage
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -1141955836
+    Weight: 2
+  - BiomeID: -830221931
+    Weight: 2
+  - BiomeID: -770075463
+    Weight: 1

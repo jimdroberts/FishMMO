@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Boarfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Tusked boar people of the thicket — snorting, heavy names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grunt
+      - Tusk
+      - Bris
+      - Snor
+      - Rut
+      - Hog
+      - Bor
+      - Kar
+      - Tro
+      - Gash
+      - Thack
+      - Rund
+      - Brak
+      - Wart
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      Codas:
+      - ak
+      - usk
+      - ug
+      - orr
+      - ash
+      - unt
+      - ik
+      - ath
+      Middles:
+      - ur
+      - og
+      - ar
+      - un
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - usk
+      - ora
+      MasculineSuffixes:
+      - ak
+      - ug
+      - unt
+      Description: 'Tusked boar people of the thicket — snorting, heavy names'
+      Tags:
+      - Tusk-names
+      - Thicket-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Root Thicket
+    - Tuskhold
+    - the Mud Wallow
+    - the Acorn Ground
+    - Snortfen
+    - the Charging Field
+    - Bristlecamp
+    Titles:
+      Honorific:
+      - Tusk-chief
+      - Thicket-warden
+      - Wallow-elder
+      - Acorn-reeve
+      - Charge-master
+      - Sow-mother
+      - Bristle-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Tusk-scarred
+      - the Thicket-born
+      - the Mud-wallowing
+      - the Charging
+      - the Acorn-fat
+      - the Bristle-backed
+      - the Never-turning
+      - the Root-digger
+      Rank:
+      - Chief of Tuskhold
+      - Warden of the Root Thicket
+      - Elder of the Mud Wallow
+      - Reeve of the Acorn Ground
+      - Master of the Charging Field
+      Legend:
+      - 'Who Charged the Knight''s Line and Broke It'
+      - Who Dug Up the Buried Treasure Looking for Roots
+      - Who Wallowed Through the Winter
+      - Who Gored the Dire Wolf
+      - Who Ate the Whole Acorn Harvest
+      Occupational:
+      - Root-digger
+      - Truffle-finder
+      - Tusk-carver
+      - Thicket-cutter
+      - Wallow-keeper
+    CitySuffixes:
+      Capital:
+      - hold
+      - thicket
+      - ground
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - wallow
+      - camp
+      - fen
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: 719042512
+    Weight: 1.5
+  - BiomeID: -540190004
+    Weight: 1

@@ -1,0 +1,182 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Frostkin
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Tundra-dwelling people — hard consonants, breath-short names spoken through scarves'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Isk
+      - Kol
+      - Bran
+      - Hrek
+      - Tuv
+      - Nak
+      - Sil
+      - Ulv
+      - Grim
+      - Vak
+      - Orn
+      - Sked
+      - Hald
+      - Rin
+      Nuclei:
+      - a
+      - i
+      - u
+      - ei
+      - o
+      Codas:
+      - ak
+      - ir
+      - ulf
+      - en
+      - ost
+      - ith
+      - ar
+      - und
+      Middles:
+      - ik
+      - ol
+      - un
+      - ra
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ild
+      - ka
+      MasculineSuffixes:
+      - ak
+      - ulf
+      - und
+      Description: 'Tundra-dwelling people — hard consonants, breath-short names spoken through scarves'
+      Tags:
+      - Ice-names
+      - Hearth-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Long Dark
+    - Sealhold
+    - the Ice Road
+    - the Whale-bone Hall
+    - the White Reach
+    - the Thaw Meadows
+    - Snowgate
+    Titles:
+      Honorific:
+      - Hearth-holder
+      - Ice-reader
+      - Seal-hunter
+      - Snow-warden
+      - Thaw-speaker
+      - Bone-carver
+      - Dark-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Frost-bearded
+      - the Never-shivering
+      - the Seal-quick
+      - the Long-dark-born
+      - the Ice-wise
+      - the Warm-hearted
+      - the White-handed
+      - the Thaw-bringer
+      Rank:
+      - Holder of the Whale-bone Hall
+      - Warden of Snowgate
+      - Reader of the Ice Road
+      - Elder of the White Reach
+      - Keeper of the Long Dark
+      Legend:
+      - Who Walked the Ice Road Alone in the Long Dark
+      - Who Pulled the Whale Ashore
+      - Who Kept the Hearth Lit Ninety Nights
+      - Who Found the Thaw Meadows
+      - Who Fought the Frost Giant with a Fish-knife
+      Occupational:
+      - Seal-hunter
+      - Ice-fisher
+      - Sledge-wright
+      - Bone-carver
+      - Furrier
+    CitySuffixes:
+      Capital:
+      - hold
+      - hall
+      - reach
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - camp
+      - cove
+      - hearth
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 187749268
+    Weight: 3
+  - BiomeID: 144196518
+    Weight: 2
+  - BiomeID: 1645414801
+    Weight: 1.5
+  - BiomeID: -212386137
+    Weight: 0.5
+  - BiomeID: 1225680173
+    Weight: 0.5

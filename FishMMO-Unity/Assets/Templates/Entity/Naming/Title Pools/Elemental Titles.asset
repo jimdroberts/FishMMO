@@ -1,0 +1,108 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Elemental Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Elemental
+  Titles:
+    Honorific:
+    - Ember-voice
+    - Storm-voice
+    - Deep-current
+    - Stone-heart
+    - Flame-warden
+    - Gale-rider
+    - Tide-heart
+    - Root-speaker
+    - Ash-crowned
+    - Spark-bearer
+    - Frost-warden
+    - Vein-keeper
+    HonorificMasculine:
+    - Ember-father
+    - Storm-son
+    HonorificFeminine:
+    - Ember-mother
+    - Storm-daughter
+    Epithet:
+    - the Ever-burning
+    - the Never-still
+    - the Deep-rooted
+    - the Storm-shaped
+    - the White-hot
+    - the Frost-bound
+    - the Wind-torn
+    - the Tide-turning
+    - the Glass-born
+    - the Slow as Stone
+    - the Lightning-quick
+    - the Ash-crowned
+    - the Molten-hearted
+    - the Rain-woven
+    - the Quake-footed
+    - the Breath of the Rift
+    - the Cold-forged
+    - the Cinder-eyed
+    - the Salt-veined
+    - the Thunder-shouldered
+    - the Unquenched
+    - the Spark-scattering
+    - the Old as Weather
+    Rank:
+    - Warden of the Ember Heart
+    - Smith of the Storm Anvil
+    - Keeper of the Deep Vein
+    - Guardian of the Still Spring
+    - Lord of the Cinder Sea
+    - Voice of the Howling Rift
+    - Elder of the Root of the Mountain
+    - Master of the Tide-heart
+    - Pillar of the Ash Column
+    - Walker of the Glass Plain
+    - Herald of the Lightning Field
+    - Bearer of the First Flame
+    Legend:
+    - Who Burned for a Thousand Years Without Rest
+    - Who Split the Mountain and Slept in the Crack
+    - Who Drank the Storm
+    - Who Froze the River in Summer
+    - Who Turned the Desert to Glass
+    - Who Carried the First Flame Through the Flood
+    - Who Sang the Earthquake Quiet
+    - Who Rode the Lightning Down
+    - Who Boiled the Cinder Sea
+    - Who Was Born When the Mountain Woke
+    - Who Held the Rift Shut
+    - Who Rained for a Year Over the Dry Lands
+    Occupational:
+    - Flame-tender
+    - Storm-caller
+    - Stone-shaper
+    - Spring-keeper
+    - Ash-sifter
+    - Wind-herder
+    - Ice-carver
+    - Glass-blower
+  Places:
+  - the Ember Heart
+  - the Storm Anvil
+  - the Deep Vein
+  - the Still Spring
+  - the Cinder Sea
+  - the Howling Rift
+  - the Root of the Mountain
+  - the Tide-heart
+  - the Ash Column
+  - the Glass Plain
+  - the Lightning Field
+  - the First Flame

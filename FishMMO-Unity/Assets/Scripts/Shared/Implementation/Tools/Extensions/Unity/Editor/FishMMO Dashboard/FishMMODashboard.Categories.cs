@@ -209,8 +209,10 @@ namespace FishMMO.Shared
 				AssetType = typeof(RaceTemplate),
 				DefaultAssetDirectory = "Assets/Templates/Entity/Races",
 				CreateAssetMenuName = "FishMMO/Character/Race/Race",
-				// Playable races first; the naming-only library (phonology, no prefab) below them.
-				GetGroupLabel = asset => asset is RaceTemplate race && race.Playable ? "Playable" : "Naming Library",
+				// Playable races first, then every other race under its category.
+				GetGroupLabel = asset => asset is RaceTemplate race
+					? (race.Playable ? "Playable" : string.IsNullOrWhiteSpace(race.Category) ? "Uncategorised" : race.Category.Trim())
+					: "",
 				GetSortOrder = asset => asset is RaceTemplate race && race.Playable ? 0 : 1,
 			});
 
@@ -243,6 +245,10 @@ namespace FishMMO.Shared
 			AddCategory<FishMMO.Shared.NameGeneration.NameModifierTemplate>("Name Modifiers", "Naming",
 				"Assets/Templates/Entity/Naming/Modifiers",
 				"FishMMO/Naming/Name Modifier");
+
+			AddCategory<FishMMO.Shared.NameGeneration.TitlePoolTemplate>("Title Pools", "Naming",
+				"Assets/Templates/Entity/Naming/Title Pools",
+				"FishMMO/Naming/Title Pool");
 
 			AddCategory<FishMMO.Shared.NameGeneration.NameGrammarTemplate>("Name Grammar", "Naming",
 				"Assets/Templates/Entity/Naming",

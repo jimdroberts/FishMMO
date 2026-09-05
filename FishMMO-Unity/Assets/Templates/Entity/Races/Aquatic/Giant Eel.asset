@@ -1,0 +1,171 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Giant Eel
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Ship-length eels of the sea caves — writhing, sibilant names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sss
+      - Wrig
+      - Mur
+      - Lur
+      - Glis
+      - Thal
+      - Vess
+      - Nyss
+      - Coil
+      - Ish
+      - Sar
+      - Deep
+      - Mor
+      - Kel
+      Nuclei:
+      - i
+      - e
+      - a
+      - u
+      - oo
+      Codas:
+      - ish
+      - iss
+      - el
+      - ur
+      - ath
+      - ess
+      - oon
+      - ith
+      Middles:
+      - li
+      - ss
+      - ur
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - iss
+      - ess
+      MasculineSuffixes:
+      - el
+      - ur
+      - ath
+      Description: 'Ship-length eels of the sea caves — writhing, sibilant names'
+      Tags:
+      - Writhe-names
+      - Cave-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Sea-cave Lair
+    - Writheshelf
+    - the Drowned Anchor
+    - the Shock Reef
+    - Slickdeep
+    - the Wreck Gullet
+    - the Night Tide
+    Titles:
+      Honorific:
+      - Cave-lurker
+      - Shelf-lord
+      - Reef-shocker
+      - Gullet-matriarch
+      - Tide-swimmer
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ship-long
+      - the Cave-lurking
+      - the Shock-skinned
+      - the Slick
+      - the Anchor-wrapping
+      - the Night-tide-born
+      - the Never-held
+      - the Wreck-nesting
+      Rank:
+      - Lurker of the Sea-cave Lair
+      - Lord of Writheshelf
+      - Shocker of the Shock Reef
+      - Matriarch of the Wreck Gullet
+      - Swimmer of the Night Tide
+      Legend:
+      - Who Wrapped the Anchor and Pulled the Ship Under
+      - Who Shocked the Diver Senseless
+      - Who Nested in the Wreck for a Century
+      - Who Bit the Sea Serpent and Won the Cave
+      - Who Slid Up the River to the Mill
+      Occupational:
+      - Cave-guard
+      - Wreck-nester
+      - Reef-shocker
+    CitySuffixes:
+      Capital:
+      - lair
+      - shelf
+      - deep
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - anchor
+      - reef
+      - gullet
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1552223677
+    Weight: 3
+  - BiomeID: 646460858
+    Weight: 2
+  - BiomeID: -770075463
+    Weight: 1.5
+  - BiomeID: 1496239796
+    Weight: 1

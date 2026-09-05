@@ -21,9 +21,10 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			public int Biomes;
 			public int Modifiers;
 			public int Grammars;
+			public int Pools;
 
 			public override string ToString() =>
-				$"{Races} race(s), {Biomes} biome(s), {Modifiers} modifier(s), {Grammars} grammar(s)";
+				$"{Races} race(s), {Biomes} biome(s), {Modifiers} modifier(s), {Pools} title pool(s), {Grammars} grammar(s)";
 		}
 
 		[InitializeOnLoadMethod]
@@ -43,6 +44,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 					Races = RaceRegistry.Count,
 					Biomes = BiomeRegistry.Count,
 					Modifiers = ModifierRegistry.Count,
+					Pools = TitlePoolRegistry.Count,
 					Grammars = NameGrammar.IsLoaded ? 1 : 0,
 				};
 			}
@@ -55,6 +57,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			RaceRegistry.Clear();
 			BiomeRegistry.Clear();
 			ModifierRegistry.Clear();
+			TitlePoolRegistry.Clear();
 			NameGrammar.Clear();
 
 			var report = new LoadReport();
@@ -76,6 +79,11 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			{
 				ModifierRegistry.Register(modifier);
 				report.Modifiers++;
+			}
+			foreach (TitlePoolTemplate pool in FindAll<TitlePoolTemplate>())
+			{
+				TitlePoolRegistry.Register(pool);
+				report.Pools++;
 			}
 			foreach (NameGrammarTemplate grammar in FindAll<NameGrammarTemplate>())
 			{

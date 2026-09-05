@@ -1,0 +1,110 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Beastfolk Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Beastfolk
+  Titles:
+    Honorific:
+    - Pack-leader
+    - Den-mother
+    - Clan-speaker
+    - Hunt-master
+    - Trail-warden
+    - Scent-reader
+    - Herd-caller
+    - Fang
+    - Claw
+    - Moot-elder
+    - Fire-keeper
+    - Track-finder
+    HonorificMasculine:
+    - Alpha
+    - Sire of the Den
+    HonorificFeminine:
+    - Matriarch
+    - Dam of the Den
+    Epithet:
+    - the Swift-footed
+    - the Sharp-toothed
+    - the Keen-nosed
+    - the Long-clawed
+    - the Silent Stalker
+    - the Bright-pelted
+    - the Broad-antlered
+    - the Night-runner
+    - the Scarred
+    - the Unbroken
+    - the Pack-loyal
+    - the Lone
+    - the Trail-wise
+    - the Storm-hunter
+    - the Sun-warmed
+    - the Winter-thin
+    - the Thick-hided
+    - the Ever-hungry
+    - the Whisper-stepped
+    - the Quick-eared
+    - the Blood-marked
+    - the Dust-runner
+    - the Cliff-leaper
+    - the Water-shy
+    Rank:
+    - Leader of the Pack
+    - Warden of the Hunting Grounds
+    - Keeper of the Warm Dens
+    - Speaker at the Moot Hollow
+    - Master of the Long Grass
+    - Guardian of the Crossing Ford
+    - Elder of the Bone Ring
+    - Caller of the Herd
+    - Marker of the Border
+    - Keeper of the Clan Fire
+    - First Hunter of the Old Trail
+    - Watcher of the Salt Lick
+    Legend:
+    - Who Ran Down the Wind
+    - Who Fought the Great Bear and Shared the Kill
+    - Who Led the Herd Through the Fire
+    - Who Tracked a Ghost for Three Nights
+    - Who Howled the Moon Back
+    - Who Crossed the Ford in Flood
+    - Who Ate the Poisoned Meat and Lived
+    - Who Made Peace Between Fang and Hoof
+    - Who Carried the Cubs Across the Ice
+    - 'Who Outran the Hunters'' Horses'
+    - Who Found Water in the Dry Year
+    - 'Who Broke the Trap-maker''s Line'
+    Occupational:
+    - Tracker
+    - Hide-scraper
+    - Bone-carver
+    - Trail-runner
+    - Den-digger
+    - Herd-guard
+    - Fang-sharpener
+    - Scent-mixer
+    - Skin-stitcher
+  Places:
+  - the Hunting Grounds
+  - the Warm Dens
+  - the Long Grass
+  - the Scent-marked Border
+  - the Moot Hollow
+  - the Crossing Ford
+  - the Bone Ring
+  - the Rutting Hills
+  - the Clan Fire
+  - the Salt Lick
+  - the Old Trail
+  - the Watering Stone

@@ -1,0 +1,102 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Construct Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Construct
+  Titles:
+    Honorific:
+    - Warden of the Hall
+    - Gate-stander
+    - 'Maker''s Voice'
+    - Iron-sentinel
+    - Kiln-born
+    - Gear-keeper
+    - Forge-child
+    - Stone-watch
+    - First-wound
+    - Anvil-sworn
+    - Quiet Guard
+    HonorificMasculine:
+    - Iron-son
+    HonorificFeminine:
+    - Iron-daughter
+    Epithet:
+    - the Unsleeping
+    - the Iron-jointed
+    - the Kiln-fired
+    - 'the Maker''s Last'
+    - the Rust-marked
+    - the Stone-faced
+    - the Ever-standing
+    - the Wound Tight
+    - the Gear-hearted
+    - the Unhurried
+    - the Rain-worn
+    - the Silent
+    - the Hammer-shaped
+    - the Order-bound
+    - the Unbroken After Centuries
+    - the Anvil-born
+    - the Cold to the Touch
+    - the Watchful at the Gate
+    - the Half-finished
+    - the Rune-scored
+    - the Patient as Stone
+    - the Tireless
+    - the Key-turned
+    Rank:
+    - 'Warden of the Maker''s Hall'
+    - Sentinel of the Iron Foundry
+    - Keeper of the Gear Vault
+    - Guard of the Cold Forge
+    - Master of the Stone Yard
+    - Watcher of the Waiting Room
+    - Climber of the Clockwork Stair
+    - Overseer of Kiln Row
+    - Custodian of the Unfinished Wing
+    - Champion of the Anvil Court
+    Legend:
+    - Who Stood Guard After the Maker Died
+    - Who Held the Gate for Three Centuries
+    - Who Would Not Rust
+    - Who Counted the Gears of the World
+    - Who Was Built to Fight and Chose to Build
+    - Who Finished the Unfinished Wing Alone
+    - Who Carried the Bell to the Tower
+    - Who Learned a Single Word and Kept It
+    - Who Outlasted the Kingdom that Made Them
+    - Who Walked from the Forge into the Sea
+    - Who Broke Only Once
+    - Who Kept the Kiln Warm Through the Long Dark
+    Occupational:
+    - Gate-warden
+    - Gear-turner
+    - Forge-tender
+    - Stone-lifter
+    - Kiln-stoker
+    - Hall-sweeper
+    - Vault-sealer
+  Places:
+  - 'the Maker''s Hall'
+  - the Iron Foundry
+  - the Gear Vault
+  - the Cold Forge
+  - the Stone Yard
+  - the Waiting Room
+  - the Clockwork Stair
+  - the Kiln Row
+  - the Rust Field
+  - the Unfinished Wing
+  - the Anvil Court
+  - the Silent Workshop

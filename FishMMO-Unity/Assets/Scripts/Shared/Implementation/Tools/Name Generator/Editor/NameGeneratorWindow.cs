@@ -51,6 +51,8 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		// Registry keys, parallel to the display lists shown in the pickers.
 		private List<string> raceKeys;
 		private List<string> raceDisplayNames;
+		/// <summary>Category per race, parallel to <see cref="raceKeys"/>; groups the race dropdowns.</summary>
+		private List<string> raceGroups;
 		private List<string> biomeKeys;
 		private List<string> biomeDisplayNames;
 		private List<string> cultureKeys = new();
@@ -173,6 +175,9 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		{
 			raceKeys = NameGenerator.SupportedRaces.ToList();
 			raceDisplayNames = raceKeys.Select(RaceRegistry.GetDisplayName).ToList();
+			raceGroups = raceKeys
+				.Select(key => RaceRegistry.TryGet(key, out RaceTemplate race) && !string.IsNullOrWhiteSpace(race.Category) ? race.Category.Trim() : "Other")
+				.ToList();
 			biomeKeys = NameGenerator.SupportedBiomes.ToList();
 			biomeDisplayNames = biomeKeys.Select(BiomeRegistry.GetDisplayName).ToList();
 			climateAssets = AssetDatabase.FindAssets($"t:{nameof(ClimateSettings)}")
@@ -265,7 +270,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			raceRow = new VisualElement();
 			raceRow.Add(FieldLabel("Race"));
 			int humanIndex = Mathf.Max(0, raceKeys.IndexOf("human"));
-			raceField = new SearchableDropdownField("Race", raceDisplayNames, humanIndex) { name = "race-field" };
+			raceField = new SearchableDropdownField("Race", raceDisplayNames, humanIndex, raceGroups) { name = "race-field" };
 			raceField.OnValueChanged += _ => RefreshCultureChoices();
 			raceRow.Add(raceField);
 			settingsContent.Add(raceRow);
@@ -368,7 +373,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			hybridRow.style.display = DisplayStyle.None;
 			hybridRow.Add(FieldLabel("Second Race"));
 			int elfIndex = Mathf.Max(0, raceKeys.IndexOf("elf"));
-			secondRaceField = new SearchableDropdownField("Second Race", raceDisplayNames, elfIndex) { name = "second-race-field" };
+			secondRaceField = new SearchableDropdownField("Second Race", raceDisplayNames, elfIndex, raceGroups) { name = "second-race-field" };
 			hybridRow.Add(secondRaceField);
 
 			hybridRow.Add(FieldLabel("Dominance (1 = first race)"));

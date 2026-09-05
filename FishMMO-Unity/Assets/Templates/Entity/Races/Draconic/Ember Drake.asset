@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Ember Drake
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Draconic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Small fire-drakes of the cinder slopes — crackling, spitting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Emb
+      - Cind
+      - Spark
+      - Ash
+      - Pyr
+      - Kal
+      - Flar
+      - Skor
+      - Drak
+      - Sear
+      - Zar
+      - Brim
+      - Vulk
+      - Ign
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - ir
+      Codas:
+      - ax
+      - ith
+      - ar
+      - ok
+      - ash
+      - urn
+      - oss
+      - ang
+      Middles:
+      - ar
+      - ir
+      - ol
+      - ak
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ara
+      MasculineSuffixes:
+      - ax
+      - ok
+      - urn
+      Description: 'Small fire-drakes of the cinder slopes — crackling, spitting names'
+      Tags:
+      - Ember-names
+      - Spit-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Cinder Roost
+    - Sparkreach
+    - the Warm Hoard
+    - the Spitting Ledge
+    - Emberclaw
+    - the Slag Nest
+    - the Smoke Spire
+    Titles:
+      Honorific:
+      - Cinder-drake
+      - Spark-lord
+      - Warm-hoard-keeper
+      - Ledge-spitter
+      - Ember-matriarch
+      - Smoke-master
+      - Slag-warden
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ember-scaled
+      - the Spark-spitting
+      - the Cinder-born
+      - the Warm-bellied
+      - the Smoke-crowned
+      - the Quick-winged
+      - the Never-cooling
+      - the Slag-nesting
+      Rank:
+      - Lord of the Cinder Roost
+      - Keeper of the Warm Hoard
+      - Matriarch of Emberclaw
+      - Spitter of the Spitting Ledge
+      - Warden of the Slag Nest
+      Legend:
+      - Who Set the Harvest Alight with a Sneeze
+      - Who Nested in the Forge Chimney
+      - 'Who Spat the Knight''s Visor Shut'
+      - Who Hoarded Coal and Guarded It Fiercely
+      - Who Lit the Beacon Chain in a Night
+      Occupational:
+      - Forge-lighter
+      - Coal-hoarder
+      - Beacon-lighter
+      - Ledge-watcher
+    CitySuffixes:
+      Capital:
+      - roost
+      - reach
+      - spire
+      Fortress:
+      - crag
+      - ledge
+      - perch
+      - aerie
+      Village:
+      - nest
+      - ledge
+      - claw
+      Port:
+      - shelf
+      - strand
+      - cove
+      Sacred:
+      - egg
+      - fire
+      - ash
+      - altar
+      Ruin:
+      - bones
+      - ash
+      - cinder
+      - fall
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 155940630
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 493502347
+    Weight: 1

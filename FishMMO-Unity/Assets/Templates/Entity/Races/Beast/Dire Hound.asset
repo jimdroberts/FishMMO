@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Dire Hound
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Huge black hounds of the moor — baying, panting names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bay
+      - Grim
+      - Bar
+      - Hul
+      - Fang
+      - Shuk
+      - Moor
+      - Gar
+      - Ral
+      - Snarl
+      - Kel
+      - Dun
+      - Vor
+      - Howl
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - ow
+      Codas:
+      - ak
+      - ar
+      - ulf
+      - ash
+      - orr
+      - un
+      - ith
+      - ang
+      Middles:
+      - ar
+      - ul
+      - og
+      - an
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ora
+      - ith
+      MasculineSuffixes:
+      - ak
+      - ulf
+      - ang
+      Description: 'Huge black hounds of the moor — baying, panting names'
+      Tags:
+      - Bay-names
+      - Moor-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Black Moor
+    - the Baying Stones
+    - Gallows Kennel
+    - the Fog Road
+    - Shuckmere
+    - the Cold Scent
+    - the Last Gate
+    Titles:
+      Honorific:
+      - Moor-hound
+      - Bay-leader
+      - Gate-guard
+      - Kennel-lord
+      - Fog-runner
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Black-coated
+      - the Red-eyed
+      - the Fog-running
+      - the Never-tiring
+      - the Baying
+      - the Moor-born
+      - the Gate-guarding
+      - the Death-omened
+      Rank:
+      - Hound of the Black Moor
+      - Leader of the Baying Stones
+      - Guard of the Last Gate
+      - Lord of Gallows Kennel
+      - Runner of the Fog Road
+      Legend:
+      - Who Ran the Traveller Down at Shuckmere
+      - Who Bayed Under the Window Three Nights
+      - Who Guarded the Grave Until the Stone Fell
+      - Who Ran a Hundred Miles Without Stopping
+      - Who Was Seen at Every Crossroads in One Night
+      Occupational:
+      - Gate-guard
+      - Scent-follower
+      - Night-runner
+    CitySuffixes:
+      Capital:
+      - moor
+      - kennel
+      - stones
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - mere
+      - road
+      - gate
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1.5
+  - BiomeID: -857237992
+    Weight: 1

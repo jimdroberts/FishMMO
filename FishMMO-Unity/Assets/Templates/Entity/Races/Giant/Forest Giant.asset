@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Forest Giant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Moss-backed woodland giants — soft, rustling names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bram
+      - Oak
+      - Moss
+      - Hol
+      - Tan
+      - Fern
+      - Rowan
+      - Bur
+      - Alder
+      - Thorn
+      - Wil
+      - Ash
+      - Elm
+      - Sedge
+      Nuclei:
+      - a
+      - o
+      - e
+      - u
+      - ae
+      Codas:
+      - wood
+      - oth
+      - an
+      - ell
+      - orn
+      - und
+      - ash
+      - ith
+      Middles:
+      - en
+      - ol
+      - ar
+      - um
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ell
+      - wen
+      MasculineSuffixes:
+      - oth
+      - orn
+      - und
+      Description: 'Moss-backed woodland giants — soft, rustling names'
+      Tags:
+      - Moss-names
+      - Canopy-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Moss Throne
+    - Deepshade
+    - 'the Fallen Giant''s Bridge'
+    - the Canopy Hall
+    - Rootwatch
+    - the Deer Glade
+    - the Old Stump Ring
+    Titles:
+      Honorific:
+      - Canopy-thane
+      - Moss-lord
+      - Glade-warden
+      - Root-elder
+      - Bridge-keeper
+      - Tree-mother
+      - Shade-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Moss-backed
+      - the Bird-nested
+      - the Slow as Growing
+      - the Canopy-tall
+      - the Deer-gentle
+      - the Root-footed
+      - the Leaf-crowned
+      - the Storm-sheltering
+      Rank:
+      - Thane of the Canopy Hall
+      - Lord of the Moss Throne
+      - Warden of the Deer Glade
+      - 'Keeper of the Fallen Giant''s Bridge'
+      - Elder of Rootwatch
+      Legend:
+      - Who Replanted the Burned Forest Tree by Tree
+      - Who Carried the Village Across the Flooded River
+      - Who Slept a Decade and Woke as a Hill
+      - Who Lifted the Fallen Oak to Free the Fawn
+      - Who Chased the Woodcutters Out with a Whisper
+      Occupational:
+      - Tree-planter
+      - Deer-warden
+      - Bough-bender
+      - Moss-gatherer
+      - Stump-splitter
+    CitySuffixes:
+      Capital:
+      - hall
+      - throne
+      - glade
+      Fortress:
+      - wall
+      - gate
+      - rampart
+      - boulder
+      Village:
+      - shade
+      - root
+      - hollow
+      Port:
+      - landing
+      - strand
+      - shelf
+      Sacred:
+      - stone
+      - cairn
+      - altar
+      - table
+      Ruin:
+      - fall
+      - rubble
+      - tumble
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 1.5
+  - BiomeID: 144196518
+    Weight: 1

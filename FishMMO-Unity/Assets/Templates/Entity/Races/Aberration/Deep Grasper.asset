@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Deep Grasper
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Tentacled ambushers of flooded ruins — grasping, gurgling names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gras
+      - Ten
+      - Grip
+      - Ulq
+      - Thal
+      - Nyx
+      - Kthu
+      - Vess
+      - Oth
+      - Wrap
+      - Sar
+      - Xoth
+      - Mur
+      - Ithl
+      Nuclei:
+      - a
+      - o
+      - u
+      - oo
+      - y
+      Codas:
+      - oth
+      - ith
+      - ess
+      - ax
+      - ull
+      - orr
+      - ael
+      - urq
+      Middles:
+      - lo
+      - ul
+      - th
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - yl
+      MasculineSuffixes:
+      - oth
+      - ax
+      - urq
+      Description: 'Tentacled ambushers of flooded ruins — grasping, gurgling names'
+      Tags:
+      - Grasp-names
+      - Flood-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Flooded Hall
+    - Grasperdeep
+    - the Drowned Stair
+    - the Tentacle Vault
+    - Gripwater
+    - the Pulled-under Court
+    - the Ripple Gate
+    Titles:
+      Honorific:
+      - Hall-grasper
+      - Deep-lord
+      - Stair-drowner
+      - Vault-matriarch
+      - Gate-rippler
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Many-armed
+      - the Grasping
+      - the Flood-born
+      - the Stair-drowning
+      - the Ripple-only
+      - the Patient-below
+      - the Never-letting-go
+      - the Vault-coiled
+      Rank:
+      - Grasper of the Flooded Hall
+      - Lord of Grasperdeep
+      - Drowner of the Drowned Stair
+      - Matriarch of the Tentacle Vault
+      - Rippler of the Ripple Gate
+      Legend:
+      - Who Pulled the Expedition Under One by One
+      - Who Grasped the Sunken Crown and Would Not Trade
+      - Who Filled the Flooded Hall with Arms
+      - Who Was Only Ever a Ripple Until Too Late
+      - Who Coiled the Vault Door Shut
+      Occupational:
+      - Stair-lurker
+      - Vault-coiler
+      - Arm-grasper
+    CitySuffixes:
+      Capital:
+      - hall
+      - deep
+      - vault
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - stair
+      - water
+      - gate
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 173642607
+    Weight: 3
+  - BiomeID: -307314686
+    Weight: 2
+  - BiomeID: -830221931
+    Weight: 2
+  - BiomeID: -770075463
+    Weight: 1

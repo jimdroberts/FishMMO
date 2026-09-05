@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Nixie
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'River-pool water fey — rippling, liquid names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Nix
+      - Rill
+      - Lor
+      - Wel
+      - Sel
+      - Mer
+      - Lin
+      - Bub
+      - Spri
+      - Cal
+      - Dil
+      - Ael
+      - Fon
+      - Tarn
+      Nuclei:
+      - a
+      - i
+      - e
+      - ee
+      - o
+      Codas:
+      - ie
+      - ith
+      - ell
+      - ine
+      - ora
+      - el
+      - ee
+      - ara
+      Middles:
+      - li
+      - ri
+      - el
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - ie
+      - a
+      - ine
+      MasculineSuffixes:
+      - el
+      - ith
+      - ora
+      Description: 'River-pool water fey — rippling, liquid names'
+      Tags:
+      - Ripple-names
+      - Pool-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Mill Pool
+    - Rillcourt
+    - the Drowning Weir
+    - the Lily Throne
+    - Bubblehollow
+    - the Green Pool
+    - the Stepping Stones
+    Titles:
+      Honorific:
+      - Pool-warden
+      - Weir-singer
+      - Lily-herald
+      - Rill-elder
+      - Stone-keeper
+      - Ripple-mother
+      - Mill-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ripple-haired
+      - the Pool-born
+      - the Weir-singing
+      - the Green-eyed
+      - the Never-dry
+      - the Bubble-laughing
+      - the Lily-crowned
+      - the Drowning-sweet
+      Rank:
+      - Warden of the Mill Pool
+      - Herald of Rillcourt
+      - Singer of the Drowning Weir
+      - Keeper of the Stepping Stones
+      - Elder of the Lily Throne
+      Legend:
+      - 'Who Sang the Miller''s Son Under'
+      - Who Kept the Mill Wheel Turning Through the Drought
+      - Who Hid the Wedding Ring in the Green Pool for a Century
+      - Who Danced on the Stepping Stones Without Wetting a Foot
+      - Who Married the River
+      Occupational:
+      - Weir-tender
+      - Lily-gatherer
+      - Pool-keeper
+      - Wheel-turner
+      - Stone-polisher
+    CitySuffixes:
+      Capital:
+      - pool
+      - court
+      - weir
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - hollow
+      - stones
+      - mere
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 2117371294
+    Weight: 3
+  - BiomeID: 247344987
+    Weight: 2
+  - BiomeID: -2077848218
+    Weight: 1.5
+  - BiomeID: -1486751517
+    Weight: 1

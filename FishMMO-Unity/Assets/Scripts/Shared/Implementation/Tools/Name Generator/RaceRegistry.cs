@@ -61,6 +61,7 @@ namespace FishMMO.Shared.NameGeneration
 			template.Naming.BuildRuntime();
 			templates[key] = template;
 			sortedKeys = null;
+			TitlePoolRegistry.Invalidate();
 			Changed?.Invoke();
 		}
 
@@ -206,22 +207,57 @@ namespace FishMMO.Shared.NameGeneration
 			return string.IsNullOrEmpty(modifier) ? phonology : ModifierRegistry.Apply(phonology, modifier);
 		}
 
+		/// <summary>The race's titles merged with every title pool serving its category.</summary>
 		public static bool TryGetTitles(string raceKey, out RaceTitles titles)
 		{
 			if (TryGet(raceKey, out RaceTemplate template))
 			{
-				titles = template.Naming.RuntimeTitles;
+				titles = TitlePoolRegistry.TitlesFor(template);
 				return true;
 			}
 			titles = null;
 			return false;
 		}
 
+		/// <summary>Every category carried by a registered race, in ordinal order.</summary>
+		public static IReadOnlyList<string> Categories()
+		{
+			var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (RaceTemplate template in templates.Values)
+			{
+				if (!string.IsNullOrWhiteSpace(template.Category))
+				{
+					set.Add(template.Category.Trim());
+				}
+			}
+			var result = new List<string>(set);
+			result.Sort(StringComparer.Ordinal);
+			return result;
+		}
+
+		/// <summary>Keys of the races in a category (case-insensitive), in key order.</summary>
+		public static IReadOnlyList<string> RacesInCategory(string category)
+		{
+			var result = new List<string>();
+			if (string.IsNullOrWhiteSpace(category))
+			{
+				return result;
+			}
+			foreach (string raceKey in SupportedRaces)
+			{
+				if (string.Equals(templates[raceKey].Category?.Trim(), category.Trim(), StringComparison.OrdinalIgnoreCase))
+				{
+					result.Add(raceKey);
+				}
+			}
+			return result;
+		}
+
 		public static bool TryGetPlaces(string raceKey, out string[] places)
 		{
 			if (TryGet(raceKey, out RaceTemplate template))
 			{
-				places = template.Naming.RuntimePlaces;
+				places = TitlePoolRegistry.PlacesFor(template);
 				return places != null && places.Length > 0;
 			}
 			places = null;

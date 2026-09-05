@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Turtlefolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Shelled wanderers of coast and river who carry their homes on their backs and outlive their friends.
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Lur
+      - Sol
+      - Mok
+      - Gom
+      - Ku
+      - Pon
+      - Wa
+      - Ro
+      - Ta
+      - Lu
+      - Su
+      - Mu
+      Nuclei:
+      - u
+      - o
+      - a
+      - un
+      - 'on'
+      Codas:
+      - tle
+      - kan
+      - mon
+      - ba
+      - pan
+      - un
+      - 'on'
+      - an
+      Middles:
+      - ku
+      - mo
+      - ba
+      - ul
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - una
+      - mai
+      MasculineSuffixes:
+      - tle
+      - mon
+      - ka
+      Description: 'Slow, considered shell-folk speech'
+      Tags:
+      - Shell-names
+      - Sea-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Tidepool Haven
+    - Driftshell Reef
+    - the Slow Beach
+    - Moonshell Cove
+    Titles:
+      Honorific:
+      - Shell-elder
+      - Reef-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Slow
+      - the Patient
+      - the Tide-sworn
+      Rank:
+      - Elder of the Tidepool Haven
+      Legend:
+      - Who Outlasted the Three Storms
+      Occupational:
+      - Fisher
+      - Shell-carver
+      - Navigator
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: 1384639345
+    Weight: 3
+  - BiomeID: 888339253
+    Weight: 2
+  - BiomeID: -1552223677
+    Weight: 1
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: 247344987
+    Weight: 1

@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hivemind
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aberration
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Colonies of small things that think as one — chittering, plural names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Hiv
+      - Swar
+      - Man
+      - Thra
+      - Kthu
+      - Chit
+      - Zzir
+      - Ulq
+      - Ithl
+      - Ossk
+      - Nyth
+      - Vresh
+      - Qhal
+      - Sszk
+      Nuclei:
+      - i
+      - u
+      - a
+      - y
+      - o
+      Codas:
+      - ith
+      - iss
+      - ull
+      - ax
+      - thk
+      - urq
+      - yl
+      - oth
+      Middles:
+      - ss
+      - th
+      - ri
+      - yy
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - iss
+      - yl
+      MasculineSuffixes:
+      - ax
+      - ull
+      - urq
+      Description: 'Colonies of small things that think as one — chittering, plural names'
+      Tags:
+      - Swarm-names
+      - Mind-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Thinking Swarm
+    - Hivedeep
+    - the Many-voiced Hall
+    - the Shared Nest
+    - Chitterwell
+    - the One Thought
+    - the Colony Court
+    Titles:
+      Honorific:
+      - Swarm-mind
+      - Hall-voice
+      - Nest-warden
+      - Thought-keeper
+      - Colony-matriarch
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Many-as-one
+      - the Chittering
+      - the Nest-born
+      - the Single-minded
+      - the Never-alone
+      - the Thousand-legged
+      - the Shared
+      - the Colony-crowned
+      Rank:
+      - Mind of the Thinking Swarm
+      - Voice of the Many-voiced Hall
+      - Warden of the Shared Nest
+      - Keeper of the One Thought
+      - Matriarch of the Colony Court
+      Legend:
+      - Who Thought One Thought with a Million Bodies
+      - 'Who Filled the Hall and Spoke the King''s Sentence'
+      - Who Was Swatted a Thousand Times and Never Diminished
+      - Who Learned the Alphabet in a Night and the Law in a Week
+      - Who Nested in the Library and Read It
+      Occupational:
+      - Colony-keeper
+      - Nest-builder
+      - Thought-sharer
+    CitySuffixes:
+      Capital:
+      - swarm
+      - hall
+      - nest
+      Fortress:
+      - wall
+      - angle
+      - vault
+      - maw
+      Village:
+      - well
+      - thought
+      - court
+      Port:
+      - sink
+      - drain
+      - mouth
+      Sacred:
+      - eye
+      - dream
+      - whisper
+      Ruin:
+      - gnaw
+      - rot
+      - hollow
+      - void
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -1640008461
+    Weight: 2
+  - BiomeID: -830221931
+    Weight: 2
+  - BiomeID: -307314686
+    Weight: 1

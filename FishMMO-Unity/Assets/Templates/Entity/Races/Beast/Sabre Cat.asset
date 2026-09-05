@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sabre Cat
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Long-fanged great cat — hissing, rasping names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sab
+      - Rasp
+      - Kri
+      - Fang
+      - Tal
+      - Hiss
+      - Nyx
+      - Sar
+      - Vell
+      - Kesh
+      - Rax
+      - Thal
+      - Shar
+      - Zan
+      Nuclei:
+      - a
+      - i
+      - ae
+      - o
+      - u
+      Codas:
+      - ith
+      - ar
+      - ax
+      - ess
+      - ael
+      - orr
+      - ik
+      - ur
+      Middles:
+      - ra
+      - si
+      - ae
+      - il
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - ael
+      MasculineSuffixes:
+      - ar
+      - ax
+      - ur
+      Description: 'Long-fanged great cat — hissing, rasping names'
+      Tags:
+      - Fang-names
+      - Ambush-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Ambush Ledge
+    - the Long-tooth Cave
+    - the Tar Pool
+    - Fangreach
+    - the Cliff Larder
+    - the Silent Stalk
+    - Hissrock
+    Titles:
+      Honorific:
+      - Ledge-stalker
+      - Fang-lord
+      - Larder-keeper
+      - Cave-matriarch
+      - Stalk-master
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Long-fanged
+      - the Silent-stalking
+      - the Ledge-leaping
+      - the Tar-black
+      - the Ambush-patient
+      - the Cliff-born
+      - the Throat-taker
+      - the Never-heard
+      Rank:
+      - Stalker of the Ambush Ledge
+      - Lord of the Long-tooth Cave
+      - Keeper of the Cliff Larder
+      - Matriarch of Fangreach
+      - Master of the Silent Stalk
+      Legend:
+      - Who Took the Mammoth Alone
+      - Who Dragged the Horse Up the Cliff
+      - Who Was Not Seen Until Too Late
+      - Who Escaped the Tar Pool
+      - Who Left Nothing for the Vultures
+      Occupational:
+      - Ambusher
+      - Cliff-climber
+      - Larder-keeper
+    CitySuffixes:
+      Capital:
+      - ledge
+      - cave
+      - reach
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - rock
+      - stalk
+      - pool
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1275219499
+    Weight: 3
+  - BiomeID: -1911521020
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1.5
+  - BiomeID: -138594552
+    Weight: 1

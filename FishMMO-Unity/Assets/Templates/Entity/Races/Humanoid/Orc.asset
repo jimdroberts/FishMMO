@@ -1,0 +1,326 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Orc
+  m_EditorClassIdentifier: 
+  Playable: 1
+  Category: Humanoid
+  Prefab: {fileID: 4573496687782621821, guid: 7b96a8c61db3a844ebc4c92b2487b0d1, type: 3}
+  PlaceholderModel:
+    m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 
+  InitialAttributes: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
+  InitialFaction: {fileID: 11400000, guid: e5859044195c03e44adebc73805dd570, type: 2}
+  StartingAbilities:
+  - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grak
+      - Ur
+      - Kra
+      - Bru
+      - Ghor
+      - Rak
+      - Skul
+      - Thok
+      - Wog
+      - Vrak
+      - Drak
+      - Mog
+      - Nar
+      - Prak
+      - Rug
+      - Skrag
+      - Tug
+      - Unk
+      - Zug
+      - Gash
+      Nuclei:
+      - a
+      - u
+      - o
+      - ak
+      - og
+      - ug
+      - uk
+      Codas:
+      - ak
+      - ug
+      - ok
+      - ash
+      - rak
+      - urg
+      - mak
+      - rok
+      - tuk
+      - gash
+      - uk
+      - ag
+      Middles:
+      - ra
+      - ru
+      - ka
+      - ma
+      - ga
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - ash
+      - ak
+      - a
+      MasculineSuffixes:
+      - rak
+      - urg
+      - ok
+      Description: 'Guttural stops, minimal vowels — forged in battle-cries'
+      Tags:
+      - War-names
+      - Clan marks
+      - Blood-titles
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: sea
+      Phonology:
+        Onsets:
+        - Brak
+        - Gor
+        - Kra
+        - Rak
+        - Sal
+        - Thr
+        - Vor
+        - Wak
+        - Zul
+        - Gash
+        - Drak
+        - Mur
+        - Nar
+        - Skag
+        - Urg
+        Nuclei:
+        - a
+        - o
+        - u
+        - ar
+        - or
+        - ak
+        - ul
+        Codas:
+        - ak
+        - ork
+        - ash
+        - urg
+        - rak
+        - gul
+        - mak
+        - rok
+        - tar
+        - wav
+        Middles:
+        - ra
+        - ro
+        - ru
+        - ka
+        - ma
+        SyllMin: 1
+        SyllMax: 2
+        FeminineSuffixes:
+        - ash
+        - a
+        - wav
+        MasculineSuffixes:
+        - rak
+        - ork
+        - tar
+        Description: 'Sea Orc — raiders, storm-voiced, salt-scarred'
+        Tags:
+        - Ship-names
+        - Raid-bonds
+        - Storm-marks
+        WeightedCodas: []
+    - CultureKey: steppe
+      Phonology:
+        Onsets:
+        - Bat
+        - Cha
+        - Gol
+        - Khu
+        - Mong
+        - Noy
+        - Sar
+        - Tem
+        - Tog
+        - Yal
+        - Bol
+        - Dor
+        - Ger
+        - Kha
+        - Tum
+        Nuclei:
+        - a
+        - o
+        - u
+        - ai
+        - oi
+        - ul
+        - ar
+        Codas:
+        - ai
+        - ar
+        - ul
+        - an
+        - or
+        - uk
+        - at
+        - ol
+        - un
+        - ur
+        Middles:
+        - al
+        - ar
+        - or
+        - ul
+        - an
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - ai
+        - a
+        - un
+        MasculineSuffixes:
+        - ar
+        - ul
+        - an
+        Description: 'Steppe Orc — nomadic, horse-lord, wind-hardened'
+        Tags:
+        - Herd-names
+        - Ride-bonds
+        - Sky-marks
+        WeightedCodas: []
+    Places:
+    - the Blood Pits
+    - Skull Ridge
+    - the Eastern Clans
+    - Ironjaw Hold
+    - the Ashen Waste
+    - Warcry Basin
+    - the Bone Fields
+    - Thunderhowl Pass
+    Titles:
+      Honorific:
+      - Warchief
+      - Bloodcaller
+      - Skullkeeper
+      - Ironjaw
+      - Bonecrusher
+      - Battle-singer
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Undefeated
+      - the Bloodied
+      - the Bonecrusher
+      - the Fearless
+      - the Scarred
+      - the Warbringer
+      - the Red-handed
+      - the Thunder-voiced
+      - the Mountain-breaker
+      Rank:
+      - Warchief of the Eastern Clans
+      - First Blade of the Skull Legion
+      - Keeper of the War Drum
+      - Champion of the Blood Pits
+      - Elder Warrior
+      - Lord of Thunderhowl Pass
+      Legend:
+      - Who Broke the Iron Gates
+      - Who Ate the Enemy General
+      - Last of the Grey Tusk Clan
+      - Who Fought for Seven Days
+      - Whose War Cry Crumbled Walls
+      - Who Charged an Army Alone and Won
+      Occupational:
+      - Warsmith
+      - Beast-tamer
+      - Skull-carver
+      - Drum-keeper
+      - Hide-tanner
+      - Spear-maker
+      - Raid-quartermaster
+    CitySuffixes:
+      Capital:
+      - skull
+      - hold
+      - maw
+      - throne
+      - pit
+      - stronghold
+      - bastion
+      Fortress:
+      - wall
+      - gate
+      - fang
+      - guard
+      - fort
+      - spike
+      - rampart
+      Village:
+      - camp
+      - pit
+      - den
+      - hollow
+      - mud
+      - clearing
+      - ground
+      Port:
+      - landing
+      - shore
+      - wreck
+      - bay
+      - cove
+      - dock
+      Sacred:
+      - altar
+      - pyre
+      - blood-ground
+      - totem
+      - bone-circle
+      - shrine
+      Ruin:
+      - fall
+      - ash
+      - scar
+      - waste
+      - ruin
+      - boneyard
+      - char
+  BiomeAffinities:
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: -1911521020
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1.5
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: -540190004
+    Weight: 1
+  - BiomeID: 1275219499
+    Weight: 1

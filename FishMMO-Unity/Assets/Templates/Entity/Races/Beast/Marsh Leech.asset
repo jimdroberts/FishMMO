@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Marsh Leech
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Man-length blood-leeches of the fen — sucking, wet names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sluk
+      - Gulp
+      - Mur
+      - Suck
+      - Blub
+      - Fen
+      - Glut
+      - Ooz
+      - Wurm
+      - Slop
+      - Mudd
+      - Drai
+      - Lurk
+      - Slick
+      Nuclei:
+      - u
+      - o
+      - oo
+      - a
+      - i
+      Codas:
+      - uk
+      - orb
+      - ug
+      - ash
+      - oom
+      - ell
+      - ub
+      - orr
+      Middles:
+      - ub
+      - oo
+      - ur
+      - og
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - oob
+      - ug
+      MasculineSuffixes:
+      - uk
+      - ub
+      - orr
+      Description: 'Man-length blood-leeches of the fen — sucking, wet names'
+      Tags:
+      - Suck-names
+      - Fen-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Bleeding Pool
+    - Leechbank
+    - the Drained Ford
+    - the Black Reeds
+    - Slickmire
+    - the Sucking Mud
+    - Pale-water
+    Titles:
+      Honorific:
+      - Pool-drainer
+      - Bank-lurker
+      - Reed-sucker
+      - Mire-lord
+      - Mud-hider
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Blood-fat
+      - the Slick-backed
+      - the Never-full
+      - the Reed-hidden
+      - the Mud-sucking
+      - the Pale-water-born
+      - the Slow-draining
+      - the Unfelt-until-late
+      Rank:
+      - Drainer of the Bleeding Pool
+      - Lurker of Leechbank
+      - Lord of Slickmire
+      - Sucker of the Black Reeds
+      - Hider of the Sucking Mud
+      Legend:
+      - Who Drained the Ox in the Ford
+      - Who Was Salted Nine Times and Grew Back
+      - Who Latched Onto the Barge and Followed It to the Sea
+      - Who Filled the Bleeding Pool Red
+      - Who Waited in the Reeds for the Whole Regiment
+      Occupational:
+      - Blood-taker
+      - Mud-lurker
+      - Ford-drainer
+    CitySuffixes:
+      Capital:
+      - pool
+      - bank
+      - mire
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - reeds
+      - mud
+      - water
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: 888339253
+    Weight: 1

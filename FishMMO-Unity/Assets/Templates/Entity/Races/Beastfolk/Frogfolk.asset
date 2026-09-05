@@ -1,0 +1,139 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Frogfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Boastful, croaking swamp-folk who crown a king every season and depose him the next.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gurb
+      - Grib
+      - Plod
+      - Plip
+      - Blub
+      - Plo
+      - Brit
+      - Splo
+      - Gu
+      - Gru
+      - Plu
+      - Blu
+      - Bru
+      - Splu
+      - Gi
+      - Gri
+      - Pli
+      - Bli
+      Nuclei:
+      - u
+      - o
+      - i
+      - up
+      - ip
+      Codas:
+      - blop
+      - grub
+      - gort
+      - plik
+      - splod
+      - up
+      - ip
+      - op
+      - ub
+      - ib
+      - ob
+      - urt
+      Middles:
+      - ru
+      - pi
+      - bl
+      - ug
+      - ig
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - ibba
+      - ogga
+      - a
+      MasculineSuffixes:
+      - ub
+      - og
+      - ok
+      Description: 'Frog-croak patois — damp, bragging'
+      Tags:
+      - Marsh-names
+      - Tongue-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Croaking Marsh
+    - Mud-Throne
+    - Lilypad Assembly
+    - Sedge Keep
+    Titles:
+      Honorific: []
+      HonorificMasculine:
+      - Marsh-King
+      - Croak-lord
+      HonorificFeminine:
+      - Marsh-Queen
+      - Croak-lady
+      Epithet:
+      - the Blubbering
+      - the Hop-speaker
+      Rank:
+      - King of the Croaking Marsh
+      Legend:
+      - Who Swallowed the Envoy Whole
+      Occupational:
+      - Fly-catcher
+      - Reed-weaver
+      - Bog-guide
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: 888339253
+    Weight: 1
+  - BiomeID: -2019209325
+    Weight: 1

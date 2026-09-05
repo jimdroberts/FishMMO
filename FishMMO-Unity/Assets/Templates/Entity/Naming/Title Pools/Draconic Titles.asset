@@ -1,0 +1,102 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Draconic Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Draconic
+  Titles:
+    Honorific:
+    - Wyrm-lord
+    - Hoard-warden
+    - Sky-sovereign
+    - Scale-elder
+    - Flame-tongue
+    - Roost-master
+    - Egg-guardian
+    - Claw-sworn
+    - Ash-herald
+    - Wing-commander
+    HonorificMasculine:
+    - Sire of the Roost
+    - Great Drake
+    HonorificFeminine:
+    - Dam of the Roost
+    - Great Wyrm
+    Epithet:
+    - the Gold-bellied
+    - the Ever-burning
+    - the Ancient
+    - the Hoard-heavy
+    - the Sky-splitting
+    - the Scale-hard
+    - the Cinder-eyed
+    - the Long-winged
+    - the Mountain-coiled
+    - the Smoke-crowned
+    - the Thunder-throated
+    - the Ash-maned
+    - the Bright-scaled
+    - the Bone-strewn
+    - the Slow-waking
+    - the Storm-riding
+    - the Coin-counting
+    - the Fear of Knights
+    - the Molten-hearted
+    - the Wing-shadowed
+    - the Never-slain
+    - the First-hatched
+    - the Ember-breathed
+    Rank:
+    - Lord of the Hoard-deep
+    - Sovereign of the Sky-roost
+    - Warden of the Cinder Spire
+    - Keeper of the Egg-warm Caves
+    - Master of the Molten Throne
+    - 'Elder of the Old Wyrm''s Vale'
+    - Terror of the Scale Ford
+    - Ruler of the Ash Reach
+    - Watcher of the Wing-shadow Pass
+    - Counter of the Coin-strewn Hall
+    Legend:
+    - Who Burned the Hundred Ships
+    - Who Slept on the Crown of Kings
+    - Who Was Owed a Debt by the Sun
+    - Who Broke the Knight-order at the Scale Ford
+    - Who Hatched in the Heart of the Volcano
+    - Who Counted Every Coin of the Hoard-deep
+    - 'Who Flew Beyond the Sky''s Edge and Returned'
+    - Who Ate the Storm
+    - Who Spared the Village for a Song
+    - Who Melted the Iron Gate with a Breath
+    - 'Who Nested on the Old King''s Tomb'
+    - Who Taught the Mountain to Smoke
+    Occupational:
+    - Hoard-counter
+    - Egg-turner
+    - Roost-warden
+    - Scale-polisher
+    - Ash-sifter
+    - Sky-scout
+  Places:
+  - the Hoard-deep
+  - the Sky-roost
+  - the Cinder Spire
+  - the Bone Ledge
+  - 'the Old Wyrm''s Vale'
+  - the Scale Ford
+  - the Molten Throne
+  - the Ash Reach
+  - the Thunder Perch
+  - the Egg-warm Caves
+  - the Wing-shadow Pass
+  - the Coin-strewn Hall

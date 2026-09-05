@@ -1,0 +1,123 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hydra
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Many-headed cadence; layered voices
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Hy
+      - Thal
+      - Kyr
+      - Oph
+      - Sev
+      - Vor
+      - Ness
+      - Skal
+      - Mar
+      - Tor
+      - Gul
+      - Ryth
+      Nuclei:
+      - a
+      - e
+      - y
+      - o
+      - ae
+      Codas:
+      - dra
+      - kes
+      - thon
+      - rra
+      - oss
+      - ix
+      - eth
+      - ander
+      Middles:
+      - dr
+      - thy
+      - ler
+      - na
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ena
+      - issa
+      MasculineSuffixes:
+      - us
+      - 'on'
+      - es
+      Description: Many-headed cadence; layered voices
+      Tags:
+      - Regrowth-names
+      - Swamp-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Black Fen
+    - Lernan Pool
+    - the Nine-Mouth Hollow
+    - Coilwater
+    Titles:
+      Honorific:
+      - Nine-crowned
+      - Regrowth-warden
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Uncut
+      - the Thrice-reborn
+      Rank:
+      - Warden of the Nine-Mouth Hollow
+      Legend:
+      - Who Grew Back from the Final Blow
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 1
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: 888339253
+    Weight: 1

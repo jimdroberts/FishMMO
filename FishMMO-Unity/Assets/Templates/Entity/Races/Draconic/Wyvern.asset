@@ -1,0 +1,128 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Wyvern
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Draconic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Cousins to dragons — sharp, poison-tongued'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Vex
+      - Kry
+      - Zyn
+      - Ver
+      - Drae
+      - Thyr
+      - Skar
+      - Vyr
+      - Pyr
+      - Ve
+      - Kre
+      - Ze
+      Nuclei:
+      - a
+      - e
+      - ae
+      - y
+      - ex
+      Codas:
+      - drax
+      - vor
+      - nyx
+      - rin
+      - thar
+      - vax
+      - ex
+      - yx
+      Middles:
+      - er
+      - ir
+      - ar
+      - ev
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - ae
+      - a
+      - yra
+      - ine
+      MasculineSuffixes:
+      - or
+      - ax
+      - us
+      - 'on'
+      Description: 'Cousins to dragons — sharp, poison-tongued'
+      Tags:
+      - Poison-names
+      - Sky-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Jagged Aeries
+    - Venom Spine Peaks
+    - the Rattling Ridge
+    - Tail-Lash Gorge
+    Titles:
+      Honorific:
+      - Sky-stinger
+      - Poison-wing
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Jagged
+      - the Venom-tipped
+      - the Low-winged
+      Rank:
+      - Stinger-lord of the Aeries
+      Legend:
+      - Whose Tail Ended the Cavalry
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: 1275219499
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 1
+  - BiomeID: -138594552
+    Weight: 1
+  - BiomeID: 681889367
+    Weight: 0.5

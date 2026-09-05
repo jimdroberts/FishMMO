@@ -1,0 +1,173 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Pitborn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Lesser fiends spawned in the pit''s depths — guttural, sulphurous names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grak
+      - Sulph
+      - Vor
+      - Mal
+      - Thes
+      - Kor
+      - Zar
+      - Brak
+      - Nyx
+      - Gral
+      - Ash
+      - Sath
+      - Rukk
+      - Vesh
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - i
+      Codas:
+      - oth
+      - ax
+      - urn
+      - ess
+      - el
+      - rot
+      - ias
+      - ug
+      Middles:
+      - ra
+      - za
+      - ul
+      - mo
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - ura
+      MasculineSuffixes:
+      - ax
+      - urn
+      - ug
+      Description: 'Lesser fiends spawned in the pit''s depths — guttural, sulphurous names'
+      Tags:
+      - Pit-names
+      - Spawn-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Spawning Pit
+    - the Sulphur Road
+    - 'the Brass Gate''s Foot'
+    - Gralldeep
+    - the Contract Floor
+    - 'the Ninth Circle''s Edge'
+    - 'the Ash Throne''s Shadow'
+    Titles:
+      Honorific:
+      - Pit-spawn
+      - Road-toll
+      - Gate-foot
+      - Floor-scribe
+      - Edge-warden
+      - Sulphur-mother
+      - Ash-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Pit-spawned
+      - the Sulphur-breathed
+      - the Lesser-and-hungry
+      - the Contract-carrying
+      - the Gate-crouching
+      - the Edge-born
+      - the Never-promoted
+      - the Guttural
+      Rank:
+      - Spawn of the Spawning Pit
+      - Toll of the Sulphur Road
+      - Foot of the Brass Gate
+      - Scribe of the Contract Floor
+      - 'Warden of the Ninth Circle''s Edge'
+      Legend:
+      - Who Crawled Up from the Ninth Circle to the First
+      - Who Carried the Contract Through the Fire Unburned
+      - 'Who Ate the Greater Fiend''s Dinner'
+      - 'Who Guarded the Gate''s Foot for an Age Hoping for Promotion'
+      - Who Was Summoned by a Child and Obeyed
+      Occupational:
+      - Contract-carrier
+      - Gate-crouch
+      - Pit-digger
+      - Soul-counter
+    CitySuffixes:
+      Capital:
+      - pit
+      - gate
+      - floor
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - deep
+      - edge
+      - shadow
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -1042859854
+    Weight: 3
+  - BiomeID: 155940630
+    Weight: 2
+  - BiomeID: 681889367
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 1

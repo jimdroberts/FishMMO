@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Plant Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Plant
+  Titles:
+    Honorific:
+    - Root-elder
+    - Grove-warden
+    - Seed-keeper
+    - Sap-speaker
+    - Bramble-lord
+    - Canopy-watcher
+    - Spore-mother
+    - Moss-tender
+    - Heartwood-voice
+    - Leaf-herald
+    - Bark-sworn
+    HonorificMasculine:
+    - Oak-father
+    HonorificFeminine:
+    - Willow-mother
+    Epithet:
+    - the Deep-rooted
+    - the Slow-growing
+    - the Ever-green
+    - the Thorn-crowned
+    - the Moss-bearded
+    - the Leaf-shedding
+    - the Sun-drinking
+    - the Storm-bent
+    - the Old as the Grove
+    - the Spore-scattering
+    - the Sap-blooded
+    - the Bark-hided
+    - the Patient
+    - the Wind-sown
+    - the Winter-sleeping
+    - the Root-bound
+    - the Bloom-bright
+    - the Bramble-armed
+    - the Fungus-crowned
+    - the Shade-giving
+    - the Fire-scarred
+    - the Hundred-ringed
+    - the Seed-heavy
+    Rank:
+    - Elder of the Heartwood
+    - Warden of the Old Grove
+    - Keeper of the Seed Vault
+    - Mother of the Spore Hollow
+    - Lord of the Bramble Court
+    - Voice of the Green Cathedral
+    - Guardian of the Fallen Oak
+    - Tender of the Sap Well
+    - Watcher of the Canopy Road
+    - Dancer of the Mushroom Ring
+    - Steward of the Root Cellar
+    - Climber of the Moss Steps
+    Legend:
+    - Who Grew Through the Castle Wall
+    - Who Slept a Century and Bloomed
+    - Who Held the Hillside Together in the Great Rain
+    - Who Fed the Village Through the Famine
+    - Who Was Cut Down and Grew Again
+    - Who Rooted the Wandering Island
+    - Who Outlived the Forest Fire
+    - Who Sheltered the Last Deer
+    - Who Drank the Poisoned Well and Cleaned It
+    - Who Spread from One Spore to a Kingdom
+    - Who Turned the Woodcutter Green
+    - Who Bore Fruit in Winter
+    Occupational:
+    - Seed-sower
+    - Sap-tapper
+    - Moss-gatherer
+    - Root-tender
+    - Spore-carrier
+    - Bark-mender
+    - Grove-planter
+  Places:
+  - the Heartwood
+  - the Old Grove
+  - the Spore Hollow
+  - the Root Cellar
+  - the Bramble Court
+  - the Green Cathedral
+  - the Fallen Oak
+  - the Moss Steps
+  - the Seed Vault
+  - the Sap Well
+  - the Canopy Road
+  - the Mushroom Ring

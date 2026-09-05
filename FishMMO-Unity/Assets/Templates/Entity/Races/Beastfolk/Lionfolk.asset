@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Lionfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Golden-maned pride people — regal, roaring names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Leo
+      - Ras
+      - Mane
+      - Sim
+      - Aur
+      - Gol
+      - Rho
+      - Tar
+      - Kesh
+      - Nem
+      - Sar
+      - Vash
+      - Ori
+      - Bahr
+      Nuclei:
+      - a
+      - e
+      - o
+      - u
+      - ae
+      Codas:
+      - ar
+      - 'on'
+      - ess
+      - ath
+      - ir
+      - um
+      - ael
+      - ora
+      Middles:
+      - ra
+      - le
+      - 'on'
+      - ar
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - ora
+      MasculineSuffixes:
+      - ar
+      - 'on'
+      - um
+      Description: 'Golden-maned pride people — regal, roaring names'
+      Tags:
+      - Pride-names
+      - Sun-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Pride Rock
+    - Goldmane
+    - the Sun Court
+    - the Roaring Plain
+    - Manehold
+    - the Watering Throne
+    - the Long Shadow
+    Titles:
+      Honorific:
+      - Pride-lord
+      - Sun-warden
+      - Mane-elder
+      - Plain-reeve
+      - Roar-herald
+      - Pride-mother
+      - Shadow-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Golden-maned
+      - the Roaring
+      - the Sun-warmed
+      - the Pride-first
+      - the Long-shadowed
+      - the Slow-waking
+      - the Plain-ruling
+      - the Never-hurried
+      Rank:
+      - Lord of the Pride Rock
+      - Warden of the Sun Court
+      - Elder of Goldmane
+      - Reeve of the Roaring Plain
+      - Keeper of the Watering Throne
+      Legend:
+      - Who Roared the Drought Away
+      - Who Slept Nineteen Hours and Ruled the Twentieth
+      - Who Faced the Hyena-pack Alone at the Watering Throne
+      - Who Carried the Sun on Their Mane
+      - Who Made Peace Between the Prides
+      Occupational:
+      - Pride-guard
+      - Sun-watcher
+      - Plain-scout
+      - Mane-comber
+      - Hunt-caller
+    CitySuffixes:
+      Capital:
+      - rock
+      - court
+      - hold
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - shadow
+      - plain
+      - throne
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1911521020
+    Weight: 3
+  - BiomeID: 1655673647
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1.5
+  - BiomeID: -1951431387
+    Weight: 1

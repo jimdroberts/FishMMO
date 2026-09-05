@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Crabfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Armoured shore-scuttlers — clicking, clacking names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Klik
+      - Skut
+      - Karr
+      - Pinch
+      - Shel
+      - Clak
+      - Tid
+      - Bar
+      - Krab
+      - Snip
+      - Roc
+      - Gril
+      - Mol
+      - Chit
+      Nuclei:
+      - a
+      - i
+      - o
+      - u
+      - ee
+      Codas:
+      - ak
+      - ik
+      - ock
+      - ash
+      - ull
+      - ith
+      - ek
+      - orr
+      Middles:
+      - ka
+      - ki
+      - ol
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ika
+      - ock
+      MasculineSuffixes:
+      - ak
+      - ik
+      - orr
+      Description: 'Armoured shore-scuttlers — clicking, clacking names'
+      Tags:
+      - Click-names
+      - Shell-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Tide-pool Court
+    - Clackrock
+    - the Moulting Cave
+    - the Sideways Road
+    - Pinchhaven
+    - the Wreck Reef
+    - the Salt Flats
+    Titles:
+      Honorific:
+      - Pool-elder
+      - Shell-warden
+      - Moult-keeper
+      - Reef-reeve
+      - Sideways-master
+      - Claw-mother
+      - Rock-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Hard-shelled
+      - the Sideways-walking
+      - the Big-clawed
+      - the Tide-pool-born
+      - the Moult-new
+      - the Rock-clinging
+      - the Never-caught-by-gulls
+      - the Clacking
+      Rank:
+      - Elder of the Tide-pool Court
+      - Warden of Clackrock
+      - Keeper of the Moulting Cave
+      - Reeve of the Wreck Reef
+      - Master of the Sideways Road
+      Legend:
+      - 'Who Pinched the Gull-god''s Toe'
+      - Who Held the Rock Through the Hurricane
+      - Who Walked Sideways Around the World
+      - Who Moulted Nine Times in a Year and Grew Enormous
+      - 'Who Cracked the Pirate''s Chest and Ate the Lock'
+      Occupational:
+      - Pool-cleaner
+      - Shell-polisher
+      - Wreck-picker
+      - Salt-scraper
+      - Reef-mender
+    CitySuffixes:
+      Capital:
+      - rock
+      - court
+      - reef
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - pool
+      - cave
+      - flats
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 646460858
+    Weight: 3
+  - BiomeID: 1384639345
+    Weight: 2
+  - BiomeID: -1552223677
+    Weight: 1.5
+  - BiomeID: 888339253
+    Weight: 1

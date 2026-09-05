@@ -1,0 +1,280 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Demon
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Infernal and binding — names that carry weight and corruption
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Azh
+      - Bal
+      - Kaz
+      - Mal
+      - Rak
+      - Sath
+      - Thal
+      - Ur
+      - Val
+      - Xal
+      - Zal
+      - Ath
+      - Bel
+      - Dha
+      - Kel
+      - Mol
+      - Nar
+      - Pal
+      - Ral
+      - Sal
+      Nuclei:
+      - al
+      - el
+      - ur
+      - az
+      - ath
+      - ul
+      - or
+      Codas:
+      - ath
+      - el
+      - or
+      - ur
+      - azar
+      - igal
+      - ithar
+      - uzal
+      - ishar
+      - inor
+      Middles:
+      - az
+      - al
+      - ur
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - el
+      - ath
+      - a
+      MasculineSuffixes:
+      - or
+      - ur
+      - azar
+      Description: Infernal and binding — names that carry weight and corruption
+      Tags:
+      - True-names
+      - Contract-marks
+      - Infernal titles
+      WeightedCodas:
+      - Item: azar
+        Weight: 6
+      - Item: igal
+        Weight: 5
+      - Item: ithar
+        Weight: 4
+      - Item: uzal
+        Weight: 3
+      - Item: ishar
+        Weight: 3
+      - Item: inor
+        Weight: 3
+      - Item: ath
+        Weight: 10
+      - Item: el
+        Weight: 8
+      - Item: or
+        Weight: 7
+      - Item: ur
+        Weight: 6
+      - Item: xulath
+        Weight: 1
+      - Item: nethigor
+        Weight: 1
+    Cultures:
+    - CultureKey: abyssal
+      Phonology:
+        Onsets:
+        - Azath
+        - Belial
+        - Cthar
+        - Dagrun
+        - Exeal
+        - Rift
+        - Hasht
+        - Ithar
+        - Kaz
+        - Maal
+        - Nyx
+        - Orthog
+        - Pazuz
+        - Quethr
+        - Sabaz
+        Nuclei:
+        - a
+        - o
+        - u
+        - au
+        - ou
+        - yr
+        Codas:
+        - oth
+        - azz
+        - oss
+        - axx
+        - urr
+        - iggr
+        - harr
+        - riel
+        - uul
+        - arr
+        Middles:
+        - ar
+        - or
+        - ur
+        SyllMin: 3
+        SyllMax: 4
+        FeminineSuffixes:
+        - iel
+        - azz
+        - rina
+        MasculineSuffixes:
+        - oth
+        - oss
+        - riel
+        Description: 'Abyssal — true-named by bargain, speak-at-peril'
+        Tags:
+        - True-names
+        - Pact-bonds
+        - Sin-marks
+        WeightedCodas: []
+    Places:
+    - the Seventh Circle
+    - the Ruinous Pit
+    - Ashenmaw
+    - the Infernal Court
+    - the Binding Halls
+    - the Screaming Abyss
+    - the Furnace of Souls
+    Titles:
+      Honorific:
+      - Archfiend
+      - Malefactor
+      - Ruincaller
+      - Soulbinder
+      - Hellsmouth
+      - Ashkeeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Unbound
+      - the Soul-hungry
+      - the Corruptor
+      - the Thousand-named
+      - the Ancient Evil
+      - the Unchained
+      - the Consuming
+      - the Oath-breaker
+      Rank:
+      - Lord of the Seventh Circle
+      - Keeper of Infernal Contracts
+      - High Tempter of the Mortal Realm
+      - Archfiend of the Ruinous Pit
+      - Commander of the Legion Unbound
+      - Voice of the Screaming Abyss
+      Legend:
+      - Who Tempted a Saint into Ruin
+      - Who Has Collected a Million Souls
+      - Whose True Name Shatters Minds
+      - Who Escaped the Binding of Ages
+      - Who Was Too Evil for Hell Itself
+      - Who Corrupted an Entire Civilization with a Whisper
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - pit
+      - throne
+      - furnace
+      - citadel
+      - maw
+      - spire
+      - abyss
+      Fortress:
+      - gate
+      - wall
+      - chain
+      - seal
+      - ward
+      - bastion
+      - binding
+      Village:
+      - pit
+      - crater
+      - hollow
+      - den
+      - camp
+      - scorch
+      - breach
+      Port:
+      - lake
+      - pool
+      - flow
+      - basin
+      - channel
+      - dock
+      Sacred:
+      - altar
+      - pyre
+      - sanctum
+      - circle
+      - brand
+      - shrine
+      - fane
+      Ruin:
+      - ruin
+      - ash
+      - scar
+      - void
+      - waste
+      - char
+      - blight
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 2
+  - BiomeID: -1042859854
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: 493502347
+    Weight: 1

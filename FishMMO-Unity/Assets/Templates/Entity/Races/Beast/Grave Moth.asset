@@ -1,0 +1,169 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Grave Moth
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beast
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Great pale moths that drink from the dead — whispering, dusty names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grae
+      - Dus
+      - Mor
+      - Pal
+      - Sil
+      - Wisp
+      - Umb
+      - Vel
+      - Ash
+      - Shro
+      - Lin
+      - Powd
+      - Nyx
+      - Hush
+      Nuclei:
+      - a
+      - u
+      - o
+      - e
+      - y
+      Codas:
+      - ith
+      - wing
+      - ell
+      - ust
+      - en
+      - ae
+      - orr
+      - yn
+      Middles:
+      - us
+      - el
+      - in
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ae
+      - ust
+      MasculineSuffixes:
+      - en
+      - orr
+      - wing
+      Description: 'Great pale moths that drink from the dead — whispering, dusty names'
+      Tags:
+      - Dust-names
+      - Shroud-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Shroud Loft
+    - Palewing
+    - the Candle Crypt
+    - the Dust Court
+    - Gravedusk
+    - the Winding-sheet Meadow
+    - the Silent Belfry
+    Titles:
+      Honorific:
+      - Loft-matriarch
+      - Crypt-flutterer
+      - Dust-lord
+      - Belfry-hanger
+      - Shroud-warden
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Pale-winged
+      - the Grave-fed
+      - the Dust-shedding
+      - the Candle-circling
+      - the Silent
+      - the Shroud-born
+      - the Night-drinking
+      - the Never-seen-by-day
+      Rank:
+      - Matriarch of the Shroud Loft
+      - Flutterer of the Candle Crypt
+      - Lord of the Dust Court
+      - Hanger of the Silent Belfry
+      - Warden of Palewing
+      Legend:
+      - Who Drank From Every Corpse of the Plague Year
+      - Who Blotted the Funeral Candles
+      - Who Wore the Winding-sheet as Wings
+      - Who Filled the Belfry and Silenced the Bell
+      - 'Who Powdered the Mourners'' Eyes'
+      Occupational:
+      - Crypt-flutterer
+      - Dust-shedder
+      - Candle-blotter
+    CitySuffixes:
+      Capital:
+      - loft
+      - crypt
+      - court
+      Fortress:
+      - thicket
+      - burrow
+      - ledge
+      Village:
+      - dusk
+      - meadow
+      - belfry
+      Port:
+      - bank
+      - shore
+      - mud
+      Sacred:
+      - rock
+      - stone
+      - bones
+      Ruin:
+      - bones
+      - carrion
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: 621224406
+    Weight: 2
+  - BiomeID: 173642607
+    Weight: 2
+  - BiomeID: -567058185
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1

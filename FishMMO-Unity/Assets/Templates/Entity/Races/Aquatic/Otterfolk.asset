@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Otterfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Playful river people — chirping, sleek names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ott
+      - Lut
+      - Sleek
+      - Riv
+      - Dab
+      - Whis
+      - Bel
+      - Fen
+      - Pip
+      - Tarn
+      - Rol
+      - Kel
+      - Nib
+      - Spla
+      Nuclei:
+      - i
+      - a
+      - e
+      - o
+      - u
+      Codas:
+      - er
+      - ish
+      - et
+      - ell
+      - ip
+      - ock
+      - ee
+      - ard
+      Middles:
+      - er
+      - il
+      - ol
+      - ab
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ie
+      - ell
+      MasculineSuffixes:
+      - er
+      - et
+      - ock
+      Description: 'Playful river people — chirping, sleek names'
+      Tags:
+      - Slide-names
+      - River-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Mud Slide
+    - Splashholt
+    - the Fish Weir
+    - the Play Pool
+    - Sleekwater
+    - the Riverbank Holt
+    - the Ice Slide
+    Titles:
+      Honorific:
+      - Holt-elder
+      - Slide-master
+      - Weir-warden
+      - Pool-reeve
+      - River-herald
+      - Fish-mother
+      - Splash-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Sleek-furred
+      - the Ever-playing
+      - the Fish-quick
+      - the Mud-sliding
+      - the Whiskered
+      - the River-born
+      - the Never-serious
+      - the Water-dancing
+      Rank:
+      - Elder of Splashholt
+      - Master of the Mud Slide
+      - Warden of the Fish Weir
+      - Reeve of the Play Pool
+      - Herald of Sleekwater
+      Legend:
+      - Who Slid the Whole River Without Stopping
+      - Who Juggled Three Fish for the King
+      - Who Pulled the Drowning Child Out by the Collar
+      - Who Played Through the Flood
+      - Who Taught the Bears to Fish and Regretted It
+      Occupational:
+      - Fish-catcher
+      - Weir-builder
+      - Slide-keeper
+      - River-guide
+      - Pearl-finder
+    CitySuffixes:
+      Capital:
+      - holt
+      - weir
+      - water
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - slide
+      - pool
+      - bank
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 2117371294
+    Weight: 3
+  - BiomeID: 247344987
+    Weight: 2
+  - BiomeID: 888339253
+    Weight: 2
+  - BiomeID: -2077848218
+    Weight: 1

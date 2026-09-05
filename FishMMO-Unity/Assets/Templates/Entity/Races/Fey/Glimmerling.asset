@@ -1,0 +1,177 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Glimmerling
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Light-fey of lanterns and glow-worms — soft, shining names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Glim
+      - Lum
+      - Shim
+      - Fla
+      - Lir
+      - Bea
+      - Ael
+      - Sil
+      - Twin
+      - Gleam
+      - Oria
+      - Nim
+      - Fyr
+      - Spar
+      Nuclei:
+      - i
+      - e
+      - a
+      - ae
+      - y
+      Codas:
+      - ith
+      - el
+      - ine
+      - eer
+      - ora
+      - ael
+      - yn
+      - ell
+      Middles:
+      - li
+      - ri
+      - el
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ine
+      - ael
+      MasculineSuffixes:
+      - el
+      - eer
+      - yn
+      Description: 'Light-fey of lanterns and glow-worms — soft, shining names'
+      Tags:
+      - Glow-names
+      - Lantern-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Lantern Meadow
+    - Glow-worm Hollow
+    - the Star Pool
+    - Candlewick
+    - the Firefly Court
+    - the Shining Ford
+    - Moonglass
+    Titles:
+      Honorific:
+      - Lantern-herald
+      - Glow-warden
+      - Star-keeper
+      - Firefly-elder
+      - Wick-mother
+      - Ford-lighter
+      - Moon-reader
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Softly-shining
+      - the Glow-born
+      - the Never-dark
+      - the Star-pooled
+      - the Firefly-crowned
+      - the Candle-warm
+      - the Moonglass-eyed
+      - the Light-footed
+      Rank:
+      - Herald of the Firefly Court
+      - Warden of the Lantern Meadow
+      - Keeper of the Star Pool
+      - Lighter of the Shining Ford
+      - Elder of Glow-worm Hollow
+      Legend:
+      - Who Lit the Lost Child Home Through the Fen
+      - Who Caught the Falling Star in a Cup
+      - Who Outshone the Lighthouse for a Night
+      - Who Taught the Glow-worms to Spell
+      - Who Hid the Moon in Moonglass
+      Occupational:
+      - Lantern-tender
+      - Glow-worm-herder
+      - Star-catcher
+      - Candle-dipper
+      - Wick-trimmer
+    CitySuffixes:
+      Capital:
+      - court
+      - meadow
+      - pool
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - hollow
+      - wick
+      - glass
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: 1139958860
+    Weight: 1.5
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: 247344987
+    Weight: 1

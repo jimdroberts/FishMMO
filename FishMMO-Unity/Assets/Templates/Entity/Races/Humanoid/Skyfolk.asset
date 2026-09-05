@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Skyfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Peak-top settlers — thin-air names, long and breathy'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Aer
+      - Hal
+      - Ven
+      - Cirr
+      - Sol
+      - Kes
+      - Lir
+      - Wyn
+      - Tal
+      - Ori
+      - Fen
+      - Sky
+      - Ael
+      - Rho
+      Nuclei:
+      - a
+      - e
+      - i
+      - ae
+      - io
+      Codas:
+      - iel
+      - eth
+      - ar
+      - ion
+      - an
+      - ys
+      - el
+      - orn
+      Middles:
+      - el
+      - ir
+      - ae
+      - 'on'
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - iel
+      - a
+      - ys
+      MasculineSuffixes:
+      - ar
+      - ion
+      - orn
+      Description: 'Peak-top settlers — thin-air names, long and breathy'
+      Tags:
+      - Peak-names
+      - Wind-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Eyrie Steps
+    - Cloudhaven
+    - the Rope Bridge
+    - the Thin-air Shrine
+    - Highwatch
+    - the Condor Ledge
+    - the Windmill Terrace
+    Titles:
+      Honorific:
+      - Bridge-warden
+      - Eyrie-elder
+      - Wind-reader
+      - Ledge-master
+      - Shrine-keeper
+      - Cloud-reeve
+      - Rope-mother
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Thin-air-born
+      - the Sure-handed
+      - the Cloud-walking
+      - the Far-seeing
+      - the Wind-light
+      - the Never-dizzy
+      - the Sun-browned
+      - the Ledge-brave
+      Rank:
+      - Warden of the Rope Bridge
+      - Elder of the Eyrie Steps
+      - Keeper of the Thin-air Shrine
+      - Master of Highwatch
+      - Reeve of Cloudhaven
+      Legend:
+      - Who Crossed the Rope Bridge in the Gale
+      - Who Built Highwatch on the Cloud
+      - Who Rode the Condor to the Valley and Back
+      - Who Read the Storm Three Days Early
+      - Who Carried Water Up a Thousand Steps
+      Occupational:
+      - Rope-maker
+      - Terrace-farmer
+      - Wind-miller
+      - Condor-keeper
+      - Step-cutter
+    CitySuffixes:
+      Capital:
+      - eyrie
+      - watch
+      - haven
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - ledge
+      - step
+      - terrace
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: -138594552
+    Weight: 1.5
+  - BiomeID: -544771122
+    Weight: 0.5

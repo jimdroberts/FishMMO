@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Angel
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Winged messengers of the bright host — ringing, luminous names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ael
+      - Ser
+      - Cel
+      - Ura
+      - Lum
+      - Ith
+      - Ori
+      - Sol
+      - Ely
+      - Ath
+      - Rael
+      - Mich
+      - Gab
+      - Vael
+      Nuclei:
+      - a
+      - ae
+      - ie
+      - io
+      - e
+      Codas:
+      - iel
+      - ion
+      - ael
+      - iah
+      - eus
+      - oria
+      - ith
+      - el
+      Middles:
+      - l
+      - r
+      - n
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - iel
+      - a
+      - ael
+      MasculineSuffixes:
+      - ion
+      - eus
+      - el
+      Description: 'Winged messengers of the bright host — ringing, luminous names'
+      Tags:
+      - Wing-names
+      - Choir-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Choir of Dawn
+    - the Silver Threshold
+    - the Bright Bastion
+    - the Court of Wings
+    - the Trumpet Stair
+    - the Hall of Oaths
+    - the Last Judgement
+    Titles:
+      Honorific:
+      - Herald
+      - Choir-leader
+      - Wing-marshal
+      - Threshold-warden
+      - Bright Sentinel
+      - Oath-witness
+      - Trumpet-bearer
+      HonorificMasculine:
+      - Lord of the Choir
+      HonorificFeminine:
+      - Lady of the Choir
+      Epithet:
+      - the Bright-winged
+      - the Radiant
+      - the Oath-bound
+      - the Trumpet-voiced
+      - the Unfallen
+      - the Dawn-blessed
+      - the Star-forged
+      - the Merciful
+      Rank:
+      - Herald of the Choir of Dawn
+      - Warden of the Silver Threshold
+      - Marshal of the Court of Wings
+      - Sentinel of the Bright Bastion
+      - Bearer of the Trumpet Stair
+      Legend:
+      - Who Sang at the Dawn of the World
+      - Who Held the Silver Threshold Against the Host
+      - Who Carried the Message Through the Fire
+      - Who Wept for the Damned
+      - Who Refused the Fall
+      Occupational:
+      - Message-bearer
+      - Oath-witness
+      - Choir-singer
+      - Threshold-guard
+    CitySuffixes:
+      Capital:
+      - choir
+      - bastion
+      - court
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - stair
+      - threshold
+      - hall
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 18062707
+    Weight: 3
+  - BiomeID: -1474826537
+    Weight: 2
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: 1645414801
+    Weight: 1

@@ -1,0 +1,108 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Fey Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Fey
+  Titles:
+    Honorific:
+    - Courtier
+    - Trickster
+    - Glade-warden
+    - Dream-weaver
+    - Dew-keeper
+    - Moon-dancer
+    - Thorn-speaker
+    - Riddle-master
+    - Ring-warden
+    - Season-herald
+    - Whisper
+    HonorificMasculine:
+    - Prince of the Glade
+    - Lord of Mischief
+    HonorificFeminine:
+    - Princess of the Glade
+    - Lady of Mischief
+    Epithet:
+    - the Laughing
+    - the Never-caught
+    - the Dew-crowned
+    - the Moon-touched
+    - the Riddling
+    - the Barefoot
+    - the Thorn-hearted
+    - the Bright and Fickle
+    - the Glamour-clad
+    - the Star-haired
+    - the Unasked
+    - the Mist-wrapped
+    - the Twilight-born
+    - the Honey-tongued
+    - the Ever-young
+    - the Season-turning
+    - the Quick as Thought
+    - the Shoeless
+    - the Petal-light
+    - the Wild-eyed
+    - the Wish-granting
+    - the Name-stealing
+    - the Bell-voiced
+    - the Uninvited
+    Rank:
+    - Warden of the Hollow Hill
+    - Herald of the Court of Seasons
+    - Keeper of the Ring of Stones
+    - Master of the Hidden Market
+    - Dancer of the Moonlit Court
+    - Lord of the Thornmaze
+    - Guardian of the Dreaming Wood
+    - Toll-taker of the Silver Ford
+    - Lamplighter of the Lantern Grove
+    - Reeve of the Dew Meadows
+    - Bridge-warden of the Mist
+    - Speaker for the Twilight Glade
+    Legend:
+    - Who Stole a Year from a King
+    - Who Danced the Moon Down
+    - Who Tricked the Winter into Leaving Early
+    - Who Traded a Name for a Song
+    - Who Walked the Thornmaze Blindfold
+    - Who Kept a Promise for a Hundred Years
+    - Who Turned the Tax-collector into a Toad
+    - Who Lit the Lantern Grove Alone
+    - Who Rode a Stag Through the Hidden Market
+    - Who Wept a River into Being
+    - Who Laughed at the Old Gods and Was Forgiven
+    - Who Won the Riddle Contest of the Ages
+    Occupational:
+    - Dew-gatherer
+    - Glamour-spinner
+    - Petal-weaver
+    - Dream-tailor
+    - Moth-herder
+    - Ring-dancer
+    - Wish-broker
+    - Thorn-tender
+  Places:
+  - the Moonlit Court
+  - the Hollow Hill
+  - the Ring of Stones
+  - Twilight Glade
+  - the Thornmaze
+  - the Dreaming Wood
+  - the Silver Ford
+  - the Hidden Market
+  - the Dew Meadows
+  - the Lantern Grove
+  - the Court of Seasons
+  - the Mist Bridge

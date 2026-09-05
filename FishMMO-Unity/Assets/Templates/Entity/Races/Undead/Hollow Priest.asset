@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Hollow Priest
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Undead
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Dead clergy still keeping a forgotten rite — sepulchral, chanted names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sep
+      - Rit
+      - Vesp
+      - Cant
+      - Mor
+      - Hal
+      - Ora
+      - Dus
+      - Ben
+      - Litur
+      - Nox
+      - Pray
+      - Cel
+      - Ossu
+      Nuclei:
+      - a
+      - o
+      - u
+      - e
+      - ae
+      Codas:
+      - oth
+      - ius
+      - ael
+      - ith
+      - orr
+      - um
+      - eth
+      - ura
+      Middles:
+      - ra
+      - li
+      - ae
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ael
+      - ura
+      MasculineSuffixes:
+      - ius
+      - oth
+      - um
+      Description: 'Dead clergy still keeping a forgotten rite — sepulchral, chanted names'
+      Tags:
+      - Rite-names
+      - Chapel-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Cold Chapel
+    - Vesperhall
+    - the Forgotten Altar
+    - the Bone Choir
+    - Ritemound
+    - the Unlit Nave
+    - the Last Candle
+    Titles:
+      Honorific:
+      - Altar-keeper
+      - Vesper-warden
+      - Choir-elder
+      - Nave-lord
+      - Rite-priest
+      - Candle-mother
+      - Chapel-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Rite-keeping
+      - the Hollow-voiced
+      - the Candle-lit
+      - the Forgotten-god-serving
+      - the Bone-choired
+      - the Never-dismissed
+      - the Chanting
+      - the Cold-blessed
+      Rank:
+      - Keeper of the Forgotten Altar
+      - Warden of Vesperhall
+      - Elder of the Bone Choir
+      - Lord of the Unlit Nave
+      - Priest of the Cold Chapel
+      Legend:
+      - Who Kept the Rite a Thousand Years After the God Died
+      - Who Blessed the Army That Burned the Chapel
+      - Who Sang Vespers to an Empty Nave Every Night
+      - Who Lit the Last Candle and Would Not Let It Die
+      - Who Married the Dead to the Dead
+      Occupational:
+      - Rite-keeper
+      - Candle-lighter
+      - Vesper-singer
+      - Altar-sweeper
+    CitySuffixes:
+      Capital:
+      - chapel
+      - hall
+      - nave
+      Fortress:
+      - keep
+      - tower
+      - gate
+      - wall
+      Village:
+      - altar
+      - mound
+      - candle
+      Port:
+      - wreck
+      - drowned
+      - landing
+      Sacred:
+      - chapel
+      - shrine
+      - ossuary
+      - altar
+      Ruin:
+      - bones
+      - dust
+      - ash
+      - waste
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: 621224406
+    Weight: 2
+  - BiomeID: -567058185
+    Weight: 2
+  - BiomeID: 1056999638
+    Weight: 1
+  - BiomeID: 1169976905
+    Weight: 1

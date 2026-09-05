@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sea Giant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Coastal giants who wade the shallows — booming, wave-long names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Thal
+      - Mor
+      - Brim
+      - Kel
+      - Vor
+      - Wael
+      - Tarn
+      - Hol
+      - Dros
+      - Skell
+      - Nor
+      - Gul
+      - Bran
+      - Ulm
+      Nuclei:
+      - a
+      - o
+      - u
+      - ae
+      - oa
+      Codas:
+      - oth
+      - ar
+      - und
+      - eth
+      - orm
+      - ull
+      - ath
+      - ir
+      Middles:
+      - or
+      - ul
+      - an
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ae
+      - und
+      MasculineSuffixes:
+      - oth
+      - ar
+      - orm
+      Description: 'Coastal giants who wade the shallows — booming, wave-long names'
+      Tags:
+      - Wave-names
+      - Wading-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Wading Shelf
+    - Brinehall
+    - the Anchor Stone
+    - the Kelp Pasture
+    - Gullroost
+    - the Drowned Causeway
+    - the Whale Table
+    Titles:
+      Honorific:
+      - Shelf-thane
+      - Wave-lord
+      - Anchor-warden
+      - Kelp-herder
+      - Causeway-keeper
+      - Tide-mother
+      - Gull-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Wave-shouldered
+      - the Barnacle-kneed
+      - the Deep-wading
+      - the Salt-bearded
+      - the Ship-lifting
+      - the Tide-patient
+      - the Whale-friend
+      - the Storm-standing
+      Rank:
+      - Thane of the Wading Shelf
+      - Lord of Brinehall
+      - Warden of the Anchor Stone
+      - Herder of the Kelp Pasture
+      - Keeper of the Drowned Causeway
+      Legend:
+      - Who Lifted the Ship Over the Reef
+      - Who Waded to the Far Isle for a Bride
+      - Who Held the Causeway Against the Flood Tide
+      - Who Wrestled the Kraken to a Draw
+      - Who Ate the Whale Raw
+      Occupational:
+      - Kelp-herder
+      - Ship-lifter
+      - Anchor-setter
+      - Whale-driver
+      - Reef-clearer
+    CitySuffixes:
+      Capital:
+      - hall
+      - shelf
+      - table
+      Fortress:
+      - wall
+      - gate
+      - rampart
+      - boulder
+      Village:
+      - roost
+      - shelf
+      - cove
+      Port:
+      - landing
+      - strand
+      - shelf
+      Sacred:
+      - stone
+      - cairn
+      - altar
+      - table
+      Ruin:
+      - fall
+      - rubble
+      - tumble
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 646460858
+    Weight: 3
+  - BiomeID: 1508835452
+    Weight: 2
+  - BiomeID: 1384639345
+    Weight: 1.5
+  - BiomeID: 1496239796
+    Weight: 1

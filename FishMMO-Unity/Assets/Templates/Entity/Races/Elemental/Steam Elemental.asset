@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Steam Elemental
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Living scalding vapour of the geyser fields — hissing, billowing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Stea
+      - Hiss
+      - Gey
+      - Bil
+      - Scald
+      - Vap
+      - Sil
+      - Wisp
+      - Kal
+      - Mist
+      - Fum
+      - Boil
+      - Sul
+      - Sear
+      Nuclei:
+      - a
+      - i
+      - o
+      - u
+      - ee
+      Codas:
+      - ith
+      - ess
+      - el
+      - ur
+      - ash
+      - oon
+      - ae
+      - orr
+      Middles:
+      - li
+      - ss
+      - ur
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ess
+      - ae
+      MasculineSuffixes:
+      - el
+      - ur
+      - orr
+      Description: 'Living scalding vapour of the geyser fields — hissing, billowing names'
+      Tags:
+      - Steam-names
+      - Geyser-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Geyser Field
+    - the Scalding Vent
+    - Steamdeep
+    - the Boiling Pool
+    - the Fume Column
+    - the Hot Spring Court
+    - the First Breath of Fire
+    Titles:
+      Honorific:
+      - Geyser-voice
+      - Vent-herald
+      - Column-heart
+      - Pool-warden
+      - Spring-keeper
+      - Steam-mother
+      - Fume-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ever-billowing
+      - the Scalding
+      - the Geyser-born
+      - the Never-settled
+      - the Hissing
+      - the Hot-breathed
+      - the Sulphur-crowned
+      - the Fume-veiled
+      Rank:
+      - Voice of the Geyser Field
+      - Herald of the Scalding Vent
+      - Heart of the Fume Column
+      - Warden of the Boiling Pool
+      - Keeper of the Hot Spring Court
+      Legend:
+      - Who Scalded the Army in the Pass
+      - Who Boiled the Lake Dry
+      - Who Rose from the Geyser Every Hour for a Thousand Years
+      - Who Hid the Hot Spring Court in Fog
+      - Who Was Born Where Fire Met Water
+      Occupational:
+      - Geyser-tender
+      - Spring-warden
+      - Fog-maker
+    CitySuffixes:
+      Capital:
+      - field
+      - court
+      - column
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - vent
+      - pool
+      - deep
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 493502347
+    Weight: 2
+  - BiomeID: -2077848218
+    Weight: 1
+  - BiomeID: 155940630
+    Weight: 1

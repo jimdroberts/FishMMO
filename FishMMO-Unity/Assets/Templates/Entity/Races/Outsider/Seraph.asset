@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Seraph
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Six-winged burning ones of the highest choir — blazing, many-syllabled names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ser
+      - Ael
+      - Ura
+      - Sol
+      - Lum
+      - Ith
+      - Ory
+      - Cel
+      - Ely
+      - Rael
+      - Vael
+      - Ath
+      - Ori
+      - Zer
+      Nuclei:
+      - a
+      - ae
+      - ie
+      - io
+      - e
+      Codas:
+      - iel
+      - ion
+      - ael
+      - iah
+      - eus
+      - oria
+      - ith
+      - aphim
+      Middles:
+      - l
+      - r
+      - n
+      - ae
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - iel
+      - a
+      - ael
+      MasculineSuffixes:
+      - ion
+      - eus
+      - iah
+      Description: 'Six-winged burning ones of the highest choir — blazing, many-syllabled names'
+      Tags:
+      - Flame-names
+      - Choir-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Burning Choir
+    - the Sixfold Stair
+    - the Throne of Flame
+    - the Bright Bastion
+    - the Hall of Oaths
+    - the Veiled Face
+    - the First Light
+    Titles:
+      Honorific:
+      - Choir-flame
+      - Stair-herald
+      - Throne-warden
+      - Bastion-sentinel
+      - Oath-binder
+      - Veil-keeper
+      - Light-bearer
+      HonorificMasculine:
+      - Lord of Flame
+      HonorificFeminine:
+      - Lady of Flame
+      Epithet:
+      - the Six-winged
+      - the Ever-burning
+      - the Face-veiling
+      - the Radiant
+      - the Throne-circling
+      - the Unfallen
+      - the Flame-crowned
+      - the First-lit
+      Rank:
+      - Flame of the Burning Choir
+      - Herald of the Sixfold Stair
+      - Warden of the Throne of Flame
+      - Sentinel of the Bright Bastion
+      - Binder of the Hall of Oaths
+      Legend:
+      - Who Burned Before the First Sunrise
+      - Who Veiled Their Face and Blinded the Host Anyway
+      - Who Circled the Throne for an Age Without Rest
+      - 'Who Touched the Prophet''s Lips with Fire'
+      - Who Held the First Light
+      Occupational:
+      - Throne-circler
+      - Light-bearer
+      - Oath-binder
+    CitySuffixes:
+      Capital:
+      - choir
+      - throne
+      - bastion
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - stair
+      - hall
+      - light
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 18062707
+    Weight: 3
+  - BiomeID: -1474826537
+    Weight: 2
+  - BiomeID: 681889367
+    Weight: 1
+  - BiomeID: 1645414801
+    Weight: 1

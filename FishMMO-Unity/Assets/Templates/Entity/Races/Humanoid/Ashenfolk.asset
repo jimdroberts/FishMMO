@@ -1,0 +1,183 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Ashenfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Volcanic-slope people — soot-grey skin, ember-warm speech, names like cooling lava'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ash
+      - Cin
+      - Ember
+      - Sor
+      - Kal
+      - Bran
+      - Vol
+      - Mag
+      - Rusk
+      - Tarn
+      - Hol
+      - Sear
+      - Dorm
+      - Vesk
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - or
+      - ul
+      Codas:
+      - ash
+      - urn
+      - ok
+      - ath
+      - ur
+      - ell
+      - orn
+      - ard
+      - ith
+      Middles:
+      - ar
+      - ol
+      - un
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - ura
+      MasculineSuffixes:
+      - ok
+      - ar
+      - orn
+      Description: 'Volcanic-slope people — soot-grey skin, ember-warm speech, names like cooling lava'
+      Tags:
+      - Ember-names
+      - Slope-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Cinder Terraces
+    - Ashford Below
+    - the Warm Cellars
+    - the Vent Road
+    - Slagmouth
+    - the Ember Fields
+    - the Cooling Stair
+    Titles:
+      Honorific:
+      - Vent-warden
+      - Slag-reeve
+      - Ember-elder
+      - Terrace-master
+      - Ash-priest
+      - Kiln-mother
+      - Fire-reader
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Soot-cheeked
+      - the Ember-eyed
+      - the Slope-born
+      - the Never-cold
+      - the Slag-shod
+      - the Warm-handed
+      - the Cinder-crowned
+      - the Lava-patient
+      Rank:
+      - Warden of the Vent Road
+      - Reeve of Slagmouth
+      - Master of the Cinder Terraces
+      - Keeper of the Warm Cellars
+      - Elder of the Ember Fields
+      Legend:
+      - Who Walked the Lava Flow Barefoot
+      - 'Who Read the Mountain''s Warning'
+      - Who Dug the Cooling Stair in a Night
+      - Who Kept the Kilns Lit Through the Ashfall
+      - Who Bargained with the Fire Giants
+      Occupational:
+      - Vent-tapper
+      - Obsidian-knapper
+      - Sulphur-gatherer
+      - Kiln-keeper
+      - Ash-farmer
+    CitySuffixes:
+      Capital:
+      - terrace
+      - vent
+      - kiln
+      - hold
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - cellar
+      - slag
+      - hearth
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 493502347
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 0.5

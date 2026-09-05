@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bog Giant
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Giant
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Mire giants half-sunk in the fen — bubbling names
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Murg
+      - Slog
+      - Brog
+      - Fenn
+      - Gulm
+      - Thud
+      - Mudd
+      - Wurm
+      - Skum
+      - Drab
+      - Bul
+      - Glom
+      - Hurn
+      - Ock
+      Nuclei:
+      - u
+      - o
+      - a
+      - oo
+      - ug
+      Codas:
+      - umb
+      - ug
+      - orm
+      - ath
+      - og
+      - urn
+      - ull
+      - ash
+      Middles:
+      - ub
+      - um
+      - og
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - umb
+      - oog
+      MasculineSuffixes:
+      - ug
+      - orm
+      - ull
+      Description: Mire giants half-sunk in the fen — bubbling names
+      Tags:
+      - Mire-names
+      - Bubble-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Sunken Throne
+    - Mudhall
+    - the Bubbling Steps
+    - Peatcrown
+    - the Leech Hearth
+    - the Half-drowned Ring
+    - Sloughend
+    Titles:
+      Honorific:
+      - Mire-thane
+      - Mud-lord
+      - Peat-warden
+      - Slough-elder
+      - Bubble-keeper
+      - Fen-mother
+      - Leech-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Half-sunk
+      - the Peat-brown
+      - the Slow-bubbling
+      - the Never-dry
+      - the Reed-crowned
+      - the Mud-patient
+      - the Fog-headed
+      - the Frog-friend
+      Rank:
+      - Thane of the Sunken Throne
+      - Lord of Mudhall
+      - Warden of the Bubbling Steps
+      - Keeper of the Leech Hearth
+      - Elder of Sloughend
+      Legend:
+      - Who Drank the Marsh Dry and Spat It Back
+      - Who Sat in the Fen Until the Village Grew on Them
+      - Who Pulled the Sunken Ship Up by the Mast
+      - Who Wrestled the Hydra in the Mud
+      - Who Slept Under the Peat for an Age
+      Occupational:
+      - Peat-lifter
+      - Reed-bundler
+      - Mud-shaper
+      - Frog-herder
+      - Punt-pusher
+    CitySuffixes:
+      Capital:
+      - throne
+      - hall
+      - crown
+      Fortress:
+      - wall
+      - gate
+      - rampart
+      - boulder
+      Village:
+      - hollow
+      - slough
+      - ring
+      Port:
+      - landing
+      - strand
+      - shelf
+      Sacred:
+      - stone
+      - cairn
+      - altar
+      - table
+      Ruin:
+      - fall
+      - rubble
+      - tumble
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: 888339253
+    Weight: 0.5

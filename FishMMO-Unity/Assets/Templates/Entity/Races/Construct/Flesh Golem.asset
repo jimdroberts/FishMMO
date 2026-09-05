@@ -1,0 +1,158 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Flesh Golem
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Construct
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'A body stitched from many bodies and shocked into motion; strong, simple, and given to rage when confused.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grub
+      - Mol
+      - Stitch
+      - Bruk
+      - Hulm
+      - Gorm
+      - Seam
+      - Lump
+      - Dorf
+      - Kalb
+      - Gru
+      - Mu
+      - Stu
+      - Bru
+      - Hu
+      - Gu
+      - Su
+      - Lu
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - or
+      Codas:
+      - ert
+      - ok
+      - ust
+      - ath
+      - um
+      - ash
+      - ob
+      - ilk
+      - urt
+      - ort
+      - irt
+      - eart
+      Middles:
+      - k
+      - g
+      - t
+      - ug
+      - og
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - a
+      - ix
+      MasculineSuffixes:
+      - us
+      - 'on'
+      Description: 'Slow, thick, mismatched — syllables that do not belong together'
+      Tags:
+      - Construct
+      - Monster
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - 'the Maker''s Vault'
+    - the Sealed Door
+    - the Ninth Stair
+    - the Silent Hall
+    - Foundry Deep
+    Titles:
+      Honorific:
+      - Sentinel
+      - First-forged
+      - Keystone
+      - Warden-unit
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Unsleeping
+      - the Iron-bound
+      - the Word-carved
+      - the Tireless
+      - the Hollow
+      - the Rusted
+      - the Faithful
+      - the Unfinished
+      - the Stitched
+      - the Mismade
+      Rank:
+      - Guardian of the Sealed Door
+      - Sentinel of the Ninth Stair
+      - 'Keeper of the Maker''s Vault'
+      - Warden of the Silent Hall
+      Legend:
+      - Who Held the Gate for a Century
+      - Who Outlived Its Maker
+      - Who Never Once Rested
+      - Who Broke the Siege Tower
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - foundry
+      - forge
+      Fortress:
+      - bastion
+      - gate
+      Village:
+      - works
+      - yard
+      Port:
+      - dock
+      Sacred:
+      - shrine
+      Ruin:
+      - scrap
+      - rust
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 173642607
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 1

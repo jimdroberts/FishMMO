@@ -1,0 +1,266 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Gnome
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Light, quick consonants — the sound of gears turning and sparks flying'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fizz
+      - Giz
+      - Tink
+      - Wiz
+      - Bim
+      - Cog
+      - Dip
+      - Flik
+      - Gim
+      - Jix
+      - Kip
+      - Nim
+      - Pip
+      - Rix
+      - Sprk
+      - Tib
+      - Wren
+      - Zap
+      - Blix
+      - Quirk
+      Nuclei:
+      - i
+      - e
+      - ix
+      - ib
+      - ip
+      - ik
+      - el
+      Codas:
+      - wick
+      - wink
+      - tibble
+      - bobble
+      - kin
+      - tock
+      - gig
+      - fiz
+      - spring
+      - wrench
+      Middles:
+      - ri
+      - ki
+      - bi
+      - ni
+      - ti
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - ine
+      - ette
+      - ix
+      - a
+      MasculineSuffixes:
+      - wort
+      - kin
+      - wick
+      - tock
+      Description: 'Light, quick consonants — the sound of gears turning and sparks flying'
+      Tags:
+      - Tinker-names
+      - Workshop-bonds
+      - Patent-marks
+      WeightedCodas: []
+    Cultures:
+    - CultureKey: tinkersmith
+      Phonology:
+        Onsets:
+        - Bip
+        - Coz
+        - Dibb
+        - Fizzl
+        - Gimbl
+        - Hixx
+        - Jax
+        - Krink
+        - Lev
+        - Miz
+        - Nob
+        - Pip
+        - Quark
+        - Rix
+        - Snip
+        Nuclei:
+        - i
+        - o
+        - a
+        - ix
+        - op
+        Codas:
+        - cog
+        - gear
+        - spark
+        - whirl
+        - sprint
+        - twist
+        - bolt
+        - nut
+        - spring
+        - click
+        Middles:
+        - it
+        - og
+        - ix
+        SyllMin: 2
+        SyllMax: 3
+        FeminineSuffixes:
+        - ette
+        - ella
+        - ina
+        MasculineSuffixes:
+        - cog
+        - bolt
+        - sprint
+        Description: 'Tinkersmith — invention-blessed, goggled, clock-voiced'
+        Tags:
+        - Workshop-names
+        - Patent-bonds
+        - Gear-marks
+        WeightedCodas: []
+    Places:
+    - the Cogwheel Quarter
+    - Tinkerton
+    - Sparkwell
+    - the Great Workshop
+    - Gearhold
+    - the Clocktower
+    - Brasswick
+    - 'the Inventor''s Atrium'
+    Titles:
+      Honorific:
+      - Tinkerlord
+      - High Inventor
+      - Gearmaster
+      - Sparkwright
+      - Clockwarden
+      - Chief Engineer
+      - Patent-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ingenious
+      - the Overcomplicated
+      - the Spark-touched
+      - the Gear-brained
+      - the Ever-curious
+      - the Thrice-patented
+      - the Dangerously Creative
+      - the Unstoppable Tinkerer
+      Rank:
+      - Grand Tinker of the Cogwheel Guild
+      - First Inventor of the Great Workshop
+      - Chief Artificer
+      - Master of Unlikely Contraptions
+      - Speaker of the Gears
+      - Keeper of the Clocktower Archive
+      Legend:
+      - Who Built a Machine That Thinks
+      - Whose Invention Exploded Twice (and Worked the Third Time)
+      - Who Mapped the Stars with Clockwork
+      - Who Accidentally Created Life
+      - Who Invented Flight and Forgot to Invent Landing
+      Occupational:
+      - Tinker
+      - Clockmaker
+      - Alchemist
+      - Illusionist
+      - Gem-cutter
+      - Cartographer
+      - Inventor
+      - Locksmith
+    CitySuffixes:
+      Capital:
+      - works
+      - forge
+      - tower
+      - hall
+      - gear
+      - hub
+      - atrium
+      Fortress:
+      - wall
+      - gate
+      - lock
+      - guard
+      - vault
+      - trap
+      - spring
+      Village:
+      - burrow
+      - shop
+      - nook
+      - den
+      - workshop
+      - tinker
+      - bench
+      Port:
+      - dock
+      - lock
+      - canal
+      - wharf
+      - slip
+      - basin
+      Sacred:
+      - clock
+      - gear
+      - patent
+      - altar
+      - archive
+      - vault
+      Ruin:
+      - scrap
+      - rust
+      - ruin
+      - heap
+      - junk
+      - wreck
+      - dust
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 1
+  - BiomeID: -2037808285
+    Weight: 0.5

@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Batfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Beastfolk
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Cave-roosting bat people — chittering, echoing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Chit
+      - Skree
+      - Vesp
+      - Nok
+      - Flit
+      - Umb
+      - Squee
+      - Dus
+      - Kir
+      - Zib
+      - Nyx
+      - Wing
+      - Pip
+      - Skra
+      Nuclei:
+      - i
+      - ee
+      - a
+      - u
+      - o
+      Codas:
+      - ix
+      - eek
+      - ith
+      - ak
+      - ell
+      - ur
+      - ip
+      - orr
+      Middles:
+      - ki
+      - ri
+      - ul
+      - ee
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ix
+      - eek
+      MasculineSuffixes:
+      - ak
+      - ur
+      - orr
+      Description: 'Cave-roosting bat people — chittering, echoing names'
+      Tags:
+      - Echo-names
+      - Roost-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Roost Vault
+    - Echo Ceiling
+    - the Guano Steps
+    - Dusk-gate
+    - the Hanging Hall
+    - Squeakhollow
+    - the Moth Cloud
+    Titles:
+      Honorific:
+      - Roost-warden
+      - Echo-elder
+      - Gate-keeper
+      - Hall-hanger
+      - Dusk-master
+      - Wing-mother
+      - Cloud-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Upside-down
+      - the Echo-eyed
+      - the Dusk-flying
+      - the Moth-fed
+      - the Soft-winged
+      - the Ceiling-born
+      - the Never-lost-in-the-dark
+      - the Squeaking
+      Rank:
+      - Warden of the Roost Vault
+      - Elder of Echo Ceiling
+      - Keeper of Dusk-gate
+      - Hanger of the Hanging Hall
+      - Master of the Guano Steps
+      Legend:
+      - Who Mapped the Cave by Screaming
+      - Who Ate the Moth Cloud in a Night
+      - Who Hung from the Cathedral Bell Unnoticed for a Year
+      - Who Flew the Blind Passage at Full Speed
+      - Who Woke the Whole Roost with One Squeak
+      Occupational:
+      - Echo-mapper
+      - Moth-catcher
+      - Guano-gatherer
+      - Night-courier
+      - Ceiling-cleaner
+    CitySuffixes:
+      Capital:
+      - vault
+      - ceiling
+      - hall
+      Fortress:
+      - wall
+      - stockade
+      - ring
+      - palisade
+      Village:
+      - roost
+      - hollow
+      - gate
+      Port:
+      - landing
+      - ford
+      - strand
+      Sacred:
+      - stone
+      - circle
+      - fire
+      - cairn
+      Ruin:
+      - bones
+      - fall
+      - scatter
+      - hollow
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -830221931
+    Weight: 1.5
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1

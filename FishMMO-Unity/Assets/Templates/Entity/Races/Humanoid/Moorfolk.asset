@@ -1,0 +1,181 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Moorfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Upland heath people — soft, rain-worn names, half-sung'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bry
+      - Hea
+      - Lin
+      - Mor
+      - Cair
+      - Wyn
+      - Fell
+      - Tor
+      - Bram
+      - Ael
+      - Gwen
+      - Har
+      - Rhos
+      - Dun
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      - ae
+      Codas:
+      - wyn
+      - eth
+      - ell
+      - an
+      - ith
+      - orn
+      - ael
+      - od
+      Middles:
+      - en
+      - al
+      - or
+      - ith
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - wen
+      - eth
+      - a
+      MasculineSuffixes:
+      - an
+      - od
+      - orn
+      Description: 'Upland heath people — soft, rain-worn names, half-sung'
+      Tags:
+      - Heath-names
+      - Cairn-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the High Heath
+    - Cairnfoot
+    - the Mist Tarn
+    - the Sheep Road
+    - the Standing Stone
+    - Fellend
+    - the Peat Cuttings
+    Titles:
+      Honorific:
+      - Cairn-warden
+      - Heath-reeve
+      - Tarn-keeper
+      - Shepherd-elder
+      - Stone-speaker
+      - Peat-mother
+      - Mist-reader
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Rain-worn
+      - the Heath-born
+      - the Mist-walking
+      - the Sure-footed
+      - the Wool-warm
+      - the Quiet-spoken
+      - the Long-sighted
+      - the Stone-patient
+      Rank:
+      - Warden of the Standing Stone
+      - Reeve of the High Heath
+      - Keeper of the Mist Tarn
+      - Elder of Cairnfoot
+      - Master of the Sheep Road
+      Legend:
+      - Who Found the Lost Flock in the Fog
+      - Who Cut Peat Through the Wet Year
+      - Who Sat the Standing Stone for a Night and Came Back Wiser
+      - Who Carried the Sick Lamb Twenty Miles
+      - Who Walked Every Cairn of the Heath
+      Occupational:
+      - Shepherd
+      - Peat-cutter
+      - Wool-spinner
+      - Drystone-waller
+      - Tarn-fisher
+    CitySuffixes:
+      Capital:
+      - cairn
+      - fell
+      - moor
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - fold
+      - cot
+      - heath
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 3
+  - BiomeID: 1156965030
+    Weight: 1.5
+  - BiomeID: -2077848218
+    Weight: 1
+  - BiomeID: 1655673647
+    Weight: 1

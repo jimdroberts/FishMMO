@@ -1,0 +1,179 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Bog Troll
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Humanoid
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Marsh trolls — gurgling, mud-thick names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Glub
+      - Murk
+      - Brog
+      - Slud
+      - Gorb
+      - Thurk
+      - Bul
+      - Grob
+      - Mudd
+      - Fenk
+      - Bog
+      - Skum
+      - Drog
+      - Wurm
+      Nuclei:
+      - u
+      - o
+      - a
+      - oo
+      - ug
+      Codas:
+      - ub
+      - ork
+      - ug
+      - umb
+      - ash
+      - og
+      - urg
+      - oth
+      Middles:
+      - ub
+      - og
+      - ur
+      - um
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ug
+      - oob
+      MasculineSuffixes:
+      - ub
+      - ork
+      - og
+      Description: 'Marsh trolls — gurgling, mud-thick names'
+      Tags:
+      - Mud-names
+      - Gurgle-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Sinking Hut
+    - Skullpool
+    - the Mud Throne
+    - Rotstump
+    - the Leech Bank
+    - the Fog Bridge
+    - Bogmouth
+    Titles:
+      Honorific:
+      - Mud-chief
+      - Pool-lord
+      - Bridge-troll
+      - Stump-elder
+      - Leech-mother
+      - Fog-warden
+      - Toll-taker
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Mud-thick
+      - the Never-washed
+      - the Bridge-squatting
+      - the Fog-breathed
+      - the Leech-fed
+      - the Slow-sinking
+      - the Croaking
+      - the Rot-tolerant
+      Rank:
+      - Chief of Skullpool
+      - Troll of the Fog Bridge
+      - Lord of the Mud Throne
+      - Elder of Rotstump
+      - Warden of Bogmouth
+      Legend:
+      - Who Ate the Tax-collector and His Horse
+      - Who Sat Under the Fog Bridge for a Hundred Years
+      - Who Sank the Barge with One Hand
+      - Who Was Struck by Lightning and Only Smelled Worse
+      - Who Charged the King a Toll
+      Occupational:
+      - Toll-taker
+      - Leech-farmer
+      - Mud-builder
+      - Frog-catcher
+    CitySuffixes:
+      Capital:
+      - pool
+      - mud
+      - stump
+      Fortress:
+      - wall
+      - gard
+      - watch
+      - fort
+      - tower
+      - guard
+      Village:
+      - hut
+      - bank
+      - hollow
+      Port:
+      - port
+      - haven
+      - mouth
+      - quay
+      - wharf
+      Sacred:
+      - minster
+      - chapel
+      - shrine
+      - well
+      - cross
+      Ruin:
+      - fall
+      - rest
+      - barrow
+      - hollow
+      - scar
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: -830221931
+    Weight: 1

@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Ice Elemental
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Elemental
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Living cold of the glacier — cracking, ringing names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Isk
+      - Glac
+      - Rime
+      - Frost
+      - Kry
+      - Hrim
+      - Vint
+      - Kol
+      - Sleet
+      - Glis
+      - Nix
+      - Brist
+      - Skel
+      - Chi
+      Nuclei:
+      - a
+      - i
+      - ei
+      - o
+      - y
+      Codas:
+      - ir
+      - isk
+      - eth
+      - ald
+      - ynn
+      - ost
+      - ith
+      - aer
+      Middles:
+      - r
+      - l
+      - th
+      - ik
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ith
+      - isk
+      MasculineSuffixes:
+      - ir
+      - ost
+      - ald
+      Description: 'Living cold of the glacier — cracking, ringing names'
+      Tags:
+      - Ice-names
+      - Crack-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Glacier Heart
+    - the Crack Vein
+    - the Frozen Column
+    - Rimedeep
+    - the Ice Anvil
+    - the Still Cold
+    - the First Frost
+    Titles:
+      Honorific:
+      - Frost-warden
+      - Glacier-voice
+      - Crack-herald
+      - Column-heart
+      - Rime-keeper
+      - Cold-mother
+      - Ice-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ever-frozen
+      - the Cracking
+      - the Glacier-born
+      - the Ringing-cold
+      - the Never-thawed
+      - the Rime-crowned
+      - the Still
+      - the First-frost-woken
+      Rank:
+      - Warden of the Glacier Heart
+      - Voice of the Crack Vein
+      - Heart of the Frozen Column
+      - Keeper of the Ice Anvil
+      - Bearer of the First Frost
+      Legend:
+      - Who Froze the Waterfall Mid-fall
+      - Who Cracked the Mountain by Cooling It
+      - Who Rang the Glacier Like a Bell
+      - Who Held the Still Cold Through the Hot Age
+      - Who Was the First Frost of the World
+      Occupational:
+      - Ice-shaper
+      - Frost-bringer
+      - Glacier-tender
+    CitySuffixes:
+      Capital:
+      - heart
+      - column
+      - anvil
+      Fortress:
+      - wall
+      - vein
+      - rift
+      - crown
+      Village:
+      - vein
+      - deep
+      - cold
+      Port:
+      - strand
+      - mouth
+      - shore
+      Sacred:
+      - flame
+      - spring
+      - stone
+      - altar
+      Ruin:
+      - ash
+      - glass
+      - cinder
+      - still
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -212386137
+    Weight: 3
+  - BiomeID: 1225680173
+    Weight: 2
+  - BiomeID: 1645414801
+    Weight: 2
+  - BiomeID: 1018971064
+    Weight: 1

@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Briarwitch
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Fey
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Thorn-hedge fey — prickly, whispering names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bri
+      - Thorn
+      - Nett
+      - Sloe
+      - Haw
+      - Bram
+      - Gors
+      - Wych
+      - Hedge
+      - Ros
+      - Blak
+      - Twis
+      - Prick
+      - Wyl
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - y
+      Codas:
+      - wyn
+      - eth
+      - ell
+      - orn
+      - ith
+      - ag
+      - ash
+      - yl
+      Middles:
+      - el
+      - or
+      - ag
+      - yl
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - wyn
+      - a
+      - ell
+      MasculineSuffixes:
+      - orn
+      - eth
+      - ag
+      Description: 'Thorn-hedge fey — prickly, whispering names'
+      Tags:
+      - Thorn-names
+      - Hedge-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Thorn Cottage
+    - Sloe Hollow
+    - the Blackberry Court
+    - Hawthorn Gate
+    - the Prickle Ring
+    - Rosehip Bank
+    - the Hedge Maze
+    Titles:
+      Honorific:
+      - Hedge-witch
+      - Thorn-warden
+      - Sloe-elder
+      - Berry-mother
+      - Gate-keeper
+      - Maze-mistress
+      - Prickle-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Thorn-crowned
+      - the Prickly
+      - the Hedge-born
+      - the Berry-stained
+      - the Sharp-tongued
+      - the Never-pruned
+      - the Hawthorn-white
+      - the Bramble-armed
+      Rank:
+      - Warden of Hawthorn Gate
+      - Mistress of the Hedge Maze
+      - Elder of Sloe Hollow
+      - Keeper of the Blackberry Court
+      - Witch of the Thorn Cottage
+      Legend:
+      - Who Grew the Hedge Around the Sleeping Castle
+      - Who Pricked the Prince and Sent Him Home
+      - 'Who Made Sloe Gin for the King''s Funeral'
+      - Who Walked the Hedge Maze Backwards
+      - 'Who Turned the Hunters'' Hounds to Briars'
+      Occupational:
+      - Hedge-layer
+      - Berry-picker
+      - Sloe-brewer
+      - Thorn-charmer
+      - Maze-keeper
+    CitySuffixes:
+      Capital:
+      - hedge
+      - court
+      - gate
+      Fortress:
+      - thorn
+      - briar
+      - wall
+      - maze
+      Village:
+      - hollow
+      - bank
+      - cottage
+      Port:
+      - ford
+      - mere
+      - pool
+      - strand
+      Sacred:
+      - ring
+      - stone
+      - grove
+      - well
+      Ruin:
+      - dusk
+      - fade
+      - hush
+      - loss
+    AllowGenericOccupations: 1
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1

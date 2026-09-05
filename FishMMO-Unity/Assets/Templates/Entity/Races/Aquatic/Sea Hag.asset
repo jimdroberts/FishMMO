@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Sea Hag
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Aquatic
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Crone of the drowned coves — croaking, salt-cracked names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Grim
+      - Mor
+      - Brine
+      - Wrack
+      - Kelp
+      - Hag
+      - Salt
+      - Cro
+      - Nag
+      - Bleth
+      - Wyl
+      - Mur
+      - Dros
+      - Gris
+      Nuclei:
+      - a
+      - o
+      - e
+      - i
+      - u
+      Codas:
+      - witch
+      - hag
+      - crone
+      - ith
+      - ag
+      - ell
+      - ur
+      - ash
+      Middles:
+      - ra
+      - bi
+      - ur
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ag
+      - ell
+      MasculineSuffixes:
+      - ur
+      - ith
+      - ash
+      Description: 'Crone of the drowned coves — croaking, salt-cracked names'
+      Tags:
+      - Cove-names
+      - Wrack-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Drowned Cove
+    - Wrackhut
+    - the Cauldron Rock
+    - 'the Widows'' Beach'
+    - Salthag Point
+    - the Bone Wreck
+    - the Weeping Cave
+    Titles:
+      Honorific:
+      - Cove-crone
+      - Wrack-witch
+      - Cauldron-keeper
+      - Widow-maker
+      - Point-warden
+      - Wreck-mother
+      - Cave-weeper
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Salt-cracked
+      - the Kelp-haired
+      - the Drowned-eyed
+      - the Wrack-wrapped
+      - the Cauldron-stirring
+      - the Widow-making
+      - the Cove-born
+      - the Never-drowned
+      Rank:
+      - Crone of the Drowned Cove
+      - Witch of Wrackhut
+      - Keeper of the Cauldron Rock
+      - Warden of Salthag Point
+      - Weeper of the Weeping Cave
+      Legend:
+      - 'Who Lured Nine Ships Onto the Widows'' Beach'
+      - Who Boiled the Sea in the Cauldron Rock
+      - Who Married the Drowned Captain
+      - Who Cursed the Harbour Bell
+      - Who Wept the Weeping Cave Full
+      Occupational:
+      - Wrack-gatherer
+      - Cauldron-stirrer
+      - Bone-picker
+      - Curse-weaver
+    CitySuffixes:
+      Capital:
+      - cove
+      - point
+      - rock
+      Fortress:
+      - wall
+      - reef
+      - shoal
+      - gate
+      Village:
+      - hut
+      - cave
+      - beach
+      Port:
+      - harbour
+      - landing
+      - strand
+      - quay
+      Sacred:
+      - pearl
+      - shell
+      - shrine
+      - bell
+      Ruin:
+      - wreck
+      - drift
+      - sink
+      - silt
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 646460858
+    Weight: 3
+  - BiomeID: 888339253
+    Weight: 2
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: 1508835452
+    Weight: 1

@@ -1,0 +1,175 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Duskherald
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Twilight messengers between the choir and the pit — hushed, balanced names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Dus
+      - Twi
+      - Vel
+      - Umb
+      - Ael
+      - Sel
+      - Mor
+      - Ori
+      - Nyx
+      - Rael
+      - Hush
+      - Ith
+      - Sol
+      - Kae
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - ae
+      Codas:
+      - iel
+      - oth
+      - ael
+      - ith
+      - el
+      - orr
+      - ion
+      - ess
+      Middles:
+      - el
+      - ae
+      - or
+      - li
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - iel
+      - a
+      - ael
+      MasculineSuffixes:
+      - oth
+      - el
+      - ion
+      Description: 'Twilight messengers between the choir and the pit — hushed, balanced names'
+      Tags:
+      - Dusk-names
+      - Threshold-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Grey Threshold
+    - the Between Court
+    - Duskgate
+    - the Balance Hall
+    - the Twilight Stair
+    - the Hour Between
+    - the Neither Road
+    Titles:
+      Honorific:
+      - Threshold-herald
+      - Court-envoy
+      - Gate-warden
+      - Balance-keeper
+      - Stair-walker
+      - Dusk-mother
+      - Hour-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Neither-bright-nor-fallen
+      - the Twilight-winged
+      - the Balance-holding
+      - the Message-bearing
+      - the Grey-eyed
+      - the Never-choosing
+      - the Between-born
+      - the Hushed
+      Rank:
+      - Herald of the Grey Threshold
+      - Envoy of the Between Court
+      - Warden of Duskgate
+      - Keeper of the Balance Hall
+      - Walker of the Twilight Stair
+      Legend:
+      - Who Carried the Truce Between the Choir and the Pit
+      - Who Stood on the Threshold Through the War of Wings
+      - Who Weighed the Soul and Called It Even
+      - Who Walked the Neither Road to Its End
+      - Who Refused Both the Fall and the Rise
+      Occupational:
+      - Message-bearer
+      - Balance-keeper
+      - Threshold-guard
+      - Truce-witness
+    CitySuffixes:
+      Capital:
+      - court
+      - gate
+      - hall
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - stair
+      - threshold
+      - road
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 18062707
+    Weight: 2
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1.5
+  - BiomeID: -1042859854
+    Weight: 1
+  - BiomeID: -1474826537
+    Weight: 1

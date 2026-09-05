@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Wrathspawn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Category: Outsider
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Fiends of pure fury — roaring, hammering names'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Wra
+      - Rag
+      - Fur
+      - Gral
+      - Brak
+      - Thund
+      - Kor
+      - Mor
+      - Sath
+      - Vor
+      - Rukk
+      - Krash
+      - Bal
+      - Gor
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      Codas:
+      - oth
+      - ak
+      - orr
+      - und
+      - ash
+      - ok
+      - um
+      - ang
+      Middles:
+      - ur
+      - og
+      - ar
+      - um
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - und
+      - ora
+      MasculineSuffixes:
+      - ak
+      - orr
+      - ang
+      Description: 'Fiends of pure fury — roaring, hammering names'
+      Tags:
+      - Fury-names
+      - Hammer-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Roaring Pit
+    - the Broken Gate
+    - Furyhall
+    - the Hammer Road
+    - 'the Ash Throne''s Step'
+    - the Smashed Ledger
+    - the Last Blow
+    Titles:
+      Honorific:
+      - Pit-roarer
+      - Gate-breaker
+      - Hall-lord
+      - Road-hammer
+      - Step-warden
+      - Fury-mother
+      - Blow-father
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Ever-furious
+      - the Gate-breaking
+      - the Roaring
+      - the Never-calm
+      - the Hammer-fisted
+      - the Red-eyed
+      - the Pit-born
+      - the Ledger-smashing
+      Rank:
+      - Roarer of the Roaring Pit
+      - Breaker of the Broken Gate
+      - Lord of Furyhall
+      - Hammer of the Hammer Road
+      - 'Warden of the Ash Throne''s Step'
+      Legend:
+      - Who Broke the Brass Gate with a Forehead
+      - Who Smashed the Burning Ledger and Was Made to Rewrite It
+      - Who Roared the Choir Silent
+      - Who Fought the Angel to a Standstill for an Age
+      - 'Who Was Summoned to Guard and Broke the Summoner''s House'
+      Occupational:
+      - Gate-breaker
+      - Pit-guard
+      - Hammer-bearer
+    CitySuffixes:
+      Capital:
+      - pit
+      - hall
+      - gate
+      Fortress:
+      - wall
+      - gate
+      - stair
+      - bulwark
+      Village:
+      - road
+      - step
+      - blow
+      Port:
+      - threshold
+      - crossing
+      - landing
+      Sacred:
+      - choir
+      - altar
+      - oath
+      - flame
+      Ruin:
+      - fall
+      - ash
+      - pit
+      - silence
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: -1042859854
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 493502347
+    Weight: 1

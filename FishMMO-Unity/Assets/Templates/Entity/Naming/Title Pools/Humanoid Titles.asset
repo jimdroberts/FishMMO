@@ -1,0 +1,132 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a1e5f0c3b9d4e2f8c6a1b0d9e8f7a05, type: 3}
+  m_Name: Humanoid Titles
+  m_EditorClassIdentifier: 
+  Categories:
+  - Humanoid
+  Titles:
+    Honorific:
+    - Captain
+    - Reeve
+    - Magistrate
+    - Alderman
+    - Guildmaster
+    - Chancellor
+    - Seneschal
+    - Constable
+    - Provost
+    - Bailiff
+    - Sheriff
+    - Burgomaster
+    - Marshal
+    - Almoner
+    HonorificMasculine:
+    - Sir
+    - Lord
+    - Master
+    - Squire
+    - Baron
+    HonorificFeminine:
+    - Dame
+    - Lady
+    - Mistress
+    - Baroness
+    - Matron
+    Epithet:
+    - the Just
+    - the Bold
+    - the Merciful
+    - the Cunning
+    - the Fair-spoken
+    - the Iron-willed
+    - the Generous
+    - the Learned
+    - the Sword-sworn
+    - the Silver-tongued
+    - the Ever-loyal
+    - the Unbought
+    - the Plain-dealing
+    - the Hard-bargaining
+    - the Hawk-eyed
+    - the Long-suffering
+    - the Well-loved
+    - the Proud
+    - the Stubborn
+    - the Twice-knighted
+    - the Ink-stained
+    - the Honest
+    - the Crowned in Ash
+    - the Debt-free
+    - the Gold-tested
+    Rank:
+    - Knight of the Realm
+    - Warden of the Eastern March
+    - Marshal of Kingshold
+    - Sheriff of Oldmarket
+    - Chancellor of Highcourt
+    - Master of the Salt Road
+    - Guildmaster of Crownharbour
+    - Constable of Thornwall
+    - Reeve of the Golden Fields
+    - Provost of Greywatch
+    - Keeper of the Bells
+    - Castellan of Ravenspire
+    - First Sword of the Iron Coast
+    - Alderman of Ashford
+    - Envoy to the Northern Kings
+    - Captain of the Bridge Guard
+    Legend:
+    - Who Held the Eastern Gate
+    - Who Freed the Burning March
+    - Who Bargained with the Northern Kings
+    - Who Rode Through the Winter of Knives
+    - Who Sat in Judgement for Forty Years
+    - Who Broke the Salt-tax
+    - Who Rebuilt Ashford from the Cinders
+    - 'Who Refused the Usurper''s Gold'
+    - Who Rang the Bells at the Last Siege
+    - Who Brought the Harvest Home in the Famine Year
+    - Who Fought Beside the Old King at Dragonfall
+    - 'Who Taught the Beggars'' Children to Read'
+    - Who Wrote the Charter of Oldmarket
+    - Who Ended the Feud of the Two Rivers
+    Occupational:
+    - Scribe
+    - Cooper
+    - Mason
+    - Miller
+    - Brewer
+    - Chandler
+    - Tanner
+    - Vintner
+    - Fletcher
+    - Armourer
+    - Herbalist
+    - Innkeeper
+    - Shipwright
+    - Weaver
+  Places:
+  - Kingshold
+  - Thornwall
+  - Ravenspire
+  - the Golden Fields
+  - the Eastern March
+  - Ashford
+  - Highcourt
+  - the Iron Coast
+  - Oldmarket
+  - Dragonfall Bridge
+  - the Vale of Bells
+  - Greywatch
+  - the Salt Road
+  - Crownharbour
