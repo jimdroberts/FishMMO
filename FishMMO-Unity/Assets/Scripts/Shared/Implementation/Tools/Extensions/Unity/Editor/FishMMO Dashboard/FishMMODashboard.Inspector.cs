@@ -1,4 +1,5 @@
 ﻿#if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -13,6 +14,11 @@ namespace FishMMO.Shared
 		/// Destroyed when switching assets.
 		/// </summary>
 		private Editor activeEditor;
+
+		/// <summary>
+		/// Editors for the per-component sections of an NPC prefab; destroyed with the inspector.
+		/// </summary>
+		private readonly List<Editor> activeEditors = new List<Editor>();
 
 		/// <summary>
 		/// Clears the inspector panel and destroys the active editor.
@@ -42,6 +48,15 @@ namespace FishMMO.Shared
 				DestroyImmediate(activeEditor);
 				activeEditor = null;
 			}
+
+			for (int i = 0; i < activeEditors.Count; i++)
+			{
+				if (activeEditors[i] != null)
+				{
+					DestroyImmediate(activeEditors[i]);
+				}
+			}
+			activeEditors.Clear();
 		}
 
 		/// <summary>
@@ -53,6 +68,13 @@ namespace FishMMO.Shared
 			ClearInspector();
 
 			if (asset == null) return;
+
+			// A prefab's own Editor is just the GameObject header; an NPC is edited by component.
+			if (IsNPCPrefab(asset))
+			{
+				ShowNPCInspector(asset as GameObject);
+				return;
+			}
 
 			if (inspectorHeader != null)
 			{

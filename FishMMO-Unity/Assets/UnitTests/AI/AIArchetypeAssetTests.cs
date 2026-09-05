@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using NUnit.Framework;
 using UnityEditor;
@@ -71,6 +71,17 @@ namespace FishMMO.UnitTests.AI
 		}
 
 		/// <summary>
+		/// True for an archetype that is meant to fight. Civilians — merchants, bankers, trainers —
+		/// are archetypes too, and deliberately have neither an attacking state nor a personality.
+		/// </summary>
+		/// <param name="archetype">The archetype to classify.</param>
+		/// <returns>True unless the asset is a civilian brain.</returns>
+		private static bool IsCombatant(AIArchetypeTemplate archetype)
+		{
+			return !archetype.name.StartsWith("Civilian - ");
+		}
+
+		/// <summary>
 		/// Returns an archetype's attacking state as a <see cref="BaseAttackingState"/>.
 		/// </summary>
 		/// <param name="archetype">The archetype to read.</param>
@@ -106,6 +117,7 @@ namespace FishMMO.UnitTests.AI
 				"Pet - Healer",
 				"Pet - Defender",
 				"Pet - Rogue",
+				"Civilian - Townsfolk",
 			};
 
 			for (int i = 0; i < required.Length; i++)
@@ -142,23 +154,89 @@ namespace FishMMO.UnitTests.AI
 		}
 
 		[Test]
-		public void EveryArchetype_HasAnAttackingStateSoItCanFight()
+		public void EveryCombatArchetype_HasAnAttackingStateSoItCanFight()
 		{
 			for (int i = 0; i < archetypes.Count; i++)
 			{
+				if (!IsCombatant(archetypes[i]))
+				{
+					continue;
+				}
+
 				Assert.IsNotNull(archetypes[i].AttackingState,
 					$"'{archetypes[i].name}' has no attacking state — an NPC using it can never fight.");
 			}
 		}
 
 		[Test]
-		public void EveryArchetype_HasAPersonalitySoItsAbilityChoicesHaveCharacter()
+		public void EveryCombatArchetype_HasAPersonalitySoItsAbilityChoicesHaveCharacter()
 		{
 			for (int i = 0; i < archetypes.Count; i++)
 			{
+				if (!IsCombatant(archetypes[i]))
+				{
+					continue;
+				}
+
 				Assert.IsNotNull(archetypes[i].Personality,
 					$"'{archetypes[i].name}' has no personality; it will score every ability identically.");
 			}
+		}
+
+		[Test]
+		public void CivilianArchetypes_CannotFightButStillIdleAndMove()
+		{
+			/* A merchant with an attacking state would sweep for enemies and chase the first
+			 * hostile that walked past its stall. It still needs an initial and an idle state,
+			 * or it spawns and never ticks. */
+			int civilians = 0;
+			for (int i = 0; i < archetypes.Count; i++)
+			{
+				AIArchetypeTemplate archetype = archetypes[i];
+				if (IsCombatant(archetype))
+				{
+					continue;
+				}
+				civilians++;
+
+				Assert.IsNull(archetype.AttackingState, $"'{archetype.name}' is a civilian and must not fight.");
+				Assert.IsNotNull(archetype.InitialState, $"'{archetype.name}' has no initial state.");
+				Assert.IsNotNull(archetype.IdleState, $"'{archetype.name}' has no idle state.");
+				Assert.IsNotNull(archetype.LodSettings, $"'{archetype.name}' has no LOD profile, so a town full of them ticks at full rate for nobody.");
+			}
+
+			Assert.Greater(civilians, 0, "No civilian archetype ships; interactable NPCs have nothing to assign.");
+		}
+
+		// --- Prefab wiring -----------------------------------------------------------------
+
+		[Test]
+		public void EveryNPCPrefab_NamesAnArchetype()
+		{
+			/* The archetype is the ONLY AI wiring a prefab carries: every state, the personality,
+			 * the rotation, the LOD profile and the threat tuning are read from it. A controller
+			 * without one has no initial state, so the NPC spawns and never ticks — and nothing at
+			 * compile time says so. */
+			StringBuilder missing = new StringBuilder();
+			int scanned = 0;
+
+			foreach (GameObject root in NPCPrefabFactory.FindNPCPrefabs(includeLocal: true))
+			{
+				AIController controller = root.GetComponent<AIController>();
+				if (controller == null)
+				{
+					continue;
+				}
+
+				scanned++;
+				if (controller.Archetype == null)
+				{
+					missing.AppendLine("    " + AssetDatabase.GetAssetPath(root));
+				}
+			}
+
+			Assert.Greater(scanned, 0, "No prefab with an AIController was found; the scan is broken.");
+			Assert.IsEmpty(missing.ToString(), "NPC prefabs with an AIController but no archetype:\n" + missing);
 		}
 
 		// --- Named behaviour: the point of the exercise -------------------------------------

@@ -134,7 +134,7 @@ Per-spawner overrides that let one NPC prefab serve a whole zone's worth of vari
 | `FactionOverride` | `RaceTemplate` | — | Replaces the prefab's race template / faction source |
 | `MinimumScale` / `MaximumScale` | `float` | 1 / 1 | Random uniform scale range; 1..1 leaves the prefab scale alone |
 
-The archetype is re-applied here rather than relying on `AIController.InitializeOnce`, which only runs on an instance's very first Awake — without this a recycled NPC would keep the previous spawner's brain.
+The controller reads every AI state and tuning value live from its archetype, so this one assignment is the whole override, and it takes effect on a recycled instance too. With no override the prefab's own archetype is assigned back, the same "this spawner's value, or the prefab's" rule every other override follows.
 
 The scale is deliberately uniform: a non-uniform scale would desynchronise the NavMeshAgent's radius and height from the collider.
 

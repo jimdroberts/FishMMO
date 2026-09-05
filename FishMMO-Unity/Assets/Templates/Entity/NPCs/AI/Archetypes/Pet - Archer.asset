@@ -24,7 +24,6 @@ MonoBehaviour:
   Personality: {fileID: 11400000, guid: 0abe9137cceb5fe83026def40795bdc0, type: 2}
   AbilityRotation: {fileID: 0}
   BehaviorTree: {fileID: 0}
-  OverrideThreatTuning: 0
   AggressionDamageWeight: 1
   AggressionHealingWeight: 0.6
   AggressionHitBonus: 5

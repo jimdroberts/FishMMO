@@ -402,7 +402,6 @@ MonoBehaviour:
   AttributeBonuses: {fileID: 11400000, guid: 7c33d6280baf6d94b8eee0548a749deb, type: 2}
   Abilities:
   - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
-  - {fileID: 11400000, guid: 981ccbfcf1adc4a56a367c343a05319c, type: 2}
   objectSpawner: {fileID: 0}
   spawnableSettings:
     rid: -2

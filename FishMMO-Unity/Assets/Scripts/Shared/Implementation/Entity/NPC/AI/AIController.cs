@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.Serialization;
 using FishNet.Connection;
 using FishNet.Object;
 using FishMMO.Shared.Core;
@@ -31,151 +32,174 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public Collider[] SweepHits = new Collider[20];
 
-		/// <summary>
-		/// How often (in seconds) to sweep for nearby enemies.
-		/// </summary>
-		public float EnemySweepRate = 1.5f;
-
 		[Header("Archetype")]
 		/// <summary>
-		/// Optional archetype asset that fills in every state and tuning slot below.
+		/// The NPC's brain: which states it uses, how it picks abilities, how it behaves in combat,
+		/// how much threat it feels, and how it is throttled at distance. The only AI wiring on a
+		/// prefab.
 		/// </summary>
 		/// <remarks>
-		/// Applied in <see cref="InitializeOnce"/>. Fields the archetype leaves null keep whatever
-		/// the prefab already had, so a prefab can override one slot without abandoning the
-		/// archetype. Assign this instead of wiring a dozen slots by hand.
+		/// <para>
+		/// Every state and tuning property on this controller reads straight through to the
+		/// archetype, so an NPC is configured by assigning one asset rather than by filling a
+		/// dozen slots — and two NPCs that share an archetype cannot drift apart. There is no
+		/// per-prefab override layer on purpose: the old one doubled every assignment, put the
+		/// personality in two places, and let a prefab silently disagree with the brain it claimed
+		/// to use. To make one creature behave differently, create another archetype.
+		/// </para>
+		/// <para>
+		/// Assigning a different archetype at runtime — a spawner override, a harness — takes
+		/// effect immediately: the threat table is retuned and the agent's avoidance priority is
+		/// re-applied, and everything else is read live. <see cref="ResetState"/> hands a pooled
+		/// instance back with the archetype it was authored with.
+		/// </para>
 		/// </remarks>
-		[Tooltip("Optional archetype asset that fills in the state and tuning slots below.")]
-		public AIArchetypeTemplate Archetype;
-
-		[Header("States")]
-		/// <summary>
-		/// The initial AI state when the controller is started.
-		/// </summary>
-		public BaseAIState InitialState;
+		[Tooltip("The NPC's whole brain. Every state and tuning value comes from this asset.")]
+		[FormerlySerializedAs("Archetype")]
+		[SerializeField]
+		private AIArchetypeTemplate archetype;
 
 		/// <summary>
-		/// The avoidance priority for this agent (affects how strongly it avoids other agents).
+		/// The archetype the prefab was authored with, captured on first initialisation.
 		/// </summary>
-		public AgentAvoidancePriority AvoidancePriority = AgentAvoidancePriority.Medium;
+		/// <remarks>
+		/// A spawner override is a plain field write that outlives the spawn that made it, so a
+		/// recycled instance would otherwise carry the previous spawner's brain into a spawner
+		/// that expected the prefab's. Restored in <see cref="ResetState"/>.
+		/// </remarks>
+		private AIArchetypeTemplate prefabArchetype;
+
+		/// <summary>Attacking state a boss phase has put in place of the archetype's, or null.</summary>
+		private BaseAIState phaseAttackingState;
+
+		/// <summary>Behavior tree a boss phase has put in place of the archetype's, or null.</summary>
+		private AIBehaviorTree phaseBehaviorTree;
+
+		/// <summary>Ability rotation a boss phase has put in place of the archetype's, or null.</summary>
+		private AIAbilityRotation phaseAbilityRotation;
 
 		/// <summary>
-		/// Reference to the wander state for random movement.
+		/// The archetype this NPC runs. See the field remarks for what assigning one at runtime does.
 		/// </summary>
-		public BaseAIState WanderState;
+		public AIArchetypeTemplate Archetype
+		{
+			get => archetype;
+			set
+			{
+				if (archetype == value)
+				{
+					return;
+				}
+				archetype = value;
+				if (Initialized)
+				{
+					ApplyArchetypeTuning();
+				}
+			}
+		}
 
 		/// <summary>
-		/// Reference to the patrol state for waypoint movement.
+		/// The state the NPC starts in when it spawns.
 		/// </summary>
-		public BaseAIState PatrolState;
+		public BaseAIState InitialState => archetype != null ? archetype.InitialState : null;
 
 		/// <summary>
-		/// Reference to the return home state for leash logic.
+		/// Random movement around the home position, or null when the archetype does not wander.
 		/// </summary>
-		public BaseAIState ReturnHomeState;
+		public BaseAIState WanderState => archetype != null ? archetype.WanderState : null;
 
 		/// <summary>
-		/// Reference to the retreat state for fleeing behavior.
+		/// Waypoint movement, or null when the archetype does not patrol.
 		/// </summary>
-		public BaseAIState RetreatState;
+		public BaseAIState PatrolState => archetype != null ? archetype.PatrolState : null;
 
 		/// <summary>
-		/// Reference to the idle state for passive behavior.
+		/// Leash return, or null when the archetype never leashes.
 		/// </summary>
-		public BaseAIState IdleState;
+		public BaseAIState ReturnHomeState => archetype != null ? archetype.ReturnHomeState : null;
 
 		/// <summary>
-		/// Reference to the attacking state for combat behavior.
+		/// Flee state, or null when the archetype fights to the death.
 		/// </summary>
-		public BaseAIState AttackingState;
+		public BaseAIState RetreatState => archetype != null ? archetype.RetreatState : null;
 
 		/// <summary>
-		/// Reference to the dead state for death logic.
+		/// The state this NPC falls back to when it has nothing to do.
 		/// </summary>
-		public BaseAIState DeadState;
+		public BaseAIState IdleState => archetype != null ? archetype.IdleState : null;
 
-		[Header("Ability Rotation")]
 		/// <summary>
-		/// Optional ability rotation asset. When assigned, <see cref="PickBestAbility"/> evaluates
-		/// the rotation first. If no entry matches and <see cref="AIAbilityRotation.FallbackToDefault"/>
-		/// is true, the default scoring-based picker runs as a fallback.
+		/// The combat state, or null when this NPC cannot fight. A boss phase's override wins over
+		/// the archetype's while the phase is in force.
 		/// </summary>
-		[Tooltip("Optional ability rotation for condition/sequence-based ability selection.")]
-		public AIAbilityRotation AbilityRotation;
+		public BaseAIState AttackingState =>
+			phaseAttackingState != null ? phaseAttackingState : (archetype != null ? archetype.AttackingState : null);
 
-		[Header("Combat Personality")]
 		/// <summary>
-		/// Optional combat personality that biases ability selection via per-category score multipliers.
-		/// When assigned, <see cref="PickBestAbility"/> applies the personality's weight and bonus
-		/// to each ability's score. Two NPCs with the same abilities but different personalities
-		/// will favour different abilities in combat.
+		/// Optional state entered on death.
 		/// </summary>
-		[Tooltip("Optional combat personality for data-driven ability preference.")]
-		public AICombatPersonality Personality;
+		public BaseAIState DeadState => archetype != null ? archetype.DeadState : null;
 
-		[Header("Behavior Tree")]
+		/// <summary>
+		/// Optional ability rotation. When assigned, <see cref="PickBestAbility"/> evaluates the
+		/// rotation first. If no entry matches and <see cref="AIAbilityRotation.FallbackToDefault"/>
+		/// is true, the default scoring-based picker runs as a fallback. A boss phase's override
+		/// wins over the archetype's while the phase is in force.
+		/// </summary>
+		public AIAbilityRotation AbilityRotation =>
+			phaseAbilityRotation != null ? phaseAbilityRotation : (archetype != null ? archetype.AbilityRotation : null);
+
+		/// <summary>
+		/// Optional combat personality that biases ability selection via per-category score
+		/// multipliers. When assigned, <see cref="PickBestAbility"/> applies the personality's
+		/// weight and bonus to each ability's score. Two NPCs with the same abilities but different
+		/// personalities will favour different abilities in combat.
+		/// </summary>
+		public AICombatPersonality Personality => archetype != null ? archetype.Personality : null;
+
 		/// <summary>
 		/// Optional behavior tree that provides high-level decision making above the state machine.
 		/// When assigned, the tree is evaluated each tick before the current state's UpdateState.
-		/// If the tree produces a state transition (returns Success), UpdateState is skipped that tick.
+		/// If the tree produces a state transition (returns Success), UpdateState is skipped that
+		/// tick. A boss phase's override wins over the archetype's while the phase is in force.
 		/// </summary>
-		[Tooltip("Optional behavior tree for high-level decision making.")]
-		public AIBehaviorTree BehaviorTree;
+		public AIBehaviorTree BehaviorTree =>
+			phaseBehaviorTree != null ? phaseBehaviorTree : (archetype != null ? archetype.BehaviorTree : null);
 
-		[Header("AI LOD")]
 		/// <summary>
-		/// Optional LOD settings for distance-based update throttling.
-		/// When assigned, replaces the fixed 1-in-3 stagger with distance-based tiers:
-		/// Active (nearby players), Nearby, Far, and Dormant (no observers).
+		/// Optional LOD settings for distance-based update throttling. When assigned, replaces the
+		/// fixed 1-in-3 stagger with distance-based tiers: Active (nearby players), Nearby, Far,
+		/// and Dormant (no observers). Null means always Active.
 		/// </summary>
-		[Tooltip("Optional LOD settings for distance-based AI throttling.")]
-		public AILodSettings LodSettings;
+		public AILodSettings LodSettings => archetype != null ? archetype.LodSettings : null;
+
+		/// <summary>
+		/// How often (in seconds) to sweep for nearby enemies while out of combat.
+		/// </summary>
+		public float EnemySweepRate =>
+			archetype != null && archetype.EnemySweepRate > 0f ? archetype.EnemySweepRate : DEFAULT_ENEMY_SWEEP_RATE;
+
+		/// <summary>
+		/// The NavMeshAgent avoidance priority (affects how strongly it avoids other agents).
+		/// </summary>
+		public AgentAvoidancePriority AvoidancePriority =>
+			archetype != null ? archetype.AvoidancePriority : AgentAvoidancePriority.Medium;
+
+		/// <summary>Enemy sweep rate for an NPC with no archetype.</summary>
+		private const float DEFAULT_ENEMY_SWEEP_RATE = 1.5f;
 
 		[Header("Boss Script")]
 		/// <summary>
 		/// Optional boss script defining phased encounters and timed mechanics.
 		/// When assigned, the controller evaluates phase transitions and mechanic timers each tick.
 		/// </summary>
+		/// <remarks>
+		/// Stays on the prefab rather than the archetype because it describes one encounter, not a
+		/// reusable brain — a boss script on a shared archetype would fire its phases on every
+		/// creature that borrowed it.
+		/// </remarks>
 		[Tooltip("Optional boss script for phased encounters.")]
 		public BossScript BossScript;
-
-		[Header("Aggression / Threat")]
-		/// <summary>
-		/// Points awarded per 1 point of damage dealt to this NPC.
-		/// </summary>
-		[Tooltip("Aggression points per 1 damage taken.")]
-		public float AggressionDamageWeight = 1.0f;
-
-		/// <summary>
-		/// Points awarded per 1 point of healing an enemy of the NPC witnesses.
-		/// </summary>
-		[Tooltip("Aggression points per 1 healing witnessed on a combat participant.")]
-		public float AggressionHealingWeight = 0.6f;
-
-		/// <summary>
-		/// Flat points added per hit, regardless of damage amount.
-		/// </summary>
-		[Tooltip("Flat aggression per hit.")]
-		public float AggressionHitBonus = 5.0f;
-
-		/// <summary>
-		/// Points per second that each entry decays when no new events occur.
-		/// </summary>
-		[Tooltip("Aggression decay per second.")]
-		public float AggressionDecayRate = 3.0f;
-
-		/// <summary>
-		/// Seconds after last event before an entry is removed entirely.
-		/// </summary>
-		[Tooltip("Seconds before a stale aggression entry is pruned.")]
-		public float AggressionStaleTimeout = 30.0f;
-
-		/// <summary>
-		/// Chance (0-1) that target selection ignores the top-threat target and picks a secondary one.
-		/// </summary>
-		[Range(0f, 1f)]
-		[Tooltip("Chance to pick a non-top-threat target for variety.")]
-		public float AggressionVarietyChance = 0.15f;
 
 		/// <summary>
 		/// How quickly the NPC turns to face its look target, in radians-ish per second.
@@ -488,7 +512,8 @@ namespace FishMMO.Shared
 		private float cachedTargetHalfHeight = 0.0f;
 		private Transform cachedTargetHeightSource;
 		private int staggerID;
-		private List<BaseAIState> movementStates = new List<BaseAIState>();
+		/// <summary>Scratch list for <see cref="TransitionToRandomMovementState"/>; refilled per call.</summary>
+		private readonly List<BaseAIState> movementStates = new List<BaseAIState>(4);
 		private List<ICharacter> sweepResults = new List<ICharacter>(10);
 
 		// --- Ability cache ---
@@ -829,11 +854,8 @@ namespace FishMMO.Shared
 		{
 			base.InitializeOnce();
 
-			// Apply the archetype before anything reads the state slots.
-			if (Archetype != null)
-			{
-				Archetype.ApplyTo(this);
-			}
+			// The brain the prefab was authored with; ResetState restores it after a spawner override.
+			prefabArchetype = archetype;
 
 			// Resolved once: Home reads this on every leash check and wander destination.
 			cachedPet = Character as Pet;
@@ -847,15 +869,8 @@ namespace FishMMO.Shared
 			 * frames — the exact frame spike the stagger exists to prevent. */
 			staggerID = Mathf.Abs(gameObject.GetInstanceID());
 
-			// Initialize the per-NPC aggression state with serialized tuning values.
-			AggressionState = new AggressionState(
-				Character,
-				AggressionDamageWeight,
-				AggressionHealingWeight,
-				AggressionHitBonus,
-				AggressionDecayRate,
-				AggressionStaleTimeout,
-				AggressionVarietyChance);
+			// One threat table per NPC; ApplyArchetypeTuning below gives it the archetype's numbers.
+			AggressionState = new AggressionState(Character);
 
 			// Wire event-driven combat entry: when the NPC takes damage for the first time,
 			// enter combat immediately instead of waiting for the next physics sweep.
@@ -866,7 +881,7 @@ namespace FishMMO.Shared
 				Agent = GetComponent<NavMeshAgent>();
 			}
 
-			Agent.avoidancePriority = (int)AvoidancePriority;
+			ApplyArchetypeTuning();
 			Agent.speed = Constants.Character.WalkSpeed;
 
 			/* The agent simulates; the tick moves the transform. See StepAgent.
@@ -892,29 +907,93 @@ namespace FishMMO.Shared
 			 * NPC's own PhysicsScene; AICombatSlots spaces attackers around a target. */
 			Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
-			// Add available movement states to the list for random selection.
-			if (WanderState != null)
-			{
-				movementStates.Add(WanderState);
-			}
-			if (PatrolState != null)
-			{
-				movementStates.Add(PatrolState);
-			}
-			if (ReturnHomeState != null)
-			{
-				movementStates.Add(ReturnHomeState);
-			}
-			if (IdleState != null)
-			{
-				movementStates.Add(IdleState);
-			}
-
 			// Initialize boss script runtime state if a boss script is assigned.
 			if (BossScript != null)
 			{
 				BossState = new BossScriptState(BossScript);
 			}
+		}
+
+		/// <summary>
+		/// Pushes the parts of the archetype that are consumed once, rather than read live, into
+		/// the objects that hold them: the threat table's weights and the agent's avoidance priority.
+		/// </summary>
+		/// <remarks>
+		/// Runs from <see cref="InitializeOnce"/> and again whenever <see cref="Archetype"/> changes
+		/// on an initialised controller, which is what makes a spawner override take on a recycled
+		/// instance rather than only on the first spawn of that pooled object.
+		/// </remarks>
+		private void ApplyArchetypeTuning()
+		{
+			if (AggressionState != null)
+			{
+				if (archetype != null)
+				{
+					AggressionState.Configure(
+						archetype.AggressionDamageWeight,
+						archetype.AggressionHealingWeight,
+						archetype.AggressionHitBonus,
+						archetype.AggressionDecayRate,
+						archetype.AggressionStaleTimeout,
+						archetype.AggressionVarietyChance);
+				}
+				else
+				{
+					AggressionState.ConfigureDefaults();
+				}
+			}
+
+			if (Agent != null)
+			{
+				Agent.avoidancePriority = (int)AvoidancePriority;
+			}
+		}
+
+		/// <summary>
+		/// Puts a boss phase's overrides in front of the archetype's slots. A null argument leaves
+		/// that slot's current override in place, so a later phase that only replaces the rotation
+		/// keeps the attacking state an earlier phase installed.
+		/// </summary>
+		/// <param name="attackingState">Attacking state for the phase, or null to keep the current one.</param>
+		/// <param name="behaviorTree">Behavior tree for the phase, or null to keep the current one.</param>
+		/// <param name="abilityRotation">Ability rotation for the phase, or null to keep the current one.</param>
+		public void SetPhaseOverrides(BaseAIState attackingState, AIBehaviorTree behaviorTree, AIAbilityRotation abilityRotation)
+		{
+			if (attackingState != null)
+			{
+				phaseAttackingState = attackingState;
+			}
+			if (behaviorTree != null)
+			{
+				phaseBehaviorTree = behaviorTree;
+			}
+			if (abilityRotation != null)
+			{
+				phaseAbilityRotation = abilityRotation;
+			}
+		}
+
+		/// <summary>
+		/// Drops every boss phase override so the archetype's own slots show through again.
+		/// </summary>
+		public void ClearPhaseOverrides()
+		{
+			phaseAttackingState = null;
+			phaseBehaviorTree = null;
+			phaseAbilityRotation = null;
+		}
+
+		/// <summary>
+		/// Returns the boss script to its first phase and drops the overrides later phases installed.
+		/// </summary>
+		/// <remarks>
+		/// The two have to go together: phase 0 is never "transitioned to", so a reset that only
+		/// rewound the phase index left the boss fighting with its final phase's attacking state.
+		/// </remarks>
+		private void ResetBossScript()
+		{
+			BossState?.Reset();
+			ClearPhaseOverrides();
 		}
 
 		/// <summary>
@@ -1009,7 +1088,17 @@ namespace FishMMO.Shared
 			Group = null;
 			GroupRole = NPCGroupRole.None;
 			PendingState = null;
-			BossState?.Reset();
+			ResetBossScript();
+
+			/* Give the instance back with the brain it was authored with. A spawner override is a
+			 * plain field write; without this the next spawner to draw this instance — one with no
+			 * override, expecting the prefab default — silently inherits the previous brain. Only
+			 * once InitializeOnce has captured it: FishNet also calls ResetState from OnDisable and
+			 * OnDestroy, which can run before the character has bound its behaviours. */
+			if (Initialized)
+			{
+				Archetype = prefabArchetype;
+			}
 			AggressionState?.Clear();
 			cachedAbilities.Clear();
 			lastKnownAbilityCount = -1;
@@ -1253,7 +1342,7 @@ namespace FishMMO.Shared
 				// Reset boss script phases.
 				if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
 				{
-					BossState.Reset();
+					ResetBossScript();
 				}
 
 				TransitionToIdleState();
@@ -1415,7 +1504,7 @@ namespace FishMMO.Shared
 					// Reset boss script phases on leash.
 					if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
 					{
-						BossState.Reset();
+						ResetBossScript();
 					}
 
 					return;
@@ -1960,18 +2049,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Exposes the serialized combat state through <see cref="IAIStateMachine"/>.
-		/// Explicit because the inspector needs a field here, and a field cannot satisfy a
-		/// property on an interface.
-		/// </summary>
-		BaseAIState IAIStateMachine.AttackingState => AttackingState;
-
-		/// <summary>
-		/// Exposes the serialized idle state through <see cref="IAIStateMachine"/>.
-		/// </summary>
-		BaseAIState IAIStateMachine.IdleState => IdleState;
-
-		/// <summary>
 		/// Forces this NPC onto a specific character immediately, entering combat if it is not
 		/// already fighting.
 		/// </summary>
@@ -2033,7 +2110,26 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public virtual void TransitionToRandomMovementState()
 		{
-			if (movementStates == null || movementStates.Count < 1)
+			/* Refilled on every call rather than cached at initialisation, so a spawner that swaps
+			 * the archetype after InitializeOnce gets the new archetype's movement states too. */
+			movementStates.Clear();
+			if (WanderState != null)
+			{
+				movementStates.Add(WanderState);
+			}
+			if (PatrolState != null)
+			{
+				movementStates.Add(PatrolState);
+			}
+			if (ReturnHomeState != null)
+			{
+				movementStates.Add(ReturnHomeState);
+			}
+			if (IdleState != null)
+			{
+				movementStates.Add(IdleState);
+			}
+			if (movementStates.Count < 1)
 			{
 				return;
 			}

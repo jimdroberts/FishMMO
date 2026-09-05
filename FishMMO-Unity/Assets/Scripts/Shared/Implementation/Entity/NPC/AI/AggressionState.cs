@@ -40,11 +40,39 @@ namespace FishMMO.Shared
 		public System.Action<ICharacter> OnCombatInitiated;
 
 		/// <summary>
-		/// Creates a new aggression state, initialises the threat table, and subscribes
-		/// to global damage/heal/kill events.
+		/// Creates a new aggression state with a threat table at the default weights, and subscribes
+		/// to global damage/heal/kill events. Call <see cref="Configure"/> to give it an archetype's
+		/// numbers.
 		/// </summary>
-		public AggressionState(
-			ICharacter character,
+		/// <param name="character">The NPC this threat table belongs to.</param>
+		public AggressionState(ICharacter character)
+		{
+			this.character = character;
+
+			Controller = new AggressionController();
+
+			/* Registered with the shared dispatcher rather than subscribing to the global events
+			 * directly. Per-NPC subscriptions turned every single hit in the scene into one
+			 * delegate call per NPC alive, of which at most one was relevant. */
+			AggressionDispatcher.Register(character, this);
+		}
+
+		/// <summary>
+		/// Sets the threat table's weights. Existing entries keep their points; only how future
+		/// events are scored and how fast entries decay changes.
+		/// </summary>
+		/// <remarks>
+		/// Separate from the constructor so a controller whose archetype changes after it has been
+		/// initialised — a spawner override on a recycled instance — can retune the table it already
+		/// has instead of rebuilding it and losing its dispatcher registration.
+		/// </remarks>
+		/// <param name="damageWeight">Threat per 1 point of damage taken.</param>
+		/// <param name="healingWeight">Threat per 1 point of healing witnessed on a combat participant.</param>
+		/// <param name="hitBonus">Flat threat added per hit, regardless of damage.</param>
+		/// <param name="decayRate">Threat lost per second while no new events arrive.</param>
+		/// <param name="staleTimeout">Seconds before a drained threat entry is forgotten.</param>
+		/// <param name="varietyChance">Chance target selection picks the second-highest threat.</param>
+		public void Configure(
 			float damageWeight,
 			float healingWeight,
 			float hitBonus,
@@ -52,22 +80,32 @@ namespace FishMMO.Shared
 			float staleTimeout,
 			float varietyChance)
 		{
-			this.character = character;
-
-			Controller = new AggressionController()
+			if (Controller == null)
 			{
-				DamageWeight = damageWeight,
-				HealingWeight = healingWeight,
-				HitBonusPoints = hitBonus,
-				DecayRate = decayRate,
-				StaleEntryTimeout = staleTimeout,
-				TargetVarietyChance = varietyChance,
-			};
+				return;
+			}
+			Controller.DamageWeight = damageWeight;
+			Controller.HealingWeight = healingWeight;
+			Controller.HitBonusPoints = hitBonus;
+			Controller.DecayRate = decayRate;
+			Controller.StaleEntryTimeout = staleTimeout;
+			Controller.TargetVarietyChance = varietyChance;
+		}
 
-			/* Registered with the shared dispatcher rather than subscribing to the global events
-			 * directly. Per-NPC subscriptions turned every single hit in the scene into one
-			 * delegate call per NPC alive, of which at most one was relevant. */
-			AggressionDispatcher.Register(character, this);
+		/// <summary>
+		/// Returns the threat table to <see cref="AggressionController"/>'s own default weights.
+		/// Used for an NPC with no archetype.
+		/// </summary>
+		public void ConfigureDefaults()
+		{
+			AggressionController defaults = new AggressionController();
+			Configure(
+				defaults.DamageWeight,
+				defaults.HealingWeight,
+				defaults.HitBonusPoints,
+				defaults.DecayRate,
+				defaults.StaleEntryTimeout,
+				defaults.TargetVarietyChance);
 		}
 
 		/// <summary>

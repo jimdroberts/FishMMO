@@ -254,28 +254,8 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
-  EnemySweepRate: 1.5
   Archetype: {fileID: 11400000, guid: 22ada2cd43c7cc5fd72bdebffe7d7275, type: 2}
-  InitialState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
-  AvoidancePriority: 25
-  WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
-  PatrolState: {fileID: 0}
-  ReturnHomeState: {fileID: 11400000, guid: b646a6d9bc4f07d428f12e255af67366, type: 2}
-  RetreatState: {fileID: 11400000, guid: 5b56c55d686ceac4cac2a744a5bf0951, type: 2}
-  IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
-  AttackingState: {fileID: 11400000, guid: a188e3de8a5794043903352f3ce4a57d, type: 2}
-  DeadState: {fileID: 0}
-  AbilityRotation: {fileID: 0}
-  Personality: {fileID: 0}
-  BehaviorTree: {fileID: 0}
-  LodSettings: {fileID: 11400000, guid: cd98f591a3445c5a50a6e478001853a1, type: 2}
   BossScript: {fileID: 0}
-  AggressionDamageWeight: 1
-  AggressionHealingWeight: 0.6
-  AggressionHitBonus: 5
-  AggressionDecayRate: 3
-  AggressionStaleTimeout: 30
-  AggressionVarietyChance: 0.15
   TurnRate: 8
   RepathInterval: 0.5
   eyeTransform: {fileID: 0}

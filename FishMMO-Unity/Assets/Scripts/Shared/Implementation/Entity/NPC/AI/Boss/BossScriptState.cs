@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Logging;
 using FishNet.Connection;
@@ -176,23 +176,11 @@ namespace FishMMO.Shared
 
 			Log.Debug("BossScriptState", $"Boss {controller.gameObject.name} transitioning from Phase {oldPhase} to Phase {phaseIndex} (HP threshold {phase.HealthThreshold:P0})");
 
-			// Apply behavior tree override.
-			if (phase.BehaviorTreeOverride != null)
-			{
-				controller.BehaviorTree = phase.BehaviorTreeOverride;
-			}
-
-			// Apply attacking state override.
-			if (phase.AttackingStateOverride != null)
-			{
-				controller.AttackingState = phase.AttackingStateOverride;
-			}
-
-			// Apply ability rotation override.
-			if (phase.AbilityRotationOverride != null)
-			{
-				controller.AbilityRotation = phase.AbilityRotationOverride;
-			}
+			/* Phase overrides sit in front of the archetype's slots on the controller rather than
+			 * overwriting them: the archetype is a shared asset, and the controller drops the
+			 * overrides again when the script resets or the instance is pooled. A slot the phase
+			 * leaves null keeps whatever an earlier phase installed. */
+			controller.SetPhaseOverrides(phase.AttackingStateOverride, phase.BehaviorTreeOverride, phase.AbilityRotationOverride);
 
 			// Spawn adds.
 			SpawnAdds(controller, phase.SpawnOnEnter, phase.SpawnOffsets);

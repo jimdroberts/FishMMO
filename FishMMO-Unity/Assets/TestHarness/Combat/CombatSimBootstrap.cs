@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using FishMMO.Shared;
@@ -230,29 +230,40 @@ namespace FishMMO.TestHarness
 					casting.ChanneledTemplate = Manifest.ChannelMarker;
 					casting.ChargedTemplate = Manifest.ChargeMarker;
 
-					// Null LOD settings = always Active: with zero observers the tier evaluator
-					// would otherwise park every brain Dormant and nothing would ever fight.
+					/* Every AI slot reads through the archetype, and the archetype is a shared
+					 * asset — mutating it would edit the shipped brain. Each fighter gets a
+					 * per-instance CLONE to tune instead. */
 					AIController brain = go.GetComponent<AIController>();
-					brain.LodSettings = null;
-
-					/* The prefab's attacking state ships with PreferredDistance 0 — close to
-					 * melee. Two such teams collapse into a touching scrum, and aiming at a
-					 * target you are standing inside produces a near-vertical fire direction
-					 * (projectiles straight up). A per-fighter CLONE of the state (assets are
-					 * shared — mutating the original would edit the shipped asset) holds a
-					 * ranged standoff instead, so the red and blue lines trade fire visibly. */
-					if (brain.AttackingState is BaseAttackingState prefabAttack)
+					if (brain.Archetype != null)
 					{
-						BaseAttackingState rangedAttack = Instantiate(prefabAttack);
-						rangedAttack.name = prefabAttack.name + " (ranged sim)";
-						rangedAttack.PreferredDistance = 9f;
-						rangedAttack.MinComfortDistance = 5f;
-						// Global cast pacing on top of per-ability cooldowns: without it a
-						// spellbook this deep lets the AI legally chain instants back-to-back.
-						// The jitter is also what desynchronizes the two teams' rhythms.
-						rangedAttack.AttackCooldown = 1.5f;
-						rangedAttack.AttackCooldownJitter = 1.0f;
-						brain.AttackingState = rangedAttack;
+						AIArchetypeTemplate simBrain = Instantiate(brain.Archetype);
+						simBrain.name = brain.Archetype.name + " (sim)";
+
+						// Null LOD settings = always Active: with zero observers the tier
+						// evaluator would otherwise park every brain Dormant and nothing would
+						// ever fight.
+						simBrain.LodSettings = null;
+
+						/* The shipped attacking state has PreferredDistance 0 — close to melee.
+						 * Two such teams collapse into a touching scrum, and aiming at a target
+						 * you are standing inside produces a near-vertical fire direction
+						 * (projectiles straight up). A cloned state holds a ranged standoff
+						 * instead, so the red and blue lines trade fire visibly. */
+						if (simBrain.AttackingState is BaseAttackingState prefabAttack)
+						{
+							BaseAttackingState rangedAttack = Instantiate(prefabAttack);
+							rangedAttack.name = prefabAttack.name + " (ranged sim)";
+							rangedAttack.PreferredDistance = 9f;
+							rangedAttack.MinComfortDistance = 5f;
+							// Global cast pacing on top of per-ability cooldowns: without it a
+							// spellbook this deep lets the AI legally chain instants back-to-back.
+							// The jitter is also what desynchronizes the two teams' rhythms.
+							rangedAttack.AttackCooldown = 1.5f;
+							rangedAttack.AttackCooldownJitter = 1.0f;
+							simBrain.AttackingState = rangedAttack;
+						}
+
+						brain.Archetype = simBrain;
 					}
 				},
 				afterActivate: go => go.GetComponent<AIController>().Initialize(position));

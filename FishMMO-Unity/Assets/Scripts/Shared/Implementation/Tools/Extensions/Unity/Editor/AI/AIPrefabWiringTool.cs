@@ -122,25 +122,31 @@ namespace FishMMO.Shared
 				NPC npc = root.GetComponent<NPC>();
 				bool isPet = root.GetComponent<Pet>() != null;
 
+				/* The archetype is the whole brain: every state the controller runs is read from
+				 * it, so a controller without one has no states at all. */
+				if (controller != null && controller.Archetype == null)
+				{
+					lines.Add("no Archetype — the controller has no states, no LOD profile and no personality; it spawns and never ticks");
+				}
+
 				/* A merchant or a banker is an NPC with no combat wiring on purpose. Only report
 				 * a prefab that is *partly* set up for combat, which is the case that indicates a
 				 * mistake rather than a design choice. Pets are always combat-capable: theirs
 				 * comes from the summoning template rather than the prefab. */
-				bool hasCombatState = controller != null &&
-					(controller.Archetype != null || controller.AttackingState != null);
+				bool hasCombatState = controller != null && controller.AttackingState != null;
 				bool hasAbilities = npc != null && npc.Abilities != null && npc.Abilities.Count > 0;
 				bool intendedForCombat = hasCombatState || hasAbilities || isPet;
 
-				if (controller != null && intendedForCombat)
+				if (controller != null && controller.Archetype != null && intendedForCombat)
 				{
 					if (!hasCombatState)
 					{
-						lines.Add("no Archetype and no AttackingState — the NPC can never enter combat");
+						lines.Add($"archetype '{controller.Archetype.name}' has no AttackingState — the NPC can never enter combat");
 					}
 
-					if (controller.Archetype == null && controller.IdleState == null)
+					if (controller.IdleState == null)
 					{
-						lines.Add("no Archetype and no IdleState — TransitionToIdleState is a no-op");
+						lines.Add($"archetype '{controller.Archetype.name}' has no IdleState — TransitionToIdleState is a no-op");
 					}
 
 					if (!hasAbilities && !isPet)

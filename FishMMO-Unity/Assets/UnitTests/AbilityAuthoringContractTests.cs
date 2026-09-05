@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -210,7 +210,7 @@ namespace FishMMO.UnitTests
 			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Orcs[2].path);
 			NPC npc = prefab.GetComponent<NPC>();
 			AIController ai = prefab.GetComponent<AIController>();
-			BaseAttackingState attacking = (ai.Archetype != null ? ai.Archetype.AttackingState : ai.AttackingState) as BaseAttackingState;
+			BaseAttackingState attacking = ai.AttackingState as BaseAttackingState;
 			Assert.That(attacking, Is.Not.Null);
 
 			float longest = 0f;

@@ -58,6 +58,24 @@ namespace FishMMO.Shared
 		/// Each entry is (displayName, concreteType).
 		/// </summary>
 		public List<(string Name, Type Type)> ConcreteTypes;
+
+		/// <summary>
+		/// Optional loader that replaces the <see cref="AssetType"/> search. For categories whose
+		/// entries are not a ScriptableObject type — NPC prefabs — where "everything of type T"
+		/// is not the right question.
+		/// </summary>
+		public Func<List<UnityEngine.Object>> LoadAssets;
+
+		/// <summary>
+		/// Optional counter for the sidebar badge, paired with <see cref="LoadAssets"/>.
+		/// </summary>
+		public Func<int> CountAssets;
+
+		/// <summary>
+		/// Optional handler for the create button, replacing the empty-asset default. A category
+		/// whose entries need several decisions before they are usable opens a form here.
+		/// </summary>
+		public Action CreateAsset;
 	}
 
 	public partial class FishMMODashboard
@@ -252,9 +270,12 @@ namespace FishMMO.Shared
 			});
 
 			// ── NPCs ──
-			/* Archetypes come first: this is the asset a designer should reach for. One of them
-			 * fills in every state and tuning slot on an AIController, so the individual state
-			 * categories below are for authoring the pieces rather than for wiring a prefab. */
+			/* The NPC prefabs themselves come first: that is what a designer is trying to make.
+			 * Archetypes next, because one of them is every state and tuning value an
+			 * AIController has; the individual state categories below are for authoring the
+			 * pieces rather than for wiring a prefab. */
+			RegisterNPCCategory();
+
 			categories.Add(new TemplateCategory
 			{
 				DisplayName = "AI Archetypes",
@@ -510,9 +531,9 @@ namespace FishMMO.Shared
 				item.Add(nameLabel);
 
 				// Show asset count for non-special categories
-				if (!cat.IsSpecial && cat.AssetType != null)
+				if (!cat.IsSpecial && (cat.CountAssets != null || cat.AssetType != null))
 				{
-					int count = CountAssetsOfType(cat.AssetType);
+					int count = cat.CountAssets != null ? cat.CountAssets() : CountAssetsOfType(cat.AssetType);
 					Label countLabel = new Label($"({count})");
 					countLabel.AddToClassList("category-count");
 					item.Add(countLabel);
@@ -573,7 +594,7 @@ namespace FishMMO.Shared
 				entityPanelHeader.text = cat.DisplayName;
 			}
 
-			bool canCreate = !cat.IsSpecial && cat.AssetType != null;
+			bool canCreate = !cat.IsSpecial && (cat.AssetType != null || cat.CreateAsset != null);
 			if (createButton != null)
 			{
 				createButton.SetEnabled(canCreate);
@@ -622,22 +643,29 @@ namespace FishMMO.Shared
 		{
 			currentAssets.Clear();
 
-			if (cat.AssetType == null) return;
-
-			string[] guids = AssetDatabase.FindAssets($"t:{cat.AssetType.Name}");
-			bool skipLocal = !EditorPrefs.GetBool("FishMMOEnableLocalDirectory", false);
-
-			for (int i = 0; i < guids.Length; i++)
+			if (cat.LoadAssets != null)
 			{
-				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-				if (skipLocal && path.Replace('\\', '/').StartsWith("Assets/LOCAL/", StringComparison.OrdinalIgnoreCase))
+				currentAssets.AddRange(cat.LoadAssets());
+			}
+			else
+			{
+				if (cat.AssetType == null) return;
+
+				string[] guids = AssetDatabase.FindAssets($"t:{cat.AssetType.Name}");
+				bool skipLocal = !EditorPrefs.GetBool("FishMMOEnableLocalDirectory", false);
+
+				for (int i = 0; i < guids.Length; i++)
 				{
-					continue;
-				}
-				UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath(path, cat.AssetType);
-				if (asset != null)
-				{
-					currentAssets.Add(asset);
+					string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+					if (skipLocal && path.Replace('\\', '/').StartsWith("Assets/LOCAL/", StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+					UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath(path, cat.AssetType);
+					if (asset != null)
+					{
+						currentAssets.Add(asset);
+					}
 				}
 			}
 
@@ -874,7 +902,16 @@ namespace FishMMO.Shared
 			if (selectedCategoryIndex < 0 || selectedCategoryIndex >= categories.Count) return;
 
 			TemplateCategory cat = categories[selectedCategoryIndex];
-			if (cat.AssetType == null || cat.IsSpecial) return;
+			if (cat.IsSpecial) return;
+
+			// A category that needs a form rather than an empty asset.
+			if (cat.CreateAsset != null)
+			{
+				cat.CreateAsset();
+				return;
+			}
+
+			if (cat.AssetType == null) return;
 
 			// If the category defines concrete subtypes, show a picker menu.
 			if (cat.ConcreteTypes != null && cat.ConcreteTypes.Count > 0)
@@ -954,6 +991,13 @@ namespace FishMMO.Shared
 
 			if (AssetDatabase.CopyAsset(sourcePath, newPath))
 			{
+				/* A copied prefab is a new guid with no Addressables entry, and a server cannot
+				 * spawn an NPC it cannot load. */
+				if (IsNPCPrefab(asset))
+				{
+					NPCPrefabFactory.RegisterAddressableLike(newPath, sourcePath);
+				}
+
 				AssetDatabase.Refresh();
 				ReloadCurrentCategory();
 				SetStatus($"Duplicated: {newPath}");
@@ -975,6 +1019,12 @@ namespace FishMMO.Shared
 					string error = AssetDatabase.RenameAsset(path, result);
 					if (string.IsNullOrEmpty(error))
 					{
+						// An NPC's address is its name; keep the two together.
+						if (IsNPCPrefab(asset))
+						{
+							NPCPrefabFactory.SyncAddress(AssetDatabase.GetAssetPath(asset));
+						}
+
 						AssetDatabase.Refresh();
 						ReloadCurrentCategory();
 						SetStatus($"Renamed to: {result}");
@@ -1013,6 +1063,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void ReloadCurrentCategory()
 		{
+			InvalidateNPCPrefabCache();
+
 			if (selectedCategoryIndex < 0 || selectedCategoryIndex >= categories.Count) return;
 
 			TemplateCategory cat = categories[selectedCategoryIndex];

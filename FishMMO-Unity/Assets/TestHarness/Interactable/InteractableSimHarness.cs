@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using FishMMO.Server;
 using FishMMO.Shared;
@@ -162,10 +162,15 @@ namespace FishMMO.TestHarness
 				gameObject.scene, configure: go =>
 				{
 					go.name = name;
+					/* Null LOD settings = always Active. The LOD profile lives on the archetype,
+					 * which is a shared asset, so the harness tunes a per-instance clone. */
 					AIController ai = go.GetComponent<AIController>();
-					if (ai != null)
+					if (ai != null && ai.Archetype != null)
 					{
-						ai.LodSettings = null;
+						AIArchetypeTemplate simBrain = Instantiate(ai.Archetype);
+						simBrain.name = ai.Archetype.name + " (sim)";
+						simBrain.LodSettings = null;
+						ai.Archetype = simBrain;
 					}
 				},
 				afterActivate: go =>

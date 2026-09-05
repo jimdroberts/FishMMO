@@ -25,7 +25,7 @@ The system is layered so that **archetypes are data, not code**:
 
 | Layer | Responsibility |
 |---|---|
-| `AIArchetypeTemplate` | One asset that is a whole brain: which states, which personality, which threat tuning, which LOD profile. |
+| `AIArchetypeTemplate` | One asset that is a whole brain: which states, which personality, which threat tuning, which LOD profile. The only AI wiring a prefab carries. |
 | `BaseAIState` machine | Execution. What the NPC is doing right now. |
 | `AICombatDecision` | A pure function over plain floats that every attacking state shares. |
 | `AICombatPersonality` | Ability preferences, flee threshold, targeting mode. |
@@ -112,8 +112,10 @@ An NPC prefab requires `AIController`, `CharacterPredictionController`, `Ability
 
 ## Quick Start Guide
 
-1. Create an archetype: `FishMMO > Character > NPC > AI > Archetype`, or start from one of the 16 shipped assets under `Assets/Templates/Entity/NPCs/AI/Archetypes/`.
-2. Assign it to `AIController.Archetype` on the NPC prefab. Every other state and tuning slot fills itself in at spawn; anything left null on the archetype keeps whatever the prefab already had.
+The fastest route is the dashboard: `FishMMO > FishMMO Dashboard > NPCs > +` opens a form pre-filled from the selected NPC — name, folder, race, archetype, attribute databases, loot, abilities and interactable role — and `Create NPC` clones a working prefab, writes those fields onto it, registers it with Addressables and selects it. The steps below are what that form does, for when a piece has to be authored first.
+
+1. Create an archetype: `FishMMO > Character > NPC > AI > Archetype`, or start from one of the 17 shipped assets under `Assets/Templates/Entity/NPCs/AI/Archetypes/` (10 enemy, 6 pet, 1 civilian).
+2. Assign it to `AIController.Archetype` on the NPC prefab. That is the whole AI setup: the controller reads every state, the personality, the rotation, the LOD profile and the threat tuning from the archetype. There is no per-prefab slot to fill or override — a creature that needs one thing different gets its own archetype, so two NPCs naming the same archetype always behave the same.
 3. Populate `NPC.Abilities` with `AbilityTemplate`s — **an NPC with no abilities will chase its target and never strike**.
 4. Run `FishMMO > AI > Audit NPC Prefabs` to confirm the prefab is wired for combat.
 5. Run `FishMMO > AI > Validate Archetypes` to confirm the archetype is internally consistent.
@@ -124,13 +126,24 @@ An NPC prefab requires `AIController`, `CharacterPredictionController`, `Ability
 
 | Field | Default | Purpose |
 |---|---|---|
-| `Archetype` | `null` | Fills every state and tuning slot below |
+| `Archetype` | `null` | The whole brain; every state and tuning value is read from it. Required |
+| `BossScript` | `null` | Optional phased encounter script. Per prefab, not per archetype, because it describes one encounter |
 | `AiTickRate` | `8` | Brain updates per second; 5–10 is the useful band |
 | `TurnRate` | `8` | Facing smoothing rate; higher is snappier |
-| `EnemySweepRate` | `1.5` | Seconds between out-of-combat hostile sweeps |
 | `RepathInterval` | `0.5` | Minimum seconds between throttled `SetDestination` calls |
 | `StuckTimeout` | `2.5` | Seconds of no progress before the NPC counts as stuck |
 | `StuckWarpTimeout` | `8.0` | Seconds stuck before it is warped free; 0 disables |
+
+### AIArchetypeTemplate
+
+| Field | Default | Purpose |
+|---|---|---|
+| `InitialState` / `IdleState` / `AttackingState` | `null` | Core states. Initial and idle are required; a civilian archetype leaves attacking empty |
+| `WanderState` / `PatrolState` / `ReturnHomeState` / `RetreatState` / `DeadState` | `null` | Optional movement, leash, flee and death states |
+| `Personality` | `null` | `AICombatPersonality`: ability weights, flee threshold, targeting mode |
+| `AbilityRotation` / `BehaviorTree` | `null` | Optional decision layers above the scorer and the state machine |
+| `LodSettings` | `null` | Distance throttling profile; null means always Active |
+| `EnemySweepRate` | `1.5` | Seconds between out-of-combat hostile sweeps |
 | `AvoidancePriority` | `Medium` | NavMeshAgent avoidance priority |
 | `AggressionDamageWeight` | `1.0` | Threat per point of damage taken |
 | `AggressionHealingWeight` | `0.6` | Threat per point of healing witnessed |
@@ -138,6 +151,8 @@ An NPC prefab requires `AIController`, `CharacterPredictionController`, `Ability
 | `AggressionDecayRate` | `3.0` | Threat lost per second |
 | `AggressionStaleTimeout` | `30.0` | Seconds before a drained entry is forgotten |
 | `AggressionVarietyChance` | `0.15` | Chance of picking the second-highest threat |
+
+Assigning a different archetype to an initialised controller — a spawner's `ArchetypeOverride`, a harness clone — takes effect immediately: the threat table is retuned, the avoidance priority is re-applied, and every state is read live. Boss phases put their overrides in front of the archetype's slots rather than writing into the shared asset, and the controller drops them when the script resets or the instance is pooled.
 
 ### BaseAttackingState
 
@@ -259,7 +274,7 @@ A state entered mid-fight for positioning (orbit, flank, flee) must have `KeepsC
 | Check | How to Verify |
 |---|---|
 | Brain is ticking | `AIController.EffectiveAiTickRate` reports the resolved rate; at 30 Hz network tick and 8 Hz requested it is 7.5 |
-| Archetype applied | State slots on the controller are populated at spawn even when the prefab left them empty |
+| Archetype applied | `AIController.InitialState` and the other state properties resolve to the archetype's assets; a prefab with no archetype is reported by `Audit NPC Prefabs` and by the `EveryNPCPrefab_NamesAnArchetype` EditMode test |
 | NPC can fight | `FishMMO > AI > Audit NPC Prefabs` reports no problems |
 | Archetypes valid | `FishMMO > AI > Validate Archetypes` reports all valid |
 | LOD engaged | Move a player away from an NPC; its update rate should drop through Nearby, Far and Dormant |

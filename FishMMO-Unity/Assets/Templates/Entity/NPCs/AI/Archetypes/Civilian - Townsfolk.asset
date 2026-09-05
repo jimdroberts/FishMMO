@@ -10,18 +10,20 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b15d1b8236d4cf0b5b3f74d99b9a983b, type: 3}
-  m_Name: Pet - Caster
+  m_Name: Civilian - Townsfolk
   m_EditorClassIdentifier: 
-  Description: Caster pet. Holds range and interrupts to escape melee.
-  InitialState: {fileID: 11400000, guid: f5b1bcb5c5de2a877d9877e43907f58d, type: 2}
-  AttackingState: {fileID: 11400000, guid: ecd31ff07e929f6ee0b89178e183cb54, type: 2}
-  IdleState: {fileID: 11400000, guid: f5b1bcb5c5de2a877d9877e43907f58d, type: 2}
-  WanderState: {fileID: 0}
+  Description: Non-combatant townsfolk. Idles and wanders a short way around its
+    spawn point, never sweeps for enemies and cannot fight. The brain for merchants,
+    bankers, trainers and other interactable NPCs.
+  InitialState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
+  AttackingState: {fileID: 0}
+  IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
+  WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
   PatrolState: {fileID: 0}
   ReturnHomeState: {fileID: 0}
-  RetreatState: {fileID: 11400000, guid: 8751b24bf85f92efad896766fd2ace5e, type: 2}
+  RetreatState: {fileID: 0}
   DeadState: {fileID: 0}
-  Personality: {fileID: 11400000, guid: 0abe9137cceb5fe83026def40795bdc0, type: 2}
+  Personality: {fileID: 0}
   AbilityRotation: {fileID: 0}
   BehaviorTree: {fileID: 0}
   AggressionDamageWeight: 1
@@ -30,6 +32,6 @@ MonoBehaviour:
   AggressionDecayRate: 3
   AggressionStaleTimeout: 30
   AggressionVarietyChance: 0.15
-  LodSettings: {fileID: 11400000, guid: 4309ac96576cac0277c5f220a221a5a2, type: 2}
+  LodSettings: {fileID: 11400000, guid: cd98f591a3445c5a50a6e478001853a1, type: 2}
   EnemySweepRate: 1.5
-  AvoidancePriority: 25
+  AvoidancePriority: 50

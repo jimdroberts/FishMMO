@@ -87,8 +87,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1620b8e92153a6fc6907418be87a52e1
+    m_Address: Mock Nearest Strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16794f965b0ad7e4c86ac5731eb17d0e
+    m_Address: Mock Taunt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1684e33d9f0a24c749104f633be71ecf
     m_Address: Orc War Cry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 18016b10e867b9538b74524afae86d16
+    m_Address: Mock Shotgun Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -273,6 +291,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3dd24d27fad4b54e8bffb2b3c47197e5
+    m_Address: Mock Piercing Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3f3e421dc58c81d4e94dcea943cfcd35
     m_Address: Assets/Prefabs/WorldSceneDetails.asset
     m_ReadOnly: 0
@@ -285,8 +309,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4637a288488d62775a18a92d8d7cf78e
+    m_Address: Mock Dispel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4a7063529ee215d4a915672973d299db
     m_Address: Test Leggings
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b0638fbffccc436bb5327fd0deb2b8e
+    m_Address: Mock Charged Shot
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -299,6 +335,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4db22f87e1992de42b510d2318f467be
     m_Address: Earth Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e0fa2784e61b216fac2dd524fee32fd
+    m_Address: Mock Area Pulse Trap
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -329,6 +371,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 549f4456666a19b428ae484dd2630ab1
     m_Address: Lesser Fireball
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 55423e7003059d1db86f51cbd0084860
+    m_Address: Mock Heal Over Time
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -381,8 +429,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5f19ad0614781477a8f7a053b7ece904
+    m_Address: Mock Channel Marker Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5f83904fcedd0864fbb6162f45fbeb9e
     m_Address: Currency
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5faebdfb4e2ebc9518562ae7bc405075
+    m_Address: Mock Area Heal
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -395,6 +455,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69de0afedec049ceaa7dfafe0242db29
     m_Address: Basic Physical Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6f4d5054b0302ce1f9a830b5a817436f
+    m_Address: Mock Area Damage Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -448,6 +514,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7cd43d92272ec5c309d97061f24592c3
+    m_Address: Mock Area Heal Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7d40862968a2aed4f859067648b24444
     m_Address: Assets/DefaultPrefabObjects.asset
     m_ReadOnly: 0
@@ -483,8 +555,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8317c4c926eb06457a46cef717ee0338
+    m_Address: Mock Single Target Strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 840ab52aad01472dea4e8c66d23487a8
+    m_Address: Mock Threat Pulse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8751b24bf85f92efad896766fd2ace5e
     m_Address: Combat Flee State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8766246d673041191a07889157e01b58
+    m_Address: Mock Random Bolts
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -515,6 +605,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 93fb2e9d657c108f5e209832010309be
     m_Address: Defender Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 948fb4b1883942d2a8a95e38e03baf8c
+    m_Address: Mock Stun
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -764,6 +860,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: db9ade9d3353c692b8a57a6ed0e8db96
+    m_Address: Mock Block Raise Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: deced8ea13363bb4ea7e3a4e0876268f
+    m_Address: Mock Shield Block
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0d004d1b5e90374fa54e7f9aec2166a
     m_Address: Fire Damage
     m_ReadOnly: 0
@@ -797,6 +905,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e37548aba1d69c14cb2bd288e7882f76
     m_Address: DungeonFog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3e463f1607fe984b9712d60b46738ba
+    m_Address: Mock Area Pulse Tick Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -950,6 +1064,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - NameCache
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ff81fe79c8c39b5fc90c7636172097a5
+    m_Address: Mock Heal Over Time Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ffa3526f3f634c34891d4419dab88371

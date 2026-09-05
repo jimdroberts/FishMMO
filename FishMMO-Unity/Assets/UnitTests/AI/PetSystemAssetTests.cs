@@ -219,12 +219,11 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void PetPrefabs_HaveNoMovementStatesToWanderOffInto()
 		{
-			/* AIArchetypeTemplate.ApplyTo skips null fields so a prefab can override one slot —
-			 * which also means a WanderState or PatrolState left on the PET prefab survives the
-			 * archetype that deliberately leaves both empty. It then joins AIController's
-			 * movementStates list, and every TransitionToRandomMovementState — which is where a
-			 * pet lands whenever a fight ends — can roll it. The pet wanders off from the owner
-			 * it belongs to, and no amount of following brings it back until the roll changes. */
+			/* A wander or patrol state joins the movement roll, and TransitionToRandomMovementState
+			 * — which is where a pet lands whenever a fight ends — can pick it. The pet wanders off
+			 * from the owner it belongs to, and no amount of following brings it back until the
+			 * roll changes. The controller reads both slots from its archetype, so this pins the
+			 * archetype each pet prefab actually names. */
 			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
 			{
 				if (template.PetPrefab == null)
@@ -238,8 +237,8 @@ namespace FishMMO.UnitTests.AI
 					continue;
 				}
 
-				BaseAIState wander = ResolveSlot(controller.Archetype?.WanderState, controller.WanderState);
-				BaseAIState patrol = ResolveSlot(controller.Archetype?.PatrolState, controller.PatrolState);
+				BaseAIState wander = controller.WanderState;
+				BaseAIState patrol = controller.PatrolState;
 
 				Assert.IsNull(wander,
 					$"'{template.PetPrefab.name}' resolves a wander state, so it can drift away from its owner.");
@@ -262,9 +261,12 @@ namespace FishMMO.UnitTests.AI
 				Assert.IsNotNull(controller,
 					$"'{template.PetPrefab.name}' has no AIController, so it has no brain at all.");
 
-				BaseAIState idle = ResolveSlot(controller.Archetype?.IdleState, controller.IdleState);
-				BaseAIState initial = ResolveSlot(controller.Archetype?.InitialState, controller.InitialState);
-				BaseAIState attacking = ResolveSlot(controller.Archetype?.AttackingState, controller.AttackingState);
+				Assert.IsNotNull(controller.Archetype,
+					$"'{template.PetPrefab.name}' has no AI archetype, so its controller has no states at all.");
+
+				BaseAIState idle = controller.IdleState;
+				BaseAIState initial = controller.InitialState;
+				BaseAIState attacking = controller.AttackingState;
 
 				Assert.IsInstanceOf<PetIdleState>(idle,
 					$"'{template.PetPrefab.name}' does not resolve a PetIdleState, so it will never follow its owner.");
@@ -312,15 +314,6 @@ namespace FishMMO.UnitTests.AI
 					$"'{template.PetPrefab.name}' resolves no health resource attribute, so it cannot be damaged, " +
 					"killed, or saved as still summoned.");
 			}
-		}
-
-		/// <summary>
-		/// Mirrors <see cref="AIArchetypeTemplate.ApplyTo"/>: the archetype wins unless it left
-		/// the slot null, in which case whatever the prefab carries survives.
-		/// </summary>
-		private static BaseAIState ResolveSlot(BaseAIState fromArchetype, BaseAIState fromPrefab)
-		{
-			return fromArchetype != null ? fromArchetype : fromPrefab;
 		}
 
 		/// <summary>

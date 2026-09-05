@@ -71,8 +71,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// Lets one prefab be a passive critter at one spawner and an aggressive hunter at another
-		/// without touching the prefab. Applied before <see cref="AIController.InitializeOnce"/>
-		/// reads its state slots.
+		/// without touching the prefab. The controller reads every state and tuning value live from
+		/// its archetype, so assigning one here is the whole override.
 		/// </remarks>
 		[Header("Behaviour")]
 		[Tooltip("Replaces the prefab's AI archetype. Leave empty to use the prefab's own.")]
@@ -160,7 +160,7 @@ namespace FishMMO.Shared
 				: prefabNPC?.LootTable;
 
 			ApplyAbilities(npc, prefabNPC);
-			ApplyArchetype(nob);
+			ApplyArchetype(nob, prefabNPC);
 			ApplyFaction(nob);
 			ApplyScale(nob);
 		}
@@ -219,29 +219,35 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Applies the AI archetype override.
+		/// Applies the AI archetype override, or restores the prefab's own archetype when there is
+		/// none — the same "this spawner's value, or the prefab's" rule every other override uses.
 		/// </summary>
+		/// <remarks>
+		/// <see cref="AIController.Archetype"/> retunes the threat table and re-applies the
+		/// avoidance priority when it changes on an initialised controller, and every state slot is
+		/// read live, so this one assignment is the whole override even on a recycled instance.
+		/// </remarks>
 		/// <param name="nob">The instantiated network object.</param>
-		private void ApplyArchetype(NetworkObject nob)
+		/// <param name="prefabNPC">The prefab the instance was pooled from, or null.</param>
+		private void ApplyArchetype(NetworkObject nob, NPC prefabNPC)
 		{
-			if (ArchetypeOverride == null)
-			{
-				return;
-			}
-
 			AIController controller = nob.GetComponent<AIController>();
 			if (controller == null)
 			{
 				return;
 			}
 
-			controller.Archetype = ArchetypeOverride;
+			if (ArchetypeOverride != null)
+			{
+				controller.Archetype = ArchetypeOverride;
+				return;
+			}
 
-			/* InitializeOnce applies the archetype, and it only runs once per instance — on the
-			 * very first Awake. A recycled NPC has already been through it, so applying the
-			 * archetype here as well is what makes the override take on reuse rather than only on
-			 * the first spawn of that pooled object. */
-			ArchetypeOverride.ApplyTo(controller);
+			AIController prefabController = prefabNPC != null ? prefabNPC.GetComponent<AIController>() : null;
+			if (prefabController != null)
+			{
+				controller.Archetype = prefabController.Archetype;
+			}
 		}
 
 		/// <summary>
