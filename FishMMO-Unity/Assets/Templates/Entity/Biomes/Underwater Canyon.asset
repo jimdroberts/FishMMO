@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Underwater Canyon
+  m_EditorClassIdentifier: 
+  DisplayName: Underwater Canyon
+  Description: 'Deep underwater valleys — sheer walls, strong currents, narrow passages'
+  BiomeColorId: {r: 0.1, g: 0.15, b: 0.4, a: 1}
+  GizmoColor: {r: 0.2, g: 0.3, b: 0.6, a: 1}
+  ElevationTier: 0
+  MinHeight: 0.05
+  MaxHeight: 0.2
+  MinTemperature: -0.7
+  MaxTemperature: -0.2
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mar
+      - Del
+      - Cor
+      - Tid
+      - Ner
+      - Lir
+      - Und
+      - Pel
+      - Gor
+      - Sha
+      - Kra
+      - Dra
+      - Kel
+      - Aqu
+      - Bri
+      Nuclei:
+      - a
+      - ea
+      - ia
+      - al
+      - oa
+      - ei
+      - ar
+      Codas:
+      - reef
+      - deep
+      - tide
+      - gorge
+      - rift
+      - wall
+      - cut
+      - bed
+      - flow
+      - fall
+      Middles:
+      - al
+      - ar
+      - el
+      - an
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Canyon
+      - Gorge
+      - Rift
+      - Cleft
+      - Ravine
+      - Chasm
+      - Cut
+      - Gully
+      - Trench
+      - Notch
+      - Passage
+      - Narrows
+      - Shaft
+      - Tunnel
+      - Cavern
+      - Slot
+      - Gallery
+      - Chimney
+      - Throat
+      - Overhang
+      - Ledge
+      - Alcove
+      DungeonPrefixes:
+      - The Sunken
+      - The Narrow
+      - The Sheer
+      - The Drowned
+      - The Carved
+      - The Ancient
+      - The Echoing
+      - The Tidal
+      - The Current-swept
+      - The Serpentine
+      - The Plunging
+      - The Shadow-filled
+      - The Eroded
+      - The Towering
+      - The Pressure-carved
+      - The Turbulent
+      - The Kelp-draped
+      - The Silt-clouded
+      - The Layered
+      - The Abyssal
+      POISuffixes:
+      - Canyon-wall
+      - Ledge
+      - Overhang
+      - Shelf
+      - Current-gap
+      - Silt-fall
+      - Rock-face
+      - Narrows
+      - Turbidity-channel
+      - Canyon-floor
+      - Blind-canyon
+      - Slot-canyon
+      - Fossil-layer
+      - Sediment-cascade
+      - Current-break
+      - Wall-garden
+      - Coral-ledge
+      - Kelp-curtain
+      - Amphitheater
+      - Echo-wall
+      Adjectives:
+      - Sunken
+      - Narrow
+      - Sheer
+      - Drowned
+      - Carved
+      - Echoing
+      - Tidal
+      - Deep-cut
+      - Serpentine
+      - Plunging
+      - Current-swept
+      - Shadow-filled
+      - Eroded
+      - Towering
+      - Pressure-carved
+      - Turbulent
+      - Kelp-draped
+      - Silt-clouded
+      - Layered
+      - Abyssal
+      - Vertiginous
+      - Maze-like
+      Description: 'Deep underwater valleys — sheer walls, strong currents, narrow passages'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 921bf8281157c524ab5d40a5ba633989, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 12.872803
+    blendNoiseOffsetY: -331.18616
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -411.16345
+    blendNoiseOffsetY: 929.68823
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 301.70078
+    blendNoiseOffsetY: -944.13184
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -326.33032
+    blendNoiseOffsetY: -501.02832
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

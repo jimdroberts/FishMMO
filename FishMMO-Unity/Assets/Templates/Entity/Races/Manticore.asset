@@ -72,7 +72,7 @@ MonoBehaviour:
       - us
       - or
       - ax
-      Description: Persian-flavored growls and tail-spine threats
+      Description: Desert-court growls and tail-spine threats
       Tags:
       - Spine-names
       - Desert-bonds
@@ -85,8 +85,11 @@ MonoBehaviour:
     - Crimson Sands
     Titles:
       Honorific:
-      - Spine-lord
       - Hunt-master
+      HonorificMasculine:
+      - Spine-lord
+      HonorificFeminine:
+      - Spine-lady
       Epithet:
       - the Red-maned
       - the Barbed
@@ -95,6 +98,7 @@ MonoBehaviour:
       - Overlord of the Maw
       Legend:
       - Who Slew Seven in a Single Leap
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -102,3 +106,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: -941601695
+    Weight: 1
+  - BiomeID: 1156965030
+    Weight: 1
+  - BiomeID: 1275219499
+    Weight: 1

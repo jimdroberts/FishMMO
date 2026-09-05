@@ -87,9 +87,11 @@ MonoBehaviour:
     - the Veiled Hall
     Titles:
       Honorific:
+      - Red-lipped
+      HonorificMasculine: []
+      HonorificFeminine:
       - Matron
       - Lady of Pacts
-      - Red-lipped
       Epithet:
       - the Silk-voiced
       - the Blood-Rose
@@ -98,6 +100,7 @@ MonoBehaviour:
       - Mistress of the Blood-Rose Court
       Legend:
       - Who Unmade the Paladin with a Whisper
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -105,3 +108,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1042859854
+    Weight: 2
+  - BiomeID: 18062707
+    Weight: 2
+  - BiomeID: -857237992
+    Weight: 1

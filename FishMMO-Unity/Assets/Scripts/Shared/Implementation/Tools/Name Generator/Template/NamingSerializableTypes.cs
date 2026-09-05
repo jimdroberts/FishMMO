@@ -159,26 +159,57 @@ namespace FishMMO.Shared.NameGeneration
 	[Serializable]
 	public class SerializableRaceTitles
 	{
+		[Tooltip("Honorifics that fit any gender: Captain, Elder, Chieftain.")]
 		public string[] Honorific;
+		[Tooltip("Honorifics for masculine names: Sir, Lord, Clanfather.")]
+		public string[] HonorificMasculine;
+		[Tooltip("Honorifics for feminine names: Dame, Lady, Clanmother.")]
+		public string[] HonorificFeminine;
 		public string[] Epithet;
 		public string[] Rank;
 		public string[] Legend;
+		[Tooltip("Trades and callings of this race: Runesmith, Brewer. The grammar's generic occupations are used when empty.")]
+		public string[] Occupational;
 
 		public RaceTitles ToRuntime() => new()
 		{
 			Honorific = Honorific ?? Array.Empty<string>(),
+			HonorificMasculine = HonorificMasculine ?? Array.Empty<string>(),
+			HonorificFeminine = HonorificFeminine ?? Array.Empty<string>(),
 			Epithet = Epithet ?? Array.Empty<string>(),
 			Rank = Rank ?? Array.Empty<string>(),
 			Legend = Legend ?? Array.Empty<string>(),
+			Occupational = Occupational ?? Array.Empty<string>(),
 		};
 
 		public static SerializableRaceTitles From(RaceTitles runtime) => new()
 		{
 			Honorific = runtime.Honorific,
+			HonorificMasculine = runtime.HonorificMasculine,
+			HonorificFeminine = runtime.HonorificFeminine,
 			Epithet = runtime.Epithet,
 			Rank = runtime.Rank,
 			Legend = runtime.Legend,
+			Occupational = runtime.Occupational,
 		};
+	}
+
+	/// <summary>
+	/// One way of composing a title, authored in the grammar asset. The pattern
+	/// names its slots in braces — <c>{honorific:place} of {place}</c> — and the
+	/// builder fills them from the race's tables and the grammar; a template
+	/// whose slots cannot all be filled for a given race is simply not used.
+	/// </summary>
+	[Serializable]
+	public class TitleTemplate
+	{
+		public TitleType Category = TitleType.Honorific;
+		[Tooltip("Register this composition belongs to; Any fits every register.")]
+		public TitleRegister Register = TitleRegister.Any;
+		[Tooltip("Slots: {honorific} {honorific:place} {honorific:ordinal} {epithet} {rank} {rank:noplace} {legend} {occupation} {profession} {place} {place:race} {universalplace} {ordinal} {pronoun} {deed} {object} {era} {battle} {outcome} {adjective} {qualifier}.")]
+		public string Pattern;
+		[Tooltip("Relative chance among the usable templates of the same category.")]
+		public int Weight = 10;
 	}
 
 	/// <summary>City-name endings for one race, by city type.</summary>

@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Scree
+  m_EditorClassIdentifier: 
+  DisplayName: Scree
+  Description: 'Loose rock slopes — unstable footing, avalanche danger, shifting stone'
+  BiomeColorId: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  GizmoColor: {r: 0.4, g: 0.4, b: 0.4, a: 1}
+  ElevationTier: 7
+  MinHeight: 0.9
+  MaxHeight: 0.95
+  MinTemperature: -0.9
+  MaxTemperature: -0.2
+  MinHumidity: -1
+  MaxHumidity: 0.2
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sto
+      - Gri
+      - Cra
+      - Roc
+      - Sha
+      - Kel
+      - Bre
+      - Hol
+      - Mor
+      - Sli
+      - Dri
+      - Bou
+      - Thr
+      - Nor
+      - Gor
+      Nuclei:
+      - a
+      - o
+      - e
+      - ar
+      - or
+      - ag
+      - ur
+      Codas:
+      - stone
+      - rock
+      - slide
+      - rubble
+      - shard
+      - grit
+      - chip
+      - talus
+      - fall
+      - debris
+      Middles:
+      - an
+      - or
+      - al
+      - er
+      - ar
+      SyllMin: 1
+      SyllMax: 2
+      DungeonSuffixes:
+      - Slide
+      - Collapse
+      - Pit
+      - Crack
+      - Fissure
+      - Shaft
+      - Gap
+      - Hollow
+      - Chute
+      - Rubble-cave
+      - Den
+      - Chamber
+      - Passage
+      - Tunnel
+      - Pocket
+      - Alcove
+      - Crawl-space
+      - Crevice
+      - Lair
+      - Shelter
+      - Foundation
+      - Overhang
+      DungeonPrefixes:
+      - The Unstable
+      - The Shifting
+      - The Treacherous
+      - The Crumbling
+      - The Loose
+      - The Shattered
+      - The Avalanche
+      - The Fractured
+      - The Rattling
+      - The Dangerous
+      - The Steep
+      - The Gray
+      - The Rock-slide
+      - The Boulder-choked
+      - The Perilous
+      - The Ankle-breaking
+      - The Grinding
+      - The Collapsing
+      - The Precarious
+      - The Debris-filled
+      POISuffixes:
+      - Talus-field
+      - Rock-slide
+      - Boulder-pile
+      - Shingle-slope
+      - Gravel-fan
+      - Stone-chute
+      - Debris-field
+      - Loose-face
+      - Cairn
+      - Rock-glacier
+      - Terminal-moraine
+      - Frost-shatter
+      - Fallen-cliff
+      - Pebble-stream
+      - Stone-river
+      - Slide-path
+      - Erosion-scar
+      - Rock-fall
+      - Scramble-route
+      - Unstable-ledge
+      Adjectives:
+      - Unstable
+      - Shifting
+      - Treacherous
+      - Crumbling
+      - Loose
+      - Shattered
+      - Dangerous
+      - Steep
+      - Gray
+      - Rattling
+      - Boulder-choked
+      - Perilous
+      - Ankle-breaking
+      - Grinding
+      - Collapsing
+      - Precarious
+      - Debris-filled
+      - Fractured
+      - Sliding
+      - Harsh
+      - Wind-blown
+      - Inhospitable
+      Description: 'Loose rock slopes — unstable footing, avalanche danger, shifting stone'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 529c6ea2ae030a64aaddae146da21193, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 41.777954
+    blendNoiseOffsetY: -657.87695
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -463.67087
+    blendNoiseOffsetY: -64.24988
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 915.5956
+    blendNoiseOffsetY: 351.56464
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 832.14044
+    blendNoiseOffsetY: -240.12195
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

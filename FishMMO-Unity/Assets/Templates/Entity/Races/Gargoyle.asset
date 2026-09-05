@@ -71,7 +71,7 @@ MonoBehaviour:
       - dros
       - us
       - ric
-      Description: Grotesque-Latin — stone watcher
+      Description: 'Grotesque stone-chant — the watcher''s rasp'
       Tags:
       - Watcher-names
       - Ledge-bonds
@@ -85,7 +85,10 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Eave-warden
+      HonorificMasculine:
       - Ledge-lord
+      HonorificFeminine:
+      - Ledge-lady
       Epithet:
       - the Stone-eyed
       - the Weather-worn
@@ -94,6 +97,7 @@ MonoBehaviour:
       - Warden of the Cathedral Ledge
       Legend:
       - 'Who Woke on the Worst Night in the City''s History'
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -101,3 +105,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 2
+  - BiomeID: -835082438
+    Weight: 1
+  - BiomeID: 1275219499
+    Weight: 1
+  - BiomeID: 18062707
+    Weight: 1

@@ -94,7 +94,7 @@ MonoBehaviour:
       - us
       - 'on'
       - eus
-      Description: 'Musical and dancing — Greek pastoral warmth, revelry in every syllable'
+      Description: 'Musical and dancing — pastoral warmth, revelry in every syllable'
       Tags:
       - Revel-names
       - Song-bonds
@@ -170,10 +170,13 @@ MonoBehaviour:
       Honorific:
       - Revel-master
       - Song-keeper
-      - Wine-lord
       - Grove-dancer
       - Mirth-bringer
       - Pipe-caller
+      HonorificMasculine:
+      - Wine-lord
+      HonorificFeminine:
+      - Wine-lady
       Epithet:
       - the Ever-dancing
       - the Wild-hearted
@@ -196,6 +199,7 @@ MonoBehaviour:
       - Whose Song Brought Rain After a Century of Drought
       - Who Drank the River Dry
       - Who Played a Song So Beautiful That Trees Wept
+      Occupational: []
     CitySuffixes:
       Capital:
       - court
@@ -244,3 +248,12 @@ MonoBehaviour:
       - ruin
       - husk
       - fade
+  BiomeAffinities:
+  - BiomeID: -439598380
+    Weight: 3
+  - BiomeID: -1123947451
+    Weight: 1.5
+  - BiomeID: -540190004
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1

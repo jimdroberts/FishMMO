@@ -85,6 +85,8 @@ MonoBehaviour:
       Honorific:
       - Oath-ridden
       - Purpose-bound
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Returned
       - the Vengeance-bound
@@ -93,6 +95,7 @@ MonoBehaviour:
       - Warden of the Unquiet Grave
       Legend:
       - Who Returned to Kill the One Who Killed Them
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +103,14 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: -835082438
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: -567058185
+    Weight: 1
+  - BiomeID: 173642607
+    Weight: 1

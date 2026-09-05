@@ -266,6 +266,8 @@ MonoBehaviour:
       - Tidecaller
       - Lorewarden
       - Dreamshaper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Eternal
       - the Starborn
@@ -293,6 +295,16 @@ MonoBehaviour:
       - Who Defied the Long Dark
       - Who Planted the First Tree
       - Whose Song Ended a War That Lasted Centuries
+      Occupational:
+      - Loremaster
+      - Star-reader
+      - Bowyer
+      - Songweaver
+      - Glade-warden
+      - Herbalist
+      - Silversmith
+      - Scribe
+      - Dream-reader
     CitySuffixes:
       Capital:
       - spire
@@ -341,3 +353,14 @@ MonoBehaviour:
       - echo
       - weep
       - fade
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 1.5
+  - BiomeID: 1139958860
+    Weight: 0.5
+  - BiomeID: -540190004
+    Weight: 0.5

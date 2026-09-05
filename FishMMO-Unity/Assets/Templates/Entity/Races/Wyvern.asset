@@ -89,6 +89,8 @@ MonoBehaviour:
       Honorific:
       - Sky-stinger
       - Poison-wing
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Jagged
       - the Venom-tipped
@@ -97,6 +99,7 @@ MonoBehaviour:
       - Stinger-lord of the Aeries
       Legend:
       - Whose Tail Ended the Cavalry
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -104,3 +107,14 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 1275219499
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 1
+  - BiomeID: -138594552
+    Weight: 1
+  - BiomeID: 681889367
+    Weight: 0.5

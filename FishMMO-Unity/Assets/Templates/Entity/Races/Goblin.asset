@@ -167,6 +167,8 @@ MonoBehaviour:
       - Hoardchief
       - Trickwarden
       - Glintlord
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Sneaky
       - the Very Sneaky
@@ -190,6 +192,14 @@ MonoBehaviour:
       - Who Survived by Running Very Fast
       - Who Nobody Ever Saw Coming
       - Who Stole the Crown Jewels and Returned Them for a Bigger Reward
+      Occupational:
+      - Scrap-trader
+      - Trap-maker
+      - Tinker
+      - Fence
+      - Tunnel-digger
+      - Rat-catcher
+      - Loot-counter
     CitySuffixes:
       Capital:
       - warren
@@ -237,3 +247,14 @@ MonoBehaviour:
       - trash
       - heap
       - mess
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1.5
+  - BiomeID: 1156965030
+    Weight: 1
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 1

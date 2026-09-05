@@ -1,291 +1,553 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
+
 namespace FishMMO.Shared.NameGeneration
 {
+	/// <summary>What the caller wants from a title: category, register, gender, role and size.</summary>
+	public sealed class TitleOptions
+	{
+		public TitleType TitleType = TitleType.Any;
+		public TitleRegister Register = TitleRegister.Any;
+		public CharacterGender Gender = CharacterGender.Unspecified;
+		/// <summary>What the character does ("Banker"); fills <c>{profession}</c>.</summary>
+		public string Profession;
+		/// <summary>Longest title allowed; 0 is unlimited.</summary>
+		public int MaxLength;
+		public bool AllowCompound = true;
+
+		public bool Fits(string title) => MaxLength <= 0 || string.IsNullOrEmpty(title) || title.Length <= MaxLength;
+	}
+
 	/// <summary>
-	/// Grammar-based title builder.
+	/// Remembers recent titles so a batch does not hand the same authored legend
+	/// to two characters in a row. One per generator; not shared across peers,
+	/// and never consulted when a request is seeded, since a seeded title must
+	/// replay exactly regardless of what was generated before it.
+	/// </summary>
+	public sealed class TitleMemory
+	{
+		private readonly Queue<string> recent = new Queue<string>();
+		private readonly HashSet<string> set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		private readonly int capacity;
+
+		public TitleMemory(int capacity = 48)
+		{
+			this.capacity = Math.Max(1, capacity);
+		}
+
+		public bool Seen(string title) => !string.IsNullOrEmpty(title) && set.Contains(title);
+
+		public void Remember(string title)
+		{
+			if (string.IsNullOrEmpty(title) || set.Contains(title))
+			{
+				return;
+			}
+			recent.Enqueue(title);
+			set.Add(title);
+			while (recent.Count > capacity)
+			{
+				set.Remove(recent.Dequeue());
+			}
+		}
+	}
+
+	/// <summary>
+	/// Template-driven title builder.
 	///
-	/// <para>A title is assembled by picking a category (honorific / epithet /
-	/// rank / legend) and filling its slots from a mix of race-specific data
-	/// (the race's titles and places) and the universal grammar in
-	/// <see cref="NameGrammar"/> (deeds, objects, ordinals, outcomes, qualifiers).</para>
+	/// <para>A title is a <see cref="TitleTemplate"/> from the grammar asset with its
+	/// slots filled from the race's tables (honorifics, epithets, ranks, legends,
+	/// occupations, places) and the grammar's universal vocabulary (deeds, eras,
+	/// ordinals…). Templates whose slots cannot be filled for a race are skipped;
+	/// honorifics only take a place or an ordinal when the grammar says they may;
+	/// honorifics follow the character's gender; and a length budget decides
+	/// whether a second clause is appended at all.</para>
 	///
-	/// <para>Output examples: <c>Sir</c> · <c>Sir, Third of his Name</c> ·
-	/// <c>Dame of Ashford</c> · <c>the Ironwilled</c> ·
-	/// <c>Knight of the Realm, the Dragon-touched</c> ·
+	/// <para>Examples: <c>Sir</c> · <c>Lady of Ashford</c> · <c>King, Third of his
+	/// Name</c> · <c>the Ironwilled</c> · <c>Master Coinkeeper of Kingshold</c> ·
 	/// <c>Who Sealed the Dark Gate at the Battle of Hollow Hill</c>.</para>
 	/// </summary>
 	public static class TitleBuilder
 	{
-		// Each roll threshold is named so its intent is visible at the call site.
-
-		/// <summary>Chance to append a second clause to a completed title.</summary>
+		/// <summary>Chance to append a second clause when it fits the budget.</summary>
 		private const double CompoundTitleChance = 0.18;
-
-		private const double HonorificPlaceChance = 0.30;
-		private const double HonorificOrdinalChance = 0.18;
-		private const double HonorificStackChance = 0.12;
-
-		private const double EpithetComposeChance = 0.35;
-		private const double EpithetPlaceChance = 0.28;
-
-		private const double RankPlaceChance = 0.25;
-		private const double RankOrdinalChance = 0.12;
-
-		private const double LegendAuthoredChance = 0.55;
-		/// <summary>Chance to prefer the race's own places when composing a legend's location.</summary>
-		private const double LegendRacePlaceBias = 0.70;
-
+		/// <summary>Chance a runtime-injected title is used over a composed one when both exist.</summary>
+		private const double InjectedTitleChance = 0.65;
 		/// <summary>Each meaning keyword that matches gets this chance to pin the category.</summary>
 		private const double MeaningBiasChance = 0.50;
+		/// <summary>How many compositions are tried before settling for the shortest usable one.</summary>
+		private const int Attempts = 6;
 
-		/// <summary>Chance a runtime-injected title is used over a procedural one when both exist.</summary>
-		private const double InjectedTitleChance = 0.65;
-
-		// Weighted category selection (cumulative); the remainder is legend.
-		private const double CategoryEpithetCdf = 0.40;
-		private const double CategoryHonorificCdf = 0.70;
-		private const double CategoryRankCdf = 0.90;
-
-		public static (string title, string category) Build(
-			string race, TitleType titleType, string meaning, DeterministicRNG rng)
+		private static readonly Regex SlotPattern = new Regex(@"\{(\w+)(?::(\w+))?\}", RegexOptions.Compiled);
+		private static readonly HashSet<string> SmallWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
+			"a", "an", "the", "of", "in", "at", "and", "on", "to", "for", "by", "with", "from", "or",
+		};
+
+		/// <summary>
+		/// Compositions used when the grammar asset has none, so a bare grammar still yields titles.
+		/// The same set is what the migration writes into the asset.
+		/// </summary>
+		public static readonly TitleTemplate[] DefaultTemplates =
+		{
+			T(TitleType.Honorific, TitleRegister.Civil, "{honorific}", 50),
+			T(TitleType.Honorific, TitleRegister.Civil, "{honorific:place} of {place}", 20),
+			T(TitleType.Honorific, TitleRegister.Civil, "{honorific:ordinal}, {ordinal} of {pronoun} Name", 8),
+			T(TitleType.Honorific, TitleRegister.Civil, "{honorific} and {honorific}", 6),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet}", 45),
+			T(TitleType.Epithet, TitleRegister.Any, "the {adjective}-{qualifier}", 25),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet} of {place}", 8),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet} from {place}", 4),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, bane of {place}", 3),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, sworn to {place}", 3),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, pride of {place}", 3),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, exiled from {place}", 3),
+			T(TitleType.Rank, TitleRegister.Martial, "{rank}", 50),
+			T(TitleType.Rank, TitleRegister.Martial, "{rank:noplace} of {place}", 20),
+			T(TitleType.Rank, TitleRegister.Martial, "{ordinal} {rank}", 10),
+			T(TitleType.Legend, TitleRegister.Mythic, "{legend}", 40),
+			T(TitleType.Legend, TitleRegister.Mythic, "Who {deed} {object}", 15),
+			T(TitleType.Legend, TitleRegister.Mythic, "Who {deed} {object} at {place}", 15),
+			T(TitleType.Legend, TitleRegister.Mythic, "Who {deed} {object} in the {era}", 10),
+			T(TitleType.Legend, TitleRegister.Mythic, "Who {deed} {object} and {outcome}", 10),
+			T(TitleType.Legend, TitleRegister.Mythic, "Who {deed} {object} at the {battle} of {place}", 10),
+			T(TitleType.Occupation, TitleRegister.Civil, "{profession}", 30),
+			T(TitleType.Occupation, TitleRegister.Civil, "Master {profession}", 20),
+			T(TitleType.Occupation, TitleRegister.Civil, "{profession} of {place}", 20),
+			T(TitleType.Occupation, TitleRegister.Civil, "{occupation}", 25),
+			T(TitleType.Occupation, TitleRegister.Civil, "Master {occupation}", 10),
+			T(TitleType.Occupation, TitleRegister.Civil, "{occupation} of {place}", 10),
+			T(TitleType.Occupation, TitleRegister.Civil, "Guild {occupation}", 5),
+		};
+
+		private static TitleTemplate T(TitleType category, TitleRegister register, string pattern, int weight) =>
+			new TitleTemplate { Category = category, Register = register, Pattern = pattern, Weight = weight };
+
+		/// <summary>Builds a title for a race. Returns empty strings when the race has no titles or nothing fits.</summary>
+		public static (string title, string category) Build(string race, TitleOptions options, string meaning,
+			DeterministicRNG rng, TitleMemory memory = null)
+		{
+			options ??= new TitleOptions();
 			if (!RaceRegistry.TryGetTitles(race, out RaceTitles titles))
 			{
 				return ("", "");
 			}
 
-			string category = titleType == TitleType.Any
-				? PickMeaningAwareCategory(meaning, rng)
-				: titleType.ToString().ToLower();
+			var ctx = new SlotContext(race, titles, options, rng);
+			TitleType category = ResolveCategory(options, meaning, rng);
 
-			// Injected titles win most of the time; the remainder keeps procedural
-			// titles in play so the pool is never exclusive once one is registered.
-			string injected = RuntimeInjection.TryPickTitle(race, category, rng);
-			if (injected != null && rng.NextDouble() < InjectedTitleChance)
+			// Injected titles win most of the time; the remainder keeps composed titles in play.
+			string injected = RuntimeInjection.TryPickTitle(race, CategoryKey(category), rng);
+			if (injected != null && rng.NextDouble() < InjectedTitleChance && options.Fits(injected))
 			{
-				return (injected, category);
+				return (injected, CategoryKey(category));
 			}
 
-			string title = category switch
+			string title = Compose(ctx, category, memory);
+			if (title.Length == 0)
 			{
-				"honorific" => BuildHonorific(race, titles, rng),
-				"epithet" => BuildEpithet(race, titles, rng),
-				"rank" => BuildRank(race, titles, rng),
-				"legend" => BuildLegend(race, titles, rng),
-				_ => "",
-			};
-
-			if (!string.IsNullOrEmpty(title) && rng.NextDouble() < CompoundTitleChance)
-			{
-				string extra = BuildSecondary(race, titles, category, rng);
-				if (!string.IsNullOrEmpty(extra))
+				foreach (TitleType fallback in Fallbacks(category, options.Register))
 				{
-					title = title + ", " + extra;
+					title = Compose(ctx, fallback, memory);
+					if (title.Length > 0)
+					{
+						category = fallback;
+						break;
+					}
+				}
+			}
+			if (title.Length == 0)
+			{
+				return ("", "");
+			}
+
+			if (options.AllowCompound && rng.NextDouble() < CompoundTitleChance)
+			{
+				TitleType second = SecondaryCategory(category, options.Register, rng);
+				string extra = Compose(ctx, second, memory);
+				if (extra.Length > 0)
+				{
+					string combined = title + ", " + (second == TitleType.Legend ? LowerFirstWord(extra) : extra);
+					if (options.Fits(combined))
+					{
+						title = combined;
+					}
 				}
 			}
 
-			return (title, category);
+			memory?.Remember(title);
+			return (title, CategoryKey(category));
 		}
 
-		// ── Category builders ──────────────────────────────────────────
+		// ── Composition ────────────────────────────────────────────────
 
-		private static string BuildHonorific(string race, RaceTitles t, DeterministicRNG rng)
+		private static string Compose(SlotContext ctx, TitleType category, TitleMemory memory)
 		{
-			if (t.Honorific == null || t.Honorific.Length == 0)
+			List<TitleTemplate> usable = UsableTemplates(ctx, category);
+			if (usable.Count == 0)
 			{
 				return "";
 			}
-			string baseTitle = GeneratorUtility.Pick(t.Honorific, rng);
 
-			// "Lord of Ashford"
-			if (rng.NextDouble() < HonorificPlaceChance && RaceRegistry.TryGetPlaces(race, out string[] places))
+			string shortest = null;
+			for (int attempt = 0; attempt < Attempts; attempt++)
 			{
-				return $"{baseTitle} of {GeneratorUtility.Pick(places, rng)}";
-			}
-
-			// "Lord, Third of his Name"
-			if (rng.NextDouble() < HonorificOrdinalChance
-				&& NameGrammar.Ordinals.Length > 0 && NameGrammar.PossessivePronouns.Length > 0)
-			{
-				string ordinal = GeneratorUtility.Pick(NameGrammar.Ordinals, rng);
-				string pronoun = GeneratorUtility.Pick(NameGrammar.PossessivePronouns, rng);
-				return $"{baseTitle}, {ordinal} of {pronoun} Name";
-			}
-
-			// "Lord and Commander"
-			if (t.Honorific.Length > 1 && rng.NextDouble() < HonorificStackChance)
-			{
-				string second = GeneratorUtility.Pick(t.Honorific, rng);
-				if (second != baseTitle)
+				TitleTemplate template = PickWeighted(usable, ctx.Rng);
+				string candidate = Fill(template.Pattern, ctx);
+				if (candidate.Length == 0)
 				{
-					return $"{baseTitle} and {second}";
+					continue;
+				}
+				if (shortest == null || candidate.Length < shortest.Length)
+				{
+					shortest = candidate;
+				}
+				if (!ctx.Options.Fits(candidate))
+				{
+					continue;
+				}
+				if (memory != null && memory.Seen(candidate) && attempt < Attempts - 1)
+				{
+					continue;
+				}
+				return candidate;
+			}
+
+			// Nothing drawn fit the budget: settle for the shortest, if even that does.
+			return shortest != null && ctx.Options.Fits(shortest) ? shortest : "";
+		}
+
+		private static List<TitleTemplate> UsableTemplates(SlotContext ctx, TitleType category)
+		{
+			IReadOnlyList<TitleTemplate> source = NameGrammar.TitleTemplates.Count > 0 ? NameGrammar.TitleTemplates : DefaultTemplates;
+			var usable = new List<TitleTemplate>();
+			for (int i = 0; i < source.Count; i++)
+			{
+				TitleTemplate t = source[i];
+				if (t.Category != category)
+				{
+					continue;
+				}
+				if (ctx.Options.Register != TitleRegister.Any && t.Register != TitleRegister.Any && t.Register != ctx.Options.Register)
+				{
+					continue;
+				}
+				if (CanFill(t.Pattern, ctx))
+				{
+					usable.Add(t);
 				}
 			}
-
-			return baseTitle;
+			return usable;
 		}
 
-		private static string BuildEpithet(string race, RaceTitles t, DeterministicRNG rng)
+		private static TitleTemplate PickWeighted(List<TitleTemplate> templates, DeterministicRNG rng)
 		{
-			if (t.Epithet == null || t.Epithet.Length == 0)
+			int total = 0;
+			for (int i = 0; i < templates.Count; i++)
 			{
-				return "";
+				total += Math.Max(1, templates[i].Weight);
 			}
-			string epithet = GeneratorUtility.Pick(t.Epithet, rng);
-
-			// "the Iron-wrought"
-			if (rng.NextDouble() < EpithetComposeChance
-				&& NameGrammar.ComposedAdjectives.Length > 0 && NameGrammar.ComposedQualifiers.Length > 0)
+			int roll = rng.Next(total);
+			for (int i = 0; i < templates.Count; i++)
 			{
-				string adjective = GeneratorUtility.Pick(NameGrammar.ComposedAdjectives, rng);
-				string qualifier = GeneratorUtility.Pick(NameGrammar.ComposedQualifiers, rng);
-				epithet = $"the {adjective}-{qualifier}";
+				roll -= Math.Max(1, templates[i].Weight);
+				if (roll < 0)
+				{
+					return templates[i];
+				}
 			}
-
-			// "the Unyielding of Karak"
-			if (rng.NextDouble() < EpithetPlaceChance
-				&& RaceRegistry.TryGetPlaces(race, out string[] places)
-				&& NameGrammar.PlaceEpithetPatterns.Length > 0)
-			{
-				string place = GeneratorUtility.Pick(places, rng);
-				string pattern = GeneratorUtility.Pick(NameGrammar.PlaceEpithetPatterns, rng);
-				return $"{epithet} {string.Format(pattern, place)}";
-			}
-
-			return epithet;
+			return templates[templates.Count - 1];
 		}
 
-		private static string BuildRank(string race, RaceTitles t, DeterministicRNG rng)
+		private static bool CanFill(string pattern, SlotContext ctx)
 		{
-			if (t.Rank == null || t.Rank.Length == 0)
+			foreach (Match m in SlotPattern.Matches(pattern))
 			{
-				return "";
+				if (ctx.Pool(m.Groups[1].Value, m.Groups[2].Value).Count == 0)
+				{
+					return false;
+				}
 			}
-			string rank = GeneratorUtility.Pick(t.Rank, rng);
-
-			// "Warden of the Silverwood" — skipped when the rank already carries an "of".
-			if (rng.NextDouble() < RankPlaceChance
-				&& RaceRegistry.TryGetPlaces(race, out string[] places)
-				&& !rank.Contains(" of "))
-			{
-				return $"{rank} of {GeneratorUtility.Pick(places, rng)}";
-			}
-
-			// "Third Warden"
-			if (rng.NextDouble() < RankOrdinalChance && NameGrammar.Ordinals.Length > 0)
-			{
-				return $"{GeneratorUtility.Pick(NameGrammar.Ordinals, rng)} {rank}";
-			}
-
-			return rank;
+			return true;
 		}
 
-		private static string BuildLegend(string race, RaceTitles t, DeterministicRNG rng)
+		private static string Fill(string pattern, SlotContext ctx)
 		{
-			if (t.Legend != null && t.Legend.Length > 0 && rng.NextDouble() < LegendAuthoredChance)
+			var sb = new StringBuilder(pattern.Length + 32);
+			int last = 0;
+			string previousHonorific = null;
+			foreach (Match m in SlotPattern.Matches(pattern))
 			{
-				return GeneratorUtility.Pick(t.Legend, rng);
+				sb.Append(pattern, last, m.Index - last);
+				string slot = m.Groups[1].Value;
+				IReadOnlyList<string> pool = ctx.Pool(slot, m.Groups[2].Value);
+				if (pool.Count == 0)
+				{
+					return "";
+				}
+				string value = pool[ctx.Rng.Next(pool.Count)];
+				// "{honorific} and {honorific}": never the same word twice.
+				if (slot == "honorific")
+				{
+					if (previousHonorific != null && pool.Count > 1)
+					{
+						for (int i = 0; i < 4 && string.Equals(value, previousHonorific, StringComparison.OrdinalIgnoreCase); i++)
+						{
+							value = pool[ctx.Rng.Next(pool.Count)];
+						}
+						if (string.Equals(value, previousHonorific, StringComparison.OrdinalIgnoreCase))
+						{
+							return "";
+						}
+					}
+					previousHonorific = value;
+				}
+				sb.Append(value);
+				last = m.Index + m.Length;
 			}
-			return ComposeLegend(race, rng);
-		}
-
-		private static string ComposeLegend(string race, DeterministicRNG rng)
-		{
-			if (NameGrammar.DeedVerbs.Length == 0 || NameGrammar.DeedObjects.Length == 0)
-			{
-				return "";
-			}
-
-			string deed = GeneratorUtility.Pick(NameGrammar.DeedVerbs, rng);
-			string obj = GeneratorUtility.Pick(NameGrammar.DeedObjects, rng);
-
-			string place = null;
-			if (RaceRegistry.TryGetPlaces(race, out string[] places) && rng.NextDouble() < LegendRacePlaceBias)
-			{
-				place = GeneratorUtility.Pick(places, rng);
-			}
-			else if (NameGrammar.UniversalPlaces.Length > 0)
-			{
-				place = GeneratorUtility.Pick(NameGrammar.UniversalPlaces, rng);
-			}
-
-			double roll = rng.NextDouble();
-			if (roll < 0.20 || place == null)
-			{
-				return $"Who {deed} {obj}";
-			}
-			if (roll < 0.50)
-			{
-				return $"Who {deed} {obj} at {place}";
-			}
-			if (roll < 0.70 && NameGrammar.EraQualifiers.Length > 0)
-			{
-				return $"Who {deed} {obj} in the {GeneratorUtility.Pick(NameGrammar.EraQualifiers, rng)}";
-			}
-			if (roll < 0.85 && NameGrammar.Outcomes.Length > 0)
-			{
-				return $"Who {deed} {obj} and {GeneratorUtility.Pick(NameGrammar.Outcomes, rng)}";
-			}
-			if (NameGrammar.BattleQualifiers.Length > 0)
-			{
-				return $"Who {deed} {obj} at the {GeneratorUtility.Pick(NameGrammar.BattleQualifiers, rng)} of {place}";
-			}
-			return $"Who {deed} {obj} at {place}";
-		}
-
-		private static string BuildSecondary(string race, RaceTitles t, string primaryCategory, DeterministicRNG rng)
-		{
-			// A different category from the primary, for variety.
-			string pick = primaryCategory switch
-			{
-				"honorific" => rng.NextDouble() < 0.6 ? "epithet" : "rank",
-				"rank" => rng.NextDouble() < 0.6 ? "epithet" : "legend",
-				"epithet" => rng.NextDouble() < 0.5 ? "rank" : "legend",
-				"legend" => "epithet",
-				_ => "epithet",
-			};
-
-			return pick switch
-			{
-				"honorific" => BuildHonorific(race, t, rng),
-				"epithet" => BuildEpithet(race, t, rng),
-				"rank" => BuildRank(race, t, rng),
-				"legend" => LowerFirstWord(BuildLegend(race, t, rng)),
-				_ => "",
-			};
-		}
-
-		private static string LowerFirstWord(string s)
-		{
-			if (string.IsNullOrEmpty(s))
-			{
-				return s;
-			}
-			return s.StartsWith("Who ") ? "who " + s.Substring(4) : s;
+			sb.Append(pattern, last, pattern.Length - last);
+			return sb.ToString().Trim();
 		}
 
 		// ── Category selection ─────────────────────────────────────────
 
-		private static string PickMeaningAwareCategory(string meaning, DeterministicRNG rng)
+		private static TitleType ResolveCategory(TitleOptions options, string meaning, DeterministicRNG rng)
 		{
+			if (options.TitleType != TitleType.Any)
+			{
+				return options.TitleType;
+			}
+
+			double roll;
+			switch (options.Register)
+			{
+				case TitleRegister.Civil:
+					roll = rng.NextDouble();
+					if (!string.IsNullOrEmpty(options.Profession) && roll < 0.55) return TitleType.Occupation;
+					if (roll < 0.45) return TitleType.Honorific;
+					if (roll < 0.80) return TitleType.Occupation;
+					return TitleType.Epithet;
+				case TitleRegister.Martial:
+					roll = rng.NextDouble();
+					if (roll < 0.55) return TitleType.Rank;
+					if (roll < 0.85) return TitleType.Epithet;
+					return TitleType.Legend;
+				case TitleRegister.Mythic:
+					return rng.NextDouble() < 0.60 ? TitleType.Legend : TitleType.Epithet;
+			}
+
 			string lower = (meaning ?? "").ToLower();
-			var bias = NameGrammar.MeaningTitleBias;
+			IReadOnlyList<StringMapping> bias = NameGrammar.MeaningTitleBias;
 			for (int i = 0; i < bias.Count; i++)
 			{
 				if (lower.Contains(bias[i].Key.ToLower()) && rng.NextDouble() < MeaningBiasChance)
 				{
-					return bias[i].Value;
+					TitleType biased = ParseCategory(bias[i].Value);
+					if (biased != TitleType.Any)
+					{
+						return biased;
+					}
 				}
 			}
-			return PickWeightedCategory(rng);
+
+			roll = rng.NextDouble();
+			if (roll < 0.40) return TitleType.Epithet;
+			if (roll < 0.70) return TitleType.Honorific;
+			if (roll < 0.90) return TitleType.Rank;
+			return TitleType.Legend;
 		}
 
-		private static string PickWeightedCategory(DeterministicRNG rng)
+		private static IEnumerable<TitleType> Fallbacks(TitleType failed, TitleRegister register)
 		{
-			double roll = rng.NextDouble();
-			if (roll < CategoryEpithetCdf) return "epithet";
-			if (roll < CategoryHonorificCdf) return "honorific";
-			if (roll < CategoryRankCdf) return "rank";
-			return "legend";
+			switch (register)
+			{
+				case TitleRegister.Civil:
+					yield return TitleType.Honorific;
+					yield return TitleType.Occupation;
+					yield return TitleType.Epithet;
+					break;
+				case TitleRegister.Martial:
+					yield return TitleType.Rank;
+					yield return TitleType.Epithet;
+					yield return TitleType.Legend;
+					break;
+				case TitleRegister.Mythic:
+					yield return TitleType.Legend;
+					yield return TitleType.Epithet;
+					break;
+				default:
+					yield return TitleType.Epithet;
+					yield return TitleType.Honorific;
+					yield return TitleType.Rank;
+					yield return TitleType.Legend;
+					break;
+			}
+		}
+
+		private static TitleType SecondaryCategory(TitleType primary, TitleRegister register, DeterministicRNG rng)
+		{
+			// A different category from the primary, staying inside the register.
+			switch (primary)
+			{
+				case TitleType.Honorific:
+				case TitleType.Occupation:
+					return register == TitleRegister.Civil || rng.NextDouble() < 0.6 ? TitleType.Epithet : TitleType.Rank;
+				case TitleType.Rank:
+					return register == TitleRegister.Martial || rng.NextDouble() < 0.6 ? TitleType.Epithet : TitleType.Legend;
+				case TitleType.Epithet:
+					if (register == TitleRegister.Civil) return TitleType.Honorific;
+					if (register == TitleRegister.Mythic) return TitleType.Legend;
+					return rng.NextDouble() < 0.5 ? TitleType.Rank : TitleType.Legend;
+				default:
+					return TitleType.Epithet;
+			}
+		}
+
+		private static string LowerFirstWord(string s)
+		{
+			return s.StartsWith("Who ", StringComparison.Ordinal) ? "who " + s.Substring(4) : s;
+		}
+
+		private static string CategoryKey(TitleType category) => category.ToString().ToLower();
+
+		private static TitleType ParseCategory(string value)
+		{
+			switch ((value ?? "").Trim().ToLower())
+			{
+				case "honorific": return TitleType.Honorific;
+				case "epithet": return TitleType.Epithet;
+				case "rank": return TitleType.Rank;
+				case "legend": return TitleType.Legend;
+				case "occupation": return TitleType.Occupation;
+				default: return TitleType.Any;
+			}
+		}
+
+		/// <summary>
+		/// "a goddess" → "a Goddess", "the iron gate" → "the Iron Gate": nouns are
+		/// capitalised, articles and prepositions stay lower, so authored and
+		/// composed legends read the same.
+		/// </summary>
+		public static string TitleCaseObject(string s)
+		{
+			if (string.IsNullOrWhiteSpace(s))
+			{
+				return s;
+			}
+			string[] words = s.Split(' ');
+			for (int i = 0; i < words.Length; i++)
+			{
+				string w = words[i];
+				if (w.Length == 0 || SmallWords.Contains(w))
+				{
+					continue;
+				}
+				words[i] = char.ToUpperInvariant(w[0]) + w.Substring(1);
+			}
+			return string.Join(" ", words);
+		}
+
+		// ── Slot pools ─────────────────────────────────────────────────
+
+		/// <summary>The vocabulary each slot draws from, resolved once per build.</summary>
+		private sealed class SlotContext
+		{
+			public readonly DeterministicRNG Rng;
+			public readonly TitleOptions Options;
+			private readonly string race;
+			private readonly RaceTitles titles;
+			private readonly Dictionary<string, IReadOnlyList<string>> cache = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+			private static readonly string[] Empty = Array.Empty<string>();
+
+			public SlotContext(string race, RaceTitles titles, TitleOptions options, DeterministicRNG rng)
+			{
+				this.race = race;
+				this.titles = titles;
+				Options = options;
+				Rng = rng;
+			}
+
+			public IReadOnlyList<string> Pool(string slot, string variant)
+			{
+				string key = slot + ":" + variant;
+				if (!cache.TryGetValue(key, out IReadOnlyList<string> pool))
+				{
+					pool = Resolve(slot, variant) ?? Empty;
+					cache[key] = pool;
+				}
+				return pool;
+			}
+
+			private IReadOnlyList<string> Resolve(string slot, string variant)
+			{
+				switch (slot)
+				{
+					case "honorific":
+					{
+						List<string> pool = GenderedHonorifics();
+						if (variant == "place")
+						{
+							return pool.FindAll(h => NameGrammar.PlaceTakingHonorifics.Contains(h));
+						}
+						if (variant == "ordinal")
+						{
+							return pool.FindAll(h => NameGrammar.OrdinalTakingHonorifics.Contains(h));
+						}
+						return pool;
+					}
+					case "epithet": return titles.Epithet;
+					case "rank":
+						return variant == "noplace"
+							? Array.FindAll(titles.Rank ?? Empty, r => !r.Contains(" of "))
+							: titles.Rank;
+					case "legend": return titles.Legend;
+					case "occupation":
+						if (titles.Occupational != null && titles.Occupational.Length > 0)
+						{
+							return titles.Occupational;
+						}
+						// Generic trades only for races that plausibly practise them.
+						return RaceRegistry.TryGet(race, out RaceTemplate raceTemplate) && raceTemplate.Naming.AllowGenericOccupations
+							? NameGrammar.GenericOccupations
+							: Empty;
+					case "profession":
+						return string.IsNullOrWhiteSpace(Options.Profession) ? Empty : new[] { Options.Profession.Trim() };
+					case "place":
+						if (RaceRegistry.TryGetPlaces(race, out string[] places))
+						{
+							return places;
+						}
+						return variant == "race" ? Empty : NameGrammar.UniversalPlaces;
+					case "universalplace": return NameGrammar.UniversalPlaces;
+					case "ordinal": return NameGrammar.Ordinals;
+					case "pronoun":
+						return new[] { Options.Gender == CharacterGender.Male ? "his" : Options.Gender == CharacterGender.Female ? "her" : "their" };
+					case "deed": return NameGrammar.DeedVerbs;
+					case "object": return Array.ConvertAll(NameGrammar.DeedObjects, TitleCaseObject);
+					case "era": return NameGrammar.EraQualifiers;
+					case "battle": return NameGrammar.BattleQualifiers;
+					case "outcome": return NameGrammar.Outcomes;
+					case "adjective": return NameGrammar.ComposedAdjectives;
+					case "qualifier": return NameGrammar.ComposedQualifiers;
+					default: return Empty;
+				}
+			}
+
+			/// <summary>Neutral honorifics plus the gendered set; a gender with no set of its own gets only the neutral ones, and an unspecified gender never gets a gendered word.</summary>
+			private List<string> GenderedHonorifics()
+			{
+				var pool = new List<string>(titles.Honorific ?? Empty);
+				string[] gendered = Options.Gender == CharacterGender.Male ? titles.HonorificMasculine
+					: Options.Gender == CharacterGender.Female ? titles.HonorificFeminine
+					: null;
+				if (gendered != null)
+				{
+					pool.AddRange(gendered);
+				}
+				return pool;
+			}
 		}
 	}
 }

@@ -3,7 +3,14 @@ using System.Collections.Generic;
 namespace FishMMO.Shared.NameGeneration
 {
 	/// <summary>Category of title to generate.</summary>
-	public enum TitleType { Any, Honorific, Epithet, Rank, Legend }
+	public enum TitleType { Any, Honorific, Epithet, Rank, Legend, Occupation }
+
+	/// <summary>
+	/// The social register a title belongs to. A banker wants a Civil title, a
+	/// warchief a Martial one, a legendary hero a Mythic one; Any lets the
+	/// name's meaning decide.
+	/// </summary>
+	public enum TitleRegister { Any = 0, Civil = 1, Martial = 2, Mythic = 3 }
 
 	/// <summary>A generated character entry: given name, optional family name and title, and the derived meaning.</summary>
 	public class CharacterEntry
@@ -69,10 +76,17 @@ namespace FishMMO.Shared.NameGeneration
 	/// <summary>Title arrays organized by category for a single race.</summary>
 	public class RaceTitles
 	{
+		/// <summary>Honorifics that fit any gender ("Captain", "Elder").</summary>
 		public string[] Honorific { get; set; }
+		/// <summary>Honorifics for masculine names ("Sir", "Lord").</summary>
+		public string[] HonorificMasculine { get; set; }
+		/// <summary>Honorifics for feminine names ("Dame", "Lady").</summary>
+		public string[] HonorificFeminine { get; set; }
 		public string[] Epithet { get; set; }
 		public string[] Rank { get; set; }
 		public string[] Legend { get; set; }
+		/// <summary>Trades and callings this race practises ("Runesmith", "Brewer"); the grammar's generic list backs it.</summary>
+		public string[] Occupational { get; set; }
 	}
 
 	/// <summary>City suffix sets for a single race.</summary>

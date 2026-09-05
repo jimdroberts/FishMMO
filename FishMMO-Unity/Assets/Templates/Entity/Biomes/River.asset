@@ -1,0 +1,246 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: River
+  m_EditorClassIdentifier: 
+  DisplayName: River
+  Description: 'Running fresh water — fords, rapids, mills and river crossings'
+  BiomeColorId: {r: 0.2, g: 0.5, b: 0.7, a: 1}
+  GizmoColor: {r: 0.2, g: 0.5, b: 0.7, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.42
+  MaxHeight: 0.9
+  MinTemperature: -0.6
+  MaxTemperature: 0.6
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Riv
+      - Tor
+      - Ald
+      - Wen
+      - Fal
+      - Bro
+      - Kel
+      - Ser
+      - Dun
+      - Cam
+      - Ith
+      - Ran
+      - Ley
+      - Ost
+      - Ver
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - u
+      - ea
+      - ou
+      Codas:
+      - ford
+      - wash
+      - run
+      - flow
+      - bourne
+      - brook
+      - race
+      - fall
+      - bend
+      - rill
+      Middles:
+      - an
+      - er
+      - in
+      - ol
+      - un
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Ford
+      - Gorge
+      - Sluice
+      - Culvert
+      - Undertow
+      - Cataract
+      - Weir
+      - Channel
+      - Delta
+      - Crossing
+      - Mill
+      - Cavern
+      - Spillway
+      - Rapids
+      - Headwater
+      - Deeps
+      DungeonPrefixes:
+      - The Rushing
+      - The Drowned
+      - The Silt-heavy
+      - The Roaring
+      - The Mist-thrown
+      - The Flood-carved
+      - The Whispering
+      - The Old
+      - The Broken
+      - The Swift
+      - The Winding
+      - The Fordless
+      POISuffixes:
+      - Ford
+      - Crossing
+      - Bridge
+      - Mill
+      - Weir
+      - Rapids
+      - Falls
+      - Bend
+      - Landing
+      - Ferry
+      - Sandbar
+      - Oxbow
+      - Confluence
+      - Spring
+      Adjectives:
+      - Rushing
+      - Swift
+      - Winding
+      - Silt-heavy
+      - Roaring
+      - Flood-carved
+      - Mist-thrown
+      - Whispering
+      - Cold-running
+      - Broad
+      - Shallow
+      - Braided
+      - Meandering
+      - Fordable
+      Description: 'Running fresh water — fords, rapids, mills and river crossings'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 07ad6b0e116383746b672119c84588a0, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 965.4238
+    blendNoiseOffsetY: 470.97968
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -585.7234
+    blendNoiseOffsetY: 907.37036
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -47.444458
+    blendNoiseOffsetY: -694.18713
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 861.3026
+    blendNoiseOffsetY: 667.0928
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

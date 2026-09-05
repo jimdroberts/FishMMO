@@ -85,7 +85,10 @@ MonoBehaviour:
     - Bog Kitchen
     - 'the Witch''s Gate'
     Titles:
-      Honorific:
+      Honorific: []
+      HonorificMasculine:
+      - Grandfather
+      HonorificFeminine:
       - Grandmother
       - Crone
       - Coven-mother
@@ -97,6 +100,7 @@ MonoBehaviour:
       - 'Matriarch of the Crone''s Cottage'
       Legend:
       - 'Who Ate the King''s Heart in a Pie'
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -104,3 +108,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: 144196518
+    Weight: 1
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: -830221931
+    Weight: 1

@@ -39,6 +39,22 @@ namespace FishMMO.Shared.NameGeneration
 			return entries[entries.Length - 1].item;
 		}
 
+		/// <summary>
+		/// Picks from <paramref name="preferred"/> with the given chance, else from
+		/// <paramref name="fallback"/>; either may be empty. A climate variant's adjectives lead a
+		/// name this way without the biome's own vocabulary disappearing.
+		/// </summary>
+		public static string PickFlavoured(string[] preferred, string[] fallback, double preferChance, DeterministicRNG rng)
+		{
+			bool hasPreferred = preferred != null && preferred.Length > 0;
+			bool hasFallback = fallback != null && fallback.Length > 0;
+			if (hasPreferred && (!hasFallback || rng.NextDouble() < preferChance))
+			{
+				return Pick(preferred, rng);
+			}
+			return hasFallback ? Pick(fallback, rng) : "";
+		}
+
 		/// <summary>Uppercase the first character; leaves other characters as-is.</summary>
 		public static string Capitalize(string s) =>
 			string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);

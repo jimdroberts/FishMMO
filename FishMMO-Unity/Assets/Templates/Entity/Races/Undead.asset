@@ -170,6 +170,8 @@ MonoBehaviour:
       - Soulkeeper
       - Dustlord
       - Bonecarver
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Eternal
       - the Unliving
@@ -194,6 +196,7 @@ MonoBehaviour:
       - Who Remembers the Living World
       - Who Waited a Thousand Years
       - Who Rose When All Others Stayed Dead
+      Occupational: []
     CitySuffixes:
       Capital:
       - crypt
@@ -241,3 +244,14 @@ MonoBehaviour:
       - hollow
       - void
       - waste
+  BiomeAffinities:
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: 173642607
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: -567058185
+    Weight: 1

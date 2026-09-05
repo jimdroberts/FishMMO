@@ -83,8 +83,11 @@ MonoBehaviour:
     - the Singular Forge
     Titles:
       Honorific:
-      - Forge-father
       - Lone Eye
+      HonorificMasculine:
+      - Forge-father
+      HonorificFeminine:
+      - Forge-mother
       Epithet:
       - the One-eyed
       - the Mountain-shouldered
@@ -93,6 +96,7 @@ MonoBehaviour:
       - Master of the Singular Forge
       Legend:
       - Who Cast the Unstoppable Spear
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +104,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 1275219499
+    Weight: 2
+  - BiomeID: 681889367
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 1
+  - BiomeID: 493502347
+    Weight: 1

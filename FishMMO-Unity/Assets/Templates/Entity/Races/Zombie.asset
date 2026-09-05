@@ -83,7 +83,10 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Risen
+      HonorificMasculine:
       - Shambler-lord
+      HonorificFeminine:
+      - Shambler-lady
       Epithet:
       - the Moaning
       - the Pale-fleshed
@@ -91,6 +94,7 @@ MonoBehaviour:
       - First Risen of the Pestilence Quarter
       Legend:
       - Whose Horde Drowned the Walled City in Flesh
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -98,3 +102,14 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 173642607
+    Weight: 1
+  - BiomeID: -2037808285
+    Weight: 0.5
+  - BiomeID: 596668801
+    Weight: 0.5

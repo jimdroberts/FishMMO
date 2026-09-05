@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: High Desert
+  m_EditorClassIdentifier: 
+  DisplayName: High Desert
+  Description: 'High altitude desert — cold nights, hot days, sparse sage, wind-carved rock'
+  BiomeColorId: {r: 0.8, g: 0.7, b: 0.5, a: 1}
+  GizmoColor: {r: 0.9, g: 0.8, b: 0.6, a: 1}
+  ElevationTier: 7
+  MinHeight: 0.9
+  MaxHeight: 0.95
+  MinTemperature: 0.1
+  MaxTemperature: 0.8
+  MinHumidity: -1
+  MaxHumidity: -0.5
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Zan
+      - Kha
+      - Sha
+      - Raz
+      - Dha
+      - Tar
+      - Bre
+      - Win
+      - Gri
+      - Sto
+      - Dri
+      - Sal
+      - Bri
+      - Kel
+      - Hol
+      Nuclei:
+      - a
+      - i
+      - u
+      - ar
+      - ai
+      - or
+      - ur
+      Codas:
+      - dust
+      - wind
+      - stone
+      - mesa
+      - sage
+      - dry
+      - flat
+      - ridge
+      - sand
+      - scrub
+      Middles:
+      - al
+      - ar
+      - an
+      - or
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Pit
+      - Cave
+      - Hollow
+      - Crack
+      - Shaft
+      - Tunnel
+      - Den
+      - Crevice
+      - Burrow
+      - Lair
+      - Chamber
+      - Passage
+      - Gallery
+      - Grotto
+      - Mine
+      - Alcove
+      - Pocket
+      - Foundation
+      - Shelter
+      - Overhang
+      - Spring-cave
+      - Cistern
+      DungeonPrefixes:
+      - The Wind-carved
+      - The Sun-scorched
+      - The High
+      - The Dry
+      - The Ancient
+      - The Exposed
+      - The Dust-filled
+      - The Lonely
+      - The Stark
+      - The Cold-night
+      - The Arid
+      - The Sage-scented
+      - The Juniper-studded
+      - The Alkali
+      - The Elevation
+      - The Frost-and-sun
+      - The Rattlesnake
+      - The Wide-sky
+      - The Mesa-top
+      - The Erosion-carved
+      POISuffixes:
+      - Mesa
+      - Dry-lake
+      - Sage-flat
+      - Dust-devil
+      - Wind-arch
+      - Sun-stone
+      - Alkali-flat
+      - Desert-spring
+      - Juniper-stand
+      - Pinyon-grove
+      - Dry-wash
+      - Salt-pan
+      - Petroglyph-rock
+      - Erosion-pillar
+      - Night-sky-point
+      - Cold-spring
+      - Lizard-rock
+      - Raptor-cliff
+      - Drought-crack
+      - Canyon-rim
+      Adjectives:
+      - Wind-carved
+      - Sun-scorched
+      - High
+      - Dry
+      - Exposed
+      - Dust-filled
+      - Lonely
+      - Stark
+      - Cold-night
+      - Arid
+      - Sage-scented
+      - Juniper-studded
+      - Alkali
+      - Elevation-swept
+      - Frost-and-sun
+      - Wide-sky
+      - Mesa-top
+      - Erosion-carved
+      - Rugged
+      - Austere
+      - Mineral-rich
+      - Vast
+      Description: 'High altitude desert — cold nights, hot days, sparse sage, wind-carved rock'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 308cee79997a13645aef863746d0aa99, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -154.8866
+    blendNoiseOffsetY: -34.651154
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 451.55453
+    blendNoiseOffsetY: 300.17944
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 946.51013
+    blendNoiseOffsetY: 48.21982
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 705.3656
+    blendNoiseOffsetY: 702.7938
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

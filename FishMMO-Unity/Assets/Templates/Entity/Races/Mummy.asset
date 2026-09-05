@@ -72,7 +72,7 @@ MonoBehaviour:
       - mes
       - nu
       - hen
-      Description: 'Dry, chanted Egyptian cadence — tomb-speech'
+      Description: 'Dry, chanted tomb-speech'
       Tags:
       - Tomb-names
       - Wrap-marks
@@ -81,20 +81,24 @@ MonoBehaviour:
     Places:
     - the Sand Tomb
     - Bone-Wrapped Hall
-    - 'Pharaoh''s Rest'
+    - 'Tomb-King''s Rest'
     - the Cursed Tomb
     Titles:
       Honorific:
-      - High-Pharaoh
       - Tomb-keeper
+      HonorificMasculine:
+      - High Tomb-King
+      HonorificFeminine:
+      - High Tomb-queen
       Epithet:
       - the Wrapped
       - the Sand-buried
       - the Still-breathing
       Rank:
-      - Pharaoh of the Sand Tomb
+      - Tomb-King of the Sand Tomb
       Legend:
       - Whose Curse Followed the Thief Across the Sea
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -102,3 +106,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -941601695
+    Weight: 3
+  - BiomeID: 992717471
+    Weight: 1.5
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 0.5

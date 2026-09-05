@@ -70,7 +70,7 @@ MonoBehaviour:
       - ak
       - uul
       - gor
-      Description: Chaos-tainted guttural Khornate-style
+      Description: Chaos-tainted guttural war-brays
       Tags:
       - Chaos-names
       - Mutation-marks
@@ -85,6 +85,8 @@ MonoBehaviour:
       Honorific:
       - Beastlord
       - Herdstone-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Horn-crowned
       - the Twice-mutated
@@ -93,6 +95,7 @@ MonoBehaviour:
       - Gor of the Herdstone
       Legend:
       - Who Led the Herd to Sack the Border Village
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +103,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1
+  - BiomeID: 144196518
+    Weight: 1

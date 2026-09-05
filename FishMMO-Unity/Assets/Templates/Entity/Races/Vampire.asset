@@ -94,7 +94,7 @@ MonoBehaviour:
       - ov
       - ius
       - arn
-      Description: 'Elegant and Slavic — aristocratic dread, each syllable a velvet blade'
+      Description: 'Elegant and old-blooded — aristocratic dread, each syllable a velvet blade'
       Tags:
       - Blood-names
       - Court-bonds
@@ -111,12 +111,15 @@ MonoBehaviour:
     - Castle Duskmoor
     Titles:
       Honorific:
-      - Blood-lord
       - Night-sovereign
       - Eternal One
       - Crimson Duke
       - Shadow-count
       - Pale Monarch
+      HonorificMasculine:
+      - Blood-lord
+      HonorificFeminine:
+      - Blood-lady
       Epithet:
       - the Deathless
       - the Pale
@@ -139,6 +142,7 @@ MonoBehaviour:
       - Whose Thirst Cannot Be Slaked
       - Who Remembers the Sun and Chose the Dark
       - Who Built an Empire That Only Wakes at Night
+      Occupational: []
     CitySuffixes:
       Capital:
       - court
@@ -187,3 +191,12 @@ MonoBehaviour:
       - void
       - hollow
       - waste
+  BiomeAffinities:
+  - BiomeID: -857237992
+    Weight: 3
+  - BiomeID: 18062707
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: 144196518
+    Weight: 0.5

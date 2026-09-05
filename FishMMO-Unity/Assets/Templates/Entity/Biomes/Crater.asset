@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Crater
+  m_EditorClassIdentifier: 
+  DisplayName: Crater
+  Description: 'Impact or volcanic craters — scarred earth, strange minerals, mystery'
+  BiomeColorId: {r: 0.5, g: 0.35, b: 0.25, a: 1}
+  GizmoColor: {r: 0.65, g: 0.45, b: 0.35, a: 1}
+  ElevationTier: 6
+  MinHeight: 0.3
+  MaxHeight: 0.9
+  MinTemperature: -0.1
+  MaxTemperature: 0.7
+  MinHumidity: -0.6
+  MaxHumidity: 0.4
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gor
+      - Kra
+      - Sha
+      - Sto
+      - Dra
+      - Mor
+      - Ash
+      - Bre
+      - Hol
+      - Gri
+      - Kel
+      - Vel
+      - Thr
+      - Roc
+      - Imp
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - or
+      - ax
+      - ur
+      Codas:
+      - crater
+      - impact
+      - rim
+      - basin
+      - bowl
+      - scar
+      - strike
+      - blast
+      - ring
+      - pit
+      Middles:
+      - an
+      - or
+      - al
+      - ar
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Crater
+      - Basin
+      - Pit
+      - Shaft
+      - Hollow
+      - Chamber
+      - Rift
+      - Chasm
+      - Cave
+      - Void
+      - Tunnel
+      - Passage
+      - Gallery
+      - Den
+      - Lair
+      - Crevice
+      - Pocket
+      - Alcove
+      - Foundation
+      - Mine
+      - Grotto
+      - Abyss
+      DungeonPrefixes:
+      - The Impact
+      - The Shattered
+      - The Scorched
+      - The Ancient
+      - The Sky-scarred
+      - The Glassed
+      - The Anomalous
+      - The Sunken
+      - The Massive
+      - The Mysterious
+      - The Alien
+      - The Star-born
+      - The Cataclysmic
+      - The Primordial
+      - The Meteor-struck
+      - The Devastated
+      - The Ring-walled
+      - The Mineral-rich
+      - The Magnetic
+      - The Cosmic
+      POISuffixes:
+      - Crater-rim
+      - Impact-site
+      - Glass-field
+      - Ejecta-mound
+      - Shatter-zone
+      - Central-peak
+      - Ring-wall
+      - Debris-field
+      - Meteorite-fragment
+      - Shock-quartz
+      - Melt-rock
+      - Impact-lake
+      - Anomaly-zone
+      - Mineral-deposit
+      - Magnetized-stone
+      - Flash-glass
+      - Tektite-field
+      - Breccia-wall
+      - Uplift-peak
+      - Star-stone
+      Adjectives:
+      - Impact-scarred
+      - Shattered
+      - Scorched
+      - Sky-scarred
+      - Glassed
+      - Anomalous
+      - Ancient
+      - Massive
+      - Mysterious
+      - Alien
+      - Star-born
+      - Cataclysmic
+      - Primordial
+      - Meteor-struck
+      - Devastated
+      - Ring-walled
+      - Mineral-rich
+      - Magnetic
+      - Cosmic
+      - Otherworldly
+      - Violent
+      - Breathtaking
+      Description: 'Impact or volcanic craters — scarred earth, strange minerals, mystery'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: daf4be7380957be4198ece1e45559b2b, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 224.91943
+    blendNoiseOffsetY: -913.156
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -525.24133
+    blendNoiseOffsetY: 827.9264
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -699.0762
+    blendNoiseOffsetY: 388.84543
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 758.2617
+    blendNoiseOffsetY: 743.4237
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

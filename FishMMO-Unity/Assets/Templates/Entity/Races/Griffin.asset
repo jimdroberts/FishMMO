@@ -94,6 +94,8 @@ MonoBehaviour:
       - Skylord
       - Aerie-warden
       - Feathered One
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Proud
       - the Golden-winged
@@ -102,6 +104,7 @@ MonoBehaviour:
       - First Talon of the Eyrie
       Legend:
       - Whose Hunt Never Failed
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -109,3 +112,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1

@@ -1,0 +1,145 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Dire Wolf
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'A wolf half again the size of a pony, leader of packs that hunt men when winter is hard.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fen
+      - Gar
+      - Ulf
+      - Rag
+      - Howl
+      - Grey
+      - Snar
+      - Wulf
+      - Kar
+      - Bran
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      Codas:
+      - ar
+      - ulf
+      - ak
+      - ath
+      - ir
+      - aw
+      - ang
+      - ur
+      Middles:
+      - r
+      - g
+      - n
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - a
+      - ella
+      MasculineSuffixes:
+      - ug
+      - ar
+      Description: 'Howling, snarling — long vowels, hard stops'
+      Tags:
+      - Beast
+      - Monster
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Hollow Den
+    - the North Road
+    - the Winter Hunt
+    - the Boar Wood
+    - the Dark Sty
+    Titles:
+      Honorific:
+      - Old One
+      - Pack-elder
+      - Den-mother
+      - Grey-muzzle
+      HonorificMasculine:
+      - Den-father
+      HonorificFeminine:
+      - Den-mother
+      Epithet:
+      - the Man-eater
+      - the Scarred
+      - the Old
+      - the Grey
+      - the One-eyed
+      - the Cunning
+      - the Tusked
+      - the Sleepless
+      - the Winter-fang
+      - the Pack-lord
+      Rank:
+      - Terror of the North Road
+      - Lord of the Hollow Den
+      - Scourge of the Shepherds
+      - Master of the Winter Hunt
+      Legend:
+      - 'Who Took the Miller''s Son'
+      - 'Who Broke the Hunter''s Spear'
+      - Who Was Never Caught
+      - Who Killed Three Dogs
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - den
+      - lair
+      Fortress:
+      - thicket
+      Village:
+      - sty
+      - wallow
+      Port:
+      - ford
+      Sacred:
+      - bone-ring
+      Ruin:
+      - carcass
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 144196518
+    Weight: 3
+  - BiomeID: 187749268
+    Weight: 2
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: 1645414801
+    Weight: 1

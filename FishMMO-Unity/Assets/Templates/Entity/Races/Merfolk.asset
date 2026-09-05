@@ -238,6 +238,8 @@ MonoBehaviour:
       - Wavecaller
       - Reef-sovereign
       - Current-speaker
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Deepborn
       - the Tide-kissed
@@ -260,6 +262,12 @@ MonoBehaviour:
       - Who United the Seven Seas
       - Who Spoke with the Leviathan
       - Whose Voice Calmed the Great Maelstrom
+      Occupational:
+      - Pearl-diver
+      - Reef-warden
+      - Tide-reader
+      - Shell-carver
+      - Current-pilot
     CitySuffixes:
       Capital:
       - throne
@@ -309,3 +317,12 @@ MonoBehaviour:
       - void
       - hollow
       - silt
+  BiomeAffinities:
+  - BiomeID: -1552223677
+    Weight: 3
+  - BiomeID: 1476749746
+    Weight: 2
+  - BiomeID: 1508835452
+    Weight: 1.5
+  - BiomeID: 1496239796
+    Weight: 1

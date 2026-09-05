@@ -70,7 +70,7 @@ MonoBehaviour:
       - mor
       - ak
       - brand
-      Description: Forge-bellow and ember-anger — basso Nordic cadence
+      Description: Forge-bellow and ember-anger — basso forge-hall cadence
       Tags:
       - Ember-names
       - Forge-bonds
@@ -82,9 +82,13 @@ MonoBehaviour:
     - Cinderhall
     - the Ash Citadel
     Titles:
-      Honorific:
+      Honorific: []
+      HonorificMasculine:
       - Forge-king
       - Ember-lord
+      HonorificFeminine:
+      - Forge-queen
+      - Ember-lady
       Epithet:
       - the Molten
       - the Brass-armored
@@ -93,6 +97,7 @@ MonoBehaviour:
       - King of the Ash Citadel
       Legend:
       - Whose Hammer Broke the Mountain in Two
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +105,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 3
+  - BiomeID: 155940630
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 1

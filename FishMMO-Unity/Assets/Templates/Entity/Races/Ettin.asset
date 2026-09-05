@@ -83,6 +83,8 @@ MonoBehaviour:
       Honorific:
       - Both-Heads
       - Twin-chief
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Two-voiced
       - the Self-arguing
@@ -90,6 +92,7 @@ MonoBehaviour:
       - Chief of Twin-Peak Pass
       Legend:
       - Whose Two Heads Made Peace on Their Deathbed
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -97,3 +100,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: -138594552
+    Weight: 1

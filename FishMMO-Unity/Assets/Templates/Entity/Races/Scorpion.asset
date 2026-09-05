@@ -1,0 +1,147 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Scorpion
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'A giant scorpion of the dry wastes, its sting a spear and its pincers a vice.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Skor
+      - Ven
+      - Sting
+      - Dun
+      - Sar
+      - Tail
+      - Chel
+      - Rakk
+      - Zir
+      - Kesh
+      Nuclei:
+      - i
+      - a
+      - ee
+      - u
+      - ik
+      Codas:
+      - ak
+      - ith
+      - oss
+      - ix
+      - ar
+      - uk
+      - ash
+      - eth
+      Middles:
+      - k
+      - sk
+      - t
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - ix
+      - ia
+      MasculineSuffixes:
+      - ik
+      - us
+      Description: 'Dry, clicking — desert-hard consonants'
+      Tags:
+      - Vermin
+      - Monster
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Lower Nests
+    - the Egg Chamber
+    - the Grain Cellars
+    - the Web Cavern
+    - the Bone Midden
+    Titles:
+      Honorific:
+      - Brood-mother
+      - Nest-boss
+      - Swarm-elder
+      - Hive-voice
+      HonorificMasculine:
+      - Nest-king
+      HonorificFeminine:
+      - Nest-queen
+      Epithet:
+      - the Skittering
+      - the Many-legged
+      - the Hungry
+      - the Gnawing
+      - the Swarming
+      - the Venomous
+      - the Burrowing
+      - the Ever-breeding
+      - the Sting-tailed
+      - the Sand-hidden
+      Rank:
+      - Chief of the Lower Nests
+      - Warden of the Egg Chamber
+      - Terror of the Grain Cellars
+      - Voice of the Swarm
+      Legend:
+      - Who Emptied the Granary
+      - Who Ate the Rope Bridge
+      - Who Bred a Thousand
+      - Who Chewed Through Stone
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - nest
+      - hive
+      Fortress:
+      - warren
+      - burrow
+      Village:
+      - midden
+      - den
+      Port:
+      - drain
+      Sacred:
+      - egg-ring
+      Ruin:
+      - husk
+      - shell
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: -941601695
+    Weight: 3
+  - BiomeID: 599899035
+    Weight: 1.5
+  - BiomeID: 1156965030
+    Weight: 1
+  - BiomeID: 992717471
+    Weight: 1

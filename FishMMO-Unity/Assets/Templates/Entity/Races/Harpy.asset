@@ -95,8 +95,10 @@ MonoBehaviour:
     - Skyshard Ridge
     Titles:
       Honorific:
-      - Song-mother
       - Wind-speaker
+      HonorificMasculine: []
+      HonorificFeminine:
+      - Song-mother
       - Matron of the Roost
       Epithet:
       - the Shrill
@@ -109,6 +111,7 @@ MonoBehaviour:
       Legend:
       - Whose Song Split a Sail
       - Who Seized the Prince at Sea
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -116,3 +119,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 646460858
+    Weight: 3
+  - BiomeID: -544771122
+    Weight: 1
+  - BiomeID: -138594552
+    Weight: 1
+  - BiomeID: 1496239796
+    Weight: 0.5

@@ -1,0 +1,111 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Poison Frogfolk
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'Tiny, brightly coloured tree-frog folk whose skin is deadly and whose castes are decided by colour.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gru
+      - Kro
+      - Blo
+      - Pu
+      - Ri
+      - Krub
+      - Zik
+      - Tor
+      Nuclei:
+      - u
+      - o
+      - i
+      Codas:
+      - kk
+      - rib
+      - blak
+      - ung
+      - nar
+      Middles:
+      - ub
+      - or
+      - ik
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - a
+      - ibb
+      - ona
+      MasculineSuffixes:
+      - ub
+      - or
+      - ig
+      Description: Guttural frog-folk — croaks and caste-colours
+      Tags:
+      - Caste-names
+      - Pond-bonds
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Poison Pool
+    - Mud-Castle
+    - Green-Skin Hollow
+    - Vinestripe Mire
+    Titles:
+      Honorific:
+      - Elder-croak
+      - Color-chief
+      HonorificMasculine: []
+      HonorificFeminine: []
+      Epithet:
+      - the Red-banded
+      - the Slick
+      - the Venom-breathed
+      Rank:
+      - Chief of the Poison Pool
+      Legend:
+      - Whose Skin Killed the Prince Who Kissed It
+      Occupational: []
+    CitySuffixes:
+      Capital: []
+      Fortress: []
+      Village: []
+      Port: []
+      Sacred: []
+      Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1640008461
+    Weight: 3
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: 719042512
+    Weight: 1

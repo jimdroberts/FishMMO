@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Rocky Coast
+  m_EditorClassIdentifier: 
+  DisplayName: Rocky Coast
+  Description: 'Rugged rocky coastline — sea stacks, blowholes, crashing waves'
+  BiomeColorId: {r: 0.5, g: 0.5, b: 0.6, a: 1}
+  GizmoColor: {r: 0.6, g: 0.6, b: 0.7, a: 1}
+  ElevationTier: 3
+  MinHeight: 0.4
+  MaxHeight: 0.45
+  MinTemperature: -0.2
+  MaxTemperature: 0.4
+  MinHumidity: -0.3
+  MaxHumidity: 0.9
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sto
+      - Cra
+      - Gri
+      - Kel
+      - Bri
+      - Wav
+      - Tid
+      - Sal
+      - She
+      - Cli
+      - Rav
+      - Dri
+      - Roc
+      - Mar
+      - Gul
+      Nuclei:
+      - a
+      - o
+      - e
+      - ar
+      - or
+      - al
+      - ag
+      Codas:
+      - rock
+      - cliff
+      - crag
+      - stone
+      - shore
+      - stack
+      - bluff
+      - spur
+      - arch
+      - ledge
+      Middles:
+      - an
+      - or
+      - al
+      - er
+      - ar
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Cavern
+      - Blowhole
+      - Grotto
+      - Stack
+      - Arch
+      - Tunnel
+      - Chimney
+      - Cleft
+      - Crevice
+      - Hollow
+      - Pool
+      - Pit
+      - Passage
+      - Gallery
+      - Chamber
+      - Den
+      - Ledge
+      - Shelf
+      - Rift
+      - Throat
+      - Shaft
+      - Alcove
+      DungeonPrefixes:
+      - The Storm-lashed
+      - The Craggy
+      - The Sea-carved
+      - The Wind-blasted
+      - The Barnacled
+      - The Jagged
+      - The Salt-scarred
+      - The Crumbling
+      - The Wave-battered
+      - The Spray-drenched
+      - The Cliff-face
+      - The Tide-worn
+      - The Gull-haunted
+      - The Granite
+      - The Basalt
+      - The Dramatic
+      - The Treacherous
+      - The Precipitous
+      - The Thunder-echoing
+      - The Fog-shrouded
+      POISuffixes:
+      - Sea-stack
+      - Rock-arch
+      - Cliff-face
+      - Blowhole
+      - Tidal-shelf
+      - Barnacle-rock
+      - Wave-cut
+      - Spray-ledge
+      - Gull-nest
+      - Seal-haul-out
+      - Lighthouse-ruin
+      - Fossil-cliff
+      - Puffin-colony
+      - Mussel-bed
+      - Kelp-shore
+      - Storm-pool
+      - Cliff-cave
+      - Natural-bridge
+      - Eroded-pinnacle
+      - Whale-watching-point
+      Adjectives:
+      - Storm-lashed
+      - Craggy
+      - Sea-carved
+      - Wind-blasted
+      - Barnacled
+      - Jagged
+      - Salt-scarred
+      - Dramatic
+      - Towering
+      - Treacherous
+      - Wave-battered
+      - Spray-drenched
+      - Tide-worn
+      - Gull-haunted
+      - Granite
+      - Basalt
+      - Precipitous
+      - Thunder-echoing
+      - Fog-shrouded
+      - Rugged
+      - Weathered
+      - Imposing
+      Description: 'Rugged rocky coastline — sea stacks, blowholes, crashing waves'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: e1655f0f7ac0ba9488e2df7b166e8715, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -280.2235
+    blendNoiseOffsetY: -115.83508
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -4.3536377
+    blendNoiseOffsetY: -804.67175
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 963.7942
+    blendNoiseOffsetY: 592.0896
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 295.48926
+    blendNoiseOffsetY: -773.8065
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

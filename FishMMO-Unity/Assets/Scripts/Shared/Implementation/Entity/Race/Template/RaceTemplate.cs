@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using FishMMO.Logging;
 using FishMMO.Shared.NameGeneration;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared
 {
@@ -143,6 +144,14 @@ namespace FishMMO.Shared
 		[Header("Naming")]
 		public RaceNamingData Naming = new RaceNamingData();
 
+		/// <summary>
+		/// Biomes this race realistically belongs in, weighted. Naming draws a home biome from
+		/// these when none is given, and spawners can ask which races suit a place.
+		/// </summary>
+		[Header("Biomes")]
+		[Tooltip("Where this race is at home. Weighted; empty means no preference.")]
+		public List<BiomeAffinity> BiomeAffinities = new List<BiomeAffinity>();
+
 		private string namingKey;
 
 		/// <summary>
@@ -164,6 +173,71 @@ namespace FishMMO.Shared
 				}
 				return namingKey;
 			}
+		}
+
+		/// <summary>
+		/// This race's affinity for a biome, or 0 when it has none.
+		/// </summary>
+		public float AffinityFor(int biomeID)
+		{
+			if (BiomeAffinities == null || biomeID == 0)
+			{
+				return 0f;
+			}
+			for (int i = 0; i < BiomeAffinities.Count; i++)
+			{
+				BiomeAffinity affinity = BiomeAffinities[i];
+				if (affinity != null && affinity.BiomeID == biomeID)
+				{
+					return affinity.Weight;
+				}
+			}
+			return 0f;
+		}
+
+		/// <summary>
+		/// Draws one of this race's home biomes, weighted, with the given RNG; null when the race has
+		/// no registered affinities. Deterministic for a seeded RNG, so both peers agree.
+		/// </summary>
+		public BiomeTemplate PickHomeBiome(DeterministicRNG rng)
+		{
+			if (BiomeAffinities == null || BiomeAffinities.Count == 0)
+			{
+				return null;
+			}
+			float total = 0f;
+			for (int i = 0; i < BiomeAffinities.Count; i++)
+			{
+				BiomeAffinity affinity = BiomeAffinities[i];
+				if (affinity != null && affinity.Weight > 0f && affinity.Biome != null)
+				{
+					total += affinity.Weight;
+				}
+			}
+			if (total <= 0f)
+			{
+				return null;
+			}
+			float roll = (float)(rng.NextDouble() * total);
+			for (int i = 0; i < BiomeAffinities.Count; i++)
+			{
+				BiomeAffinity affinity = BiomeAffinities[i];
+				if (affinity == null || affinity.Weight <= 0f)
+				{
+					continue;
+				}
+				BiomeTemplate biome = affinity.Biome;
+				if (biome == null)
+				{
+					continue;
+				}
+				roll -= affinity.Weight;
+				if (roll <= 0f)
+				{
+					return biome;
+				}
+			}
+			return null;
 		}
 
 		/// <summary>

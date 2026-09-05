@@ -4,6 +4,7 @@ using System.Linq;
 using NUnit.Framework;
 using FishMMO.Shared;
 using FishMMO.Shared.NameGeneration;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration.Editor;
 
 namespace FishMMO.UnitTests
@@ -31,7 +32,7 @@ namespace FishMMO.UnitTests
 		{
 			Assert.IsTrue(NameGenerator.IsReady, "Generator should be ready once the assets are registered.");
 			Assert.GreaterOrEqual(report.Races, 135, "Every exported race should register.");
-			Assert.AreEqual(56, report.Biomes);
+			Assert.GreaterOrEqual(report.Biomes, 56, "Every biome asset should register.");
 			Assert.AreEqual(12, report.Modifiers);
 			Assert.AreEqual(1, report.Grammars, "Exactly one Name Grammar asset should exist.");
 		}
@@ -194,10 +195,10 @@ namespace FishMMO.UnitTests
 		public void Culture_UsesItsOwnPhonology()
 		{
 			RacePhonology plain = RaceRegistry.ResolvePhonology("human", null);
-			RacePhonology nordic = RaceRegistry.ResolvePhonology("human", "nordic");
-			Assert.AreNotSame(plain, nordic);
-			CollectionAssert.AreNotEqual(plain.Onsets, nordic.Onsets);
-			CollectionAssert.Contains(RaceRegistry.GetCultures("human"), "nordic");
+			RacePhonology northern = RaceRegistry.ResolvePhonology("human", "northern");
+			Assert.AreNotSame(plain, northern);
+			CollectionAssert.AreNotEqual(plain.Onsets, northern.Onsets);
+			CollectionAssert.Contains(RaceRegistry.GetCultures("human"), "northern");
 		}
 
 		[Test]
@@ -244,8 +245,8 @@ namespace FishMMO.UnitTests
 			Assert.IsTrue(RaceRegistry.TryGetByID(RaceRegistry.IDOf(human), out RaceTemplate found));
 			Assert.AreSame(human, found);
 
-			BiomeNamingTemplate biome = BiomeRegistry.Get(BiomeRegistry.SupportedBiomes[0]);
-			Assert.IsTrue(BiomeRegistry.TryGetByID(BiomeRegistry.IDOf(biome), out BiomeNamingTemplate foundBiome));
+			BiomeTemplate biome = BiomeRegistry.Get(BiomeRegistry.SupportedBiomes[0]);
+			Assert.IsTrue(BiomeRegistry.TryGetByID(BiomeRegistry.IDOf(biome), out BiomeTemplate foundBiome));
 			Assert.AreSame(biome, foundBiome);
 		}
 	}

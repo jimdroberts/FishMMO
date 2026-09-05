@@ -1,0 +1,145 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Cockatrice
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'A rooster-headed, bat-winged serpent whose bite turns flesh to stone; small, foul-tempered, and lethal.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Cock
+      - Kra
+      - Skree
+      - Bas
+      - Rook
+      - Crow
+      - Krik
+      - Serp
+      - Caw
+      - Sciss
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - aw
+      Codas:
+      - ix
+      - ath
+      - ee
+      - ak
+      - iss
+      - orn
+      - aw
+      - eth
+      Middles:
+      - r
+      - g
+      - n
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - a
+      - ella
+      MasculineSuffixes:
+      - ug
+      - ar
+      Description: 'Crowing, hissing — a cackle with a rattle in it'
+      Tags:
+      - Beast
+      - Monster
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Hollow Den
+    - the North Road
+    - the Winter Hunt
+    - the Boar Wood
+    - the Dark Sty
+    Titles:
+      Honorific:
+      - Old One
+      - Pack-elder
+      - Den-mother
+      - Grey-muzzle
+      HonorificMasculine:
+      - Den-father
+      HonorificFeminine:
+      - Den-mother
+      Epithet:
+      - the Man-eater
+      - the Scarred
+      - the Old
+      - the Grey
+      - the One-eyed
+      - the Cunning
+      - the Tusked
+      - the Sleepless
+      - the Stone-biter
+      - the Crowing
+      Rank:
+      - Terror of the North Road
+      - Lord of the Hollow Den
+      - Scourge of the Shepherds
+      - Master of the Winter Hunt
+      Legend:
+      - 'Who Took the Miller''s Son'
+      - 'Who Broke the Hunter''s Spear'
+      - Who Was Never Caught
+      - Who Killed Three Dogs
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - den
+      - lair
+      Fortress:
+      - thicket
+      Village:
+      - sty
+      - wallow
+      Port:
+      - ford
+      Sacred:
+      - bone-ring
+      Ruin:
+      - carcass
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1156965030
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1
+  - BiomeID: -2037808285
+    Weight: 1
+  - BiomeID: -941601695
+    Weight: 1

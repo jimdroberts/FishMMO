@@ -13,16 +13,11 @@ MonoBehaviour:
   m_Name: CharacterCreateSystem
   m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.LoginServer.CharacterCreateSystem
   maxMainThreadResponsesPerFrame: 100
+  maxSceneFieldLength: 256
   maxCharacters: 8
   createRequestCooldownMilliseconds: 2000
   worldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
     type: 2}
-  startingAbilityIDs: []
-  startingInventoryItemIDs: []
-  startingEquipmentIDs:
-  - -523909364
-  - -450748893
-  - 1324506654
-  - -1956810487
-  - -1491658691
-  - 478237920
+  startingAbilityIDs: 225e66f8
+  startingInventoryItemIDs: 
+  startingEquipmentIDs: 0cc7c5e0231e22e51e5ef24e09715d8b3d1817a7e054811c

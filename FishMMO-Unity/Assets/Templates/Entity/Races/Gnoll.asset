@@ -86,6 +86,8 @@ MonoBehaviour:
       Honorific:
       - Flind
       - Pack-master
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Ever-laughing
       - the Blood-maned
@@ -94,6 +96,7 @@ MonoBehaviour:
       - Pack-master of the Grinding Pit
       Legend:
       - Who Hunted a Royal Procession and Laughed Throughout
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -101,3 +104,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1911521020
+    Weight: 3
+  - BiomeID: 1156965030
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 1

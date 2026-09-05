@@ -81,9 +81,13 @@ MonoBehaviour:
     - the Gaze Pit
     - Stone-Eye Hollow
     Titles:
-      Honorific:
+      Honorific: []
+      HonorificMasculine:
       - Gaze-king
       - Serpent-lord
+      HonorificFeminine:
+      - Gaze-queen
+      - Serpent-lady
       Epithet:
       - the Unblinking
       - the Stone-shaper
@@ -91,6 +95,7 @@ MonoBehaviour:
       - King of the Glass Gorge
       Legend:
       - Whose Gaze Sealed the Third Gate
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -98,3 +103,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -941601695
+    Weight: 2
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: 1275219499
+    Weight: 1

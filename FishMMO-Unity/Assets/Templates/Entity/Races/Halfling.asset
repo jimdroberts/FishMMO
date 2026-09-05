@@ -240,6 +240,8 @@ MonoBehaviour:
       - Meadmaster
       - Pantryguard
       - Pipe-elder
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Brave (surprisingly)
       - the Well-fed
@@ -263,6 +265,17 @@ MonoBehaviour:
       - Who Hid from an Army in a Pie Cart
       - Who Baked a Pie So Good It Ended a War
       - Who Was Underestimated One Time Too Many
+      Occupational:
+      - Innkeeper
+      - Baker
+      - Brewer
+      - Pipeweed-grower
+      - Cheesemaker
+      - Gardener
+      - Ferryman
+      - Cook
+      - Tinker
+      - Postmaster
     CitySuffixes:
       Capital:
       - shire
@@ -310,3 +323,12 @@ MonoBehaviour:
       - dust
       - ruin
       - scar
+  BiomeAffinities:
+  - BiomeID: -2037808285
+    Weight: 3
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: 1655673647
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1

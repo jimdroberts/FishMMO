@@ -1,0 +1,302 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Plains
+  m_EditorClassIdentifier: 
+  DisplayName: Plains
+  Description: 'Flat grasslands — rolling hills, hidden barrows beneath golden fields'
+  BiomeColorId: {r: 0.5, g: 0.8, b: 0.4, a: 1}
+  GizmoColor: {r: 0.6, g: 0.9, b: 0.5, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.45
+  MaxHeight: 0.6
+  MinTemperature: -0.2
+  MaxTemperature: 0.2
+  MinHumidity: -0.3
+  MaxHumidity: 0.3
+  SelectionWeight: 1
+  ClimateVariants:
+  - Name: Frozen
+    MinTemperature: -1
+    MaxTemperature: -0.45
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Snow-plain
+    - Frost-bitten
+    - White-flat
+    - Winter-wide
+    DungeonPrefixes:
+    - The White-flat
+    - The Frost-bitten
+    TextureLayerOverrides: []
+  - Name: Scorched
+    MinTemperature: 0.45
+    MaxTemperature: 1
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Sun-beaten
+    - Heat-wide
+    - Dust-plain
+    - Cracked-earth
+    DungeonPrefixes:
+    - The Sun-beaten
+    - The Cracked-earth
+    TextureLayerOverrides: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gra
+      - Whe
+      - Gol
+      - Far
+      - Bre
+      - Win
+      - Hil
+      - Lar
+      - Fen
+      - Pra
+      - Bro
+      - Swa
+      - Rye
+      - Hay
+      - Dew
+      Nuclei:
+      - a
+      - e
+      - ea
+      - ai
+      - ow
+      - ie
+      - ar
+      Codas:
+      - field
+      - stead
+      - holm
+      - dale
+      - mead
+      - vale
+      - plain
+      - lea
+      - down
+      - wold
+      Middles:
+      - an
+      - el
+      - ar
+      - er
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Barrow
+      - Cairn
+      - Mound
+      - Cellar
+      - Burrow
+      - Hollow
+      - Pit
+      - Den
+      - Tomb
+      - Passage
+      - Tunnel
+      - Warren
+      - Chamber
+      - Crypt
+      - Vault
+      - Shaft
+      - Root-cellar
+      - Silo
+      - Foundation
+      - Well
+      - Lair
+      - Nest
+      DungeonPrefixes:
+      - The Buried
+      - The Hidden
+      - The Windswept
+      - The Ancient
+      - The Forgotten
+      - The Grass-covered
+      - The Prairie
+      - The Open
+      - The Sun-drenched
+      - The Golden
+      - The Rolling
+      - The Vast
+      - The Lonely
+      - The Wild
+      - The Storm-swept
+      - The Earthen
+      - The Ancestral
+      - The Barrow-dotted
+      - The Haunted
+      - The Timeless
+      POISuffixes:
+      - Standing-stone
+      - Hillock
+      - Barrow-mound
+      - Wind-marker
+      - Grass-ring
+      - Prairie-well
+      - Cairn
+      - Waystone
+      - Buffalo-wallow
+      - Tallgrass-patch
+      - Prairie-dog-town
+      - Eagle-nest
+      - Stone-circle
+      - Burial-mound
+      - Wildflower-field
+      - Hawk-perch
+      - Sun-dial
+      - Shepherd-cairn
+      - Horse-trail
+      - Thunder-stone
+      Adjectives:
+      - Windswept
+      - Golden
+      - Vast
+      - Endless
+      - Rolling
+      - Sun-drenched
+      - Wild
+      - Peaceful
+      - Fertile
+      - Ancient
+      - Lonely
+      - Storm-swept
+      - Earthen
+      - Ancestral
+      - Haunted
+      - Timeless
+      - Open
+      - Boundless
+      - Prairie
+      - Amber
+      - Flat
+      - Horizon-stretching
+      Description: 'Flat grasslands — rolling hills, hidden barrows beneath golden fields'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: ac571e023977e824b8d127213edebc1f, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -231.7959
+    blendNoiseOffsetY: 627.1987
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 314.04352
+    blendNoiseOffsetY: 846.91907
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 131.56543
+    blendNoiseOffsetY: 971.50964
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -484.4154
+    blendNoiseOffsetY: 764.2035
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

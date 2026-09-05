@@ -1,4 +1,7 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared
 {
@@ -64,5 +67,87 @@ namespace FishMMO.Shared
 		/// </remarks>
 		[Tooltip("Deprecated. Migrated into the Map Definition by FishMMO/World Map/Bake Maps.")]
 		public Sprite SceneTransitionImage;
+
+		/// <summary>
+		/// The climate model this scene runs under: lapse rates, humidity curve, tier boundaries and
+		/// the base global offsets. Shared between scenes that share a climate; null falls back to
+		/// the built-in defaults.
+		/// </summary>
+		[Header("Climate")]
+		[Tooltip("Climate model for this scene. Shared between scenes with the same climate.")]
+		public ClimateSettings Climate;
+
+		/// <summary>
+		/// Which biome lies where, baked when the world was generated. Biomes are mixed through a
+		/// scene; the map is how anything asks what is under a position.
+		/// </summary>
+		[Tooltip("Baked biome grid for this scene, imported from the world generator's biome map.")]
+		public SceneBiomeMap BiomeMap;
+
+		/// <summary>
+		/// Runtime shift on top of <see cref="Climate"/>'s global temperature offset. Mutable: a
+		/// weather or season system writes it, and every climate reading in the scene moves with it.
+		/// </summary>
+		[Tooltip("Runtime temperature shift on top of the climate asset. Driven by weather at runtime.")]
+		[Range(-2f, 2f)] public float RuntimeTemperatureOffset;
+
+		/// <summary>
+		/// Runtime shift on top of <see cref="Climate"/>'s global humidity offset. Mutable, like
+		/// <see cref="RuntimeTemperatureOffset"/>.
+		/// </summary>
+		[Tooltip("Runtime humidity shift on top of the climate asset. Driven by weather at runtime.")]
+		[Range(-2f, 2f)] public float RuntimeHumidityOffset;
+
+		private static readonly Dictionary<int, WorldSceneSettings> byScene = new Dictionary<int, WorldSceneSettings>();
+
+		/// <summary>The settings component of a loaded scene, if it has one. Scenes load additively on a scene server, so this is keyed by scene.</summary>
+		public static bool TryGetForScene(Scene scene, out WorldSceneSettings settings)
+		{
+			return byScene.TryGetValue(scene.handle, out settings) && settings != null;
+		}
+
+		private void OnEnable()
+		{
+			byScene[gameObject.scene.handle] = this;
+		}
+
+		private void OnDisable()
+		{
+			if (byScene.TryGetValue(gameObject.scene.handle, out WorldSceneSettings current) && current == this)
+			{
+				byScene.Remove(gameObject.scene.handle);
+			}
+		}
+
+		/// <summary>
+		/// The climate at a normalised height and latitude right now: the climate asset's reading
+		/// plus this scene's runtime offsets.
+		/// </summary>
+		public ClimateSample SampleClimate(float height01, float latitude01)
+		{
+			ClimateSample sample = Climate != null
+				? Climate.Evaluate(height01, latitude01)
+				: new ClimateSample
+				{
+					Temperature = Mathf.Clamp(-height01 * 0.8f, -1f, 1f),
+					Humidity = Mathf.Clamp((1f - height01) * 0.3f, -1f, 1f),
+					ElevationTier = ClimateSettings.TierForHeight(height01, null),
+				};
+			sample.Temperature = Mathf.Clamp(sample.Temperature + RuntimeTemperatureOffset, -1f, 1f);
+			sample.Humidity = Mathf.Clamp(sample.Humidity + RuntimeHumidityOffset, -1f, 1f);
+			return sample;
+		}
+
+		/// <summary>The climate variant a biome shows under a reading: the biome's own, else the climate asset's defaults.</summary>
+		public BiomeClimateVariant ResolveVariant(BiomeTemplate biome, ClimateSample sample)
+		{
+			if (biome == null)
+			{
+				return null;
+			}
+			return Climate != null
+				? Climate.ResolveVariant(biome, sample)
+				: biome.ResolveOwnVariant(sample.Temperature, sample.Humidity);
+		}
 	}
 }

@@ -76,7 +76,7 @@ MonoBehaviour:
       - ion
       - us
       - rion
-      Description: 'Serpentine sibilants, ancient Hellenic cadence'
+      Description: 'Serpentine sibilants, ancient temple cadence'
       Tags:
       - Stone-gaze
       - Serpent-marks
@@ -91,9 +91,11 @@ MonoBehaviour:
     - Snake-hair Hollow
     Titles:
       Honorific:
-      - Matron
       - Veiled One
       - Stone-warden
+      HonorificMasculine: []
+      HonorificFeminine:
+      - Matron
       Epithet:
       - the Unseen
       - the Sixth-Sister
@@ -103,6 +105,7 @@ MonoBehaviour:
       - Queen of the Petrified Court
       Legend:
       - 'Whose Gaze Ended the Hero''s Line'
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -110,3 +113,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 18062707
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1
+  - BiomeID: 646460858
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1

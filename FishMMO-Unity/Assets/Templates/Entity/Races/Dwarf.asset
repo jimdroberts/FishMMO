@@ -254,12 +254,14 @@ MonoBehaviour:
       Honorific:
       - Forgemaster
       - Stonelord
-      - Clanfather
-      - Clanmother
       - Deepwarden
       - Runekeeper
       - Ironbeard
       - Anvil-blessed
+      HonorificMasculine:
+      - Clanfather
+      HonorificFeminine:
+      - Clanmother
       Epithet:
       - the Ironwilled
       - the Unbroken
@@ -286,6 +288,17 @@ MonoBehaviour:
       - Who Held the Forge for Forty Days
       - Who Forged a Weapon That Slew a God
       - Whose Grudge Outlasted a Mountain
+      Occupational:
+      - Runesmith
+      - Brewmaster
+      - Stonemason
+      - Miner
+      - Forgemaster
+      - Gemcutter
+      - Tunnel-warden
+      - Anvil-priest
+      - Ale-keeper
+      - Vault-keeper
     CitySuffixes:
       Capital:
       - hold
@@ -333,3 +346,14 @@ MonoBehaviour:
       - scar
       - hollow
       - void
+  BiomeAffinities:
+  - BiomeID: -138594552
+    Weight: 3
+  - BiomeID: 1275219499
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1.5
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: -1474826537
+    Weight: 0.5

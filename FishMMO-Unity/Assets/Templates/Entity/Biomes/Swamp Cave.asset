@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Swamp Cave
+  m_EditorClassIdentifier: 
+  DisplayName: Swamp Cave
+  Description: 'Underground swamp system — flooded tunnels, fungus, slimy walls'
+  BiomeColorId: {r: 0.15, g: 0.2, b: 0.12, a: 1}
+  GizmoColor: {r: 0.25, g: 0.3, b: 0.2, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.42
+  MaxHeight: 0.6
+  MinTemperature: -0.1
+  MaxTemperature: 0.6
+  MinHumidity: 0.6
+  MaxHumidity: 1
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fen
+      - Bog
+      - Mur
+      - Gor
+      - Dra
+      - Sha
+      - Gri
+      - Kra
+      - Vel
+      - Thi
+      - Hol
+      - Rot
+      - Slu
+      - Mor
+      - Hag
+      Nuclei:
+      - u
+      - o
+      - a
+      - ur
+      - og
+      - ul
+      - ow
+      Codas:
+      - mire
+      - bog
+      - deep
+      - rot
+      - muck
+      - gul
+      - murk
+      - rok
+      - gor
+      - fen
+      Middles:
+      - ur
+      - og
+      - ul
+      - an
+      - or
+      SyllMin: 1
+      SyllMax: 2
+      DungeonSuffixes:
+      - Cavern
+      - Grotto
+      - Hollow
+      - Pit
+      - Tunnel
+      - Den
+      - Burrow
+      - Sinkhole
+      - Hole
+      - Depth
+      - Chamber
+      - Passage
+      - Pool
+      - Shaft
+      - Crevice
+      - Lair
+      - Alcove
+      - Gallery
+      - Pocket
+      - Throat
+      - Crawl-space
+      - Seep
+      DungeonPrefixes:
+      - The Dripping
+      - The Fetid
+      - The Flooded
+      - The Mossy
+      - The Dark
+      - The Reeking
+      - The Winding
+      - The Moist
+      - The Sludge-filled
+      - The Fungus-lit
+      - The Leech-infested
+      - The Suffocating
+      - The Bog-connected
+      - The Root-choked
+      - The Mud-walled
+      - The Stagnant
+      - The Cramped
+      - The Toxic
+      - The Slime-coated
+      - The Dank
+      POISuffixes:
+      - Drip-pool
+      - Moss-shelf
+      - Bog-stream
+      - Slime-wall
+      - Rot-column
+      - Muck-pool
+      - Fungus-shelf
+      - Damp-ledge
+      - Blind-fish-pool
+      - Frog-den
+      - Root-curtain
+      - Mud-stalagmite
+      - Fungus-garden
+      - Echo-pool
+      - Drip-curtain
+      - Slime-formation
+      - Cave-moss
+      - Mold-ceiling
+      - Wet-ledge
+      - Mushroom-cluster
+      Adjectives:
+      - Dripping
+      - Fetid
+      - Flooded
+      - Mossy
+      - Reeking
+      - Winding
+      - Moist
+      - Slippery
+      - Slimy
+      - Cramped
+      - Sludge-filled
+      - Fungus-lit
+      - Leech-infested
+      - Suffocating
+      - Root-choked
+      - Mud-walled
+      - Stagnant
+      - Toxic
+      - Slime-coated
+      - Dank
+      - Claustrophobic
+      - Putrid
+      Description: 'Underground swamp system — flooded tunnels, fungus, slimy walls'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

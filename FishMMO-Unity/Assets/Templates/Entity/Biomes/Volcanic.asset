@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Volcanic
+  m_EditorClassIdentifier: 
+  DisplayName: Volcanic
+  Description: 'Open volcanic landscape — lava flows, ash fields, toxic vents'
+  BiomeColorId: {r: 0.6, g: 0.3, b: 0.2, a: 1}
+  GizmoColor: {r: 0.8, g: 0.2, b: 0.1, a: 1}
+  ElevationTier: 7
+  MinHeight: 0.4
+  MaxHeight: 1
+  MinTemperature: 0.2
+  MaxTemperature: 1
+  MinHumidity: -1
+  MaxHumidity: 0.3
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Vol
+      - Ash
+      - Mag
+      - Pyr
+      - Sco
+      - Mol
+      - Bri
+      - Gor
+      - Kel
+      - Dra
+      - Fla
+      - Obs
+      - Kra
+      - Bre
+      - Fen
+      Nuclei:
+      - a
+      - o
+      - u
+      - or
+      - ax
+      - ur
+      - ok
+      Codas:
+      - ash
+      - rok
+      - maw
+      - gor
+      - flame
+      - char
+      - deep
+      - forge
+      - brim
+      - mul
+      Middles:
+      - ru
+      - or
+      - al
+      - ax
+      - ok
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Caldera
+      - Vent
+      - Pit
+      - Crater
+      - Fissure
+      - Forge
+      - Shaft
+      - Tube
+      - Maw
+      - Furnace
+      - Chimney
+      - Rift
+      - Chamber
+      - Hollow
+      - Passage
+      - Tongue
+      - Throat
+      - Basin
+      - Trench
+      - Bowl
+      - Cauldron
+      - Sinkhole
+      DungeonPrefixes:
+      - The Erupting
+      - The Ash-covered
+      - The Smoldering
+      - The Scorched
+      - The Obsidian
+      - The Sulfurous
+      - The Burning
+      - The Active
+      - The Pyroclastic
+      - The Lava-streaked
+      - The Cinder-strewn
+      - The Fuming
+      - The Charred
+      - The Hellish
+      - The Explosive
+      - The Molten
+      - The Barren
+      - The Gas-choked
+      - The Ember-lit
+      - The Devastated
+      POISuffixes:
+      - Lava-field
+      - Ash-plain
+      - Crater
+      - Fumarole
+      - Pumice-ridge
+      - Obsidian-shelf
+      - Steam-vent
+      - Char-flat
+      - Cinder-cone
+      - Basalt-flow
+      - Sulfur-spring
+      - Pyroclast-field
+      - Lava-tongue
+      - Ember-slope
+      - Volcanic-bomb-field
+      - Scoria-mound
+      - Tephra-bed
+      - Lava-delta
+      - Spatter-cone
+      - Gas-plume
+      Adjectives:
+      - Erupting
+      - Ash-covered
+      - Scorched
+      - Sulfurous
+      - Burning
+      - Active
+      - Charred
+      - Barren
+      - Searing
+      - Desolate
+      - Pyroclastic
+      - Lava-streaked
+      - Cinder-strewn
+      - Fuming
+      - Hellish
+      - Explosive
+      - Molten
+      - Gas-choked
+      - Ember-lit
+      - Devastated
+      - Smoking
+      - Unstable
+      Description: 'Open volcanic landscape — lava flows, ash fields, toxic vents'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: b0d499e08f7c81d489bd909435b0985b, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 282.94678
+    blendNoiseOffsetY: -196.4718
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 44.809204
+    blendNoiseOffsetY: 938.1941
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 880.89417
+    blendNoiseOffsetY: -425.56442
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 353.26385
+    blendNoiseOffsetY: -190.199
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

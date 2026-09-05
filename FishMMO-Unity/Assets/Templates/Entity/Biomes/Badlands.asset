@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Badlands
+  m_EditorClassIdentifier: 
+  DisplayName: Badlands
+  Description: 'Eroded terrain — red rock, mesas, hoodoos, deep gulches'
+  BiomeColorId: {r: 0.7, g: 0.4, b: 0.3, a: 1}
+  GizmoColor: {r: 0.8, g: 0.5, b: 0.4, a: 1}
+  ElevationTier: 6
+  MinHeight: 0.75
+  MaxHeight: 0.9
+  MinTemperature: 0.3
+  MaxTemperature: 0.9
+  MinHumidity: -1
+  MaxHumidity: -0.5
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gor
+      - Kra
+      - Sha
+      - Dri
+      - Red
+      - Ero
+      - Gri
+      - Rav
+      - Sto
+      - Bri
+      - Kel
+      - Mor
+      - Thr
+      - Hol
+      - Ash
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - or
+      - ag
+      - ur
+      Codas:
+      - rock
+      - gully
+      - mesa
+      - butte
+      - clay
+      - wash
+      - ridge
+      - crack
+      - dust
+      - hoodoo
+      Middles:
+      - an
+      - or
+      - ar
+      - ul
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Gulch
+      - Ravine
+      - Crack
+      - Pit
+      - Hollow
+      - Chasm
+      - Tunnel
+      - Cave
+      - Fissure
+      - Shaft
+      - Chamber
+      - Passage
+      - Den
+      - Gallery
+      - Lair
+      - Crevice
+      - Pocket
+      - Alcove
+      - Canyon
+      - Slot
+      - Mine
+      - Overhang
+      DungeonPrefixes:
+      - The Eroded
+      - The Red
+      - The Crumbling
+      - The Sun-blasted
+      - The Dry
+      - The Ancient
+      - The Striated
+      - The Cracked
+      - The Layered
+      - The Fossil-rich
+      - The Barren
+      - The Sculpted
+      - The Wind-carved
+      - The Ochre
+      - The Desolate
+      - The Hoodoo-studded
+      - The Mesa-topped
+      - The Clay-walled
+      - The Petrified
+      - The Bone-dry
+      POISuffixes:
+      - Mesa
+      - Butte
+      - Hoodoo
+      - Wash
+      - Gully
+      - Clay-bank
+      - Fossil-bed
+      - Arroyo
+      - Pedestal-rock
+      - Balanced-rock
+      - Natural-bridge
+      - Slot-canyon
+      - Petrified-log
+      - Painted-wall
+      - Erosion-pillar
+      - Dry-waterfall
+      - Sand-pipe
+      - Mud-crack
+      - Cap-rock
+      - Pinnacle
+      Adjectives:
+      - Eroded
+      - Red
+      - Crumbling
+      - Sun-blasted
+      - Striated
+      - Cracked
+      - Layered
+      - Barren
+      - Harsh
+      - Sculpted
+      - Wind-carved
+      - Ochre
+      - Desolate
+      - Hoodoo-studded
+      - Fossil-rich
+      - Clay-walled
+      - Petrified
+      - Bone-dry
+      - Painted
+      - Ancient
+      - Tortured
+      - Dramatic
+      Description: 'Eroded terrain — red rock, mesas, hoodoos, deep gulches'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 0b7ea11686b5ccf44bb4871d2facee3a, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 615.3905
+    blendNoiseOffsetY: -612.8318
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 433.1374
+    blendNoiseOffsetY: 412.0013
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -981.9884
+    blendNoiseOffsetY: 135.24234
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 190.92285
+    blendNoiseOffsetY: -240.34915
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

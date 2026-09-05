@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Ice Cave
+  m_EditorClassIdentifier: 
+  DisplayName: Ice Cave
+  Description: 'Frozen underground — ice formations, bitter cold, echoing chambers'
+  BiomeColorId: {r: 0.7, g: 0.85, b: 0.95, a: 1}
+  GizmoColor: {r: 0.8, g: 0.9, b: 1, a: 1}
+  ElevationTier: 7
+  MinHeight: 0.75
+  MaxHeight: 1
+  MinTemperature: -1
+  MaxTemperature: -0.4
+  MinHumidity: -0.5
+  MaxHumidity: 0.5
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fro
+      - Gla
+      - Kri
+      - Thr
+      - Sno
+      - Vre
+      - Hri
+      - Bor
+      - Kel
+      - Nim
+      - Isk
+      - Dri
+      - Vin
+      - Hol
+      - Bre
+      Nuclei:
+      - i
+      - o
+      - a
+      - ir
+      - al
+      - or
+      - im
+      Codas:
+      - frost
+      - rim
+      - mir
+      - gard
+      - heim
+      - kel
+      - thr
+      - brin
+      - vald
+      - drim
+      Middles:
+      - ri
+      - al
+      - or
+      - im
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Cavern
+      - Grotto
+      - Hollow
+      - Fissure
+      - Tunnel
+      - Rift
+      - Chasm
+      - Crevice
+      - Gulch
+      - Depth
+      - Shaft
+      - Chamber
+      - Den
+      - Passage
+      - Gallery
+      - Pit
+      - Abyss
+      - Labyrinth
+      - Vault
+      - Throat
+      - Burrow
+      - Alcove
+      DungeonPrefixes:
+      - The Frozen
+      - The Glacial
+      - The Shimmering
+      - The Bitter
+      - The Crystal
+      - The Howling
+      - The Rime-locked
+      - The Silent
+      - The Frost-bitten
+      - The Blue
+      - The Slippery
+      - The Cracking
+      - The Dripping
+      - The Echoing
+      - The Translucent
+      - The Blinding
+      - The Treacherous
+      - The Permafrost
+      - The Glittering
+      - The Wind-howling
+      POISuffixes:
+      - Ice-pillar
+      - Frost-pool
+      - Frozen-falls
+      - Crystal-shelf
+      - Icicle-arch
+      - Hoar-bridge
+      - Glacier-step
+      - Rime-stone
+      - Ice-column
+      - Frost-flower
+      - Frozen-lake
+      - Crystal-garden
+      - Snow-drift
+      - Blue-ice-wall
+      - Drip-stone
+      - Ice-curtain
+      - Frost-chimney
+      - Permafrost-shelf
+      - Icicle-grove
+      - Glacial-pool
+      Adjectives:
+      - Frozen
+      - Glacial
+      - Shimmering
+      - Bitter
+      - Crystal
+      - Howling
+      - Rime-locked
+      - Frigid
+      - Blinding
+      - Silent
+      - Treacherous
+      - Translucent
+      - Glittering
+      - Blue
+      - Slippery
+      - Cracking
+      - Permafrost
+      - Echoing
+      - Dripping
+      - Frost-bitten
+      - Sub-zero
+      - Crystalline
+      Description: 'Frozen underground — ice formations, bitter cold, echoing chambers'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

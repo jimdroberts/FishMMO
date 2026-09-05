@@ -1,0 +1,113 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c11ae8f4b5d25f2a9b0e6d3c7a8f9b02, type: 3}
+  m_Name: Default Climate
+  m_EditorClassIdentifier: 
+  GlobalTemperatureOffset: 0
+  GlobalHumidityOffset: 0
+  UsePlanetTemperature: 0
+  ElevationLapseRate: 0.8
+  LowlandHumidityBonus: 0.3
+  HeatDryingThreshold: 0.5
+  HeatDryingRate: 0.5
+  ColdDryingThreshold: -0.3
+  ColdDryingRate: 0.3
+  ElevationBoundaries:
+  - 0
+  - 0.2
+  - 0.35
+  - 0.42
+  - 0.45
+  - 0.6
+  - 0.75
+  - 0.9
+  - 0.95
+  - 1
+  WaterSurfaceHeight: 0.42
+  DefaultVariants:
+  - Name: Frozen
+    MinTemperature: -1
+    MaxTemperature: -0.45
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Frozen
+    - Frostbound
+    - Ice-locked
+    - Snow-choked
+    - Rime-crusted
+    - Glacial
+    - Bitter
+    - Hoarfrost
+    DungeonPrefixes:
+    - The Frozen
+    - The Frostbound
+    - The Ice-locked
+    - The Snowbound
+    - The Rimed
+    TextureLayerOverrides: []
+  - Name: Scorched
+    MinTemperature: 0.45
+    MaxTemperature: 1
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Scorched
+    - Sun-cracked
+    - Blistering
+    - Ashen
+    - Heat-shimmering
+    - Sun-bleached
+    - Smouldering
+    - Parched
+    DungeonPrefixes:
+    - The Scorched
+    - The Sun-cracked
+    - The Smouldering
+    - The Blistered
+    - The Ashen
+    TextureLayerOverrides: []
+  - Name: Parched
+    MinTemperature: -0.45
+    MaxTemperature: 0.45
+    MinHumidity: -1
+    MaxHumidity: -0.5
+    Adjectives:
+    - Dust-dry
+    - Withered
+    - Cracked
+    - Thirsting
+    - Wind-scoured
+    - Barren
+    DungeonPrefixes:
+    - The Withered
+    - The Dust-dry
+    - The Thirsting
+    TextureLayerOverrides: []
+  - Name: Drenched
+    MinTemperature: -0.45
+    MaxTemperature: 0.45
+    MinHumidity: 0.55
+    MaxHumidity: 1
+    Adjectives:
+    - Rain-soaked
+    - Sodden
+    - Mist-veiled
+    - Storm-lashed
+    - Dripping
+    - Flooded
+    DungeonPrefixes:
+    - The Sodden
+    - The Mist-veiled
+    - The Storm-lashed
+    - The Drowned
+    TextureLayerOverrides: []

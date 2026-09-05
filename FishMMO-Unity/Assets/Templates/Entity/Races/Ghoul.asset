@@ -82,8 +82,11 @@ MonoBehaviour:
     - the Charnel Row
     Titles:
       Honorific:
-      - Grave-lord
       - Bone-picker
+      HonorificMasculine:
+      - Grave-lord
+      HonorificFeminine:
+      - Grave-lady
       Epithet:
       - the Pale
       - the Still-hungry
@@ -91,6 +94,7 @@ MonoBehaviour:
       - Lord of the Boneyard
       Legend:
       - 'Who Ate the Priest and the Priest''s Holy Book'
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -98,3 +102,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 525873855
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: 173642607
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1

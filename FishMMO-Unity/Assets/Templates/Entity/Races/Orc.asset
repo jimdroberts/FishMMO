@@ -227,6 +227,8 @@ MonoBehaviour:
       - Ironjaw
       - Bonecrusher
       - Battle-singer
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Undefeated
       - the Bloodied
@@ -251,6 +253,14 @@ MonoBehaviour:
       - Who Fought for Seven Days
       - Whose War Cry Crumbled Walls
       - Who Charged an Army Alone and Won
+      Occupational:
+      - Warsmith
+      - Beast-tamer
+      - Skull-carver
+      - Drum-keeper
+      - Hide-tanner
+      - Spear-maker
+      - Raid-quartermaster
     CitySuffixes:
       Capital:
       - skull
@@ -298,3 +308,16 @@ MonoBehaviour:
       - ruin
       - boneyard
       - char
+  BiomeAffinities:
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: -1911521020
+    Weight: 2
+  - BiomeID: 1156965030
+    Weight: 1.5
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: -540190004
+    Weight: 1
+  - BiomeID: 1275219499
+    Weight: 1

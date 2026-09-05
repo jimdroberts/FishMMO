@@ -85,6 +85,8 @@ MonoBehaviour:
       Honorific:
       - Elder-sculptor
       - Dream-carver
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Stoneshaper
       - the Silent
@@ -93,6 +95,7 @@ MonoBehaviour:
       - Sculptor of the Elder Gallery
       Legend:
       - Who Carved a Mountain for His Lost Kin
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +103,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 1275219499
+    Weight: 3
+  - BiomeID: -544771122
+    Weight: 2
+  - BiomeID: -138594552
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1

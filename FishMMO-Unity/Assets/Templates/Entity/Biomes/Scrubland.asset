@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Scrubland
+  m_EditorClassIdentifier: 
+  DisplayName: Scrubland
+  Description: 'Dry shrublands — thorny scrub, exposed rock, hardy survival'
+  BiomeColorId: {r: 0.6, g: 0.6, b: 0.4, a: 1}
+  GizmoColor: {r: 0.7, g: 0.7, b: 0.5, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.45
+  MaxHeight: 0.6
+  MinTemperature: 0.3
+  MaxTemperature: 0.6
+  MinHumidity: -0.6
+  MaxHumidity: 0
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bru
+      - Thi
+      - Gor
+      - Sha
+      - Dri
+      - Kra
+      - Sag
+      - Cha
+      - Gri
+      - Fen
+      - Wil
+      - Dry
+      - Kel
+      - Rot
+      - Bri
+      Nuclei:
+      - a
+      - o
+      - u
+      - ai
+      - ar
+      - ie
+      - ur
+      Codas:
+      - brush
+      - thorn
+      - scrub
+      - dust
+      - root
+      - rock
+      - sage
+      - grit
+      - parch
+      - bur
+      Middles:
+      - an
+      - or
+      - ar
+      - el
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Den
+      - Burrow
+      - Hollow
+      - Pit
+      - Hole
+      - Warren
+      - Tunnel
+      - Nest
+      - Lair
+      - Crack
+      - Cave
+      - Chamber
+      - Passage
+      - Shaft
+      - Crevice
+      - Foundation
+      - Shelter
+      - Crawl-space
+      - Pocket
+      - Root-hole
+      - Gully
+      - Wash
+      DungeonPrefixes:
+      - The Dry
+      - The Dusty
+      - The Thorn-choked
+      - The Hidden
+      - The Parched
+      - The Barren
+      - The Cracked
+      - The Wind-stripped
+      - The Sun-bleached
+      - The Sparse
+      - The Hardy
+      - The Scraggly
+      - The Lizard-haunted
+      - The Snake-infested
+      - The Rattling
+      - The Drought-stricken
+      - The Gritty
+      - The Resilient
+      - The Sage-scented
+      - The Weathered
+      POISuffixes:
+      - Thorn-bush
+      - Dry-wash
+      - Scrub-clearing
+      - Rock-outcrop
+      - Sage-flat
+      - Dust-hollow
+      - Gully
+      - Brush-ring
+      - Lizard-rock
+      - Snake-den
+      - Rabbit-burrow
+      - Cactus-stand
+      - Juniper-grove
+      - Desert-willow
+      - Coyote-trail
+      - Roadrunner-perch
+      - Scorpion-stone
+      - Mesquite-thicket
+      - Dry-spring
+      - Erosion-gully
+      Adjectives:
+      - Dry
+      - Dusty
+      - Thorn-choked
+      - Parched
+      - Barren
+      - Wind-stripped
+      - Hardy
+      - Scraggly
+      - Sun-bleached
+      - Sparse
+      - Lizard-haunted
+      - Snake-infested
+      - Rattling
+      - Drought-stricken
+      - Gritty
+      - Resilient
+      - Sage-scented
+      - Weathered
+      - Heat-cracked
+      - Desolate
+      - Thorny
+      - Rugged
+      Description: 'Dry shrublands — thorny scrub, exposed rock, hardy survival'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: ce8c98f267d4a424799e2fe49fde661a, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 800.54016
+    blendNoiseOffsetY: 790.9467
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 443.13522
+    blendNoiseOffsetY: -373.80276
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -222.62964
+    blendNoiseOffsetY: -200.72974
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 653.3568
+    blendNoiseOffsetY: -115.34009
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

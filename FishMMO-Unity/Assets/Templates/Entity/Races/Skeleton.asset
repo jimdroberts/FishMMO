@@ -70,7 +70,7 @@ MonoBehaviour:
       - us
       - os
       - mor
-      Description: Clattering Latinate — dry bone-speech
+      Description: Clattering ossuary-chant — dry bone-speech
       Tags:
       - Bone-names
       - Animation-marks
@@ -84,7 +84,10 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Bone-captain
+      HonorificMasculine:
       - Osseous-lord
+      HonorificFeminine:
+      - Osseous-lady
       Epithet:
       - the White
       - the Jaw-broken
@@ -93,6 +96,7 @@ MonoBehaviour:
       - Captain of the Bone Reliquary
       Legend:
       - Who Held the Bridge Without Flesh or Breath
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +104,16 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: -567058185
+    Weight: 1
+  - BiomeID: 173642607
+    Weight: 1

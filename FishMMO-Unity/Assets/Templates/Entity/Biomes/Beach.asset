@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Beach
+  m_EditorClassIdentifier: 
+  DisplayName: Beach
+  Description: 'Coastal shoreline — tidal caves, salt spray, sun-bleached stone'
+  BiomeColorId: {r: 0.9, g: 0.8, b: 0.6, a: 1}
+  GizmoColor: {r: 1, g: 0.9, b: 0.7, a: 1}
+  ElevationTier: 3
+  MinHeight: 0.42
+  MaxHeight: 0.45
+  MinTemperature: -0.1
+  MaxTemperature: 0.6
+  MinHumidity: -0.5
+  MaxHumidity: 0.8
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Tid
+      - Cor
+      - Sal
+      - Bri
+      - Wav
+      - Pel
+      - San
+      - Gul
+      - She
+      - Kel
+      - Mar
+      - Dri
+      - Flo
+      - Rip
+      - Cov
+      Nuclei:
+      - a
+      - ea
+      - ia
+      - al
+      - oa
+      - ei
+      - ar
+      Codas:
+      - tide
+      - shore
+      - bay
+      - cove
+      - reef
+      - sand
+      - wave
+      - shell
+      - bank
+      - drift
+      Middles:
+      - al
+      - ar
+      - el
+      - an
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Grotto
+      - Cavern
+      - Cove
+      - Hollow
+      - Tunnel
+      - Passage
+      - Rift
+      - Arch
+      - Pool
+      - Chasm
+      - Den
+      - Blowhole
+      - Pit
+      - Shelf
+      - Chamber
+      - Neck
+      - Vault
+      - Maze
+      - Sinkhole
+      - Stack
+      - Crevice
+      - Fissure
+      DungeonPrefixes:
+      - The Tidal
+      - The Salt-worn
+      - The Barnacled
+      - The Flooded
+      - The Echoing
+      - The Sandy
+      - The Spray-kissed
+      - The Wave-carved
+      - The Sun-bleached
+      - The Shell-encrusted
+      - The Coral-lined
+      - The Driftwood-framed
+      - The Storm-battered
+      - The Seaweed-draped
+      - The Foam-washed
+      - The Briny
+      - The Pearl-studded
+      - The Tide-locked
+      - The Sea-hollowed
+      - The Wind-scoured
+      POISuffixes:
+      - Tideline
+      - Shell-mound
+      - Rock-pool
+      - Driftwood
+      - Lagoon
+      - Sand-bar
+      - Coral-bed
+      - Sea-arch
+      - Crab-hollow
+      - Seal-rock
+      - Kelp-strand
+      - Wave-shelf
+      - Beach-cave
+      - Sea-glass-bank
+      - Turtle-nest
+      - Ship-timber
+      - Oyster-bed
+      - Barnacle-rock
+      - Tide-marker
+      - Dune-grass
+      Adjectives:
+      - Tidal
+      - Salt-worn
+      - Barnacled
+      - Sun-bleached
+      - Sandy
+      - Wave-carved
+      - Spray-kissed
+      - Windswept
+      - Briny
+      - Driftwood-strewn
+      - Shell-encrusted
+      - Coral-lined
+      - Storm-battered
+      - Seaweed-draped
+      - Foam-washed
+      - Pearl-studded
+      - Tide-locked
+      - Sea-hollowed
+      - Weathered
+      - Golden
+      - Turquoise
+      - Tropical
+      Description: 'Coastal shoreline — tidal caves, salt spray, sun-bleached stone'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 10, y: 10}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -867.54443
+    blendNoiseOffsetY: -190.98486
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -961.4673
+    blendNoiseOffsetY: -823.14966
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 44.885498
+    blendNoiseOffsetY: -731.26965
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -884.7539
+    blendNoiseOffsetY: -147.5593
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

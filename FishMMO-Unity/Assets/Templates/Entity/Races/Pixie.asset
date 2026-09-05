@@ -82,8 +82,10 @@ MonoBehaviour:
     - Silver Wing Meadow
     Titles:
       Honorific:
-      - Wee-queen
       - Dust-sprinkler
+      HonorificMasculine: []
+      HonorificFeminine:
+      - Wee-queen
       Epithet:
       - the Chiming
       - the Dust-throwing
@@ -92,6 +94,7 @@ MonoBehaviour:
       - Queen of the Dewdrop Court
       Legend:
       - 'Who Stole the Knight''s Nose for an Hour'
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -99,3 +102,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: -439598380
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1

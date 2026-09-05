@@ -173,6 +173,8 @@ MonoBehaviour:
       - Echospeaker
       - Shimmerbound
       - Memory-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Unmoored
       - the Fading
@@ -195,6 +197,7 @@ MonoBehaviour:
       - Who Guided Ten Thousand Souls
       - Who Cannot Be Destroyed
       - Who Held the Veil Together When Reality Cracked
+      Occupational: []
     CitySuffixes:
       Capital:
       - drift
@@ -242,3 +245,14 @@ MonoBehaviour:
       - hollow
       - void
       - dust
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: 1139958860
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1
+  - BiomeID: 247344987
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1

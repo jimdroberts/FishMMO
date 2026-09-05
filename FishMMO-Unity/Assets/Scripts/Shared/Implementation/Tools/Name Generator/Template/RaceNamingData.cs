@@ -29,6 +29,9 @@ namespace FishMMO.Shared.NameGeneration
 
 		public SerializableRaceCitySuffixes CitySuffixes = new();
 
+		[Tooltip("Whether Civil titles may draw trades from the grammar's generic list when this race lists none. Off for monsters: a slime is never a potter.")]
+		public bool AllowGenericOccupations = true;
+
 		private RacePhonology runtimePhonology;
 		private Dictionary<string, RacePhonology> runtimeCultures;
 		private RaceTitles runtimeTitles;
@@ -138,6 +141,7 @@ namespace FishMMO.Shared.NameGeneration
 			}
 			Places = source.Places == null ? null : (string[])source.Places.Clone();
 			Titles = source.Titles == null ? new SerializableRaceTitles() : SerializableRaceTitles.From(source.Titles.ToRuntime());
+			AllowGenericOccupations = source.AllowGenericOccupations;
 			CitySuffixes = source.CitySuffixes == null ? new SerializableRaceCitySuffixes() : SerializableRaceCitySuffixes.From(source.CitySuffixes.ToRuntime());
 			runtimePhonology = null;
 		}

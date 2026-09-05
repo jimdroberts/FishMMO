@@ -84,8 +84,10 @@ MonoBehaviour:
     - Laurel Circle
     Titles:
       Honorific:
-      - Tree-mother
       - Grove-soul
+      HonorificMasculine: []
+      HonorificFeminine:
+      - Tree-mother
       Epithet:
       - the Green-veined
       - the Many-leaved
@@ -93,6 +95,7 @@ MonoBehaviour:
       - Mother of the Great Oak
       Legend:
       - Whose Roots Saved the Village from the Fire
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +103,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 1
+  - BiomeID: -1640008461
+    Weight: 0.5

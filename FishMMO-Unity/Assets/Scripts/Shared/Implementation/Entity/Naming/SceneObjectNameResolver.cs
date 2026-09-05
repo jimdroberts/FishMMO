@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
 using FishMMO.Shared.NameGeneration;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared
 {
@@ -79,9 +81,19 @@ namespace FishMMO.Shared
 		public CharacterNameFormat NameFormat = CharacterNameFormat.GivenAndFamily;
 		public NamingTitlePolicy TitlePolicy = NamingTitlePolicy.None;
 
+		[Header("Title")]
+		[Tooltip("Social register of the title: Civil for townsfolk and traders, Martial for soldiers, Mythic for legends.")]
+		public TitleRegister Register = TitleRegister.Civil;
+		[Tooltip("What this character does, e.g. 'Banker'. Empty uses the Interactable's title when the object has one.")]
+		public string Profession;
+		[Tooltip("Longest title allowed on the nameplate; 0 is unlimited.")]
+		public int MaxTitleLength = 32;
+		[Tooltip("Whether a second clause may be appended ('Lord of Ashford, the Bold'). Off keeps nameplates short.")]
+		public bool AllowCompoundTitle;
+
 		[Header("Places and items")]
-		[Tooltip("Biome for Dungeon and Point of Interest names; optional flavour for City names.")]
-		[TemplateReference(typeof(BiomeNamingTemplate))]
+		[Tooltip("Biome for Dungeon and Point of Interest names and flavour for City names. Leave unset to read the scene's biome map at the object's position.")]
+		[TemplateReference(typeof(BiomeTemplate))]
 		public int BiomeID;
 		public CityType CityType = CityType.Any;
 		public POIType POIType = POIType.Any;
@@ -103,6 +115,9 @@ namespace FishMMO.Shared
 		public bool RequiresBiome =>
 			Mode == SceneObjectNamingMode.Dungeon
 			|| Mode == SceneObjectNamingMode.PointOfInterest;
+
+		/// <summary>True for the modes whose name is coloured by a biome, required or not.</summary>
+		public bool UsesBiome => RequiresBiome || Mode == SceneObjectNamingMode.City;
 	}
 
 	/// <summary>
@@ -205,8 +220,85 @@ namespace FishMMO.Shared
 		/// templates loaded, no race for a race-driven mode, no biome for a biome-driven mode — so the
 		/// caller can keep the authored name instead of guessing.
 		/// </summary>
+		/// <summary>
+		/// The biome a namer should use: the settings' explicit biome, else the biome the scene's map
+		/// (or terrain and climate) reports at the object's position. Null when neither exists.
+		/// </summary>
+		public static BiomeTemplate ResolveBiome(SceneObjectNamingSettings settings, Vector3 worldPosition,
+			WorldSceneSettings scene, out BiomeClimateVariant variant)
+		{
+			variant = null;
+			if (settings == null || !settings.UsesBiome)
+			{
+				return null;
+			}
+			BiomeReading reading = BiomeSampler.Read(worldPosition, scene);
+			if (settings.BiomeID != 0)
+			{
+				if (!BiomeRegistry.TryGetByID(settings.BiomeID, out BiomeTemplate chosen))
+				{
+					chosen = BiomeTemplate.Get<BiomeTemplate>(settings.BiomeID);
+				}
+				if (chosen != null)
+				{
+					// An explicit biome still reads under the scene's current climate.
+					variant = scene != null ? scene.ResolveVariant(chosen, reading.Climate) : chosen.ResolveOwnVariant(reading.Climate.Temperature, reading.Climate.Humidity);
+					return chosen;
+				}
+			}
+			variant = reading.Variant;
+			return reading.Biome;
+		}
+
+		/// <summary>The variants a biome can show under a scene: its own, else the scene climate's defaults.</summary>
+		public static IReadOnlyList<BiomeClimateVariant> VariantsFor(BiomeTemplate biome, WorldSceneSettings scene)
+		{
+			if (biome == null)
+			{
+				return System.Array.Empty<BiomeClimateVariant>();
+			}
+			if (biome.ClimateVariants != null && biome.ClimateVariants.Count > 0)
+			{
+				return biome.ClimateVariants;
+			}
+			return scene != null && scene.Climate != null ? scene.Climate.DefaultVariants : System.Array.Empty<BiomeClimateVariant>();
+		}
+
+		/// <summary>Index of a variant in <see cref="VariantsFor"/> plus one; 0 when it is not one of them. What the wire carries.</summary>
+		public static byte VariantIndexOf(BiomeTemplate biome, WorldSceneSettings scene, BiomeClimateVariant variant)
+		{
+			if (variant == null)
+			{
+				return 0;
+			}
+			IReadOnlyList<BiomeClimateVariant> variants = VariantsFor(biome, scene);
+			for (int i = 0; i < variants.Count && i < 254; i++)
+			{
+				if (variants[i] == variant)
+				{
+					return (byte)(i + 1);
+				}
+			}
+			return 0;
+		}
+
+		/// <summary>The variant a wire index names, or null.</summary>
+		public static BiomeClimateVariant VariantAt(BiomeTemplate biome, WorldSceneSettings scene, byte index)
+		{
+			if (index == 0)
+			{
+				return null;
+			}
+			IReadOnlyList<BiomeClimateVariant> variants = VariantsFor(biome, scene);
+			return index - 1 < variants.Count ? variants[index - 1] : null;
+		}
+
+		/// <param name="autoProfession">Profession to use when the settings name none — the interactable's title, typically.</param>
+		/// <param name="biome">The biome to name from, already resolved by <see cref="ResolveBiome"/>; null to use only the settings' explicit biome.</param>
+		/// <param name="variant">The climate variant the place reads under; null for none.</param>
 		public static bool TryBuild(SceneObjectNamingSettings settings, RaceTemplate race, int seed,
-			CharacterGender gender, out string name, out string error)
+			CharacterGender gender, out string name, out string error, string autoProfession = null,
+			BiomeTemplate biome = null, BiomeClimateVariant variant = null)
 		{
 			name = null;
 			error = null;
@@ -236,18 +328,19 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			string biomeKey = null;
-			if (settings.BiomeID != 0)
+			if (biome == null && settings.BiomeID != 0)
 			{
-				if (!BiomeRegistry.TryGetByID(settings.BiomeID, out BiomeNamingTemplate biome))
+				if (!BiomeRegistry.TryGetByID(settings.BiomeID, out biome))
 				{
-					biome = BiomeNamingTemplate.Get<BiomeNamingTemplate>(settings.BiomeID);
+					biome = BiomeTemplate.Get<BiomeTemplate>(settings.BiomeID);
 				}
-				biomeKey = biome?.Key;
 			}
-			if (settings.RequiresBiome && (biomeKey == null || !BiomeRegistry.Contains(biomeKey)))
+			int biomeID = biome != null ? BiomeRegistry.IDOf(biome) : 0;
+			if (settings.RequiresBiome && (biome == null || biome.Naming == null || !biome.Naming.IsUsable))
 			{
-				error = $"{settings.Mode} names need a Biome";
+				error = biome == null
+					? $"{settings.Mode} names need a biome: set one, or place the object where the scene's biome map covers"
+					: $"biome '{biome.name}' has no naming data";
 				return false;
 			}
 
@@ -277,6 +370,10 @@ namespace FishMMO.Shared
 							Modifier = modifierKey,
 							Gender = gender,
 							TitleType = ToTitleType(settings.TitlePolicy),
+							Register = settings.Register,
+							Profession = string.IsNullOrWhiteSpace(settings.Profession) ? autoProfession : settings.Profession,
+							MaxTitleLength = settings.MaxTitleLength,
+							AllowCompoundTitle = settings.AllowCompoundTitle,
 							NameOnly = settings.TitlePolicy == NamingTitlePolicy.None,
 							IncludeFamilyName = settings.NameFormat == CharacterNameFormat.GivenAndFamily,
 						});
@@ -289,21 +386,24 @@ namespace FishMMO.Shared
 							Race = raceKey,
 							Culture = culture,
 							CityType = settings.CityType,
-							Biome = biomeKey,
+							BiomeID = biomeID,
+							Variant = variant,
 						}).Name;
 						break;
 					case SceneObjectNamingMode.Dungeon:
 						name = generator.Generate(new DungeonRequest
 						{
-							Biome = biomeKey,
+							BiomeID = biomeID,
 							Race = raceKey,
+							Variant = variant,
 						}).Name;
 						break;
 					case SceneObjectNamingMode.PointOfInterest:
 						name = generator.Generate(new POIRequest
 						{
-							Biome = biomeKey,
+							BiomeID = biomeID,
 							POIType = settings.POIType,
+							Variant = variant,
 						}).Name;
 						break;
 					case SceneObjectNamingMode.Item:

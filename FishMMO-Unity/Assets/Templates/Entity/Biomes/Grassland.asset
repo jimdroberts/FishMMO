@@ -1,0 +1,393 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Grassland
+  m_EditorClassIdentifier: 
+  DisplayName: Grassland
+  Description: 'Temperate grasslands — wild grasses, hidden warrens, wind-swept plains'
+  BiomeColorId: {r: 0.4, g: 0.7, b: 0.3, a: 1}
+  GizmoColor: {r: 0, g: 1, b: 0, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.45
+  MaxHeight: 0.6
+  MinTemperature: -0.1
+  MaxTemperature: 0.4
+  MinHumidity: 0
+  MaxHumidity: 0.6
+  SelectionWeight: 1
+  ClimateVariants:
+  - Name: Frozen
+    MinTemperature: -1
+    MaxTemperature: -0.45
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Frost-stiff
+    - Snow-flat
+    - Ice-blown
+    - Winter-brown
+    DungeonPrefixes:
+    - The Frost-flat
+    - The Snow-swept
+    TextureLayerOverrides: []
+  - Name: Scorched
+    MinTemperature: 0.45
+    MaxTemperature: 1
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Sun-gold
+    - Straw-dry
+    - Dust-blown
+    - Heat-hazed
+    DungeonPrefixes:
+    - The Sun-gold
+    - The Straw-dry
+    - The Dust-blown
+    TextureLayerOverrides: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gra
+      - Bre
+      - Win
+      - Gol
+      - Pra
+      - Wil
+      - Far
+      - Hil
+      - Lar
+      - Swa
+      - Rye
+      - Dew
+      - Hay
+      - Fer
+      - Bro
+      Nuclei:
+      - a
+      - e
+      - ea
+      - ai
+      - ow
+      - ie
+      - ar
+      Codas:
+      - grass
+      - field
+      - mead
+      - plain
+      - vale
+      - down
+      - wold
+      - lea
+      - dale
+      - holm
+      Middles:
+      - an
+      - el
+      - ar
+      - er
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Barrow
+      - Den
+      - Hollow
+      - Burrow
+      - Mound
+      - Warren
+      - Tunnel
+      - Pit
+      - Nest
+      - Lair
+      - Passage
+      - Chamber
+      - Cave
+      - Shaft
+      - Crevice
+      - Root-cave
+      - Cellar
+      - Vault
+      - Sinkhole
+      - Pocket
+      - Hole
+      - Crawl-space
+      DungeonPrefixes:
+      - The Hidden
+      - The Grass-covered
+      - The Wild
+      - The Wind-battered
+      - The Ancient
+      - The Overgrown
+      - The Forgotten
+      - The Prairie
+      - The Sun-warmed
+      - The Vast
+      - The Endless
+      - The Rolling
+      - The Storm-swept
+      - The Golden
+      - The Untamed
+      - The Boundless
+      - The Lonely
+      - The Rustling
+      - The Open
+      - The Amber
+      POISuffixes:
+      - Grass-ring
+      - Standing-stone
+      - Grazing-ground
+      - Wildflower-meadow
+      - Bison-trail
+      - Wind-cairn
+      - Prairie-spring
+      - Grass-mound
+      - Hawk-perch
+      - Rabbit-warren
+      - Snake-den
+      - Prairie-dog-town
+      - Fire-scar
+      - Camp-ring
+      - Sun-stone
+      - Migration-path
+      - Bone-pile
+      - Antelope-run
+      - Thunder-circle
+      - Seed-head-field
+      Adjectives:
+      - Wild
+      - Wind-battered
+      - Verdant
+      - Endless
+      - Untamed
+      - Flourishing
+      - Sun-warmed
+      - Rustling
+      - Boundless
+      - Pristine
+      - Rolling
+      - Storm-swept
+      - Golden
+      - Lonely
+      - Open
+      - Amber
+      - Vast
+      - Tall
+      - Whispering
+      - Undulating
+      - Fragrant
+      - Sweeping
+      Description: 'Temperate grasslands — wild grasses, hidden warrens, wind-swept plains'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: b57d7a0ebf324414fb3f358921cc80fc, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 8, y: 8}
+    blendMode: 0
+    blendNoiseScale: 16
+    blendNoiseOffsetX: 577.98505
+    blendNoiseOffsetY: -911.29016
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules:
+    - stableGuid: f4d3fd6ef31b47a7a109092cbaf02f07
+      enableSpawning: 1
+      ruleName: 
+      prefabs:
+      - {fileID: 4732638208583590639, guid: 87bd0c23528df05478c9d9c23b961a97, type: 3}
+      spawnChannel: 0
+      densityPer100m2: 50
+      maxPerChunk: 20000
+      minSpacing: 0
+      minTextureWeight: 0.35
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 0
+      heightFalloff: 0
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 0
+      slopeFalloff: 0
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 1, y: 1}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 0}
+      alignToTerrainNormal: 0
+      seedOffset: 0
+      detailNoiseSpread: 0.5
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: 16b080bc250c42f183134296c88ef485
+      enableSpawning: 1
+      ruleName: 
+      prefabs:
+      - {fileID: 8730988760233312242, guid: ab474dcb80a6b304981d8d8456ec4f14, type: 3}
+      spawnChannel: 1
+      densityPer100m2: 1.5
+      maxPerChunk: 35
+      minSpacing: 0
+      minTextureWeight: 0.35
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 0
+      heightFalloff: 0
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 0
+      slopeFalloff: 0
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 1, y: 1}
+      widthScaleRange: {x: 0.6, y: 1}
+      heightScaleRange: {x: 1, y: 1.6}
+      yRotationRange: {x: 0, y: 0}
+      alignToTerrainNormal: 0
+      seedOffset: 0
+      detailNoiseSpread: 0.5
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 64
+  detailTextureLayers:
+  - albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 16, y: 16}
+    blendMode: 0
+    blendNoiseScale: 128
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 0
+    heightFalloff: 0
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 0
+    slopeFalloff: 0
+    prefabSpawnRules: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -881.8032
+    blendNoiseOffsetY: -800.38074
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 898.52527
+    blendNoiseOffsetY: -152.44519
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 304.54797
+    blendNoiseOffsetY: 336.3719
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

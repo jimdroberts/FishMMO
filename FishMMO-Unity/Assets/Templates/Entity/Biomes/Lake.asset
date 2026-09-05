@@ -1,0 +1,246 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Lake
+  m_EditorClassIdentifier: 
+  DisplayName: Lake
+  Description: 'Still fresh water — mirror-calm shallows, reed beds, cold depths'
+  BiomeColorId: {r: 0.25, g: 0.55, b: 0.8, a: 1}
+  GizmoColor: {r: 0.25, g: 0.55, b: 0.8, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.42
+  MaxHeight: 0.6
+  MinTemperature: -0.6
+  MaxTemperature: 0.6
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mer
+      - Lin
+      - Sil
+      - Cal
+      - Wyn
+      - Tarn
+      - Lor
+      - Ash
+      - Bri
+      - Hol
+      - Vel
+      - Nim
+      - Ser
+      - Del
+      - Elm
+      Nuclei:
+      - a
+      - e
+      - i
+      - o
+      - ae
+      - oo
+      - ea
+      Codas:
+      - mere
+      - tarn
+      - pool
+      - loch
+      - shore
+      - deep
+      - lin
+      - wash
+      - reed
+      - still
+      Middles:
+      - en
+      - el
+      - an
+      - or
+      - is
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Depths
+      - Basin
+      - Sanctum
+      - Grotto
+      - Hollow
+      - Vault
+      - Cistern
+      - Wellspring
+      - Drownway
+      - Undercroft
+      - Shallows
+      - Bed
+      - Cavern
+      - Reach
+      - Mirror
+      - Sink
+      DungeonPrefixes:
+      - The Sunken
+      - The Still
+      - The Drowned
+      - The Mirror-black
+      - The Reed-choked
+      - The Glassy
+      - The Silt-bound
+      - The Cold-water
+      - The Forgotten
+      - The Mist-veiled
+      - The Moonlit
+      - The Bottomless
+      POISuffixes:
+      - Landing
+      - Reed-bed
+      - Shallows
+      - Fishing-stones
+      - Boathouse
+      - Weir
+      - Jetty
+      - Lily-bank
+      - Mere-stone
+      - Drowned-shrine
+      - Heron-perch
+      - Islet
+      - Spillway
+      - Cold-spring
+      Adjectives:
+      - Still
+      - Glassy
+      - Mirror-calm
+      - Reed-fringed
+      - Mist-veiled
+      - Cold
+      - Bottomless
+      - Moonlit
+      - Silt-dark
+      - Placid
+      - Drowned
+      - Clear-water
+      - Sunken
+      - Sheltered
+      Description: 'Still fresh water — mirror-calm shallows, reed beds, cold depths'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 2ada0aee473c5c64f836dbc1cf387aa6, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 113.59534
+    blendNoiseOffsetY: 405.3492
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -750.3777
+    blendNoiseOffsetY: -582.3987
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -630.56775
+    blendNoiseOffsetY: -828.12744
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -612.4895
+    blendNoiseOffsetY: -312.88733
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

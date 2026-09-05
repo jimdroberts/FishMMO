@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.NameGeneration.Editor
 {
@@ -70,9 +71,19 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		private SearchableDropdownField raceField;
 		private SearchableDropdownField secondRaceField;
 		private SearchableDropdownField biomeField;
+		private SearchableDropdownField variantField;
+		/// <summary>Variant behind each entry of <see cref="variantField"/>; null for "(none)".</summary>
+		private List<BiomeClimateVariant> variantObjects = new List<BiomeClimateVariant>();
+		/// <summary>Climate assets whose default variants the variant dropdown offers.</summary>
+		private List<ClimateSettings> climateAssets = new List<ClimateSettings>();
+		/// <summary>Label of the city-only biome choice that lets the race pick its own home.</summary>
+		private const string RaceHomeBiomeChoice = "(race's home biome)";
 		private DropdownField cultureField;
 		private DropdownField genderField;
 		private DropdownField titleTypeField;
+		private DropdownField registerField;
+		private TextField professionField;
+		private IntegerField maxTitleField;
 		private DropdownField cityTypeField;
 		private DropdownField poiTypeField;
 		private DropdownField itemTypeField;
@@ -89,6 +100,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		private VisualElement characterGroup;
 		private VisualElement cityGroup;
 		private VisualElement biomeRow;
+		private VisualElement variantRow;
 		private VisualElement poiGroup;
 		private VisualElement itemGroup;
 
@@ -163,6 +175,11 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			raceDisplayNames = raceKeys.Select(RaceRegistry.GetDisplayName).ToList();
 			biomeKeys = NameGenerator.SupportedBiomes.ToList();
 			biomeDisplayNames = biomeKeys.Select(BiomeRegistry.GetDisplayName).ToList();
+			climateAssets = AssetDatabase.FindAssets($"t:{nameof(ClimateSettings)}")
+				.Select(guid => AssetDatabase.LoadAssetAtPath<ClimateSettings>(AssetDatabase.GUIDToAssetPath(guid)))
+				.Where(asset => asset != null)
+				.OrderBy(asset => asset.name, StringComparer.Ordinal)
+				.ToList();
 		}
 
 		// ── Category list (left panel) ────────────────────────────────
@@ -207,13 +224,25 @@ namespace FishMMO.Shared.NameGeneration.Editor
 				|| category == Category.Cities
 				|| category == Category.Items;
 			bool usesBiome = category == Category.Dungeons
-				|| category == Category.PointsOfInterest;
+				|| category == Category.PointsOfInterest
+				|| category == Category.Cities;
+			// Cities may leave the biome to the race; the other biome categories must name one.
+			bool wasCities = biomeField.Choices.Count == biomeDisplayNames.Count + 1;
+			bool isCities = category == Category.Cities;
+			if (usesBiome && wasCities != isCities)
+			{
+				biomeField.SetChoices(isCities
+					? new[] { RaceHomeBiomeChoice }.Concat(biomeDisplayNames)
+					: biomeDisplayNames);
+				RefreshVariantChoices();
+			}
 
 			raceRow.style.display = usesRace ? DisplayStyle.Flex : DisplayStyle.None;
 			cultureRow.style.display = usesRace && cultureKeys.Count > 0
 				? DisplayStyle.Flex
 				: DisplayStyle.None;
 			biomeRow.style.display = usesBiome ? DisplayStyle.Flex : DisplayStyle.None;
+			variantRow.style.display = usesBiome ? DisplayStyle.Flex : DisplayStyle.None;
 
 			characterGroup.style.display = isCharacters ? DisplayStyle.Flex : DisplayStyle.None;
 			cityGroup.style.display = category == Category.Cities ? DisplayStyle.Flex : DisplayStyle.None;
@@ -253,8 +282,17 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			biomeRow = new VisualElement();
 			biomeRow.Add(FieldLabel("Biome"));
 			biomeField = new SearchableDropdownField("Biome", biomeDisplayNames) { name = "biome-field" };
+			biomeField.OnValueChanged += _ => RefreshVariantChoices();
 			biomeRow.Add(biomeField);
 			settingsContent.Add(biomeRow);
+
+			// Climate variant: the biome's own, then every ClimateSettings asset's defaults.
+			variantRow = new VisualElement();
+			variantRow.Add(FieldLabel("Climate Variant"));
+			variantField = new SearchableDropdownField("Climate Variant", new[] { "(none)" }) { name = "variant-field" };
+			variantRow.Add(variantField);
+			settingsContent.Add(variantRow);
+			RefreshVariantChoices();
 
 			BuildCharacterGroup();
 			BuildCityGroup();
@@ -289,6 +327,35 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			row.Add(titleCol);
 
 			characterGroup.Add(row);
+
+			var titleRow = new VisualElement();
+			titleRow.AddToClassList("field-row");
+
+			var registerCol = new VisualElement();
+			registerCol.AddToClassList("field-col");
+			registerCol.Add(FieldLabel("Register"));
+			registerField = new DropdownField(Enum.GetNames(typeof(TitleRegister)).ToList(), 0) { name = "register-field" };
+			registerField.labelElement.style.display = DisplayStyle.None;
+			registerField.tooltip = "Civil: honorifics and trades. Martial: ranks and deeds. Mythic: legends.";
+			registerCol.Add(registerField);
+			titleRow.Add(registerCol);
+
+			var maxCol = new VisualElement();
+			maxCol.AddToClassList("field-col");
+			maxCol.Add(FieldLabel("Max title length"));
+			maxTitleField = new IntegerField { value = 0, name = "max-title-field" };
+			maxTitleField.labelElement.style.display = DisplayStyle.None;
+			maxTitleField.tooltip = "0 = unlimited. Nameplates use 32.";
+			maxCol.Add(maxTitleField);
+			titleRow.Add(maxCol);
+
+			characterGroup.Add(titleRow);
+
+			characterGroup.Add(FieldLabel("Profession (optional)"));
+			professionField = new TextField { value = "", name = "profession-field" };
+			professionField.labelElement.style.display = DisplayStyle.None;
+			professionField.tooltip = "Fills the {profession} slot of Civil titles, e.g. 'Banker'.";
+			characterGroup.Add(professionField);
 
 			hybridToggle = new Toggle("Hybrid Mode") { value = false, name = "hybrid-toggle" };
 			hybridToggle.tooltip = "Blend the phonology of two races into one name.";
@@ -452,10 +519,55 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			return i >= 0 && i < raceKeys.Count ? raceKeys[i] : "elf";
 		}
 
+		/// <summary>The chosen biome key, or null when a city is left to its race's home biome.</summary>
 		private string SelectedBiomeKey()
 		{
 			int i = biomeField.Index;
+			if (biomeField.Choices.Count == biomeDisplayNames.Count + 1)
+			{
+				// Cities: entry 0 is the race's home.
+				i--;
+				if (i < 0) return null;
+			}
 			return i >= 0 && i < biomeKeys.Count ? biomeKeys[i] : biomeKeys.FirstOrDefault();
+		}
+
+		private BiomeClimateVariant SelectedVariant()
+		{
+			int i = variantField.Index;
+			return i >= 0 && i < variantObjects.Count ? variantObjects[i] : null;
+		}
+
+		private void RefreshVariantChoices()
+		{
+			if (variantField == null) return;
+			var labels = new List<string> { "(none)" };
+			variantObjects = new List<BiomeClimateVariant> { null };
+			string key = SelectedBiomeKey();
+			if (key != null && BiomeRegistry.TryGet(key, out BiomeTemplate biome))
+			{
+				foreach (BiomeClimateVariant variant in biome.ClimateVariants)
+				{
+					if (variant == null || string.IsNullOrWhiteSpace(variant.Name)) continue;
+					labels.Add(variant.Name);
+					variantObjects.Add(variant);
+				}
+			}
+			foreach (ClimateSettings climate in climateAssets)
+			{
+				foreach (BiomeClimateVariant variant in climate.DefaultVariants)
+				{
+					if (variant == null || string.IsNullOrWhiteSpace(variant.Name)) continue;
+					labels.Add($"{variant.Name} ({climate.name})");
+					variantObjects.Add(variant);
+				}
+			}
+			variantField.SetChoices(labels);
+		}
+
+		private static string VariantSuffix(BiomeClimateVariant variant)
+		{
+			return variant == null ? "" : $", {variant.Name}";
 		}
 
 		private string SelectedCulture()
@@ -529,6 +641,9 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			string raceKey = SelectedRaceKey();
 			var gender = (CharacterGender)Enum.Parse(typeof(CharacterGender), genderField.value);
 			var titleType = (TitleType)Enum.Parse(typeof(TitleType), titleTypeField.value);
+			var register = (TitleRegister)Enum.Parse(typeof(TitleRegister), registerField.value);
+			string profession = string.IsNullOrWhiteSpace(professionField.value) ? null : professionField.value.Trim();
+			int maxTitle = Mathf.Max(0, maxTitleField.value);
 			int count = Mathf.Clamp(countField.value, 1, 100);
 			bool unique = uniqueToggle.value;
 			string culture = SelectedCulture();
@@ -538,31 +653,25 @@ namespace FishMMO.Shared.NameGeneration.Editor
 
 			if (hybridToggle.value)
 			{
-				GenerateHybrids(raceKey, gender, titleType, count, unique, fullCharacters, regionSeed);
-			}
-			else if (fullCharacters)
-			{
-				characterResults.AddRange(unique
-					? generator.GenerateUniqueCharacters(raceKey, count, gender, titleType,
-						culture: culture, regionSeed: regionSeed)
-					: generator.GenerateCharacters(raceKey, count, gender, titleType,
-						culture: culture, regionSeed: regionSeed));
+				GenerateHybrids(raceKey, gender, titleType, register, profession, maxTitle, count, unique, fullCharacters, regionSeed);
 			}
 			else
 			{
-				List<string> names = unique
-					? generator.GenerateUniqueNames(raceKey, count, gender,
-						culture: culture, regionSeed: regionSeed)
-					: generator.GenerateNames(raceKey, count, gender,
-						culture: culture, regionSeed: regionSeed);
-				foreach (string name in names)
+				var request = new NameRequest
 				{
-					characterResults.Add(new CharacterEntry
-					{
-						Name = name,
-						Race = RaceRegistry.GetDisplayName(raceKey),
-					});
-				}
+					Race = raceKey,
+					Gender = gender,
+					TitleType = titleType,
+					Register = register,
+					Profession = profession,
+					MaxTitleLength = maxTitle,
+					Culture = culture,
+					RegionSeed = regionSeed,
+					NameOnly = !fullCharacters,
+				};
+				characterResults.AddRange(unique
+					? generator.GenerateUnique(request, count).Items
+					: generator.GenerateBatch(request, count));
 			}
 
 			string mode = hybridToggle.value
@@ -580,6 +689,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		/// same RNG every iteration and returns the same name N times.
 		/// </summary>
 		private void GenerateHybrids(string raceKey, CharacterGender gender, TitleType titleType,
+			TitleRegister register, string profession, int maxTitle,
 			int count, bool unique, bool fullCharacters, string regionSeed)
 		{
 			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -593,6 +703,9 @@ namespace FishMMO.Shared.NameGeneration.Editor
 					RaceB = SelectedSecondRaceKey(),
 					Gender = gender,
 					TitleType = titleType,
+					Register = register,
+					Profession = profession,
+					MaxTitleLength = maxTitle,
 					Dominance = dominanceSlider.value,
 					RegionSeed = regionSeed,
 					Index = attempt,
@@ -620,16 +733,23 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			string culture = SelectedCulture();
 			string regionSeed = RegionSeed();
 
+			string biomeKey = SelectedBiomeKey();
+			BiomeClimateVariant variant = SelectedVariant();
+			var request = new CityRequest
+			{
+				Race = raceKey, CityType = cityType, Culture = culture, RegionSeed = regionSeed,
+				Biome = biomeKey, Variant = variant,
+			};
+
 			cityResults.Clear();
 			cityResults.AddRange(unique
-				? generator.GenerateUniqueCityNames(raceKey, count, cityType,
-					culture: culture, regionSeed: regionSeed)
-				: generator.GenerateCityNames(raceKey, count, cityType,
-					culture: culture, regionSeed: regionSeed));
+				? generator.GenerateUnique(request, count).Items
+				: generator.GenerateBatch(request, count));
 
+			string where = biomeKey == null ? "" : $", {biomeField.Value}";
 			SetStatus($"Generated {cityResults.Count} city name(s)" +
 				$"{UniqueSuffix(unique, cityResults.Count, count)} — " +
-				$"{raceField.Value}{CultureSuffix(culture)}{RegionSuffix(regionSeed)}");
+				$"{raceField.Value}{CultureSuffix(culture)}{where}{VariantSuffix(variant)}{RegionSuffix(regionSeed)}");
 		}
 
 		private void GenerateDungeons()
@@ -639,14 +759,17 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			bool unique = uniqueToggle.value;
 			string regionSeed = RegionSeed();
 
+			BiomeClimateVariant variant = SelectedVariant();
+			var request = new DungeonRequest { Biome = biomeKey, RegionSeed = regionSeed, Variant = variant };
+
 			dungeonResults.Clear();
 			dungeonResults.AddRange(unique
-				? generator.GenerateUniqueDungeonNames(biomeKey, count, regionSeed: regionSeed)
-				: generator.GenerateDungeonNames(biomeKey, count, regionSeed: regionSeed));
+				? generator.GenerateUnique(request, count).Items
+				: generator.GenerateBatch(request, count));
 
 			SetStatus($"Generated {dungeonResults.Count} dungeon name(s)" +
 				$"{UniqueSuffix(unique, dungeonResults.Count, count)} — " +
-				$"{biomeField.Value}{RegionSuffix(regionSeed)}");
+				$"{biomeField.Value}{VariantSuffix(variant)}{RegionSuffix(regionSeed)}");
 		}
 
 		private void GeneratePOIs()
@@ -657,14 +780,17 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			bool unique = uniqueToggle.value;
 			string regionSeed = RegionSeed();
 
+			BiomeClimateVariant variant = SelectedVariant();
+			var request = new POIRequest { Biome = biomeKey, POIType = poiType, RegionSeed = regionSeed, Variant = variant };
+
 			poiResults.Clear();
 			poiResults.AddRange(unique
-				? generator.GenerateUniquePOINames(biomeKey, count, poiType, regionSeed: regionSeed)
-				: generator.GeneratePOINames(biomeKey, count, poiType, regionSeed: regionSeed));
+				? generator.GenerateUnique(request, count).Items
+				: generator.GenerateBatch(request, count));
 
 			SetStatus($"Generated {poiResults.Count} POI name(s)" +
 				$"{UniqueSuffix(unique, poiResults.Count, count)} — " +
-				$"{biomeField.Value}{RegionSuffix(regionSeed)}");
+				$"{biomeField.Value}{VariantSuffix(variant)}{RegionSuffix(regionSeed)}");
 		}
 
 		private void GenerateItems()

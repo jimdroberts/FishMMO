@@ -113,6 +113,8 @@ MonoBehaviour:
       - Spindlegrace
       - Silkwarden
       - Fang-priest
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Eight-eyed
       - the Patient
@@ -134,6 +136,7 @@ MonoBehaviour:
       - Whose Venom Has No Antidote
       - Who Wove the Great Labyrinth
       - Who Spun a Trap That Caught Time Itself
+      Occupational: []
     CitySuffixes:
       Capital:
       - web
@@ -181,3 +184,12 @@ MonoBehaviour:
       - void
       - dust
       - tatter
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: -1123947451
+    Weight: 1.5
+  - BiomeID: -1640008461
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1

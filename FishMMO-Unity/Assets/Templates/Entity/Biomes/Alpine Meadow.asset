@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Alpine Meadow
+  m_EditorClassIdentifier: 
+  DisplayName: Alpine Meadow
+  Description: 'High mountain meadows — wildflowers, meltwater, brief alpine summer'
+  BiomeColorId: {r: 0.5, g: 0.8, b: 0.3, a: 1}
+  GizmoColor: {r: 0.6, g: 0.9, b: 0.4, a: 1}
+  ElevationTier: 7
+  MinHeight: 0.9
+  MaxHeight: 0.95
+  MinTemperature: -0.6
+  MaxTemperature: -0.1
+  MinHumidity: 0.4
+  MaxHumidity: 0.8
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bri
+      - Gre
+      - Fer
+      - Mea
+      - Lar
+      - Dew
+      - Wil
+      - Hol
+      - Bre
+      - Kel
+      - Sil
+      - Mos
+      - Pin
+      - Gol
+      - Flo
+      Nuclei:
+      - a
+      - e
+      - ea
+      - ie
+      - ai
+      - ow
+      - ar
+      Codas:
+      - mead
+      - bloom
+      - vale
+      - dell
+      - field
+      - blossom
+      - petal
+      - dew
+      - aster
+      - bell
+      Middles:
+      - an
+      - el
+      - ar
+      - er
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Burrow
+      - Den
+      - Hollow
+      - Grotto
+      - Tunnel
+      - Nest
+      - Cave
+      - Pit
+      - Warren
+      - Lair
+      - Chamber
+      - Passage
+      - Shaft
+      - Crevice
+      - Shelter
+      - Alcove
+      - Root-cave
+      - Pocket
+      - Foundation
+      - Spring-cave
+      - Crawl-space
+      - Gallery
+      DungeonPrefixes:
+      - The Flower-ringed
+      - The Hidden
+      - The High
+      - The Serene
+      - The Ancient
+      - The Mist-veiled
+      - The Sun-kissed
+      - The Mountain
+      - The Pristine
+      - The Fragrant
+      - The Blooming
+      - The Dew-kissed
+      - The Brief
+      - The Brilliant
+      - The Peaceful
+      - The Butterfly-danced
+      - The Snow-melt
+      - The Alpine
+      - The Delicate
+      - The Seasonal
+      POISuffixes:
+      - Flower-field
+      - Mountain-spring
+      - Marmot-den
+      - Edelweiss-patch
+      - Snow-melt-pool
+      - High-meadow
+      - Alpine-tarn
+      - Bell-flower-ring
+      - Butterfly-cloud
+      - Gentian-patch
+      - Clover-field
+      - Mountain-daisy
+      - Pika-colony
+      - Ptarmigan-nest
+      - Wildflower-carpet
+      - Glacier-lily
+      - Spring-brook
+      - Snow-line
+      - Crystal-stream
+      - Herb-garden
+      Adjectives:
+      - Flower-ringed
+      - Serene
+      - Mist-veiled
+      - Sun-kissed
+      - Pristine
+      - Delicate
+      - Brilliant
+      - Peaceful
+      - Fragrant
+      - Brief
+      - Blooming
+      - Dew-kissed
+      - Alpine
+      - Seasonal
+      - Butterfly-danced
+      - Radiant
+      - Gentle
+      - Vibrant
+      - Breathtaking
+      - Enchanting
+      - Colorful
+      - Fleeting
+      Description: 'High mountain meadows — wildflowers, meltwater, brief alpine summer'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 189164606a235f741a8e299fdf4a96f1, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 429.872
+    blendNoiseOffsetY: -855.35913
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -471.30618
+    blendNoiseOffsetY: 170.92383
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -429.2959
+    blendNoiseOffsetY: 753.6366
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -670.058
+    blendNoiseOffsetY: -24.66333
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

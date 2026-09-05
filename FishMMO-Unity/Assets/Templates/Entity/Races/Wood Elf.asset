@@ -231,6 +231,8 @@ MonoBehaviour:
       - Leafwarden
       - Barkwhisper
       - Thornguard
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - of the Deep Wood
       - the Unseen
@@ -247,11 +249,19 @@ MonoBehaviour:
       - Keeper of the Ancient Groves
       - First Ranger of the Canopy
       Legend:
-      - Who Spoke with the Last Treant
+      - Who Spoke with the Last Treefolk
       - Who Hid a Thousand Refugees
       - Whose Arrows Never Missed
       - Who Tamed the Forest Fire
       - Who Grew a Forest in a Single Night
+      Occupational:
+      - Bowyer
+      - Tracker
+      - Glade-warden
+      - Herbalist
+      - Beekeeper
+      - Bark-scribe
+      - Fletcher
     CitySuffixes:
       Capital:
       - canopy
@@ -300,3 +310,12 @@ MonoBehaviour:
       - blight
       - husk
       - stump
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1640008461
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1

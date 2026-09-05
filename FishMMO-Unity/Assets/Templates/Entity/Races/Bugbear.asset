@@ -83,7 +83,10 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Big-chief
+      HonorificMasculine:
       - Ambush-lord
+      HonorificFeminine:
+      - Ambush-lady
       Epithet:
       - the Silent-step
       - the Long-armed
@@ -92,6 +95,7 @@ MonoBehaviour:
       - Warlord of Shadowden
       Legend:
       - Who Killed the Patrol Without a Single Cry
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -99,3 +103,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1
+  - BiomeID: 144196518
+    Weight: 1

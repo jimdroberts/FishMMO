@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.NameGeneration
 {
@@ -20,8 +21,12 @@ namespace FishMMO.Shared.NameGeneration
 		/// <summary>Chance a two-syllable root grows a middle syllable.</summary>
 		private const double MiddleChance = 0.40;
 
+		/// <summary>Chance a variant's own adjective leads the name over the biome's when the variant has any.</summary>
+		private const double VariantAdjectiveChance = 0.65;
+
 		public static (string name, string meaning, List<string> fragments) Build(
-			RacePhonology ph, string race, CityType cityType, string biome, DeterministicRNG rng)
+			RacePhonology ph, string race, CityType cityType, string biome, DeterministicRNG rng,
+			BiomeClimateVariant variant = null)
 		{
 			string typeKey = cityType == CityType.Any
 				? PickRandomCityType(rng)
@@ -50,10 +55,12 @@ namespace FishMMO.Shared.NameGeneration
 			double prefixChance = biomePh != null ? BiomePrefixChance : PlainPrefixChance;
 			if (rng.NextDouble() < prefixChance)
 			{
-				if (biomePh != null && biomePh.Adjectives != null &&
-					biomePh.Adjectives.Length > 0 && rng.NextDouble() < BiomeAdjectiveChance)
+				string[] variantAdjectives = variant?.Adjectives;
+				bool biomeAdjectives = (biomePh != null && biomePh.Adjectives != null && biomePh.Adjectives.Length > 0)
+					|| (variantAdjectives != null && variantAdjectives.Length > 0);
+				if (biomeAdjectives && rng.NextDouble() < BiomeAdjectiveChance)
 				{
-					prefix = GeneratorUtility.Pick(biomePh.Adjectives, rng);
+					prefix = GeneratorUtility.PickFlavoured(variantAdjectives, biomePh?.Adjectives, VariantAdjectiveChance, rng);
 				}
 				else if (NameGrammar.CityPrefixes.Length > 0)
 				{

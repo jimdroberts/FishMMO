@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Wetlands
+  m_EditorClassIdentifier: 
+  DisplayName: Wetlands
+  Description: 'Marshes and swamps — waterlogged ground, reeds, mist-shrouded hollows'
+  BiomeColorId: {r: 0.3, g: 0.5, b: 0.35, a: 1}
+  GizmoColor: {r: 0.4, g: 0.6, b: 0.45, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.45
+  MaxHeight: 0.6
+  MinTemperature: -0.1
+  MaxTemperature: 0.3
+  MinHumidity: 0.7
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fen
+      - Bog
+      - Mur
+      - Ree
+      - Wil
+      - Hag
+      - Rot
+      - Slu
+      - Gri
+      - Mar
+      - Dra
+      - Sha
+      - Kel
+      - Thi
+      - Mor
+      Nuclei:
+      - u
+      - o
+      - a
+      - ur
+      - og
+      - ow
+      - ul
+      Codas:
+      - marsh
+      - fen
+      - bog
+      - mire
+      - reed
+      - muck
+      - silt
+      - pool
+      - sludge
+      - ooze
+      Middles:
+      - ur
+      - og
+      - ul
+      - ow
+      - an
+      SyllMin: 1
+      SyllMax: 2
+      DungeonSuffixes:
+      - Mire
+      - Hollow
+      - Sinkhole
+      - Pool
+      - Den
+      - Bog
+      - Burrow
+      - Pit
+      - Quagmire
+      - Morass
+      - Fen
+      - Marsh
+      - Passage
+      - Chamber
+      - Tunnel
+      - Seep
+      - Slough
+      - Wallow
+      - Drainage
+      - Gulch
+      - Pocket
+      - Sump
+      DungeonPrefixes:
+      - The Waterlogged
+      - The Marshy
+      - The Flooded
+      - The Reed-choked
+      - The Sunken
+      - The Rotting
+      - The Murky
+      - The Fetid
+      - The Peat-dark
+      - The Mist-shrouded
+      - The Squelching
+      - The Boggy
+      - The Sodden
+      - The Teeming
+      - The Green
+      - The Spongy
+      - The Mosquito-thick
+      - The Oozing
+      - The Stagnant
+      - The Fog-bound
+      POISuffixes:
+      - Reed-bed
+      - Bog-pool
+      - Mud-flat
+      - Fen-bridge
+      - Marsh-light
+      - Heron-roost
+      - Lily-pond
+      - Peat-bank
+      - Cattail-stand
+      - Frog-chorus
+      - Mosquito-cloud
+      - Crane-nest
+      - Duck-blind
+      - Otter-slide
+      - Muskrat-lodge
+      - Bog-cotton
+      - Sphagnum-mound
+      - Bittern-hide
+      - Dragonfly-pool
+      - Sedge-meadow
+      Adjectives:
+      - Waterlogged
+      - Marshy
+      - Reed-choked
+      - Murky
+      - Fetid
+      - Stagnant
+      - Misty
+      - Soggy
+      - Teeming
+      - Green
+      - Peat-dark
+      - Mist-shrouded
+      - Squelching
+      - Boggy
+      - Sodden
+      - Spongy
+      - Mosquito-thick
+      - Oozing
+      - Fog-bound
+      - Verdant
+      - Primordial
+      - Humid
+      Description: 'Marshes and swamps — waterlogged ground, reeds, mist-shrouded hollows'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 9a681237b604de04880797b962f6b667, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -842.5503
+    blendNoiseOffsetY: 322.54218
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 571.3296
+    blendNoiseOffsetY: -137.32397
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 443.65308
+    blendNoiseOffsetY: -764.55884
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -13.3172
+    blendNoiseOffsetY: 753.6442
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

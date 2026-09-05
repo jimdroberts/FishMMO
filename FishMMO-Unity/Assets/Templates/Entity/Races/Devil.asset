@@ -88,9 +88,12 @@ MonoBehaviour:
     - the Chained Court
     Titles:
       Honorific:
-      - Archduke
       - Lord of Contracts
       - Chained One
+      HonorificMasculine:
+      - Archduke
+      HonorificFeminine:
+      - Archduchess
       Epithet:
       - the Signatory
       - the Brazen
@@ -99,6 +102,7 @@ MonoBehaviour:
       - Duke of the Eighth Hell
       Legend:
       - Who Wrote the Contract Kings Obey
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -106,3 +110,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1042859854
+    Weight: 3
+  - BiomeID: 681889367
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 0.5

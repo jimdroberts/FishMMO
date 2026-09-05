@@ -71,7 +71,7 @@ MonoBehaviour:
       - n/a
       - a
       - ai
-      Description: Keening Gaelic lament — fore-sung grief
+      Description: Keening lament — fore-sung grief
       Tags:
       - Mourning-names
       - Wail-marks
@@ -85,6 +85,8 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Keener
+      HonorificMasculine: []
+      HonorificFeminine:
       - Wail-Mother
       Epithet:
       - the Grey
@@ -94,6 +96,7 @@ MonoBehaviour:
       - Mourner of the Grey Strand
       Legend:
       - Whose Wail Foretold the Fall of the House
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -101,3 +104,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -567058185
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 2
+  - BiomeID: 173642607
+    Weight: 1
+  - BiomeID: -2077848218
+    Weight: 1

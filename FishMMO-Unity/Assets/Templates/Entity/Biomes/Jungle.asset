@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Jungle
+  m_EditorClassIdentifier: 
+  DisplayName: Jungle
+  Description: 'Dense tropical — humid, vine-choked, green and dangerous'
+  BiomeColorId: {r: 0.1, g: 0.6, b: 0.2, a: 1}
+  GizmoColor: {r: 0, g: 0.8, b: 0.2, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.45
+  MaxHeight: 0.75
+  MinTemperature: 0.6
+  MaxTemperature: 0.9
+  MinHumidity: 0.8
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Zan
+      - Kel
+      - Mok
+      - Thi
+      - Bra
+      - Vir
+      - Gor
+      - Sha
+      - Qui
+      - Nag
+      - Rin
+      - Pal
+      - Dra
+      - Ulu
+      - Fen
+      Nuclei:
+      - a
+      - o
+      - u
+      - ai
+      - ua
+      - ao
+      - ou
+      Codas:
+      - ra
+      - la
+      - na
+      - ka
+      - thi
+      - zul
+      - rok
+      - pan
+      - ven
+      - da
+      Middles:
+      - an
+      - ul
+      - ok
+      - ri
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Maw
+      - Pit
+      - Hollow
+      - Tangle
+      - Root
+      - Nest
+      - Gullet
+      - Den
+      - Lair
+      - Burrow
+      - Thicket
+      - Snarl
+      - Labyrinth
+      - Canopy-tomb
+      - Vine-pit
+      - Serpent-hole
+      - Undergrowth
+      - Crevice
+      - Web
+      - Gorge
+      - Thorn-cage
+      - Morass
+      DungeonPrefixes:
+      - The Verdant
+      - The Overgrown
+      - The Strangling
+      - The Wild
+      - The Tangled
+      - The Forgotten
+      - The Primordial
+      - The Steaming
+      - The Rotting
+      - The Venomous
+      - The Crawling
+      - The Suffocating
+      - The Dripping
+      - The Cursed
+      - The Festering
+      - The Lurking
+      - The Savage
+      - The Sweltering
+      - The Living
+      - The Choking
+      POISuffixes:
+      - Vine-bridge
+      - Canopy
+      - Root
+      - Tree
+      - Basin
+      - Falls
+      - Clearing
+      - Thicket
+      - Orchid-grove
+      - Monkey-trail
+      - River-fork
+      - Parrot-perch
+      - Fruit-tree
+      - Moss-rock
+      - Fern-hollow
+      - Waterfall
+      - Bamboo-grove
+      - Flower-bank
+      - Mushroom-log
+      - Jaguar-path
+      Adjectives:
+      - Verdant
+      - Overgrown
+      - Humid
+      - Ancient
+      - Dripping
+      - Tangled
+      - Wild
+      - Primal
+      - Steaming
+      - Lush
+      - Dense
+      - Tropical
+      - Sweltering
+      - Venomous
+      - Suffocating
+      - Towering
+      - Crawling
+      - Emerald
+      - Savage
+      - Untamed
+      - Fetid
+      - Oppressive
+      Description: 'Dense tropical — humid, vine-choked, green and dangerous'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 3d80aba0e85f202419137bd5cd05427f, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -898.35095
+    blendNoiseOffsetY: -785.01013
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -275.1681
+    blendNoiseOffsetY: -53.8031
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 263.13013
+    blendNoiseOffsetY: -51.60962
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 480.78632
+    blendNoiseOffsetY: 428.32684
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

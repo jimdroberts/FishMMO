@@ -37,7 +37,7 @@ MonoBehaviour:
   Naming:
     Phonology:
       Onsets:
-      - Vecna
+      - the Whispered One
       - Acer
       - Kel
       - Xyzra
@@ -56,7 +56,7 @@ MonoBehaviour:
       - mar
       - xyr
       - nak
-      - vecna
+      - vekra
       Middles:
       - th
       - xi
@@ -86,8 +86,12 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Archmage-undying
+      HonorificMasculine:
       - Phylactery-lord
       - Dread-king
+      HonorificFeminine:
+      - Phylactery-lady
+      - Dread-queen
       Epithet:
       - the Eternal
       - the Withered
@@ -96,6 +100,7 @@ MonoBehaviour:
       - Archmage of the Black Pyramid
       Legend:
       - Whose Phylactery Has Never Been Found
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -103,3 +108,14 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1693619367
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: -567058185
+    Weight: 1

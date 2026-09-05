@@ -114,6 +114,8 @@ MonoBehaviour:
       - Mine-warden
       - Chief Digger
       - Glitter-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Sneaky
       - the Surprisingly Clever
@@ -136,6 +138,11 @@ MonoBehaviour:
       - Who Dug Deeper Than Any Dwarf
       - Whose Tunnel Connected Two Mountains
       - Who Found the Shiniest Stone in the World and Refused to Share It
+      Occupational:
+      - Trap-setter
+      - Tunnel-digger
+      - Egg-warden
+      - Scrap-smith
     CitySuffixes:
       Capital:
       - warren
@@ -184,3 +191,12 @@ MonoBehaviour:
       - rubble
       - hole
       - mess
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: 155940630
+    Weight: 1.5
+  - BiomeID: 1275219499
+    Weight: 1
+  - BiomeID: -540190004
+    Weight: 0.5

@@ -214,11 +214,32 @@ namespace FishMMO.Shared
 				GetSortOrder = asset => asset is RaceTemplate race && race.Playable ? 0 : 1,
 			});
 
-			// ── Naming ── (race naming lives on the Race templates above)
-			AddCategory<FishMMO.Shared.NameGeneration.BiomeNamingTemplate>("Biome Naming", "Naming",
-				"Assets/Templates/Entity/Naming/Biomes",
-				"FishMMO/Naming/Biome Naming");
+			// ── Biomes ── (biome naming lives on the Biome templates)
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Biomes",
+				Group = "Biomes",
+				AssetType = typeof(FishMMO.Shared.Biomes.BiomeTemplate),
+				DefaultAssetDirectory = "Assets/Templates/Entity/Biomes",
+				CreateAssetMenuName = "FishMMO/Biomes/Biome",
+				// Grouped by elevation tier, sea floor first; placement-only biomes (weight 0) last.
+				GetGroupLabel = asset => asset is FishMMO.Shared.Biomes.BiomeTemplate biome
+					? (biome.IsSelectable ? FishMMO.Shared.Biomes.BiomeTemplate.TierName(biome.ElevationTier) : "Placed Only")
+					: "",
+				GetSortOrder = asset => asset is FishMMO.Shared.Biomes.BiomeTemplate biome
+					? (biome.IsSelectable ? biome.ElevationTier : 100)
+					: 0,
+			});
 
+			AddCategory<FishMMO.Shared.Biomes.ClimateSettings>("Climate Settings", "Biomes",
+				"Assets/Templates/Entity/Biomes",
+				"FishMMO/Biomes/Climate Settings");
+
+			AddCategory<FishMMO.Shared.Biomes.SceneBiomeMap>("Scene Biome Maps", "Biomes",
+				"Assets/Templates/Entity/Biomes/Maps",
+				"FishMMO/Biomes/Scene Biome Map");
+
+			// ── Naming ── (race naming lives on the Race templates above)
 			AddCategory<FishMMO.Shared.NameGeneration.NameModifierTemplate>("Name Modifiers", "Naming",
 				"Assets/Templates/Entity/Naming/Modifiers",
 				"FishMMO/Naming/Name Modifier");

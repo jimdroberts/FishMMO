@@ -1,0 +1,387 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Forest
+  m_EditorClassIdentifier: 
+  DisplayName: Forest
+  Description: 'Dense temperate forests — old growth, dark canopy, ancient roots'
+  BiomeColorId: {r: 0.2, g: 0.5, b: 0.2, a: 1}
+  GizmoColor: {r: 0.2, g: 0.6, b: 0.2, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.6
+  MaxHeight: 0.75
+  MinTemperature: -0.3
+  MaxTemperature: 0.2
+  MinHumidity: 0.4
+  MaxHumidity: 0.9
+  SelectionWeight: 1
+  ClimateVariants:
+  - Name: Frozen
+    MinTemperature: -1
+    MaxTemperature: -0.45
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Frostwood
+    - Snow-laden
+    - Rime-choked
+    - Winter-still
+    - Ice-boughed
+    DungeonPrefixes:
+    - The Frostwood
+    - The Snowbound
+    - The Winter-still
+    TextureLayerOverrides: []
+  - Name: Scorched
+    MinTemperature: 0.45
+    MaxTemperature: 1
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Sun-dried
+    - Tinder-dry
+    - Fire-scarred
+    - Charred
+    - Heat-wilted
+    DungeonPrefixes:
+    - The Fire-scarred
+    - The Charred
+    - The Tinder-dry
+    TextureLayerOverrides: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Oak
+      - Elm
+      - Fer
+      - Mos
+      - Bri
+      - Tho
+      - Wil
+      - Lar
+      - Hol
+      - Ivy
+      - Ber
+      - Ash
+      - Cop
+      - Ver
+      - Gre
+      Nuclei:
+      - a
+      - e
+      - o
+      - ea
+      - ie
+      - ow
+      - ar
+      Codas:
+      - wood
+      - ow
+      - ell
+      - orn
+      - oss
+      - ine
+      - ern
+      - ale
+      - ark
+      - ith
+      Middles:
+      - an
+      - el
+      - in
+      - or
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Hollow
+      - Den
+      - Burrow
+      - Root-cave
+      - Thicket
+      - Lair
+      - Nest
+      - Tunnel
+      - Warren
+      - Barrow
+      - Grotto
+      - Chamber
+      - Passage
+      - Pit
+      - Cave
+      - Cellar
+      - Vault
+      - Shaft
+      - Crevice
+      - Alcove
+      - Moss-cave
+      - Stump-hole
+      DungeonPrefixes:
+      - The Dark
+      - The Ancient
+      - The Dense
+      - The Primeval
+      - The Silent
+      - The Enchanted
+      - The Tangled
+      - The Deep
+      - The Mossy
+      - The Lichen-draped
+      - The Fog-bound
+      - The Canopy-shadowed
+      - The Root-woven
+      - The Mushroom-lit
+      - The Fern-choked
+      - The Old-growth
+      - The Owl-haunted
+      - The Spider-webbed
+      - The Timber-fallen
+      - The Misty
+      POISuffixes:
+      - Great-oak
+      - Clearing
+      - Brook
+      - Fallen-tree
+      - Moss-stone
+      - Fern-bank
+      - Hollow-tree
+      - Mushroom-ring
+      - Deer-trail
+      - Owl-nest
+      - Wolf-den
+      - Mushroom-log
+      - Spider-web
+      - Lichen-rock
+      - Foxglove-patch
+      - Bluebell-carpet
+      - Pine-stand
+      - Birch-grove
+      - Woodpecker-tree
+      - Fallen-giant
+      Adjectives:
+      - Dark
+      - Ancient
+      - Dense
+      - Primeval
+      - Silent
+      - Enchanted
+      - Shadowy
+      - Towering
+      - Verdant
+      - Mysterious
+      - Mossy
+      - Fog-bound
+      - Root-woven
+      - Mushroom-lit
+      - Fern-choked
+      - Old-growth
+      - Owl-haunted
+      - Canopy-dark
+      - Whispering
+      - Dappled
+      - Untouched
+      - Primordial
+      Description: 'Dense temperate forests — old growth, dark canopy, ancient roots'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 136.38269
+    blendNoiseOffsetY: 239.75623
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules:
+    - stableGuid: 6e05d5407fd34849a21482300a7b36d8
+      enableSpawning: 1
+      ruleName: 
+      prefabs:
+      - {fileID: 8730988760233312242, guid: ab474dcb80a6b304981d8d8456ec4f14, type: 3}
+      - {fileID: 4244583878775227621, guid: 87ba66e77b1b4954b8176243a1ba6d01, type: 3}
+      spawnChannel: 1
+      densityPer100m2: 7.5
+      maxPerChunk: 1500
+      minSpacing: 0
+      minTextureWeight: 0
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 0
+      heightFalloff: 0
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 0
+      slopeFalloff: 0
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 1, y: 1}
+      widthScaleRange: {x: 3, y: 5}
+      heightScaleRange: {x: 3, y: 8}
+      yRotationRange: {x: 0, y: 0}
+      alignToTerrainNormal: 0
+      seedOffset: 0
+      detailNoiseSpread: 0
+      detailHealthyColor: {r: 0, g: 0, b: 0, a: 0}
+      detailDryColor: {r: 0, g: 0, b: 0, a: 0}
+      detailInstancesPerSpawn: 64
+  detailTextureLayers:
+  - albedoTexture: {fileID: 2800000, guid: a1c155353d68bbb468bcd000d3568816, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 8, y: 8}
+    blendMode: 0
+    blendNoiseScale: 32
+    blendNoiseOffsetX: 125
+    blendNoiseOffsetY: 325
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 0
+    heightFalloff: 0
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 0
+    slopeFalloff: 0
+    prefabSpawnRules: []
+  - albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 8, y: 8}
+    blendMode: 0
+    blendNoiseScale: 128
+    blendNoiseOffsetX: 125
+    blendNoiseOffsetY: 325
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 0
+    heightFalloff: 0
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 0
+    slopeFalloff: 0
+    prefabSpawnRules: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -353.86288
+    blendNoiseOffsetY: -234.19461
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -120.776764
+    blendNoiseOffsetY: 496.5639
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 602.0095
+    blendNoiseOffsetY: -6.6643677
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

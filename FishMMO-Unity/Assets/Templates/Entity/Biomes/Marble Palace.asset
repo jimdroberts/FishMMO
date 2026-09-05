@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Marble Palace
+  m_EditorClassIdentifier: 
+  DisplayName: Marble Palace
+  Description: 'Opulent marble architecture — columns, mosaics, divine grandeur'
+  BiomeColorId: {r: 0.9, g: 0.9, b: 0.85, a: 1}
+  GizmoColor: {r: 1, g: 1, b: 0.95, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.5
+  MaxHeight: 0.8
+  MinTemperature: -0.2
+  MaxTemperature: 0.5
+  MinHumidity: -0.4
+  MaxHumidity: 0.4
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mar
+      - Lum
+      - Bel
+      - Gol
+      - Sil
+      - Val
+      - Pal
+      - Cry
+      - Dia
+      - Pra
+      - Hel
+      - Kor
+      - Rav
+      - Gri
+      - Thr
+      Nuclei:
+      - a
+      - e
+      - i
+      - al
+      - or
+      - ar
+      - ia
+      Codas:
+      - iel
+      - orn
+      - ard
+      - heim
+      - burg
+      - hall
+      - spire
+      - stein
+      - court
+      - mund
+      Middles:
+      - al
+      - el
+      - or
+      - an
+      - ir
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Palace
+      - Hall
+      - Gallery
+      - Sanctum
+      - Throne
+      - Cathedral
+      - Ballroom
+      - Chamber
+      - Court
+      - Vault
+      - Library
+      - Observatory
+      - Chapel
+      - Rotunda
+      - Conservatory
+      - Treasury
+      - Pavilion
+      - Cloister
+      - Salon
+      - Foyer
+      - Arcade
+      - Mausoleum
+      DungeonPrefixes:
+      - The Gleaming
+      - The Grand
+      - The Pristine
+      - The Eternal
+      - The Resplendent
+      - The Radiant
+      - The Opulent
+      - The Hallowed
+      - The Gilded
+      - The Magnificent
+      - The Ivory
+      - The Sacred
+      - The Jeweled
+      - The Silent
+      - The Ornate
+      - The Celestial
+      - The Monumental
+      - The Divine
+      - The Palatial
+      - The Alabaster
+      POISuffixes:
+      - Fountain
+      - Colonnade
+      - Statue
+      - Mosaic
+      - Balcony
+      - Staircase
+      - Rotunda
+      - Portico
+      - Rose-garden
+      - Reflecting-pool
+      - Ivory-throne
+      - Tapestry-hall
+      - Chandelier
+      - Marble-arch
+      - Gold-inlay
+      - Crystal-dome
+      - Fresco-ceiling
+      - Pillar-gallery
+      - Jeweled-altar
+      - Bronze-gate
+      Adjectives:
+      - Gleaming
+      - Grand
+      - Pristine
+      - Resplendent
+      - Radiant
+      - Opulent
+      - Hallowed
+      - Immaculate
+      - Ornate
+      - Luminous
+      - Gilded
+      - Magnificent
+      - Ivory
+      - Sacred
+      - Jeweled
+      - Celestial
+      - Monumental
+      - Divine
+      - Palatial
+      - Alabaster
+      - Splendid
+      - Majestic
+      Description: 'Opulent marble architecture — columns, mosaics, divine grandeur'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

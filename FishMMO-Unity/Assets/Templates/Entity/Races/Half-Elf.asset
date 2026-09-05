@@ -108,6 +108,8 @@ MonoBehaviour:
       - Bridgewalker
       - Twiceborn
       - Heritage-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - of Two Bloods
       - the Betweener
@@ -129,6 +131,13 @@ MonoBehaviour:
       - Child of Two Sunsets
       - Who Spoke for Both Courts
       - Who Bridged the Mortal and the Eternal
+      Occupational:
+      - Merchant
+      - Scribe
+      - Diplomat
+      - Minstrel
+      - Cartographer
+      - Healer
     CitySuffixes:
       Capital:
       - hold
@@ -171,3 +180,14 @@ MonoBehaviour:
       - scar
       - end
       - fade
+  BiomeAffinities:
+  - BiomeID: -439598380
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 2
+  - BiomeID: -1951431387
+    Weight: 1
+  - BiomeID: -2037808285
+    Weight: 1
+  - BiomeID: -1123947451
+    Weight: 1

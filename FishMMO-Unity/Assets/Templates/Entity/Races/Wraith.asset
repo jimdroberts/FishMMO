@@ -83,8 +83,11 @@ MonoBehaviour:
     - Echoing Cloister
     Titles:
       Honorific:
-      - Shade-Lord
       - 'Widow''s Herald'
+      HonorificMasculine:
+      - Shade-Lord
+      HonorificFeminine:
+      - Shade-lady
       Epithet:
       - the Unsleeping
       - the Colorless
@@ -93,6 +96,7 @@ MonoBehaviour:
       - Captain of the Shadeward
       Legend:
       - Whose Passing Leaves No Mark but Chill
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +104,14 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -567058185
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: -1141955836
+    Weight: 0.5

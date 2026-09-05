@@ -72,7 +72,7 @@ MonoBehaviour:
       - os
       - us
       - ael
-      Description: Airy Latinate breath-speech
+      Description: Airy breath-speech
       Tags:
       - Wind-names
       - Sky-bonds
@@ -87,6 +87,8 @@ MonoBehaviour:
       Honorific:
       - Air-dancer
       - Wind-touched
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Silver-breathing
       - the Sky-born
@@ -95,6 +97,7 @@ MonoBehaviour:
       - Dancer of the Breath Grove
       Legend:
       - Whose Breath Cleared the Battle-Smoke at the Right Moment
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -102,3 +105,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 2
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 0.5
+  - BiomeID: 1645414801
+    Weight: 0.5

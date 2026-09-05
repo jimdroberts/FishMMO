@@ -1,0 +1,300 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Hills
+  m_EditorClassIdentifier: 
+  DisplayName: Hills
+  Description: 'Rolling hills — moss-covered barrows, ancient cairns, gentle slopes'
+  BiomeColorId: {r: 0.5, g: 0.7, b: 0.4, a: 1}
+  GizmoColor: {r: 0.6, g: 0.8, b: 0.5, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.6
+  MaxHeight: 0.75
+  MinTemperature: -0.3
+  MaxTemperature: 0.3
+  MinHumidity: 0
+  MaxHumidity: 0.6
+  SelectionWeight: 1
+  ClimateVariants:
+  - Name: Frozen
+    MinTemperature: -1
+    MaxTemperature: -0.45
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Snow-capped
+    - Frost-ridged
+    - White-shouldered
+    DungeonPrefixes:
+    - The Snow-capped
+    - The Frost-ridged
+    TextureLayerOverrides: []
+  - Name: Scorched
+    MinTemperature: 0.45
+    MaxTemperature: 1
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Sun-baked
+    - Scrub-dry
+    - Heat-browned
+    DungeonPrefixes:
+    - The Sun-baked
+    - The Heat-browned
+    TextureLayerOverrides: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Hil
+      - Bre
+      - Gre
+      - Sto
+      - Kel
+      - Far
+      - Lar
+      - Bro
+      - Oak
+      - Wil
+      - Dew
+      - Mos
+      - Fer
+      - Tho
+      - Elm
+      Nuclei:
+      - a
+      - e
+      - o
+      - ea
+      - ow
+      - ie
+      - ar
+      Codas:
+      - hill
+      - dale
+      - crest
+      - ridge
+      - knoll
+      - tor
+      - brow
+      - fell
+      - holm
+      - mound
+      Middles:
+      - an
+      - el
+      - ar
+      - er
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Barrow
+      - Cairn
+      - Den
+      - Hollow
+      - Tunnel
+      - Burrow
+      - Cellar
+      - Mine
+      - Pit
+      - Cave
+      - Chamber
+      - Passage
+      - Shaft
+      - Crevice
+      - Grotto
+      - Lair
+      - Vault
+      - Tomb
+      - Warren
+      - Gallery
+      - Shelter
+      - Foundation
+      DungeonPrefixes:
+      - The Hilltop
+      - The Ancient
+      - The Moss-covered
+      - The Hidden
+      - The Stone-ringed
+      - The Windswept
+      - The Crumbling
+      - The Earthen
+      - The Rolling
+      - The Green
+      - The Misty
+      - The Heather-clad
+      - The Pastoral
+      - The Terraced
+      - 'The Shepherds'''
+      - The Fog-veiled
+      - The Gentle
+      - The Rounded
+      - The Bracken-covered
+      - The Rain-washed
+      POISuffixes:
+      - Hilltop
+      - Ridge
+      - Tor
+      - Cairn
+      - Sheep-fold
+      - Stone-circle
+      - Lookout
+      - Barrow-mound
+      - Spring-head
+      - Fox-earth
+      - Badger-sett
+      - Shepherd-cairn
+      - Hill-fort
+      - Dewpond
+      - Boundary-stone
+      - Wind-break
+      - Bracken-slope
+      - Heather-summit
+      - Rabbit-hill
+      - Dry-wall
+      Adjectives:
+      - Rolling
+      - Mossy
+      - Windswept
+      - Green
+      - Ancient
+      - Stone-ringed
+      - Gentle
+      - Terraced
+      - Heather-clad
+      - Rounded
+      - Misty
+      - Pastoral
+      - Fog-veiled
+      - Bracken-covered
+      - Rain-washed
+      - Peaceful
+      - Undulating
+      - Grassy
+      - Sheep-dotted
+      - Chalky
+      - Iron-rich
+      - Craggy
+      Description: 'Rolling hills — moss-covered barrows, ancient cairns, gentle slopes'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: ec7c6d96ca4878945af594dea5ba3323, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -876.2877
+    blendNoiseOffsetY: 98.69565
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 553.4148
+    blendNoiseOffsetY: -952.8174
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 360.70465
+    blendNoiseOffsetY: -771.43604
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 200.755
+    blendNoiseOffsetY: -372.49887
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

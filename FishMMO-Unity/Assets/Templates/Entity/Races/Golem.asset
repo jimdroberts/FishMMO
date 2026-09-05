@@ -72,7 +72,7 @@ MonoBehaviour:
       - us
       - or
       - heim
-      Description: Hebraic cadence — truth-carved servant
+      Description: Word-carved cadence — truth-bound servant
       Tags:
       - Shem-names
       - Clay-bonds
@@ -87,6 +87,8 @@ MonoBehaviour:
       Honorific:
       - Shem-bearer
       - Emet-one
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Truth-carved
       - the Silent
@@ -95,6 +97,7 @@ MonoBehaviour:
       - Servant of the Prague Attic
       Legend:
       - Who Held the Gate When the City Wept
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -102,3 +105,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 1275219499
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1

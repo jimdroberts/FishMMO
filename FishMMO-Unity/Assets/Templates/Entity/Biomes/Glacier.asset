@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Glacier
+  m_EditorClassIdentifier: 
+  DisplayName: Glacier
+  Description: 'Glacial ice — crevasses, blue ice, grinding movement, deadly beauty'
+  BiomeColorId: {r: 0.8, g: 0.9, b: 1, a: 1}
+  GizmoColor: {r: 0.9, g: 0.95, b: 1, a: 1}
+  ElevationTier: 8
+  MinHeight: 0.95
+  MaxHeight: 1
+  MinTemperature: -1
+  MaxTemperature: -0.6
+  MinHumidity: 0.1
+  MaxHumidity: 0.8
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Gla
+      - Fro
+      - Cry
+      - Bre
+      - Kel
+      - Nim
+      - Bor
+      - Hri
+      - Isk
+      - Sno
+      - Dri
+      - Vre
+      - Hol
+      - Thr
+      - Vin
+      Nuclei:
+      - i
+      - a
+      - o
+      - ir
+      - al
+      - or
+      - ia
+      Codas:
+      - frost
+      - glacier
+      - crevasse
+      - moulin
+      - serac
+      - moraine
+      - firn
+      - berg
+      - field
+      - flow
+      Middles:
+      - ri
+      - al
+      - or
+      - im
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Crevasse
+      - Moulin
+      - Cavern
+      - Tunnel
+      - Grotto
+      - Shaft
+      - Chamber
+      - Hollow
+      - Rift
+      - Chasm
+      - Gallery
+      - Passage
+      - Vault
+      - Pit
+      - Alcove
+      - Pocket
+      - Den
+      - Abyss
+      - Chimney
+      - Throat
+      - Cathedral
+      - Hall
+      DungeonPrefixes:
+      - The Glacial
+      - The Grinding
+      - The Ancient
+      - The Creaking
+      - The Blue
+      - The Crushing
+      - The Frozen
+      - The Slow
+      - The Immense
+      - The Pristine
+      - The Deadly
+      - The Calving
+      - The Advancing
+      - The Retreating
+      - The Millennia-old
+      - The Pressure-carved
+      - The Ice-blue
+      - The Groaning
+      - The Massive
+      - The Relentless
+      POISuffixes:
+      - Crevasse
+      - Serac
+      - Moulin
+      - Ice-fall
+      - Moraine
+      - Glacial-lake
+      - Firn-field
+      - Ice-bridge
+      - Glacial-erratic
+      - Kettle-lake
+      - Esker
+      - Drumlin
+      - Ice-cave
+      - Blue-ice-wall
+      - Glacial-flour-lake
+      - Nunatak
+      - Meltwater-stream
+      - Cirque
+      - Hanging-glacier
+      - Bergschrund
+      Adjectives:
+      - Glacial
+      - Grinding
+      - Creaking
+      - Blue
+      - Crushing
+      - Ancient
+      - Slow
+      - Immense
+      - Pristine
+      - Deadly
+      - Calving
+      - Advancing
+      - Retreating
+      - Millennia-old
+      - Pressure-carved
+      - Ice-blue
+      - Groaning
+      - Massive
+      - Relentless
+      - Majestic
+      - Unforgiving
+      - Eternal
+      Description: 'Glacial ice — crevasses, blue ice, grinding movement, deadly beauty'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 22c2e676d9b34e14b87e4b97acdc05ed, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -433.9441
+    blendNoiseOffsetY: -914.33887
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 702.9459
+    blendNoiseOffsetY: -694.38293
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -440.3595
+    blendNoiseOffsetY: 97.068695
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -448.0597
+    blendNoiseOffsetY: -891.7003
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

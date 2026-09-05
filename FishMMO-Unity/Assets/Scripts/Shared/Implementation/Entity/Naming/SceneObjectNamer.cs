@@ -4,6 +4,7 @@ using FishNet.Connection;
 using FishNet.Serializing;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared
 {
@@ -32,6 +33,17 @@ namespace FishMMO.Shared
 		/// The gender behind a character name; also what <see cref="NPC"/> picks its model set with.
 		/// </summary>
 		private CharacterGender selectedGender = CharacterGender.Unspecified;
+
+		/// <summary>
+		/// The biome the name was read from, by cached-object ID; 0 when the mode uses none.
+		/// </summary>
+		private int biomeID;
+
+		/// <summary>
+		/// The climate variant the biome was read under, as an index into
+		/// <see cref="SceneObjectNameResolver.VariantsFor"/> plus one; 0 for none.
+		/// </summary>
+		private byte variantIndex;
 
 		/// <summary>
 		/// True once the seed and gender have been rolled (server) or received (client).
@@ -135,6 +147,8 @@ namespace FishMMO.Shared
 			nameGenerated = false;
 			nameSeed = 0;
 			selectedGender = CharacterGender.Unspecified;
+			biomeID = 0;
+			variantIndex = 0;
 			generatedName = null;
 
 			if (!string.IsNullOrEmpty(authoredName))
@@ -155,8 +169,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Reads the seed and gender. Always consumes exactly five bytes, so the behaviours after this
-		/// one in the payload stay aligned whatever the values are.
+		/// Reads the seed and gender, and for a biome-driven mode the biome and climate variant. The
+		/// length follows only from the authored settings, identical on both peers, so the behaviours
+		/// after this one in the payload stay aligned whatever the values are.
 		/// </summary>
 		/// <param name="connection">Network connection.</param>
 		/// <param name="reader">Network reader for payload.</param>
@@ -164,11 +179,18 @@ namespace FishMMO.Shared
 		{
 			nameSeed = reader.ReadInt32();
 			selectedGender = (CharacterGender)reader.ReadUInt8Unpacked();
+			if (settings.UsesBiome)
+			{
+				biomeID = reader.ReadInt32();
+				variantIndex = reader.ReadUInt8Unpacked();
+			}
 			nameGenerated = true;
 		}
 
 		/// <summary>
-		/// Writes the seed and gender: four bytes plus one, in place of a name string.
+		/// Writes the seed and gender (five bytes), plus the biome ID and variant (five more) when the
+		/// mode names from a biome — so a client never has to agree with the server about a biome map
+		/// or the weather to reproduce the name.
 		/// </summary>
 		/// <param name="connection">Network connection.</param>
 		/// <param name="writer">Network writer for payload.</param>
@@ -178,6 +200,11 @@ namespace FishMMO.Shared
 
 			writer.WriteInt32(nameSeed);
 			writer.WriteUInt8Unpacked((byte)selectedGender);
+			if (settings.UsesBiome)
+			{
+				writer.WriteInt32(biomeID);
+				writer.WriteUInt8Unpacked(variantIndex);
+			}
 		}
 
 		/// <summary>
@@ -195,6 +222,13 @@ namespace FishMMO.Shared
 			selectedGender = settings.Mode == SceneObjectNamingMode.Character
 				? SceneObjectNameResolver.ResolveGender(settings.GenderPolicy, race, SceneObjectNameResolver.GenderRng(nameSeed))
 				: CharacterGender.Unspecified;
+			if (settings.UsesBiome)
+			{
+				WorldSceneSettings.TryGetForScene(gameObject.scene, out WorldSceneSettings scene);
+				BiomeTemplate biome = SceneObjectNameResolver.ResolveBiome(settings, transform.position, scene, out BiomeClimateVariant variant);
+				biomeID = BiomeRegistry.IDOf(biome);
+				variantIndex = SceneObjectNameResolver.VariantIndexOf(biome, scene, variant);
+			}
 			nameGenerated = true;
 		}
 
@@ -210,7 +244,18 @@ namespace FishMMO.Shared
 			}
 
 			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<IFactionController>());
-			if (!SceneObjectNameResolver.TryBuild(settings, race, nameSeed, selectedGender, out string name, out string error))
+			// A merchant is titled as a merchant unless the settings say otherwise.
+			Interactable interactable = GetComponent<Interactable>();
+			string autoProfession = interactable == null || string.IsNullOrWhiteSpace(interactable.Title) ? null : interactable.Title;
+			BiomeTemplate biome = null;
+			BiomeClimateVariant variant = null;
+			if (settings.UsesBiome && biomeID != 0)
+			{
+				WorldSceneSettings.TryGetForScene(gameObject.scene, out WorldSceneSettings scene);
+				BiomeRegistry.TryGetByID(biomeID, out biome);
+				variant = SceneObjectNameResolver.VariantAt(biome, scene, variantIndex);
+			}
+			if (!SceneObjectNameResolver.TryBuild(settings, race, nameSeed, selectedGender, out string name, out string error, autoProfession, biome, variant))
 			{
 				Log.Warning("SceneObjectNamer", $"'{authoredName}' keeps its authored name: {error}.");
 				return;

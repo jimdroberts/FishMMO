@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Ice Ruin
+  m_EditorClassIdentifier: 
+  DisplayName: Ice Ruin
+  Description: Collapsed ice civilization — frozen decay and howling winds
+  BiomeColorId: {r: 0.75, g: 0.8, b: 0.9, a: 1}
+  GizmoColor: {r: 0.85, g: 0.9, b: 0.95, a: 1}
+  ElevationTier: 7
+  MinHeight: 0.8
+  MaxHeight: 1
+  MinTemperature: -1
+  MaxTemperature: -0.5
+  MinHumidity: -0.5
+  MaxHumidity: 0.5
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fro
+      - Kri
+      - Bre
+      - Hol
+      - Vre
+      - Gla
+      - Sno
+      - Isk
+      - Dri
+      - Kel
+      - Nim
+      - Thr
+      - Vin
+      - Bor
+      - Hri
+      Nuclei:
+      - o
+      - i
+      - a
+      - or
+      - im
+      - al
+      - ir
+      Codas:
+      - frost
+      - kel
+      - rim
+      - brin
+      - drim
+      - vald
+      - heim
+      - gard
+      - mir
+      - thr
+      Middles:
+      - ri
+      - al
+      - or
+      - im
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Ruin
+      - Wreck
+      - Collapse
+      - Shell
+      - Husk
+      - Fragment
+      - Rubble
+      - Remnant
+      - Debris
+      - Skeleton
+      - Crater
+      - Foundation
+      - Shard-pile
+      - Broken-hall
+      - Fallen-tower
+      - Shattered-vault
+      - Frost-heap
+      - Collapsed-arch
+      - Rime-rubble
+      - Ice-debris
+      - Cracked-chamber
+      - Windswept-shell
+      DungeonPrefixes:
+      - The Shattered
+      - The Frozen
+      - The Crumbling
+      - The Lost
+      - The Buried
+      - The Windswept
+      - The Abandoned
+      - The Rime-scarred
+      - The Ice-crushed
+      - The Fractured
+      - The Snow-buried
+      - The Collapsed
+      - The Howling
+      - The Desolate
+      - The Frost-eaten
+      - The Time-worn
+      - The Splintered
+      - The Ruined
+      - The Glacial-torn
+      - The Forgotten
+      POISuffixes:
+      - Broken-spire
+      - Frost-rubble
+      - Cracked-wall
+      - Fallen-arch
+      - Ice-heap
+      - Shattered-dome
+      - Rime-stump
+      - Frozen-step
+      - Collapsed-tower
+      - Frost-debris
+      - Shattered-pillar
+      - Ice-shard-pile
+      - Broken-gate
+      - Tilted-column
+      - Snow-buried-wall
+      - Cracked-foundation
+      - Rime-covered-stair
+      - Fallen-chandelier
+      - Fractured-floor
+      - Windswept-ruin
+      Adjectives:
+      - Shattered
+      - Crumbling
+      - Abandoned
+      - Rime-scarred
+      - Windswept
+      - Collapsed
+      - Buried
+      - Silent
+      - Forgotten
+      - Frost-bitten
+      - Ice-crushed
+      - Fractured
+      - Snow-buried
+      - Desolate
+      - Frost-eaten
+      - Time-worn
+      - Splintered
+      - Glacial-torn
+      - Howling
+      - Bleak
+      - Frozen
+      - Decrepit
+      Description: Collapsed ice civilization — frozen decay and howling winds
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

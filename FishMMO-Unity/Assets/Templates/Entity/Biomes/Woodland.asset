@@ -1,0 +1,365 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Woodland
+  m_EditorClassIdentifier: 
+  DisplayName: Woodland
+  Description: 'Temperate forest — dappled light, old growth, woodland creatures'
+  BiomeColorId: {r: 0.45, g: 0.65, b: 0.35, a: 1}
+  GizmoColor: {r: 0.55, g: 0.7, b: 0.45, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.6
+  MaxHeight: 0.75
+  MinTemperature: -0.1
+  MaxTemperature: 0.3
+  MinHumidity: 0.2
+  MaxHumidity: 0.6
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Oak
+      - Bri
+      - Elm
+      - Fer
+      - Gre
+      - Hol
+      - Ivy
+      - Lar
+      - Mos
+      - Wil
+      - Ash
+      - Ber
+      - Cop
+      - Dew
+      - Tho
+      Nuclei:
+      - a
+      - e
+      - o
+      - ea
+      - ie
+      - ow
+      - ar
+      Codas:
+      - ow
+      - ell
+      - orn
+      - oss
+      - ine
+      - ern
+      - ale
+      - ith
+      - ood
+      - ark
+      Middles:
+      - an
+      - el
+      - in
+      - or
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Burrow
+      - Hollow
+      - Den
+      - Root-cellar
+      - Thicket
+      - Tunnel
+      - Warren
+      - Nest
+      - Hole
+      - Barrow
+      - Lair
+      - Grotto
+      - Passage
+      - Crypt
+      - Moss-cave
+      - Foxhole
+      - Badger-set
+      - Root-cave
+      - Stump-cellar
+      - Fern-cave
+      - Chamber
+      - Pit
+      DungeonPrefixes:
+      - The Mossy
+      - The Overgrown
+      - The Dark
+      - The Ancient
+      - The Twisted
+      - The Hidden
+      - The Hollow
+      - The Whispering
+      - The Shaded
+      - The Gnarled
+      - The Ivy-draped
+      - The Bramble-covered
+      - The Dew-kissed
+      - The Enchanted
+      - The Fern-choked
+      - The Root-tangled
+      - The Leaf-strewn
+      - The Canopy-dark
+      - The Sylvan
+      - The Fog-wreathed
+      POISuffixes:
+      - Oak
+      - Clearing
+      - Brook
+      - Stump
+      - Ring
+      - Hollow-tree
+      - Moss-stone
+      - Fern-bank
+      - Badger-sett
+      - Fox-den
+      - Mushroom-ring
+      - Bluebell-dell
+      - Ivy-wall
+      - Fallen-oak
+      - Bird-nest
+      - Deer-trail
+      - Acorn-grove
+      - Hazel-copse
+      - Willow-pool
+      - Bramble-arch
+      Adjectives:
+      - Mossy
+      - Ancient
+      - Twisted
+      - Whispering
+      - Shaded
+      - Dappled
+      - Gnarled
+      - Overgrown
+      - Sylvan
+      - Verdant
+      - Enchanted
+      - Fog-wreathed
+      - Ivy-draped
+      - Bramble-covered
+      - Fern-choked
+      - Root-tangled
+      - Leaf-strewn
+      - Canopy-dark
+      - Peaceful
+      - Timeless
+      - Mysterious
+      - Rustling
+      Description: 'Temperate forest — dappled light, old growth, woodland creatures'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 1a25c9f32fbc86941820446872df368c, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 5, y: 5}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -429.00955
+    blendNoiseOffsetY: -455.13354
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules:
+    - stableGuid: d7de883a6b6e4713a025a3e73e36ed71
+      enableSpawning: 1
+      ruleName: 
+      prefabs:
+      - {fileID: 8730988760233312242, guid: ab474dcb80a6b304981d8d8456ec4f14, type: 3}
+      - {fileID: 4416970066911431485, guid: 8b4ca9eaa2c9c444f88567fb98f51be1, type: 3}
+      - {fileID: 4244583878775227621, guid: 87ba66e77b1b4954b8176243a1ba6d01, type: 3}
+      spawnChannel: 1
+      densityPer100m2: 5
+      maxPerChunk: 500
+      minSpacing: 0
+      minTextureWeight: 0
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 0
+      heightFalloff: 0
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 0
+      slopeFalloff: 0
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 1, y: 1}
+      widthScaleRange: {x: 1.5, y: 4}
+      heightScaleRange: {x: 2, y: 5}
+      yRotationRange: {x: 0, y: 0}
+      alignToTerrainNormal: 0
+      seedOffset: 0
+      detailNoiseSpread: 0.05
+      detailHealthyColor: {r: 0, g: 0, b: 0, a: 0}
+      detailDryColor: {r: 0, g: 0, b: 0, a: 0}
+      detailInstancesPerSpawn: 64
+    - stableGuid: afdc1bdca9b24d259cd15a8de2516542
+      enableSpawning: 1
+      ruleName: 
+      prefabs:
+      spawnChannel: 0
+      densityPer100m2: 5
+      maxPerChunk: 5000
+      minSpacing: 0
+      minTextureWeight: 0
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 0
+      heightFalloff: 0
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 0
+      slopeFalloff: 0
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 1, y: 1}
+      widthScaleRange: {x: 1, y: 1}
+      heightScaleRange: {x: 1, y: 1}
+      yRotationRange: {x: 0, y: 0}
+      alignToTerrainNormal: 0
+      seedOffset: 0
+      detailNoiseSpread: 0.05
+      detailHealthyColor: {r: 0, g: 0, b: 0, a: 0}
+      detailDryColor: {r: 0, g: 0, b: 0, a: 0}
+      detailInstancesPerSpawn: 64
+  detailTextureLayers:
+  - albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 0
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 0
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 0
+    heightFalloff: 0
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 0
+    slopeFalloff: 0
+    prefabSpawnRules: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 66.46933
+    blendNoiseOffsetY: 888.3329
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -664.25305
+    blendNoiseOffsetY: 83.64212
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -912.2462
+    blendNoiseOffsetY: 609.3614
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

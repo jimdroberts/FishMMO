@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Swamp Temple
+  m_EditorClassIdentifier: 
+  DisplayName: Swamp Temple
+  Description: 'Sacred site swallowed by swamp — drowned altars, defiled shrines'
+  BiomeColorId: {r: 0.35, g: 0.45, b: 0.3, a: 1}
+  GizmoColor: {r: 0.45, g: 0.55, b: 0.4, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.42
+  MaxHeight: 0.6
+  MinTemperature: -0.1
+  MaxTemperature: 0.6
+  MinHumidity: 0.6
+  MaxHumidity: 1
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fen
+      - Bog
+      - Mur
+      - Gor
+      - Dra
+      - Sha
+      - Vel
+      - Kra
+      - Gri
+      - Mor
+      - Hag
+      - Thi
+      - Rot
+      - Wil
+      - Slu
+      Nuclei:
+      - u
+      - o
+      - a
+      - ur
+      - og
+      - ul
+      - ow
+      Codas:
+      - mire
+      - bog
+      - fen
+      - rot
+      - gul
+      - murk
+      - marsh
+      - rok
+      - gor
+      - muck
+      Middles:
+      - ur
+      - og
+      - ul
+      - ow
+      - an
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Temple
+      - Sanctum
+      - Shrine
+      - Altar
+      - Fane
+      - Crypt
+      - Chamber
+      - Vault
+      - Chapel
+      - Sepulcher
+      - Mausoleum
+      - Hall
+      - Gallery
+      - Passage
+      - Throne-room
+      - Inner-sanctum
+      - Ossuary
+      - Baptistry
+      - Nave
+      - Vestry
+      - Antechamber
+      - Reliquary
+      DungeonPrefixes:
+      - The Sunken
+      - The Rotting
+      - The Drowned
+      - The Cursed
+      - The Forgotten
+      - The Desecrated
+      - The Moss-choked
+      - The Flooded
+      - The Defiled
+      - The Putrid
+      - The Plague-touched
+      - The Fetid
+      - 'The Bog-spirit''s'
+      - The Corrupted
+      - The Forsaken
+      - The Profane
+      - The Necromantic
+      - The Miasmic
+      - The Witch-haunted
+      - 'The Toad-god''s'
+      POISuffixes:
+      - Drowned-altar
+      - Bog-idol
+      - Rot-shrine
+      - Marsh-font
+      - Moss-totem
+      - Muck-pillar
+      - Reed-circle
+      - Fen-fane
+      - Swamp-oracle
+      - Leech-basin
+      - Toad-throne
+      - Fungus-altar
+      - Lily-offering
+      - Witch-stone
+      - Plague-well
+      - Spirit-lantern
+      - Sacrifice-slab
+      - Bog-body
+      - Curse-stone
+      - Fen-grave
+      Adjectives:
+      - Sunken
+      - Drowned
+      - Cursed
+      - Desecrated
+      - Moss-choked
+      - Flooded
+      - Defiled
+      - Putrid
+      - Ancient
+      - Forsaken
+      - Plague-touched
+      - Corrupted
+      - Profane
+      - Necromantic
+      - Miasmic
+      - Witch-haunted
+      - Fetid
+      - Bog-claimed
+      - Rotting
+      - Forbidden
+      - Unholy
+      - Pestilent
+      Description: 'Sacred site swallowed by swamp — drowned altars, defiled shrines'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

@@ -1,0 +1,201 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Cragborn
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: Towering grey-skinned mountain folk who measure worth in feats and remember every one of them.
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bor
+      - Gauth
+      - Kal
+      - Mak
+      - Nor
+      - Rath
+      - Skor
+      - Thar
+      - Urg
+      - Var
+      - Berg
+      - Dram
+      - Gor
+      - Hruk
+      - Kan
+      - Lok
+      - Mun
+      - Prav
+      - Rok
+      - Voth
+      Nuclei:
+      - a
+      - o
+      - u
+      - or
+      - ur
+      - au
+      - ar
+      Codas:
+      - ath
+      - urg
+      - orn
+      - alk
+      - usk
+      - arn
+      - olk
+      - urk
+      - ash
+      - ard
+      Middles:
+      - ar
+      - or
+      - ur
+      - al
+      - an
+      SyllMin: 2
+      SyllMax: 3
+      FeminineSuffixes:
+      - a
+      - ath
+      - urn
+      - ia
+      MasculineSuffixes:
+      - urg
+      - orn
+      - alk
+      - ard
+      Description: Heavy and unyielding — mountain stone given voice
+      Tags:
+      - Peak-names
+      - Trial-bonds
+      - Summit-marks
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the High Summit
+    - Stonefall Peak
+    - the Mountain Trials
+    - Thunder Ridge
+    - the Sacred Peak
+    - the Windbreak
+    - Giantstone Plateau
+    Titles:
+      Honorific:
+      - Peak-elder
+      - Stone-chief
+      - Summit-warden
+      - Frost-speaker
+      - Mountain-marked
+      HonorificMasculine:
+      - Thunder-lord
+      HonorificFeminine:
+      - Thunder-lady
+      Epithet:
+      - the Mountain-born
+      - the Unshakeable
+      - the Titan-blooded
+      - the Storm-braver
+      - the Everclimbing
+      - the Peak-proven
+      - the Avalanche
+      - the Cliff-walker
+      Rank:
+      - Chief of the High Summit
+      - Keeper of the Mountain Trials
+      - First Climber of the Season
+      - Warden of the Sacred Peak
+      - Elder of the Stone Circle
+      - Champion of Thunder Ridge
+      Legend:
+      - Who Carried a Mountain on Their Shoulders
+      - Who Wrestled a Storm Giant
+      - Who Stood Alone on the Highest Peak
+      - Who Has Never Fallen
+      - Who Climbed Beyond the Clouds and Returned Changed
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - peak
+      - summit
+      - throne
+      - hold
+      - crest
+      - ridge
+      - crown
+      Fortress:
+      - wall
+      - gate
+      - guard
+      - crag
+      - ridge
+      - bastion
+      - rampart
+      Village:
+      - camp
+      - clearing
+      - ledge
+      - shelter
+      - hollow
+      - cave
+      - plateau
+      Port:
+      - ford
+      - bridge
+      - bank
+      - crossing
+      - falls
+      - pool
+      Sacred:
+      - altar
+      - peak
+      - summit
+      - shrine
+      - stone-circle
+      - cairn
+      Ruin:
+      - fall
+      - rubble
+      - scar
+      - dust
+      - ruin
+      - landslide
+      - waste
+  BiomeAffinities:
+  - BiomeID: 1275219499
+    Weight: 3
+  - BiomeID: -138594552
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 2
+  - BiomeID: 493502347
+    Weight: 1

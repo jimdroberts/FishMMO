@@ -1,0 +1,147 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
+  m_Name: Thornbeast
+  m_EditorClassIdentifier: 
+  Playable: 0
+  Prefab: {fileID: 0}
+  PlaceholderModel:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  GenderedModels: []
+  Description: 'A bramble that learned to hunt: it uproots, lunges and drags its prey into the thicket to feed the roots.'
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
+  InitialAttributes: {fileID: 0}
+  InitialFaction: {fileID: 0}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Bram
+      - Thor
+      - Bri
+      - Snag
+      - Rak
+      - Barb
+      - Twist
+      - Nett
+      - Gors
+      - Cla
+      Nuclei:
+      - oo
+      - o
+      - u
+      - a
+      - ae
+      Codas:
+      - orn
+      - ax
+      - ick
+      - rill
+      - eth
+      - urr
+      - ash
+      - ar
+      Middles:
+      - r
+      - m
+      - l
+      SyllMin: 1
+      SyllMax: 2
+      FeminineSuffixes:
+      - a
+      - ella
+      MasculineSuffixes:
+      - us
+      - or
+      Description: 'Rasping, snagging — thorny consonant clusters'
+      Tags:
+      - Plant
+      - Monster
+      WeightedCodas: []
+    Cultures: []
+    Places:
+    - the Fungal Deep
+    - the Thorn Wall
+    - the Rot Garden
+    - the Choking Vine
+    - Mushroom Hollow
+    Titles:
+      Honorific:
+      - Old-root
+      - Spore-mother
+      - Thorn-elder
+      - Grove-warden
+      HonorificMasculine:
+      - Root-father
+      HonorificFeminine:
+      - Root-mother
+      Epithet:
+      - the Creeping
+      - the Overgrown
+      - the Rooted
+      - the Blooming
+      - the Choking
+      - the Patient
+      - the Thorned
+      - the Mossy
+      - the Snagging
+      - the Blood-rooted
+      Rank:
+      - Warden of the Fungal Deep
+      - Keeper of the Thorn Wall
+      - Elder of the Rot Garden
+      - Voice of the Choking Vine
+      Legend:
+      - Who Grew Through the Castle
+      - Who Strangled the Old Oak
+      - Who Bloomed in Winter
+      - Who Took the Village Back
+      Occupational: []
+    CitySuffixes:
+      Capital:
+      - grove
+      - bloom
+      Fortress:
+      - thorn
+      - wall
+      Village:
+      - patch
+      - hollow
+      Port:
+      - fen
+      Sacred:
+      - ring
+      Ruin:
+      - rot
+      - mould
+    AllowGenericOccupations: 0
+  BiomeAffinities:
+  - BiomeID: 1156965030
+    Weight: 2
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: -439598380
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 1

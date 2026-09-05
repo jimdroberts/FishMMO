@@ -130,7 +130,7 @@ MonoBehaviour:
         - Cthar
         - Dagon
         - Exeal
-        - Gith
+        - Rift
         - Hasht
         - Ithar
         - Kaz
@@ -194,6 +194,8 @@ MonoBehaviour:
       - Soulbinder
       - Hellsmouth
       - Ashkeeper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Unbound
       - the Soul-hungry
@@ -217,6 +219,7 @@ MonoBehaviour:
       - Who Escaped the Binding of Ages
       - Who Was Too Evil for Hell Itself
       - Who Corrupted an Entire Civilization with a Whisper
+      Occupational: []
     CitySuffixes:
       Capital:
       - pit
@@ -265,3 +268,12 @@ MonoBehaviour:
       - waste
       - char
       - blight
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 2
+  - BiomeID: -1042859854
+    Weight: 2
+  - BiomeID: 525873855
+    Weight: 1
+  - BiomeID: 493502347
+    Weight: 1

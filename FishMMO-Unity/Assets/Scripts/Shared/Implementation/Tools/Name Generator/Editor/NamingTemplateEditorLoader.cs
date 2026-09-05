@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.NameGeneration.Editor
 {
@@ -66,7 +67,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 					report.Races++;
 				}
 			}
-			foreach (BiomeNamingTemplate biome in FindAll<BiomeNamingTemplate>())
+			foreach (BiomeTemplate biome in FindAll<BiomeTemplate>())
 			{
 				BiomeRegistry.Register(biome);
 				report.Biomes++;

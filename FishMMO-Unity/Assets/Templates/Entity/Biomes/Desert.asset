@@ -1,0 +1,290 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Desert
+  m_EditorClassIdentifier: 
+  DisplayName: Desert
+  Description: Scorching sands — ancient tombs buried beneath dunes
+  BiomeColorId: {r: 0.9, g: 0.7, b: 0.4, a: 1}
+  GizmoColor: {r: 1, g: 0.8, b: 0.4, a: 1}
+  ElevationTier: 6
+  MinHeight: 0.75
+  MaxHeight: 0.9
+  MinTemperature: 0.4
+  MaxTemperature: 1
+  MinHumidity: -1
+  MaxHumidity: -0.3
+  SelectionWeight: 1
+  ClimateVariants:
+  - Name: Frozen
+    MinTemperature: -1
+    MaxTemperature: -0.45
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Frost-glazed
+    - Cold-dune
+    - Ice-sand
+    - Night-bitten
+    - Winter-dune
+    DungeonPrefixes:
+    - The Frost-glazed
+    - The Cold-dune
+    - The Ice-sand
+    TextureLayerOverrides: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Zan
+      - Kha
+      - Sha
+      - Raz
+      - Dha
+      - Tar
+      - Sal
+      - Nah
+      - Qas
+      - Bah
+      - Fah
+      - Gha
+      - Hal
+      - Jas
+      - Mal
+      Nuclei:
+      - a
+      - i
+      - u
+      - aa
+      - ai
+      - uu
+      - ar
+      Codas:
+      - im
+      - ar
+      - ud
+      - an
+      - ir
+      - ash
+      - iq
+      - um
+      - ib
+      - ad
+      Middles:
+      - al
+      - ar
+      - an
+      - ir
+      - ul
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Tomb
+      - Vault
+      - Crypt
+      - Catacomb
+      - Pit
+      - Sanctum
+      - Burial
+      - Chamber
+      - Barrow
+      - Sepulcher
+      - Mausoleum
+      - Passage
+      - Ossuary
+      - Labyrinth
+      - Hall
+      - Shaft
+      - Tunnel
+      - Well
+      - Antechamber
+      - Cistern
+      - Sarcophagus-room
+      - Oubliette
+      DungeonPrefixes:
+      - The Buried
+      - The Sand-swept
+      - The Eternal
+      - The Scorching
+      - The Lost
+      - The Sun-bleached
+      - The Cursed
+      - The Shifting
+      - The Entombed
+      - 'The Tomb-King''s'
+      - The Gilded
+      - The Sealed
+      - The Ancient
+      - The Desiccated
+      - The Forgotten
+      - The Wind-carved
+      - The Mirage-hidden
+      - The Bone-dry
+      - The Crumbling
+      - The Accursed
+      POISuffixes:
+      - Oasis
+      - Dune
+      - Mirage
+      - Sand-pillar
+      - Sun-stone
+      - Caravan-post
+      - Wind-marker
+      - Dust-well
+      - Cactus-stand
+      - Dry-riverbed
+      - Sand-sea
+      - Fossil-bed
+      - Rock-arch
+      - Scorpion-den
+      - Nomad-camp
+      - Mesa
+      - Salt-flat
+      - Sand-whirl
+      - Petrified-tree
+      - Canyon-mouth
+      Adjectives:
+      - Sun-scorched
+      - Buried
+      - Sand-swept
+      - Eternal
+      - Parched
+      - Shifting
+      - Blistering
+      - Ancient
+      - Desolate
+      - Windswept
+      - Desiccated
+      - Gilded
+      - Bone-dry
+      - Mirage-haunted
+      - Crumbling
+      - Forgotten
+      - Arid
+      - Unforgiving
+      - Relentless
+      - Timeless
+      - Dust-choked
+      - Searing
+      Description: Scorching sands — ancient tombs buried beneath dunes
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: b33352ab540cd3d4fb8c872eaf34569a, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -286.26285
+    blendNoiseOffsetY: -302.879
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 938.9646
+    blendNoiseOffsetY: 399.0593
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -772.0032
+    blendNoiseOffsetY: -596.5571
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 280.12082
+    blendNoiseOffsetY: 188.33911
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

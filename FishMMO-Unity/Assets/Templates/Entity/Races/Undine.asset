@@ -72,7 +72,7 @@ MonoBehaviour:
       - 'on'
       - ar
       - us
-      Description: Water-silver Latinate — brook and chant
+      Description: Water-silver brook-chant
       Tags:
       - Stream-names
       - Mirror-bonds
@@ -84,7 +84,10 @@ MonoBehaviour:
     - Silverdrop Falls
     - Cool Grotto
     Titles:
-      Honorific:
+      Honorific: []
+      HonorificMasculine:
+      - Nymph-lord
+      HonorificFeminine:
       - Nymph-Lady
       - Brook-mistress
       Epithet:
@@ -95,6 +98,7 @@ MonoBehaviour:
       - Mistress of Mirror Pool
       Legend:
       - Who Wept a River to Drown a Pursuer
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -102,3 +106,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 247344987
+    Weight: 3
+  - BiomeID: 2117371294
+    Weight: 2
+  - BiomeID: 888339253
+    Weight: 1
+  - BiomeID: 1508835452
+    Weight: 1

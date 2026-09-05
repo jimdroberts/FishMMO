@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Swamp
+  m_EditorClassIdentifier: 
+  DisplayName: Swamp
+  Description: 'Stinking wetland — bubbling methane, sinking ground, rot everywhere'
+  BiomeColorId: {r: 0.25, g: 0.35, b: 0.2, a: 1}
+  GizmoColor: {r: 0.35, g: 0.45, b: 0.3, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.42
+  MaxHeight: 0.6
+  MinTemperature: -0.1
+  MaxTemperature: 0.6
+  MinHumidity: 0.6
+  MaxHumidity: 1
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fen
+      - Bog
+      - Mur
+      - Gor
+      - Slu
+      - Dra
+      - Hag
+      - Wil
+      - Rot
+      - Kra
+      - Sha
+      - Gri
+      - Vel
+      - Thi
+      - Mor
+      Nuclei:
+      - u
+      - o
+      - a
+      - ur
+      - og
+      - ow
+      - ul
+      Codas:
+      - mire
+      - bog
+      - fen
+      - rot
+      - muck
+      - gul
+      - sludge
+      - murk
+      - marsh
+      - ooze
+      Middles:
+      - ur
+      - og
+      - ul
+      - ow
+      - an
+      SyllMin: 1
+      SyllMax: 2
+      DungeonSuffixes:
+      - Mire
+      - Bog
+      - Hollow
+      - Pit
+      - Sinkhole
+      - Den
+      - Pool
+      - Morass
+      - Quagmire
+      - Hole
+      - Marsh
+      - Slough
+      - Wallow
+      - Gulch
+      - Fen
+      - Drainage
+      - Muck-pit
+      - Tar-pool
+      - Seep
+      - Pocket
+      - Stagnation
+      - Sump
+      DungeonPrefixes:
+      - The Fetid
+      - The Rotting
+      - The Sunken
+      - The Bubbling
+      - The Choking
+      - The Reeking
+      - The Murky
+      - The Drowned
+      - The Stagnant
+      - The Poisonous
+      - The Sludge-filled
+      - The Methane-choked
+      - The Oozing
+      - The Putrid
+      - The Bog-haunted
+      - The Leech-infested
+      - The Festering
+      - The Miasmic
+      - The Mold-covered
+      - The Tar-black
+      POISuffixes:
+      - Bog-light
+      - Dead-tree
+      - Mud-pool
+      - Reed-bed
+      - Moss-log
+      - Gas-vent
+      - Stagnant-pool
+      - Rot-mound
+      - Leech-pond
+      - Frog-hollow
+      - Cypress-knee
+      - Lily-pad-pool
+      - Will-o-wisp
+      - Peat-bank
+      - Fungus-log
+      - Cattail-grove
+      - Turtle-shell-mound
+      - Heron-roost
+      - Quicksand
+      - Algae-bloom
+      Adjectives:
+      - Fetid
+      - Rotting
+      - Sunken
+      - Bubbling
+      - Choking
+      - Reeking
+      - Murky
+      - Drowned
+      - Stagnant
+      - Putrid
+      - Poisonous
+      - Sludge-filled
+      - Methane-choked
+      - Oozing
+      - Bog-haunted
+      - Leech-infested
+      - Festering
+      - Miasmic
+      - Mold-covered
+      - Tar-black
+      - Waterlogged
+      - Squelching
+      Description: 'Stinking wetland — bubbling methane, sinking ground, rot everywhere'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

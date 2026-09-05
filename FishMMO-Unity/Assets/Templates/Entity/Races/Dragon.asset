@@ -126,7 +126,7 @@ MonoBehaviour:
       Phonology:
         Onsets:
         - Alduin
-        - Bahamut
+        - the Skyfather
         - Chronoth
         - Drakar
         - Emberax
@@ -245,11 +245,14 @@ MonoBehaviour:
     Titles:
       Honorific:
       - the Ancient
-      - Wyrmfather
-      - Scalemother
       - Flamekeeper
       - Vaultlord
       - Sovereign Wyrm
+      HonorificMasculine:
+      - Wyrmfather
+      HonorificFeminine:
+      - Wyrmmother
+      - Scalemother
       Epithet:
       - the Undying
       - the World-breaker
@@ -274,6 +277,7 @@ MonoBehaviour:
       - Who Spoke with Gods and Found Them Wanting
       - Who Breathed Fire That Created a Desert
       - Who Was Ancient When the Elves Were Young
+      Occupational: []
     CitySuffixes:
       Capital:
       - roost
@@ -322,3 +326,14 @@ MonoBehaviour:
       - ruin
       - char
       - waste
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 2
+  - BiomeID: -1474826537
+    Weight: 2
+  - BiomeID: -544771122
+    Weight: 1
+  - BiomeID: 493502347
+    Weight: 1
+  - BiomeID: -941601695
+    Weight: 1

@@ -82,9 +82,12 @@ MonoBehaviour:
     - Slavegate
     - the Sour Vein
     Titles:
-      Honorific:
+      Honorific: []
+      HonorificMasculine:
       - Grey-thane
       - Sourforge-king
+      HonorificFeminine:
+      - Sourforge-queen
       Epithet:
       - the Bitter
       - the Stunt-bearded
@@ -93,6 +96,7 @@ MonoBehaviour:
       - Thane of Grey Hammer Hold
       Legend:
       - Who Cursed His Surface Kin into Exile
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +104,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: 155940630
+    Weight: 1.5
+  - BiomeID: 1275219499
+    Weight: 1

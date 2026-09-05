@@ -49,7 +49,7 @@ MonoBehaviour:
       - Jha
       - Mal
       - Rav
-      - Sri
+      - Coil-Lord
       - Tha
       - Uru
       - Bha
@@ -117,6 +117,8 @@ MonoBehaviour:
       - Temple-warden
       - Venom-sage
       - Wisdom-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Eternal Coil
       - the Thousand-scaled
@@ -139,6 +141,7 @@ MonoBehaviour:
       - Whose Venom Cured a Plague
       - Who Remembers the First Dawn
       - Who Coiled Around the World Tree and Held It Together
+      Occupational: []
     CitySuffixes:
       Capital:
       - temple
@@ -187,3 +190,12 @@ MonoBehaviour:
       - void
       - decay
       - husk
+  BiomeAffinities:
+  - BiomeID: -1640008461
+    Weight: 2
+  - BiomeID: 1056999638
+    Weight: 2
+  - BiomeID: 719042512
+    Weight: 1
+  - BiomeID: -2019209325
+    Weight: 1

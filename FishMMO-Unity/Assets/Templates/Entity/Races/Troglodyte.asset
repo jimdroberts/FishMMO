@@ -84,7 +84,10 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Stench-chief
+      HonorificMasculine:
       - Cave-father
+      HonorificFeminine:
+      - Cave-mother
       Epithet:
       - the Reeking
       - the Scaled-hunched
@@ -92,6 +95,7 @@ MonoBehaviour:
       - Chief of the Stinking Warrens
       Legend:
       - Whose Stench Broke the Charging Line
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -99,3 +103,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -830221931
+    Weight: 2
+  - BiomeID: 155940630
+    Weight: 1

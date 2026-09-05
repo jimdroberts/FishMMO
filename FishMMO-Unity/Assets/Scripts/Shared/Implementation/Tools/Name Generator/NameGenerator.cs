@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.NameGeneration
 {
@@ -23,6 +24,8 @@ namespace FishMMO.Shared.NameGeneration
 	public class NameGenerator
 	{
 		private readonly DeterministicRNG rng;
+		/// <summary>Recent titles, so an unseeded batch does not repeat itself. Seeded requests ignore it.</summary>
+		private readonly TitleMemory titleMemory = new TitleMemory();
 
 		/// <summary>
 		/// Construct a generator. With no <paramref name="seed"/> the RNG is
@@ -39,7 +42,7 @@ namespace FishMMO.Shared.NameGeneration
 		public static bool IsReady => NameGrammar.IsLoaded && RaceRegistry.Count > 0;
 
 		public static IReadOnlyList<string> SupportedRaces => RaceRegistry.SupportedRaces;
-		public static IReadOnlyList<string> SupportedBiomes => BiomeRegistry.SupportedBiomes;
+		public static IReadOnlyList<string> SupportedBiomes => BiomeRegistry.NameableBiomes;
 		public static IReadOnlyList<string> SupportedModifiers => ModifierRegistry.SupportedModifiers;
 
 		public static IReadOnlyList<string> GetCultures(string race) => RaceRegistry.GetCultures(race);
@@ -71,7 +74,8 @@ namespace FishMMO.Shared.NameGeneration
 
 			if (!req.NameOnly)
 			{
-				(title, titleCategory) = TitleBuilder.Build(race.NamingKey, req.TitleType, meaning, draw);
+				(title, titleCategory) = TitleBuilder.Build(race.NamingKey, TitleOptionsFor(req), meaning, draw,
+					string.IsNullOrEmpty(req.RegionSeed) ? titleMemory : null);
 			}
 
 			string displayRace = race.Name;
@@ -101,10 +105,17 @@ namespace FishMMO.Shared.NameGeneration
 			CityNameEntry injected = RuntimeInjection.TryPopCity(race.NamingKey, req.CityType);
 			if (injected != null) return injected;
 
-			DeterministicRNG draw = DeriveRng(req, batchOffset, "city", race.NamingKey, req.Culture, req.Biome);
+			BiomeTemplate biome = ResolveBiomeOrNull(req);
+			DeterministicRNG draw = DeriveRng(req, batchOffset, "city", race.NamingKey, req.Culture, biome?.Key ?? req.Biome);
+			// A settlement with no stated biome sits in one of its people's home biomes.
+			if (biome == null && req.UseRaceHomeBiome)
+			{
+				biome = race.PickHomeBiome(draw);
+			}
+			BiomeClimateVariant variant = ResolveVariant(req, biome);
 			RacePhonology phonology = RaceRegistry.ResolvePhonology(race.NamingKey, req.Culture);
 
-			var (name, meaning, fragments) = CityNameBuilder.Build(phonology, race.NamingKey, req.CityType, req.Biome, draw);
+			var (name, meaning, fragments) = CityNameBuilder.Build(phonology, race.NamingKey, req.CityType, biome?.Key, draw, variant);
 
 			string displayRace = race.Name;
 			if (!string.IsNullOrEmpty(req.Culture)) displayRace += $" ({req.Culture})";
@@ -124,13 +135,14 @@ namespace FishMMO.Shared.NameGeneration
 		private DungeonNameEntry Generate(DungeonRequest req, int batchOffset)
 		{
 			if (req == null) throw new ArgumentNullException(nameof(req));
-			BiomeNamingTemplate biome = RequireBiome(req.Biome);
+			BiomeTemplate biome = RequireBiome(req);
 
 			DungeonNameEntry injected = RuntimeInjection.TryPopDungeon(biome.Key);
 			if (injected != null) return injected;
 
 			DeterministicRNG draw = DeriveRng(req, batchOffset, "dungeon", biome.Key, req.Race);
-			var (name, meaning, fragments) = DungeonNameBuilder.Build(biome.RuntimePhonology, draw);
+			BiomeClimateVariant variant = ResolveVariant(req, biome);
+			var (name, meaning, fragments) = DungeonNameBuilder.Build(biome.Naming.RuntimePhonology, draw, variant);
 
 			return new DungeonNameEntry
 			{
@@ -146,13 +158,14 @@ namespace FishMMO.Shared.NameGeneration
 		private POINameEntry Generate(POIRequest req, int batchOffset)
 		{
 			if (req == null) throw new ArgumentNullException(nameof(req));
-			BiomeNamingTemplate biome = RequireBiome(req.Biome);
+			BiomeTemplate biome = RequireBiome(req);
 
 			POINameEntry injected = RuntimeInjection.TryPopPOI(biome.Key, req.POIType);
 			if (injected != null) return injected;
 
 			DeterministicRNG draw = DeriveRng(req, batchOffset, "poi", biome.Key, req.POIType.ToString());
-			var (name, meaning, fragments) = POINameBuilder.Build(biome.RuntimePhonology, req.POIType, draw);
+			BiomeClimateVariant variant = ResolveVariant(req, biome);
+			var (name, meaning, fragments) = POINameBuilder.Build(biome.Naming.RuntimePhonology, req.POIType, draw, variant);
 
 			return new POINameEntry
 			{
@@ -201,7 +214,8 @@ namespace FishMMO.Shared.NameGeneration
 			var (name, meaning, fragments) = NameBuilder.Build(hybrid, req.Gender, draw);
 
 			string titleRace = draw.NextDouble() < req.Dominance ? raceA.NamingKey : raceB.NamingKey;
-			var (title, titleCategory) = TitleBuilder.Build(titleRace, req.TitleType, meaning, draw);
+			var (title, titleCategory) = TitleBuilder.Build(titleRace, TitleOptionsFor(req), meaning, draw,
+				string.IsNullOrEmpty(req.RegionSeed) ? titleMemory : null);
 
 			return new CharacterEntry
 			{
@@ -357,58 +371,67 @@ namespace FishMMO.Shared.NameGeneration
 			});
 		}
 
+		/// <param name="biome">Biome key the settlement sits in; null draws one of the race's home biomes.</param>
+		/// <param name="climateVariant">Key of one of the biome's climate variants ("frozen"); null for none.</param>
 		public CityNameEntry GenerateCityName(string race,
 			CityType cityType = CityType.Any,
-			string culture = null, string regionSeed = null)
+			string culture = null, string regionSeed = null,
+			string biome = null, string climateVariant = null)
 		{
 			return Generate(new CityRequest
 			{
 				Race = race, CityType = cityType, Culture = culture, RegionSeed = regionSeed,
+				Biome = biome, ClimateVariant = climateVariant,
 			});
 		}
 
 		public List<CityNameEntry> GenerateCityNames(string race, int count,
 			CityType cityType = CityType.Any,
-			string culture = null, string regionSeed = null)
+			string culture = null, string regionSeed = null,
+			string biome = null, string climateVariant = null)
 		{
 			return GenerateBatch(new CityRequest
 			{
 				Race = race, CityType = cityType, Culture = culture, RegionSeed = regionSeed,
+				Biome = biome, ClimateVariant = climateVariant,
 			}, count);
 		}
 
 		public List<CityNameEntry> GenerateUniqueCityNames(string race, int count,
 			CityType cityType = CityType.Any, int maxAttempts = 10000,
-			string culture = null, string regionSeed = null)
+			string culture = null, string regionSeed = null,
+			string biome = null, string climateVariant = null)
 		{
 			return GenerateUnique(new CityRequest
 			{
 				Race = race, CityType = cityType, Culture = culture, RegionSeed = regionSeed,
+				Biome = biome, ClimateVariant = climateVariant,
 			}, count, maxAttempts).Items;
 		}
 
-		public DungeonNameEntry GenerateDungeonName(string biome, string regionSeed = null)
-			=> Generate(new DungeonRequest { Biome = biome, RegionSeed = regionSeed });
+		/// <param name="climateVariant">Key of one of the biome's climate variants ("frozen"); null for none.</param>
+		public DungeonNameEntry GenerateDungeonName(string biome, string regionSeed = null, string climateVariant = null)
+			=> Generate(new DungeonRequest { Biome = biome, RegionSeed = regionSeed, ClimateVariant = climateVariant });
 
-		public List<DungeonNameEntry> GenerateDungeonNames(string biome, int count, string regionSeed = null)
-			=> GenerateBatch(new DungeonRequest { Biome = biome, RegionSeed = regionSeed }, count);
+		public List<DungeonNameEntry> GenerateDungeonNames(string biome, int count, string regionSeed = null, string climateVariant = null)
+			=> GenerateBatch(new DungeonRequest { Biome = biome, RegionSeed = regionSeed, ClimateVariant = climateVariant }, count);
 
 		public List<DungeonNameEntry> GenerateUniqueDungeonNames(string biome, int count,
-			int maxAttempts = 10000, string regionSeed = null)
-			=> GenerateUnique(new DungeonRequest { Biome = biome, RegionSeed = regionSeed }, count, maxAttempts).Items;
+			int maxAttempts = 10000, string regionSeed = null, string climateVariant = null)
+			=> GenerateUnique(new DungeonRequest { Biome = biome, RegionSeed = regionSeed, ClimateVariant = climateVariant }, count, maxAttempts).Items;
 
 		public POINameEntry GeneratePOIName(string biome,
-			POIType poiType = POIType.Any, string regionSeed = null)
-			=> Generate(new POIRequest { Biome = biome, POIType = poiType, RegionSeed = regionSeed });
+			POIType poiType = POIType.Any, string regionSeed = null, string climateVariant = null)
+			=> Generate(new POIRequest { Biome = biome, POIType = poiType, RegionSeed = regionSeed, ClimateVariant = climateVariant });
 
 		public List<POINameEntry> GeneratePOINames(string biome, int count,
-			POIType poiType = POIType.Any, string regionSeed = null)
-			=> GenerateBatch(new POIRequest { Biome = biome, POIType = poiType, RegionSeed = regionSeed }, count);
+			POIType poiType = POIType.Any, string regionSeed = null, string climateVariant = null)
+			=> GenerateBatch(new POIRequest { Biome = biome, POIType = poiType, RegionSeed = regionSeed, ClimateVariant = climateVariant }, count);
 
 		public List<POINameEntry> GenerateUniquePOINames(string biome, int count,
 			POIType poiType = POIType.Any, int maxAttempts = 10000,
-			string regionSeed = null)
-			=> GenerateUnique(new POIRequest { Biome = biome, POIType = poiType, RegionSeed = regionSeed }, count, maxAttempts).Items;
+			string regionSeed = null, string climateVariant = null)
+			=> GenerateUnique(new POIRequest { Biome = biome, POIType = poiType, RegionSeed = regionSeed, ClimateVariant = climateVariant }, count, maxAttempts).Items;
 
 		public ItemNameEntry GenerateItemName(string race, ItemType itemType = ItemType.Any,
 			string culture = null, string regionSeed = null)
@@ -422,6 +445,26 @@ namespace FishMMO.Shared.NameGeneration
 			ItemType itemType = ItemType.Any, int maxAttempts = 10000,
 			string culture = null, string regionSeed = null)
 			=> GenerateUnique(new ItemRequest { Race = race, ItemType = itemType, Culture = culture, RegionSeed = regionSeed }, count, maxAttempts).Items;
+
+		private static TitleOptions TitleOptionsFor(NameRequest req) => new TitleOptions
+		{
+			TitleType = req.TitleType,
+			Register = req.Register,
+			Gender = req.Gender,
+			Profession = req.Profession,
+			MaxLength = req.MaxTitleLength,
+			AllowCompound = req.AllowCompoundTitle,
+		};
+
+		private static TitleOptions TitleOptionsFor(HybridRequest req) => new TitleOptions
+		{
+			TitleType = req.TitleType,
+			Register = req.Register,
+			Gender = req.Gender,
+			Profession = req.Profession,
+			MaxLength = req.MaxTitleLength,
+			AllowCompound = req.AllowCompoundTitle,
+		};
 
 		// ── Lookups with clear failures ────────────────────────────────
 
@@ -441,20 +484,50 @@ namespace FishMMO.Shared.NameGeneration
 				: $"Unknown race '{race}'. Supported: {string.Join(", ", RaceRegistry.SupportedRaces)}");
 		}
 
-		private static BiomeNamingTemplate RequireBiome(string biome)
+		/// <summary>The request's biome by ID, else by key; null when it names none or the biome is unknown.</summary>
+		private static BiomeTemplate ResolveBiomeOrNull(BiomeGenerationRequest req)
+		{
+			if (req.BiomeID != 0 && BiomeRegistry.TryGetByID(req.BiomeID, out BiomeTemplate byId))
+			{
+				return byId;
+			}
+			return BiomeRegistry.TryGet(req.Biome, out BiomeTemplate byKey) ? byKey : null;
+		}
+
+		private static BiomeTemplate RequireBiome(BiomeGenerationRequest req)
 		{
 			if (!NameGrammar.IsLoaded)
 			{
 				throw new InvalidOperationException(
 					"No NameGrammarTemplate is registered. Load the naming templates before generating names.");
 			}
-			if (BiomeRegistry.TryGet(biome, out BiomeNamingTemplate template))
+			BiomeTemplate biome = ResolveBiomeOrNull(req);
+			if (biome != null)
 			{
-				return template;
+				if (biome.Naming == null || !biome.Naming.IsUsable)
+				{
+					throw new ArgumentException($"Biome '{biome.name}' has no usable naming data.");
+				}
+				return biome;
 			}
+			string asked = req.BiomeID != 0 ? $"#{req.BiomeID}" : $"'{req.Biome}'";
 			throw new ArgumentException(BiomeRegistry.Count == 0
-				? $"Unknown biome '{biome}': no BiomeNamingTemplate is registered."
-				: $"Unknown biome '{biome}'. Supported: {string.Join(", ", BiomeRegistry.SupportedBiomes)}");
+				? $"Unknown biome {asked}: no BiomeTemplate is registered."
+				: $"Unknown biome {asked}. Supported: {string.Join(", ", BiomeRegistry.NameableBiomes)}");
+		}
+
+		/// <summary>The variant the request names, resolved on the biome; null when none applies.</summary>
+		private static BiomeClimateVariant ResolveVariant(BiomeGenerationRequest req, BiomeTemplate biome)
+		{
+			if (req.Variant != null)
+			{
+				return req.Variant;
+			}
+			if (biome == null || string.IsNullOrWhiteSpace(req.ClimateVariant))
+			{
+				return null;
+			}
+			return biome.FindOwnVariant(req.ClimateVariant);
 		}
 
 		// ── Seed derivation ────────────────────────────────────────────

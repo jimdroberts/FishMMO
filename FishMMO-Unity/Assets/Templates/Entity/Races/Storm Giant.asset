@@ -85,9 +85,13 @@ MonoBehaviour:
     - Tidecrown Keep
     - the Sea-Sky Palace
     Titles:
-      Honorific:
+      Honorific: []
+      HonorificMasculine:
       - Storm-lord
       - Thunder-king
+      HonorificFeminine:
+      - Storm-lady
+      - Thunder-queen
       Epithet:
       - the Thunder-voiced
       - the Sea-crowned
@@ -95,6 +99,7 @@ MonoBehaviour:
       - King of the Thunder Hall
       Legend:
       - Whose Voice Became the Storm of Ages
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -102,3 +107,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 1496239796
+    Weight: 2
+  - BiomeID: 646460858
+    Weight: 2
+  - BiomeID: -1474826537
+    Weight: 1
+  - BiomeID: 1476749746
+    Weight: 1

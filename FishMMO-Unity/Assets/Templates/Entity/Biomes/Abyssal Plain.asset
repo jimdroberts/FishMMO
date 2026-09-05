@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Abyssal Plain
+  m_EditorClassIdentifier: 
+  DisplayName: Abyssal Plain
+  Description: 'Deep ocean floor plains — featureless, silent, preserved in darkness'
+  BiomeColorId: {r: 0.02, g: 0.05, b: 0.2, a: 1}
+  GizmoColor: {r: 0.1, g: 0.1, b: 0.4, a: 1}
+  ElevationTier: 0
+  MinHeight: 0
+  MaxHeight: 0.15
+  MinTemperature: -0.9
+  MaxTemperature: -0.5
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Nul
+      - Vor
+      - Abi
+      - Sha
+      - Pel
+      - Und
+      - Gor
+      - Mor
+      - Dra
+      - Vel
+      - Kra
+      - Lir
+      - Del
+      - Eth
+      - Oce
+      Nuclei:
+      - a
+      - o
+      - u
+      - oth
+      - ul
+      - ax
+      - ux
+      Codas:
+      - void
+      - 'null'
+      - deep
+      - maw
+      - abyss
+      - plain
+      - flat
+      - dark
+      - rift
+      - bed
+      Middles:
+      - ul
+      - ax
+      - or
+      - an
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Plain
+      - Expanse
+      - Floor
+      - Bed
+      - Flat
+      - Hollow
+      - Basin
+      - Depth
+      - Void
+      - Wasteland
+      - Field
+      - Trench
+      - Passage
+      - Chamber
+      - Depression
+      - Rift
+      - Canyon
+      - Valley
+      - Pit
+      - Mound
+      - Ridge
+      - Shelf
+      DungeonPrefixes:
+      - The Endless
+      - The Barren
+      - The Lightless
+      - The Forgotten
+      - The Featureless
+      - The Silent
+      - The Primordial
+      - The Desolate
+      - The Monotonous
+      - The Infinite
+      - The Sediment-covered
+      - The Lifeless
+      - The Preserved
+      - The Uncharted
+      - The Pressure-flat
+      - The Silt-blanketed
+      - The Unchanging
+      - The Timeless
+      - The Abyssal
+      - The Tomb-quiet
+      POISuffixes:
+      - Sediment-mound
+      - Manganese-node
+      - Ooze-field
+      - Abyssal-hill
+      - Mud-vent
+      - Bone-yard
+      - Silt-drift
+      - Dead-fall
+      - Xenophyophore-field
+      - Cold-seep
+      - Tube-worm-garden
+      - Whale-skeleton
+      - Mineral-crust
+      - Nodule-field
+      - Benthic-garden
+      - Glass-sponge
+      - Amphipod-trench
+      - Polychaete-meadow
+      - Bacterial-mat
+      - Hadal-depression
+      Adjectives:
+      - Endless
+      - Barren
+      - Featureless
+      - Silent
+      - Desolate
+      - Lightless
+      - Primordial
+      - Flat
+      - Preserved
+      - Untouched
+      - Monotonous
+      - Infinite
+      - Sediment-covered
+      - Lifeless
+      - Uncharted
+      - Silt-blanketed
+      - Unchanging
+      - Timeless
+      - Pressure-flat
+      - Tomb-quiet
+      - Abyssal
+      - Isolated
+      Description: 'Deep ocean floor plains — featureless, silent, preserved in darkness'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: f86c769a177b3e84085abaa1ddeefdc6, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -402.63855
+    blendNoiseOffsetY: 274.89447
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -245.73074
+    blendNoiseOffsetY: 331.1488
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 847.641
+    blendNoiseOffsetY: -528.3816
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 242.05313
+    blendNoiseOffsetY: 691.771
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

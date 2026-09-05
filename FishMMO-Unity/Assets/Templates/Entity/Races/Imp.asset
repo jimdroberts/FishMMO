@@ -82,8 +82,11 @@ MonoBehaviour:
     - 'Shrieker''s Nook'
     Titles:
       Honorific:
-      - Little Lord
       - Pocket-devil
+      HonorificMasculine:
+      - Little Lord
+      HonorificFeminine:
+      - Little Lady
       Epithet:
       - the Needletongued
       - the Sticky-fingered
@@ -92,6 +95,7 @@ MonoBehaviour:
       - Familiar of the Third Circle
       Legend:
       - 'Who Pocketed the Wizard''s True Name'
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -99,3 +103,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 681889367
+    Weight: 1
+  - BiomeID: 155940630
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1
+  - BiomeID: 525873855
+    Weight: 1

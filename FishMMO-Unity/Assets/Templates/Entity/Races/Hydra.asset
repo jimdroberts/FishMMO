@@ -83,6 +83,8 @@ MonoBehaviour:
       Honorific:
       - Nine-crowned
       - Regrowth-warden
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Uncut
       - the Thrice-reborn
@@ -90,6 +92,7 @@ MonoBehaviour:
       - Warden of the Nine-Mouth Hollow
       Legend:
       - Who Grew Back from the Final Blow
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -97,3 +100,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2077848218
+    Weight: 1
+  - BiomeID: -2019209325
+    Weight: 1
+  - BiomeID: 888339253
+    Weight: 1

@@ -158,7 +158,11 @@ MonoBehaviour:
     ModifierID: 0
     GenderPolicy: 0
     NameFormat: 1
-    TitlePolicy: 0
+    TitlePolicy: 1
+    Register: 1
+    Profession: 
+    MaxTitleLength: 32
+    AllowCompoundTitle: 0
     BiomeID: 0
     CityType: 0
     POIType: 0

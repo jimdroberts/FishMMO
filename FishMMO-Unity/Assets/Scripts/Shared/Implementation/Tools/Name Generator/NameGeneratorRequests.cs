@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.NameGeneration
 {
@@ -27,6 +28,14 @@ namespace FishMMO.Shared.NameGeneration
 		public string Modifier { get; set; }
 		public CharacterGender Gender { get; set; } = CharacterGender.Unspecified;
 		public TitleType TitleType { get; set; } = TitleType.Any;
+		/// <summary>Social register of the title: Civil for townsfolk and traders, Martial for soldiers, Mythic for legends.</summary>
+		public TitleRegister Register { get; set; } = TitleRegister.Any;
+		/// <summary>What this character does ("Banker"); fills the {profession} slot of Civil titles.</summary>
+		public string Profession { get; set; }
+		/// <summary>Longest title allowed, in characters; 0 is unlimited. Nameplates want about 32.</summary>
+		public int MaxTitleLength { get; set; }
+		/// <summary>Whether a second clause may be appended ("Lord of Ashford, the Bold").</summary>
+		public bool AllowCompoundTitle { get; set; } = true;
 		/// <summary>If true, output skips title generation.</summary>
 		public bool NameOnly { get; set; }
 		/// <summary>If true, output skips name generation.</summary>
@@ -35,25 +44,38 @@ namespace FishMMO.Shared.NameGeneration
 		public bool IncludeFamilyName { get; set; }
 	}
 
-	public sealed class CityRequest : GenerationRequest
+	/// <summary>Fields shared by every request that names something from a biome.</summary>
+	public abstract class BiomeGenerationRequest : GenerationRequest
+	{
+		/// <summary>Biome key ("volcanic"); ignored when <see cref="BiomeID"/> is set.</summary>
+		public string Biome { get; set; }
+		/// <summary>Biome by cached-object ID — what maps, affinities and [TemplateReference] fields carry.</summary>
+		public int BiomeID { get; set; }
+		/// <summary>Key of a climate variant on the biome or the scene's defaults ("frozen"); ignored when <see cref="Variant"/> is set.</summary>
+		public string ClimateVariant { get; set; }
+		/// <summary>The climate variant the place is read under right now; its adjectives and prefixes lead the name.</summary>
+		public BiomeClimateVariant Variant { get; set; }
+
+		public bool HasBiome => BiomeID != 0 || !string.IsNullOrEmpty(Biome);
+	}
+
+	public sealed class CityRequest : BiomeGenerationRequest
 	{
 		public string Race { get; set; }
 		public string Culture { get; set; }
 		public CityType CityType { get; set; } = CityType.Any;
-		/// <summary>Optional biome key; lends the biome's adjectives and suffixes to the city name.</summary>
-		public string Biome { get; set; }
+		/// <summary>When no biome is given, draw one of the race's home biomes instead of naming without one.</summary>
+		public bool UseRaceHomeBiome { get; set; } = true;
 	}
 
-	public sealed class DungeonRequest : GenerationRequest
+	public sealed class DungeonRequest : BiomeGenerationRequest
 	{
-		public string Biome { get; set; }
 		/// <summary>Optional owning race, mixed into the seed so two races' dungeons in one biome differ.</summary>
 		public string Race { get; set; }
 	}
 
-	public sealed class POIRequest : GenerationRequest
+	public sealed class POIRequest : BiomeGenerationRequest
 	{
-		public string Biome { get; set; }
 		public POIType POIType { get; set; } = POIType.Any;
 	}
 
@@ -95,6 +117,10 @@ namespace FishMMO.Shared.NameGeneration
 		public string CultureB { get; set; }
 		public CharacterGender Gender { get; set; } = CharacterGender.Unspecified;
 		public TitleType TitleType { get; set; } = TitleType.Any;
+		public TitleRegister Register { get; set; } = TitleRegister.Any;
+		public string Profession { get; set; }
+		public int MaxTitleLength { get; set; }
+		public bool AllowCompoundTitle { get; set; } = true;
 		/// <summary>
 		/// Bias toward <see cref="RaceA"/> in [0.0, 1.0]: 0 is fully RaceB, 1 is
 		/// fully RaceA. Each candidate syllable from A passes with probability

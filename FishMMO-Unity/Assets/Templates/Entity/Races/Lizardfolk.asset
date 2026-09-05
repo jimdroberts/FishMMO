@@ -110,10 +110,13 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Scale-elder
-      - Fang-lord
       - Brood-keeper
       - Sun-basker
       - Swamp-warden
+      HonorificMasculine:
+      - Fang-lord
+      HonorificFeminine:
+      - Fang-lady
       - Clutch-mother
       Epithet:
       - the Cold-blooded
@@ -137,6 +140,11 @@ MonoBehaviour:
       - Whose Patience Outlasted a Siege
       - Who Remembers the Time Before Warm-bloods
       - Who Hatched in the Age of Dragons
+      Occupational:
+      - Egg-tender
+      - Bone-carver
+      - Marsh-hunter
+      - Hide-worker
     CitySuffixes:
       Capital:
       - nest
@@ -184,3 +192,14 @@ MonoBehaviour:
       - ash
       - waste
       - husk
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 3
+  - BiomeID: -2019209325
+    Weight: 2
+  - BiomeID: -1640008461
+    Weight: 1.5
+  - BiomeID: -2077848218
+    Weight: 1
+  - BiomeID: 888339253
+    Weight: 1

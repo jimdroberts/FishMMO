@@ -1,0 +1,306 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Ocean
+  m_EditorClassIdentifier: 
+  DisplayName: Ocean
+  Description: 'Deep ocean — crushing depths, sunken temples, bioluminescent wonder'
+  BiomeColorId: {r: 0.1, g: 0.3, b: 0.6, a: 1}
+  GizmoColor: {r: 0, g: 0.4, b: 0.8, a: 1}
+  ElevationTier: 1
+  MinHeight: 0.2
+  MaxHeight: 0.35
+  MinTemperature: -0.5
+  MaxTemperature: 0.3
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants:
+  - Name: Frozen
+    MinTemperature: -1
+    MaxTemperature: -0.45
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Ice-choked
+    - Floe-strewn
+    - Frozen
+    - Berg-haunted
+    DungeonPrefixes:
+    - The Ice-choked
+    - The Floe-strewn
+    TextureLayerOverrides: []
+  - Name: Scorched
+    MinTemperature: 0.45
+    MaxTemperature: 1
+    MinHumidity: -1
+    MaxHumidity: 1
+    Adjectives:
+    - Sun-dazzled
+    - Steaming
+    - Warm-tide
+    - Glare-bright
+    DungeonPrefixes:
+    - The Steaming
+    - The Sun-dazzled
+    TextureLayerOverrides: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mar
+      - Tid
+      - Cor
+      - Del
+      - Lir
+      - Ner
+      - Oce
+      - Pel
+      - Sal
+      - Wav
+      - Und
+      - Bri
+      - Kel
+      - Aqu
+      - Flo
+      Nuclei:
+      - a
+      - ea
+      - ia
+      - ua
+      - ei
+      - ai
+      - oa
+      Codas:
+      - al
+      - ine
+      - eal
+      - ria
+      - tide
+      - reef
+      - pearl
+      - wave
+      - ora
+      - deep
+      Middles:
+      - el
+      - al
+      - il
+      - ar
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Trench
+      - Grotto
+      - Cavern
+      - Rift
+      - Hollow
+      - Depth
+      - Chasm
+      - Vault
+      - Temple
+      - Ruin
+      - Shipwreck
+      - Abyss
+      - Crevice
+      - Tunnel
+      - Chamber
+      - Passage
+      - Coral-cave
+      - Whirlpool
+      - Den
+      - Tomb
+      - Gallery
+      - Alcove
+      DungeonPrefixes:
+      - The Sunken
+      - The Drowned
+      - The Abyssal
+      - The Tidal
+      - The Coral
+      - The Deep
+      - The Salt-cursed
+      - The Forgotten
+      - The Barnacled
+      - The Pressure-crushed
+      - The Bioluminescent
+      - The Ancient
+      - The Wave-shattered
+      - The Silt-buried
+      - The Kelp-choked
+      - The Current-swept
+      - 'The Leviathan''s'
+      - The Pearl-encrusted
+      - The Reef-hidden
+      - The Storm-sunken
+      POISuffixes:
+      - Reef
+      - Atoll
+      - Kelp-forest
+      - Shipwreck
+      - Coral-arch
+      - Tide-pool
+      - Whirlpool
+      - Sea-mount
+      - Sunken-ship
+      - Deep-vent
+      - Jellyfish-bloom
+      - Whale-bone
+      - Sea-cave
+      - Anemone-field
+      - Starfish-bed
+      - Barnacle-cluster
+      - Current-channel
+      - Phosphor-pool
+      - Sand-garden
+      - Trench-wall
+      Adjectives:
+      - Sunken
+      - Drowned
+      - Abyssal
+      - Tidal
+      - Coral
+      - Deep
+      - Salt-cursed
+      - Pressure-crushed
+      - Bioluminescent
+      - Ancient
+      - Barnacled
+      - Wave-shattered
+      - Silt-buried
+      - Kelp-choked
+      - Current-swept
+      - Pearl-encrusted
+      - Storm-sunken
+      - Vast
+      - Mysterious
+      - Dark
+      - Fathomless
+      - Turbulent
+      Description: 'Deep ocean — crushing depths, sunken temples, bioluminescent wonder'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 2aaac07da5221414f8c52c54730d6aea, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -416.54553
+    blendNoiseOffsetY: 22.739075
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -93.01102
+    blendNoiseOffsetY: -147.95627
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -455.92557
+    blendNoiseOffsetY: 831.5137
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -527.64844
+    blendNoiseOffsetY: 127.015015
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

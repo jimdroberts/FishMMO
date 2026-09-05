@@ -84,8 +84,11 @@ MonoBehaviour:
     - Swordsworn Mound
     Titles:
       Honorific:
-      - Barrow-king
       - Ever-watch
+      HonorificMasculine:
+      - Barrow-king
+      HonorificFeminine:
+      - Barrow-queen
       Epithet:
       - the Cold-handed
       - the Gold-cursed
@@ -94,6 +97,7 @@ MonoBehaviour:
       - King of the Barrow-Downs
       Legend:
       - Who Slew the Adventurer with His Own Sword
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -101,3 +105,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -567058185
+    Weight: 2
+  - BiomeID: 187749268
+    Weight: 1
+  - BiomeID: 621224406
+    Weight: 1
+  - BiomeID: -857237992
+    Weight: 1

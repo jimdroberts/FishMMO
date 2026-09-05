@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Castle
+  m_EditorClassIdentifier: 
+  DisplayName: Castle
+  Description: 'Stone fortification — battlements, towers, and echoing halls'
+  BiomeColorId: {r: 0.55, g: 0.55, b: 0.6, a: 1}
+  GizmoColor: {r: 0.7, g: 0.7, b: 0.75, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.5
+  MaxHeight: 0.8
+  MinTemperature: -0.5
+  MaxTemperature: 0.5
+  MinHumidity: -0.5
+  MaxHumidity: 0.5
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Kor
+      - Val
+      - Gar
+      - Dra
+      - Hel
+      - Sto
+      - Bel
+      - Thr
+      - Mor
+      - Rav
+      - Kel
+      - Sil
+      - Gri
+      - Nor
+      - Wra
+      Nuclei:
+      - a
+      - o
+      - e
+      - ar
+      - or
+      - al
+      - ir
+      Codas:
+      - ric
+      - mund
+      - ald
+      - ard
+      - orn
+      - heim
+      - gard
+      - stein
+      - burg
+      - hall
+      Middles:
+      - an
+      - el
+      - or
+      - ar
+      - ir
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Keep
+      - Dungeon
+      - Tower
+      - Vault
+      - Hall
+      - Crypt
+      - Cellar
+      - Chamber
+      - Oubliette
+      - Sanctum
+      - Barracks
+      - Armory
+      - Gallery
+      - Chapel
+      - Passage
+      - Battlement
+      - Gatehouse
+      - Throne-room
+      - Storeroom
+      - Cistern
+      - Treasury
+      - Bastion
+      DungeonPrefixes:
+      - The Royal
+      - The Crumbling
+      - The Haunted
+      - The Iron
+      - The Last
+      - The Fallen
+      - The Besieged
+      - The Forgotten
+      - The Ruined
+      - The Abandoned
+      - The Blood-soaked
+      - The Cursed
+      - The Burning
+      - The Looming
+      - The Grand
+      - The Ancient
+      - The Shadowed
+      - The War-scarred
+      - The Decrepit
+      - The Forsaken
+      POISuffixes:
+      - Gatehouse
+      - Courtyard
+      - Parapet
+      - Drawbridge
+      - Portcullis
+      - Battlement
+      - Turret
+      - Barbican
+      - Moat
+      - Rampart
+      - Arrow-slit
+      - Banquet-hall
+      - Throne
+      - Dungeon-grate
+      - Bell-tower
+      - Murder-hole
+      - Crenellation
+      - Guard-tower
+      - Stable
+      - Chapel-ruin
+      Adjectives:
+      - Royal
+      - Crumbling
+      - Haunted
+      - Iron
+      - Fallen
+      - Besieged
+      - Forgotten
+      - Looming
+      - Imposing
+      - Weathered
+      - Ruined
+      - Blood-soaked
+      - Cursed
+      - Grand
+      - Ancient
+      - Shadowed
+      - War-scarred
+      - Decrepit
+      - Forsaken
+      - Towering
+      - Magnificent
+      - Grim
+      Description: 'Stone fortification — battlements, towers, and echoing halls'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

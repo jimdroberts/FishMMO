@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using FishMMO.Shared;
 using FishMMO.Shared.NameGeneration;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration.Editor;
 
 namespace FishMMO.UnitTests
@@ -20,7 +21,7 @@ namespace FishMMO.UnitTests
 	{
 		private RaceTemplate human;
 		private RaceTemplate elf;
-		private BiomeNamingTemplate biome;
+		private BiomeTemplate biome;
 		private readonly List<ScriptableObject> created = new List<ScriptableObject>();
 
 		[OneTimeSetUp]
@@ -29,7 +30,7 @@ namespace FishMMO.UnitTests
 			NamingTemplateEditorLoader.Reload();
 			human = RaceRegistry.Get("human");
 			elf = RaceRegistry.Get("elf");
-			biome = BiomeRegistry.Get(BiomeRegistry.SupportedBiomes[0]);
+			biome = BiomeRegistry.Get(NameGenerator.SupportedBiomes[0]);
 			Assume.That(human, Is.Not.Null);
 			Assume.That(elf, Is.Not.Null);
 			Assume.That(biome, Is.Not.Null);

@@ -239,6 +239,41 @@ namespace FishMMO.Shared.NameGeneration
 			return false;
 		}
 
+		/// <summary>
+		/// Registered races with an affinity for a biome, with their weights, heaviest first (ties in
+		/// key order). What a spawner asks to decide who lives here.
+		/// </summary>
+		public static List<(RaceTemplate race, float weight)> RacesForBiome(int biomeID)
+		{
+			var result = new List<(RaceTemplate race, float weight)>();
+			if (biomeID == 0)
+			{
+				return result;
+			}
+			foreach (string key in SupportedRaces)
+			{
+				RaceTemplate race = templates[key];
+				float weight = race.AffinityFor(biomeID);
+				if (weight > 0f)
+				{
+					result.Add((race, weight));
+				}
+			}
+			// Stable: equal weights keep key order, so the list is the same on every peer.
+			for (int i = 1; i < result.Count; i++)
+			{
+				(RaceTemplate race, float weight) item = result[i];
+				int j = i - 1;
+				while (j >= 0 && result[j].weight < item.weight)
+				{
+					result[j + 1] = result[j];
+					j--;
+				}
+				result[j + 1] = item;
+			}
+			return result;
+		}
+
 		/// <summary>Every tag used by any registered race, in ordinal order.</summary>
 		public static IReadOnlyList<string> AllTags()
 		{

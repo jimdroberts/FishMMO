@@ -719,6 +719,237 @@ MonoBehaviour:
     - Shell
     - Skeleton
     - Husk
+  TitleTemplates:
+  - Category: 1
+    Register: 1
+    Pattern: '{honorific}'
+    Weight: 50
+  - Category: 1
+    Register: 1
+    Pattern: '{honorific:place} of {place}'
+    Weight: 20
+  - Category: 1
+    Register: 1
+    Pattern: '{honorific:ordinal}, {ordinal} of {pronoun} Name'
+    Weight: 8
+  - Category: 1
+    Register: 1
+    Pattern: '{honorific} and {honorific}'
+    Weight: 6
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet}'
+    Weight: 45
+  - Category: 2
+    Register: 0
+    Pattern: 'the {adjective}-{qualifier}'
+    Weight: 25
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet} of {place}'
+    Weight: 8
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet} from {place}'
+    Weight: 4
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet}, bane of {place}'
+    Weight: 3
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet}, sworn to {place}'
+    Weight: 3
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet}, pride of {place}'
+    Weight: 3
+  - Category: 2
+    Register: 0
+    Pattern: '{epithet}, exiled from {place}'
+    Weight: 3
+  - Category: 3
+    Register: 2
+    Pattern: '{rank}'
+    Weight: 50
+  - Category: 3
+    Register: 2
+    Pattern: '{rank:noplace} of {place}'
+    Weight: 20
+  - Category: 3
+    Register: 2
+    Pattern: '{ordinal} {rank}'
+    Weight: 10
+  - Category: 4
+    Register: 3
+    Pattern: '{legend}'
+    Weight: 40
+  - Category: 4
+    Register: 3
+    Pattern: 'Who {deed} {object}'
+    Weight: 15
+  - Category: 4
+    Register: 3
+    Pattern: 'Who {deed} {object} at {place}'
+    Weight: 15
+  - Category: 4
+    Register: 3
+    Pattern: 'Who {deed} {object} in the {era}'
+    Weight: 10
+  - Category: 4
+    Register: 3
+    Pattern: 'Who {deed} {object} and {outcome}'
+    Weight: 10
+  - Category: 4
+    Register: 3
+    Pattern: 'Who {deed} {object} at the {battle} of {place}'
+    Weight: 10
+  - Category: 5
+    Register: 1
+    Pattern: '{profession}'
+    Weight: 30
+  - Category: 5
+    Register: 1
+    Pattern: 'Master {profession}'
+    Weight: 20
+  - Category: 5
+    Register: 1
+    Pattern: '{profession} of {place}'
+    Weight: 20
+  - Category: 5
+    Register: 1
+    Pattern: '{occupation}'
+    Weight: 25
+  - Category: 5
+    Register: 1
+    Pattern: 'Master {occupation}'
+    Weight: 10
+  - Category: 5
+    Register: 1
+    Pattern: '{occupation} of {place}'
+    Weight: 10
+  - Category: 5
+    Register: 1
+    Pattern: 'Guild {occupation}'
+    Weight: 5
+  PlaceTakingHonorifics:
+  - Lord
+  - Lady
+  - Master
+  - Mistress
+  - Warden
+  - Keeper
+  - Guardian
+  - Protector
+  - Sovereign
+  - Champion
+  - Patron
+  - Matron
+  - Duke
+  - Duchess
+  - Count
+  - Countess
+  - Baron
+  - Baroness
+  - Prince
+  - Princess
+  - King
+  - Queen
+  - Chieftain
+  - Chief
+  - Elder
+  - High Priest
+  - High Priestess
+  - Marshal
+  - Captain
+  - Commander
+  - Steward
+  - Seneschal
+  - Sheriff
+  - Thane
+  - Warchief
+  - Councilor
+  - Speaker
+  - Herald
+  - Overseer
+  - Warlord
+  - Archmage
+  - Magister
+  - Boss
+  - Big Boss
+  OrdinalTakingHonorifics:
+  - King
+  - Queen
+  - Lord
+  - Lady
+  - Emperor
+  - Empress
+  - Prince
+  - Princess
+  - Duke
+  - Duchess
+  - Sovereign
+  - Archduke
+  - Archduchess
+  - Warchief
+  - Chieftain
+  - Thane
+  - Patriarch
+  - Matriarch
+  - High Priest
+  - High Priestess
+  - Overlord
+  GenericOccupations:
+  - Merchant
+  - Trader
+  - Banker
+  - Moneylender
+  - Smith
+  - Blacksmith
+  - Armorer
+  - Fletcher
+  - Tanner
+  - Weaver
+  - Tailor
+  - Cobbler
+  - Baker
+  - Brewer
+  - Innkeeper
+  - Cook
+  - Butcher
+  - Fishmonger
+  - Farmer
+  - Herder
+  - Miller
+  - Carpenter
+  - Mason
+  - Miner
+  - Scribe
+  - Scholar
+  - Healer
+  - Apothecary
+  - Alchemist
+  - Priest
+  - Acolyte
+  - Guard
+  - Watchman
+  - Hunter
+  - Trapper
+  - Ranger
+  - Sailor
+  - Shipwright
+  - Navigator
+  - Cartographer
+  - Courier
+  - Steward
+  - Chamberlain
+  - Jeweler
+  - Glassblower
+  - Potter
+  - Candlemaker
+  - Minstrel
+  - Storyteller
+  - Gravedigger
   Ordinals:
   - First
   - Second

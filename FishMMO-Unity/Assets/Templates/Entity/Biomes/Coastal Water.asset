@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Coastal Water
+  m_EditorClassIdentifier: 
+  DisplayName: Coastal Water
+  Description: 'Shallow coastal waters — tidal pools, kelp beds, submerged stone'
+  BiomeColorId: {r: 0.4, g: 0.7, b: 0.9, a: 1}
+  GizmoColor: {r: 0, g: 1, b: 1, a: 1}
+  ElevationTier: 2
+  MinHeight: 0.35
+  MaxHeight: 0.42
+  MinTemperature: -0.3
+  MaxTemperature: 0.6
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Tid
+      - Sal
+      - Wav
+      - Bri
+      - Cor
+      - Kel
+      - Mar
+      - Sho
+      - Pel
+      - Gul
+      - She
+      - Dri
+      - Flo
+      - Rip
+      - Cov
+      Nuclei:
+      - a
+      - ea
+      - ia
+      - al
+      - oa
+      - ei
+      - ar
+      Codas:
+      - tide
+      - shore
+      - bay
+      - cove
+      - wave
+      - pool
+      - drift
+      - wash
+      - spray
+      - surf
+      Middles:
+      - al
+      - ar
+      - el
+      - an
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Grotto
+      - Cavern
+      - Pool
+      - Hollow
+      - Tunnel
+      - Arch
+      - Passage
+      - Cove
+      - Chamber
+      - Rift
+      - Den
+      - Pit
+      - Shaft
+      - Crevice
+      - Shelf
+      - Alcove
+      - Gallery
+      - Pocket
+      - Lagoon
+      - Basin
+      - Chimney
+      - Blowhole
+      DungeonPrefixes:
+      - The Tidal
+      - The Flooded
+      - The Salt-worn
+      - The Spray-kissed
+      - The Shallow
+      - The Surging
+      - The Crystal-clear
+      - The Sheltered
+      - The Sun-warmed
+      - The Gentle
+      - The Turquoise
+      - The Reef-protected
+      - The Sandy-bottomed
+      - The Sparkling
+      - The Tranquil
+      - The Wave-washed
+      - The Kelp-fringed
+      - The Shimmering
+      - The Placid
+      - The Sea-glass
+      POISuffixes:
+      - Tide-pool
+      - Lagoon
+      - Sand-bar
+      - Wave-break
+      - Kelp-bed
+      - Rock-arch
+      - Shallows
+      - Current
+      - Snorkeling-spot
+      - Seahorse-meadow
+      - Turtle-beach
+      - Coral-patch
+      - Sea-fan
+      - Starfish-flat
+      - Urchin-rock
+      - Jellyfish-cove
+      - Anemone-pool
+      - Shell-beach
+      - Mangrove-edge
+      - Fish-school
+      Adjectives:
+      - Tidal
+      - Shallow
+      - Crystal-clear
+      - Sheltered
+      - Surging
+      - Warm
+      - Gentle
+      - Sparkling
+      - Briny
+      - Placid
+      - Sun-warmed
+      - Turquoise
+      - Reef-protected
+      - Sandy
+      - Tranquil
+      - Wave-washed
+      - Kelp-fringed
+      - Shimmering
+      - Inviting
+      - Tropical
+      - Azure
+      - Calm
+      Description: 'Shallow coastal waters — tidal pools, kelp beds, submerged stone'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -714.12964
+    blendNoiseOffsetY: -319.2676
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 289.47995
+    blendNoiseOffsetY: -44.367676
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -146.39172
+    blendNoiseOffsetY: 859.34705
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -340.9797
+    blendNoiseOffsetY: 269.95773
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

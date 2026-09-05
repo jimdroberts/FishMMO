@@ -94,7 +94,7 @@ MonoBehaviour:
       - os
       - us
       - eus
-      Description: 'Open and galloping — Greek-inspired, wind on open steppe'
+      Description: Open and galloping — wind on the open steppe
       Tags:
       - Herd-names
       - Star-bonds
@@ -117,6 +117,8 @@ MonoBehaviour:
       - Plainswarden
       - Thunder-hoofed
       - Horizon-keeper
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Swift-hoofed
       - the Unyielding
@@ -139,6 +141,7 @@ MonoBehaviour:
       - Whose Hooves Shook the Mountains
       - Who Guided Ten Thousand to the New Pastures
       - 'Who Read the Stars and Changed a Nation''s Fate'
+      Occupational: []
     CitySuffixes:
       Capital:
       - run
@@ -185,3 +188,12 @@ MonoBehaviour:
       - ruin
       - hollow
       - bone
+  BiomeAffinities:
+  - BiomeID: -1951431387
+    Weight: 3
+  - BiomeID: 1655673647
+    Weight: 2
+  - BiomeID: -1911521020
+    Weight: 1
+  - BiomeID: -439598380
+    Weight: 0.5

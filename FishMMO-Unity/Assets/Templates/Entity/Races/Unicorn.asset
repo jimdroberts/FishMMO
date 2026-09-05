@@ -71,7 +71,7 @@ MonoBehaviour:
       - us
       - lux
       - estar
-      Description: Pure glade-Latinate — silvered and gentle
+      Description: Pure glade-chant — silvered and gentle
       Tags:
       - Horn-names
       - Grove-bonds
@@ -85,6 +85,8 @@ MonoBehaviour:
       Honorific:
       - Horn-Crowned
       - Glade-Guardian
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Silver-horned
       - the Undoubting
@@ -93,6 +95,7 @@ MonoBehaviour:
       - Guardian of the Silver Grove
       Legend:
       - Whose Horn Healed the King After All Others Had Failed
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +103,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 1
+  - BiomeID: -439598380
+    Weight: 1

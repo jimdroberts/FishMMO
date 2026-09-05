@@ -220,18 +220,20 @@ MonoBehaviour:
     - the Obsidian Spire
     - Gloomreach
     - the Silk Court
-    - the Underdark
+    - the Deepdark
     - the Web Throne
     - Nighthollow
     - the Poison Gardens
     Titles:
       Honorific:
-      - Matron
       - Patron
       - Highblade
       - Venom-tongue
       - Shadowweave
       - Silklord
+      HonorificMasculine: []
+      HonorificFeminine:
+      - Matron
       Epithet:
       - the Poisonkissed
       - the Unseen
@@ -248,13 +250,20 @@ MonoBehaviour:
       - Assassin-Primarch
       - Keeper of the Sacred Venom
       - Mistress of the Obsidian Tower
-      - Voice of the Underdark
+      - Voice of the Deepdark
       Legend:
       - Who Slew a Goddess
       - Who Betrayed the Surface World
       - Whose Name is Spoken in Whispers
-      - Who Walked Out of the Underdark Alone
+      - Who Walked Out of the Deepdark Alone
       - Who Wove a Web That Trapped a God
+      Occupational:
+      - Venom-alchemist
+      - Web-weaver
+      - Spymaster
+      - Blade-tutor
+      - Shadow-merchant
+      - Slaver
     CitySuffixes:
       Capital:
       - spire
@@ -302,3 +311,10 @@ MonoBehaviour:
       - hollow
       - ruin
       - dust
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 3
+  - BiomeID: -770075463
+    Weight: 0.5
+  - BiomeID: -830221931
+    Weight: 1

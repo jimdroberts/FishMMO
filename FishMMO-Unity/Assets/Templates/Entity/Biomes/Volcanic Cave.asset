@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Volcanic Cave
+  m_EditorClassIdentifier: 
+  DisplayName: Volcanic Cave
+  Description: 'Underground volcanic system — lava tubes, obsidian, choking heat'
+  BiomeColorId: {r: 0.4, g: 0.15, b: 0.1, a: 1}
+  GizmoColor: {r: 0.6, g: 0.25, b: 0.15, a: 1}
+  ElevationTier: 6
+  MinHeight: 0.4
+  MaxHeight: 1
+  MinTemperature: 0.3
+  MaxTemperature: 1
+  MinHumidity: -1
+  MaxHumidity: 0.3
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Vol
+      - Ash
+      - Mag
+      - Pyr
+      - Mol
+      - Sco
+      - Bri
+      - Gor
+      - Kel
+      - Dra
+      - Fla
+      - Fen
+      - Obs
+      - Kra
+      - Bre
+      Nuclei:
+      - a
+      - o
+      - u
+      - ax
+      - or
+      - ur
+      - ok
+      Codas:
+      - maw
+      - rok
+      - ash
+      - gor
+      - mul
+      - deep
+      - flame
+      - forge
+      - char
+      - brim
+      Middles:
+      - ru
+      - or
+      - al
+      - ax
+      - ok
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Cavern
+      - Pit
+      - Vent
+      - Tube
+      - Chamber
+      - Forge
+      - Crucible
+      - Shaft
+      - Fissure
+      - Caldera
+      - Tunnel
+      - Den
+      - Passage
+      - Hollow
+      - Throat
+      - Maw
+      - Chimney
+      - Gallery
+      - Pocket
+      - Furnace
+      - Crater
+      - Rift
+      DungeonPrefixes:
+      - The Molten
+      - The Smoldering
+      - The Choking
+      - The Glowing
+      - The Obsidian
+      - The Sulfurous
+      - The Roaring
+      - The Blistering
+      - The Ash-choked
+      - The Magma-lit
+      - The Gas-filled
+      - The Pyroclastic
+      - The Ember-red
+      - The Superheated
+      - The Charred
+      - The Hellish
+      - The Fuming
+      - The Incandescent
+      - The Slag-crusted
+      - The Searing
+      POISuffixes:
+      - Lava-pool
+      - Vent
+      - Obsidian-flow
+      - Pumice-field
+      - Ash-mound
+      - Magma-font
+      - Heat-shimmer
+      - Char-stone
+      - Lava-tube
+      - Sulfur-crystal
+      - Gas-vent
+      - Ember-field
+      - Slag-heap
+      - Basalt-column
+      - Fire-geyser
+      - Pyroclast-bed
+      - Cinder-cone
+      - Fumarole
+      - Molten-river
+      - Thermal-spring
+      Adjectives:
+      - Molten
+      - Smoldering
+      - Choking
+      - Glowing
+      - Obsidian
+      - Sulfurous
+      - Roaring
+      - Blistering
+      - Searing
+      - Crusted
+      - Ash-choked
+      - Magma-lit
+      - Pyroclastic
+      - Ember-red
+      - Superheated
+      - Charred
+      - Hellish
+      - Fuming
+      - Incandescent
+      - Slag-crusted
+      - Toxic
+      - Explosive
+      Description: 'Underground volcanic system — lava tubes, obsidian, choking heat'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

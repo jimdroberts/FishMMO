@@ -101,6 +101,8 @@ MonoBehaviour:
       - Moonsworn
       - Alpha
       - Fang-marked
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Starved
       - the Iron-jawed
@@ -115,6 +117,7 @@ MonoBehaviour:
       - Who Ran with the Moon
       - Who Slew the Silvercaster
       - 'Who Ended the Hunter''s Line'
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -122,3 +125,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 3
+  - BiomeID: 144196518
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1
+  - BiomeID: -439598380
+    Weight: 1

@@ -113,8 +113,11 @@ MonoBehaviour:
       - Hornlord
       - Axe-master
       - Maze-warden
-      - Bull-king
       - Trial-sovereign
+      HonorificMasculine:
+      - Bull-king
+      HonorificFeminine:
+      - Bull-queen
       Epithet:
       - the Iron-horned
       - the Unbreakable
@@ -137,6 +140,7 @@ MonoBehaviour:
       - Whose Charge Split a Mountain
       - Who Has Never Known Defeat
       - Who Carved a New Path Through the Maze of Ages
+      Occupational: []
     CitySuffixes:
       Capital:
       - labyrinth
@@ -184,3 +188,12 @@ MonoBehaviour:
       - collapse
       - dust
       - waste
+  BiomeAffinities:
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: 18062707
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 1
+  - BiomeID: -835082438
+    Weight: 1

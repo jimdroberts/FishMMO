@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Wasteland
+  m_EditorClassIdentifier: 
+  DisplayName: Wasteland
+  Description: 'Barren wasteland — nothing lives, nothing grows, only ruin remains'
+  BiomeColorId: {r: 0.35, g: 0.25, b: 0.2, a: 1}
+  GizmoColor: {r: 0.45, g: 0.35, b: 0.3, a: 1}
+  ElevationTier: 4
+  MinHeight: 0.3
+  MaxHeight: 0.9
+  MinTemperature: 0.1
+  MaxTemperature: 0.9
+  MinHumidity: -1
+  MaxHumidity: -0.4
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Ash
+      - Gor
+      - Kra
+      - Sha
+      - Dra
+      - Mor
+      - Gri
+      - Wra
+      - Hol
+      - Rot
+      - Vel
+      - Thr
+      - Bre
+      - Fen
+      - Nul
+      Nuclei:
+      - a
+      - o
+      - u
+      - ar
+      - or
+      - ur
+      - ax
+      Codas:
+      - ash
+      - waste
+      - rot
+      - dust
+      - blight
+      - ruin
+      - char
+      - rust
+      - slag
+      - bone
+      Middles:
+      - an
+      - or
+      - ul
+      - ar
+      - ax
+      SyllMin: 1
+      SyllMax: 2
+      DungeonSuffixes:
+      - Pit
+      - Crater
+      - Ruin
+      - Shell
+      - Hollow
+      - Shaft
+      - Collapse
+      - Grave
+      - Maw
+      - Sinkhole
+      - Den
+      - Chamber
+      - Tunnel
+      - Passage
+      - Lair
+      - Vault
+      - Tomb
+      - Crypt
+      - Foundation
+      - Cellar
+      - Bunker
+      - Remnant
+      DungeonPrefixes:
+      - The Blighted
+      - The Ruined
+      - The Toxic
+      - The Dead
+      - The Forsaken
+      - The Ashen
+      - The Scarred
+      - The Lifeless
+      - The Corrupted
+      - The Barren
+      - The Desolate
+      - The Poisoned
+      - The Irradiated
+      - The Cursed
+      - The Abandoned
+      - The Decayed
+      - The Plague-ravaged
+      - The Charred
+      - The Wasted
+      - The Hopeless
+      POISuffixes:
+      - Ruin
+      - Crater
+      - Dead-zone
+      - Waste-pit
+      - Ash-field
+      - Rust-hulk
+      - Slag-heap
+      - Bone-yard
+      - Scorch-mark
+      - Bleached-skeleton
+      - Toxic-pool
+      - Collapsed-building
+      - Shattered-monument
+      - Dead-forest
+      - Poison-spring
+      - Blighted-earth
+      - Rust-field
+      - Char-pit
+      - Grave-marker
+      - Desolation-point
+      Adjectives:
+      - Blighted
+      - Ruined
+      - Toxic
+      - Dead
+      - Forsaken
+      - Ashen
+      - Scarred
+      - Lifeless
+      - Barren
+      - Corrupted
+      - Poisoned
+      - Irradiated
+      - Cursed
+      - Abandoned
+      - Decayed
+      - Plague-ravaged
+      - Charred
+      - Wasted
+      - Hopeless
+      - Desolate
+      - Blackened
+      - Devastated
+      Description: 'Barren wasteland — nothing lives, nothing grows, only ruin remains'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 79f732555549af245a2efb90ae1818a7, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 32.926422
+    blendNoiseOffsetY: 372.23288
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -62.657715
+    blendNoiseOffsetY: -176.88501
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -365.77615
+    blendNoiseOffsetY: -854.50793
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 635.6582
+    blendNoiseOffsetY: 359.5168
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

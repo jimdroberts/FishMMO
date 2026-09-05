@@ -71,7 +71,7 @@ MonoBehaviour:
       - ur
       - brand
       - ulf
-      Description: 'Cold, sharp Nordic tongue — bitter winds'
+      Description: 'Cold, sharp northern tongue — bitter winds'
       Tags:
       - Winter-names
       - Rime-bonds
@@ -84,15 +84,19 @@ MonoBehaviour:
     - the Cold Throne
     Titles:
       Honorific:
-      - Jarl
+      - Thane
+      HonorificMasculine:
       - Ice-lord
+      HonorificFeminine:
+      - Ice-lady
       Epithet:
       - the Rime-bearded
       - the Winter-voiced
       Rank:
-      - Jarl of the Rime Keep
+      - Thane of the Rime Keep
       Legend:
       - Who Froze the River Before the Siege
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +104,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -212386137
+    Weight: 3
+  - BiomeID: 1645414801
+    Weight: 2
+  - BiomeID: 187749268
+    Weight: 1
+  - BiomeID: -1693619367
+    Weight: 1

@@ -36,6 +36,11 @@ namespace FishMMO.Shared.NameGeneration
 
 		public static IReadOnlyDictionary<string, string[]> POITypeSuffixes { get; private set; } = new Dictionary<string, string[]>();
 
+		public static IReadOnlyList<TitleTemplate> TitleTemplates { get; private set; } = new List<TitleTemplate>();
+		public static HashSet<string> PlaceTakingHonorifics { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		public static HashSet<string> OrdinalTakingHonorifics { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		public static string[] GenericOccupations { get; private set; } = EmptyStrings;
+
 		public static string[] Ordinals { get; private set; } = EmptyStrings;
 		public static string[] PossessivePronouns { get; private set; } = EmptyStrings;
 		public static string[] PlaceEpithetPatterns { get; private set; } = EmptyStrings;
@@ -106,6 +111,11 @@ namespace FishMMO.Shared.NameGeneration
 
 			POITypeSuffixes = NamingTableUtility.ToListDictionary(t?.POITypeSuffixes, ignoreCase);
 
+			TitleTemplates = CleanTemplates(t?.TitleTemplates);
+			PlaceTakingHonorifics = new HashSet<string>(t?.PlaceTakingHonorifics ?? EmptyStrings, ignoreCase);
+			OrdinalTakingHonorifics = new HashSet<string>(t?.OrdinalTakingHonorifics ?? EmptyStrings, ignoreCase);
+			GenericOccupations = t?.GenericOccupations ?? EmptyStrings;
+
 			Ordinals = t?.Ordinals ?? EmptyStrings;
 			PossessivePronouns = t?.PossessivePronouns ?? EmptyStrings;
 			PlaceEpithetPatterns = t?.PlaceEpithetPatterns ?? EmptyStrings;
@@ -127,6 +137,24 @@ namespace FishMMO.Shared.NameGeneration
 			ItemPlaceRelations = t?.ItemPlaceRelations ?? EmptyStrings;
 
 			Changed?.Invoke();
+		}
+
+		private static List<TitleTemplate> CleanTemplates(List<TitleTemplate> rows)
+		{
+			var result = new List<TitleTemplate>(rows?.Count ?? 0);
+			if (rows == null)
+			{
+				return result;
+			}
+			for (int i = 0; i < rows.Count; i++)
+			{
+				TitleTemplate row = rows[i];
+				if (row != null && !string.IsNullOrWhiteSpace(row.Pattern) && row.Weight > 0)
+				{
+					result.Add(row);
+				}
+			}
+			return result;
 		}
 
 		/// <summary>First row whose key the text starts with, or null. Case-insensitive.</summary>

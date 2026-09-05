@@ -231,8 +231,11 @@ MonoBehaviour:
       - Trickbloom
       - Dawnpetal
       - Mirthkeeper
-      - Thornqueen
+      HonorificMasculine:
       - Gossamer-lord
+      HonorificFeminine:
+      - Thornqueen
+      - Gossamer-lady
       Epithet:
       - the Twice-promised
       - the Laughing
@@ -255,6 +258,7 @@ MonoBehaviour:
       - Who Has Never Kept a Promise and Never Broken One
       - Who Knows Your True Name
       - Who Bargained with Death and Won (on a technicality)
+      Occupational: []
     CitySuffixes:
       Capital:
       - court
@@ -303,3 +307,12 @@ MonoBehaviour:
       - hollow
       - dust
       - husk
+  BiomeAffinities:
+  - BiomeID: -1123947451
+    Weight: 2
+  - BiomeID: 1139958860
+    Weight: 2
+  - BiomeID: -1486751517
+    Weight: 1
+  - BiomeID: -439598380
+    Weight: 1

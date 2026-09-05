@@ -72,7 +72,7 @@ MonoBehaviour:
       - os
       - us
       - arus
-      Description: 'Airy, aristocratic — sky-palace Latinate cadence'
+      Description: 'Airy, aristocratic — sky-palace court cadence'
       Tags:
       - Cloud-names
       - Sky-bonds
@@ -85,8 +85,11 @@ MonoBehaviour:
     - Vapor-mount
     Titles:
       Honorific:
-      - High-Lord
       - Sky-Count
+      HonorificMasculine:
+      - High-Lord
+      HonorificFeminine:
+      - High-Lady
       Epithet:
       - the Lofty
       - the Silver-tongued
@@ -94,6 +97,7 @@ MonoBehaviour:
       - Count of the Cloud Palace
       Legend:
       - Who Fell From the Cloud and Walked Away
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -101,3 +105,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -1474826537
+    Weight: 3
+  - BiomeID: 1645414801
+    Weight: 1
+  - BiomeID: -1693619367
+    Weight: 0.5

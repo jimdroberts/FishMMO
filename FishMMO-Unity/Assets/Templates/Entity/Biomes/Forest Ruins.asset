@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Forest Ruins
+  m_EditorClassIdentifier: 
+  DisplayName: Forest Ruins
+  Description: 'Ancient structures consumed by forest — roots through stone, green fading'
+  BiomeColorId: {r: 0.3, g: 0.45, b: 0.25, a: 1}
+  GizmoColor: {r: 0.4, g: 0.55, b: 0.35, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.6
+  MaxHeight: 0.75
+  MinTemperature: -0.3
+  MaxTemperature: 0.3
+  MinHumidity: 0.2
+  MaxHumidity: 0.9
+  SelectionWeight: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mos
+      - Fer
+      - Oak
+      - Ver
+      - Tho
+      - Bri
+      - Hol
+      - Ivy
+      - Kel
+      - Gor
+      - Sha
+      - Vel
+      - Eld
+      - Wil
+      - Ash
+      Nuclei:
+      - a
+      - e
+      - o
+      - ea
+      - ie
+      - ow
+      - ar
+      Codas:
+      - ow
+      - ell
+      - orn
+      - oss
+      - ine
+      - ern
+      - ale
+      - ith
+      - ood
+      - ark
+      Middles:
+      - an
+      - el
+      - in
+      - or
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Ruin
+      - Cellar
+      - Vault
+      - Hollow
+      - Crypt
+      - Den
+      - Burrow
+      - Passage
+      - Chamber
+      - Barrow
+      - Foundation
+      - Shell
+      - Remnant
+      - Collapse
+      - Debris
+      - Pit
+      - Tunnel
+      - Gallery
+      - Tomb
+      - Hall
+      - Alcove
+      - Storeroom
+      DungeonPrefixes:
+      - The Overgrown
+      - The Moss-covered
+      - The Forgotten
+      - The Root-cracked
+      - The Sunken
+      - The Ancient
+      - The Reclaimed
+      - The Hollow
+      - The Vine-wrapped
+      - The Ivy-shrouded
+      - The Leaf-buried
+      - The Tree-swallowed
+      - The Fern-choked
+      - The Lichen-stained
+      - The Mushroom-covered
+      - The Nature-reclaimed
+      - The Green-drowned
+      - The Crumbling
+      - The Silent
+      - The Peaceful
+      POISuffixes:
+      - Broken-arch
+      - Moss-wall
+      - Root-gate
+      - Vine-bridge
+      - Fallen-column
+      - Fern-court
+      - Ivy-tower
+      - Cracked-step
+      - Tree-throne
+      - Mushroom-altar
+      - Lichen-fresco
+      - Leaf-carpet
+      - Root-staircase
+      - Vine-chandelier
+      - Moss-fountain
+      - Bird-nest-tower
+      - Fern-gallery
+      - Overgrown-well
+      - Wildflower-floor
+      - Bark-door
+      Adjectives:
+      - Overgrown
+      - Moss-covered
+      - Root-cracked
+      - Sunken
+      - Forgotten
+      - Reclaimed
+      - Hollow
+      - Peaceful
+      - Green
+      - Sylvan
+      - Vine-wrapped
+      - Ivy-shrouded
+      - Leaf-buried
+      - Tree-swallowed
+      - Fern-choked
+      - Lichen-stained
+      - Mushroom-covered
+      - Nature-reclaimed
+      - Crumbling
+      - Silent
+      - Ancient
+      - Beautiful
+      Description: 'Ancient structures consumed by forest — roots through stone, green fading'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

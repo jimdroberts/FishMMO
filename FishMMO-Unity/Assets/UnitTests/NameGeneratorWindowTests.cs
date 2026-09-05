@@ -6,6 +6,7 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared.NameGeneration;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration.Editor;
 
 namespace FishMMO.UnitTests

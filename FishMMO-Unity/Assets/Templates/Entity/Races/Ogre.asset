@@ -165,6 +165,8 @@ MonoBehaviour:
       - Smasher
       - Crunchlord
       - Gutfiller
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Enormous
       - the Always-Hungry
@@ -185,6 +187,7 @@ MonoBehaviour:
       - Who Threw a Boulder Over a Mountain
       - Who Forgot His Own Name (twice)
       - Who Sat Down and Created a Lake
+      Occupational: []
     CitySuffixes:
       Capital:
       - hold
@@ -232,3 +235,14 @@ MonoBehaviour:
       - dust
       - heap
       - hollow
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: 719042512
+    Weight: 1
+  - BiomeID: 596668801
+    Weight: 1
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 1

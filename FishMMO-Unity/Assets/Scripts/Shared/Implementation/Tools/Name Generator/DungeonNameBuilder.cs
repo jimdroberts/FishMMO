@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.NameGeneration
 {
@@ -13,8 +14,11 @@ namespace FishMMO.Shared.NameGeneration
 		/// <summary>Chance a two-syllable root grows a middle syllable.</summary>
 		private const double MiddleChance = 0.35;
 
+		/// <summary>Chance a variant's own prefix is used over the biome's when the variant has any.</summary>
+		private const double VariantPrefixChance = 0.65;
+
 		public static (string name, string meaning, List<string> fragments) Build(
-			BiomePhonology ph, DeterministicRNG rng)
+			BiomePhonology ph, DeterministicRNG rng, BiomeClimateVariant variant = null)
 		{
 			var (root, rootFragments) = BuildRoot(ph, rng);
 
@@ -24,10 +28,15 @@ namespace FishMMO.Shared.NameGeneration
 			fragments.Add(suffix);
 
 			string prefix = "";
-			if (ph.DungeonPrefixes != null && ph.DungeonPrefixes.Length > 0 && rng.NextDouble() < PrefixChance)
+			string[] variantPrefixes = variant?.DungeonPrefixes;
+			bool anyPrefix = (ph.DungeonPrefixes != null && ph.DungeonPrefixes.Length > 0) || (variantPrefixes != null && variantPrefixes.Length > 0);
+			if (anyPrefix && rng.NextDouble() < PrefixChance)
 			{
-				prefix = GeneratorUtility.Pick(ph.DungeonPrefixes, rng);
-				fragments.Insert(0, prefix);
+				prefix = GeneratorUtility.PickFlavoured(variantPrefixes, ph.DungeonPrefixes, VariantPrefixChance, rng);
+				if (prefix.Length > 0)
+				{
+					fragments.Insert(0, prefix);
+				}
 			}
 
 			string raw = root + suffix.ToLower().Replace("-", "");

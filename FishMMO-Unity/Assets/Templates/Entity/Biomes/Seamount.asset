@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Seamount
+  m_EditorClassIdentifier: 
+  DisplayName: Seamount
+  Description: 'Underwater mountains — rising from the deep, teeming with life'
+  BiomeColorId: {r: 0.2, g: 0.4, b: 0.5, a: 1}
+  GizmoColor: {r: 0.3, g: 0.5, b: 0.6, a: 1}
+  ElevationTier: 1
+  MinHeight: 0.25
+  MaxHeight: 0.35
+  MinTemperature: -0.4
+  MaxTemperature: 0.2
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Mar
+      - Oce
+      - Pel
+      - Tid
+      - Cor
+      - Ner
+      - Del
+      - Lir
+      - Und
+      - Bri
+      - Aqu
+      - Sal
+      - Kel
+      - Wav
+      - Flo
+      Nuclei:
+      - a
+      - ea
+      - ia
+      - oa
+      - al
+      - ei
+      - ar
+      Codas:
+      - mount
+      - peak
+      - rise
+      - crest
+      - crown
+      - ridge
+      - reef
+      - spire
+      - shelf
+      - bank
+      Middles:
+      - al
+      - ar
+      - el
+      - an
+      - or
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Peak
+      - Summit
+      - Crest
+      - Spire
+      - Rise
+      - Ridge
+      - Crown
+      - Mount
+      - Pinnacle
+      - Tor
+      - Plateau
+      - Shelf
+      - Terrace
+      - Cone
+      - Knoll
+      - Mound
+      - Chimney
+      - Table
+      - Shoulder
+      - Rampart
+      - Bastion
+      - Promontory
+      DungeonPrefixes:
+      - The Submerged
+      - The Hidden
+      - The Ancient
+      - The Volcanic
+      - The Coral-crusted
+      - The Towering
+      - The Silent
+      - The Drowned
+      - The Teeming
+      - The Barnacled
+      - The Current-battered
+      - The Monumental
+      - The Isolated
+      - The Reef-crowned
+      - The Majestic
+      - The Primordial
+      - The Life-giving
+      - The Magnetic
+      - The Basalt
+      - The Eroded
+      POISuffixes:
+      - Summit
+      - Ridge-crest
+      - Rock-pinnacle
+      - Coral-cap
+      - Vent-field
+      - Current-break
+      - Shelf-edge
+      - Spire-top
+      - Caldera
+      - Terrace-garden
+      - Fish-school
+      - Coral-garden
+      - Kelp-forest
+      - Sea-fan-grove
+      - Barnacle-field
+      - Volcanic-vent
+      - Anemone-cluster
+      - Cave-mouth
+      - Migration-path
+      - Nursery-ground
+      Adjectives:
+      - Submerged
+      - Hidden
+      - Towering
+      - Coral-crusted
+      - Ancient
+      - Volcanic
+      - Monumental
+      - Barnacled
+      - Teeming
+      - Majestic
+      - Current-battered
+      - Isolated
+      - Reef-crowned
+      - Primordial
+      - Life-giving
+      - Magnetic
+      - Basalt
+      - Eroded
+      - Imposing
+      - Massive
+      - Fertile
+      - Storm-swept
+      Description: 'Underwater mountains — rising from the deep, teeming with life'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: d74297414c89f90408f6c1700ed4f57e, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 873.1842
+    blendNoiseOffsetY: -757.96484
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 302.7346
+    blendNoiseOffsetY: 774.6952
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 343.32056
+    blendNoiseOffsetY: -219.35666
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -877.1024
+    blendNoiseOffsetY: -558.10376
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

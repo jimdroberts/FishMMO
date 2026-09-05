@@ -89,7 +89,7 @@ MonoBehaviour:
       - ard
       - mund
       - win
-      Description: 'Common tongue — varied, adaptable, Germanic and Latin-influenced'
+      Description: 'Common tongue — varied, adaptable, weighty and formal by turns'
       Tags:
       - Short forms
       - Trade names
@@ -151,7 +151,7 @@ MonoBehaviour:
         - ar
         - ud
         - ir
-        Description: 'Arabic-inspired — desert wind, trade roads, starlit courts'
+        Description: 'Desert — trade-road cadence, starlit and sparse'
         Tags:
         - Caravan names
         - Trade titles
@@ -218,7 +218,7 @@ MonoBehaviour:
         - Honor titles
         - Nature-marks
         WeightedCodas: []
-    - CultureKey: nordic
+    - CultureKey: northern
       Phonology:
         Onsets:
         - Bjorn
@@ -274,13 +274,13 @@ MonoBehaviour:
         - rik
         - ulf
         - ald
-        Description: 'Norse-inspired — frost, iron, and saga'
+        Description: 'Northern — hard, wind-bitten, clan-named'
         Tags:
         - Clan names
         - Saga titles
         - Frost-marks
         WeightedCodas: []
-    - CultureKey: roman
+    - CultureKey: imperial
       Phonology:
         Onsets:
         - Aur
@@ -333,7 +333,7 @@ MonoBehaviour:
         - us
         - ius
         - ix
-        Description: 'Latin-inspired — senatorial, structured, imperial'
+        Description: 'Imperial — senatorial, structured, formal'
         Tags:
         - House names
         - Legion titles
@@ -352,16 +352,18 @@ MonoBehaviour:
     - Dragonfall Bridge
     Titles:
       Honorific:
-      - Sir
-      - Dame
-      - Lord
-      - Lady
-      - Master
-      - Mistress
       - Captain
       - Commander
       - Councilor
       - Seneschal
+      HonorificMasculine:
+      - Sir
+      - Lord
+      - Master
+      HonorificFeminine:
+      - Dame
+      - Lady
+      - Mistress
       Epithet:
       - the Bold
       - the Wise
@@ -393,6 +395,27 @@ MonoBehaviour:
       - Who Named the Storm
       - Who United the Five Kingdoms
       - Who Spoke with Dragons and Lived
+      Occupational:
+      - Merchant
+      - Banker
+      - Blacksmith
+      - Innkeeper
+      - Scribe
+      - Healer
+      - Miller
+      - Farmer
+      - Guard
+      - Carpenter
+      - Mason
+      - Brewer
+      - Baker
+      - Tailor
+      - Cartographer
+      - Alchemist
+      - Priest
+      - Sailor
+      - Hunter
+      - Courier
     CitySuffixes:
       Capital:
       - hold
@@ -441,3 +464,22 @@ MonoBehaviour:
       - barrow
       - scar
       - waste
+  BiomeAffinities:
+  - BiomeID: -1951431387
+    Weight: 2
+  - BiomeID: 1655673647
+    Weight: 2
+  - BiomeID: -2037808285
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 1.5
+  - BiomeID: -439598380
+    Weight: 1
+  - BiomeID: -1486751517
+    Weight: 1
+  - BiomeID: 1384639345
+    Weight: 1
+  - BiomeID: 646460858
+    Weight: 0.5
+  - BiomeID: 888339253
+    Weight: 0.5

@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Taiga
+  m_EditorClassIdentifier: 
+  DisplayName: Taiga
+  Description: 'Coniferous forests — dark pines, deep snow, silent wilderness'
+  BiomeColorId: {r: 0.25, g: 0.35, b: 0.25, a: 1}
+  GizmoColor: {r: 0.35, g: 0.45, b: 0.35, a: 1}
+  ElevationTier: 5
+  MinHeight: 0.6
+  MaxHeight: 0.75
+  MinTemperature: -0.7
+  MaxTemperature: -0.2
+  MinHumidity: 0.3
+  MaxHumidity: 0.8
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sno
+      - Bre
+      - Pin
+      - Spr
+      - Kel
+      - Bor
+      - Nim
+      - Fro
+      - Hol
+      - Wil
+      - Lar
+      - Bir
+      - Elk
+      - Mos
+      - Thi
+      Nuclei:
+      - a
+      - e
+      - o
+      - or
+      - ar
+      - ie
+      - al
+      Codas:
+      - pine
+      - spruce
+      - frost
+      - wood
+      - bark
+      - lichen
+      - moss
+      - snow
+      - bough
+      - resin
+      Middles:
+      - an
+      - or
+      - al
+      - er
+      - in
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Den
+      - Hollow
+      - Burrow
+      - Root-cave
+      - Warren
+      - Tunnel
+      - Lair
+      - Pit
+      - Barrow
+      - Nest
+      - Cave
+      - Chamber
+      - Passage
+      - Grotto
+      - Shaft
+      - Crevice
+      - Shelter
+      - Alcove
+      - Gallery
+      - Pocket
+      - Crawl-space
+      - Foundation
+      DungeonPrefixes:
+      - The Snow-dusted
+      - The Pine-shadowed
+      - The Frozen
+      - The Silent
+      - The Dark
+      - The Ancient
+      - The Moss-carpeted
+      - 'The Bear''s'
+      - 'The Wolf''s'
+      - The Moose-trail
+      - The Lichen-draped
+      - The Resin-scented
+      - The Spruce-dark
+      - The Birch-ringed
+      - The Frost-locked
+      - The Endless
+      - The Lonely
+      - The Snow-laden
+      - The Pristine
+      - The Boreal
+      POISuffixes:
+      - Pine-stand
+      - Spruce-grove
+      - Frozen-brook
+      - Lichen-rock
+      - Elk-trail
+      - Snow-clearing
+      - Birch-copse
+      - Resin-tree
+      - Wolf-den
+      - Bear-cave
+      - Moose-crossing
+      - Owl-perch
+      - Mushroom-log
+      - Fox-earth
+      - Beaver-dam
+      - Lynx-trail
+      - Wolverine-den
+      - Snow-bank
+      - Ice-bridge
+      - Fallen-spruce
+      Adjectives:
+      - Snow-dusted
+      - Pine-shadowed
+      - Frozen
+      - Silent
+      - Dark
+      - Ancient
+      - Moss-carpeted
+      - Endless
+      - Cold
+      - Pristine
+      - Wolf-haunted
+      - Lichen-draped
+      - Resin-scented
+      - Spruce-dark
+      - Birch-ringed
+      - Frost-locked
+      - Lonely
+      - Snow-laden
+      - Boreal
+      - Wilderness
+      - Untouched
+      - Trackless
+      Description: 'Coniferous forests — dark pines, deep snow, silent wilderness'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: ac99ed97fdaf249478422c10b6724858, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -565.7676
+    blendNoiseOffsetY: 669.97546
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -225.43848
+    blendNoiseOffsetY: -212.14832
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -557.1411
+    blendNoiseOffsetY: -127.44678
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -513.5078
+    blendNoiseOffsetY: -746.0305
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

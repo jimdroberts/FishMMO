@@ -85,8 +85,11 @@ MonoBehaviour:
     Titles:
       Honorific:
       - Trimouth
-      - Hybrid-king
       - Three-aspect
+      HonorificMasculine:
+      - Hybrid-king
+      HonorificFeminine:
+      - Hybrid-queen
       Epithet:
       - the Cloven
       - the Three-named
@@ -95,6 +98,7 @@ MonoBehaviour:
       - Master of the Burning Gorge
       Legend:
       - Who Breathed Three Deaths
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -102,3 +106,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: 599899035
+    Weight: 2
+  - BiomeID: 1275219499
+    Weight: 2
+  - BiomeID: 681889367
+    Weight: 1

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.NameGeneration
 {
@@ -15,8 +16,11 @@ namespace FishMMO.Shared.NameGeneration
 		/// <summary>Chance a two-syllable root grows a coda.</summary>
 		private const double CodaChance = 0.30;
 
+		/// <summary>Chance a variant's own adjective is used over the biome's when the variant has any.</summary>
+		private const double VariantAdjectiveChance = 0.65;
+
 		public static (string name, string meaning, List<string> fragments) Build(
-			BiomePhonology ph, POIType poiType, DeterministicRNG rng)
+			BiomePhonology ph, POIType poiType, DeterministicRNG rng, BiomeClimateVariant variant = null)
 		{
 			string typeKey = poiType == POIType.Any
 				? PickRandomPOIType(rng)
@@ -30,10 +34,15 @@ namespace FishMMO.Shared.NameGeneration
 			fragments.Add(typeSuffix);
 
 			string adjective = "";
-			if (ph.Adjectives != null && ph.Adjectives.Length > 0 && rng.NextDouble() < AdjectiveChance)
+			string[] variantAdjectives = variant?.Adjectives;
+			bool anyAdjective = (ph.Adjectives != null && ph.Adjectives.Length > 0) || (variantAdjectives != null && variantAdjectives.Length > 0);
+			if (anyAdjective && rng.NextDouble() < AdjectiveChance)
 			{
-				adjective = GeneratorUtility.Pick(ph.Adjectives, rng);
-				fragments.Insert(0, adjective);
+				adjective = GeneratorUtility.PickFlavoured(variantAdjectives, ph.Adjectives, VariantAdjectiveChance, rng);
+				if (adjective.Length > 0)
+				{
+					fragments.Insert(0, adjective);
+				}
 			}
 
 			string raw = GeneratorUtility.Smooth(root);

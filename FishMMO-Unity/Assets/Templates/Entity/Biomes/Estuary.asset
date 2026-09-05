@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Estuary
+  m_EditorClassIdentifier: 
+  DisplayName: Estuary
+  Description: 'River mouths and deltas — brackish water, silted channels, rich life'
+  BiomeColorId: {r: 0.3, g: 0.6, b: 0.7, a: 1}
+  GizmoColor: {r: 0.4, g: 0.7, b: 0.8, a: 1}
+  ElevationTier: 3
+  MinHeight: 0.38
+  MaxHeight: 0.45
+  MinTemperature: 0
+  MaxTemperature: 0.5
+  MinHumidity: 0.7
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Tid
+      - Del
+      - Mar
+      - Fen
+      - Sal
+      - Bri
+      - Riv
+      - Flo
+      - Kel
+      - Wav
+      - Mud
+      - She
+      - Cor
+      - Dri
+      - Ner
+      Nuclei:
+      - a
+      - ea
+      - ia
+      - al
+      - ua
+      - ei
+      - ar
+      Codas:
+      - tide
+      - mouth
+      - delta
+      - marsh
+      - bank
+      - flat
+      - flow
+      - fen
+      - mud
+      - reed
+      Middles:
+      - al
+      - ar
+      - el
+      - an
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Silt-cave
+      - Den
+      - Hollow
+      - Tunnel
+      - Burrow
+      - Chamber
+      - Pool
+      - Pit
+      - Passage
+      - Crypt
+      - Lair
+      - Grotto
+      - Shelf
+      - Cave
+      - Warren
+      - Nest
+      - Channel
+      - Sinkhole
+      - Alcove
+      - Pocket
+      - Foundation
+      - Cellar
+      DungeonPrefixes:
+      - The Brackish
+      - The Silted
+      - The Tidal
+      - The Murky
+      - The Shifting
+      - The Flooded
+      - The Rich
+      - The Ancient
+      - The Mud-thick
+      - The Reed-hidden
+      - The Salt-tinged
+      - The Productive
+      - The Winding
+      - The Oyster-crusted
+      - The Mangrove-fringed
+      - The Delta
+      - The Marshy
+      - The Current-carved
+      - The Sediment-rich
+      - The Fertile
+      POISuffixes:
+      - Delta
+      - Mud-flat
+      - Reed-bed
+      - Salt-pan
+      - Tidal-pool
+      - River-mouth
+      - Sand-bank
+      - Oyster-bed
+      - Heron-rookery
+      - Fish-weir
+      - Crab-flat
+      - Shrimp-ground
+      - Bird-blind
+      - Salt-marsh
+      - Eel-grass-bed
+      - Pelican-perch
+      - Wading-ground
+      - Mussel-bank
+      - Tidal-channel
+      - Net-post
+      Adjectives:
+      - Brackish
+      - Silted
+      - Tidal
+      - Murky
+      - Shifting
+      - Rich
+      - Productive
+      - Winding
+      - Tranquil
+      - Misty
+      - Mud-thick
+      - Reed-hidden
+      - Salt-tinged
+      - Oyster-crusted
+      - Mangrove-fringed
+      - Marshy
+      - Current-carved
+      - Sediment-rich
+      - Fertile
+      - Gentle
+      - Life-teeming
+      - Estuarine
+      Description: 'River mouths and deltas — brackish water, silted channels, rich life'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 9879d2efbe1740b499ccadccf9320289, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -146.04532
+    blendNoiseOffsetY: -656.99646
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 867.6665
+    blendNoiseOffsetY: 135.11243
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 695.5106
+    blendNoiseOffsetY: -393.50638
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -308.2527
+    blendNoiseOffsetY: 890.0337
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

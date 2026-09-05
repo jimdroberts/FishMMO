@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Mountain Slope
+  m_EditorClassIdentifier: 
+  DisplayName: Mountain Slope
+  Description: 'Lower mountain slopes — exposed rock, precarious paths, thin air'
+  BiomeColorId: {r: 0.5, g: 0.5, b: 0.4, a: 1}
+  GizmoColor: {r: 0.6, g: 0.6, b: 0.5, a: 1}
+  ElevationTier: 6
+  MinHeight: 0.75
+  MaxHeight: 0.9
+  MinTemperature: -0.5
+  MaxTemperature: 0.3
+  MinHumidity: -0.3
+  MaxHumidity: 0.5
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sto
+      - Gri
+      - Kel
+      - Hol
+      - Bre
+      - Thr
+      - Mor
+      - Rav
+      - Cra
+      - Nor
+      - Dri
+      - Sil
+      - Gor
+      - Hil
+      - Roc
+      Nuclei:
+      - a
+      - o
+      - e
+      - ar
+      - or
+      - al
+      - ag
+      Codas:
+      - stone
+      - rock
+      - crag
+      - ridge
+      - spur
+      - face
+      - slope
+      - shelf
+      - cliff
+      - moraine
+      Middles:
+      - an
+      - or
+      - al
+      - ar
+      - er
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Cave
+      - Mine
+      - Shaft
+      - Tunnel
+      - Den
+      - Hollow
+      - Crevice
+      - Fissure
+      - Grotto
+      - Lair
+      - Chamber
+      - Passage
+      - Pit
+      - Adit
+      - Gallery
+      - Ledge
+      - Overhang
+      - Shelter
+      - Chimney
+      - Crawl-space
+      - Pocket
+      - Alcove
+      DungeonPrefixes:
+      - The Exposed
+      - The Wind-battered
+      - The Rocky
+      - The Precarious
+      - The Crumbling
+      - The Ancient
+      - The Hidden
+      - The Treacherous
+      - The Steep
+      - The Goat-trail
+      - The Switchback
+      - The Boulder-strewn
+      - The Altitude-thin
+      - The Frost-touched
+      - The Scree-covered
+      - 'The Eagle''s'
+      - The Cloud-brushing
+      - The Rain-lashed
+      - The Snow-dusted
+      - The Granite
+      POISuffixes:
+      - Switchback
+      - Ledge
+      - Rock-face
+      - Scree-field
+      - Mountain-spring
+      - Cliff-shelf
+      - Boulder-field
+      - Pass
+      - Goat-trail
+      - Eagle-nest
+      - Avalanche-chute
+      - Tree-line
+      - Mountain-goat-perch
+      - Snow-line
+      - Waterfall
+      - Cairn-marker
+      - Overhang-shelter
+      - Rock-slide
+      - Summit-view
+      - Bergschrund
+      Adjectives:
+      - Exposed
+      - Wind-battered
+      - Rocky
+      - Precarious
+      - Crumbling
+      - Treacherous
+      - Steep
+      - Rugged
+      - Barren
+      - Weathered
+      - Boulder-strewn
+      - Altitude-thin
+      - Frost-touched
+      - Scree-covered
+      - Cloud-brushing
+      - Rain-lashed
+      - Snow-dusted
+      - Granite
+      - Perilous
+      - Intimidating
+      - Harsh
+      - Unforgiving
+      Description: 'Lower mountain slopes — exposed rock, precarious paths, thin air'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 5fc805ea39fd9514589524dc6c3933f7, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 526.7389
+    blendNoiseOffsetY: 178.72348
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -77.04532
+    blendNoiseOffsetY: 350.76758
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -466.50208
+    blendNoiseOffsetY: 416.72992
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 626.91473
+    blendNoiseOffsetY: 311.97165
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

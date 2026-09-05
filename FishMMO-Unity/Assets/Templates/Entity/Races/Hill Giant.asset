@@ -85,6 +85,8 @@ MonoBehaviour:
       Honorific:
       - Big-Chief
       - Mound-boss
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Stinky
       - the Slow
@@ -93,6 +95,7 @@ MonoBehaviour:
       - Chief of the Tall Hill
       Legend:
       - Who Flattened the Village by Sitting on It
+      Occupational: []
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -100,3 +103,10 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -540190004
+    Weight: 3
+  - BiomeID: 1655673647
+    Weight: 1
+  - BiomeID: 1156965030
+    Weight: 1

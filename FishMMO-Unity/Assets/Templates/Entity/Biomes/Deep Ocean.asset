@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Deep Ocean
+  m_EditorClassIdentifier: 
+  DisplayName: Deep Ocean
+  Description: 'Deepest underwater — crushing pressure, total darkness, ocean trenches'
+  BiomeColorId: {r: 0.05, g: 0.1, b: 0.3, a: 1}
+  GizmoColor: {r: 0, g: 0, b: 1, a: 1}
+  ElevationTier: 0
+  MinHeight: 0
+  MaxHeight: 0.2
+  MinTemperature: -0.8
+  MaxTemperature: -0.3
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Abi
+      - Mar
+      - Tid
+      - Del
+      - Lir
+      - Ner
+      - Pel
+      - Und
+      - Gor
+      - Sha
+      - Kra
+      - Mor
+      - Dra
+      - Vor
+      - Nul
+      Nuclei:
+      - a
+      - o
+      - u
+      - ea
+      - oa
+      - ux
+      - al
+      Codas:
+      - deep
+      - maw
+      - trench
+      - abyss
+      - rift
+      - void
+      - crush
+      - tide
+      - dark
+      - fath
+      Middles:
+      - al
+      - or
+      - ul
+      - el
+      - an
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Trench
+      - Abyss
+      - Rift
+      - Depth
+      - Chasm
+      - Maw
+      - Fissure
+      - Void
+      - Gulch
+      - Hollow
+      - Pit
+      - Chamber
+      - Shaft
+      - Tunnel
+      - Gallery
+      - Cave
+      - Crevice
+      - Passage
+      - Throat
+      - Basin
+      - Crater
+      - Vault
+      DungeonPrefixes:
+      - The Crushing
+      - The Lightless
+      - The Abyssal
+      - The Sunken
+      - The Pressure-locked
+      - The Forgotten
+      - The Primordial
+      - The Drowned
+      - The Inky
+      - The Silent
+      - The Vast
+      - The Bone-crushing
+      - The Frigid
+      - The Alien
+      - 'The Leviathan''s'
+      - The Trench-dwelling
+      - The Pitch-black
+      - The Hadal
+      - The Unseen
+      - The Perpetual
+      POISuffixes:
+      - Vent
+      - Trench-wall
+      - Ocean-floor
+      - Pressure-rift
+      - Thermal-plume
+      - Brine-pool
+      - Seep
+      - Abyss-ledge
+      - Hydrothermal-vent
+      - Whale-fall
+      - Manganese-node
+      - Cold-seep
+      - Black-smoker
+      - Tube-worm-colony
+      - Abyss-plain
+      - Deep-coral
+      - Sediment-drift
+      - Angler-den
+      - Pressure-cave
+      - Giant-squid-lair
+      Adjectives:
+      - Crushing
+      - Lightless
+      - Abyssal
+      - Sunken
+      - Primordial
+      - Drowned
+      - Pressure-locked
+      - Inky
+      - Vast
+      - Silent
+      - Bone-crushing
+      - Frigid
+      - Alien
+      - Hadal
+      - Pitch-black
+      - Unseen
+      - Perpetual
+      - Fathomless
+      - Immense
+      - Otherworldly
+      - Freezing
+      - Desolate
+      Description: 'Deepest underwater — crushing pressure, total darkness, ocean trenches'
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -60.68811
+    blendNoiseOffsetY: 796.1211
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -203.70255
+    blendNoiseOffsetY: -319.00488
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 908.2119
+    blendNoiseOffsetY: -178.35938
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -293.4369
+    blendNoiseOffsetY: -41.28659
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

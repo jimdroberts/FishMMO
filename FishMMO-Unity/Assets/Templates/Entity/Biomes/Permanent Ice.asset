@@ -1,0 +1,274 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Permanent Ice
+  m_EditorClassIdentifier: 
+  DisplayName: Permanent Ice
+  Description: 'Permanent ice fields — eternal frost, time-locked, perfectly preserved'
+  BiomeColorId: {r: 0.95, g: 0.98, b: 1, a: 1}
+  GizmoColor: {r: 1, g: 1, b: 1, a: 1}
+  ElevationTier: 8
+  MinHeight: 0.95
+  MaxHeight: 1
+  MinTemperature: -1
+  MaxTemperature: -0.7
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Fro
+      - Gla
+      - Cry
+      - Bre
+      - Hol
+      - Nim
+      - Isk
+      - Sno
+      - Vre
+      - Kel
+      - Bor
+      - Hri
+      - Thr
+      - Dri
+      - Vin
+      Nuclei:
+      - i
+      - a
+      - o
+      - ir
+      - al
+      - or
+      - im
+      Codas:
+      - frost
+      - ice
+      - rime
+      - cap
+      - sheet
+      - crystal
+      - freeze
+      - field
+      - berg
+      - shard
+      Middles:
+      - ri
+      - al
+      - or
+      - im
+      - el
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Vault
+      - Chamber
+      - Hall
+      - Tomb
+      - Crypt
+      - Hollow
+      - Cavern
+      - Grotto
+      - Prison
+      - Sanctum
+      - Gallery
+      - Passage
+      - Tunnel
+      - Shaft
+      - Pit
+      - Alcove
+      - Labyrinth
+      - Abyss
+      - Cathedral
+      - Throne-room
+      - Treasury
+      - Archive
+      DungeonPrefixes:
+      - The Eternal
+      - The Time-locked
+      - The Pristine
+      - The Blinding
+      - The Silent
+      - The Crystal
+      - The Unmelting
+      - The Absolute
+      - The Perfect
+      - The Merciless
+      - The Ancient
+      - The Preserved
+      - The Frozen-solid
+      - The Diamond-hard
+      - The Unchanging
+      - The Ice-bound
+      - The Flawless
+      - The Perpetual
+      - The Ageless
+      - The Immovable
+      POISuffixes:
+      - Ice-cap
+      - Frost-plain
+      - Crystal-field
+      - Rime-shelf
+      - White-expanse
+      - Frozen-lake
+      - Ice-sheet
+      - Snow-dome
+      - Ice-core
+      - Fossil-ice
+      - Blue-glacier
+      - Pressure-ridge
+      - Ice-cliff
+      - Frost-flower-field
+      - Sastrugi
+      - Ice-lens
+      - Frost-polygon
+      - Hoar-formation
+      - Crystal-cave
+      - White-silence
+      Adjectives:
+      - Eternal
+      - Time-locked
+      - Pristine
+      - Blinding
+      - Crystal
+      - Unmelting
+      - Absolute
+      - Perfect
+      - Merciless
+      - Ancient
+      - Preserved
+      - Frozen-solid
+      - Diamond-hard
+      - Unchanging
+      - Ice-bound
+      - Flawless
+      - Perpetual
+      - Ageless
+      - Immovable
+      - Brilliant
+      - Stark
+      - Unyielding
+      Description: 'Permanent ice fields — eternal frost, time-locked, perfectly preserved'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 123a1cbb024511e459625c8d823e4ef9, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -767.6279
+    blendNoiseOffsetY: -874.3839
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 878.36975
+    blendNoiseOffsetY: -791.3871
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 563.3938
+    blendNoiseOffsetY: 157.74097
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -338.12866
+    blendNoiseOffsetY: 946.8406
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

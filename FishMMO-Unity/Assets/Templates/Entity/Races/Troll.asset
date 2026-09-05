@@ -161,11 +161,14 @@ MonoBehaviour:
     - Mossback Hollow
     Titles:
       Honorific:
-      - Rockfather
       - Bridgekeeper
       - Stonehide
       - Riverclaim
       - Mosslord
+      HonorificMasculine:
+      - Rockfather
+      HonorificFeminine:
+      - Rockmother
       Epithet:
       - the Regrown
       - the Immovable
@@ -186,6 +189,7 @@ MonoBehaviour:
       - Who Guards the Bridge Since Before Memory
       - Who Swallowed a Knight Whole
       - Who Turned to Stone and Woke a Century Later
+      Occupational: []
     CitySuffixes:
       Capital:
       - bridge
@@ -233,3 +237,14 @@ MonoBehaviour:
       - ruin
       - heap
       - dust
+  BiomeAffinities:
+  - BiomeID: 719042512
+    Weight: 2
+  - BiomeID: 596668801
+    Weight: 2
+  - BiomeID: 144196518
+    Weight: 1
+  - BiomeID: -540190004
+    Weight: 1
+  - BiomeID: -138594552
+    Weight: 1

@@ -41,6 +41,16 @@ namespace FishMMO.Shared.NameGeneration
 		[Tooltip("POI type (lowercase POIType name) → type-specific suffixes, e.g. 'shrine' → Shrine, Altar, Fane.")]
 		public List<StringListMapping> POITypeSuffixes = new();
 
+		[Header("Titles — compositions")]
+		[Tooltip("How titles are assembled, by category and register. Empty falls back to the built-in set.")]
+		public List<TitleTemplate> TitleTemplates = new();
+		[Tooltip("Honorifics that may take 'of <place>': Lord of Ashford, but never Sir of Ashford.")]
+		public string[] PlaceTakingHonorifics;
+		[Tooltip("Honorifics that may take an ordinal: King, Third of his Name — but never Sir.")]
+		public string[] OrdinalTakingHonorifics;
+		[Tooltip("Trades any race may practise, used when a race lists none of its own.")]
+		public string[] GenericOccupations;
+
 		[Header("Titles — ordinals and pronouns")]
 		public string[] Ordinals;
 		public string[] PossessivePronouns;

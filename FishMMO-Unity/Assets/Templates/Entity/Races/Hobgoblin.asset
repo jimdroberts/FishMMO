@@ -86,6 +86,8 @@ MonoBehaviour:
       - Captain
       - Legate
       - Legion-master
+      HonorificMasculine: []
+      HonorificFeminine: []
       Epithet:
       - the Iron-disciplined
       - the Banner-bearer
@@ -94,6 +96,12 @@ MonoBehaviour:
       - Legate of the Iron Barracks
       Legend:
       - Who Wheeled His Legion at the Exact Right Moment
+      Occupational:
+      - Quartermaster
+      - Drillmaster
+      - Siege-engineer
+      - Armorer
+      - Provisioner
     CitySuffixes:
       Capital: []
       Fortress: []
@@ -101,3 +109,12 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+  BiomeAffinities:
+  - BiomeID: -835082438
+    Weight: 2
+  - BiomeID: -540190004
+    Weight: 2
+  - BiomeID: -1123947451
+    Weight: 1
+  - BiomeID: 599899035
+    Weight: 1

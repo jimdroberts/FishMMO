@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Snow
+  m_EditorClassIdentifier: 
+  DisplayName: Snow
+  Description: 'Open tundra — endless white, buried secrets, biting wind'
+  BiomeColorId: {r: 0.9, g: 0.95, b: 1, a: 1}
+  GizmoColor: {r: 1, g: 1, b: 1, a: 1}
+  ElevationTier: 8
+  MinHeight: 0.95
+  MaxHeight: 1
+  MinTemperature: -1
+  MaxTemperature: -0.5
+  MinHumidity: -0.2
+  MaxHumidity: 1
+  SelectionWeight: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Sno
+      - Win
+      - Bre
+      - Hol
+      - Fro
+      - Kel
+      - Nim
+      - Bor
+      - Dri
+      - Vre
+      - Gla
+      - Hri
+      - Thr
+      - Vin
+      - Isk
+      Nuclei:
+      - o
+      - a
+      - i
+      - al
+      - or
+      - an
+      - im
+      Codas:
+      - heim
+      - gard
+      - feld
+      - stead
+      - hall
+      - mund
+      - vald
+      - rik
+      - arn
+      - ulf
+      Middles:
+      - an
+      - or
+      - al
+      - er
+      - un
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Barrow
+      - Cairn
+      - Tomb
+      - Mound
+      - Hollow
+      - Den
+      - Burrow
+      - Pit
+      - Grave
+      - Lair
+      - Drift-cave
+      - Tunnel
+      - Warren
+      - Crevice
+      - Chamber
+      - Shelter
+      - Nest
+      - Ice-hole
+      - Root-cellar
+      - Snow-cave
+      - Frost-pit
+      - Passage
+      DungeonPrefixes:
+      - The Snow-buried
+      - The Frozen
+      - The White
+      - The Blinding
+      - The Silent
+      - The Howling
+      - The Frostbitten
+      - The Hidden
+      - The Snowdrift
+      - The Ice-locked
+      - The Windswept
+      - The Desolate
+      - The Bitter
+      - The Frost-sealed
+      - The Pale
+      - The Shivering
+      - The Drifted
+      - The Arctic
+      - The Sub-zero
+      - The Glacial
+      POISuffixes:
+      - Drift
+      - Snowfield
+      - Frozen-lake
+      - Ice-shelf
+      - Pine-stand
+      - Snowcap
+      - White-stone
+      - Frost-mound
+      - Snow-cave
+      - Ice-bridge
+      - Frost-ring
+      - Snowdrift
+      - Frozen-stream
+      - White-cairn
+      - Ice-pillar
+      - Snow-bank
+      - Icicle-cliff
+      - Frost-hollow
+      - Snowpack
+      - Permafrost-mound
+      Adjectives:
+      - Snow-buried
+      - Blinding
+      - Silent
+      - Howling
+      - White
+      - Pristine
+      - Bitter
+      - Desolate
+      - Endless
+      - Windswept
+      - Frozen
+      - Ice-locked
+      - Glacial
+      - Arctic
+      - Sub-zero
+      - Frost-sealed
+      - Pale
+      - Shivering
+      - Drifted
+      - Crystalline
+      - Barren
+      - Merciless
+      Description: 'Open tundra — endless white, buried secrets, biting wind'
+  mainTextureLayer:
+    albedoTexture: {fileID: 2800000, guid: 880ecc3bf473abd4da332ec06e2b5ff2, type: 3}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -850.9774
+    blendNoiseOffsetY: 658.8533
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 277.2746
+    blendNoiseOffsetY: 203.36783
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 991.55334
+    blendNoiseOffsetY: -542.71716
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: -160.51855
+    blendNoiseOffsetY: -607.0957
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
