@@ -48,6 +48,7 @@ namespace FishMMO.UnitTests
 
 			string abilityControllerGuid = ScriptGuid("Implementation/Entity/Prediction/Ability/AbilityController.cs");
 			string targetControllerGuid = ScriptGuid("Implementation/Entity/Target/TargetController.cs");
+			string damageControllerGuid = ScriptGuid("Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs");
 
 			string[] prefabs = Directory.GetFiles(NpcRoot, "*.prefab", SearchOption.AllDirectories);
 			LogAssert.IsTrue(prefabs.Length > 0, "there must be NPC prefabs to check");
@@ -63,8 +64,18 @@ namespace FishMMO.UnitTests
 					continue;
 				}
 
-				checkedCount++;
 				string name = Path.GetFileNameWithoutExtension(prefab);
+
+				/* An NPC authored immortal has no reason to target anything, and the controller
+				 * short-circuits for it at runtime whatever the prefab says. */
+				Match damage = Regex.Match(source,
+					"m_Script: \\{fileID: 11500000, guid: " + damageControllerGuid + ", type: 3\\}[\\s\\S]*?(?=\\n--- !u!)");
+				if (damage.Success && Regex.IsMatch(damage.Value, "\\n  immortal: 1"))
+				{
+					continue;
+				}
+
+				checkedCount++;
 
 				/* The component block: its script line, then its serialized fields until the next
 				 * document separator. The LayerMask serialises as "m_Bits: N" inside it. */
@@ -102,6 +113,24 @@ namespace FishMMO.UnitTests
 			string npc = File.ReadAllText(Path.Combine(Scripts, "Implementation/Entity/NPC/NPC.cs"));
 			LogAssert.IsTrue(npc.Contains("[RequireComponent(typeof(TargetController))]"),
 				"NPC must RequireComponent a TargetController; without it every NPC cast spawns nothing");
+		}
+
+		/// <summary>
+		/// An immortal NPC's acquisition trace short-circuits: it has no reason to target anything.
+		/// </summary>
+		[Test]
+		public void ImmortalNpcTargetingShortCircuits()
+		{
+			string controller = File.ReadAllText(Path.Combine(Scripts, "Implementation/Entity/Target/TargetController.cs"));
+
+			int shortCircuit = controller.IndexOf("if (IsImmortalNpc)", System.StringComparison.Ordinal);
+			int resolveScene = controller.IndexOf("PhysicsScene physicsScene = ResolvePhysicsScene();", System.StringComparison.Ordinal);
+
+			LogAssert.IsTrue(shortCircuit >= 0, "TargetController.UpdateTarget must short-circuit for an immortal NPC");
+			LogAssert.IsTrue(resolveScene > shortCircuit,
+				"the short-circuit must come before the physics scene is resolved and traced");
+			LogAssert.IsTrue(controller.Contains("if (PlayerCharacter != null)\n\t\t\t\t{\n\t\t\t\t\treturn false;"),
+				"the short-circuit is for NPCs only — a teleporting player is briefly immortal and keeps its hover targeting");
 		}
 
 		/// <summary>

@@ -76,7 +76,12 @@ namespace FishMMO.Shared
 					 * nothing traces nothing: the component is present and every cast still
 					 * resolves no target, which is the same outcome as a missing component. */
 					TargetController targeting = root.GetComponent<TargetController>();
-					if (targeting == null)
+					if (IsAuthoredImmortal(root))
+					{
+						/* An immortal NPC has no reason to target anything; TargetController
+						 * short-circuits at runtime for it, so the mask is left alone. */
+					}
+					else if (targeting == null)
 					{
 						root.AddComponent<TargetController>().LayerMask = NpcTargetLayers;
 						changes.Add("added TargetController");
@@ -138,8 +143,14 @@ namespace FishMMO.Shared
 					lines.Add("no CharacterPredictionController — queued abilities are never drained and the NPC freezes on its first cast");
 				}
 
+				/* Immortal NPCs are exempt: they have no reason to target anything, and the
+				 * controller short-circuits for them at runtime whatever its mask says. */
 				TargetController targeting = root.GetComponent<TargetController>();
-				if (targeting == null)
+				if (IsAuthoredImmortal(root))
+				{
+					// Nothing to report.
+				}
+				else if (targeting == null)
 				{
 					lines.Add("no TargetController — every cast runs to completion and spawns nothing; the NPC never lands a hit");
 				}
@@ -271,6 +282,18 @@ namespace FishMMO.Shared
 		/// terrain and let a projectile stop at a wall.
 		/// </summary>
 		private static LayerMask NpcTargetLayers => LayerMask.GetMask("Default", "Player", "Ground");
+
+		/// <summary>
+		/// True when the prefab's damage controller is authored immortal — a training dummy, an
+		/// invulnerable quest giver. Such an NPC has no reason to target anything, so the
+		/// targeting requirement does not apply to it.
+		/// </summary>
+		/// <param name="root">The prefab root.</param>
+		private static bool IsAuthoredImmortal(GameObject root)
+		{
+			CharacterDamageController damage = root.GetComponent<CharacterDamageController>();
+			return damage != null && damage.Immortal;
+		}
 
 		/// <summary>
 		/// Enables prediction on a prefab root's NetworkObject.

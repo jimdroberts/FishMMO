@@ -70,6 +70,55 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public List<Trigger> OnTargetClearTriggers => onTargetClearTriggers;
 
+		/// <summary>
+		/// The character's damage controller, resolved once so the immortal check below is a
+		/// field read per trace rather than a registry lookup.
+		/// </summary>
+		private ICharacterDamageController cachedDamageController;
+
+		/// <inheritdoc />
+		public override void InitializeOnce()
+		{
+			base.InitializeOnce();
+			if (Character != null)
+			{
+				Character.TryGet(out cachedDamageController);
+			}
+		}
+
+		/// <summary>
+		/// True when this is an NPC that cannot be hurt, and so has no reason to target anything.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// NPCs only. A player is immortal for the few ticks of a teleport, and its hover
+		/// targeting has no reason to blink out for that. An NPC is immortal because it was
+		/// authored that way — a training dummy, an invulnerable quest giver — or because it is a
+		/// corpse, and neither of those ever has a reason to acquire a target: nothing it does can
+		/// be answered, so nothing it aims at is worth the trace.
+		/// </para>
+		/// <para>
+		/// The component is on every NPC regardless, because <see cref="NPC"/> requires it (see
+		/// issue #232). This is what makes it inert where it should be, without a prefab needing to
+		/// be authored without one.
+		/// </para>
+		/// </remarks>
+		private bool IsImmortalNpc
+		{
+			get
+			{
+				if (PlayerCharacter != null)
+				{
+					return false;
+				}
+				if (cachedDamageController == null && Character != null)
+				{
+					Character.TryGet(out cachedDamageController);
+				}
+				return cachedDamageController != null && cachedDamageController.Immortal;
+			}
+		}
+
 		/// <inheritdoc />
 		public int ClientSelectedTargetObjectId { get; private set; }
 
@@ -275,6 +324,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnDestroying()
 		{
+			cachedDamageController = null;
 			OnChangeTarget = null;
 			OnUpdateTarget = null;
 			OnClearTarget = null;
@@ -501,6 +551,14 @@ namespace FishMMO.Shared
 			Last = Current;
 
 			float distance = maxDistance.Clamp(0.0f, MAX_TARGET_DISTANCE);
+
+			/* An immortal NPC has no reason to target anything. Short-circuit before the physics
+			 * scene is even resolved, and report a miss so a stale acquisition cannot linger. */
+			if (IsImmortalNpc)
+			{
+				Current = new TargetInfo(null, new Ray(origin, direction).GetPoint(distance));
+				return Current;
+			}
 			PhysicsScene physicsScene = ResolvePhysicsScene();
 
 			/* Compensation is a server-side query against authoritative history and is deliberately
