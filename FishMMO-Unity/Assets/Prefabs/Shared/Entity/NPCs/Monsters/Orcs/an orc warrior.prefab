@@ -88,6 +88,7 @@ GameObject:
   - component: {fileID: 6308388451046359136}
   - component: {fileID: 445704639441175919}
   - component: {fileID: 6941437132823096281}
+  - component: {fileID: 7268034718613146375}
   m_Layer: 6
   m_Name: an orc warrior
   m_TagString: Untagged
@@ -254,7 +255,7 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
-  Archetype: {fileID: 11400000, guid: b80bc0482ed9646928250918c4f9a266, type: 2}
+  archetype: {fileID: 11400000, guid: b80bc0482ed9646928250918c4f9a266, type: 2}
   BossScript: {fileID: 0}
   TurnRate: 8
   RepathInterval: 0.5
@@ -575,6 +576,26 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
   maximumRewindMilliseconds: 500
+--- !u!114 &7268034718613146375
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7330d2c79dca4b428d96b86dd591417, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.TargetController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: -4468559157413045786}
+  _networkObjectCache: {fileID: -4468559157413045786}
+  LayerMask:
+    serializedVersion: 2
+    m_Bits: 193
+  onTargetChangeTriggers: []
+  onTargetClearTriggers: []
 --- !u!1 &9198423041106670181
 GameObject:
   m_ObjectHideFlags: 0

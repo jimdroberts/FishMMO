@@ -826,26 +826,40 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Activates an ability and arms the per-NPC attack pacing timer.
+		/// Queues an ability and, only if it was queued, arms the per-NPC attack pacing timer.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// <see cref="AttackCooldown"/> was previously a documented but entirely unread field —
 		/// NPCs fired on every tick that had anything off cooldown. The timer lives on the
 		/// controller rather than on this shared ScriptableObject, which every NPC using this
 		/// archetype has a reference to.
+		/// </para>
+		/// <para>
+		/// The timer used to be armed whether or not <see cref="IAbilityController.Activate"/>
+		/// queued anything, so a refused activation was indistinguishable from a successful one:
+		/// the NPC stood next to its target waiting out a cooldown for an attack it never made,
+		/// and nothing in the logs said so. Arming only on success means a refusal is retried
+		/// on the next brain tick instead — the picker already agreed the ability was usable,
+		/// so a refusal here is a pre-filter disagreement worth retrying, not a pacing event.
+		/// </para>
 		/// </remarks>
 		/// <param name="controller">The AI controller.</param>
 		/// <param name="abilityController">The ability controller to activate on.</param>
 		/// <param name="ability">The ability to activate.</param>
-		protected void ActivateAbility(AIController controller, IAbilityController abilityController, Ability ability)
+		/// <returns>True when the ability was queued.</returns>
+		protected bool ActivateAbility(AIController controller, IAbilityController abilityController, Ability ability)
 		{
 			if (ability == null)
-				return;
+				return false;
 
 			// Pass isHeld=true for channeled/charged abilities so the activation pipeline
 			// keeps the held state active. Regular abilities get isHeld=false.
 			bool held = abilityController.RequiresHeld(ability.ID);
-			abilityController.Activate(ability.ID, held);
+			if (!abilityController.Activate(ability.ID, held))
+			{
+				return false;
+			}
 
 			if (AttackCooldown > 0f)
 			{
@@ -857,6 +871,7 @@ namespace FishMMO.Shared
 				}
 				controller.AttackCooldownTimer = AttackCooldown + jitter;
 			}
+			return true;
 		}
 
 		/// <summary>

@@ -72,11 +72,21 @@ namespace FishMMO.Shared.Core
 		/// <param name="attacker">The character causing the interruption.</param>
 		void Interrupt(ICharacter attacker);
 		/// <summary>
-		/// Activates an ability by reference ID and held state.
+		/// Queues an ability for activation on this peer's next replicate input.
 		/// </summary>
+		/// <remarks>
+		/// Queued, not activated: the authoritative decision is made inside the replicate. The
+		/// return value is the caller's only signal that anything was queued at all — a server-side
+		/// brain that arms its attack pacing on a refused call waits out a cooldown for an attack
+		/// it never made, with nothing in the logs to say so.
+		/// </remarks>
 		/// <param name="referenceID">The ability reference ID.</param>
 		/// <param name="isHeld">Whether the activation key is held.</param>
-		void Activate(long referenceID, bool isHeld);
+		/// <returns>
+		/// True when the ability was queued. False when the pre-filter refused it or another
+		/// activation, queued ability or interrupt is already pending.
+		/// </returns>
+		bool Activate(long referenceID, bool isHeld);
 		/// <summary>
 		/// Queues a consumable item for activation through the replicate pipeline.
 		/// </summary>

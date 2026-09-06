@@ -16,6 +16,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(AIController))]
 	[RequireComponent(typeof(CharacterPredictionController))]
 	[RequireComponent(typeof(AbilityController))]
+	[RequireComponent(typeof(TargetController))]
 	[RequireComponent(typeof(CooldownController))]
 	[RequireComponent(typeof(BuffController))]
 	[RequireComponent(typeof(CharacterAttributeController))]

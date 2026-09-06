@@ -1778,36 +1778,45 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Attempts to activate an ability by reference ID and held state, if all conditions are met.
+		/// Attempts to queue an ability by reference ID and held state, if all conditions are met.
 		/// </summary>
+		/// <remarks>
+		/// Queues into the input this peer drains on its next replicate — the owning client for a
+		/// player, the server for an AI character (see <c>HandleCharacterInput</c>). The result
+		/// says whether anything was queued; the activation itself is decided in the replicate.
+		/// </remarks>
 		/// <param name="referenceID">The ability reference ID to activate.</param>
 		/// <param name="isHeld">Whether the activation key is held.</param>
-		public void Activate(long referenceID, bool isHeld)
+		/// <returns>True when the ability was queued for the next replicate; false otherwise.</returns>
+		public bool Activate(long referenceID, bool isHeld)
 		{
 			// Client-side pre-filter: cheap, best-effort, not authoritative.
 			// The server will re-validate in Replicate(). If this passes but the
 			// server denies, reconcile will correct the prediction.
 			if (!CanActivateOptimistic(referenceID, base.TimeManager.LocalTick, out _))
 			{
-				return;
+				return false;
 			}
 
 			// Ensure we are not already activating an ability or an interrupt is waiting to be processed
-			if (!AbilityQueued &&
-				!IsActivating &&
-				!localInputFlags.IsFlagged(AbilityActivationFlags.Interrupt))
+			if (AbilityQueued ||
+				IsActivating ||
+				localInputFlags.IsFlagged(AbilityActivationFlags.Interrupt))
 			{
-				//Log.Debug("Activating " + referenceID);
-				queuedAbilityID = referenceID;
-				if (isHeld)
-				{
-					localInputFlags.EnableBit(AbilityActivationFlags.IsHeld);
-				}
-				else
-				{
-					localInputFlags.DisableBit(AbilityActivationFlags.IsHeld);
-				}
+				return false;
 			}
+
+			//Log.Debug("Activating " + referenceID);
+			queuedAbilityID = referenceID;
+			if (isHeld)
+			{
+				localInputFlags.EnableBit(AbilityActivationFlags.IsHeld);
+			}
+			else
+			{
+				localInputFlags.DisableBit(AbilityActivationFlags.IsHeld);
+			}
+			return true;
 		}
 
 		/// <summary>

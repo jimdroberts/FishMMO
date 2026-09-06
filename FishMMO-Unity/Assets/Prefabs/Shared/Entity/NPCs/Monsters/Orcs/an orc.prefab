@@ -88,6 +88,7 @@ GameObject:
   - component: {fileID: 6308388451046359136}
   - component: {fileID: 673423307491661604}
   - component: {fileID: 2318546241283612122}
+  - component: {fileID: 7268034718613146375}
   m_Layer: 6
   m_Name: an orc
   m_TagString: Untagged
@@ -254,28 +255,8 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
-  EnemySweepRate: 1.5
-  Archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
-  InitialState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
-  AvoidancePriority: 25
-  WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
-  PatrolState: {fileID: 0}
-  ReturnHomeState: {fileID: 11400000, guid: b646a6d9bc4f07d428f12e255af67366, type: 2}
-  RetreatState: {fileID: 11400000, guid: 5b56c55d686ceac4cac2a744a5bf0951, type: 2}
-  IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
-  AttackingState: {fileID: 11400000, guid: a188e3de8a5794043903352f3ce4a57d, type: 2}
-  DeadState: {fileID: 0}
-  AbilityRotation: {fileID: 0}
-  Personality: {fileID: 0}
-  BehaviorTree: {fileID: 0}
-  LodSettings: {fileID: 11400000, guid: cd98f591a3445c5a50a6e478001853a1, type: 2}
+  archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
   BossScript: {fileID: 0}
-  AggressionDamageWeight: 1
-  AggressionHealingWeight: 0.6
-  AggressionHitBonus: 5
-  AggressionDecayRate: 3
-  AggressionStaleTimeout: 30
-  AggressionVarietyChance: 0.15
   TurnRate: 8
   RepathInterval: 0.5
   eyeTransform: {fileID: 0}
@@ -593,6 +574,26 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
   maximumRewindMilliseconds: 500
+--- !u!114 &7268034718613146375
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7330d2c79dca4b428d96b86dd591417, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.TargetController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: -4468559157413045786}
+  _networkObjectCache: {fileID: -4468559157413045786}
+  LayerMask:
+    serializedVersion: 2
+    m_Bits: 193
+  onTargetChangeTriggers: []
+  onTargetClearTriggers: []
 --- !u!1 &9198423041106670181
 GameObject:
   m_ObjectHideFlags: 0

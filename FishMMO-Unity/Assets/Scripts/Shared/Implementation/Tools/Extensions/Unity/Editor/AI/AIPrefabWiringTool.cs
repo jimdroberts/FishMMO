@@ -13,11 +13,20 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// <para>
 	/// NPC ability activation runs through the same predicted pipeline players use, which needs
-	/// three things on the prefab that NPC prefabs historically did not have: a
+	/// four things on the prefab that NPC prefabs historically did not have: a
 	/// <see cref="CharacterPredictionController"/> to drive the replicate stream, a
-	/// <see cref="CooldownController"/> for the ability picker to consult, and
-	/// <c>EnablePrediction</c> set on the <see cref="NetworkObject"/>. Without all three an NPC
+	/// <see cref="CooldownController"/> for the ability picker to consult, a
+	/// <see cref="TargetController"/> for the cast to resolve its target and spawn through, and
+	/// <c>EnablePrediction</c> set on the <see cref="NetworkObject"/>. Without all four an NPC
 	/// spawns, ticks its brain, decides to cast — and nothing happens.
+	/// </para>
+	/// <para>
+	/// The TargetController was the last one found (issue #232). With the other three in place
+	/// the cast genuinely ran — cooldown started, resources spent, the AI's pacing timer armed —
+	/// and <c>AbilityController.ResolveTargetAndSpawn</c> then spawned nothing, because the
+	/// acquisition trace it needs lives on that component. One warning per controller was the
+	/// only trace of it. The combat simulation never saw it because it added the component
+	/// itself.
 	/// </para>
 	/// <para>
 	/// This is a one-shot migration plus an ongoing audit. New prefabs get the components
@@ -59,6 +68,23 @@ namespace FishMMO.Shared
 					{
 						root.AddComponent<CharacterPredictionController>();
 						changes.Add("added CharacterPredictionController");
+					}
+
+					/* NPC's RequireComponent adds a missing TargetController the moment the
+					 * prefab contents load, with an EMPTY mask — so on a prefab saved before the
+					 * requirement existed the second branch is the one that fires. A mask of
+					 * nothing traces nothing: the component is present and every cast still
+					 * resolves no target, which is the same outcome as a missing component. */
+					TargetController targeting = root.GetComponent<TargetController>();
+					if (targeting == null)
+					{
+						root.AddComponent<TargetController>().LayerMask = NpcTargetLayers;
+						changes.Add("added TargetController");
+					}
+					else if (targeting.LayerMask.value == 0)
+					{
+						targeting.LayerMask = NpcTargetLayers;
+						changes.Add("set the TargetController LayerMask (it was empty)");
 					}
 
 					if (EnablePrediction(root))
@@ -110,6 +136,16 @@ namespace FishMMO.Shared
 				if (root.GetComponent<CharacterPredictionController>() == null)
 				{
 					lines.Add("no CharacterPredictionController — queued abilities are never drained and the NPC freezes on its first cast");
+				}
+
+				TargetController targeting = root.GetComponent<TargetController>();
+				if (targeting == null)
+				{
+					lines.Add("no TargetController — every cast runs to completion and spawns nothing; the NPC never lands a hit");
+				}
+				else if (targeting.LayerMask.value == 0)
+				{
+					lines.Add("TargetController LayerMask is empty — the acquisition trace can hit nothing");
 				}
 
 				NetworkObject networkObject = root.GetComponent<NetworkObject>();
@@ -227,6 +263,14 @@ namespace FishMMO.Shared
 			AuditNPCPrefabs();
 			ValidateArchetypes();
 		}
+
+		/// <summary>
+		/// The layers an NPC's acquisition trace considers: the same set the shipped player
+		/// prefabs use, so an NPC can hit what a player can hit. Player characters and NPCs both
+		/// live on the Player layer; Default and Ground let a ground-targeted ability land on
+		/// terrain and let a projectile stop at a wall.
+		/// </summary>
+		private static LayerMask NpcTargetLayers => LayerMask.GetMask("Default", "Player", "Ground");
 
 		/// <summary>
 		/// Enables prediction on a prefab root's NetworkObject.

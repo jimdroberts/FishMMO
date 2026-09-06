@@ -108,7 +108,7 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 
 Integrated module within the FishMMO Shared assembly. No separate installation.
 
-An NPC prefab requires `AIController`, `CharacterPredictionController`, `AbilityController`, `CooldownController` and `EnablePrediction` on its `NetworkObject`. `NPC`'s `RequireComponent` attributes add the components automatically; `FishMMO > AI > Repair NPC Prefabs For Combat` migrates existing prefabs and enables prediction.
+An NPC prefab requires `AIController`, `CharacterPredictionController`, `AbilityController`, `CooldownController`, `TargetController` and `EnablePrediction` on its `NetworkObject`. `NPC`'s `RequireComponent` attributes add the components automatically; `FishMMO > AI > Repair NPC Prefabs For Combat` migrates existing prefabs and enables prediction. The `TargetController` is not cosmetic: `AbilityController` resolves every cast's target through it, and a caster without one completes the cast, starts the cooldown and spawns nothing (issue #232).
 
 ## Quick Start Guide
 

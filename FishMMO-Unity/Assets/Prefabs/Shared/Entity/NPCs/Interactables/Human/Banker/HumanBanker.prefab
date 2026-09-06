@@ -75,6 +75,7 @@ GameObject:
   - component: {fileID: 251157398792487894}
   - component: {fileID: 7246315852314852023}
   - component: {fileID: 133104273134037835}
+  - component: {fileID: 7268034718613146375}
   m_Layer: 6
   m_Name: HumanBanker
   m_TagString: Untagged
@@ -273,7 +274,7 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
-  Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
+  archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
   BossScript: {fileID: 0}
   TurnRate: 8
   RepathInterval: 0.5
@@ -282,6 +283,8 @@ MonoBehaviour:
   RandomizeState: 0
   Waypoints: []
   AiTickRate: 8
+  SeparationRadius: 0
+  SeparationSpeed: 1
 --- !u!114 &2119787057571980410
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -306,6 +309,8 @@ MonoBehaviour:
   StaminaResourceTemplateID: 2142067754
   StaminaRegenerationTemplateID: -251416119
   regenTickRate: 1
+  observedResourcePushInterval: 6
+  observedResourceOutOfCombatPushInterval: 12
 --- !u!114 &7824644601122125574
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -502,7 +507,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 7250114663715075110}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 7250114663715075110}
   AbilitySpawner: {fileID: 0}
   AttackSpeedReductionTemplate: {fileID: 0}
   CastSpeedReductionTemplate: {fileID: 0}
@@ -527,7 +532,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPredictionController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 7250114663715075110}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 7250114663715075110}
 --- !u!114 &6308388451046359136
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -542,7 +547,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CooldownController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 7250114663715075110}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 7250114663715075110}
 --- !u!114 &251157398792487894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -582,8 +587,51 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPositionHistory
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 7250114663715075110}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 7250114663715075110}
   maximumRewindMilliseconds: 500
+--- !u!114 &133104273134037835
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
+  Type: 10
+  Visibility: 0
+  Icon: {fileID: 0}
+  Tint: {r: 1, g: 1, b: 1, a: 1}
+  Label: Bank
+  IconSize: 14
+  ClampToEdge: 0
+  Priority: 0
+  ShowOnMinimap: 1
+  ShowOnWorldMap: 1
+  MarkerAnchor: {fileID: 0}
+--- !u!114 &7268034718613146375
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7330d2c79dca4b428d96b86dd591417, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.TargetController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  LayerMask:
+    serializedVersion: 2
+    m_Bits: 193
+  onTargetChangeTriggers: []
+  onTargetClearTriggers: []
 --- !u!1 &5335545856828808014
 GameObject:
   m_ObjectHideFlags: 0
@@ -1036,26 +1084,3 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 7599432074871062846}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &133104273134037835
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
-  Type: 10
-  Visibility: 0
-  Icon: {fileID: 0}
-  Tint: {r: 1, g: 1, b: 1, a: 1}
-  Label: Bank
-  IconSize: 14
-  ClampToEdge: 0
-  Priority: 0
-  ShowOnMinimap: 1
-  ShowOnWorldMap: 1
-  MarkerAnchor: {fileID: 0}

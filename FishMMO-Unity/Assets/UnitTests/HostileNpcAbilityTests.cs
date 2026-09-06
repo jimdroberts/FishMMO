@@ -60,7 +60,10 @@ namespace FishMMO.UnitTests
 			{
 				string source = File.ReadAllText(prefab);
 
-				Match archetype = Regex.Match(source, "Archetype: \\{fileID: \\d+, guid: ([0-9a-f]{32})");
+				/* The field was renamed to its camelCase backing field behind FormerlySerializedAs, so a
+				 * prefab saved before the rename carries "Archetype:" and one saved after carries
+				 * "archetype:". Both are the same slot. */
+				Match archetype = Regex.Match(source, "[Aa]rchetype: \\{fileID: \\d+, guid: ([0-9a-f]{32})");
 				if (!archetype.Success ||
 					!archetypeNames.TryGetValue(archetype.Groups[1].Value, out string archetypeName) ||
 					!Fights(archetypeName))

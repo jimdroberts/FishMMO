@@ -212,15 +212,22 @@ namespace FishMMO.TestHarness
 			Vector3 position = TeamAnchors[team] + new Vector3(0f, 0f, (slot - (TeamSize - 1) * 0.5f) * 3f);
 			Quaternion facing = Quaternion.LookRotation(team == 0 ? Vector3.right : Vector3.left);
 
-			/* Configured while inactive: the NPC prefabs ship without a TargetController (their
-			 * casts would spawn nothing) and with ChanneledTemplate/ChargedTemplate null (the
-			 * held shapes would degrade to instants). BaseCharacter.Awake registers whatever
-			 * behaviours exist at that moment, so the additions must precede activation. */
+			/* Configured while inactive: the NPC prefabs ship with ChanneledTemplate/ChargedTemplate
+			 * null (the held shapes would degrade to instants), and the sim wants an unrestricted
+			 * targeting mask. BaseCharacter.Awake registers whatever behaviours exist at that
+			 * moment, so the additions must precede activation. The TargetController is now a
+			 * RequireComponent on NPC (issue #232 — shipped prefabs had none, so no NPC cast ever
+			 * spawned an object outside this harness); adding a second would throw. */
 			GameObject clone = server.Spawn(Manifest.NpcPrefab, position, facing, gameObject.scene,
 				configure: go =>
 				{
 					go.name = $"{(team == 0 ? "Red" : "Blue")} Fighter {slot}";
-					go.AddComponent<TargetController>().LayerMask = ~0;
+					TargetController targeting = go.GetComponent<TargetController>();
+					if (targeting == null)
+					{
+						targeting = go.AddComponent<TargetController>();
+					}
+					targeting.LayerMask = ~0;
 
 					NPC configuring = go.GetComponent<NPC>();
 					configuring.Abilities.Clear();

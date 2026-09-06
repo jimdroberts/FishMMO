@@ -545,11 +545,13 @@ namespace FishMMO.Shared
 			}
 
 			// A ray that starts inside the caster hits the caster. Push through it and take whatever
-			// is behind, rather than reporting that a character targeted itself.
-			IPlayerCharacter hitPlayerCharacter = hit.transform.GetComponent<IPlayerCharacter>();
-			if (hitPlayerCharacter != null &&
+			// is behind, rather than reporting that a character targeted itself. Any caster: an NPC
+			// aims from a fixed eye height inside its own capsule and sits on the same targetable
+			// layer as a player, so testing for a player here let an NPC acquire itself.
+			ICharacter hitCharacter = hit.transform.GetComponent<ICharacter>();
+			if (hitCharacter != null &&
 				Character != null &&
-				hitPlayerCharacter.ID == Character.ID)
+				hitCharacter.ID == Character.ID)
 			{
 				Vector3 newRayOrigin = hit.point + direction.normalized * 0.1f;
 				float remaining = (distance - hit.distance).Max(0.0f);
