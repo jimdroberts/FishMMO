@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using FishNet.Managing.Predicting;
 using FishNet.Object.Prediction;
 using FishNet.Component.Prediction;
 using FishNet.Connection;
@@ -128,8 +129,17 @@ namespace FishMMO.Shared
 		/// <summary>Per-tick velocity ring, indexed by <c>tick % VelocityHistoryLength</c>.</summary>
 		private readonly Vector3[] velocityHistory = new Vector3[VelocityHistoryLength];
 
-		/// <summary>The tick each <see cref="velocityHistory"/> slot holds, to detect a stale slot.</summary>
+		/// <summary>The tick each history slot holds, to detect a stale slot.</summary>
 		private readonly uint[] velocityHistoryTicks = new uint[VelocityHistoryLength];
+
+		/// <summary>Per-tick deck POSE ring, indexed by <c>tick % VelocityHistoryLength</c>.</summary>
+		/// <remarks>
+		/// The companion to <see cref="velocityHistory"/>, and needed for the same reason one tick
+		/// deeper: a rider replaying a reconcile inherits the right velocity from the ring, but its
+		/// ground probes hit the deck COLLIDER, and the collider only ever stood where the platform
+		/// is now. See <see cref="PredictionManager_OnPreReplicateReplay"/>.
+		/// </remarks>
+		private readonly Vector3[] positionHistory = new Vector3[VelocityHistoryLength];
 
 		/// <summary>
 		/// The velocity this platform produced on a specific tick.
@@ -155,12 +165,31 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		/// <summary>Records the velocity produced on <paramref name="tick"/>.</summary>
-		private void RecordTickVelocity(uint tick, Vector3 velocity)
+		/// <summary>
+		/// The world position this platform stood at on the end of a specific tick.
+		/// </summary>
+		/// <param name="tick">The tick to look up.</param>
+		/// <param name="position">The position held at the end of that tick, when still held.</param>
+		/// <returns>True when the tick is still in the ring.</returns>
+		public bool TryGetPositionForTick(uint tick, out Vector3 position)
+		{
+			int slot = (int)(tick % VelocityHistoryLength);
+			if (velocityHistoryTicks[slot] == tick)
+			{
+				position = positionHistory[slot];
+				return true;
+			}
+			position = Vector3.zero;
+			return false;
+		}
+
+		/// <summary>Records the velocity and pose produced on <paramref name="tick"/>.</summary>
+		private void RecordTickState(uint tick, Vector3 velocity, Vector3 position)
 		{
 			int slot = (int)(tick % VelocityHistoryLength);
 			velocityHistoryTicks[slot] = tick;
 			velocityHistory[slot] = velocity;
+			positionHistory[slot] = position;
 		}
 
 		/// <summary>
@@ -234,6 +263,9 @@ namespace FishMMO.Shared
 				platformCollider.OnEnter -= PlatformCollider_OnEnter;
 				platformCollider.OnExit -= PlatformCollider_OnExit;
 			}
+			// A destroyed platform still holding prediction subscriptions would be invoked as a
+			// dead Unity object on the next reconcile.
+			SetReplayRewindSubscription(false);
 			SceneObject.Unregister(this);
 		}
 
@@ -274,7 +306,151 @@ namespace FishMMO.Shared
 		public override void OnStartNetwork()
 		{
 			SetTickCallbacks(TickCallback.Tick);
+			SetReplayRewindSubscription(true);
 		}
+
+		/// <inheritdoc/>
+		public override void OnStopNetwork()
+		{
+			SetReplayRewindSubscription(false);
+			base.OnStopNetwork();
+		}
+
+		#region Replay geometry rewind.
+		/// <summary>The prediction manager this platform is subscribed to, when subscribed.</summary>
+		private PredictionManager subscribedPredictionManager;
+
+		/// <summary>Deck pose to restore when the reconcile that displaced it finishes.</summary>
+		private Vector3 livePositionDuringReplay;
+
+		/// <summary>True while a reconcile has this deck standing at a historic pose.</summary>
+		private bool replayPoseApplied;
+
+		/// <summary>
+		/// Subscribes (or unsubscribes) the reconcile hooks that stand this deck where it stood on
+		/// each replayed tick.
+		/// </summary>
+		/// <remarks>
+		/// Client-only by construction: the server runs every replicate exactly once and never
+		/// replays, so there is no historic tick for it to rewind to.
+		/// </remarks>
+		private void SetReplayRewindSubscription(bool subscribe)
+		{
+			/* NetworkObject first: the PredictionManager accessor dereferences the network-object
+			 * cache and throws on a component that was never spawned, the same guard order
+			 * ReadPayload's TimeManager use documents. */
+			PredictionManager manager = subscribe
+				? (base.IsClientOnlyStarted && base.NetworkObject != null ? base.PredictionManager : null)
+				: subscribedPredictionManager;
+			if (manager == null)
+			{
+				return;
+			}
+
+			if (subscribe)
+			{
+				if (subscribedPredictionManager != null)
+				{
+					return;
+				}
+				subscribedPredictionManager = manager;
+				manager.OnPreReconcile += PredictionManager_OnPreReconcile;
+				manager.OnPreReplicateReplay += PredictionManager_OnPreReplicateReplay;
+				manager.OnPostReconcile += PredictionManager_OnPostReconcile;
+			}
+			else
+			{
+				manager.OnPreReconcile -= PredictionManager_OnPreReconcile;
+				manager.OnPreReplicateReplay -= PredictionManager_OnPreReplicateReplay;
+				manager.OnPostReconcile -= PredictionManager_OnPostReconcile;
+				subscribedPredictionManager = null;
+				RestoreLivePose();
+			}
+		}
+
+		/// <summary>
+		/// Stands the deck where it stood at the end of the reconciled state tick, before FishNet
+		/// runs the <c>SyncTransforms</c> that feeds the first replayed tick.
+		/// </summary>
+		/// <remarks>
+		/// A rider's motor probes the ground with real physics queries, and a physics query answers
+		/// from the last SYNCED collider pose — during a live tick that is the pose from the end of
+		/// the previous tick, because FishNet syncs once per tick after <c>OnTick</c>. So a rider
+		/// simulating tick T stands on the deck as it was at the end of T-1, and a replay of T has
+		/// to present that same pose or it is not replaying the same world. It did not: the deck
+		/// never rolled back, so every replayed tick probed the deck where it is NOW — up to a full
+		/// round trip downstream of where the rider actually stood. Near the trailing edge that
+		/// probe finds nothing, the replayed rider ungrounds, gravity takes it, and (being
+		/// ungrounded) it also stops inheriting the deck's velocity and slides further back. The
+		/// next reconcile lifts it out and the next replay drops it again: standing on a moving
+		/// deck sinks and stutters through it, worst at high ping, worst near the edges.
+		/// <para>
+		/// This is the geometry half of the fix whose velocity half is
+		/// <see cref="TryGetVelocityForTick"/> — the ring already carried the right velocity for
+		/// each replayed tick while the collider it acted on stayed in the present.
+		/// </para>
+		/// </remarks>
+		private void PredictionManager_OnPreReconcile(uint clientTick, uint serverTick)
+		{
+			/* Should a previous reconcile have ended without its post hook (a replay that threw),
+			 * the deck is still parked in the past — put it back BEFORE reading it, or the stale
+			 * pose is saved as "live" and the platform latches one replay window behind the server
+			 * for good. */
+			RestoreLivePose();
+
+			// Remember where the live simulation left the deck; the replay is about to displace it.
+			livePositionDuringReplay = transform.position;
+			replayPoseApplied = true;
+			ApplyHistoricPose(clientTick);
+		}
+
+		/// <summary>
+		/// Advances the deck to the pose it held at the end of <paramref name="clientTick"/>, so the
+		/// physics sync FishNet runs at the end of this replayed tick hands the NEXT replayed tick
+		/// the geometry that tick saw — the same one-tick relationship a live tick has.
+		/// </summary>
+		private void PredictionManager_OnPreReplicateReplay(uint clientTick, uint serverTick)
+		{
+			ApplyHistoricPose(clientTick);
+		}
+
+		/// <summary>Returns the deck to the live simulation's pose once the replay is over.</summary>
+		/// <remarks>
+		/// Normally a no-op — the last replayed tick is the last live tick, so the historic pose and
+		/// the live pose are the same point. It matters when they are not: a ring too short for the
+		/// replay window, or a platform that spawned inside it. Leaving a deck parked at a historic
+		/// pose would desynchronise it from the server permanently, which is a worse bug than the
+		/// one being fixed, so the live pose is always restored explicitly.
+		/// </remarks>
+		private void PredictionManager_OnPostReconcile(uint clientTick, uint serverTick)
+		{
+			RestoreLivePose();
+		}
+
+		/// <summary>Moves the deck to its ringed pose for a tick, when the ring still holds it.</summary>
+		/// <remarks>
+		/// A miss leaves the deck where it is, which is exactly the old behaviour — a replay window
+		/// longer than the ring degrades to the previous model rather than to a wrong pose.
+		/// </remarks>
+		private void ApplyHistoricPose(uint tick)
+		{
+			if (TryGetPositionForTick(tick, out Vector3 position))
+			{
+				transform.position = position;
+			}
+		}
+
+		/// <summary>Restores the pose saved when the reconcile began, if one is outstanding.</summary>
+		private void RestoreLivePose()
+		{
+			if (!replayPoseApplied)
+			{
+				return;
+			}
+			replayPoseApplied = false;
+			transform.position = livePositionDuringReplay;
+		}
+		#endregion
 
 		/// <inheritdoc/>
 		/// <remarks>
@@ -390,10 +566,10 @@ namespace FishMMO.Shared
 				Step((float)TimeManager.TickDelta);
 			}
 
-			// Keyed by the tick that just ran, so a rider replaying it can ask for the same value.
+			// Keyed by the tick that just ran, so a rider replaying it can ask for the same values.
 			if (TimeManager != null)
 			{
-				RecordTickVelocity(TimeManager.LocalTick, LastCompletedTickVelocity);
+				RecordTickState(TimeManager.LocalTick, LastCompletedTickVelocity, transform.position);
 			}
 		}
 
@@ -472,6 +648,9 @@ namespace FishMMO.Shared
 			// first rider that steps on the freshly-respawned platform).
 			LastCompletedTickVelocity = Vector3.zero;
 			goalIndex = 0;
+			// A despawn mid-reconcile must not leave the next spawn believing it owes a pose
+			// restore to a position from the previous one.
+			replayPoseApplied = false;
 		}
 	}
 }

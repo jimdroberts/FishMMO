@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Reflection;
 using FishMMO.Shared;
 using KinematicCharacterController;
@@ -36,11 +36,16 @@ namespace FishMMO.TestHarness
 	/// failures, platform phase error and fall-throughs, with a PASS/FAIL banner.
 	/// </para>
 	/// <para>
-	/// <b>Replay fidelity note.</b> During replay the motor's ground probes run against the
-	/// platforms at their PRESENT poses while the platform VELOCITY comes from the per-tick ring —
-	/// which is exactly what the live game does (platforms never roll back; riders replay against
-	/// <c>KCCPlatform.TryGetVelocityForTick</c>). The harness mirrors that deliberately rather
-	/// than "fixing" it.
+	/// <b>Replay fidelity note.</b> A replay rolls the PLATFORMS back with the rider: each
+	/// replayed tick stands every deck at its ringed pose for that tick (and syncs transforms)
+	/// before the motor's ground probes run, and the platform velocity comes from the same ring.
+	/// That is what the live game does — <c>KCCPlatform</c> rewinds itself across FishNet's
+	/// reconcile hooks (<c>OnPreReconcile</c> / <c>OnPreReplicateReplay</c> / <c>OnPostReconcile</c>)
+	/// using <c>TryGetPositionForTick</c>, alongside <c>TryGetVelocityForTick</c>. Until 2026-09-05
+	/// only the velocity rolled back; the decks stayed in the present, so every replayed probe
+	/// tested geometry up to a round trip downstream of where the rider stood and riders sank
+	/// through moving decks near the edges (issue #228). Set <see cref="LegacyPresentPoseReplay"/>
+	/// to watch that model fail.
 	/// </para>
 	/// </remarks>
 	public sealed class PlatformSimHarness : MonoBehaviour
@@ -73,6 +78,14 @@ namespace FishMMO.TestHarness
 		/// scene exists to keep dead. Applied on Reset.
 		/// </summary>
 		public bool LegacyStalePlatformSeed = false;
+
+		/// <summary>
+		/// Demonstration toggle: replay the rider against the platforms at their PRESENT poses,
+		/// the way the shipped model behaved before the geometry rewind of issue #228. The rider
+		/// replays over a deck that has since slid downstream, diverges from the live state near
+		/// every edge, and at high RTT sinks through the deck it is standing on.
+		/// </summary>
+		public bool LegacyPresentPoseReplay = false;
 
 		/// <summary>Cycle RTT 0 → 500 in 50 ms steps automatically, logging a line per step.</summary>
 		public bool AutoSweep = false;
@@ -542,11 +555,42 @@ namespace FishMMO.TestHarness
 			client.Motor.ApplyState(snapshot.MotorState);
 			client.Rider.transform.SetPositionAndRotation(client.Motor.TransientPosition, client.Motor.TransientRotation);
 
+			/* Roll the DECKS back with the rider, not just their velocities. SimulateTick probes
+			 * the ground with real physics queries, and a query answers from wherever the deck
+			 * collider currently stands — so replaying against the live decks tests geometry up
+			 * to a whole round trip downstream of where the rider actually was. The live game
+			 * rewinds the same way (KCCPlatform's reconcile hooks); LegacyPresentPoseReplay
+			 * restores the old model for demonstration. */
+			Vector3[] livePlatformPoses = null;
+			if (!LegacyPresentPoseReplay)
+			{
+				livePlatformPoses = new Vector3[PlatformCount];
+				for (int p = 0; p < PlatformCount; ++p)
+				{
+					livePlatformPoses[p] = client.PlatformDecks[p].position;
+				}
+			}
+
 			for (uint j = snapshot.Tick + 1; j <= currentTick; ++j)
 			{
+				if (livePlatformPoses != null)
+				{
+					ApplyPlatformPosesForTick(j);
+				}
 				Vector3 replayPlatformVelocity = PlatformVelocityUnder(client, live: false, ringTick: j);
 				client.Rider.SimulateTick(inputs[j % RingSize], replayPlatformVelocity, TickDelta);
 				predictedStates[j % RingSize] = client.Motor.GetState();
+			}
+
+			if (livePlatformPoses != null)
+			{
+				/* Back to the live poses before anything else looks at them — a later snapshot in
+				 * this same tick, the next live tick, or the frame that renders the scene. */
+				for (int p = 0; p < PlatformCount; ++p)
+				{
+					client.PlatformDecks[p].position = livePlatformPoses[p];
+				}
+				Physics.SyncTransforms();
 			}
 
 			if (!mispredicted)
@@ -576,8 +620,30 @@ namespace FishMMO.TestHarness
 		}
 
 		/// <summary>
-		/// Replays at nonzero RTT that diverged from the live state near moving geometry —
-		/// an expected, self-correcting property of the shipped model, tracked for visibility.
+		/// Stands every client deck where it stood at the end of <paramref name="tick"/> and syncs
+		/// the physics scene, so the replayed motor probes the world that tick actually saw.
+		/// </summary>
+		/// <remarks>
+		/// The pose for the tick BEING simulated, because that is this harness's own live
+		/// ordering (step → sync → simulate). FishNet syncs once per tick after OnTick instead, so
+		/// <c>KCCPlatform</c> applies the pose one tick earlier in its hooks to land on the same
+		/// relationship. Both present "the geometry of the tick being replayed"; only the seam
+		/// where the sync happens differs.
+		/// </remarks>
+		private void ApplyPlatformPosesForTick(uint tick)
+		{
+			for (int p = 0; p < PlatformCount; ++p)
+			{
+				client.PlatformDecks[p].position = clientPlatformRing[tick % RingSize, p].Position;
+			}
+			Physics.SyncTransforms();
+		}
+
+		/// <summary>
+		/// Replays that diverged from the live state they replaced. With the platforms rolled back
+		/// this must be ZERO at every latency: a replay of an agreeing snapshot is an identity.
+		/// It was not before issue #228 — moving geometry that stayed in the present made every
+		/// near-edge replay land somewhere else (27 at 250 ms, 47 at 500 ms over ~900 ticks).
 		/// </summary>
 		private long edgeReplayDivergences;
 
@@ -895,6 +961,8 @@ namespace FishMMO.TestHarness
 			{
 				LegacyStalePlatformSeed = legacy;
 			}
+			LegacyPresentPoseReplay = GUILayout.Toggle(LegacyPresentPoseReplay,
+				" Legacy present-pose replay (issue #228 bug demo; watch edge replays climb)");
 			AutoSweep = GUILayout.Toggle(AutoSweep, " Auto-sweep RTT 0→500 (logs a line per step)");
 
 			GUILayout.Space(6);
@@ -905,9 +973,13 @@ namespace FishMMO.TestHarness
 			GUILayout.Label($"fall failures — client: {client?.FallThroughs ?? 0} (dips recovered {client?.RecoveredDips ?? 0})   server: {server?.FallThroughs ?? 0}   water landings: {waterEntries}");
 			GUILayout.Label($"ferry crossings completed: {completedCrossings}   brain: {brainState}");
 
+			/* Edge replays join the banner: with the decks rolled back they are zero at every
+			 * latency, so any at all means a replay is again reading geometry from a tick other
+			 * than the one it is replaying (issue #228). */
 			bool pass = (client?.FallThroughs ?? 0) == 0 &&
 				(server?.FallThroughs ?? 0) == 0 &&
-				identityFailures == 0;
+				identityFailures == 0 &&
+				edgeReplayDivergences == 0;
 			GUI.color = pass ? Color.green : Color.red;
 			GUILayout.Label(pass ? "<b>PASS</b>" : "<b>FAIL</b>", RichLabel());
 			GUI.color = Color.white;
@@ -956,7 +1028,8 @@ namespace FishMMO.TestHarness
 				bool onFerry = client != null && IsStandingOnFerry(client);
 				return $"tick {clientTick} brain {brainState} dir {rideDirection} " +
 					$"rider ({rider.x:F2},{rider.y:F2},{rider.z:F2}) ferry x {ferry.x:F2} velX {ferryVelX:F3} " +
-					$"onFerry {onFerry} crossings {completedCrossings} water {waterEntries}";
+					$"onFerry {onFerry} crossings {completedCrossings} water {waterEntries} " +
+					$"dips {(client != null ? client.RecoveredDips : 0)} edgeReplays {edgeReplayDivergences}";
 			}
 		}
 	}

@@ -1282,11 +1282,14 @@ namespace FishMMO.UnitTests
 			try
 			{
 				KCCPlatform platform = go.AddComponent<KCCPlatform>();
-				MethodInfo record = typeof(KCCPlatform).GetMethod("RecordTickVelocity", Any);
+				/* RecordTickState since issue #228 — the same ring now carries the deck's POSE per
+				 * tick as well, because a replaying rider needs the geometry it probed, not just
+				 * the velocity it inherited. */
+				MethodInfo record = typeof(KCCPlatform).GetMethod("RecordTickState", Any);
 				LogAssert.IsTrue(record != null, "KCCPlatform must record per-tick velocity.");
 
-				record.Invoke(platform, new object[] { 100u, new Vector3(0f, 0f, 4f) });
-				record.Invoke(platform, new object[] { 101u, new Vector3(0f, 0f, -4f) });
+				record.Invoke(platform, new object[] { 100u, new Vector3(0f, 0f, 4f), Vector3.zero });
+				record.Invoke(platform, new object[] { 101u, new Vector3(0f, 0f, -4f), Vector3.zero });
 
 				LogAssert.IsTrue(platform.TryGetVelocityForTick(100u, out Vector3 atHundred));
 				LogAssert.IsTrue((atHundred - new Vector3(0f, 0f, 4f)).magnitude < 1e-4f,

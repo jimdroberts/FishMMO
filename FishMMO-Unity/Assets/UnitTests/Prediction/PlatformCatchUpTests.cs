@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Reflection;
 using System.Collections.Generic;
@@ -110,7 +110,130 @@ namespace FishMMO.UnitTests
 				"Bounded, so a clock-estimate glitch cannot spin an unbounded catch-up loop on spawn.");
 		}
 
+		/// <summary>
+		/// The pose ring hands back the position the deck actually held at the end of each tick —
+		/// the geometry half of what a rider needs to replay a reconcile honestly.
+		/// </summary>
+		/// <remarks>
+		/// The velocity ring alone was not enough (issue #228). A rider replaying k ticks inherited
+		/// the right velocity for each of them while its ground probes — real physics queries —
+		/// hit the deck collider wherever it stands NOW, up to a full round trip downstream. At the
+		/// shipped platform's 4 u/s a 500 ms round trip is 2 units of a deck only 2.5 units deep,
+		/// so a rider standing anywhere in the back of the deck replayed over open air: it
+		/// ungrounded, stopped inheriting the platform velocity (the motor only conveys a stably
+		/// grounded rider on a horizontal platform), fell, and was hauled back by the next
+		/// reconcile — sinking through the deck it was standing on, worst at high ping.
+		/// </remarks>
+		[Test]
+		public void PoseRing_ReturnsThePoseEachTickActuallyHeld()
+		{
+			const float tickDelta = 1f / 30f;
+			KCCPlatform platform = MakePlatform("ringPlatform");
+
+			// Walk the platform the way its tick does — step, then record — remembering the truth.
+			const uint firstTick = 500;
+			const int ticks = 40;
+			Vector3[] truth = new Vector3[ticks];
+			for (int i = 0; i < ticks; ++i)
+			{
+				platform.Step(tickDelta);
+				truth[i] = platform.transform.position;
+				RecordTickState(platform, firstTick + (uint)i, platform.LastCompletedTickVelocity, truth[i]);
+			}
+
+			for (int i = 0; i < ticks; ++i)
+			{
+				LogAssert.IsTrue(platform.TryGetPositionForTick(firstTick + (uint)i, out Vector3 pose),
+					$"Tick {firstTick + (uint)i} is inside the ring and must still be readable — a replay " +
+					"that cannot recover a tick's geometry falls back to replaying against the present.");
+				LogAssert.IsTrue((pose - truth[i]).sqrMagnitude < 1e-10f,
+					"The ring must return the pose that tick actually held, not a neighbouring tick's. " +
+					"Riding is decided by where the deck was when the rider's probe ran.");
+			}
+
+			/* The ring must move with the deck, not just exist: a ring that returned one frozen
+			 * pose for every tick would pass the lookups above if the platform never moved. */
+			LogAssert.IsTrue((truth[ticks - 1] - truth[0]).sqrMagnitude > 0.01f,
+				"The fixture must actually walk the platform, or it proves nothing.");
+		}
+
+		/// <summary>
+		/// A tick older than the ring reports a miss rather than a wrong pose — a replay window
+		/// longer than the history degrades to the old present-pose behaviour, never to geometry
+		/// from some unrelated lap.
+		/// </summary>
+		[Test]
+		public void PoseRing_ReportsAMissForTicksItNoLongerHolds()
+		{
+			const float tickDelta = 1f / 30f;
+			KCCPlatform platform = MakePlatform("ringOverflowPlatform");
+
+			const uint firstTick = 1000;
+			const int ringLength = 64;
+			for (int i = 0; i < ringLength + 5; ++i)
+			{
+				platform.Step(tickDelta);
+				RecordTickState(platform, firstTick + (uint)i, platform.LastCompletedTickVelocity, platform.transform.position);
+			}
+
+			/* Slot reuse is what makes this a real question: tick T and tick T+64 share a slot, so
+			 * an implementation that only indexed by slot would happily return the NEWER lap's
+			 * pose for the older tick. The stored tick is checked, so it misses instead. */
+			LogAssert.IsFalse(platform.TryGetPositionForTick(firstTick, out _),
+				"A tick the ring has since overwritten must miss, not return the pose of the tick " +
+				"that took its slot — that would place the deck a whole lap away from where the " +
+				"replayed rider stood.");
+			LogAssert.IsTrue(platform.TryGetPositionForTick(firstTick + ringLength + 4, out _),
+				"The most recent tick must still be held.");
+		}
+
+		/// <summary>
+		/// SOURCE — the rewind is actually wired to FishNet's reconcile, at the three seams that
+		/// make it line up with a live tick, and the live pose is always put back.
+		/// </summary>
+		[Test]
+		public void Reconcile_RewindsPlatformGeometryAndRestoresIt()
+		{
+			string source = ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
+
+			/* A physics query answers from the last SYNCED collider pose, and FishNet syncs once
+			 * per tick after OnTick — so a rider simulating tick T stands on the deck as it was at
+			 * the end of T-1. The replay reproduces that relationship by applying the state tick's
+			 * pose before the SyncTransforms that follows OnPreReconcile, then each replayed
+			 * tick's pose before the Simulate that closes that tick. Move either hook and the
+			 * replayed world slips a tick out of step with the live one. */
+			LogAssert.IsTrue(source.Contains("manager.OnPreReconcile += PredictionManager_OnPreReconcile"),
+				"The deck must be placed at the reconciled tick's pose BEFORE FishNet's pre-replay " +
+				"SyncTransforms, or the first replayed tick probes the present.");
+			LogAssert.IsTrue(source.Contains("manager.OnPreReplicateReplay += PredictionManager_OnPreReplicateReplay"),
+				"And advanced per replayed tick, so each replayed probe sees that tick's geometry.");
+			LogAssert.IsTrue(source.Contains("manager.OnPostReconcile += PredictionManager_OnPostReconcile"),
+				"And returned to the live pose when the replay ends — a deck left parked in the past " +
+				"would desynchronise from the server permanently, which is worse than the bug.");
+			LogAssert.IsTrue(source.Contains("private void RestoreLivePose()") &&
+				source.Contains("transform.position = livePositionDuringReplay;"),
+				"The restore must use the pose saved when the reconcile began, not a recomputed one: " +
+				"the ring can miss (short history, a platform spawned mid-window) and the live pose " +
+				"is the only value known to be correct in that case.");
+			LogAssert.IsTrue(source.Contains("base.IsClientOnlyStarted"),
+				"Client-only: the server runs every replicate once and never replays, so it has no " +
+				"historic tick to rewind to.");
+		}
+
 		// ── Helpers ──────────────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Files one tick into the platform's history ring, exactly as its tick callback does.
+		/// Reflection because the recorder is private and its caller needs a spawned NetworkObject.
+		/// </summary>
+		private static void RecordTickState(KCCPlatform platform, uint tick, Vector3 velocity, Vector3 position)
+		{
+			MethodInfo method = typeof(KCCPlatform).GetMethod("RecordTickState",
+				BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.IsNotNull(method, "KCCPlatform.RecordTickState not found — the history ring was renamed.");
+			method.Invoke(platform, new object[] { tick, velocity, position });
+		}
+
 
 		/// <summary>
 		/// A platform with its goals installed directly, sidestepping Awake entirely: edit mode

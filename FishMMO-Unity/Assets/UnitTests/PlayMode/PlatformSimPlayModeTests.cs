@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using FishMMO.TestHarness;
 using NUnit.Framework;
 using UnityEngine;
@@ -76,12 +76,11 @@ namespace FishMMO.UnitTests.PlayMode
 					$"RTT {rtt}ms: the rider never completed a ferry crossing — it is not actually " +
 					"riding the moving platform this scene exists to exercise.");
 
-				/* The contract, held exactly as the live game holds it: the SERVER never falls;
-				 * a CLIENT dip near a deck edge at high RTT is legitimate (its replay probes
-				 * platforms at present pose, deliberately mirroring the shipped model) but must
-				 * be RECOVERED by reconciliation — an unrecovered fall means the correction loop
-				 * is broken. Rollback identity is asserted only at zero delay, where the world
-				 * cannot have moved under the replay and any divergence is real nondeterminism. */
+				/* The contract, held exactly as the live game holds it: nobody falls, on either
+				 * side. Rollback identity is a hard error only at zero delay, where the world
+				 * cannot have moved under the replay and any divergence is real nondeterminism;
+				 * at latency the same divergence is counted as an edge replay and asserted just
+				 * below. */
 				Assert.AreEqual(0, harness.TotalFallThroughs,
 					$"RTT {rtt}ms: a rider fell and stayed fallen (or the SERVER fell at all) — the exact " +
 					"regression this scene guards.");
@@ -91,6 +90,18 @@ namespace FishMMO.UnitTests.PlayMode
 						"RTT 0ms: rollback+replay of an agreeing snapshot must land exactly on the live state; " +
 						"a drift here means the simulation reads something outside its reconciled state.");
 				}
+
+				/* Issue #228. A replay must reproduce the world of the tick it is replaying, and
+				 * the platforms are part of that world: they roll back with the rider, so a replay
+				 * of an agreeing snapshot is an identity AT EVERY LATENCY, not just at zero. It
+				 * was not before — with the decks left standing in the present, every near-edge
+				 * replay probed geometry up to a round trip downstream and landed somewhere else
+				 * (measured on this scene: 27 at 250ms, 47 at 500ms over ~900 ticks), which in the
+				 * live game is a rider sinking through the deck it is standing on. A nonzero count
+				 * here means the geometry rewind has been lost. */
+				Assert.AreEqual(0L, harness.EdgeReplayDivergences,
+					$"RTT {rtt}ms: replays diverged from the live state they replaced — the platforms are " +
+					"no longer rolling back with the rider (issue #228).");
 				Assert.Less(harness.MaxPlatformPhaseError, 0.05f,
 					$"RTT {rtt}ms: client and server platforms diverged in phase at matched ticks — the payload " +
 					"catch-up contract is broken.");
