@@ -156,10 +156,21 @@ namespace FishNet.CodeGenerating.Extension
 
                 if (copyParameters)
                 {
-                    foreach (ParameterDefinition pd in methodTemplate.Parameters)
+                    /* FISHMMO EDIT (issue #229): a template that lives in another module (e.g. a
+                     * NetworkBehaviour base method) must have its parameters cloned with imported types,
+                     * never re-parented; see MethodDefinitionExtensions.CreateParameters for why. Same-module
+                     * templates keep the original re-parenting behaviour, which callers rely on. */
+                    if (methodTemplate.Module != td.Module)
                     {
-                        session.ImportReference(pd.ParameterType.CachedResolve(session));
-                        md.Parameters.Add(pd);
+                        md.CreateParameters(session, methodTemplate);
+                    }
+                    else
+                    {
+                        foreach (ParameterDefinition pd in methodTemplate.Parameters)
+                        {
+                            session.ImportReference(pd.ParameterType.CachedResolve(session));
+                            md.Parameters.Add(pd);
+                        }
                     }
                 }
 

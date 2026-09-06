@@ -175,7 +175,7 @@ namespace FishMMO.UnitTests
 		{
 			var dungeon = new SceneObjectNamingSettings { Mode = SceneObjectNamingMode.Dungeon };
 			Assert.IsFalse(SceneObjectNameResolver.TryBuild(dungeon, null, 3, CharacterGender.Unspecified, out _, out string error));
-			StringAssert.Contains("Biome", error);
+			StringAssert.Contains("biome", error.ToLowerInvariant(), "The refusal must say what is missing.");
 
 			dungeon.BiomeID = BiomeRegistry.IDOf(biome);
 			Assert.IsTrue(SceneObjectNameResolver.TryBuild(dungeon, null, 3, CharacterGender.Unspecified, out string dungeonName, out error), error);

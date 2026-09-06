@@ -79,6 +79,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 						EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
 					}
 
+					BakeWorldMaps(customBuildType);
+
 					Log.Debug("BuildLogger", "Configuring addressables...");
 					bool isWebGL = buildTarget == BuildTarget.WebGL;
 					addressableManager.BuildAddressablesWithExclusions(excludedAddressableGroups, isWebGL, isWebGL);
@@ -99,6 +101,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					// CRITICAL: Always restore settings, even if build fails
 					Log.Debug("BuildLogger", "Restoring build configuration...");
 					configurator.Restore();
+					CleanWorldMaps(customBuildType);
 				}
 			}
 			catch (System.Exception ex)
@@ -219,7 +222,62 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			bool useUnityWebRequest = (osTarget == OSTargetEnvironment.WebGL);
 
 			BuildTarget buildTarget = BuildEnvironmentOptions.GetBuildTarget(osTarget);
-			BuildAddressablesWithExclusionsWrapper(excludedGroups, buildTarget, enableCrc, useUnityWebRequest);
+			CustomBuildType customBuildType = buildType == BuildTypeEnvironment.Server ? CustomBuildType.Server : CustomBuildType.Client;
+			BuildAddressablesWithExclusionsWrapper(excludedGroups, buildTarget, customBuildType, enableCrc, useUnityWebRequest);
+		}
+
+		/// <summary>
+		/// Bakes a map definition and image for every world scene and rebuilds the world scene
+		/// details cache to reference them, before the addressables of a client build are built.
+		/// Everything the bake produces is build output (gitignored; see
+		/// <see cref="FishMMO.Shared.WorldMaps.WorldMapBaker"/>) and <see cref="CleanWorldMaps"/>
+		/// removes it again when the build has finished. Server builds never draw a map, so they
+		/// skip both. A bake that fails is logged and does not stop the build, because the world map
+		/// falls back to a plain background without its image.
+		/// </summary>
+		private static void BakeWorldMaps(CustomBuildType customBuildType)
+		{
+			if (customBuildType != CustomBuildType.Client)
+			{
+				Log.Debug("BuildLogger", "Server build: world maps are not baked.");
+				return;
+			}
+
+			try
+			{
+				Log.Debug("BuildLogger", "Baking world maps...");
+				FishMMO.Shared.WorldMaps.WorldMapBaker.BakeAll();
+				Log.Debug("BuildLogger", "Rebuilding the world scene details cache with the baked maps...");
+				WorldSceneDetailsCacheBuilder.Rebuild();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"World map bake failed; the build continues without map images: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Removes the baked world maps and their addressable group after a client build and
+		/// rebuilds the world scene details cache without them, so the project is left as it was
+		/// found.
+		/// </summary>
+		private static void CleanWorldMaps(CustomBuildType customBuildType)
+		{
+			if (customBuildType != CustomBuildType.Client)
+			{
+				return;
+			}
+
+			try
+			{
+				Log.Debug("BuildLogger", "Removing baked world maps...");
+				FishMMO.Shared.WorldMaps.WorldMapBaker.CleanBakedMaps();
+				WorldSceneDetailsCacheBuilder.Rebuild();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"Removing the baked world maps failed; run FishMMO/World Map/Remove Baked Maps and FishMMO/Rebuild World Scene Details by hand: {ex.Message}");
+			}
 		}
 
 		/// <summary>
@@ -229,9 +287,10 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// </summary>
 		/// <param name="excludeGroups">Array of group name substrings to exclude from the build.</param>
 		/// <param name="buildTarget">The build target platform (e.g. StandaloneLinux64, WebGL).</param>
+		/// <param name="customBuildType">Client builds bake the world map images first and remove them afterwards; server builds do neither.</param>
 		/// <param name="enableCrcForRemoteLoading">If true, enables CRC checking for remote bundle loading (WebGL/CDN). If false, disables CRC for local StreamingAssets loading.</param>
 		/// <param name="useUnityWebRequestForLocal">If true, uses UnityWebRequest for local bundles (WebGL requirement). If false, uses LoadFromFileAsync (better performance for Windows/Linux).</param>
-		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups, BuildTarget buildTarget, bool enableCrcForRemoteLoading = false, bool useUnityWebRequestForLocal = false)
+		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups, BuildTarget buildTarget, CustomBuildType customBuildType, bool enableCrcForRemoteLoading = false, bool useUnityWebRequestForLocal = false)
 		{
 			InitializeLogger();
 
@@ -244,6 +303,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				// assets, not code — the Server/Player distinction doesn't affect bundle content.
 				// Building with Server subtarget causes SBP failures.
 				configurator.Configure(StandaloneBuildSubtarget.Player, buildTarget);
+				BakeWorldMaps(customBuildType);
 				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}
 			catch (System.Exception ex)
@@ -253,6 +313,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			finally
 			{
 				configurator.Restore();
+				CleanWorldMaps(customBuildType);
 			}
 
 			Log.Shutdown();

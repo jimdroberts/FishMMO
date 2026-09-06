@@ -13,7 +13,9 @@
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.Addressables",
         "FishMMO.Shared.Tools.Editor",
-        "FishMMO.Shared.NameGenerator.Editor"
+        "FishMMO.Shared.NameGenerator.Editor",
+        "FishMMO.Shared.Map.Editor",
+        "Unity.Addressables.Editor"
     ],
     "includePlatforms": [
         "Editor"
@@ -36,7 +38,8 @@
     ],
     "autoReferenced": false,
     "defineConstraints": [
-        "UNITY_INCLUDE_TESTS"
+        "UNITY_INCLUDE_TESTS",
+        "!UNITY_SERVER"
     ],
     "versionDefines": [],
     "noEngineReferences": false

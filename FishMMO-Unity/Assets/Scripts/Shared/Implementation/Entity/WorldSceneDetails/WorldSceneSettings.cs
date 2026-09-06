@@ -45,27 +45,20 @@ namespace FishMMO.Shared
 		public int MaxClients = MaximumClientsPerScene;
 
 		/// <summary>
-		/// The scene's map, loading image and player-facing name.
+		/// Optional hand-made map definition, for a set of scenes that share one map (a dungeon and
+		/// its instanced twin). Normally empty: a client build bakes a definition per scene into
+		/// <see cref="WorldMapDefinition.BakedDirectory"/>, points the world scene details cache at
+		/// it, and removes it after the build. A definition assigned here is filled in by that same
+		/// bake instead.
 		/// </summary>
-		/// <remarks>
-		/// Created and filled in by <c>FishMMO/World Map/Bake Maps</c>, which also assigns it here
-		/// if the field is empty. Left assignable by hand so a set of scenes that share a map — a
-		/// dungeon and its instanced twin — can point at one definition.
-		/// </remarks>
-		[Tooltip("The scene's map definition. Created and assigned automatically by FishMMO/World Map/Bake Maps.")]
+		[Tooltip("Optional. Leave empty and the client build bakes this scene's map; assign one only to share a map between scenes.")]
 		public WorldMapDefinition MapDefinition;
 
 		/// <summary>
-		/// Legacy home of the scene's loading image, migrated into <see cref="MapDefinition"/>.
+		/// The scene's loading image. Authored here; the map bake copies it into the scene's
+		/// definition so the client finds the whole presentation in one place.
 		/// </summary>
-		/// <remarks>
-		/// The image belongs with the rest of a scene's presentation, and living on a component
-		/// meant it could only be found by opening the scene. The map bake moves any value still
-		/// here into the definition and clears this field, so a scene keeps its image without
-		/// anybody re-authoring it; the reader still falls back to this for a scene that has not
-		/// been baked since the move. Remove once every world scene has been baked.
-		/// </remarks>
-		[Tooltip("Deprecated. Migrated into the Map Definition by FishMMO/World Map/Bake Maps.")]
+		[Tooltip("The image shown while this scene loads. Copied into the baked map definition.")]
 		public Sprite SceneTransitionImage;
 
 		/// <summary>

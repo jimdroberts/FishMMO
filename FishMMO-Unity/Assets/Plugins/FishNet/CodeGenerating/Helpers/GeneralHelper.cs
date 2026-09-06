@@ -896,14 +896,27 @@ namespace FishNet.CodeGenerating.Helping
         /// </summary>
         public ParameterDefinition CreateParameter(MethodDefinition methodDef, ParameterDefinition parameterTypeDef)
         {
-            ImportReference(parameterTypeDef.ParameterType);
+            // FISHMMO EDIT (issue #229): use the imported type (the original discarded it) and seal the attribute list.
+            TypeReference parameterTypeRef = ImportReference(parameterTypeDef.ParameterType);
 
             int currentCount = methodDef.Parameters.Count;
             string name = parameterTypeDef.Name + currentCount;
-            ParameterDefinition parameterDef = new(name, parameterTypeDef.Attributes, parameterTypeDef.ParameterType);
+            ParameterDefinition parameterDef = new(name, parameterTypeDef.Attributes, parameterTypeRef);
+            SealCustomAttributes(parameterDef);
             methodDef.Parameters.Add(parameterDef);
 
             return parameterDef;
+        }
+
+        /// <summary>
+        /// FISHMMO EDIT (issue #229): materialises a freshly created parameter's custom attribute list while its
+        /// row id is still 0. Cecil reads a parameter's attributes lazily through parameterType.Module using the
+        /// parameter's CURRENT token, and the writer assigns the final token before it checks HasCustomAttributes,
+        /// so an unsealed parameter would pick up whatever attributes the original image stored at that row.
+        /// </summary>
+        public static void SealCustomAttributes(ParameterDefinition parameterDef)
+        {
+            _ = parameterDef.CustomAttributes;
         }
 
         /// <summary>
@@ -918,6 +931,7 @@ namespace FishNet.CodeGenerating.Helping
             if (string.IsNullOrEmpty(name))
                 name = parameterTypeRef.Name + currentCount;
             ParameterDefinition parameterDef = new(name, attributes, parameterTypeRef);
+            SealCustomAttributes(parameterDef); // FISHMMO EDIT (issue #229)
             if (index == -1)
                 methodDef.Parameters.Add(parameterDef);
             else

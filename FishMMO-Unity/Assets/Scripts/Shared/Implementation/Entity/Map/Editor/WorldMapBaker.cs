@@ -10,7 +10,7 @@ using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared.Core;
 
-namespace FishMMO.Shared.Editor
+namespace FishMMO.Shared.WorldMaps
 {
 	/// <summary>
 	/// Photographs every world scene from directly overhead and writes the result, together with
@@ -25,6 +25,16 @@ namespace FishMMO.Shared.Editor
 	/// player gets the same map of the same terrain, which is also why widening the view on a
 	/// modified client reveals nothing that is not public.</para>
 	///
+	/// <para><b>Everything it writes is build output, not source.</b> A client build bakes a
+	/// definition and an image per world scene into <see cref="WorldMapDefinition.BakedDirectory"/>,
+	/// places the images in a client addressable group, rebuilds the world scene details cache so
+	/// that it references the fresh definitions, builds, and then removes the bake again and rebuilds
+	/// the cache once more (<see cref="CleanBakedMaps"/>). Nothing is hand-edited, nothing is committed,
+	/// no scene is written: the loading image and every label, landmark and boundary are read from
+	/// the scene, and the definition's presentation fields take their defaults. A scene that must
+	/// share one map with another (an instanced twin) may still point <c>WorldSceneSettings.MapDefinition</c>
+	/// at a hand-made definition, which the bake then fills in place instead of creating one.</para>
+	///
 	/// <para><b>It needs a graphics device.</b> Reading pixels back off a render texture is not
 	/// possible under <c>-nographics</c>. Run under <c>xvfb-run</c> in a headless environment; when
 	/// there is no device the bake still writes the definition's data — bounds, labels,
@@ -34,10 +44,15 @@ namespace FishMMO.Shared.Editor
 	public static class WorldMapBaker
 	{
 		/// <summary>Folder the definitions and their baked images are written to.</summary>
-		private const string OutputDirectory = "Assets/Prefabs/Shared/WorldMaps";
+		private const string OutputDirectory = WorldMapDefinition.BakedDirectory;
 
 		/// <summary>Addressable group the baked images are placed in.</summary>
-		private const string AddressableGroupName = "WorldMaps";
+		/// <remarks>
+		/// The name carries "Client" because the build tool excludes groups by that substring from
+		/// server bundles; the group is created by a client bake and removed after the build, but if
+		/// one ever lingers it still stays out of a server build.
+		/// </remarks>
+		public const string AddressableGroupName = "ClientWorldMaps";
 
 		/// <summary>Longest edge, in pixels, of a baked map image.</summary>
 		/// <remarks>
@@ -105,14 +120,7 @@ namespace FishMMO.Shared.Editor
 				}
 				finally
 				{
-					/* Saved before closing, because the bake can WRITE to the scene: it assigns a
-					 * newly created definition onto WorldSceneSettings and clears the migrated
-					 * loading image. Closing without saving would discard both and the next bake
-					 * would make the same definition again. */
-					if (scene.isDirty)
-					{
-						EditorSceneManager.SaveScene(scene);
-					}
+					// The bake only reads the scene; nothing it produces lives there.
 					EditorSceneManager.CloseScene(scene, true);
 				}
 			}
@@ -129,6 +137,38 @@ namespace FishMMO.Shared.Editor
 		}
 
 		/// <summary>
+		/// Removes everything the bake produced: the definitions, the images and their addressable
+		/// group. The build tool calls this after a client build and then rebuilds the world scene
+		/// details cache so it no longer references the removed definitions; it is also a menu item
+		/// for tidying up after a manual bake.
+		/// </summary>
+		[MenuItem("FishMMO/World Map/Remove Baked Maps")]
+		public static void CleanBakedMaps()
+		{
+			bool removedFolder = AssetDatabase.IsValidFolder(OutputDirectory) && AssetDatabase.DeleteAsset(OutputDirectory);
+			if (!removedFolder && Directory.Exists(OutputDirectory))
+			{
+				// Not known to the asset database (a bake without a refresh): remove it directly.
+				Directory.Delete(OutputDirectory, true);
+				File.Delete(OutputDirectory + ".meta");
+				removedFolder = true;
+			}
+
+			AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+			AddressableAssetGroup group = settings != null ? settings.FindGroup(AddressableGroupName) : null;
+			if (group != null)
+			{
+				// Deletes the group asset and its schema assets as well.
+				settings.RemoveGroup(group);
+			}
+
+			AssetDatabase.SaveAssets();
+			AssetDatabase.Refresh();
+
+			Debug.Log($"[WorldMapBaker] Removed {(removedFolder ? $"'{OutputDirectory}'" : "no bake folder")}{(group != null ? $" and the '{AddressableGroupName}' addressable group" : "")}.");
+		}
+
+		/// <summary>
 		/// Bakes the map for a scene that is already open.
 		/// </summary>
 		/// <param name="scene">The open scene.</param>
@@ -142,14 +182,11 @@ namespace FishMMO.Shared.Editor
 				return false;
 			}
 
-			WorldMapDefinition definition = settings.MapDefinition;
-			if (definition == null)
-			{
-				definition = CreateDefinition(scene.name);
-				settings.MapDefinition = definition;
-				EditorUtility.SetDirty(settings);
-				EditorSceneManager.MarkSceneDirty(scene);
-			}
+			/* A hand-assigned definition on the component is filled in place, so that two scenes can
+			 * share one map. Otherwise the scene gets the transient definition the build produces. */
+			WorldMapDefinition definition = settings.MapDefinition != null
+				? settings.MapDefinition
+				: LoadOrCreateBakedDefinition(scene.name);
 
 			definition.SceneName = scene.name;
 
@@ -158,17 +195,11 @@ namespace FishMMO.Shared.Editor
 				definition.DisplayName = scene.name;
 			}
 
-			/* The loading image migrates on the first bake and only then: the component's copy is
-			 * cleared afterwards, so a later bake finds nothing to move and leaves whatever the
-			 * definition holds alone. Somebody who changes the image on the definition does not
-			 * have it overwritten by a stale value on a component they were told to stop using. */
-			if (definition.SceneTransitionImage == null && settings.SceneTransitionImage != null)
+			/* The loading image is authored on the component and copied here on every bake, so the
+			 * client finds a scene's whole presentation in one place without anything being moved. */
+			if (settings.SceneTransitionImage != null)
 			{
 				definition.SceneTransitionImage = settings.SceneTransitionImage;
-				settings.SceneTransitionImage = null;
-				EditorUtility.SetDirty(settings);
-				EditorSceneManager.MarkSceneDirty(scene);
-				Debug.Log($"[WorldMapBaker] Moved '{scene.name}' loading image from WorldSceneSettings into its map definition.");
 			}
 
 			HarvestAuthoredContent(scene, definition);
@@ -197,17 +228,22 @@ namespace FishMMO.Shared.Editor
 		}
 
 		/// <summary>
-		/// Creates a definition asset for a scene.
+		/// Loads the definition a previous bake wrote for a scene, or creates it.
 		/// </summary>
 		/// <param name="sceneName">The scene's name.</param>
-		/// <returns>The new asset.</returns>
-		private static WorldMapDefinition CreateDefinition(string sceneName)
+		/// <returns>The asset, at <see cref="WorldMapDefinition.BakedAssetPath"/>.</returns>
+		private static WorldMapDefinition LoadOrCreateBakedDefinition(string sceneName)
 		{
-			WorldMapDefinition definition = ScriptableObject.CreateInstance<WorldMapDefinition>();
+			string path = WorldMapDefinition.BakedAssetPath(sceneName);
+			WorldMapDefinition definition = AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(path);
+			if (definition != null)
+			{
+				return definition;
+			}
+
+			definition = ScriptableObject.CreateInstance<WorldMapDefinition>();
 			definition.SceneName = sceneName;
 			definition.DisplayName = sceneName;
-
-			string path = AssetDatabase.GenerateUniqueAssetPath($"{OutputDirectory}/{SanitizeFileName(sceneName)}Map.asset");
 			AssetDatabase.CreateAsset(definition, path);
 			Debug.Log($"[WorldMapBaker] Created map definition '{path}' for scene '{sceneName}'.");
 			return definition;
@@ -295,7 +331,7 @@ namespace FishMMO.Shared.Editor
 				byte[] png = image.EncodeToPNG();
 				Object.DestroyImmediate(image);
 
-				string imagePath = $"{OutputDirectory}/{SanitizeFileName(definition.SceneName)}Map.png";
+				string imagePath = WorldMapDefinition.BakedImagePath(definition.SceneName);
 				File.WriteAllBytes(imagePath, png);
 				AssetDatabase.ImportAsset(imagePath, ImportAssetOptions.ForceUpdate);
 
@@ -435,30 +471,5 @@ namespace FishMMO.Shared.Editor
 			return results;
 		}
 
-		/// <summary>
-		/// Makes a scene name usable as a file name.
-		/// </summary>
-		/// <param name="value">The scene name.</param>
-		/// <returns>The sanitised name.</returns>
-		private static string SanitizeFileName(string value)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-			{
-				return "Unknown";
-			}
-
-			char[] characters = value.ToCharArray();
-			char[] invalid = Path.GetInvalidFileNameChars();
-
-			for (int i = 0; i < characters.Length; ++i)
-			{
-				if (System.Array.IndexOf(invalid, characters[i]) >= 0 || characters[i] == ' ')
-				{
-					characters[i] = '_';
-				}
-			}
-
-			return new string(characters);
-		}
 	}
 }

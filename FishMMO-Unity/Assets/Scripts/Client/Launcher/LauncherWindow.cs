@@ -81,7 +81,7 @@ namespace FishMMO.Client
 			NativeRefreshRate = default;
 		}
 
-#if !UNITY_EDITOR && !UNITY_WEBGL && !UNITY_SERVER
+#if !UNITY_EDITOR && !UNITY_WEBGL
 		/// <summary>
 		/// Sizes the window for the launcher before the first scene loads.
 		/// </summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -15,20 +16,37 @@ namespace FishMMO.UnitTests
 	/// Drives the Name Generator window the way a user does — pick a category,
 	/// set the options, press the toolbar buttons — and asserts on the visual
 	/// tree and status bar it produces. <c>BuildUI</c> mounts the real UXML into
-	/// a detached root, so none of this needs a window to be shown.
+	/// a root that lives on a runtime panel (a <see cref="UIDocument"/> with the
+	/// project's panel settings), so none of this needs a window to be shown but
+	/// <c>field.value = x</c> still dispatches the change callbacks the window
+	/// hangs its behaviour on. A detached root swallows those events.
 	/// </summary>
 	[TestFixture]
 	public class NameGeneratorWindowTests
 	{
+		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
+
 		private NameGeneratorWindow window;
 		private VisualElement root;
+		private GameObject panelHost;
+		private PanelSettings panelSettings;
 
 		[SetUp]
 		public void SetUp()
 		{
 			NamingTemplateEditorLoader.EnsureLoaded();
+
+			PanelSettings template = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+			Assert.IsNotNull(template, $"panel settings must exist at {PanelSettingsPath}");
+			panelSettings = UnityEngine.Object.Instantiate(template);
+			panelHost = new GameObject("NameGeneratorWindowPanel") { hideFlags = HideFlags.HideAndDontSave };
+			UIDocument document = panelHost.AddComponent<UIDocument>();
+			document.panelSettings = panelSettings;
+			Assert.IsNotNull(document.rootVisualElement, "the UIDocument must provide a rooted tree");
+
 			window = ScriptableObject.CreateInstance<NameGeneratorWindow>();
 			root = new VisualElement();
+			document.rootVisualElement.Add(root);
 			window.BuildUI(root);
 		}
 
@@ -39,8 +57,18 @@ namespace FishMMO.UnitTests
 			{
 				UnityEngine.Object.DestroyImmediate(window);
 			}
+			if (panelHost != null)
+			{
+				UnityEngine.Object.DestroyImmediate(panelHost);
+			}
+			if (panelSettings != null)
+			{
+				UnityEngine.Object.DestroyImmediate(panelSettings);
+			}
 			window = null;
 			root = null;
+			panelHost = null;
+			panelSettings = null;
 		}
 
 		// ── Helpers ───────────────────────────────────────────────────
@@ -396,6 +424,14 @@ namespace FishMMO.UnitTests
 				NameGeneratorWindow.Category.Cities,
 				NameGeneratorWindow.Category.Items,
 			};
+			// Cities take both: the race names the settlement and an optional biome colours it,
+			// defaulting to the race's home biome. Dungeons and points of interest are biome-only.
+			var expectBiome = new[]
+			{
+				NameGeneratorWindow.Category.Dungeons,
+				NameGeneratorWindow.Category.PointsOfInterest,
+				NameGeneratorWindow.Category.Cities,
+			};
 
 			foreach (NameGeneratorWindow.Category category in AllCategories)
 			{
@@ -405,7 +441,7 @@ namespace FishMMO.UnitTests
 
 				Assert.AreEqual(expectRace.Contains(category), raceVisible,
 					$"{category}: race row visibility is wrong.");
-				Assert.AreEqual(!expectRace.Contains(category), biomeVisible,
+				Assert.AreEqual(expectBiome.Contains(category), biomeVisible,
 					$"{category}: biome row visibility is wrong.");
 			}
 		}

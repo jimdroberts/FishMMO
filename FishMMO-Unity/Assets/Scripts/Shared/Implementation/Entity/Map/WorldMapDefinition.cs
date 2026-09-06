@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 
@@ -39,6 +40,41 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "WorldMapDefinition", menuName = "FishMMO/World Map Definition")]
 	public class WorldMapDefinition : ScriptableObject
 	{
+		/// <summary>
+		/// Folder a client build bakes every scene's definition and map image into. Build output,
+		/// not source: the build tool creates it before it builds addressables and removes it after
+		/// the build, and git ignores it. See <c>WorldMapBaker</c>.
+		/// </summary>
+		public const string BakedDirectory = "Assets/Prefabs/Shared/WorldMaps";
+
+		/// <summary>Asset path the bake writes a scene's definition to.</summary>
+		/// <param name="sceneName">The scene's name.</param>
+		public static string BakedAssetPath(string sceneName) => $"{BakedDirectory}/{SanitizeFileName(sceneName)}Map.asset";
+
+		/// <summary>Asset path the bake writes a scene's map image to.</summary>
+		/// <param name="sceneName">The scene's name.</param>
+		public static string BakedImagePath(string sceneName) => $"{BakedDirectory}/{SanitizeFileName(sceneName)}Map.png";
+
+		/// <summary>Makes a scene name safe to use as a file name.</summary>
+		private static string SanitizeFileName(string value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+			{
+				return "Unknown";
+			}
+
+			char[] characters = value.ToCharArray();
+			char[] invalid = Path.GetInvalidFileNameChars();
+			for (int i = 0; i < characters.Length; ++i)
+			{
+				if (Array.IndexOf(invalid, characters[i]) >= 0 || characters[i] == ' ')
+				{
+					characters[i] = '_';
+				}
+			}
+			return new string(characters);
+		}
+
 		/// <summary>
 		/// Name of the Unity scene this definition describes. Must match the scene file name,
 		/// because that is the key <see cref="WorldSceneDetailsCache.Scenes"/> uses.

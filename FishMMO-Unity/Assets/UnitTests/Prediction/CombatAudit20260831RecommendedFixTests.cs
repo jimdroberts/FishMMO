@@ -395,8 +395,8 @@ namespace FishMMO.UnitTests
 		{
 			string targetController = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Target/TargetController.cs");
-			LogAssert.IsTrue(targetController.Contains("MaybeReportTargetSelection(resolvedTarget);"),
-				"The owner's trace tick must report frame changes.");
+			LogAssert.IsTrue(targetController.Contains("MaybeReportTargetSelection(!ReferenceEquals(pinnedTarget, null) ? pinnedTarget : resolvedTarget);"),
+				"The owner's trace tick must report frame changes, preferring a pinned target over the hovered one.");
 			LogAssert.IsTrue(targetController.Contains("TARGET_SELECTION_SEND_INTERVAL"),
 				"Rate-limited — a mouse sweeping a crowd changes targets faster than the server has any use for.");
 

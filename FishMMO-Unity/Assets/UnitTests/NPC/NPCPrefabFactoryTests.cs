@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests.NPCs
 		private const string SCRATCH = GENERATED_ROOT + "/NPCPrefabFactory";
 		private const string ORC = "Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc.prefab";
 		private const string BANKER = "Assets/Prefabs/Shared/Entity/NPCs/Interactables/Human/Banker/HumanBanker.prefab";
-		private const string HUMAN = "Assets/Templates/Entity/Races/Human.asset";
+		private const string HUMAN = "Assets/Templates/Entity/Races/Humanoid/Human.asset";
 		private const string ARCHER = "Assets/Templates/Entity/NPCs/AI/Archetypes/Enemy - Archer.asset";
 
 		private bool generatedRootExisted;

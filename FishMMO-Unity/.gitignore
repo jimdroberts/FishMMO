@@ -68,3 +68,10 @@ crashlytics-build.properties
 *.aab
 *.unitypackage
 *.app
+
+# --- Baked world maps (definitions + images) and their addressable group: created by a client build
+#     (or FishMMO/World Map/Bake Maps) and removed after it (or FishMMO/World Map/Remove Baked Maps). ---
+/[Aa]ssets/Prefabs/Shared/WorldMaps/
+/[Aa]ssets/Prefabs/Shared/WorldMaps.meta
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientWorldMaps.asset*
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientWorldMaps_*

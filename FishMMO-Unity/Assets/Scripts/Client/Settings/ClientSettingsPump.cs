@@ -47,10 +47,6 @@ namespace FishMMO.Client
 				return;
 			}
 
-#if UNITY_SERVER
-			// A headless server has no player settings to write.
-			return;
-#else
 			/* Isolated. This is reached from ClientSettings.RequestSave, which is on the boot path
 			 * — ClientSettings.EnsureLoaded writes a default file on first launch — and an
 			 * exception escaping here would surface as "could not load the client configuration"
@@ -71,7 +67,6 @@ namespace FishMMO.Client
 				FishMMO.Logging.Log.Warning("ClientSettingsPump",
 					$"Could not start the settings write pump; settings will be written on close instead: {ex.Message}");
 			}
-#endif
 		}
 
 		/// <summary>Flushes the owed write once its quiet period has elapsed.</summary>

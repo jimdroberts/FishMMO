@@ -107,17 +107,21 @@ namespace FishMMO.Shared
 								$"{currentScene.name} declares MaxClients={worldSceneSettings.MaxClients}, " +
 								$"outside [1, {WorldSceneSettings.MaximumClientsPerScene}]. Using {sceneDetails.MaxClients}.");
 						}
-						sceneDetails.MapDefinition = worldSceneSettings.MapDefinition;
+						/* A hand-assigned definition on the component wins (two scenes sharing one map).
+						 * Otherwise the definition the client build baked for this scene, if the bake
+						 * is present: the build tool bakes, rebuilds this cache, builds, removes the
+						 * bake and rebuilds the cache again. Outside a client build this is null and
+						 * the world map falls back to a plain background. */
+						sceneDetails.MapDefinition = worldSceneSettings.MapDefinition != null
+							? worldSceneSettings.MapDefinition
+							: AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(WorldMapDefinition.BakedAssetPath(currentScene.name));
 
-						/* The definition wins, and the component is the fallback rather than the
-						 * other way round. The image moved into the definition; a scene that has
-						 * been baked since has a null component field and a filled definition,
-						 * and a scene that has not is the reverse. Preferring the definition means
-						 * a re-bake takes effect immediately, while an un-baked scene keeps the
-						 * image it always had. */
+						/* The component is where the loading image is authored; the bake copies it
+						 * into the definition. Preferring the definition keeps a hand-made shared
+						 * definition authoritative, and the component covers the un-baked case. */
 						sceneDetails.SceneTransitionImage =
-							worldSceneSettings.MapDefinition != null && worldSceneSettings.MapDefinition.SceneTransitionImage != null
-								? worldSceneSettings.MapDefinition.SceneTransitionImage
+							sceneDetails.MapDefinition != null && sceneDetails.MapDefinition.SceneTransitionImage != null
+								? sceneDetails.MapDefinition.SceneTransitionImage
 								: worldSceneSettings.SceneTransitionImage;
 					}
 

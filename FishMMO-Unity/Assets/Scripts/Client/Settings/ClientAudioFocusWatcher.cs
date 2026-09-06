@@ -37,12 +37,6 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Not created on a headless server: there is no window to lose focus, no listener to
-			 * mute, and no reason to add a per-frame-capable object to a process that renders
-			 * nothing. */
-#if UNITY_SERVER
-			return;
-#else
 			/* Isolated, for the reason ClientSettingsPump.Install documents. This runs from
 			 * ClientAudioSettings.ApplySaved, and ApplySaved is reached lazily from GetVolume —
 			 * which the options panel calls while building its audio row. An exception escaping
@@ -72,7 +66,6 @@ namespace FishMMO.Client
 				FishMMO.Logging.Log.Warning("ClientAudioFocusWatcher",
 					$"Could not install the focus watcher; audio will not mute when unfocused: {ex.Message}");
 			}
-#endif
 		}
 
 		/// <summary>Reports a focus change.</summary>

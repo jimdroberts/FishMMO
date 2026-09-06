@@ -33,13 +33,11 @@ namespace FishMMO.Client
 	/// </remarks>
 	public static class ClientSettingsBootstrap
 	{
-#if !UNITY_SERVER
 		/// <summary>Log channel for boot-phase settings messages.</summary>
 		private const string LogChannel = "ClientSettings";
 
 		/// <summary>True once the settings have been applied, so a second call is a no-op.</summary>
 		private static bool applied;
-#endif
 
 		/// <summary>
 		/// Loads the configuration store and arms the apply hook.
@@ -51,10 +49,6 @@ namespace FishMMO.Client
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
 		private static void Initialize()
 		{
-#if UNITY_SERVER
-			// A headless server has no player settings, no display and no audio.
-			return;
-#else
 			/* Reset explicitly. With "Enter Play Mode Options" configured to skip domain reload —
 			 * which this project supports — statics survive between play-mode sessions, and an
 			 * `applied` left true from the previous run would skip the whole of boot. */
@@ -80,10 +74,8 @@ namespace FishMMO.Client
 			 * would overwrite anything applied now. ApplyAfterFirstScene below is the backstop for
 			 * scenes that have no bootstrap system to raise the hook — the UI validation and unit
 			 * test scenes among them — and it runs late enough not to be overwritten. */
-#endif
 		}
 
-#if !UNITY_SERVER
 		/// <summary>
 		/// Applies the settings once the first scene is up, for builds and scenes with no
 		/// bootstrap system to raise the hook.
@@ -130,6 +122,5 @@ namespace FishMMO.Client
 
 			Log.Debug(LogChannel, "Client settings applied.");
 		}
-#endif
 	}
 }

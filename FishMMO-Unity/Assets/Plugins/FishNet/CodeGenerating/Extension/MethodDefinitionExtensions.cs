@@ -111,16 +111,31 @@ namespace FishNet.CodeGenerating.Extension
 
             foreach (ParameterDefinition pd in otherMd.Parameters)
             {
-                session.ImportReference(pd.ParameterType.CachedResolve(session));
+                /* FISHMMO EDIT (issue #229): the parameter type must be IMPORTED into this module, not
+                 * borrowed from otherMd's module. Cecil resolves a parameter's lazily-loaded custom
+                 * attributes through parameterType.Module, and the writer assigns the new Param row id
+                 * BEFORE it asks HasCustomAttributes. With a foreign type reference that lookup lands
+                 * in the OTHER assembly's CustomAttribute table at whatever row this parameter happens
+                 * to receive here; when that row is an `in` parameter over there, its [IsReadOnly]
+                 * attribute (constructor owned by the other module) is attached and the write fails with
+                 * "Member 'IsReadOnlyAttribute::.ctor()' is declared in another module and needs to be
+                 * imported". Whether the rows collide depends on the parameter counts of both assemblies,
+                 * which is why the failure appeared and vanished with unrelated code changes and differed
+                 * between platforms. */
+                TypeReference parameterTypeRef = session.ImportReference(pd.ParameterType);
                 int currentCount = thisMd.Parameters.Count;
                 string name = pd.Name + currentCount;
-                ParameterDefinition parameterDef = new(name, pd.Attributes, pd.ParameterType);
+                ParameterDefinition parameterDef = new(name, pd.Attributes, parameterTypeRef);
                 // Set any default values.
                 parameterDef.Constant = pd.Constant;
                 parameterDef.IsReturnValue = pd.IsReturnValue;
                 parameterDef.IsOut = pd.IsOut;
+                /* FISHMMO EDIT (issue #229): materialise the attribute list while the parameter still has
+                 * row id 0 (a guaranteed miss), so the writer can never lazily read a colliding row later.
+                 * Copied attributes are cloned with an imported constructor rather than shared. */
+                MonoFN.Collections.Generic.Collection<CustomAttribute> parameterAttributes = parameterDef.CustomAttributes;
                 foreach (CustomAttribute item in pd.CustomAttributes)
-                    parameterDef.CustomAttributes.Add(item);
+                    parameterAttributes.Add(new(session.ImportReference(item.Constructor), item.GetBlob()));
                 parameterDef.HasConstant = pd.HasConstant;
                 parameterDef.HasDefault = pd.HasDefault;
 
@@ -206,11 +221,12 @@ namespace FishNet.CodeGenerating.Extension
 
         public static MethodDefinition CreateCopy(this MethodDefinition copiedMd, CodegenSession session, string nameOverride = null, MethodAttributes? attributesOverride = null)
         {
-            session.ImportReference(copiedMd.ReturnType);
+            // FISHMMO EDIT (issue #229): use the imported return type; the original discarded the import result.
+            TypeReference returnTypeRef = session.ImportReference(copiedMd.ReturnType);
 
             MethodAttributes attr = attributesOverride.HasValue ? attributesOverride.Value : copiedMd.Attributes;
             string name = nameOverride == null ? copiedMd.Name : nameOverride;
-            MethodDefinition result = new(name, attr, copiedMd.ReturnType);
+            MethodDefinition result = new(name, attr, returnTypeRef);
             foreach (GenericParameter item in copiedMd.GenericParameters)
                 result.GenericParameters.Add(item);
 

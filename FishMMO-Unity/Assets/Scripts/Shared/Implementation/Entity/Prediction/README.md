@@ -444,6 +444,24 @@ damage) rather than a networking one.
 | Replay determinism | Cause a reconcile | All controllers replay from the reconcile tick with identical results |
 | Order enforcement | Log `Order` values in `Awake()` | Sorted ascending: 80, 85, 90, 93, 95, 100 |
 
+**FISHMMO EDIT in the FishNet weaver (`CodeGenerating/Extension/MethodDefinitionExtensions.CreateParameters`,
+`CreateCopy`, `TypeDefinitionExtensions.GetOrCreateMethodDefinition`, `GeneralHelper.CreateParameter`; issue #229).**
+For every predicted behaviour the weaver copies `NetworkBehaviour.Replicate_Replay_Start(uint replayTick)` into
+the user assembly. Upstream built the copied parameter around FishNet.Runtime's own `uint` type reference
+instead of an imported one. Cecil reads a parameter's custom attributes lazily through
+`ParameterType.Module`, and its writer assigns the parameter's new Param row id *before* it asks
+`HasCustomAttributes`, so the lookup went to FishNet.Runtime's attribute table at whatever row the copy
+received in `FishMMO.Shared`. Whenever that row was an `in` parameter over there, its `[IsReadOnly]`
+attribute (constructor owned by the other module) came along and the weave died with
+"Member 'IsReadOnlyAttribute::.ctor()' is declared in another module and needs to be imported" — logged
+by Unity as "Scripts have compiler errors" with no `error CS` anywhere. Whether the rows collide depends on
+the parameter counts of both assemblies, which is why unrelated edits (a new helper method, an Editor
+asmdef split) and different platforms flipped it. The edit imports the type, seals the attribute list
+while the row id is still 0, and clones any copied attribute with an imported constructor. Re-apply after a
+FishNet upgrade; the reproduction is a method with enough parameters to push the generated row onto one
+of FishNet.Runtime's `[IsReadOnly]` rows (Param rows of `Library/Bee/artifacts/*/FishNet.Runtime.dll`,
+the pre-weave build the resolver actually opens).
+
 ## System Architecture (Mermaid)
 
 The diagrams below describe the entire `Prediction/` folder — components, the unified data structs, delta-serializer paths, and the per-tick lifecycle. They are the canonical reference; ASCII diagrams further down repeat the same information for terminal-only viewers.

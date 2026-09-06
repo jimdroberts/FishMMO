@@ -6,7 +6,8 @@
         "FishNet.Runtime",
         "Unity.Addressables",
         "Unity.Addressables.Editor",
-        "Unity.ResourceManager"
+        "Unity.ResourceManager",
+        "FishMMO.Shared.Map.Editor"
     ],
     "includePlatforms": [
         "Editor"

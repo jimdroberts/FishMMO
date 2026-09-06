@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace FishMMO.Shared
 {
@@ -13,7 +14,12 @@ namespace FishMMO.Shared
 		/// Stable unique identifier for this teleporter destination. Auto-generated on first add.
 		/// Hidden from default inspector; displayed as readonly by TeleporterDestinationEditor.
 		/// </summary>
-		[SerializeField, HideInInspector]
+		/* FormerlySerializedAs is load-bearing: the field used to be "_destinationID" and every
+		 * world scene still carries it under that name. Without the alias Unity reads the value as
+		 * missing, and the next save of the scene writes an empty GUID - every teleporter aimed at
+		 * that destination then fails to resolve, silently. The world map bake re-saves all seven
+		 * world scenes, which is how the loss was caught. */
+		[SerializeField, HideInInspector, FormerlySerializedAs("_destinationID")]
 		private string destinationID;
 
 		/// <summary>

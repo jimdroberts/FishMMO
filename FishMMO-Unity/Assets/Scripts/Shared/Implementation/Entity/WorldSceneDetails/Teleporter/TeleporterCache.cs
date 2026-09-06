@@ -188,7 +188,7 @@ namespace FishMMO.Shared
 						if (string.IsNullOrEmpty(dest.DestinationID))
 						{
 							SerializedObject so = new SerializedObject(dest);
-							SerializedProperty idProp = so.FindProperty("_destinationID");
+							SerializedProperty idProp = so.FindProperty("destinationID");
 							idProp.stringValue = System.Guid.NewGuid().ToString();
 							so.ApplyModifiedProperties();
 							EditorUtility.SetDirty(dest);

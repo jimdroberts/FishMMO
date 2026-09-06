@@ -106,6 +106,12 @@ namespace FishMMO.UnitTests
 			var titles = Titles(400, new NameRequest { Race = "human", Gender = CharacterGender.Male, TitleType = TitleType.Honorific, AllowCompoundTitle = false });
 			foreach (string title in titles)
 			{
+				// An ordinal title ("Lord, Seventh of his Name") also contains " of "; it is the
+				// ordinal rule's business, covered by OnlyOrdinalTakingHonorifics_TakeAnOrdinal.
+				if (Regex.IsMatch(title, @", \w[\w-]* of (his|her|their) Name$"))
+				{
+					continue;
+				}
 				Match m = Regex.Match(title, @"^(.+?) of (.+)$");
 				if (!m.Success)
 				{
@@ -138,7 +144,12 @@ namespace FishMMO.UnitTests
 			var titles = Titles(300, new NameRequest { Race = "human", TitleType = TitleType.Legend, AllowCompoundTitle = false });
 			foreach (string title in titles.Where(t => t.StartsWith("Who ")))
 			{
-				Assert.IsFalse(Regex.IsMatch(title, @"\b(a|an|the) [a-z]"), $"Lower-case object in '{title}'.");
+				/* Only the {object} is under test. The "and {outcome}" composition appends a
+				 * lower-case clause by design ("Who Wrestled a Titan and returned with a prize"), so
+				 * the check stops at the conjunction. */
+				int outcome = title.IndexOf(" and ", StringComparison.Ordinal);
+				string head = outcome < 0 ? title : title.Substring(0, outcome);
+				Assert.IsFalse(Regex.IsMatch(head, @"\b(a|an|the) [a-z]"), $"Lower-case object in '{title}'.");
 			}
 		}
 

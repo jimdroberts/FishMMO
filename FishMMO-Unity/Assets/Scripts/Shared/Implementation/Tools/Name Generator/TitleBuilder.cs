@@ -104,6 +104,8 @@ namespace FishMMO.Shared.NameGeneration
 			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, sworn to {place}", 3),
 			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, pride of {place}", 3),
 			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, exiled from {place}", 3),
+			T(TitleType.Epithet, TitleRegister.Any, "{epithet}, {adjective}-{qualifier}", 6),
+			T(TitleType.Epithet, TitleRegister.Any, "the {adjective}-{qualifier} of {place}", 10),
 			T(TitleType.Rank, TitleRegister.Martial, "{rank}", 50),
 			T(TitleType.Rank, TitleRegister.Martial, "{rank:noplace} of {place}", 20),
 			T(TitleType.Rank, TitleRegister.Martial, "{ordinal} {rank}", 10),
