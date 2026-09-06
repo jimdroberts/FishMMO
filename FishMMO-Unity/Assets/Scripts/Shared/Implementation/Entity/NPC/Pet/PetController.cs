@@ -48,6 +48,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public PetMovementOrder MovementOrder { get; set; } = PetMovementOrder.Follow;
 
+		/// <inheritdoc />
+		public int AttackPriority { get; set; } = PetAttackPriority.Default;
+
 		[Header("ECA - Pet")]
 		[Tooltip("Triggers invoked when a pet is summoned.")]
 		[SerializeField]
@@ -199,6 +202,7 @@ namespace FishMMO.Shared
 
 			Stance = PetStance.Defensive;
 			MovementOrder = PetMovementOrder.Follow;
+			AttackPriority = PetAttackPriority.Default;
 		}
 
 #if !UNITY_SERVER
@@ -215,6 +219,7 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<PetRemoveBroadcast>(OnClientPetRemoveBroadcastReceived);
 				ClientManager.RegisterBroadcast<PetStanceBroadcast>(OnClientPetStanceBroadcastReceived);
 				ClientManager.RegisterBroadcast<PetMovementOrderBroadcast>(OnClientPetMovementOrderBroadcastReceived);
+				ClientManager.RegisterBroadcast<PetAttackPriorityBroadcast>(OnClientPetAttackPriorityBroadcastReceived);
 			}
 		}
 
@@ -231,6 +236,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<PetRemoveBroadcast>(OnClientPetRemoveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PetStanceBroadcast>(OnClientPetStanceBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PetMovementOrderBroadcast>(OnClientPetMovementOrderBroadcastReceived);
+				ClientManager.UnregisterBroadcast<PetAttackPriorityBroadcast>(OnClientPetAttackPriorityBroadcastReceived);
 			}
 		}
 
@@ -247,10 +253,12 @@ namespace FishMMO.Shared
 
 				Stance = msg.Stance;
 				MovementOrder = msg.MovementOrder;
+				AttackPriority = PetAttackPriority.Normalize(msg.AttackPriority);
 				if (Pet != null)
 				{
 					Pet.Stance = msg.Stance;
 					Pet.MovementOrder = msg.MovementOrder;
+					Pet.AttackPriority = AttackPriority;
 				}
 
 				IPetController.OnPetSummoned?.Invoke(Pet);
@@ -281,6 +289,19 @@ namespace FishMMO.Shared
 			if (Pet != null)
 			{
 				Pet.Stance = msg.Stance;
+			}
+			IPetController.OnPetOrdersChanged?.Invoke(Pet);
+		}
+
+		/// <summary>
+		/// The server confirmed (or corrected) the attack priority.
+		/// </summary>
+		public void OnClientPetAttackPriorityBroadcastReceived(PetAttackPriorityBroadcast msg, Channel channel)
+		{
+			AttackPriority = PetAttackPriority.Normalize(msg.Priority);
+			if (Pet != null)
+			{
+				Pet.AttackPriority = AttackPriority;
 			}
 			IPetController.OnPetOrdersChanged?.Invoke(Pet);
 		}

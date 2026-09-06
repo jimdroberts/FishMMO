@@ -463,7 +463,22 @@ namespace FishMMO.Shared
 		/// Applies one tick of replicated input. Called from <c>KCCPlayer.OnReplicate</c>, once per
 		/// replicated or replayed tick — not per frame, despite the upstream sample's name for it.
 		/// </summary>
-		public void SetInputs(ref KCCInputReplicateData inputs)
+		public void SetInputs(ref KCCInputReplicateData inputs) => SetInputs(ref inputs, controlsSuppressed: false);
+
+		/// <summary>
+		/// Applies a tick's replicated input, optionally with the controls taken away.
+		/// </summary>
+		/// <remarks>
+		/// With <paramref name="controlsSuppressed"/> set the move vector is zeroed, no jump,
+		/// crouch or sprint is honoured and a jump requested on the previous tick is forgotten,
+		/// but the facing is left where it was and the motor is still driven this tick. That is
+		/// what a dead or incapacitated character needs: gravity and the ground keep acting on
+		/// it, the player just cannot steer it. The virtual camera is still recorded so the aim
+		/// origin is current the moment control returns.
+		/// </remarks>
+		/// <param name="inputs">This tick's replicated input.</param>
+		/// <param name="controlsSuppressed">True to ignore the player's controls this tick.</param>
+		public void SetInputs(ref KCCInputReplicateData inputs, bool controlsSuppressed)
 		{
 			// Validate camera rotation to prevent clients from sending arbitrary
 			// rotations to manipulate movement direction. A hacked client could
@@ -498,6 +513,15 @@ namespace FishMMO.Shared
 				cameraPlanarDirection = Vector3.ProjectOnPlane(inputs.CameraRotation * Vector3.up, Motor.CharacterUp).normalized;
 			}
 			Quaternion cameraPlanarRotation = Quaternion.LookRotation(cameraPlanarDirection, Motor.CharacterUp);
+
+			if (controlsSuppressed)
+			{
+				moveInputVector = Vector3.zero;
+				jumpRequested = false;
+				crouchInputDown = false;
+				sprintInputDown = false;
+				return;
+			}
 
 			switch (CurrentCharacterState)
 			{

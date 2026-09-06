@@ -28,6 +28,9 @@ namespace FishMMO.Shared
 		/// <summary>The aggression controller that tracks per-character threat scores and handles target selection.</summary>
 	public AggressionController Controller { get; private set; }
 
+		/// <summary>The NPC this table belongs to.</summary>
+		public ICharacter Character => character;
+
 		/// <summary>
 		/// Per-NPC timer for mid-combat target re-evaluation. Decremented by the
 		/// attacking state; reset when re-evaluation fires.

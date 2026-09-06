@@ -263,6 +263,15 @@ namespace FishMMO.Shared
 				}
 				sweepKeys.Add(key);
 
+				/* A corpse is not an enemy. A dead player stays spawned until it respawns and a
+				 * dead NPC through its whole decay, so without this the sweep kept returning
+				 * them: the brain entered the attacking state, every picker refused the corpse,
+				 * and it dropped back to idle — once per sweep, for as long as the body lay there. */
+				if (!AITargetSelection.IsValidTarget(def))
+				{
+					continue;
+				}
+
 				// Check faction alliance and only add enemies.
 				if (def.TryGet(out IFactionController defenderFactionController) &&
 					defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy)

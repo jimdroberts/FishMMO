@@ -1451,8 +1451,16 @@ namespace FishMMO.Shared
 				 * (mouse-driven) target, which is exactly why it cannot live in CanActivate. It
 				 * stops the cast bar and resource prediction from starting for a cast the server's
 				 * raycast will find nothing for — a required target that is missing, or a target
-				 * clearly beyond the ability's reach. */
-				if (cachedTargetController != null)
+				 * clearly beyond the ability's reach.
+				 *
+				 * Players only. An NPC has no mouse: its controller's Current is whatever the LAST
+				 * cast's acquisition trace left behind, which is stale the moment the brain
+				 * switches targets or the old target moves. Reading it here refused a ranged NPC's
+				 * every activation once its previous victim was out of reach — and since only a
+				 * successful cast rewrites Current, nothing could ever clear the refusal. The brain
+				 * has already decided reach for its live target (AIAbilityReach) before it calls
+				 * Activate; the server's own trace in ResolveTargetAndSpawn is the authority. */
+				if (cachedTargetController != null && PlayerCharacter != null)
 				{
 					Transform target = cachedTargetController.Current.Target;
 					if (validatedAbility.Template.RequiresTarget && target == null)

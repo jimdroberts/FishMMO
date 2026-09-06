@@ -26,7 +26,43 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The character that owns this pet.
 		/// </summary>
-		public ICharacter PetOwner;
+		/// <remarks>
+		/// Setting it also declares the pair to <see cref="AggressionDispatcher"/>, so that from
+		/// then on threat against either is threat against both: hit the owner and the pet
+		/// answers, hit the pet and the owner answers. Clearing it (dismissal, death, pool reset)
+		/// removes the link again. Any owner qualifies; an NPC handed a pet gets the same rule.
+		/// </remarks>
+		public ICharacter PetOwner
+		{
+			get => petOwner;
+			set
+			{
+				if (ReferenceEquals(petOwner, value))
+				{
+					return;
+				}
+
+				petOwner = value;
+				if (value != null)
+				{
+					AggressionDispatcher.LinkPet(this, value);
+				}
+				else
+				{
+					AggressionDispatcher.UnlinkPet(this);
+				}
+			}
+		}
+
+		/// <summary>Backing field for <see cref="PetOwner"/>.</summary>
+		private ICharacter petOwner;
+
+		/// <summary>
+		/// The packed order the attack command tries its target choices in; see
+		/// <see cref="PetAttackPriority"/>. Held on the pet as well as the owner's controller so
+		/// the server reads it from the creature it is commanding.
+		/// </summary>
+		public int AttackPriority = PetAttackPriority.Default;
 
 		/// <summary>
 		/// How willing this pet is to start a fight on its own.
@@ -208,6 +244,7 @@ namespace FishMMO.Shared
 			PetAbilityTemplate = null;
 			Stance = PetStance.Defensive;
 			MovementOrder = PetMovementOrder.Follow;
+			AttackPriority = PetAttackPriority.Default;
 
 			/* Replace rather than Clear. PetAbilityIDs is assigned by reference when a pet is
 			 * restored from the database, so clearing it here would empty the caller's list too —

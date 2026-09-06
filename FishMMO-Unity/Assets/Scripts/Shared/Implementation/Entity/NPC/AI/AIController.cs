@@ -1362,6 +1362,22 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </summary>
 		/// <param name="attacker">The character that generated the first threat event.</param>
+		/// <summary>
+		/// True while this NPC cannot be hurt. An immortal NPC has no reason to target anything, so
+		/// neither the enemy sweep nor an incoming hit acquires a target for it.
+		/// </summary>
+		/// <remarks>
+		/// Acquisition only. Both callers already stand down inside the attacking state, so a boss
+		/// that turns immortal for a phase mid-fight keeps its target and keeps fighting; what this
+		/// stops is an idle training dummy or invulnerable quest giver answering a stray hit by
+		/// chasing the player across the map. <see cref="TargetController"/> applies the same rule
+		/// to the acquisition trace a cast runs through.
+		/// </remarks>
+		private bool IsImmortal =>
+			Character != null &&
+			Character.TryGet(out ICharacterDamageController ownDamage) &&
+			ownDamage.Immortal;
+
 		public void OnThreatReceived(ICharacter attacker)
 		{
 			if (attacker == null || AttackingState == null)
@@ -1369,6 +1385,10 @@ namespace FishMMO.Shared
 
 			// Already in combat or returning home — don't interrupt.
 			if (CurrentState == AttackingState || CurrentState == ReturnHomeState)
+				return;
+
+			// An immortal NPC has no reason to target anything.
+			if (IsImmortal)
 				return;
 
 			// A passive pet does not fight back; that is the whole meaning of the stance.
@@ -1404,6 +1424,11 @@ namespace FishMMO.Shared
 			 * being attacked; letting this generic sweep run as well would make every pet
 			 * effectively aggressive regardless of what its owner ordered. */
 			if (Character is Pet)
+			{
+				return;
+			}
+			// An immortal NPC has no reason to target anything.
+			if (IsImmortal)
 			{
 				return;
 			}
@@ -2513,6 +2538,12 @@ namespace FishMMO.Shared
 			ClearPath();
 			Stop();
 			AggressionState?.Clear();
+
+			/* The corpse path calls this instead of exiting the attacking state, and the state's
+			 * Exit is where a combat slot is normally given back. Without this an NPC killed
+			 * mid-attack kept its ring slot around its victim for the whole of its decay: the
+			 * pack still counted the corpse as an attacker and spread itself around a body. */
+			ReleaseCombatSlots();
 		}
 	}
 }

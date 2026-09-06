@@ -16,6 +16,9 @@ namespace FishMMO.Shared
 
 		/// <summary>The pet's current movement order.</summary>
 		public PetMovementOrder MovementOrder;
+
+		/// <summary>The packed attack priority the server holds for this pet; see <c>PetAttackPriority</c>.</summary>
+		public int AttackPriority;
 	}
 
 	/// <summary>
@@ -59,17 +62,48 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Client-to-server: send the pet at the owner's current target.
+	/// Client-to-server: send the pet at the owner's target.
 	/// </summary>
 	/// <remarks>
-	/// Carries no target ID on purpose. The server raycasts from the owner's replicated camera
-	/// transform, in the owner's own physics scene and clamped to
-	/// <see cref="FishMMO.Shared.TargetController.MAX_TARGET_DISTANCE"/>, exactly as the ability
-	/// system resolves what a cast hits. A client can therefore point but cannot name an
-	/// arbitrary entity — including one it cannot see or reach — as its pet's victim.
+	/// <para>
+	/// Carries the owner's pinned and hovered targets separately, each as a NetworkObject id or
+	/// 0, because the owner's attack priority (see <c>PetAttackPriority</c>) may try them in
+	/// either order. Both are claims, not orders: the server accepts one only if it resolves to
+	/// a spawned character in the owner's own scene, within
+	/// <see cref="FishMMO.Shared.TargetController.MAX_TARGET_DISTANCE"/> of the owner, and passes
+	/// every pet-target rule (alive, hostile by faction, not the owner or the pet). A client can
+	/// therefore point but cannot name an arbitrary entity — including one it cannot see or
+	/// reach — as its pet's victim.
+	/// </para>
+	/// <para>
+	/// Sent in the message rather than read from the server's copy of the target frame because
+	/// that copy is rate-limited and de-duplicated on the way up, so the click can beat it by up
+	/// to a report interval. The server still uses its own copy for the "current" step when the
+	/// message names nothing, and the highest-threat step needs nothing from the client.
+	/// </para>
 	/// </remarks>
 	public struct PetAttackBroadcast : IBroadcast
 	{
+		/// <summary>The NetworkObject id of the owner's pinned target, or 0.</summary>
+		public int PinnedTargetObjectID;
+
+		/// <summary>The NetworkObject id of the owner's hovered target, or 0.</summary>
+		public int HoveredTargetObjectID;
+	}
+
+	/// <summary>
+	/// Client-to-server: set the order the pet attack command tries its target choices in.
+	/// Also sent server-to-client to confirm the authoritative order.
+	/// </summary>
+	/// <remarks>
+	/// The value is a packed <c>PetAttackPriority</c>. The server rejects anything that is not a
+	/// permutation of the three steps and confirms what it holds, so the panel always shows the
+	/// order actually in force.
+	/// </remarks>
+	public struct PetAttackPriorityBroadcast : IBroadcast
+	{
+		/// <summary>The requested (or, from the server, the authoritative) packed order.</summary>
+		public int Priority;
 	}
 
 	/// <summary>

@@ -41,6 +41,13 @@ namespace FishMMO.Shared.Core
 		PetMovementOrder MovementOrder { get; set; }
 
 		/// <summary>
+		/// The packed order a pet attack command tries its target choices in; see
+		/// <c>PetAttackPriority</c>. Mirrored on this controller so the panel has something to
+		/// bind to between a pet being dismissed and re-summoned.
+		/// </summary>
+		int AttackPriority { get; set; }
+
+		/// <summary>
 		/// Raised on the server when this controller's owner is damaged by a hostile character,
 		/// so a defensive pet can come to their aid.
 		/// </summary>

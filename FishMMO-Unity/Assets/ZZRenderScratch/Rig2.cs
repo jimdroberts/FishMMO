@@ -229,6 +229,7 @@ namespace FishMMO.RenderScratch
 		public Pet Pet { get; set; }
 		public PetStance Stance { get; set; } = PetStance.Defensive;
 		public PetMovementOrder MovementOrder { get; set; } = PetMovementOrder.Follow;
+		public int AttackPriority { get; set; } = PetAttackPriority.Default;
 
 		public event Action<IPetController, ICharacter> OnOwnerAttacked;
 

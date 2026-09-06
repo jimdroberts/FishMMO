@@ -310,6 +310,8 @@ namespace FishMMO.Shared
 		{
 			TryResolvePendingPlatform();
 
+			bool controlsSuppressed = false;
+
 			/* Movement gate. IsInCombat is intentionally excluded — players move freely during
 			 * combat; only teleportation is blocked (see CharacterSystem.Connection.cs).
 			 *
@@ -338,10 +340,15 @@ namespace FishMMO.Shared
 				 * after one death. Resource state is reconciled every tick, so both sides evaluate
 				 * this identically — the same substitution AbilityController.CanStartActivation
 				 * makes for the same reason. */
+				/* Not an early return any more. Returning here skipped the motor step as well as
+				 * the input, so a character killed (or stunned) in the air hung where it was until
+				 * it revived. The controls are what death takes away, not gravity: the input is
+				 * neutralised inside SetInputs below and the motor still simulates, so the body
+				 * falls and lands on its own. Ragdoll can replace the fall later. */
 				if (CharacterIncapacitation.IsIncapacitated(character) ||
 					IsHealthDepleted(character))
 				{
-					return;
+					controlsSuppressed = true;
 				}
 
 				/* Server-only, because these are server bookkeeping the client cannot evaluate.
@@ -405,7 +412,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			CharacterController.SetInputs(ref kccInput);
+			CharacterController.SetInputs(ref kccInput, controlsSuppressed);
 
 			float deltaTime = (float)base.TimeManager.TickDelta;
 

@@ -89,6 +89,7 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 ### Threat
 
 - `AggressionDispatcher` takes **one** global subscription for the process. Damage dispatches by dictionary lookup on the defender — O(1) regardless of NPC count. Previously every NPC subscribed individually, so one sword swing invoked one delegate per NPC alive.
+- **A pet and its owner share threat.** `Pet.PetOwner` declares the pair to the dispatcher (`LinkPet`/`UnlinkPet`), and a hit on either is delivered as threat to both — hit the owner and the pet engages, hit the pet and the owner engages (an NPC owner through its own aggression state). Keyed on characters, so an NPC given a pet gets the rule with no further wiring. The attacker is never a sharer, so an owner hitting its own pet generates nothing. Credit runs the other way as well: a pet's hit is recorded against its owner too, for the full amount, so an NPC struck by a summon hates the summoner and a player cannot shed threat by cycling pets.
 - Threat decay and staleness share a single tick-advanced `Clock`, so expiry means "this many seconds of AI time without an event" rather than wall-clock time that disagreed with the decay whenever LOD throttled the NPC.
 - `ApplyTauntAction` and `ApplyThreatAction` are ECA actions that let abilities generate threat: a taunt guarantees top threat rather than adding a flat bonus a long fight has already outgrown.
 

@@ -58,7 +58,10 @@ Movement orders are expressed as orders, not by writing the AI's combat target. 
 ## Features
 
 - Pet follow, stay, attack, stance, summon (warp), and release commands via network broadcasts with full validation
-- Attack orders read the owner's own `ITargetController` rather than trusting a target ID from the message, then re-validate the target as alive, not the owner, not the pet, and hostile by faction
+- Attack orders try three choices in the order the owner set (`PetAttackPriority`, default pinned → current → highest threat): the click carries the pinned and hovered frame ids separately, each verified — spawned character, owner's scene, within `TargetController.MAX_TARGET_DISTANCE` of the owner — with the server's own copy of the reported frame backing the current step, and the highest-threat step resolved from the threat tables (`AggressionDispatcher.TryFindHighestThreatAgainst`, which with pet-credited threat is what the owner and pet have attacked the most); whatever a step yields is re-validated as alive, not the owner, not the pet, and hostile by faction, and the first valid one wins
+- The attack priority is session state on the owner's `IPetController` like the stance (`PetAttackPriorityBroadcast` request/confirm, refused unless a permutation of the three steps, applied at summon and sent with `PetAddBroadcast`); the client remembers it in its settings under `PetAttackPriority` and replays it on every summon, so it survives sessions with no database change
+- Death is a full reset: a player's pet is dismissed from the kill event through the same `DismissPet` path as a voluntary release
+- A pet and its owner share threat both ways (see the AI README): hit either and both are threatened; a pet's hits are credited to its owner as well
 - Stance changes reject values outside the enum rather than casting a hostile byte straight in; dropping to `Passive` recalls the pet and interrupts its cast
 - Defensive and Aggressive pets answer an attack on their owner via `IPetController.OnOwnerAttacked`, a server-side hook raised from the global damage event
 - Pet ability learning: template IDs restored from the database and abilities granted by the `PetAbilityTemplate` are both taught to the pet's `IAbilityController` on spawn, and captured back before persistence

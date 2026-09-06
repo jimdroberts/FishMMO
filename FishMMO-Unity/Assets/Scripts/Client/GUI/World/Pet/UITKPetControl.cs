@@ -1,4 +1,6 @@
-﻿using UnityEngine.UIElements;
+﻿using UnityEngine;
+using UnityEngine.UIElements;
+using FishNet.Object;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishNet.Transporting;
@@ -53,6 +55,36 @@ namespace FishMMO.Client
 
 		/// <summary>Name of the attack command button.</summary>
 		private const string ATTACK_BUTTON_NAME = "pet-attack";
+
+		/// <summary>Name of the button that opens and closes the attack priority rows.</summary>
+		private const string PRIORITY_BUTTON_NAME = "pet-priority";
+
+		/// <summary>Name of the container holding the attack priority rows.</summary>
+		private const string PRIORITY_PANEL_NAME = "pet-priority-panel";
+
+		/// <summary>Name prefix of the label naming the step in a priority row; the slot index follows.</summary>
+		private const string PRIORITY_LABEL_PREFIX = "pet-priority-label-";
+
+		/// <summary>Name prefix of the button that moves a priority row up; the slot index follows.</summary>
+		private const string PRIORITY_UP_PREFIX = "pet-priority-up-";
+
+		/// <summary>Settings key the attack priority is kept under between sessions.</summary>
+		private const string PRIORITY_SETTING_KEY = "PetAttackPriority";
+
+		/// <summary>The priority rows' container.</summary>
+		private VisualElement priorityPanel;
+
+		/// <summary>One label per priority slot, first slot first.</summary>
+		private readonly Label[] priorityLabels = new Label[PetAttackPriority.StepCount];
+
+		/// <summary>One move-up button per priority slot, first slot first.</summary>
+		private readonly Button[] priorityUpButtons = new Button[PetAttackPriority.StepCount];
+
+		/// <summary>The order in force, packed; see <see cref="PetAttackPriority"/>.</summary>
+		private int attackPriority = PetAttackPriority.Default;
+
+		/// <summary>Scratch for unpacking <see cref="attackPriority"/>.</summary>
+		private readonly PetAttackTarget[] priorityOrder = new PetAttackTarget[PetAttackPriority.StepCount];
 
 		/// <summary>Name of the passive stance button.</summary>
 		private const string STANCE_PASSIVE_NAME = "pet-stance-passive";
@@ -153,6 +185,28 @@ namespace FishMMO.Client
 			{
 				attack.clicked += OnAttackWithPet;
 			}
+
+			Button priority = root.Q<Button>(PRIORITY_BUTTON_NAME);
+			if (priority != null)
+			{
+				priority.clicked += OnTogglePriorityPanel;
+			}
+			priorityPanel = root.Q(PRIORITY_PANEL_NAME);
+			if (priorityPanel != null)
+			{
+				priorityPanel.style.display = DisplayStyle.None;
+			}
+			for (int i = 0; i < PetAttackPriority.StepCount; ++i)
+			{
+				int slot = i;
+				priorityLabels[i] = root.Q<Label>(PRIORITY_LABEL_PREFIX + i);
+				priorityUpButtons[i] = root.Q<Button>(PRIORITY_UP_PREFIX + i);
+				if (priorityUpButtons[i] != null)
+				{
+					priorityUpButtons[i].clicked += () => OnPriorityMoveUp(slot);
+				}
+			}
+			attackPriority = LoadStoredPriority();
 
 			passiveButton = root.Q<Button>(STANCE_PASSIVE_NAME);
 			if (passiveButton != null)
@@ -279,6 +333,28 @@ namespace FishMMO.Client
 			}
 
 			ApplyStanceHighlight();
+			ApplyPriorityRows();
+		}
+
+		/// <summary>
+		/// Renders the attack priority rows from the order in force: first slot on top, and the
+		/// top row's move-up button disabled since there is nowhere for it to go.
+		/// </summary>
+		private void ApplyPriorityRows()
+		{
+			if (!PetAttackPriority.TryDecode(attackPriority, priorityOrder))
+			{
+				attackPriority = PetAttackPriority.Default;
+				PetAttackPriority.TryDecode(attackPriority, priorityOrder);
+			}
+			for (int i = 0; i < PetAttackPriority.StepCount; ++i)
+			{
+				if (priorityLabels[i] != null)
+				{
+					priorityLabels[i].text = (i + 1) + ". " + PetAttackPriority.Describe(priorityOrder[i]);
+				}
+				priorityUpButtons[i]?.SetEnabled(i > 0);
+			}
 		}
 
 		/// <summary>
@@ -334,6 +410,10 @@ namespace FishMMO.Client
 
 			petStance = petController.Stance;
 			petMovementOrder = petController.MovementOrder;
+			/* The server's confirmation is the order in force; it wins over the local copy and
+			 * is what gets remembered, so the panel and the settings never disagree with it. */
+			attackPriority = PetAttackPriority.Normalize(petController.AttackPriority);
+			StorePriority(attackPriority);
 			ApplyPetState();
 		}
 
@@ -359,6 +439,7 @@ namespace FishMMO.Client
 			petName = pet.GameObject != null ? pet.GameObject.name.Replace("(Clone)", string.Empty) : "Pet";
 			petStance = pet.Stance;
 			petMovementOrder = pet.MovementOrder;
+			ReplayStoredPriority(pet);
 
 			if (pet.CharacterNameLabel != null)
 			{
@@ -526,8 +607,10 @@ namespace FishMMO.Client
 		/// Orders the pet to attack the player's current target.
 		/// </summary>
 		/// <remarks>
-		/// The target is not sent: the server reads the player's own target controller, so the
-		/// client cannot nominate something it is not actually targeting.
+		/// Names the target frame — the pinned target when one is held, else whatever is hovered —
+		/// so the pet goes at what the player is looking at in the HUD rather than at whatever the
+		/// camera centre happens to trace. The server verifies the claim before acting on it; see
+		/// <see cref="PetAttackBroadcast"/>.
 		/// </remarks>
 		public void OnAttackWithPet()
 		{
@@ -535,7 +618,125 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			Client.Broadcast(new PetAttackBroadcast(), Channel.Reliable);
+			int pinned = 0;
+			int hovered = 0;
+			if (Character != null && Character.TryGet(out ITargetController targetController))
+			{
+				pinned = ResolveCharacterObjectId(targetController.PinnedTarget);
+				hovered = ResolveCharacterObjectId(targetController.Current.Target);
+			}
+			Client.Broadcast(new PetAttackBroadcast()
+			{
+				PinnedTargetObjectID = pinned,
+				HoveredTargetObjectID = hovered,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// The NetworkObject id of a targeted character, or 0 when the transform is nothing, not
+		/// spawned, or not a character. A signpost is worth hovering but never worth sending a
+		/// pet at.
+		/// </summary>
+		private static int ResolveCharacterObjectId(Transform target)
+		{
+			if (target == null ||
+				!target.TryGetComponent(out NetworkObject targetObject) ||
+				!targetObject.IsSpawned ||
+				target.GetComponent<ICharacter>() == null)
+			{
+				return 0;
+			}
+			return targetObject.ObjectId;
+		}
+
+		/// <summary>Shows or hides the attack priority rows.</summary>
+		public void OnTogglePriorityPanel()
+		{
+			if (priorityPanel == null)
+			{
+				return;
+			}
+			bool open = priorityPanel.style.display == DisplayStyle.None;
+			priorityPanel.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+			if (open)
+			{
+				ApplyPriorityRows();
+			}
+		}
+
+		/// <summary>
+		/// Moves the step in <paramref name="slot"/> one place earlier, remembers the new order
+		/// and asks the server to adopt it.
+		/// </summary>
+		/// <remarks>
+		/// Applied locally at once so the rows respond to the click; the server's confirmation
+		/// then arrives through <see cref="PetController_OnPetOrdersChanged"/> and, being the
+		/// order in force, overwrites whatever is shown. The local copy is stored regardless of
+		/// whether a pet is out, because the preference is the player's and the pet is only its
+		/// current audience — it is replayed on the next summon.
+		/// </remarks>
+		public void OnPriorityMoveUp(int slot)
+		{
+			attackPriority = PetAttackPriority.MoveUp(attackPriority, slot);
+			StorePriority(attackPriority);
+			ApplyPriorityRows();
+			RequestPriority(attackPriority);
+		}
+
+		/// <summary>Asks the server to adopt <paramref name="priority"/> for the current pet.</summary>
+		private void RequestPriority(int priority)
+		{
+			if (Character == null || !Character.TryGet(out IPetController _))
+			{
+				return;
+			}
+			Client.Broadcast(new PetAttackPriorityBroadcast() { Priority = priority }, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Pushes the remembered order to the server for a newly bound pet whose server-side
+		/// order differs — the server holds it per session and the settings file across them.
+		/// </summary>
+		private void ReplayStoredPriority(Pet pet)
+		{
+			if (pet == null || Character == null || !Character.TryGet(out IPetController petController) ||
+				!ReferenceEquals(petController.Pet, pet))
+			{
+				return;
+			}
+			int stored = LoadStoredPriority();
+			attackPriority = stored;
+			if (PetAttackPriority.Normalize(petController.AttackPriority) != stored)
+			{
+				RequestPriority(stored);
+			}
+		}
+
+		/// <summary>The order remembered in the client settings, or the default.</summary>
+		private static int LoadStoredPriority()
+		{
+			if (Configuration.GlobalSettings == null)
+			{
+				return PetAttackPriority.Default;
+			}
+			Configuration.GlobalSettings.TryGetInt(PRIORITY_SETTING_KEY, out int stored, PetAttackPriority.Default);
+			return PetAttackPriority.Normalize(stored);
+		}
+
+		/// <summary>Remembers <paramref name="priority"/> in the client settings.</summary>
+		private static void StorePriority(int priority)
+		{
+			if (Configuration.GlobalSettings == null)
+			{
+				return;
+			}
+			Configuration.GlobalSettings.TryGetInt(PRIORITY_SETTING_KEY, out int stored, -1);
+			if (stored == priority)
+			{
+				return;
+			}
+			Configuration.GlobalSettings.Set(PRIORITY_SETTING_KEY, priority.ToString());
+			Configuration.GlobalSettings.Save();
 		}
 
 		/// <summary>Requests the passive stance.</summary>

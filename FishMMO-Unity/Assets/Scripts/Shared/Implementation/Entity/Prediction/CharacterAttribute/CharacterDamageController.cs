@@ -1317,6 +1317,14 @@ namespace FishMMO.Shared
 			if (base.IsServerStarted && Character.TryGet(out IAbilityController ac))
 				ac.Cancel();
 
+			/* Death is a full reset: every cooldown goes with it. Resurrection is therefore a
+			 * way to wipe a long cooldown, deliberately — the cost of dying is what discourages
+			 * it. Server-authoritative: the owner learns of it through the next cooldown
+			 * reconcile, whose restore raises OnRemoveCooldown for every entry that vanished, so
+			 * the hotkey bar clears without a separate message. */
+			if (base.IsServerStarted && Character.TryGet(out ICooldownController cooldowns))
+				cooldowns.Clear();
+
 			if (Character.TryGet(out ICharacterAnimationController anim))
 				anim.TriggerDeath();
 

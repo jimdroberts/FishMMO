@@ -83,6 +83,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			LoadPet = 5,
 			Attack = 6,
 			Stance = 7,
+			AttackPriority = 8,
 		}
 
 		/// <summary>
@@ -115,6 +116,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<PetAttackBroadcast>(OnPetAttackBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<PetStanceBroadcast>(OnPetStanceBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PetAttackPriorityBroadcast>(OnPetAttackPriorityBroadcastReceived, true);
 
 			// Ability events
 			AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
@@ -126,6 +128,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterSystem.OnDespawnCharacter += CharacterSystem_OnDespawnCharacter;
 				characterSystem.OnPetKilled += CharacterSystem_OnPetKilled;
 			}
+
+			ICharacterDamageController.OnKilled -= DamageController_OnKilled;
+			ICharacterDamageController.OnKilled += DamageController_OnKilled;
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
@@ -158,6 +163,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<PetAttackBroadcast>(OnPetAttackBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<PetStanceBroadcast>(OnPetStanceBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PetAttackPriorityBroadcast>(OnPetAttackPriorityBroadcastReceived);
 
 			// Ability events
 			AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
@@ -169,6 +175,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;
 				characterSystem.OnPetKilled -= CharacterSystem_OnPetKilled;
 			}
+
+			ICharacterDamageController.OnKilled -= DamageController_OnKilled;
 
 			if (Server.DataContainerRegistry.TryGet<IPetSystemRuntimeData>(out var runtimeData))
 			{
@@ -435,25 +443,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Record the dismissal before the reference is dropped. Snapshots the pet's
-				// abilities on the way past, so anything granted at summon time from the
-				// PetAbilityTemplate survives rather than being silently lost at the next login.
-				PersistPetDismissed(player, petController.Pet);
-
-				if (petController.Pet.NetworkObject != null &&
-					petController.Pet.NetworkObject.IsSpawned)
-				{
-					ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
-				}
-				petController.Pet.PetOwner = null;
-				petController.Pet = null;
-				petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
-
-				Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
-
-				// Server-side dismiss triggers — see InvokePetTriggers for why the client-side
-				// raise in PetController is not enough on its own.
-				InvokePetTriggers(petController.Character, petController.OnPetDismissTriggers, null);
+				DismissPet(player, petController, conn);
 			}
 			finally
 			{
@@ -462,14 +452,89 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles pet attack broadcast: sends the pet at whatever the owner is currently targeting.
+		/// Dismisses a player's pet: persists the dismissal, despawns the body, unlinks both
+		/// sides, tells the owner and fires the dismiss triggers. The one path every dismissal
+		/// takes, whether the player asked for it or death forced it.
+		/// </summary>
+		/// <param name="owner">The pet's owner.</param>
+		/// <param name="petController">The owner's pet controller, holding a live pet.</param>
+		/// <param name="conn">The owner's connection, or null when there is none to tell.</param>
+		private void DismissPet(IPlayerCharacter owner, IPetController petController, NetworkConnection conn)
+		{
+			Pet pet = petController.Pet;
+			if (pet == null)
+			{
+				return;
+			}
+
+			// Record the dismissal before the reference is dropped. Snapshots the pet's
+			// abilities on the way past, so anything granted at summon time from the
+			// PetAbilityTemplate survives rather than being silently lost at the next login.
+			PersistPetDismissed(owner, pet);
+
+			if (pet.NetworkObject != null &&
+				pet.NetworkObject.IsSpawned)
+			{
+				ServerManager.Despawn(pet.NetworkObject, DespawnType.Pool);
+			}
+			pet.PetOwner = null;
+			petController.Pet = null;
+			petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
+
+			if (conn != null)
+			{
+				Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
+			}
+
+			// Server-side dismiss triggers — see InvokePetTriggers for why the client-side
+			// raise in PetController is not enough on its own.
+			InvokePetTriggers(petController.Character, petController.OnPetDismissTriggers, null);
+		}
+
+		/// <summary>
+		/// Dismisses the pet of a player who has just died.
 		/// </summary>
 		/// <remarks>
-		/// The message carries no target. The server resolves one itself, by raycasting from the
-		/// owner's replicated camera transform in the owner's own physics scene — the same way
-		/// the ability system decides what a cast hits — so a client can point but cannot name a
-		/// victim. Whatever comes back is then re-validated: alive, in the same scene, not the
-		/// owner, not the pet, and hostile by faction.
+		/// Death is a full reset for the character, and a pet is part of that: without this the
+		/// summon outlived its owner, leashed to a corpse and still fighting whatever had killed
+		/// it. Routed through <see cref="DismissPet"/> so it persists and notifies exactly as a
+		/// voluntary release does. A pet's own death is <see cref="CharacterSystem_OnPetKilled"/>'s
+		/// concern, and NPC deaths are not this handler's at all.
+		/// </remarks>
+		private void DamageController_OnKilled(ICharacter killer, ICharacter victim)
+		{
+			IPlayerCharacter owner = victim as IPlayerCharacter;
+			if (owner == null ||
+				!owner.TryGet(out IPetController petController) ||
+				petController.Pet == null)
+			{
+				return;
+			}
+
+			NetworkConnection conn = owner.Owner != null && owner.Owner.IsActive ? owner.Owner : null;
+			DismissPet(owner, petController, conn);
+		}
+
+		/// <summary>
+		/// Handles pet attack broadcast: sends the pet at the owner's target.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The pet goes at the first of three choices that resolves to a valid target, tried in
+		/// the order the owner set (<see cref="PetAttackPriority"/>; by default pinned, then
+		/// current, then highest threat). The pinned and hovered ids arrive in the click, the
+		/// server's own copy of the reported frame backs the "current" step (the click can beat
+		/// the report by up to an interval), and the highest-threat step is resolved here from
+		/// the threat tables. There is no raycast down the camera: that sent the pet at whatever
+		/// was under the crosshair, which is not a target the player chose.
+		/// </para>
+		/// <para>
+		/// Every route is a claim until verified. A frame id must resolve to a spawned character
+		/// in the owner's own scene within <see cref="TargetController.MAX_TARGET_DISTANCE"/> of
+		/// the owner, and whatever any route produces is then re-validated: alive, in the pet's
+		/// scene, not the owner, not the pet, and hostile by faction. A client can therefore point
+		/// at, or name, only something it could actually reach.
+		/// </para>
 		/// </remarks>
 		private void OnPetAttackBroadcastReceived(NetworkConnection conn, PetAttackBroadcast msg, Channel channel)
 		{
@@ -501,46 +566,108 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				/* Re-resolve the target rather than reading whatever is already sitting in
-				 * ITargetController.Current.
-				 *
-				 * Current is only ever written on the server by AbilityController's activation
-				 * path — TargetController.Update runs off Camera.main and so does nothing on a
-				 * headless server. Reading it directly therefore meant "attack" did nothing at
-				 * all for a player who had not cast an ability, and sent the pet at whatever
-				 * that player's LAST cast happened to raycast through for everyone else. The
-				 * pet-attack button was, in practice, non-functional.
-				 *
-				 * The camera transform below is the same replicated, already-sanitised input the
-				 * ability system aims with (KCCController.SetInputs validates the rotation), and
-				 * the raycast is the server's own, in the character's own physics scene, clamped
-				 * to TargetController.MAX_TARGET_DISTANCE. So the client still cannot name a
-				 * target: it can only point, and the server decides what is under the pointer. */
-				Vector3 cameraPosition = player.CharacterController != null
-					? player.CharacterController.VirtualCameraPosition
-					: player.Transform.position;
-				Quaternion cameraRotation = player.CharacterController != null
-					? player.CharacterController.VirtualCameraRotation
-					: player.Transform.rotation;
+				/* The owner's attack priority decides the order the three choices are tried in.
+				 * Each step is a claim until verified: a frame id must resolve to a spawned
+				 * character in the owner's scene within targeting range, the threat step is
+				 * range-bound the same way, and whatever a step produces must pass the
+				 * pet-target rules. The first step that yields a valid target wins; a step that
+				 * yields nothing, or an invalid something, hands over to the next. */
+				PetAttackTarget[] order = new PetAttackTarget[PetAttackPriority.StepCount];
+				if (!PetAttackPriority.TryDecode(petController.AttackPriority, order))
+				{
+					PetAttackPriority.TryDecode(PetAttackPriority.Default, order);
+				}
 
-				TargetInfo targetInfo = targetController.UpdateTarget(
-					cameraPosition,
-					cameraRotation * Vector3.forward,
-					TargetController.MAX_TARGET_DISTANCE);
+				ICharacter chosen = null;
+				for (int i = 0; i < order.Length && chosen == null; ++i)
+				{
+					ICharacter candidate = null;
+					switch (order[i])
+					{
+						case PetAttackTarget.Pinned:
+							TryResolveFrameTarget(player, msg.PinnedTargetObjectID, out candidate);
+							break;
 
-				Transform targetTransform = targetInfo.Target;
-				if (targetTransform == null)
+						case PetAttackTarget.Current:
+							/* What the click named, else what the server already holds from the
+							 * frame report — which the click can beat by up to a report interval. */
+							if (!TryResolveFrameTarget(player, msg.HoveredTargetObjectID, out candidate) &&
+								targetController.HasClientSelectedTarget)
+							{
+								TryResolveFrameTarget(player, targetController.ClientSelectedTargetObjectId, out candidate);
+							}
+							break;
+
+						case PetAttackTarget.HighestThreat:
+							/* Whatever hates the owner most. An NPC's threat toward the owner is
+							 * built from the owner's hits on it and, because a pet's hits are
+							 * credited to its owner, from the pet's hits too — so this is the thing
+							 * the owner and pet have been attacking. */
+							AggressionDispatcher.TryFindHighestThreatAgainst(player,
+								c => IsWithinTargetingRange(player, c) && IsValidPetTarget(petController, player, c),
+								out candidate);
+							break;
+					}
+
+					if (candidate != null && IsValidPetTarget(petController, player, candidate))
+					{
+						chosen = candidate;
+					}
+				}
+
+				if (chosen != null)
+				{
+					CommandPetAttack(petController.Pet, chosen);
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Handles an attack-priority change request from the owner.
+		/// </summary>
+		/// <remarks>
+		/// Session state on the owner's controller, like the stance: the client keeps the
+		/// preference in its own settings and replays it on every summon, so nothing here touches
+		/// the database. Anything that is not a permutation of the three steps is refused and the
+		/// order in force is confirmed back, so a bad request cannot leave the panel out of step.
+		/// </remarks>
+		private void OnPetAttackPriorityBroadcastReceived(NetworkConnection conn, PetAttackPriorityBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AttackPriority, out long guardKey))
+			{
+				return;
+			}
+			try
+			{
+				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
+				if (petController == null)
 				{
 					return;
 				}
 
-				ICharacter target = targetTransform.GetComponent<ICharacter>();
-				if (!IsValidPetTarget(petController, player, target))
+				if (PetAttackPriority.IsValid(msg.Priority))
 				{
-					return;
+					petController.AttackPriority = msg.Priority;
+					if (petController.Pet != null)
+					{
+						petController.Pet.AttackPriority = msg.Priority;
+					}
 				}
 
-				CommandPetAttack(petController.Pet, target);
+				Server.NetworkWrapper.Broadcast(conn, new PetAttackPriorityBroadcast() { Priority = petController.AttackPriority }, true, Channel.Reliable);
 			}
 			finally
 			{
@@ -606,6 +733,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="owner">The pet's owner.</param>
 		/// <param name="target">The candidate target.</param>
 		/// <returns>True if the pet may attack the candidate.</returns>
+		/// <summary>
+		/// Resolves a claimed target-frame id to a character the owner could actually be
+		/// targeting: spawned, in the owner's own scene, and within targeting range of the owner.
+		/// </summary>
+		/// <remarks>
+		/// The range check is the part the frame report deliberately leaves to the point of use:
+		/// the report is stored without one so a moving value does not flap, and this is the point
+		/// of use. Distance is measured from the owner rather than the pet — the frame is the
+		/// owner's, and it is the owner who must be able to see what it names.
+		/// </remarks>
+		/// <param name="owner">The pet's owner.</param>
+		/// <param name="objectId">The claimed NetworkObject id, or 0 for none.</param>
+		/// <param name="target">The resolved character.</param>
+		/// <returns>True when the id names a character the owner could be targeting.</returns>
+		private static bool TryResolveFrameTarget(IPlayerCharacter owner, int objectId, out ICharacter target)
+		{
+			target = null;
+			if (objectId == 0 ||
+				owner == null ||
+				owner.NetworkObject == null ||
+				owner.NetworkObject.NetworkManager == null ||
+				!owner.NetworkObject.NetworkManager.ServerManager.Objects.Spawned.TryGetValue(objectId, out NetworkObject targetObject) ||
+				targetObject == null ||
+				targetObject.gameObject.scene != owner.GameObject.scene)
+			{
+				return false;
+			}
+
+			ICharacter character = targetObject.GetComponent<ICharacter>();
+			if (character == null || character.Transform == null || owner.Transform == null)
+			{
+				return false;
+			}
+
+			if (!IsWithinTargetingRange(owner, character))
+			{
+				return false;
+			}
+
+			target = character;
+			return true;
+		}
+
+		/// <summary>
+		/// True when <paramref name="candidate"/> is within <see cref="TargetController.MAX_TARGET_DISTANCE"/>
+		/// of <paramref name="owner"/>: the bound on how far an owner can send its pet.
+		/// </summary>
+		private static bool IsWithinTargetingRange(IPlayerCharacter owner, ICharacter candidate)
+		{
+			if (owner == null || candidate == null || owner.Transform == null || candidate.Transform == null)
+			{
+				return false;
+			}
+			float maxDistance = TargetController.MAX_TARGET_DISTANCE;
+			return (candidate.Transform.position - owner.Transform.position).sqrMagnitude <= maxDistance * maxDistance;
+		}
+
 		private static bool IsValidPetTarget(IPetController petController, IPlayerCharacter owner, ICharacter target)
 		{
 			if (target == null || target == owner)
@@ -809,6 +993,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pet.Stance = petController.Stance;
 			pet.MovementOrder = PetMovementOrder.Follow;
 			petController.MovementOrder = PetMovementOrder.Follow;
+			petController.AttackPriority = PetAttackPriority.Normalize(petController.AttackPriority);
+			pet.AttackPriority = petController.AttackPriority;
 
 			/* Build the ability list before the spawn: Pet.OnStartServer teaches whatever is in
 			 * PetAbilityIDs, and OnStartServer runs inside ServerManager.Spawn below. */
@@ -878,6 +1064,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				ID = pet.ID,
 				Stance = pet.Stance,
+				AttackPriority = pet.AttackPriority,
 				MovementOrder = pet.MovementOrder,
 			}, true, Channel.Reliable);
 

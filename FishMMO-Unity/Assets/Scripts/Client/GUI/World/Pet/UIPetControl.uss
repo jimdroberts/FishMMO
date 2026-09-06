@@ -119,3 +119,37 @@
     background-color: rgba(120, 190, 255, 0.28);
     border-color: rgba(150, 210, 255, 0.85);
 }
+
+/*
+    Attack priority: three rows the player reorders with a move-up arrow, opened by the
+    Priority command. Layout only; every colour comes from the theme classes on the elements.
+*/
+.pet-priority {
+    margin-top: 6px;
+    padding-top: 4px;
+}
+
+.pet-priority__title {
+    font-size: 10px;
+    -unity-font-style: bold;
+    margin-bottom: 2px;
+}
+
+.pet-priority__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+}
+
+.pet-priority__label {
+    font-size: 10px;
+    flex-grow: 1;
+}
+
+.pet-priority__up {
+    width: 24px;
+    height: 18px;
+    font-size: 9px;
+    flex-shrink: 0;
+}
