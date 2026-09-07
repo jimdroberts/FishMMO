@@ -86,6 +86,12 @@ namespace FishMMO.Client
 		/// <summary>Tooltip label/description color.</summary>
 		public readonly Color TooltipLabel;
 
+		/// <summary>Scrollbar rail colour.</summary>
+		public readonly Color ScrollTrack;
+
+		/// <summary>Scrollbar thumb colour.</summary>
+		public readonly Color ScrollThumb;
+
 		/// <summary>
 		/// True when at least one colour was actually present in configuration.
 		/// </summary>
@@ -118,6 +124,8 @@ namespace FishMMO.Client
 			"Stamina",
 			"Crosshair",
 			"TooltipLabel",
+			"ScrollTrack",
+			"ScrollThumb",
 		};
 
 		/// <summary>
@@ -164,6 +172,8 @@ namespace FishMMO.Client
 			Stamina      = Parse(configuration, 7, out bool p7);  any |= p7;
 			Crosshair    = Parse(configuration, 8, out bool p8);  any |= p8;
 			TooltipLabel = Parse(configuration, 9, out bool p9);  any |= p9;
+			ScrollTrack  = Parse(configuration, 10, out bool p10); any |= p10;
+			ScrollThumb  = Parse(configuration, 11, out bool p11); any |= p11;
 
 			IsOverridden = any;
 		}

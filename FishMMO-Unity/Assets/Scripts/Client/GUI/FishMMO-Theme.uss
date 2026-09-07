@@ -590,26 +590,107 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   7. SCROLLVIEW
-   Overrides Unity's internal scroller child IDs.
+   7. SCROLLBARS
+   Every scroller in the client, not only those inside .fish-scroll.
    ═══════════════════════════════════════════════════════════ */
+
+/*
+    Unity's default runtime theme paints a scroller as a pale track with a
+    white thumb between two grey arrow buttons, and that is what showed through
+    on every list. The rules that were meant to recolour it addressed
+    #unity-tracker as a direct child of the scroller, but a Scroller nests the
+    tracker two levels down — scroller > slider > drag-container > tracker — so
+    they matched nothing and the default theme won by default.
+
+    These use Unity's own class names with descendant selectors, scoped under
+    .unity-scroller so the .fish-slider rules for option sliders keep their own
+    look. A slim rail: no arrow buttons, a rounded thumb that fills the rail's
+    width, and the slider stretched over the space the buttons used to hold.
+    UITKThemeManager writes the track and thumb colours inline when the player
+    overrides them, so the rest colours here are what "Scrollbar Track" and
+    "Scrollbar Thumb" reset to.
+*/
+.unity-scroller {
+    background-color: var(--clear);
+    border-width: 0;
+    margin: 0;
+}
+
+.unity-scroller--vertical {
+    width: 8px;
+    min-width: 8px;
+}
+
+.unity-scroller--horizontal {
+    height: 8px;
+    min-height: 8px;
+}
+
+.unity-scroller > .unity-scroller__low-button,
+.unity-scroller > .unity-scroller__high-button {
+    display: none;
+}
+
+.unity-scroller > .unity-scroller__slider {
+    margin: 0;
+    min-width: 0;
+    min-height: 0;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+.unity-scroller .unity-base-slider__tracker {
+    background-color: var(--abyss-700);
+    border-width: 0;
+    border-radius: 4px;
+    margin: 0;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: auto;
+}
+
+/*
+    The slider writes the thumb's length and offset inline as the content
+    scrolls; only its thickness is decided here, and it fills the rail.
+*/
+.unity-scroller .unity-base-slider__dragger {
+    background-color: var(--brand-500);
+    border-width: 0;
+    border-radius: 4px;
+    margin: 0;
+}
+
+.unity-scroller--vertical .unity-base-slider__dragger {
+    left: 0;
+    right: 0;
+    width: auto;
+}
+
+.unity-scroller--horizontal .unity-base-slider__dragger {
+    top: 0;
+    bottom: 0;
+    height: auto;
+}
+
+.unity-scroller .unity-base-slider__dragger:hover {
+    background-color: var(--brand-400);
+}
+
+.unity-scroller .unity-base-slider__dragger:active {
+    background-color: var(--brand-300);
+}
+
+.unity-scroller .unity-base-slider__dragger-border {
+    display: none;
+}
 
 .fish-scroll > #unity-content-container {
     padding-right: 4px;
-}
-
-.fish-scroll > #unity-vertical-scroller {
-    width: 6px;
-    background-color: var(--abyss-900);
-}
-
-.fish-scroll > #unity-vertical-scroller > #unity-tracker {
-    background-color: var(--abyss-400);
-    border-radius: 3px;
-}
-
-.fish-scroll > #unity-vertical-scroller > #unity-tracker:hover {
-    background-color: var(--brand-500);
 }
 
 .fish-scroll > #unity-horizontal-scroller {

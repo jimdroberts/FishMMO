@@ -285,6 +285,8 @@ namespace FishMMO.Client
 			"Stamina Bar",
 			"Crosshair",
 			"Tooltip Text",
+			"Scrollbar Track",
+			"Scrollbar Thumb",
 		};
 
 		// ── Tab state ───────────────────────────────────────────────
@@ -2160,6 +2162,8 @@ namespace FishMMO.Client
 				case "Stamina":      return theme.Stamina;
 				case "Crosshair":    return theme.Crosshair;
 				case "TooltipLabel": return theme.TooltipLabel;
+				case "ScrollTrack":  return theme.ScrollTrack;
+				case "ScrollThumb":  return theme.ScrollThumb;
 				default:             return Color.white;
 			}
 		}

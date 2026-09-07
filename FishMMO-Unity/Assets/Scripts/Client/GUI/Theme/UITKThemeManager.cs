@@ -55,6 +55,15 @@ namespace FishMMO.Client
 		private const string CLASS_LABEL        = "fish-label";
 		private const string CLASS_BUTTON       = "fish-button";
 
+		/*
+		 * Scrollbars are Unity's own elements and carry Unity's class names, not the theme's.
+		 * The track and thumb classes are shared with every Slider in the client, so they are only
+		 * ever looked up INSIDE a scroller — an option slider keeps its .fish-slider look.
+		 */
+		private const string CLASS_SCROLLER     = "unity-scroller";
+		private const string CLASS_SCROLL_TRACK = "unity-base-slider__tracker";
+		private const string CLASS_SCROLL_THUMB = "unity-base-slider__dragger";
+
 		/// <summary>
 		/// Roots currently under theme control, keyed to keep re-registration idempotent.
 		/// </summary>
@@ -176,6 +185,9 @@ namespace FishMMO.Client
 				// Tooltip
 				SetBackground(root, CLASS_TOOLTIP, theme, "Background");
 				SetColor(root, CLASS_TT_BODY, theme, "TooltipLabel");
+
+				// Scrollbars
+				SetScrollbarColours(root, theme);
 			}
 			catch (Exception ex)
 			{
@@ -216,6 +228,40 @@ namespace FishMMO.Client
 
 			root.Query(className: CLASS_CROSSHAIR).ForEach(e =>
 				e.style.unityBackgroundImageTintColor = StyleKeyword.Null);
+
+			SetScrollbarColours(root, null);
+		}
+
+		/// <summary>
+		/// Writes the scrollbar track and thumb colours onto every scroller under a root, or
+		/// clears them when the theme is null or does not set them.
+		/// </summary>
+		/// <param name="root">The panel's root visual element.</param>
+		/// <param name="theme">The theme to read from, or null to clear.</param>
+		private static void SetScrollbarColours(VisualElement root, UITKTheme theme)
+		{
+			/* Declared with a value rather than as `out Color track` in the condition. An out
+			 * variable is only definitely assigned when the call it belongs to actually runs, and
+			 * the null check short-circuits ahead of it, so the compiler rejects every later read
+			 * of it — CS0165 — no matter what the flags say. */
+			Color track = default;
+			Color thumb = default;
+			bool hasTrack = theme != null && TryResolve(theme, "ScrollTrack", out track);
+			bool hasThumb = theme != null && TryResolve(theme, "ScrollThumb", out thumb);
+
+			root.Query(className: CLASS_SCROLLER).ForEach(scroller =>
+			{
+				scroller.Query(className: CLASS_SCROLL_TRACK).ForEach(e =>
+				{
+					if (hasTrack) { e.style.backgroundColor = track; }
+					else { e.style.backgroundColor = StyleKeyword.Null; }
+				});
+				scroller.Query(className: CLASS_SCROLL_THUMB).ForEach(e =>
+				{
+					if (hasThumb) { e.style.backgroundColor = thumb; }
+					else { e.style.backgroundColor = StyleKeyword.Null; }
+				});
+			});
 		}
 
 		/// <summary>
@@ -245,6 +291,8 @@ namespace FishMMO.Client
 				case "Stamina":      color = theme.Stamina;      return true;
 				case "Crosshair":    color = theme.Crosshair;    return true;
 				case "TooltipLabel": color = theme.TooltipLabel; return true;
+				case "ScrollTrack":  color = theme.ScrollTrack;  return true;
+				case "ScrollThumb":  color = theme.ScrollThumb;  return true;
 				default:                                          return false;
 			}
 		}
