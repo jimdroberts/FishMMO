@@ -102,6 +102,19 @@ namespace FishMMO.UnitTests.PlayMode
 				Assert.AreEqual(0L, harness.EdgeReplayDivergences,
 					$"RTT {rtt}ms: replays diverged from the live state they replaced — the platforms are " +
 					"no longer rolling back with the rider (issue #228).");
+
+				/* The carry itself, with the real motor. The brain stands still on the deck for
+				 * most of each crossing and the sim compares the rider's displacement to the deck's
+				 * on every standing tick. Zero slips is the contract; a floor on standing ticks
+				 * guards against a vacuous pass where the brain never stood at all. The shipped
+				 * carry failed this on every tick: SetPlatformVelocity fed BaseVelocity, and the
+				 * controller overwrote BaseVelocity before the move. */
+				Assert.AreEqual(0, harness.CarrySlips,
+					$"RTT {rtt}ms: a rider standing still on the deck did not move with it on {harness.CarrySlips} " +
+					"ticks — the motor is not conveying the platform velocity (issue #228).");
+				Assert.GreaterOrEqual(harness.CarryTicks, 30,
+					$"RTT {rtt}ms: only {harness.CarryTicks} standing ticks were measured — the rider is not " +
+					"actually standing on the moving deck, so the carry contract was not exercised.");
 				Assert.Less(harness.MaxPlatformPhaseError, 0.05f,
 					$"RTT {rtt}ms: client and server platforms diverged in phase at matched ticks — the payload " +
 					"catch-up contract is broken.");

@@ -419,32 +419,35 @@ namespace FishMMO.Shared
 			Vector3 platformVelocity = Vector3.zero;
 			if (currentPlatform != null)
 			{
-				/* Use the platform's deterministically-cached per-tick velocity rather than
-				 * differencing its transform locally. FishNet does not guarantee a deterministic
-				 * tick order across NetworkObjects, so reading the platform's transform directly
-				 * could observe an updated or pre-update position depending on whether the platform
-				 * stepped first.
+				/* Use the platform's per-tick velocity ring rather than differencing its transform:
+				 * FishNet promises no tick order across NetworkObjects, so this rider cannot know
+				 * whether the platform has already stepped the tick being simulated.
 				 *
-				 * Ask for the velocity of the tick being simulated, not the platform's present one.
-				 * The platform never replays — it has no owner, so no reconcile reaches a client and
-				 * nothing rolls it back — so during a reconcile that replays k ticks every replayed
-				 * tick would otherwise inherit the same frozen present-tick value where the server
-				 * used each tick's own, bending the replayed path at every direction reversal. The
-				 * ring covers 64 ticks; beyond that, or on the live tick, the present value is the
-				 * right answer anyway. */
-				if (!currentPlatform.TryGetVelocityForTick(input.GetTick(), out platformVelocity))
+				 * Client only. The ring is keyed in the CLIENT tick domain (LocalTick live,
+				 * ClientReplayTick during a replay), which is the domain this input's tick is in on
+				 * the owner. On the server the input tick is the owning client's unsynchronised
+				 * counter and the ring is keyed by server ticks, so the same lookup there is an
+				 * arbitrary hit or a miss — and the server never replays, so its live value is the
+				 * right answer. A ring miss on the client (window longer than 64 ticks) also falls
+				 * back to the live value. */
+				if (base.IsServerStarted ||
+					!currentPlatform.TryGetVelocityForTick(input.GetTick(), out platformVelocity))
 				{
 					platformVelocity = currentPlatform.LastCompletedTickVelocity;
 				}
 			}
 			Motor.SetPlatformVelocity(platformVelocity);
 
-			/* The two numbers that decide whether a rider is actually carried. The motor adds the
-			 * platform velocity only when the platform is moving UP into the character (dot > 0.5)
-			 * or the character is stably grounded on it -- and a platform travelling horizontally
-			 * has a dot near zero, so a rider who is not stably grounded is not carried at all and
-			 * stands still while the deck slides away. Zero velocity produces the same symptom for
-			 * a different reason, so both are named. */
+			/* The two numbers that decide whether a rider is actually carried. The motor conveys
+			 * the platform velocity only when the platform is moving UP into the character
+			 * (dot > 0.5) or the character is stably grounded on it -- and a platform travelling
+			 * horizontally has a dot near zero, so a rider who is not stably grounded is not
+			 * carried at all and stands still while the deck slides away. Zero velocity produces
+			 * the same symptom for a different reason, so both are named. (What this cannot tell
+			 * you is whether the velocity SURVIVES to the move -- it did not, for every build before
+			 * issue #228: it was added to BaseVelocity and overwritten by UpdateVelocity on the same
+			 * tick. The carry now rides KCC's attached-rigidbody seam; see the FISHMMO EDIT in
+			 * KinematicCharacterMotor.UpdatePhase1.) */
 			if (currentPlatform != null)
 			{
 				Log.Debug("KCCPlayer",

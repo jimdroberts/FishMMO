@@ -1,3 +1,4 @@
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -233,20 +234,24 @@ namespace FishMMO.UnitTests
 		/// all and so paid nothing for it, but nothing distinguished them from a deliberate choice.
 		/// </para>
 		/// <para>
-		/// The twenty-eighth was <c>MovingPlatform</c>, which <i>is</i> predicted. It can run with
-		/// forwarding off because <c>KCCPlatform.PerformReplicate</c> is autonomous and
-		/// deterministic — every peer advances it by the same fixed <c>TickDelta</c> step and snaps
-		/// onto each waypoint — and because its spawn payload now carries position and goal index,
-		/// which is what a client arriving mid-cycle needs.
+		/// The twenty-eighth was <c>MovingPlatform</c>, which <i>is</i> predicted — and since issue
+		/// #228 it is the one kind of scene object REQUIRED to forward. The argument that keeps
+		/// forwarding off everywhere else is about relaying each owner's input to every observer;
+		/// an ownerless platform has no input, its replicate is an empty struct, and the only cost
+		/// is a delta-encoded reconcile per observer. That reconcile is what lets FishNet roll the
+		/// platform back and replay it with the rider. Run with forwarding off, the client platform
+		/// was dead-reckoned from a one-shot payload and riders sank through it.
 		/// </para>
 		/// </remarks>
 		[Test]
-		public void NoSceneNetworkObject_ShipsWithStateForwardingOn()
+		public void OnlyPlatforms_ShipWithStateForwardingOn()
 		{
+			string platformGuid = ScriptGuid("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
 			string[] scenes = UnityEditor.AssetDatabase.FindAssets("t:Scene", new[] { "Assets" });
-			StringBuilder report = new StringBuilder();
-			int total = 0;
+			StringBuilder forwardedOthers = new StringBuilder();
+			StringBuilder unforwardedPlatforms = new StringBuilder();
 			int scanned = 0;
+			int platforms = 0;
 
 			foreach (string guid in scenes)
 			{
@@ -258,27 +263,135 @@ namespace FishMMO.UnitTests
 				}
 
 				scanned++;
-				int count = 0;
-				foreach (string line in File.ReadAllLines(full))
+				Dictionary<string, string> docs = SceneDocuments(full);
+				foreach (KeyValuePair<string, string> entry in docs)
 				{
-					if (line.Trim() == "_enableStateForwarding: 1")
+					int flag = ForwardingFlag(entry.Value);
+					if (flag < 0)
 					{
-						count++;
+						continue; // Not a NetworkObject.
 					}
-				}
-				if (count > 0)
-				{
-					total += count;
-					report.Append($"\n  {path}: {count}");
+					bool isPlatform = GameObjectHasScript(docs, entry.Value, platformGuid);
+					if (isPlatform)
+					{
+						platforms++;
+						if (flag != 1)
+						{
+							unforwardedPlatforms.Append($"\n  {path}: NetworkObject &{entry.Key}");
+						}
+					}
+					else if (flag == 1)
+					{
+						forwardedOthers.Append($"\n  {path}: NetworkObject &{entry.Key}");
+					}
 				}
 			}
 
 			TestContext.WriteLine($"MEASURE scenes scanned for state forwarding: {scanned}");
-			TestContext.WriteLine($"MEASURE scene NetworkObjects with forwarding on: {total}");
-			LogAssert.AreEqual(0, total,
-				"State forwarding is off everywhere in this project; observers are fed by " +
-				"NetworkTransform and per-controller broadcasts. These scene objects still have it " +
-				"on:" + report);
+			TestContext.WriteLine($"MEASURE scene platforms found: {platforms}");
+			LogAssert.IsTrue(forwardedOthers.Length == 0,
+				"State forwarding is off for everything but platforms; observers are fed by " +
+				"NetworkTransform and per-controller broadcasts. These scene objects have it on:" + forwardedOthers);
+			LogAssert.IsTrue(unforwardedPlatforms.Length == 0,
+				"Every KCCPlatform must forward state, or FishNet never reconciles it to clients and " +
+				"the client copy runs open-loop from its spawn payload (issue #228). These do not:" + unforwardedPlatforms);
+			LogAssert.IsTrue(platforms >= 1,
+				"No KCCPlatform was found in any scene — the shipped MovingPlatform is gone or this " +
+				"scan no longer recognises it, and the forwarding contract is unproven.");
+		}
+
+		/// <summary>Every YAML document in a scene, keyed by its <c>&amp;fileID</c>.</summary>
+		private static Dictionary<string, string> SceneDocuments(string fullPath)
+		{
+			Dictionary<string, string> docs = new Dictionary<string, string>();
+			string text = File.ReadAllText(fullPath);
+			int start = text.IndexOf("--- !u!", StringComparison.Ordinal);
+			while (start >= 0)
+			{
+				int next = text.IndexOf("\n--- !u!", start + 1, StringComparison.Ordinal);
+				string doc = next < 0 ? text.Substring(start) : text.Substring(start, next - start);
+				int amp = doc.IndexOf('&');
+				int eol = doc.IndexOf('\n');
+				if (amp > 0 && eol > amp)
+				{
+					// "&123 stripped" on prefab-instance documents; the id is the first token.
+					string id = doc.Substring(amp + 1, eol - amp - 1).Trim().Split(' ')[0];
+					docs[id] = doc;
+				}
+				start = next < 0 ? -1 : next + 1;
+			}
+			return docs;
+		}
+
+		/// <summary>The serialized <c>_enableStateForwarding</c> value, or -1 when the document is not a NetworkObject.</summary>
+		private static int ForwardingFlag(string doc)
+		{
+			const string key = "_enableStateForwarding: ";
+			foreach (string raw in doc.Split('\n'))
+			{
+				string line = raw.Trim();
+				if (line.StartsWith(key, StringComparison.Ordinal) && int.TryParse(line.Substring(key.Length), out int value))
+				{
+					return value;
+				}
+			}
+			return -1;
+		}
+
+		/// <summary>The fileID a <c>field: {fileID: N}</c> line references, or null.</summary>
+		private static string FieldRef(string doc, string field)
+		{
+			string key = field + ": {fileID: ";
+			int at = doc.IndexOf(key, StringComparison.Ordinal);
+			if (at < 0)
+			{
+				return null;
+			}
+			int from = at + key.Length;
+			int end = doc.IndexOfAny(new[] { '}', ',' }, from);
+			return end < 0 ? null : doc.Substring(from, end - from).Trim();
+		}
+
+		/// <summary>True when the GameObject a component document belongs to carries a MonoBehaviour of the given script guid.</summary>
+		private static bool GameObjectHasScript(Dictionary<string, string> docs, string componentDoc, string scriptGuid)
+		{
+			string goId = FieldRef(componentDoc, "m_GameObject");
+			if (goId == null || !docs.TryGetValue(goId, out string go))
+			{
+				return false;
+			}
+			foreach (string raw in go.Split('\n'))
+			{
+				string line = raw.Trim();
+				const string key = "- component: {fileID: ";
+				if (!line.StartsWith(key, StringComparison.Ordinal))
+				{
+					continue;
+				}
+				string id = line.Substring(key.Length).TrimEnd('}').Trim();
+				if (docs.TryGetValue(id, out string component) && component.Contains("guid: " + scriptGuid))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The asset guid of a script, read from its .meta.</summary>
+		private static string ScriptGuid(string scriptPath)
+		{
+			string meta = Path.Combine(Directory.GetCurrentDirectory(), scriptPath + ".meta");
+			LogAssert.IsTrue(File.Exists(meta), $"{scriptPath}.meta not found.");
+			foreach (string raw in File.ReadAllLines(meta))
+			{
+				string line = raw.Trim();
+				if (line.StartsWith("guid: ", StringComparison.Ordinal))
+				{
+					return line.Substring(6).Trim();
+				}
+			}
+			LogAssert.IsTrue(false, $"{scriptPath}.meta carries no guid.");
+			return null;
 		}
 
 		/// <summary>

@@ -382,14 +382,24 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void Platform_ClientTick_DoesNotRelyOnTheReplicate()
+		public void Platform_ClientTick_RunsTheReplicate_BecauseItForwardsState()
 		{
+			/* Inverted by issue #228. This test used to pin the OPPOSITE: with forwarding off,
+			 * FishNet's Replicate_NonAuthoritative returns before invoking the body on a client,
+			 * so the client had to step the platform by hand — which also meant no reconcile ever
+			 * rolled it back. The platform now forwards state (an ownerless object relays no
+			 * input, so the scale argument against forwarding does not apply), and the client's
+			 * platform is moved by the replicate FishNet invokes and corrected by its reconcile. */
 			string path = Path.Combine(Application.dataPath, "Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
 			string source = File.ReadAllText(path);
 			int onTick = source.IndexOf("protected override void TimeManager_OnTick()", StringComparison.Ordinal);
-			int body = source.IndexOf("Step((float)TimeManager.TickDelta);", onTick, StringComparison.Ordinal);
-			LogAssert.IsTrue(onTick >= 0 && body > onTick,
-				"A client must step the platform directly from TimeManager_OnTick; FishNet's Replicate_NonAuthoritative returns before invoking the replicate body when forwarding is off.");
+			int next = source.IndexOf("public override void CreateReconcile()", onTick, StringComparison.Ordinal);
+			LogAssert.IsTrue(onTick >= 0 && next > onTick, "TimeManager_OnTick must exist ahead of CreateReconcile.");
+			string body = source.Substring(onTick, next - onTick);
+			LogAssert.IsTrue(body.Contains("PerformReplicate(default);"),
+				"Every peer's OnTick must go through the replicate; that is what FishNet rolls back and replays.");
+			LogAssert.IsFalse(body.Contains("Step((float)TimeManager.TickDelta);"),
+				"A client platform stepped outside the replicate is never reconciled — the open-loop model of issue #228.");
 		}
 
 		// ── 6. NPC.ReadPayload overwrote the modifiers the attribute payload just delivered ──
@@ -1282,14 +1292,11 @@ namespace FishMMO.UnitTests
 			try
 			{
 				KCCPlatform platform = go.AddComponent<KCCPlatform>();
-				/* RecordTickState since issue #228 — the same ring now carries the deck's POSE per
-				 * tick as well, because a replaying rider needs the geometry it probed, not just
-				 * the velocity it inherited. */
-				MethodInfo record = typeof(KCCPlatform).GetMethod("RecordTickState", Any);
+				MethodInfo record = typeof(KCCPlatform).GetMethod("RecordTickVelocity", Any);
 				LogAssert.IsTrue(record != null, "KCCPlatform must record per-tick velocity.");
 
-				record.Invoke(platform, new object[] { 100u, new Vector3(0f, 0f, 4f), Vector3.zero });
-				record.Invoke(platform, new object[] { 101u, new Vector3(0f, 0f, -4f), Vector3.zero });
+				record.Invoke(platform, new object[] { 100u, new Vector3(0f, 0f, 4f) });
+				record.Invoke(platform, new object[] { 101u, new Vector3(0f, 0f, -4f) });
 
 				LogAssert.IsTrue(platform.TryGetVelocityForTick(100u, out Vector3 atHundred));
 				LogAssert.IsTrue((atHundred - new Vector3(0f, 0f, 4f)).magnitude < 1e-4f,

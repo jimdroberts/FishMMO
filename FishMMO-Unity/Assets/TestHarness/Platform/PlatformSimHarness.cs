@@ -39,13 +39,22 @@ namespace FishMMO.TestHarness
 	/// <b>Replay fidelity note.</b> A replay rolls the PLATFORMS back with the rider: each
 	/// replayed tick stands every deck at its ringed pose for that tick (and syncs transforms)
 	/// before the motor's ground probes run, and the platform velocity comes from the same ring.
-	/// That is what the live game does — <c>KCCPlatform</c> rewinds itself across FishNet's
-	/// reconcile hooks (<c>OnPreReconcile</c> / <c>OnPreReplicateReplay</c> / <c>OnPostReconcile</c>)
-	/// using <c>TryGetPositionForTick</c>, alongside <c>TryGetVelocityForTick</c>. Until 2026-09-05
-	/// only the velocity rolled back; the decks stayed in the present, so every replayed probe
+	/// That is what the live game does since issue #228 — <c>KCCPlatform</c> is a forwarded,
+	/// reconciled object, so FishNet rolls it back to the server's state and replays it in
+	/// lockstep with the rider (<c>TryGetVelocityForTick</c> covers the cross-object tick order).
+	/// Before that the decks stayed in the present during a replay, so every replayed probe
 	/// tested geometry up to a round trip downstream of where the rider stood and riders sank
-	/// through moving decks near the edges (issue #228). Set <see cref="LegacyPresentPoseReplay"/>
-	/// to watch that model fail.
+	/// through moving decks near the edges. Set <see cref="LegacyPresentPoseReplay"/> to watch
+	/// that model fail.
+	/// </para>
+	/// <para>
+	/// <b>Carry note.</b> While riding, the brain STANDS STILL near the deck centre and the sim
+	/// measures whether the rider's displacement matches the deck's (<see cref="CarrySlips"/>).
+	/// It used to hold the centre by walking toward it every tick — which meant a rider chasing a
+	/// 3&#160;u/s deck at walk speed completed every crossing whether or not it was carried, and
+	/// the shipped carry was in fact dead: the platform velocity was added to
+	/// <c>BaseVelocity</c> and overwritten by the controller before the move. The motor now conveys
+	/// it through KCC's attached-rigidbody seam, and this scene proves that with the real motor.
 	/// </para>
 	/// </remarks>
 	public sealed class PlatformSimHarness : MonoBehaviour
@@ -72,8 +81,9 @@ namespace FishMMO.TestHarness
 		public bool AlwaysReconcile = true;
 
 		/// <summary>
-		/// Demonstration toggle: seed the client platforms one transit STALE, the way the shipped
-		/// payload behaved before the catch-up fix. The green halo separates from the client
+		/// Demonstration toggle: seed the client platforms one transit STALE, the way a client
+		/// platform dead-reckoned from a one-shot spawn payload behaved before it forwarded state
+		/// and was reconciled (issue #228). The green halo separates from the client
 		/// platforms by the transit distance and the rider diverges at every edge — the bug this
 		/// scene exists to keep dead. Applied on Reset.
 		/// </summary>
@@ -81,7 +91,8 @@ namespace FishMMO.TestHarness
 
 		/// <summary>
 		/// Demonstration toggle: replay the rider against the platforms at their PRESENT poses,
-		/// the way the shipped model behaved before the geometry rewind of issue #228. The rider
+		/// the way the shipped model behaved before issue #228 put the platform on FishNet's
+		/// forwarded, reconciled model. The rider
 		/// replays over a deck that has since slid downstream, diverges from the live state near
 		/// every edge, and at high RTT sinks through the deck it is standing on.
 		/// </summary>
@@ -162,6 +173,18 @@ namespace FishMMO.TestHarness
 		private long identityFailures;
 		private float maxPlatformPhaseError;
 		private uint sweepStartTick;
+
+		/// <summary>Per-tick carry error tolerated while standing on a deck, in world units.</summary>
+		/// <remarks>The ferry moves 0.1 u per tick; a slip beyond this is a 20% carry error.</remarks>
+		public const float CarrySlipTolerance = 0.02f;
+		/// <summary>Ticks the rider stood still on a moving deck and moved exactly with it.</summary>
+		private int carryTicks;
+		/// <summary>Ticks the rider stood still on a moving deck and did NOT move with it.</summary>
+		private int carrySlips;
+		/// <summary>Set by the brain on a tick it chose to stand still on the deck.</summary>
+		private bool standingThisTick;
+		/// <summary>Consecutive standing ticks, so the walk→stand transition tick is not measured.</summary>
+		private int standingStreak;
 
 		// ── Scenario brain ──────────────────────────────────────────────────────────
 
@@ -362,6 +385,9 @@ namespace FishMMO.TestHarness
 			identityFailures = 0;
 			maxPlatformPhaseError = 0f;
 			edgeReplayDivergences = 0;
+			carryTicks = 0;
+			carrySlips = 0;
+			standingStreak = 0;
 			waterEntries = 0;
 			client.FallThroughs = 0;
 			client.RecoveredDips = 0;
@@ -442,7 +468,13 @@ namespace FishMMO.TestHarness
 		{
 			uint n = clientTick;
 
+			// Where the client rider and ferry stood before this tick, for the carry check below.
+			Vector3 riderBefore = client.Motor.TransientPosition;
+			Vector3 ferryBefore = client.Platforms[0].transform.position;
+			bool onFerryBefore = IsStandingOnFerry(client);
+
 			// 1. The "player" samples input from what it can see: the client world.
+			standingThisTick = false;
 			SimRiderInput input = SampleBrain();
 			inputs[n % RingSize] = input;
 
@@ -469,6 +501,26 @@ namespace FishMMO.TestHarness
 			client.Rider.SimulateTick(input, platformVelocity, TickDelta);
 			predictedStates[n % RingSize] = client.Motor.GetState();
 			DetectFallThrough(client);
+
+			/* Carry check (issue #228). A rider standing still on the deck must move exactly as
+			 * far as the deck did this tick — no input, so any displacement is the platform's
+			 * doing. Measured only on the second standing tick onward, because the tick the brain
+			 * stops walking still carries the walk's last step. This is the assertion the old
+			 * scene could not make: its rider walked toward the deck centre every tick. */
+			if (standingThisTick && standingStreak >= 1 && onFerryBefore && IsStandingOnFerry(client))
+			{
+				float riderDx = client.Motor.TransientPosition.x - riderBefore.x;
+				float deckDx = client.Platforms[0].transform.position.x - ferryBefore.x;
+				if (Mathf.Abs(riderDx - deckDx) > CarrySlipTolerance)
+				{
+					carrySlips++;
+				}
+				else
+				{
+					carryTicks++;
+				}
+			}
+			standingStreak = standingThisTick ? standingStreak + 1 : 0;
 
 			// 4. The input travels up.
 			upQueue.Enqueue(new InputDelivery { Tick = n, DeliverAt = n + (uint)UpDelayTicks() });
@@ -559,8 +611,8 @@ namespace FishMMO.TestHarness
 			 * the ground with real physics queries, and a query answers from wherever the deck
 			 * collider currently stands — so replaying against the live decks tests geometry up
 			 * to a whole round trip downstream of where the rider actually was. The live game
-			 * rewinds the same way (KCCPlatform's reconcile hooks); LegacyPresentPoseReplay
-			 * restores the old model for demonstration. */
+			 * rewinds the same way (FishNet reconciles and replays the forwarded KCCPlatform);
+			 * LegacyPresentPoseReplay restores the old model for demonstration. */
 			Vector3[] livePlatformPoses = null;
 			if (!LegacyPresentPoseReplay)
 			{
@@ -625,10 +677,9 @@ namespace FishMMO.TestHarness
 		/// </summary>
 		/// <remarks>
 		/// The pose for the tick BEING simulated, because that is this harness's own live
-		/// ordering (step → sync → simulate). FishNet syncs once per tick after OnTick instead, so
-		/// <c>KCCPlatform</c> applies the pose one tick earlier in its hooks to land on the same
-		/// relationship. Both present "the geometry of the tick being replayed"; only the seam
-		/// where the sync happens differs.
+		/// ordering (step → sync → simulate). In the live game FishNet does the equivalent: the
+		/// platform's reconcile restores the server pose, each replayed tick runs its replicate,
+		/// and <c>Physics.Simulate</c> closes the tick before the next one probes.
 		/// </remarks>
 		private void ApplyPlatformPosesForTick(uint tick)
 		{
@@ -877,17 +928,31 @@ namespace FishMMO.TestHarness
 					{
 						input.Jump = true;
 					}
+					else if (onFerry && Mathf.Abs(rider.x - ferry.x) < 0.5f && Mathf.Abs(rider.z - ferry.z) < 0.9f)
+					{
+						/* STAND STILL. Being carried is the platform's job, and standing is the
+						 * only way to test it: a rider that walks toward the deck centre every
+						 * tick reaches the far island under its own power whether or not the deck
+						 * conveys it, which is how the dead shipped carry passed this scene for a
+						 * week. The carry check in SimulateOneTick measures these ticks. */
+						standingThisTick = true;
+					}
 					else
 					{
-						// Hold the deck center. Self-correcting: if either twin has drifted
-						// toward an edge, the shared input stream walks BOTH toward the middle
-						// instead of leaving the drifted one hanging over the gap until the next
-						// reconcile. (Side-boarding leaves the rider near the deck's z edge, so
-						// this also walks it somewhere safe before the mid-ride hop.)
+						// Off-centre (side-boarding leaves the rider near the z edge; a wobble
+						// after the hop): walk back toward the middle before standing again.
 						input.Move = MoveToward(rider, new Vector3(ferry.x, rider.y, ferry.z), out _);
 					}
-					bool ferryNearFarSide = rideDirection > 0 ? ferry.x > FerryTravel - 0.6f : ferry.x < -FerryTravel + 0.6f;
-					if (ferryNearFarSide)
+					/* Disembark as soon as the deck overlaps the far island (half-length 3 against an
+					 * island edge at |x| 6, so |ferry.x| ≥ 3) while it is still INBOUND: the rider
+					 * walks ashore at walk + deck speed (7 u/s world) with ~19 ticks in hand before
+					 * the deck reverses. Waiting for the end of the run — which worked while the
+					 * rider was NOT carried — now has the departing deck carry it back out over the
+					 * sea faster than it can walk (4 − 3 = 1 u/s). Real ferries are the same: you
+					 * step off while it is at the quay. */
+					bool deckOverlapsFarIsland = rideDirection > 0 ? ferry.x > 3.0f : ferry.x < -3.0f;
+					bool deckStillInbound = rideDirection > 0 ? ferryVelocityX > 0f : ferryVelocityX < 0f;
+					if (deckOverlapsFarIsland && deckStillInbound)
 					{
 						brainState = BrainState.Disembark;
 					}
@@ -1011,6 +1076,10 @@ namespace FishMMO.TestHarness
 		public int RecoveredDips => client?.RecoveredDips ?? 0;
 		/// <summary>Nonzero-RTT edge replays that diverged and self-corrected (informational).</summary>
 		public long EdgeReplayDivergences => edgeReplayDivergences;
+		/// <summary>Standing-on-deck ticks where the rider moved exactly with the deck.</summary>
+		public int CarryTicks => carryTicks;
+		/// <summary>Standing-on-deck ticks where the rider did NOT move with the deck.</summary>
+		public int CarrySlips => carrySlips;
 
 		public int WaterEntries => waterEntries;
 
@@ -1029,7 +1098,8 @@ namespace FishMMO.TestHarness
 				return $"tick {clientTick} brain {brainState} dir {rideDirection} " +
 					$"rider ({rider.x:F2},{rider.y:F2},{rider.z:F2}) ferry x {ferry.x:F2} velX {ferryVelX:F3} " +
 					$"onFerry {onFerry} crossings {completedCrossings} water {waterEntries} " +
-					$"dips {(client != null ? client.RecoveredDips : 0)} edgeReplays {edgeReplayDivergences}";
+					$"dips {(client != null ? client.RecoveredDips : 0)} edgeReplays {edgeReplayDivergences} " +
+					$"carry {carryTicks} slips {carrySlips}";
 			}
 		}
 	}

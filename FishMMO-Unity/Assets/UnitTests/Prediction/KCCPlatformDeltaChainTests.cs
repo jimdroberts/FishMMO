@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Reflection;
 using NUnit.Framework;
 using FishMMO.Shared;
@@ -62,11 +62,24 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>Models <c>Reconcile_Send</c>: write against the baseline, then advance it.</summary>
-		private static ArraySegment<byte> ServerSend(
+		/// <summary>The server's send counter, advanced only by <see cref="ServerSend"/> — the
+		/// same rule Server_SendReconcileRpc follows (stamped when WRITTEN, never when merely built).</summary>
+		private byte serverSequence;
+
+		[SetUp]
+		public void ResetChain()
+		{
+			serverSequence = 0;
+			// A rejection latched by an earlier test must not leak into this one.
+			FishNet.Object.ReconcileDeltaGuard.ConsumeRejection();
+		}
+
+		private ArraySegment<byte> ServerSend(
 			ref KCCPlatform.ReconcileData serverBaseline,
 			KCCPlatform.ReconcileData next,
 			DeltaSerializerOption option)
 		{
+			next = KCCPlatformReconcileDataDeltaSerializer.StampSequence(next, unchecked(++serverSequence));
 			Writer writer = new Writer();
 			writer.WriteDelta(serverBaseline, next, option);
 			serverBaseline = next;
@@ -186,6 +199,61 @@ namespace FishMMO.UnitTests
 
 			AssertReconcileEquals(authoritative, repaired,
 				"the periodic absolute snapshot must repair a drifted baseline");
+		}
+
+		/// <summary>
+		/// A lost state datagram must not have the next delta decoded against a baseline this
+		/// client never received — the chain is rejected until the periodic absolute snapshot.
+		/// </summary>
+		/// <remarks>
+		/// The platform is the one reconcile fanned out to every observer over the unreliable
+		/// channel, so this is the case that matters most: before the sequence guard a single lost
+		/// packet stood the client's deck in the wrong place — and every rider's footing with it —
+		/// for up to a second.
+		/// </remarks>
+		[Test]
+		public void LostDatagram_RejectsTheChain_UntilTheNextAbsoluteSnapshot()
+		{
+			KCCPlatform.ReconcileData serverBaseline = default;
+			KCCPlatform.ReconcileData client = default;
+			KCCPlatform.ReconcileData authoritative = new KCCPlatform.ReconcileData(new Vector3(12f, 3f, -40f), 0);
+
+			// Ticks 1..10 arrive; tick 30 is the next periodic snapshot.
+			for (uint tick = 1; tick <= 10; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
+				LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), $"tick {tick} must be accepted");
+			}
+			KCCPlatform.ReconcileData lastGood = client;
+
+			// Tick 11 is written by the server but never reaches this client.
+			authoritative = Advance(authoritative, 11);
+			ServerSend(ref serverBaseline, authoritative, OptionForTick(11));
+
+			// Ticks 12..29 arrive and must every one be rejected, leaving the baseline untouched.
+			for (uint tick = 12; tick < ServerTickRate; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				KCCPlatform.ReconcileData received = ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
+				LogAssert.IsTrue(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(),
+					$"tick {tick}: a delta after a lost datagram must be rejected, not decoded against the wrong baseline");
+				LogAssert.IsTrue(received.Position == lastGood.Position && received.GoalIndex == lastGood.GoalIndex,
+					$"tick {tick}: a rejected delta must leave the client's baseline exactly where it was");
+			}
+
+			// The periodic absolute snapshot re-seats the chain and everything after it decodes.
+			authoritative = Advance(authoritative, ServerTickRate);
+			KCCPlatform.ReconcileData repaired = ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(ServerTickRate)));
+			LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), "the absolute snapshot must be accepted");
+			AssertReconcileEquals(authoritative, repaired, "the absolute snapshot must repair the chain");
+			for (uint tick = ServerTickRate + 1; tick <= ServerTickRate + 10; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				KCCPlatform.ReconcileData received = ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
+				LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), $"tick {tick} must be accepted after the repair");
+				AssertReconcileEquals(authoritative, received, $"tick {tick} after the repair");
+			}
 		}
 
 		[Test]

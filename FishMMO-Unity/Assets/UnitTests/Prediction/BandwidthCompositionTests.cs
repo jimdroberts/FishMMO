@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
@@ -437,14 +437,15 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── 7. Still-forwarded: KCCPlatform (estimate — codegen types) ───────
+		// ── 7. Forwarded: KCCPlatform (real since issue #228 — the one scene object that forwards) ──
 
 		[Test]
 		public void Platform_Forwarded()
 		{
-			// ReplicateData is tick-only (count + channel); ReconcileData is Vector3 + byte.
+			// ReplicateData is tick-only (count + channel); ReconcileData is Vector3 + goal byte +
+			// chain sequence byte, absolute form (the delta form is smaller on every tick but one).
 			int platformReplicate = Bytes(w => { w.WriteUInt8Unpacked(1); w.WriteUInt8Unpacked(0); });
-			int platformReconcile = Bytes(w => { w.WriteVector3(new Vector3(10.5f, 2f, -3.25f)); w.WriteUInt8Unpacked(1); });
+			int platformReconcile = Bytes(w => { w.WriteVector3(new Vector3(10.5f, 2f, -3.25f)); w.WriteUInt8Unpacked(1); w.WriteUInt8Unpacked(7); });
 			Record("platform.replicate", platformReplicate);
 			Record("platform.reconcile", platformReconcile);
 		}

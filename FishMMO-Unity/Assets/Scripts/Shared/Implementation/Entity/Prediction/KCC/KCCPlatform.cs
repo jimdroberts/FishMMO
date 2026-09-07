@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using FishNet.Managing.Predicting;
 using FishNet.Object.Prediction;
 using FishNet.Component.Prediction;
 using FishNet.Connection;
@@ -12,9 +11,40 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Predicted moving platform that uses FishNet Prediction V2 for deterministic movement.
-	/// Players standing on this platform receive platform velocity through <see cref="KCCPlayer"/>.
+	/// Predicted moving platform on FishNet's own model: every peer runs the same autonomous,
+	/// deterministic replicate, the server reconciles it to every observer, and FishNet rolls it
+	/// back and replays it with everything else. Riders inherit its per-tick velocity through
+	/// <see cref="KCCPlayer"/>.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// A fork of FishNet's <c>Demos/Prediction/CharacterController/MovingPlatform</c>, and since
+	/// issue #228 deliberately back ON that model. This platform's <c>NetworkObject</c> is the one
+	/// kind of scene object in the project with state forwarding ENABLED (pinned by
+	/// <c>InterestManagementWiringTests.OnlyPlatforms_ShipWithStateForwardingOn</c>), because the
+	/// argument that keeps forwarding off everywhere else does not apply to it: forwarding a
+	/// character relays every owner's INPUT to every observer, which is what makes 100-200 players
+	/// unaffordable — an ownerless platform has no input. Its replicate is an empty struct, and the
+	/// only wire cost is one delta-encoded reconcile (Vector3 + byte) per observer per tick.
+	/// </para>
+	/// <para>
+	/// What that buys, in the demo's own words: with the body run in EVERY replicate state,
+	/// <c>IsFuture</c> included, a client's platform runs AHEAD of the server by that client's ping —
+	/// where the platform will be by the time the client's input reaches the server — and every
+	/// reconcile rolls the platform back to the server's state and replays it in lockstep with the
+	/// rider, so a replayed ground probe meets the deck where it actually stood on that tick.
+	/// </para>
+	/// <para>
+	/// The previous model — forwarding off, each client stepping the platform itself from a
+	/// one-shot spawn payload — had neither property. With forwarding off FishNet returns from
+	/// <c>Replicate_NonAuthoritative</c> before invoking the body and sends no reconcile for an
+	/// ownerless object, so the client copy was seeded from the payload and dead-reckoned open-loop
+	/// for the rest of the session: seeded BEHIND the server (aligned to the interpolated observer
+	/// frame ability objects use, the opposite of what a deck the owner stands on needs), and never
+	/// rolled back, so a reconcile replay probed a deck up to a round trip downstream of where the
+	/// rider stood. Riders sank through moving decks, worst at high ping, worst near the edges.
+	/// </para>
+	/// </remarks>
 	public class KCCPlatform : TickNetworkBehaviour, ISceneObject
 	{
 		#region Types.
@@ -58,6 +88,7 @@ namespace FishMMO.Shared
 			{
 				Position = position;
 				GoalIndex = goalIndex;
+				Sequence = 0;
 				tick = 0;
 			}
 
@@ -70,6 +101,24 @@ namespace FishMMO.Shared
 			/// Index into the goals list indicating which waypoint the platform is moving toward.
 			/// </summary>
 			public byte GoalIndex;
+
+			/// <summary>
+			/// Server-side send counter, stamped by <c>Server_SendReconcileRpc</c> through
+			/// <c>ReconcileSequenceStamper</c> on every reconcile actually written, wrapping at 255.
+			/// </summary>
+			/// <remarks>
+			/// The delta chain's loss detector, the same one <c>CharacterReconcileData.Sequence</c>
+			/// carries and for the same reason: reconciles ride the unreliable state datagram and
+			/// each delta is difference-encoded against the previous state the server SENT, so a
+			/// lost datagram would otherwise have every later delta decode against a baseline this
+			/// client never received — a deck standing in the wrong place, and every rider's
+			/// footing with it, for up to a second until the periodic absolute snapshot. The reader
+			/// requires <c>prev.Sequence + 1</c> and rejects the packet otherwise; a loss then costs
+			/// "no correction until the next snapshot", which for a deterministic platform is no
+			/// visible cost at all. This matters MORE here than on a character: the platform is the
+			/// one object whose reconcile fans out to every observer.
+			/// </remarks>
+			public byte Sequence;
 
 			private uint tick;
 
@@ -113,13 +162,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Velocity of the platform during its most recently completed <see cref="Step"/>, in world
-		/// units per second. Players riding the platform read this value so the inherited platform
-		/// velocity is independent of whether the player's NetworkBehaviour ticks before or after
-		/// this platform within the same network tick (FishNet does not guarantee a deterministic
-		/// OnTick order across separate NetworkObjects). Lag is at most one tick (acceptable for
-		/// moving-platform inheritance) but the value is consistent between server and client
-		/// because both compute it from the same deterministic <see cref="Step"/> — the server from
-		/// inside its <c>[Replicate]</c>, a client directly from its tick.
+		/// units per second. Refreshed by every run of the replicate body — the live tick on both
+		/// peers, and each replayed tick on a client — so it is the velocity of whatever tick the
+		/// platform last simulated.
 		/// </summary>
 		public Vector3 LastCompletedTickVelocity { get; private set; }
 
@@ -129,26 +174,26 @@ namespace FishMMO.Shared
 		/// <summary>Per-tick velocity ring, indexed by <c>tick % VelocityHistoryLength</c>.</summary>
 		private readonly Vector3[] velocityHistory = new Vector3[VelocityHistoryLength];
 
-		/// <summary>The tick each history slot holds, to detect a stale slot.</summary>
+		/// <summary>The tick each <see cref="velocityHistory"/> slot holds, to detect a stale slot.</summary>
 		private readonly uint[] velocityHistoryTicks = new uint[VelocityHistoryLength];
 
-		/// <summary>Per-tick deck POSE ring, indexed by <c>tick % VelocityHistoryLength</c>.</summary>
-		/// <remarks>
-		/// The companion to <see cref="velocityHistory"/>, and needed for the same reason one tick
-		/// deeper: a rider replaying a reconcile inherits the right velocity from the ring, but its
-		/// ground probes hit the deck COLLIDER, and the collider only ever stood where the platform
-		/// is now. See <see cref="PredictionManager_OnPreReplicateReplay"/>.
-		/// </remarks>
-		private readonly Vector3[] positionHistory = new Vector3[VelocityHistoryLength];
-
 		/// <summary>
-		/// The velocity this platform produced on a specific tick.
+		/// The velocity this platform produced on a specific tick, in the CLIENT tick domain.
 		/// </summary>
 		/// <remarks>
-		/// A rider replaying k ticks after a reconcile needs the velocity of each replayed tick, not
-		/// the platform's present one. The platform itself never replays — it has no owner and no
-		/// reconcile reaches a client — so without this every replayed tick inherited one frozen
-		/// value and the rider's replayed path bent at each direction reversal.
+		/// <para>
+		/// FishNet promises no tick order across NetworkObjects, so a rider simulating tick T cannot
+		/// know whether this platform has already stepped T or is still on T-1 when it asks for
+		/// <see cref="LastCompletedTickVelocity"/>. The ring answers by tick instead, and is filled
+		/// wherever the platform runs a tick on a client: from <see cref="TimeManager_OnTick"/> keyed
+		/// by <c>LocalTick</c> for the live tick, and from the replayed replicate keyed by
+		/// <c>PredictionManager.ClientReplayTick</c> — both the same counter a rider's input carries.
+		/// </para>
+		/// <para>
+		/// The server fills it too, keyed by ITS local tick, but must not consult it with a rider's
+		/// input tick: that tick is the owning client's unsynchronised counter, so the lookup is an
+		/// arbitrary hit or a miss. The server never replays, and reads the live value instead.
+		/// </para>
 		/// </remarks>
 		/// <param name="tick">The tick to look up.</param>
 		/// <param name="velocity">The velocity produced on that tick, when still held.</param>
@@ -165,31 +210,12 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		/// <summary>
-		/// The world position this platform stood at on the end of a specific tick.
-		/// </summary>
-		/// <param name="tick">The tick to look up.</param>
-		/// <param name="position">The position held at the end of that tick, when still held.</param>
-		/// <returns>True when the tick is still in the ring.</returns>
-		public bool TryGetPositionForTick(uint tick, out Vector3 position)
-		{
-			int slot = (int)(tick % VelocityHistoryLength);
-			if (velocityHistoryTicks[slot] == tick)
-			{
-				position = positionHistory[slot];
-				return true;
-			}
-			position = Vector3.zero;
-			return false;
-		}
-
-		/// <summary>Records the velocity and pose produced on <paramref name="tick"/>.</summary>
-		private void RecordTickState(uint tick, Vector3 velocity, Vector3 position)
+		/// <summary>Records the velocity produced on <paramref name="tick"/>.</summary>
+		private void RecordTickVelocity(uint tick, Vector3 velocity)
 		{
 			int slot = (int)(tick % VelocityHistoryLength);
 			velocityHistoryTicks[slot] = tick;
 			velocityHistory[slot] = velocity;
-			positionHistory[slot] = position;
 		}
 
 		/// <summary>
@@ -263,9 +289,6 @@ namespace FishMMO.Shared
 				platformCollider.OnEnter -= PlatformCollider_OnEnter;
 				platformCollider.OnExit -= PlatformCollider_OnExit;
 			}
-			// A destroyed platform still holding prediction subscriptions would be invoked as a
-			// dead Unity object on the next reconcile.
-			SetReplayRewindSubscription(false);
 			SceneObject.Unregister(this);
 		}
 
@@ -306,177 +329,16 @@ namespace FishMMO.Shared
 		public override void OnStartNetwork()
 		{
 			SetTickCallbacks(TickCallback.Tick);
-			SetReplayRewindSubscription(true);
 		}
 
 		/// <inheritdoc/>
-		public override void OnStopNetwork()
-		{
-			SetReplayRewindSubscription(false);
-			base.OnStopNetwork();
-		}
-
-		#region Replay geometry rewind.
-		/// <summary>The prediction manager this platform is subscribed to, when subscribed.</summary>
-		private PredictionManager subscribedPredictionManager;
-
-		/// <summary>Deck pose to restore when the reconcile that displaced it finishes.</summary>
-		private Vector3 livePositionDuringReplay;
-
-		/// <summary>True while a reconcile has this deck standing at a historic pose.</summary>
-		private bool replayPoseApplied;
-
-		/// <summary>
-		/// Subscribes (or unsubscribes) the reconcile hooks that stand this deck where it stood on
-		/// each replayed tick.
-		/// </summary>
 		/// <remarks>
-		/// Client-only by construction: the server runs every replicate exactly once and never
-		/// replays, so there is no historic tick for it to rewind to.
-		/// </remarks>
-		private void SetReplayRewindSubscription(bool subscribe)
-		{
-			/* NetworkObject first: the PredictionManager accessor dereferences the network-object
-			 * cache and throws on a component that was never spawned, the same guard order
-			 * ReadPayload's TimeManager use documents. */
-			PredictionManager manager = subscribe
-				? (base.IsClientOnlyStarted && base.NetworkObject != null ? base.PredictionManager : null)
-				: subscribedPredictionManager;
-			if (manager == null)
-			{
-				return;
-			}
-
-			if (subscribe)
-			{
-				if (subscribedPredictionManager != null)
-				{
-					return;
-				}
-				subscribedPredictionManager = manager;
-				manager.OnPreReconcile += PredictionManager_OnPreReconcile;
-				manager.OnPreReplicateReplay += PredictionManager_OnPreReplicateReplay;
-				manager.OnPostReconcile += PredictionManager_OnPostReconcile;
-			}
-			else
-			{
-				manager.OnPreReconcile -= PredictionManager_OnPreReconcile;
-				manager.OnPreReplicateReplay -= PredictionManager_OnPreReplicateReplay;
-				manager.OnPostReconcile -= PredictionManager_OnPostReconcile;
-				subscribedPredictionManager = null;
-				RestoreLivePose();
-			}
-		}
-
-		/// <summary>
-		/// Stands the deck where it stood at the end of the reconciled state tick, before FishNet
-		/// runs the <c>SyncTransforms</c> that feeds the first replayed tick.
-		/// </summary>
-		/// <remarks>
-		/// A rider's motor probes the ground with real physics queries, and a physics query answers
-		/// from the last SYNCED collider pose — during a live tick that is the pose from the end of
-		/// the previous tick, because FishNet syncs once per tick after <c>OnTick</c>. So a rider
-		/// simulating tick T stands on the deck as it was at the end of T-1, and a replay of T has
-		/// to present that same pose or it is not replaying the same world. It did not: the deck
-		/// never rolled back, so every replayed tick probed the deck where it is NOW — up to a full
-		/// round trip downstream of where the rider actually stood. Near the trailing edge that
-		/// probe finds nothing, the replayed rider ungrounds, gravity takes it, and (being
-		/// ungrounded) it also stops inheriting the deck's velocity and slides further back. The
-		/// next reconcile lifts it out and the next replay drops it again: standing on a moving
-		/// deck sinks and stutters through it, worst at high ping, worst near the edges.
-		/// <para>
-		/// This is the geometry half of the fix whose velocity half is
-		/// <see cref="TryGetVelocityForTick"/> — the ring already carried the right velocity for
-		/// each replayed tick while the collider it acted on stayed in the present.
-		/// </para>
-		/// </remarks>
-		private void PredictionManager_OnPreReconcile(uint clientTick, uint serverTick)
-		{
-			/* Should a previous reconcile have ended without its post hook (a replay that threw),
-			 * the deck is still parked in the past — put it back BEFORE reading it, or the stale
-			 * pose is saved as "live" and the platform latches one replay window behind the server
-			 * for good. */
-			RestoreLivePose();
-
-			// Remember where the live simulation left the deck; the replay is about to displace it.
-			livePositionDuringReplay = transform.position;
-			replayPoseApplied = true;
-			ApplyHistoricPose(clientTick);
-		}
-
-		/// <summary>
-		/// Advances the deck to the pose it held at the end of <paramref name="clientTick"/>, so the
-		/// physics sync FishNet runs at the end of this replayed tick hands the NEXT replayed tick
-		/// the geometry that tick saw — the same one-tick relationship a live tick has.
-		/// </summary>
-		private void PredictionManager_OnPreReplicateReplay(uint clientTick, uint serverTick)
-		{
-			ApplyHistoricPose(clientTick);
-		}
-
-		/// <summary>Returns the deck to the live simulation's pose once the replay is over.</summary>
-		/// <remarks>
-		/// Normally a no-op — the last replayed tick is the last live tick, so the historic pose and
-		/// the live pose are the same point. It matters when they are not: a ring too short for the
-		/// replay window, or a platform that spawned inside it. Leaving a deck parked at a historic
-		/// pose would desynchronise it from the server permanently, which is a worse bug than the
-		/// one being fixed, so the live pose is always restored explicitly.
-		/// </remarks>
-		private void PredictionManager_OnPostReconcile(uint clientTick, uint serverTick)
-		{
-			RestoreLivePose();
-		}
-
-		/// <summary>Moves the deck to its ringed pose for a tick, when the ring still holds it.</summary>
-		/// <remarks>
-		/// A miss leaves the deck where it is, which is exactly the old behaviour — a replay window
-		/// longer than the ring degrades to the previous model rather than to a wrong pose.
-		/// </remarks>
-		private void ApplyHistoricPose(uint tick)
-		{
-			if (TryGetPositionForTick(tick, out Vector3 position))
-			{
-				transform.position = position;
-			}
-		}
-
-		/// <summary>Restores the pose saved when the reconcile began, if one is outstanding.</summary>
-		private void RestoreLivePose()
-		{
-			if (!replayPoseApplied)
-			{
-				return;
-			}
-			replayPoseApplied = false;
-			transform.position = livePositionDuringReplay;
-		}
-		#endregion
-
-		/// <inheritdoc/>
-		/// <remarks>
-		/// <para>
-		/// Position and goal index are the platform's whole simulation state, and they are carried
-		/// here rather than by a reconcile because state forwarding is off on every object in this
-		/// project. With forwarding off a scene object has no owner to send a reconcile to
-		/// (<c>Server_SendReconcileRpc</c> returns immediately when <c>!Owner.IsValid</c>), so a
-		/// client that arrives mid-cycle would otherwise start the platform from its authored
-		/// position and run a full lap out of phase with the server, for the lifetime of the scene.
-		/// </para>
-		/// <para>
-		/// Per-tick movement needs no wire at all: <see cref="Step"/> is autonomous and deterministic
-		/// — <c>MoveTowards</c> by a fixed <c>TimeManager.TickDelta</c> step — and it snaps exactly
-		/// onto each waypoint on arrival, so float drift is bounded within one leg and reset at every
-		/// corner. Both peers run it: the server from its <c>[Replicate]</c>, a client directly from
-		/// <c>TimeManager_OnTick</c>, because FishNet will not invoke an ownerless, non-forwarded
-		/// replicate body on a client (which is why the platform stood still on every client until
-		/// the 2026-08-28 audit). Fourteen bytes once per observer, instead of a reconcile every tick
-		/// to every observer.
-		/// </para>
-		/// <para>
-		/// <c>goals</c> is built in <c>Awake</c> from the authored scene position, which is identical
-		/// on every peer, and <c>Awake</c> runs before this — so assigning the live position here
-		/// cannot disturb the waypoints it was derived from.
-		/// </para>
+		/// A SEED, not a sync. A client arriving mid-cycle would otherwise draw the platform at its
+		/// authored pose for the tick or two before its first reconcile lands; the reconcile is what
+		/// places it, and every reconcile after that keeps it placed. The catch-up that used to
+		/// live here (fast-forwarding the snapshot by its transit) is gone with the reason it
+		/// existed — the payload is no longer the only word the client ever hears about this
+		/// platform.
 		/// </remarks>
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
@@ -489,47 +351,7 @@ namespace FishMMO.Shared
 			 * leg; indexing past the end throws inside the replicate on the very next tick. */
 			goalIndex = readGoalIndex < goals.Count ? readGoalIndex : (byte)0;
 
-			uint serverTickAtWrite = reader.ReadUInt32();
-
 			SceneObject.Register(this, true);
-
-			/* FAST-FORWARD by the payload's transit, exactly as a streamed ability object is.
-			 *
-			 * The snapshot above describes where the platform WAS when the server wrote it. Left
-			 * as-is, this client starts stepping from that stale pose and stays behind the server
-			 * by the whole transit — permanently, because both sides step one tick per tick from
-			 * then on. Every rider's reconcile then arrives measured against the server's platform
-			 * while the local motor stands on the lagging copy: the correction drags the character
-			 * toward where the server's platform is, which near an edge or a direction reversal is
-			 * off the local platform — or inside it. That divergence never closed; it was simply
-			 * re-fought on every reconcile for as long as the client stayed connected.
-			 *
-			 * Catching up runs the SAME deterministic Step the live tick runs, so the goal index
-			 * and the corner snapping advance exactly as they did on the server. Aligned to the
-			 * interpolated view (the same SpectatorInterpolationTicks offset ability objects use),
-			 * which is the frame characters are drawn in. Skipped when either tick is unknown — an
-			 * older payload or a mid-assembly TimeManager — degrading to the old behaviour. */
-			/* NetworkObject first: the TimeManager accessor dereferences the network-object cache
-			 * and throws on a component that was never spawned (a test, a pooled instance before
-			 * first spawn) — the same guard order BuffController.GetCurrentDomainTick documents. */
-			if (serverTickAtWrite != 0u && base.NetworkObject != null && TimeManager != null)
-			{
-				uint catchUp = AbilityController.ComputeObserverFastForwardTicks(
-					TimeManager.Tick, serverTickAtWrite, LagCompensationTick.SpectatorInterpolationTicks);
-				/* A platform is cheap to step, but an absurd skew (clock estimate glitch, uint
-				 * wrap) must not spin a quarter-million MoveTowards calls on spawn. Ten seconds
-				 * of catch-up covers every honest transit by an order of magnitude. */
-				const uint MaxCatchUpTicks = 300;
-				if (catchUp > MaxCatchUpTicks)
-				{
-					catchUp = MaxCatchUpTicks;
-				}
-				float delta = (float)TimeManager.TickDelta;
-				for (uint i = 0; i < catchUp; ++i)
-				{
-					Step(delta);
-				}
-			}
 		}
 
 		/// <inheritdoc/>
@@ -538,38 +360,26 @@ namespace FishMMO.Shared
 			writer.WriteInt64(ID);
 			writer.WriteVector3(transform.position);
 			writer.WriteUInt8Unpacked(goalIndex);
-			/* The server tick this snapshot was true on, so the receiver can fast-forward it by
-			 * the transit — see ReadPayload. Zero when no TimeManager is reachable, which the
-			 * reader treats as "do not catch up". NetworkObject first — see the ReadPayload note. */
-			writer.WriteUInt32(base.NetworkObject != null && TimeManager != null ? TimeManager.LocalTick : 0u);
 		}
 
 		/// <inheritdoc/>
 		/// <remarks>
-		/// The server drives the platform through the predicted <see cref="PerformReplicate"/>.
-		/// A client cannot: with state forwarding off and no owner, FishNet's
-		/// <c>Replicate_NonAuthoritative</c> returns before it invokes the replicate body, no
-		/// reconcile is ever sent (see <see cref="ReadPayload"/>), and this object carries no
-		/// NetworkTransform — so left to the replicate the platform never moved on any client
-		/// while it moved on the server, and riders diverged every tick. The client runs the
-		/// same deterministic step directly, from the state the spawn payload handed it.
+		/// Identical on every peer, exactly as the FishNet demo has it. The server's call is
+		/// authoritative and drives the reconcile; a client's routes through
+		/// <c>Replicate_NonAuthoritative</c>, which — because this object forwards state — runs the
+		/// body with the server's queued data when it has some and with default, <c>IsFuture</c>
+		/// data when it does not. The body moves in either case, which is what puts the client's
+		/// platform ahead of the server by its ping rather than behind it.
 		/// </remarks>
 		protected override void TimeManager_OnTick()
 		{
-			if (base.IsServerStarted)
-			{
-				PerformReplicate(default);
-				CreateReconcile();
-			}
-			else
-			{
-				Step((float)TimeManager.TickDelta);
-			}
+			PerformReplicate(default);
+			CreateReconcile();
 
-			// Keyed by the tick that just ran, so a rider replaying it can ask for the same values.
+			// Keyed by the tick that just ran, so a rider replaying it can ask for the same value.
 			if (TimeManager != null)
 			{
-				RecordTickState(TimeManager.LocalTick, LastCompletedTickVelocity, transform.position);
+				RecordTickVelocity(TimeManager.LocalTick, LastCompletedTickVelocity);
 			}
 		}
 
@@ -587,12 +397,23 @@ namespace FishMMO.Shared
 		private void PerformReplicate(ReplicateData rd, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			Step((float)TimeManager.TickDelta);
+
+			/* A replayed tick refreshes the ring under the tick being replayed, in the client's
+			 * own counter — the value a rider replaying the same tick will ask for. The live tick
+			 * is recorded by TimeManager_OnTick instead, because the body may run more than once
+			 * (or not at all) inside one PerformReplicate call on a client. NetworkObject first: the
+			 * PredictionManager accessor throws on a component that was never spawned. */
+			if (state.ContainsReplayed() && base.NetworkObject != null && base.PredictionManager != null)
+			{
+				RecordTickVelocity(base.PredictionManager.ClientReplayTick, LastCompletedTickVelocity);
+			}
 		}
 
 		/// <summary>
 		/// One deterministic tick of platform movement: <c>MoveTowards</c> the current goal by
 		/// <paramref name="delta"/> × <c>moveRate</c>, snap onto the goal on arrival and advance
-		/// the goal index. Shared by the server's replicate and the client's direct tick.
+		/// the goal index. Pure in (position, goalIndex, delta), which is what lets a reconcile
+		/// replay reproduce the server's walk exactly, corners included.
 		/// </summary>
 		/// <param name="delta">Fixed tick step in seconds.</param>
 		internal void Step(float delta)
@@ -629,14 +450,17 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Restores the platform to the authoritative state for reconcile replay.
 		/// </summary>
+		/// <remarks>
+		/// Runs on every observing client, every tick, because the object forwards state: this is
+		/// the rollback that stands the deck where the server had it before the rider's replay
+		/// probes it. <c>LastCompletedTickVelocity</c> is intentionally not reconciled — the first
+		/// replayed Step refreshes it.
+		/// </remarks>
 		[Reconcile]
 		private void PerformReconcile(ReconcileData rd, Channel channel = Channel.Unreliable)
 		{
 			transform.position = rd.Position;
 			goalIndex = rd.GoalIndex;
-			/* LastCompletedTickVelocity is intentionally not reconciled — the next Step refreshes it.
-			 * Note this reconcile only runs on the server: with no owner and forwarding off nothing
-			 * is sent, and no client ever replays this object. */
 		}
 
 		/// <inheritdoc/>
@@ -648,9 +472,6 @@ namespace FishMMO.Shared
 			// first rider that steps on the freshly-respawned platform).
 			LastCompletedTickVelocity = Vector3.zero;
 			goalIndex = 0;
-			// A despawn mid-reconcile must not leave the next spawn believing it owes a pose
-			// restore to a position from the previous one.
-			replayPoseApplied = false;
 		}
 	}
 }

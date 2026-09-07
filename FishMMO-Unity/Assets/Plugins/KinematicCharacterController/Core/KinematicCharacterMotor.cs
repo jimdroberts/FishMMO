@@ -965,14 +965,32 @@ namespace KinematicCharacterController
 				CharacterController.PostGroundingUpdate(deltaTime);
 			}
 
-			// Only apply platform velocity if platform is moving up into the character (not from the side) or if grounded on the platform
+			/* FISHMMO EDIT: platform carry.
+			 *
+			 * The velocity a KCCPlatform hands in through SetPlatformVelocity used to be ADDED to
+			 * BaseVelocity here — and BaseVelocity is exactly what CharacterController.UpdateVelocity
+			 * rewrites in UpdatePhase2, before the move. With the project's grounded blend (a Lerp
+			 * whose sharpness × tickDelta clamps to 1) the addition was erased on the same tick,
+			 * every tick: a rider standing still on a moving deck did not move, the deck slid out
+			 * from under it and it dropped off — the "falling through the moving platform" of issue
+			 * #228 and the two reports before it. Nothing logged, because KCCPlayer's diagnostic
+			 * reports the velocity it injected, not whether it survived.
+			 *
+			 * The carry now goes where KCC applies the velocity of an attached PhysicsMover:
+			 * _attachedRigidbodyVelocity, moved by its own InternalCharacterMove at the end of this
+			 * phase, which the controller never sees and so never overwrites. The gate is unchanged:
+			 * a platform moving up into the character conveys it grounded or not (an elevator
+			 * lifting a jumper); a horizontal one conveys only a stably grounded rider. */
+			// What carried the character LAST tick (reconciled state, so a replay sees the same).
+			Vector3 previousPlatformCarry = _attachedRigidbody == null ? _attachedRigidbodyVelocity : Vector3.zero;
+			Vector3 platformCarry = Vector3.zero;
 			if (_platformVelocity != Vector3.zero)
 			{
 				float dot = Vector3.Dot(_platformVelocity.normalized, CharacterUp);
 				// dot > 0.5 means mostly upward (not side)
 				if (dot > 0.5f || GroundingStatus.IsStableOnGround)
 				{
-					BaseVelocity += _platformVelocity;
+					platformCarry = _platformVelocity;
 				}
 			}
 			_platformVelocity = Vector3.zero;
@@ -1055,6 +1073,47 @@ namespace KinematicCharacterController
 					_isMovingFromAttachedRigidbody = false;
 				}
 				#endregion
+			}
+
+			/* FISHMMO EDIT: platform carry, continued — see the note above the gate. A real
+			 * attached rigidbody wins (KCC has already moved the character by it); otherwise the
+			 * platform's velocity takes the same seam. Deliberately outside the
+			 * InteractiveRigidbodyHandling block, so turning that option off cannot silently stop
+			 * platforms conveying riders. */
+			if (!InteractiveRigidbodyHandling)
+			{
+				_attachedRigidbodyVelocity = _cachedZeroVector;
+			}
+			bool carriedNow = platformCarry != Vector3.zero && _attachedRigidbody == null;
+			bool carriedBefore = previousPlatformCarry != Vector3.zero;
+			/* KCC parity for the two transitions. LEAVING the deck (a jump, a step off the edge)
+			 * keeps the deck's velocity as the character's own momentum, exactly as
+			 * PreserveAttachedRigidbodyMomentum does for a PhysicsMover: without it a jump on a
+			 * moving deck goes straight up while the deck slides out from under the landing.
+			 * LANDING on the deck with that momentum still in BaseVelocity would count the deck's
+			 * velocity twice, so it is cancelled on the planar axes, as KCC's landing cancel does.
+			 * Both run before UpdateVelocity, which is free to overwrite them. */
+			if (PreserveAttachedRigidbodyMomentum && carriedBefore && !carriedNow)
+			{
+				BaseVelocity += previousPlatformCarry;
+			}
+			if (carriedNow && !carriedBefore)
+			{
+				BaseVelocity -= Vector3.ProjectOnPlane(platformCarry, _characterUp);
+			}
+			if (carriedNow)
+			{
+				_attachedRigidbodyVelocity = platformCarry;
+				_isMovingFromAttachedRigidbody = true;
+				if (_solveMovementCollisions)
+				{
+					InternalCharacterMove(ref _attachedRigidbodyVelocity, deltaTime);
+				}
+				else
+				{
+					_transientPosition += _attachedRigidbodyVelocity * deltaTime;
+				}
+				_isMovingFromAttachedRigidbody = false;
 			}
 		}
 

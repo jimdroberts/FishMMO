@@ -105,9 +105,13 @@ namespace FishNet.Object
 
         /* FISHMMO EDIT: runtime state-forwarding switch.
          *
-         * UNUSED AT RUNTIME. FishMMO's policy is that state forwarding stays OFF everywhere:
+         * UNUSED AT RUNTIME. FishMMO's policy is that state forwarding stays OFF for characters:
          * every prefab with a NetworkObject is authored with _enableStateForwarding: 0 (asserted
-         * by PrefabNetworkAuthoringTests), observers are fed by server-to-client broadcasts and a
+         * by PrefabNetworkAuthoringTests). The one deliberate exception is the scene-placed
+         * KCCPlatform (asserted the other way by InterestManagementWiringTests): ownerless, so
+         * there is no input to relay and the only cost is its reconcile, which is what lets
+         * FishNet roll a moving deck back under a replaying rider. Observers of characters are
+         * fed by server-to-client broadcasts and a
          * per-observer NetworkTransform LOD, and the PredictionModeController that used to flip
          * this was deleted. The method is kept because tests reference it and because the
          * reasoning below still describes what a future caller would have to get right.

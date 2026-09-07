@@ -430,12 +430,25 @@ The one thing genuinely broken by forwarding-off is a character with nothing to 
 `NetworkTransform`, because that presents as a content bug (a frozen character that keeps dealing
 damage) rather than a networking one.
 
+### The exception: moving platforms
+
+`KCCPlatform` is the one object that **does** forward state (`_enableStateForwarding: 1` on the
+scene `MovingPlatform`, pinned by `InterestManagementWiringTests.OnlyPlatforms_ShipWithStateForwardingOn`).
+The scale argument above is about relaying every owner's *input* to every observer; an ownerless
+platform has no input — its replicate is an empty struct — and the only cost is one delta-encoded
+reconcile (Vector3 + goal byte + chain sequence) per observer per tick. In return FishNet runs the
+platform's replicate on every client (ahead of the server by that client's ping, exactly as the
+FishNet demo describes), and rolls it back and replays it in lockstep with the rider on every
+reconcile, so a replayed ground probe meets the deck where it actually stood. The rider is conveyed
+through KCC's attached-rigidbody seam in `KinematicCharacterMotor.UpdatePhase1` (FISHMMO EDIT),
+never through `BaseVelocity`, which the controller overwrites before the move. See issue #228.
+
 ## Operational Checks
 
 | Check | How to Verify | Expected Result |
 |-------|---------------|-----------------|
 | Controller discovery | Enter Play mode, break on `Awake()` | `controllers` array contains all 5 controllers sorted by Order |
-| State Forwarding | Inspect `NetworkObject` Prediction settings | `EnableStateForwarding == false` on every shipped prefab — the interpolated open-world mode. Observers are fed by per-controller broadcasts, not by a forwarded reconcile; see `ObserverSyncMode`. `CharacterPredictionController.OnStartNetwork` warns only when forwarding is off AND there is no `NetworkTransform`, because then nothing replicates position at all |
+| State Forwarding | Inspect `NetworkObject` Prediction settings | `EnableStateForwarding == false` on every shipped prefab (the scene `MovingPlatform` is the deliberate exception — see above) — the interpolated open-world mode. Observers are fed by per-controller broadcasts, not by a forwarded reconcile; see `ObserverSyncMode`. `CharacterPredictionController.OnStartNetwork` warns only when forwarding is off AND there is no `NetworkTransform`, because then nothing replicates position at all |
 | Tick execution | Place a breakpoint in `TimeManager_OnTick` | Called every server tick; `PopulateInput` runs only for owner |
 | Replicate pipeline | Activate an ability on client | `OnReplicate` fires on both client and server with identical tick |
 | Reconcile pipeline | Force a mismatch (server modifies ability state) | `OnReconcile` fires on client, restoring server state |

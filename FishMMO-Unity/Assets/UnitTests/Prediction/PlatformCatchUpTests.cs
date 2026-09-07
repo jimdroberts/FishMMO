@@ -1,7 +1,6 @@
-﻿using System;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Collections.Generic;
 using FishMMO.Shared;
 using NUnit.Framework;
 using UnityEngine;
@@ -10,24 +9,23 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Guards the moving-platform phase contract: a client that receives a platform snapshot
-	/// catches up to the server's phase by re-running the same deterministic step, and stays there.
+	/// Guards the moving-platform prediction contract as it stands after issue #228: the platform
+	/// is on FishNet's own forwarded model, its step is deterministic so a reconcile replay
+	/// reproduces the server's walk, the motor actually conveys a rider, and the rider consults the
+	/// platform's velocity ring only in its own tick domain.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Before the catch-up, a client started stepping from the payload snapshot as written — a pose
-	/// that was already one transit old on arrival — and then stepped one tick per tick forever, so
-	/// its platform ran permanently behind the server's by the whole transit. Riders paid for it on
-	/// every reconcile: the server measured them against ITS platform, the local motor stood on the
-	/// lagging copy, and the correction dragged the character toward a pose that is off (or inside)
-	/// the local platform near edges and direction reversals — the lived experience being "falling
-	/// through the moving platform".
+	/// Three platform reports in a week ("standing on platforms but not moving with them",
+	/// "falling through the moving platform", "still") came down to two defects this fixture now
+	/// pins. The rider was never carried: <c>SetPlatformVelocity</c> fed <c>BaseVelocity</c>, which
+	/// the controller overwrites before the move. And the client platform was dead-reckoned
+	/// open-loop from a one-shot payload — seeded behind the server and never rolled back — so a
+	/// reconcile replay probed a deck up to a round trip away from where the rider stood.
 	/// </para>
 	/// <para>
-	/// The whole fix rests on one property, and that is what the behavioural test pins:
-	/// <c>KCCPlatform.Step</c> is a pure function of (position, goal index, delta), so
-	/// snapshot-then-step-K equals step-W-then-K — including the corner snap and goal-index
-	/// advance, which is where naive extrapolation (position + velocity × transit) goes wrong.
+	/// The fixture keeps its historical name; the catch-up it was written for is gone, replaced by
+	/// the model it should have had: forwarding on, FishNet reconciling and replaying the platform.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -49,8 +47,10 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// A twin that starts from the server's tick-W snapshot and steps K more ticks lands
-		/// exactly where the server lands after W + K ticks — across several direction reversals.
+		/// A twin that starts from the server's tick-W state and steps K more ticks lands exactly
+		/// where the server lands after W + K ticks — across several direction reversals. This is
+		/// the determinism a reconcile replay relies on: rollback to the server's state, replay the
+		/// same steps, arrive at the same deck.
 		/// </summary>
 		[Test]
 		public void SnapshotPlusCatchUp_EqualsTheServersWalk()
@@ -69,12 +69,12 @@ namespace FishMMO.UnitTests
 				server.Step(tickDelta);
 			}
 
-			// ...the payload carries its pose and goal index...
+			// ...the reconcile carries its pose and goal index...
 			client.transform.position = server.transform.position;
 			SetPrivateField(client, "goalIndex", GetPrivateField<byte>(server, "goalIndex"));
 
 			// ...and both sides then advance the same number of ticks: the server live, the
-			// client as catch-up plus live ticks. The two walks must be the same walk.
+			// client as replay. The two walks must be the same walk.
 			for (int i = 0; i < transitTicks; ++i)
 			{
 				server.Step(tickDelta);
@@ -82,183 +82,98 @@ namespace FishMMO.UnitTests
 			}
 
 			LogAssert.IsTrue((server.transform.position - client.transform.position).sqrMagnitude < 1e-10f,
-				"Snapshot-then-step must reproduce the server's walk exactly — this is the determinism the " +
-				"payload catch-up relies on. A drift here means Step reads something outside (position, " +
+				"Rollback-then-step must reproduce the server's walk exactly — this is the determinism a " +
+				"reconcile replay relies on. A drift here means Step reads something outside (position, " +
 				"goalIndex, delta) and the platform phase can never be trusted.");
 			LogAssert.AreEqual(GetPrivateField<byte>(server, "goalIndex"), GetPrivateField<byte>(client, "goalIndex"),
 				"Including the corner snap: both walks must agree which waypoint they are heading for.");
 		}
 
 		/// <summary>
-		/// SOURCE — the payload actually carries the server tick and the reader actually catches
-		/// up. The behavioural half above proves stepping is safe; this half proves it happens.
-		/// </summary>
-		[Test]
-		public void PlatformPayload_CarriesTheTickAndCatchesUp()
-		{
-			string source = ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
-			LogAssert.IsTrue(source.Contains("writer.WriteUInt32(base.NetworkObject != null && TimeManager != null ? TimeManager.LocalTick : 0u);"),
-				"WritePayload must stamp the server tick the snapshot was true on (behind the null-safe " +
-				"NetworkObject guard — the TimeManager accessor throws on an unspawned component).");
-			LogAssert.IsTrue(source.Contains("uint serverTickAtWrite = reader.ReadUInt32();"),
-				"ReadPayload must consume it in the same wire position.");
-			LogAssert.IsTrue(source.Contains("ComputeObserverFastForwardTicks("),
-				"And catch up with the same transit arithmetic a streamed ability object uses — without " +
-				"this the client's platform runs one full transit behind the server's for the whole session, " +
-				"and every rider reconcile fights that offset at the platform's edges.");
-			LogAssert.IsTrue(source.Contains("MaxCatchUpTicks"),
-				"Bounded, so a clock-estimate glitch cannot spin an unbounded catch-up loop on spawn.");
-		}
-
-		/// <summary>
-		/// The pose ring hands back the position the deck actually held at the end of each tick —
-		/// the geometry half of what a rider needs to replay a reconcile honestly.
+		/// SOURCE — the platform runs FishNet's demo tick model on every peer: replicate plus
+		/// reconcile from <c>TimeManager_OnTick</c>, no server-only branch, no client-side stepping,
+		/// no payload catch-up, no hand-rolled rollback.
 		/// </summary>
 		/// <remarks>
-		/// The velocity ring alone was not enough (issue #228). A rider replaying k ticks inherited
-		/// the right velocity for each of them while its ground probes — real physics queries —
-		/// hit the deck collider wherever it stands NOW, up to a full round trip downstream. At the
-		/// shipped platform's 4 u/s a 500 ms round trip is 2 units of a deck only 2.5 units deep,
-		/// so a rider standing anywhere in the back of the deck replayed over open air: it
-		/// ungrounded, stopped inheriting the platform velocity (the motor only conveys a stably
-		/// grounded rider on a horizontal platform), fell, and was hauled back by the next
-		/// reconcile — sinking through the deck it was standing on, worst at high ping.
+		/// Each of those absences is a thing the previous model needed because forwarding was off.
+		/// Their return would mean forwarding was switched off again (see
+		/// <c>InterestManagementWiringTests.OnlyPlatforms_ShipWithStateForwardingOn</c>) and the
+		/// open-loop client platform came back with it.
 		/// </remarks>
 		[Test]
-		public void PoseRing_ReturnsThePoseEachTickActuallyHeld()
-		{
-			const float tickDelta = 1f / 30f;
-			KCCPlatform platform = MakePlatform("ringPlatform");
-
-			// Walk the platform the way its tick does — step, then record — remembering the truth.
-			const uint firstTick = 500;
-			const int ticks = 40;
-			Vector3[] truth = new Vector3[ticks];
-			for (int i = 0; i < ticks; ++i)
-			{
-				platform.Step(tickDelta);
-				truth[i] = platform.transform.position;
-				RecordTickState(platform, firstTick + (uint)i, platform.LastCompletedTickVelocity, truth[i]);
-			}
-
-			for (int i = 0; i < ticks; ++i)
-			{
-				LogAssert.IsTrue(platform.TryGetPositionForTick(firstTick + (uint)i, out Vector3 pose),
-					$"Tick {firstTick + (uint)i} is inside the ring and must still be readable — a replay " +
-					"that cannot recover a tick's geometry falls back to replaying against the present.");
-				LogAssert.IsTrue((pose - truth[i]).sqrMagnitude < 1e-10f,
-					"The ring must return the pose that tick actually held, not a neighbouring tick's. " +
-					"Riding is decided by where the deck was when the rider's probe ran.");
-			}
-
-			/* The ring must move with the deck, not just exist: a ring that returned one frozen
-			 * pose for every tick would pass the lookups above if the platform never moved. */
-			LogAssert.IsTrue((truth[ticks - 1] - truth[0]).sqrMagnitude > 0.01f,
-				"The fixture must actually walk the platform, or it proves nothing.");
-		}
-
-		/// <summary>
-		/// A tick older than the ring reports a miss rather than a wrong pose — a replay window
-		/// longer than the history degrades to the old present-pose behaviour, never to geometry
-		/// from some unrelated lap.
-		/// </summary>
-		[Test]
-		public void PoseRing_ReportsAMissForTicksItNoLongerHolds()
-		{
-			const float tickDelta = 1f / 30f;
-			KCCPlatform platform = MakePlatform("ringOverflowPlatform");
-
-			const uint firstTick = 1000;
-			const int ringLength = 64;
-			for (int i = 0; i < ringLength + 5; ++i)
-			{
-				platform.Step(tickDelta);
-				RecordTickState(platform, firstTick + (uint)i, platform.LastCompletedTickVelocity, platform.transform.position);
-			}
-
-			/* Slot reuse is what makes this a real question: tick T and tick T+64 share a slot, so
-			 * an implementation that only indexed by slot would happily return the NEWER lap's
-			 * pose for the older tick. The stored tick is checked, so it misses instead. */
-			LogAssert.IsFalse(platform.TryGetPositionForTick(firstTick, out _),
-				"A tick the ring has since overwritten must miss, not return the pose of the tick " +
-				"that took its slot — that would place the deck a whole lap away from where the " +
-				"replayed rider stood.");
-			LogAssert.IsTrue(platform.TryGetPositionForTick(firstTick + ringLength + 4, out _),
-				"The most recent tick must still be held.");
-		}
-
-		/// <summary>
-		/// SOURCE — the rewind is actually wired to FishNet's reconcile, at the three seams that
-		/// make it line up with a live tick, and the live pose is always put back.
-		/// </summary>
-		[Test]
-		public void Reconcile_RewindsPlatformGeometryAndRestoresIt()
+		public void Platform_RunsTheUpstreamTickModel_OnEveryPeer()
 		{
 			string source = ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
+			int onTick = source.IndexOf("protected override void TimeManager_OnTick()", System.StringComparison.Ordinal);
+			int next = source.IndexOf("public override void CreateReconcile()", onTick, System.StringComparison.Ordinal);
+			LogAssert.IsTrue(onTick >= 0 && next > onTick, "TimeManager_OnTick and CreateReconcile must both exist, in that order.");
+			string body = source.Substring(onTick, next - onTick);
 
-			/* A physics query answers from the last SYNCED collider pose, and FishNet syncs once
-			 * per tick after OnTick — so a rider simulating tick T stands on the deck as it was at
-			 * the end of T-1. The replay reproduces that relationship by applying the state tick's
-			 * pose before the SyncTransforms that follows OnPreReconcile, then each replayed
-			 * tick's pose before the Simulate that closes that tick. Move either hook and the
-			 * replayed world slips a tick out of step with the live one. */
-			LogAssert.IsTrue(source.Contains("manager.OnPreReconcile += PredictionManager_OnPreReconcile"),
-				"The deck must be placed at the reconciled tick's pose BEFORE FishNet's pre-replay " +
-				"SyncTransforms, or the first replayed tick probes the present.");
-			LogAssert.IsTrue(source.Contains("manager.OnPreReplicateReplay += PredictionManager_OnPreReplicateReplay"),
-				"And advanced per replayed tick, so each replayed probe sees that tick's geometry.");
-			LogAssert.IsTrue(source.Contains("manager.OnPostReconcile += PredictionManager_OnPostReconcile"),
-				"And returned to the live pose when the replay ends — a deck left parked in the past " +
-				"would desynchronise from the server permanently, which is worse than the bug.");
-			LogAssert.IsTrue(source.Contains("private void RestoreLivePose()") &&
-				source.Contains("transform.position = livePositionDuringReplay;"),
-				"The restore must use the pose saved when the reconcile began, not a recomputed one: " +
-				"the ring can miss (short history, a platform spawned mid-window) and the live pose " +
-				"is the only value known to be correct in that case.");
-			LogAssert.IsTrue(source.Contains("base.IsClientOnlyStarted"),
-				"Client-only: the server runs every replicate once and never replays, so it has no " +
-				"historic tick to rewind to.");
+			LogAssert.IsTrue(body.Contains("PerformReplicate(default);") && body.Contains("CreateReconcile();"),
+				"OnTick must run the replicate and build the reconcile on EVERY peer — the client's " +
+				"PerformReplicate is what FishNet routes through Replicate_NonAuthoritative to move the " +
+				"platform ahead of the server, and the reconcile is the client's fallback state.");
+			LogAssert.IsFalse(body.Contains("IsServerStarted") || body.Contains("Step((float)"),
+				"OnTick must not branch on the server or step the platform by hand: that was the " +
+				"forwarding-off workaround, and a client platform stepped outside the replicate is " +
+				"never rolled back by a reconcile.");
+			LogAssert.IsFalse(source.Contains("ComputeObserverFastForwardTicks") || source.Contains("serverTickAtWrite"),
+				"No payload catch-up. The reconcile places the platform; a fast-forward at spawn aligned " +
+				"it to the interpolated observer frame, BEHIND the server, the opposite of what a deck " +
+				"the owner stands on needs.");
+			LogAssert.IsFalse(source.Contains("OnPreReplicateReplay") || source.Contains("TryGetPositionForTick"),
+				"No hand-rolled geometry rewind. FishNet rolls a forwarded object back itself; a second " +
+				"rewind on top of it would fight the reconcile.");
+			LogAssert.IsTrue(source.Contains("PredictionManager.ClientReplayTick, LastCompletedTickVelocity"),
+				"A replayed tick must refresh the velocity ring under the client replay tick, so a rider " +
+				"replaying the same tick reads the replayed value rather than the original prediction's.");
 		}
-
-		// ── Helpers ──────────────────────────────────────────────────────────────────
 
 		/// <summary>
-		/// Files one tick into the platform's history ring, exactly as its tick callback does.
-		/// Reflection because the recorder is private and its caller needs a spawned NetworkObject.
+		/// SOURCE — the motor conveys the platform velocity through KCC's attached-rigidbody seam,
+		/// which the controller cannot overwrite, and never through <c>BaseVelocity</c>.
 		/// </summary>
-		private static void RecordTickState(KCCPlatform platform, uint tick, Vector3 velocity, Vector3 position)
+		/// <remarks>
+		/// The behavioural half lives in <c>PlatformSimPlayModeTests</c> (a rider standing still
+		/// on the ferry must move exactly with it); this half names the seam so the reason is
+		/// findable from the code. <c>BaseVelocity += _platformVelocity</c> is the exact line that
+		/// made every build before issue #228 drop riders off moving decks: UpdateVelocity replaces
+		/// BaseVelocity on the same tick, and with the shipped sharpness (10000) the Lerp clamps
+		/// to its target and keeps nothing of what was added.
+		/// </remarks>
+		[Test]
+		public void Motor_ConveysPlatformVelocity_WhereTheControllerCannotEraseIt()
 		{
-			MethodInfo method = typeof(KCCPlatform).GetMethod("RecordTickState",
-				BindingFlags.Instance | BindingFlags.NonPublic);
-			Assert.IsNotNull(method, "KCCPlatform.RecordTickState not found — the history ring was renamed.");
-			method.Invoke(platform, new object[] { tick, velocity, position });
+			string motor = ReadSource("Assets/Plugins/KinematicCharacterController/Core/KinematicCharacterMotor.cs");
+			LogAssert.IsFalse(motor.Contains("BaseVelocity += _platformVelocity"),
+				"The platform velocity must never be added to BaseVelocity: CharacterController.UpdateVelocity " +
+				"rewrites BaseVelocity before the move and the carry is lost on the same tick.");
+			LogAssert.IsTrue(motor.Contains("_attachedRigidbodyVelocity = platformCarry;") &&
+				motor.Contains("InternalCharacterMove(ref _attachedRigidbodyVelocity, deltaTime);"),
+				"The carry must ride _attachedRigidbodyVelocity and be moved by InternalCharacterMove — " +
+				"the same path KCC uses for a PhysicsMover, applied after UpdateVelocity has run.");
+			LogAssert.IsTrue(motor.Contains("platformCarry != Vector3.zero && _attachedRigidbody == null"),
+				"A real attached rigidbody must keep precedence; the platform seam fills in only when " +
+				"KCC found nothing to attach to.");
 		}
-
 
 		/// <summary>
-		/// A platform with its goals installed directly, sidestepping Awake entirely: edit mode
-		/// does not run Awake for plain MonoBehaviours, and FishNet's IL post-processing makes
-		/// reflecting it unreliable. <c>Step</c> reads only (position, goals, goalIndex, delta),
-		/// so identical goal lists on both twins is all the determinism test needs.
+		/// SOURCE — the rider consults the platform's velocity ring on the client only.
 		/// </summary>
-		private KCCPlatform MakePlatform(string name)
+		/// <remarks>
+		/// The ring is keyed in the client's tick domain (LocalTick live, ClientReplayTick during a
+		/// replay). A replicate's tick is the owning client's unsynchronised counter, so on the
+		/// server the same lookup against a server-keyed ring is an arbitrary hit or a miss — and
+		/// the server never replays, so its live value is the correct one.
+		/// </remarks>
+		[Test]
+		public void Rider_ReadsThePlatformRing_OnlyOnTheClient()
 		{
-			GameObject go = new GameObject(name);
-			spawned.Add(go);
-			KCCPlatform platform = go.AddComponent<KCCPlatform>();
-			SetPrivateField(platform, "goals", new List<Vector3>
-			{
-				new Vector3(0f, 0f, 5f),
-				new Vector3(0f, 0f, -5f),
-			});
-			return platform;
-		}
-
-		private static void SetPrivateField<T>(object instance, string fieldName, T value)
-		{
-			FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-			Assert.IsNotNull(field, $"Private field '{fieldName}' not found on {instance.GetType().Name}.");
-			field.SetValue(instance, value);
+			string player = ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlayer.cs");
+			LogAssert.IsTrue(player.Contains("if (base.IsServerStarted ||") &&
+				player.Contains("!currentPlatform.TryGetVelocityForTick(input.GetTick(), out platformVelocity))"),
+				"KCCPlayer must take LastCompletedTickVelocity on the server and consult the ring only on " +
+				"the client, where the input tick and the ring share a domain.");
 		}
 
 		[Test]
@@ -301,6 +216,34 @@ namespace FishMMO.UnitTests
 			{
 				UnityEngine.Object.DestroyImmediate(go);
 			}
+		}
+
+		// ── Helpers ──────────────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// A platform with its goals installed directly, sidestepping Awake entirely: edit mode
+		/// does not run Awake for plain MonoBehaviours, and FishNet's IL post-processing makes
+		/// reflecting it unreliable. <c>Step</c> reads only (position, goals, goalIndex, delta),
+		/// so identical goal lists on both twins is all the determinism test needs.
+		/// </summary>
+		private KCCPlatform MakePlatform(string name)
+		{
+			GameObject go = new GameObject(name);
+			spawned.Add(go);
+			KCCPlatform platform = go.AddComponent<KCCPlatform>();
+			SetPrivateField(platform, "goals", new List<Vector3>
+			{
+				new Vector3(0f, 0f, 5f),
+				new Vector3(0f, 0f, -5f),
+			});
+			return platform;
+		}
+
+		private static void SetPrivateField<T>(object instance, string fieldName, T value)
+		{
+			FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.IsNotNull(field, $"Private field '{fieldName}' not found on {instance.GetType().Name}.");
+			field.SetValue(instance, value);
 		}
 
 		private static T GetPrivateField<T>(object instance, string fieldName)

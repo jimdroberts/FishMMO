@@ -105,6 +105,9 @@ namespace FishMMO.Shared
 		{
 			writer.WriteVector3(value.Position);
 			writer.WriteUInt8Unpacked(value.GoalIndex);
+			// Chain sequence — see KCCPlatform.ReconcileData.Sequence. Carried by the absolute form
+			// too, so the snapshot that repairs a broken chain also re-seats the counter.
+			writer.WriteUInt8Unpacked(value.Sequence);
 		}
 
 		/// <summary>
@@ -114,8 +117,9 @@ namespace FishMMO.Shared
 		{
 			Vector3 position = reader.ReadVector3();
 			byte goalIndex = reader.ReadUInt8Unpacked();
-
-			return new KCCPlatform.ReconcileData(position, goalIndex);
+			KCCPlatform.ReconcileData result = new KCCPlatform.ReconcileData(position, goalIndex);
+			result.Sequence = reader.ReadUInt8Unpacked();
+			return result;
 		}
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -125,7 +129,22 @@ namespace FishMMO.Shared
 			GenericReader<KCCPlatform.ReconcileData>.SetRead(ReadKCCPlatformReconcileData);
 			GenericDeltaWriter<KCCPlatform.ReconcileData>.SetWrite(WriteDelta);
 			GenericDeltaReader<KCCPlatform.ReconcileData>.SetRead(ReadDelta);
+			/* Stamped by FishNet at SEND time (FISHMMO EDIT in Server_SendReconcileRpc), not when
+			 * the reconcile is created — see CharacterReconcileDataDeltaSerializer for why. */
+			FishNet.Object.ReconcileSequenceStamper<KCCPlatform.ReconcileData>.Stamp = StampSequence;
 		}
+
+		/// <summary>Writes the send-time chain number into the reconcile. See <see cref="RegisterSerializers"/>.</summary>
+		internal static KCCPlatform.ReconcileData StampSequence(KCCPlatform.ReconcileData data, byte sequence)
+		{
+			data.Sequence = sequence;
+			return data;
+		}
+
+		/// <summary>Delta packets rejected for a broken chain since the last report (a counting throttle; see the character serializer).</summary>
+		private static int chainBreaksSinceReport;
+		/// <summary>One report, then one per this many further rejections.</summary>
+		private const int CHAIN_BREAK_REPORT_INTERVAL = 256;
 
 		/// <summary>
 		/// Delta writer: a one-byte field mask, then only the fields that changed.
@@ -150,11 +169,9 @@ namespace FishMMO.Shared
 			 * field through them does not produce a self-contained payload; it just guarantees
 			 * every field is present, still relative to a baseline the receiver may not have.
 			 *
-			 * NOTE (2026-08-28 audit): none of this reaches the wire today. With no owner and state
-			 * forwarding off, Server_SendReconcileRpc returns before writing anything, so this
-			 * reconcile serializer is dead code — a client advances the platform by calling
-			 * KCCPlatform.Step directly from its own tick. It is kept, correct and tested, against
-			 * forwarding being enabled later; the reasoning below is what it would need to do then.
+			 * This IS on the wire (since issue #228 the platform forwards state), and it is the one
+			 * reconcile in the project written once and sent to EVERY observer, so a mistake here
+			 * misplaces a deck under everyone standing on it.
 			 *
 			 * That matters more here than anywhere else. A platform is a scene object that starts
 			 * ticking when the scene loads and never stops, so EVERY client connects to a chain
@@ -178,6 +195,9 @@ namespace FishMMO.Shared
 			}
 
 			writer.WriteUInt8Unpacked(MODE_DELTA);
+			/* The chain sequence rides every delta, outside the flags word, so the reader can
+			 * verify its baseline BEFORE it decodes anything against it. */
+			writer.WriteUInt8Unpacked(next.Sequence);
 
 			byte flags = 0;
 			int flagPos = writer.Position;
@@ -239,6 +259,7 @@ namespace FishMMO.Shared
 				return prev;
 			}
 
+			byte sequence = reader.ReadUInt8Unpacked();
 			byte flags = reader.ReadUInt8Unpacked();
 
 			// Fields the mask does not name are unchanged, so they carry forward from prev.
@@ -250,7 +271,30 @@ namespace FishMMO.Shared
 				? reader.ReadDeltaUInt8(prev.GoalIndex)
 				: prev.GoalIndex;
 
-			return new KCCPlatform.ReconcileData(position, goalIndex);
+			if (sequence != unchecked((byte)(prev.Sequence + 1)))
+			{
+				/* The baseline this delta was built against is not the one this peer holds — a
+				 * state datagram was lost or reordered. The payload has been consumed above to keep
+				 * the shared state reader aligned, but the result is discarded and FishNet is told
+				 * not to reconcile from it (ReconcileDeltaGuard). The baseline stays where it is and
+				 * every further delta is rejected the same way until the next absolute snapshot —
+				 * at most one second — re-seats the chain. For a deterministic platform that costs
+				 * nothing visible: the client copy keeps stepping exactly as the server does. */
+				if (chainBreaksSinceReport % CHAIN_BREAK_REPORT_INTERVAL == 0)
+				{
+					Log.Debug("KCCPlatformReconcileDataDeltaSerializer",
+						$"ReadDelta: reconcile sequence {sequence} does not follow baseline {prev.Sequence}; " +
+						"a state update was lost. Ignoring platform reconciles until the next absolute snapshot. " +
+						$"(Reported once per {CHAIN_BREAK_REPORT_INTERVAL} rejections across all platforms.)");
+				}
+				unchecked { ++chainBreaksSinceReport; }
+				FishNet.Object.ReconcileDeltaGuard.RejectLastRead();
+				return prev;
+			}
+
+			KCCPlatform.ReconcileData result = new KCCPlatform.ReconcileData(position, goalIndex);
+			result.Sequence = sequence;
+			return result;
 		}
 	}
 }
