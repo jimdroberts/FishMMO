@@ -1,4 +1,4 @@
-using FishNet.Managing;
+﻿using FishNet.Managing;
 using FishNet.Transporting.WebTransport.Native;
 using System;
 using System.Collections.Concurrent;
@@ -101,6 +101,121 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// bounded by thread count, not unbounded.
 		/// </summary>
 		private const int MaxIncomingEvents = 10000;
+
+		#region Inbound rate limiting
+		/// <summary>
+		/// Per-connection inbound message budget, applied on the QUIC worker thread before any
+		/// unmanaged copy and before the shared incoming-event queue.
+		/// </summary>
+		/// <remarks>
+		/// <para>The transport caps sizes and buffers but, until this, counted nothing per
+		/// connection: <see cref="MaxIncomingEvents"/> is one budget shared by every client, so a
+		/// single flooder could fill it and have every other player's packets dropped while it
+		/// was never identified. The bucket is refilled from the monotonic clock and consumed
+		/// lock-free, one dictionary lookup per message.</para>
+		/// <para>A connection that keeps sending after its bucket is empty is disconnected, not
+		/// merely dropped. Dropping alone still lets it burn the shared queue's admission check
+		/// and the native receive buffers; a disconnect ends the cost. The disconnect is issued
+		/// from the main thread (msquic must not be re-entered from its own callback) through a
+		/// queue that is deliberately separate from the incoming-event budget the flooder may
+		/// have filled.</para>
+		/// </remarks>
+		private sealed class InboundBucket
+		{
+			public long Tokens;
+			public long LastRefillTicks;
+			public int Overflow;
+			public int Kicked;
+		}
+
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, InboundBucket> inboundBuckets =
+			new System.Collections.Concurrent.ConcurrentDictionary<ulong, InboundBucket>();
+
+		private readonly ConcurrentQueue<ulong> pendingInboundKicks = new ConcurrentQueue<ulong>();
+
+		/// <summary>Sustained messages per second per connection. Zero disables the limiter.</summary>
+		private int inboundMessagesPerSecond = 200;
+
+		/// <summary>Burst allowance per connection, in messages.</summary>
+		private int inboundMessageBurst = 400;
+
+		/// <summary>Messages refused over budget before the connection is disconnected.</summary>
+		private const int InboundOverflowKickThreshold = 100;
+
+		/// <summary>
+		/// Sets the per-connection inbound budget. Zero messages per second disables it.
+		/// </summary>
+		internal void SetInboundRateLimit(int messagesPerSecond, int burst)
+		{
+			this.inboundMessagesPerSecond = System.Math.Max(0, messagesPerSecond);
+			this.inboundMessageBurst = System.Math.Max(1, burst);
+		}
+
+		/// <summary>
+		/// Charges one message to a connection's bucket. False means drop it. Worker thread safe.
+		/// </summary>
+		private bool TryAdmitInbound(ulong nativeConnectionId)
+		{
+			int perSecond = this.inboundMessagesPerSecond;
+			if (perSecond <= 0)
+			{
+				return true;
+			}
+
+			InboundBucket bucket = this.inboundBuckets.GetOrAdd(nativeConnectionId, _ => new InboundBucket()
+			{
+				Tokens = this.inboundMessageBurst,
+				LastRefillTicks = System.Diagnostics.Stopwatch.GetTimestamp(),
+			});
+
+			if (System.Threading.Volatile.Read(ref bucket.Kicked) != 0)
+			{
+				return false;
+			}
+
+			lock (bucket)
+			{
+				long now = System.Diagnostics.Stopwatch.GetTimestamp();
+				long elapsed = now - bucket.LastRefillTicks;
+				if (elapsed > 0)
+				{
+					long refill = elapsed * perSecond / System.Diagnostics.Stopwatch.Frequency;
+					if (refill > 0)
+					{
+						bucket.Tokens = System.Math.Min(this.inboundMessageBurst, bucket.Tokens + refill);
+						bucket.LastRefillTicks = now;
+					}
+				}
+
+				if (bucket.Tokens > 0)
+				{
+					bucket.Tokens--;
+					bucket.Overflow = 0;
+					return true;
+				}
+
+				if (++bucket.Overflow >= InboundOverflowKickThreshold && bucket.Kicked == 0)
+				{
+					bucket.Kicked = 1;
+					this.pendingInboundKicks.Enqueue(nativeConnectionId);
+				}
+				return false;
+			}
+		}
+
+		/// <summary>Disconnects flooders. Main thread only; runs before the event drain.</summary>
+		private void DrainInboundKicks()
+		{
+			while (this.pendingInboundKicks.TryDequeue(out ulong nativeConnectionId))
+			{
+				transport.NetworkManager?.LogWarning($"[WebTransport Server] Connection {nativeConnectionId} exceeded the inbound message budget ({this.inboundMessagesPerSecond}/s, burst {this.inboundMessageBurst}); disconnecting.");
+				if (this.serverHandle != null && !this.serverHandle.IsInvalid)
+				{
+					WebTransportNative.wt_server_disconnect(this.serverHandle, nativeConnectionId);
+				}
+			}
+		}
+		#endregion
 
 		/// <summary>
 		/// Thread-safe queue for events arriving from native callbacks.
@@ -562,6 +677,8 @@ namespace FishNet.Transporting.WebTransport.Server
 
 			WebTransportNative.wt_server_poll(this.serverHandle, 0);
 
+			DrainInboundKicks();
+
 			while (this.incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
@@ -911,6 +1028,8 @@ namespace FishNet.Transporting.WebTransport.Server
 				return;
 			}
 
+			this.inboundBuckets.TryRemove(nativeConnectionId, out _);
+
 			this.incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
@@ -953,6 +1072,12 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (length <= 0 || length > MaxPacketSize)
 			{
 				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid stream data length {length} from connection {nativeConnectionId}. Dropping.");
+				return;
+			}
+
+			// Per-connection budget, before the copy and before the shared queue.
+			if (!TryAdmitInbound(nativeConnectionId))
+			{
 				return;
 			}
 
@@ -1014,6 +1139,12 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (length <= 0 || length > MaxDatagramReceiveSize)
 			{
 				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid datagram length {length} from connection {nativeConnectionId}. Dropping.");
+				return;
+			}
+
+			// Per-connection budget, before the copy and before the shared queue.
+			if (!TryAdmitInbound(nativeConnectionId))
+			{
 				return;
 			}
 

@@ -83,6 +83,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			TickTax(deltaTime);
 			TickPlotSync(deltaTime);
 			TickAccessEnforcement(deltaTime);
+			housingIngressGuard.Sweep(5.0f, 30.0f, 128);
 		}
 
 		/// <summary>
@@ -650,17 +651,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Log.Warning("HousingSystem", $"CharID={characterID} could not pay {price} for plot {plotID}; releasing it.");
 
-			if (!TryEnqueueAsyncWork(async () =>
+			/* EnqueuePersistence: the claim is already in the database under a character who did
+			 * not pay, and nothing sweeps such claims. A refused enqueue used to leave the land
+			 * permanently unbuyable. */
+			EnqueuePersistence(async () =>
 			{
 				if (TryGetDbService(out IPlotService plotService))
 				{
 					await ReleaseClaimAsync(plotService, plotID, characterID);
 				}
-			}, characterID))
-			{
-				Log.Error("HousingSystem",
-					$"Plot {plotID} is claimed by CharID={characterID} who did not pay for it, and the release could not be scheduled.");
-			}
+			}, characterID);
 		}
 
 		/// <summary>
@@ -714,7 +714,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!TryEnqueueAsyncWork(async () =>
+			if (!EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
 				{
@@ -734,7 +734,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}, characterID))
 			{
-				Log.Warning("HousingSystem", $"Currency ledger: async worker rejected the record for CharID={characterID}.");
+				Log.Warning("HousingSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
 			}
 		}
 

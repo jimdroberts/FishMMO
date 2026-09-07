@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using System;
 using System.Collections.Concurrent;
@@ -649,6 +649,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void OnClientTargetSelectionBroadcastReceived(NetworkConnection conn, TargetSelectionBroadcast msg, FishNet.Transporting.Channel channel)
 		{
+			if (conn == null)
+				return;
+			/* Twenty selections a second is more than any input device produces. The handler is
+			 * synchronous, so the in-flight marker is released at once and only the debounce
+			 * stamp applies. */
+			if (!respawnResurrectGuard.TryBegin(conn.ClientId, TargetSelectionOperation, TargetSelectionDebounceMs, out long selectionGuardKey))
+				return;
+			respawnResurrectGuard.End(selectionGuardKey);
+
 			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 				return;
 			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
@@ -1161,6 +1170,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const byte ResurrectOperation = 2;
 		private const byte LeaveInstanceOperation = 3;
 		private const int RespawnResurrectDebounceMs = 2000;
+
+		/// <summary>Target selection: cheap, but a Spawned lookup and a GetComponent per packet with no limit at all.</summary>
+		private const byte TargetSelectionOperation = 7;
+		private const int TargetSelectionDebounceMs = 50;
 
 		private bool TryBeginRespawnResurrectGuard(int clientId, byte operation, out long guardKey)
 		{

@@ -837,7 +837,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					groupFinderEntries.Remove(id);
 					long characterID = id;
-					TryEnqueueAsyncWork(() => DeleteGroupFinderRowAsync(characterID), characterID);
+					EnqueuePersistence(() => DeleteGroupFinderRowAsync(characterID), characterID);
 				}
 			}
 
@@ -891,7 +891,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			long characterID = entry.CharacterID;
 			NetworkConnection conn = entry.Connection;
 
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{
@@ -1329,7 +1329,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (!alive)
 			{
 				groupFinderEntries.Remove(characterID);
-				TryEnqueueAsyncWork(() => DeleteGroupFinderRowAsync(characterID), characterID);
+				EnqueuePersistence(() => DeleteGroupFinderRowAsync(characterID), characterID);
 				return;
 			}
 
@@ -1390,7 +1390,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * entry for and leaves the row alone — the delete below is this path's, and it does
 			 * not depend on any status. */
 			groupFinderEntries.Remove(characterID);
-			TryEnqueueAsyncWork(() => DeleteGroupFinderRowAsync(characterID), characterID);
+			EnqueuePersistence(() => DeleteGroupFinderRowAsync(characterID), characterID);
 
 			Log.Debug("InteractableSystem", $"Group finder: moving character {characterID} into instance {instanceID} (party {partyID}).");
 
@@ -1411,7 +1411,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			Log.Debug("InteractableSystem", $"Group finder: character {characterID} stayed untransferable, or away from the entrance, past the grace; their group goes on without them.");
 
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{

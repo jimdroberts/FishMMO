@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Transporting;
@@ -6,6 +6,8 @@ using FishNet.Transporting.WebTransport;
 using FishNet.Transporting.Multipass;
 using FishMMO.Logging;
 using System;
+using System.Collections.Generic;
+using FishNet.Managing.Server;
 using System.Runtime.CompilerServices;
 using FishMMO.Server.Core;
 using UnityEngine;
@@ -151,6 +153,12 @@ namespace FishMMO.Server.Implementation
 			ushort port = portOverride.HasValue && portOverride.Value > 0 ? portOverride.Value : config.GetUShort("Port", 7777);
 			int maxClients = config.GetInt("MaximumClients", 100);
 
+			/* Transport-level inbound budget, per connection, enforced by the WebTransport socket
+			 * on its receive thread before anything is queued. The broadcast budget below it
+			 * (BroadcastMaxMessagesPerSecond) is the second, transport-agnostic line. */
+			int inboundPerSecond = config.GetInt("TransportMaxInboundMessagesPerSecond", 200);
+			int inboundBurst = config.GetInt("TransportInboundMessageBurst", 400);
+
 			// IPv6 dual-stack support: when enabled, binds both IPv4 and IPv6 on the same port.
 			bool enableIPv6 = string.Equals(config.GetString("EnableIPv6", "false"), "true", StringComparison.OrdinalIgnoreCase);
 			string ipv6Address = config.GetString("IPv6Address", "::1");
@@ -198,6 +206,7 @@ namespace FishMMO.Server.Implementation
 						}
 #endif
 						wt.SetAllowedOrigins(allowedOrigins);
+						wt.SetInboundRateLimit(inboundPerSecond, inboundBurst);
 						if (!ConfigureWebTransport(wt))
 							Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed for Multipass child — TLS certificates not loaded.");
 						configured = true;
@@ -227,6 +236,7 @@ namespace FishMMO.Server.Implementation
 				}
 #endif
 				wt.SetAllowedOrigins(allowedOrigins);
+				wt.SetInboundRateLimit(inboundPerSecond, inboundBurst);
 				if (!ConfigureWebTransport(wt))
 					Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed -- TLS certificates not loaded.");
 			}
@@ -315,12 +325,117 @@ namespace FishMMO.Server.Implementation
 		/// <typeparam name="T">The broadcast type.</typeparam>
 		/// <param name="handler">The handler to register.</param>
 		/// <param name="requireAuthentication">Whether authentication is required for the broadcast.</param>
+		#region Broadcast budget
+		/// <summary>
+		/// Per-connection budget over every broadcast registered through this wrapper, applied
+		/// before the handler runs.
+		/// </summary>
+		/// <remarks>
+		/// <para>FishNet drains every pending packet each frame on the main thread and has no
+		/// per-connection message-rate limit of its own — only size kicks. The per-system ingress
+		/// guards bound what each handler will <i>do</i>, but not how many packets a client can
+		/// make the server parse and dispatch. This is that missing budget, and unlike the
+		/// transport's it applies to every transport (the editor's, the tests', a future one).</para>
+		/// <para>Tuned well above anything a client legitimately sends: a busy player produces a
+		/// few dozen broadcasts a second at most. A connection that keeps sending after its
+		/// bucket is empty is kicked, because dropping alone still costs the parse.</para>
+		/// </remarks>
+		private sealed class BroadcastBucket
+		{
+			public double Tokens;
+			public double LastRefillSeconds;
+			public int Overflow;
+		}
+
+		private readonly Dictionary<int, BroadcastBucket> broadcastBuckets = new Dictionary<int, BroadcastBucket>();
+		private readonly Dictionary<Delegate, Delegate> broadcastWrappers = new Dictionary<Delegate, Delegate>();
+		private bool broadcastBudgetHooked;
+		private int broadcastMaxPerSecond = -1;
+		private int broadcastBurst;
+		private const int BroadcastOverflowKickThreshold = 200;
+
+		private void EnsureBroadcastBudget()
+		{
+			if (broadcastMaxPerSecond >= 0)
+			{
+				return;
+			}
+			broadcastMaxPerSecond = Math.Max(0, config.GetInt("BroadcastMaxMessagesPerSecond", 100));
+			broadcastBurst = Math.Max(1, config.GetInt("BroadcastMessageBurst", 200));
+
+			if (!broadcastBudgetHooked && NetworkManager?.ServerManager != null)
+			{
+				NetworkManager.ServerManager.OnRemoteConnectionState += BroadcastBudget_OnRemoteConnectionState;
+				broadcastBudgetHooked = true;
+			}
+		}
+
+		private void BroadcastBudget_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		{
+			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)
+			{
+				broadcastBuckets.Remove(conn.ClientId);
+			}
+		}
+
+		/// <summary>Charges one broadcast to the connection. False means drop it. Main thread only.</summary>
+		private bool AdmitBroadcast(NetworkConnection conn)
+		{
+			if (broadcastMaxPerSecond <= 0 || conn == null)
+			{
+				return true;
+			}
+
+			double now = UnityEngine.Time.realtimeSinceStartupAsDouble;
+			if (!broadcastBuckets.TryGetValue(conn.ClientId, out BroadcastBucket bucket))
+			{
+				bucket = new BroadcastBucket() { Tokens = broadcastBurst, LastRefillSeconds = now };
+				broadcastBuckets[conn.ClientId] = bucket;
+			}
+
+			double elapsed = now - bucket.LastRefillSeconds;
+			if (elapsed > 0.0)
+			{
+				bucket.Tokens = Math.Min(broadcastBurst, bucket.Tokens + elapsed * broadcastMaxPerSecond);
+				bucket.LastRefillSeconds = now;
+			}
+
+			if (bucket.Tokens >= 1.0)
+			{
+				bucket.Tokens -= 1.0;
+				bucket.Overflow = 0;
+				return true;
+			}
+
+			if (++bucket.Overflow >= BroadcastOverflowKickThreshold)
+			{
+				bucket.Overflow = 0;
+				Log.Warning("FishNetNetworkWrapper", $"Connection {conn.ClientId} exceeded the broadcast budget ({broadcastMaxPerSecond}/s, burst {broadcastBurst}); kicking.");
+				conn.Kick(KickReason.ExploitExcessiveData);
+			}
+			return false;
+		}
+		#endregion
+
 		public void RegisterBroadcast<T>(
 			Action<NetworkConnection, T, Channel> handler,
 			bool requireAuthentication = true) where T : struct, IBroadcast
 		{
 			Log.Debug("Broadcast", "Registered " + typeof(T));
-			NetworkManager.ServerManager.RegisterBroadcast(handler, requireAuthentication);
+			EnsureBroadcastBudget();
+
+			/* Wrapped, so the budget is charged before any handler runs; the wrapper is remembered
+			 * so Unregister can hand FishNet the same delegate instance it registered. */
+			Action<NetworkConnection, T, Channel> wrapped = (conn, msg, channel) =>
+			{
+				if (!AdmitBroadcast(conn))
+				{
+					return;
+				}
+				handler(conn, msg, channel);
+			};
+			broadcastWrappers[handler] = wrapped;
+			NetworkManager.ServerManager.RegisterBroadcast(wrapped, requireAuthentication);
 		}
 
 		/// <summary>
@@ -332,6 +447,12 @@ namespace FishMMO.Server.Implementation
 			Action<NetworkConnection, T, Channel> handler) where T : struct, IBroadcast
 		{
 			Log.Debug("Broadcast", "Unregistered " + typeof(T));
+			if (broadcastWrappers.TryGetValue(handler, out Delegate wrapped))
+			{
+				broadcastWrappers.Remove(handler);
+				NetworkManager.ServerManager.UnregisterBroadcast((Action<NetworkConnection, T, Channel>)wrapped);
+				return;
+			}
 			NetworkManager.ServerManager.UnregisterBroadcast(handler);
 		}
 

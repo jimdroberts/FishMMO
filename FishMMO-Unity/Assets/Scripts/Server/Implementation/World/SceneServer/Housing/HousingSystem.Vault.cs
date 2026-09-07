@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -85,7 +85,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long baseFee = Math.Max(0L, vaultBaseFee);
 			float rate = VaultFeeRatePerDay;
 
-			if (!TryEnqueueAsyncWork(async () =>
+			/* EnqueuePersistence, not TryEnqueueAsyncWork: the land is already released, so a
+			 * refused enqueue used to leave the previous owner's house neither vaulted nor
+			 * demolished, on ground somebody else now owns, with no sweep to ever revisit it. */
+			EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out IPlotVaultService vaultService))
 				{
@@ -112,10 +115,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Log.Debug("HousingSystem",
 						$"Vaulted {stored.Data} stack(s) from plot {plotID} for CharID={ownerCharacterID}.");
 				}
-			}, ownerCharacterID))
-			{
-				Log.Warning("HousingSystem", $"Could not enqueue the vault move for plot {plotID}.");
-			}
+			}, ownerCharacterID);
 		}
 
 		/// <summary>
@@ -245,7 +245,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			long characterID = player.ID;
 
-			if (!TryEnqueueAsyncWork(async () =>
+			/* EnqueuePersistence: the fee has already been taken and persisted, so the removal
+			 * must run — on the pool when it has room, on the unbounded fallback when it does
+			 * not. The refund paths below stay for the outcomes the database itself reports. */
+			EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out IPlotVaultService vaultService))
 				{
@@ -279,11 +282,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				Log.Debug("HousingSystem",
 					$"CharID={characterID} retrieved {entry.Amount}x template {entry.TemplateID} from the vault for {fee}.");
-			}, characterID))
-			{
-				Log.Error("HousingSystem", $"Vault retrieval for CharID={characterID} was charged but could not be completed; refunding.");
-				RefundVaultFee(player, fee);
-			}
+			}, characterID);
 		}
 
 		/// <summary>
@@ -362,7 +361,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!TryEnqueueAsyncWork(async () =>
+			if (!EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
 				{
@@ -382,7 +381,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}, characterID))
 			{
-				Log.Warning("HousingSystem", $"Currency ledger: async worker rejected the vault fee record for CharID={characterID}.");
+				Log.Warning("HousingSystem", $"Currency ledger: async worker was full; the vault fee record for CharID={characterID} ran on the unbounded fallback path.");
 			}
 		}
 	}

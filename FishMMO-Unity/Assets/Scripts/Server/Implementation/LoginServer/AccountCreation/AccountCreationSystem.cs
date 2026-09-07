@@ -1,4 +1,4 @@
-// Nullable annotations without null-state analysis. The authentication path annotates the
+﻿// Nullable annotations without null-state analysis. The authentication path annotates the
 // references that are legitimately absent — an unestablished session, a challenge that never
 // arrived — and Unity compiles this assembly with the nullable context off, so every one of those
 // annotations raised CS8632. `annotations` alone enables them without switching on flow analysis,
@@ -8,6 +8,7 @@
 using FishNet.Connection;
 using FishNet.Transporting;
 using System;
+using FishMMO.Server.Core.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Security.Cryptography;
@@ -62,6 +63,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[Header("Rate Limiting")]
 		[Tooltip("Minimum seconds between account creation attempts from the same IP")]
 		[SerializeField] private float ipRateLimitSeconds = 5.0f;
+
+		/// <summary>Per-IP debounce for <see cref="AccountVerifyBroadcast"/>. See the handler.</summary>
+		private readonly ExpiringKeyTracker<string> verifyRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		private static readonly TimeSpan VerifyRateLimitDuration = TimeSpan.FromSeconds(1);
 
 		/// <summary>
 		/// Maximum failed attempts allowed before an IP is temporarily blocked.
@@ -399,6 +405,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg, Channel channel)
 		{
+			verifyRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
 			// Already-authenticated connections should not be creating accounts.
 			if (conn.IsAuthenticated)
 			{
@@ -1528,6 +1535,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 					conn.Disconnect(true);
 					return;
 				}
+			}
+
+			/* A per-IP debounce, like account creation has, and not only the failure counter:
+			 * until maxFailedAttempts accumulate, every message here enqueued a decrypt and a
+			 * database lookup from an unauthenticated connection. One verification per IP per
+			 * second is far more than any honest client sends. */
+			if (!verifyRateLimiter.TryBegin(ipAddress, DateTime.UtcNow, VerifyRateLimitDuration))
+			{
+				return;
 			}
 
 			// Per-username brute-force protection: prevents distributed attacks from

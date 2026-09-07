@@ -1,4 +1,4 @@
-// Nullable annotations without null-state analysis. The authentication path annotates the
+﻿// Nullable annotations without null-state analysis. The authentication path annotates the
 // references that are legitimately absent — an unestablished session, a challenge that never
 // arrived — and Unity compiles this assembly with the nullable context off, so every one of those
 // annotations raised CS8632. `annotations` alone enables them without switching on flow analysis,
@@ -72,6 +72,19 @@ namespace FishMMO.Server.Implementation
 		/// total revocations at 10/second regardless of connection count.
 		/// </summary>
 		private readonly ExpiringKeyTracker<string> revokeGlobalRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Per-connection debounce for <see cref="RequestConnectionTokenBroadcast"/>.
+		/// </summary>
+		/// <remarks>
+		/// Minting is an HMAC, two Base64 encodes and a reliable reply, and a client hops at most
+		/// once every few seconds — so a connection asking more often than once a second is
+		/// either broken or hostile, and either way the extra requests are dropped rather than
+		/// served. Keyed by client id, cleared on disconnect with the handshake limiter.
+		/// </remarks>
+		private readonly ExpiringKeyTracker<int> tokenMintRateLimiter = new ExpiringKeyTracker<int>();
+
+		private static readonly TimeSpan TokenMintRateLimitDuration = TimeSpan.FromSeconds(1);
 
 		private static readonly TimeSpan RevokeGlobalRateLimitDuration = TimeSpan.FromMilliseconds(100);
 
@@ -365,6 +378,7 @@ namespace FishMMO.Server.Implementation
 			// Sweep expired entries from the handshake rate limiter to prevent
 			// unbounded memory growth under sustained handshake traffic.
 			handshakeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
+			tokenMintRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
 			// Same for the revocation limiters. The global one holds a single key, so its
 			// sweep is sized accordingly.
 			revokeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
@@ -945,6 +959,12 @@ namespace FishMMO.Server.Implementation
 		{
 			if (conn == null || !conn.IsActive) return;
 
+			if (!tokenMintRateLimiter.TryBegin(conn.ClientId, DateTime.UtcNow, TokenMintRateLimitDuration))
+			{
+				// Dropped, not answered: an answer is the cost being limited.
+				return;
+			}
+
 			if (!TryMintConnectionToken(conn, out string token))
 			{
 				// Reply with an empty token rather than staying silent: the client is
@@ -1045,6 +1065,7 @@ namespace FishMMO.Server.Implementation
 			// fallback. Remove that explicitly. This is the key that actually matters on
 			// a disconnect, because FishNet recycles ClientIds.
 			handshakeRateLimiter.Remove($"conn:{conn.ClientId}");
+			tokenMintRateLimiter.Remove(conn.ClientId);
 		}
 
 		#endregion

@@ -1,5 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Connection;
+using FishMMO.Server.Core;
 using FishNet.Transporting;
 using FishMMO.Database.Data;
 using FishMMO.Logging;
@@ -25,6 +26,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </remarks>
 	public partial class HousingSystem
 	{
+		/// <summary>Ingress-guard operation codes for the housing broadcasts. Unique within this guard.</summary>
+		private enum HousingOperation : byte
+		{
+			BeginBuilding = 1,
+			EndBuilding = 2,
+			FinishBuilding = 3,
+			PlaceStructure = 4,
+			RemoveStructure = 5,
+			GrantAccess = 6,
+			RevokeAccess = 7,
+			VaultRequest = 8,
+			VaultRetrieve = 9,
+			VaultForfeit = 10,
+		}
+
+		[Header("Request Protection")]
+		[Tooltip("Minimum milliseconds between housing requests of one kind from one connection.")]
+		[SerializeField] private int housingDebounceMilliseconds = 250;
+
+		[Tooltip("Minimum milliseconds between ANY two housing requests from one connection.")]
+		[SerializeField] private int housingGlobalRateMilliseconds = 50;
+
+		/// <summary>
+		/// Per-connection, per-operation debounce for the ten housing broadcasts.
+		/// </summary>
+		/// <remarks>
+		/// These handlers had no rate limit at all: every message paid a linear plot scan on the
+		/// main thread and most enqueued database work, so one client could fill the shared
+		/// async worker — starving character saves and session releases for everyone — by
+		/// holding a key down. The handlers are synchronous (their database work is enqueued,
+		/// not awaited), so the in-flight marker is released immediately and only the debounce
+		/// stamp does the work; a refused request does not extend the window.
+		/// </remarks>
+		private readonly IngressGuard housingIngressGuard = new IngressGuard();
+
+		private bool TryDebounceHousingRequest(NetworkConnection conn, HousingOperation operation)
+		{
+			if (conn == null)
+			{
+				return false;
+			}
+			if (!housingIngressGuard.TryBegin(conn.ClientId, (byte)operation, housingDebounceMilliseconds, out long guardKey, housingGlobalRateMilliseconds))
+			{
+				return false;
+			}
+			housingIngressGuard.End(guardKey);
+			return true;
+		}
+
 		/// <summary>
 		/// Registers the client-facing housing broadcasts.
 		/// </summary>
@@ -165,6 +215,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingBeginBuilding(NetworkConnection conn, HousingBeginBuildingBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.BeginBuilding))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -189,6 +243,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingEndBuilding(NetworkConnection conn, HousingEndBuildingBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.EndBuilding))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -208,6 +266,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingFinishBuilding(NetworkConnection conn, HousingFinishBuildingBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.FinishBuilding))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -238,6 +300,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingPlaceStructure(NetworkConnection conn, HousingPlaceStructureBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.PlaceStructure))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -261,6 +327,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingRemoveStructure(NetworkConnection conn, HousingRemoveStructureBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.RemoveStructure))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -284,6 +354,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingGrantAccess(NetworkConnection conn, HousingGrantAccessBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.GrantAccess))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -317,6 +391,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingRevokeAccess(NetworkConnection conn, HousingRevokeAccessBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.RevokeAccess))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -395,6 +473,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingVaultRequest(NetworkConnection conn, HousingVaultRequestBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.VaultRequest))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -441,6 +523,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingVaultRetrieve(NetworkConnection conn, HousingVaultRetrieveBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.VaultRetrieve))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;
@@ -459,6 +545,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnServerHousingVaultForfeit(NetworkConnection conn, HousingVaultForfeitBroadcast msg, Channel channel)
 		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.VaultForfeit))
+			{
+				return;
+			}
 			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
 			{
 				return;

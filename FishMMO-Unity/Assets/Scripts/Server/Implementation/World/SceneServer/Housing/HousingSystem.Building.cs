@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -329,7 +329,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long plotID = plot.PlotID;
 			long characterID = player.ID;
 
-			if (!TryEnqueueAsyncWork(async () =>
+			// EnqueuePersistence: the session has already ended in memory, so the state move must run.
+			EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out IPlotService plotService))
 				{
@@ -362,11 +363,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				MarkPlotChanged(plotID);
-			}, characterID))
-			{
-				Log.Warning("HousingSystem", $"Could not enqueue finishing the build on plot {plotID}.");
-				return false;
-			}
+			}, characterID);
 
 			return true;
 		}

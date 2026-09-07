@@ -146,10 +146,8 @@ namespace FishMMO.Server.Implementation
 			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
 				long entityKey = (long)accountName.GetDeterministicHashCode();
-				if (!TryEnqueueAsyncWork(() => DeleteKickRequestAsync(accountName), entityKey))
-				{
-					Log.Warning("KickRequestSystem", $"Failed to enqueue kick-request cleanup for account '{accountName}'.");
-				}
+				// EnqueuePersistence: a dropped delete kicks the account again on its next login.
+				EnqueuePersistence(() => DeleteKickRequestAsync(accountName), entityKey);
 			}
 		}
 

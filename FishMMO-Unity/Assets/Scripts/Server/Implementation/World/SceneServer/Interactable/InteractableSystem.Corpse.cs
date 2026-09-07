@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Logging;
@@ -637,6 +637,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				return;
 			}
+
+			// The one corpse message that had no guard. Synchronous: acquire, stamp, release.
+			if (!TryBeginCorpseLootGuard(conn, out long closeGuardKey))
+			{
+				return;
+			}
+			EndIngressGuard(closeGuardKey);
 
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null)

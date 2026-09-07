@@ -1,4 +1,4 @@
-using FishMMO.Logging;
+﻿using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
@@ -92,6 +92,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override void OnDeinitialize()
 		{
 			UnregisterHousingBroadcasts();
+			housingIngressGuard.Clear();
 			UnsubscribeFromCharacterLifecycle();
 			UnsubscribeFromPlots();
 		}

@@ -1,4 +1,4 @@
-using FishNet.Managing;
+﻿using FishNet.Managing;
 using FishNet.Transporting.WebTransport.Native;
 using FishNet.Managing.Transporting;
 using System;
@@ -138,6 +138,19 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		[SerializeField]
 		private float clientTimeout = 20f;
+
+		/// <summary>
+		/// Sustained inbound messages per second the server accepts from one connection before
+		/// dropping, and disconnecting a connection that keeps going. Zero disables the limiter.
+		/// </summary>
+		[Tooltip("Per-connection inbound messages per second the server accepts. A connection that keeps exceeding it is disconnected. 0 disables.")]
+		[SerializeField]
+		private int maxInboundMessagesPerSecond = 200;
+
+		/// <summary>Burst allowance per connection, in messages, on top of the sustained rate.</summary>
+		[Tooltip("Per-connection burst allowance in messages.")]
+		[SerializeField]
+		private int inboundMessageBurst = 400;
 		#endregion
 
 		#region Private
@@ -474,6 +487,19 @@ namespace FishNet.Transporting.WebTransport
 		/// The value is clamped to the range [1, 100000] to prevent resource exhaustion.
 		/// </summary>
 		/// <param name="value">The maximum number of clients (clamped to [1, 100000]).</param>
+		/// <summary>
+		/// Sets the per-connection inbound message budget. Applies to connections accepted after
+		/// the call and, when the server is running, immediately to the live socket.
+		/// </summary>
+		/// <param name="messagesPerSecond">Sustained rate; zero disables the limiter.</param>
+		/// <param name="burst">Burst allowance in messages.</param>
+		public void SetInboundRateLimit(int messagesPerSecond, int burst)
+		{
+			maxInboundMessagesPerSecond = System.Math.Max(0, messagesPerSecond);
+			inboundMessageBurst = System.Math.Max(1, burst);
+			this.serverSocket?.SetInboundRateLimit(maxInboundMessagesPerSecond, inboundMessageBurst);
+		}
+
 		public override void SetMaximumClients(int value)
 		{
 			// Range validation is duplicated in ServerSocket.SetMaximumClients.
@@ -608,6 +634,7 @@ namespace FishNet.Transporting.WebTransport
 			}
 #endif
 			this.serverSocket.Initialize(this, DatagramMTU, certificatePath, privateKeyPath);
+			this.serverSocket.SetInboundRateLimit(maxInboundMessagesPerSecond, inboundMessageBurst);
 			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
 			// ServerSocket.DefaultAlpn. Override via ServerSocket.Alpn before calling StartConnection if needed.
 			return this.serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);

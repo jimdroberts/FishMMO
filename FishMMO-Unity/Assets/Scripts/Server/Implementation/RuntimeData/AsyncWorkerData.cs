@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -135,6 +135,15 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			/* Tunable per deployment from the server configuration; the fields hold the defaults.
+			 * MaxConcurrency must stay under the database connection pool (see the class remarks);
+			 * MaxOutstanding is the backpressure threshold past which Enqueue refuses work. */
+			if (Server?.Configuration != null)
+			{
+				maxConcurrency = Server.Configuration.GetInt("AsyncWorkerMaxConcurrency", maxConcurrency);
+				maxOutstandingItems = Server.Configuration.GetInt("AsyncWorkerMaxOutstandingItems", maxOutstandingItems);
+			}
+
 			maxConcurrency = Mathf.Max(1, maxConcurrency);
 			maxOutstandingItems = Mathf.Max(maxConcurrency, maxOutstandingItems);
 

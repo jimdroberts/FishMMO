@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -231,7 +231,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * puts the grant back, which is the harmless direction to be wrong in. */
 			ApplyGrantEverywhere(plotID, targetCharacterID, PlotPermission.None);
 
-			if (!TryEnqueueAsyncWork(async () =>
+			/* EnqueuePersistence: the revocation is already applied in memory, and the next plot
+			 * resolve re-reads the grants from the database. A refused enqueue used to hand the
+			 * revoked player their key back on that resolve. */
+			EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out IPlotAccessService accessService))
 				{
@@ -246,10 +249,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				MarkPlotChanged(plotID);
-			}, revoker.ID))
-			{
-				Log.Warning("HousingSystem", $"Could not enqueue the access revocation for plot {plotID}.");
-			}
+			}, revoker.ID);
 
 			return true;
 		}
@@ -273,7 +273,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foundation.ApplyAccessGrants(new Dictionary<long, PlotPermission>());
 			}
 
-			if (!TryEnqueueAsyncWork(async () =>
+			/* EnqueuePersistence: this runs when a plot changes hands. Every foundation's grants
+			 * are already cleared above; a refused enqueue used to leave the previous owner's
+			 * guest list in the database, and the next resolve gave those keys to strangers in
+			 * the new owner's house. Keyed on the plot so it orders behind that plot's grants. */
+			EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out IPlotAccessService accessService))
 				{
@@ -285,10 +289,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Log.Error("HousingSystem", $"Could not clear access grants on plot {plotID}: {result.ErrorMessage}");
 				}
-			}))
-			{
-				Log.Warning("HousingSystem", $"Could not enqueue clearing the access grants on plot {plotID}.");
-			}
+			}, plotID);
 		}
 
 		/// <summary>

@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishMMO.Shared;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
@@ -60,6 +60,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// </remarks>
 	public partial class InteractableSystem
 	{
+		/// <summary>Ingress-guard operation code for the ready-check answer. Unique among this system's operations.</summary>
+		private const byte ArenaReadyOperation = 16;
+
+		/// <summary>Minimum milliseconds between ready-check answers from one connection.</summary>
+		private const int ArenaReadyDebounceMilliseconds = 250;
+
 		/// <summary>Seconds between arena ticks. One, because the countdown is announced per second.</summary>
 		private const float ArenaTickSeconds = 1.0f;
 
@@ -428,7 +434,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			long instanceID = state.InstanceID;
 			long seasonID = state.SeasonID;
 
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{
@@ -726,7 +732,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			long matchID = state.MatchID;
 			long characterID = seat.CharacterID;
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{
@@ -1118,7 +1124,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
+			/* One answer per seat is enforced below by seat.Answered; this bounds what an
+			 * unanswered seat can cost per packet before that check. Synchronous handler. */
+			if (!TryBeginIngressGuard(conn.ClientId, ArenaReadyOperation, ArenaReadyDebounceMilliseconds, out long readyGuardKey))
+			{
+				return;
+			}
+			EndIngressGuard(readyGuardKey);
+
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (character == null || !CharacterStateValidation.CanAct(character))
+			{
+				return;
+			}
 			if (character?.GameObject == null ||
 				!TryGetArenaMatchForScene(character.GameObject.scene.handle, out ArenaMatchState state) ||
 				state.MatchID != msg.MatchID ||
@@ -1272,7 +1290,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				long matchID = state.MatchID;
 				DateTime until = state.BackfillUntilUtc;
-				TryEnqueueAsyncWork(async () =>
+				EnqueuePersistence(async () =>
 				{
 					try
 					{
@@ -1495,7 +1513,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			long matchID = state.MatchID;
 			long seasonID = state.SeasonID;
 			bool ranked = state.Ranked;
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{
@@ -1955,7 +1973,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 			DateTime until = DateTime.UtcNow.AddMinutes(minutes);
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{
@@ -1978,7 +1996,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				return;
 			}
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{
@@ -2216,7 +2234,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private void PersistArenaStatus(ArenaMatchState state, ArenaMatchStatus status)
 		{
 			long matchID = state.MatchID;
-			TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
 				try
 				{

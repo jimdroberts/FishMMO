@@ -659,7 +659,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				? CurrencyMovementState.Absorbed
 				: CurrencyMovementState.Returned;
 
-			if (!TryEnqueueAsyncWork(async () =>
+			if (!EnqueuePersistence(async () =>
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICurrencyLedgerService>(out ICurrencyLedgerService ledgerService))
@@ -674,7 +674,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 			}, characterID))
 			{
-				Log.Warning("InteractableSystem", $"Currency ledger: async worker rejected the record for CharID={characterID}.");
+				Log.Warning("InteractableSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
 			}
 		}
 

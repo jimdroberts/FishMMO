@@ -1276,7 +1276,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				? CurrencyMovementState.Absorbed
 				: CurrencyMovementState.Returned;
 
-			if (!TryEnqueueAsyncWork(async () =>
+			if (!EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
 				{
@@ -1290,7 +1290,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}, characterID))
 			{
-				Log.Warning("GuildSystem", $"Currency ledger: async worker rejected the record for CharID={characterID}.");
+				Log.Warning("GuildSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
 			}
 		}
 

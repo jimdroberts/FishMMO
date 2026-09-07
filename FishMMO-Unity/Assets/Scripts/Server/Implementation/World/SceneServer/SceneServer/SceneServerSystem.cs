@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Managing.Scened;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using UnityEngine;
@@ -1118,11 +1118,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				mappingData.PendingScenes.Remove(sceneId);
 
 				Log.Warning("SceneServerSystem", $"Pending scene request timed out and was failed: SceneID={sceneId}");
-				if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneId, SceneStatus.Failed), sceneId))
-				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update for expired scene: SceneID={sceneId}. Firing directly.");
-					_ = UpdateSceneStatusAsync(sceneId, SceneStatus.Failed);
-				}
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. */
+				EnqueuePersistence(() => UpdateSceneStatusAsync(sceneId, SceneStatus.Failed), sceneId);
 			}
 		}
 
@@ -1241,11 +1239,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				!WorldSceneDetailsCache.Scenes.Contains(sceneData.SceneName))
 			{
 				Log.Warning("SceneServerSystem", $"Scene is missing from the cache. Unable to load scene: SceneID={sceneData.ID} Scene={sceneData.SceneName}");
-				if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
-				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update for missing scene: SceneID={sceneData.ID}. Firing directly.");
-					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
-				}
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. */
+				EnqueuePersistence(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 
 				/* Kick any connected characters assigned to this scene so they don't get stuck.
 				 * Characters arriving after this point are handled by CharacterSystem.Loading,
@@ -1398,11 +1394,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (sceneData.WorldServerID == UNKNOWN_WORLD_ID)
 			{
 				Log.Warning("SceneServerSystem", "Failed to get World Server ID.");
-				if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
-				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update: SceneID={sceneData.ID}. Firing directly.");
-					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
-				}
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. */
+				EnqueuePersistence(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 				// The row is refused, but the scene may well have loaded. See UnloadOrphanedScenes.
 				UnloadOrphanedScenes(mappingData, args.LoadedScenes);
 				return;
@@ -1412,11 +1406,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (sceneType == SceneType.Unknown)
 			{
 				Log.Warning("SceneServerSystem", "Unknown scene type.");
-				if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
-				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update: SceneID={sceneData.ID}. Firing directly.");
-					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
-				}
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. */
+				EnqueuePersistence(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 				UnloadOrphanedScenes(mappingData, args.LoadedScenes);
 				return;
 			}
@@ -1425,11 +1417,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (args.LoadedScenes == null || args.LoadedScenes.Length < 1)
 			{
 				Log.Debug("SceneServerSystem", $"Failed to load Database Scene[{sceneData.ID}].");
-				if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
-				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update: SceneID={sceneData.ID}. Firing directly.");
-					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
-				}
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. */
+				EnqueuePersistence(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 			}
 			else
 			{
@@ -1459,16 +1449,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * coming into service behind it — and nothing about two different scenes becoming
 				 * ready needs to be ordered at all. Per-scene ordering is what matters here: it is
 				 * what keeps a ready write from overtaking a status write for the same row. */
-				if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(readySceneId, runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle), readySceneId))
-				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={sceneName}:{sceneHandle}. Firing directly.");
-					// Fire-and-forget is safe here: SetSceneReadyAsync has its own
-					// try-catch with error logging (see method body). The task is
-					// discarded with _ = to suppress the compiler warning; any DB
-					// or network failure will be logged internally without crashing
-					// the scene-load callback.
-					_ = SetSceneReadyAsync(readySceneId, runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle);
-				}
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. */
+				EnqueuePersistence(() => SetSceneReadyAsync(readySceneId, runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle), readySceneId);
 			}
 		}
 
@@ -1907,11 +1890,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Remove the scene details from the database immediately upon an Unload request
 			// to prevent new clients from connecting to it.
-			if (!TryEnqueueAsyncWork(() => DeleteSceneAsync(sceneID), sceneID))
-			{
-				Log.Warning("SceneServerSystem", $"Failed to enqueue async DeleteScene: SceneID={sceneID}. Firing directly.");
-				_ = DeleteSceneAsync(sceneID);
-			}
+			/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+			 * saturated pool must not be unbounded work on the frame thread. */
+			EnqueuePersistence(() => DeleteSceneAsync(sceneID), sceneID);
 
 			SceneUnloadData sud = new SceneUnloadData()
 			{

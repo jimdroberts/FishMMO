@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -461,19 +461,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			/* Instanced content has no channels, and the answer to that is an empty list rather
-			 * than silence. The picker opens itself on the player's click and only closes again
-			 * when a list arrives, so a request that is never answered leaves an empty window
-			 * over the game with nothing to explain it. */
-			if (character.IsInInstance())
-			{
-				SendChannelList(conn, Array.Empty<ChannelAddress>(), character.InstanceSceneHandle);
-				return;
-			}
-
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.RequestList, out long guardKey))
 			{
 				// Debounced, or a list request is already in flight — that one will answer.
+				return;
+			}
+
+			/* Instanced content has no channels, and the answer to that is an empty list rather
+			 * than silence. The picker opens itself on the player's click and only closes again
+			 * when a list arrives, so a request that is never answered leaves an empty window
+			 * over the game with nothing to explain it. Behind the guard, unlike before: this
+			 * branch sent a reliable reply per message with no limit for anyone in an instance. */
+			if (character.IsInInstance())
+			{
+				EndIngressGuard(guardKey);
+				SendChannelList(conn, Array.Empty<ChannelAddress>(), character.InstanceSceneHandle);
 				return;
 			}
 

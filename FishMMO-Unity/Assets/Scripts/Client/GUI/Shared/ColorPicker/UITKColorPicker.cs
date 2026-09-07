@@ -259,17 +259,14 @@ namespace FishMMO.Client
 		private Color current = Color.red;
 
 		/// <summary>
-		/// When true, value-changed callbacks are ignored to prevent feedback loops during programmatic updates.
-		/// </summary>
-		private bool suppressCallbacks;
-
-		/// <summary>
 		/// When true, <see cref="OnColorChanged"/> is not raised.
 		/// </summary>
 		/// <remarks>
-		/// Distinct from <see cref="suppressCallbacks"/>, which is about the picker's own
-		/// elements talking to each other. This one is about the picker talking to whoever
-		/// opened it, and it is set while the picker is being seeded rather than driven.
+		/// This is about the picker talking to whoever opened it, and it is set while the picker
+		/// is being seeded rather than driven. The picker's own elements never talk to each other
+		/// through change events at all: every programmatic write goes through
+		/// <c>SetValueWithoutNotify</c> (see <see cref="SetSliderValue"/>), so a change callback
+		/// only ever means the player moved something.
 		/// </remarks>
 		private bool suppressNotify;
 
@@ -460,7 +457,11 @@ namespace FishMMO.Client
 			// Static spectrum backgrounds that never change.
 			BuildStaticStrips();
 
-			SetColor(InitialColor);
+			/* Seeded silently. Open assigns the subscriber before Show, and Show is what runs this
+			 * on a start-hidden panel, so notifying here reported the caller's own colour straight
+			 * back to it as if the player had picked it — and the Options panel answers every
+			 * report with a settings write and a theme reload. */
+			ApplyColor(InitialColor, notify: false);
 		}
 
 		/// <summary>
@@ -541,13 +542,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private void RegisterHSV()
 		{
-			hSlider?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateHueSliderValue(evt.newValue); } });
-			sSlider?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateSaturationSliderValue(evt.newValue); } });
-			vSlider?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateValueSliderValue(evt.newValue); } });
+			hSlider?.RegisterValueChangedCallback((evt) => UpdateHueSliderValue(evt.newValue));
+			sSlider?.RegisterValueChangedCallback((evt) => UpdateSaturationSliderValue(evt.newValue));
+			vSlider?.RegisterValueChangedCallback((evt) => UpdateValueSliderValue(evt.newValue));
 
-			hInput?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateHueInputValue(evt.newValue); } });
-			sInput?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateSaturationInputValue(evt.newValue); } });
-			vInput?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateValueInputValue(evt.newValue); } });
+			hInput?.RegisterValueChangedCallback((evt) => UpdateHueInputValue(evt.newValue));
+			sInput?.RegisterValueChangedCallback((evt) => UpdateSaturationInputValue(evt.newValue));
+			vInput?.RegisterValueChangedCallback((evt) => UpdateValueInputValue(evt.newValue));
 		}
 
 		/// <summary>
@@ -555,15 +556,15 @@ namespace FishMMO.Client
 		/// </summary>
 		private void RegisterRGBA()
 		{
-			rSlider?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateRedSliderValue(evt.newValue); } });
-			gSlider?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateGreenSliderValue(evt.newValue); } });
-			bSlider?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateBlueSliderValue(evt.newValue); } });
-			aSlider?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateAlphaSliderValue(evt.newValue); } });
+			rSlider?.RegisterValueChangedCallback((evt) => UpdateRedSliderValue(evt.newValue));
+			gSlider?.RegisterValueChangedCallback((evt) => UpdateGreenSliderValue(evt.newValue));
+			bSlider?.RegisterValueChangedCallback((evt) => UpdateBlueSliderValue(evt.newValue));
+			aSlider?.RegisterValueChangedCallback((evt) => UpdateAlphaSliderValue(evt.newValue));
 
-			rInput?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateRedInputValue(evt.newValue); } });
-			gInput?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateGreenInputValue(evt.newValue); } });
-			bInput?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateBlueInputValue(evt.newValue); } });
-			aInput?.RegisterValueChangedCallback((evt) => { if (!suppressCallbacks) { UpdateAlphaInputValue(evt.newValue); } });
+			rInput?.RegisterValueChangedCallback((evt) => UpdateRedInputValue(evt.newValue));
+			gInput?.RegisterValueChangedCallback((evt) => UpdateGreenInputValue(evt.newValue));
+			bInput?.RegisterValueChangedCallback((evt) => UpdateBlueInputValue(evt.newValue));
+			aInput?.RegisterValueChangedCallback((evt) => UpdateAlphaInputValue(evt.newValue));
 		}
 
 		/// <summary>
@@ -872,48 +873,40 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Sets a slider value without firing user callbacks.
+		/// Sets a slider value without raising its change event.
 		/// </summary>
+		/// <remarks>
+		/// <c>SetValueWithoutNotify</c>, not <c>value</c> behind a "suppress callbacks" flag.
+		/// The flag looked like it worked and did not: UI Toolkit's dispatcher queues any event
+		/// sent while another event is being dispatched, and the picker is only ever written to
+		/// from inside one — the Options "Change" click that opens it, the pointer event behind a
+		/// slider drag. The queued change events were delivered after the flag had already been
+		/// put back, so every write here re-entered the recompute chain. One slider step reported
+		/// seventeen colours to the caller, and each pass rounded through integer HSV, so the
+		/// exact channel the player set — and the colour the picker was seeded with — drifted by a
+		/// unit or two on every open and every drag.
+		/// </remarks>
 		private void SetSliderValue(Slider slider, float value)
 		{
-			if (slider == null)
-			{
-				return;
-			}
-			bool previous = suppressCallbacks;
-			suppressCallbacks = true;
-			slider.value = value;
-			suppressCallbacks = previous;
+			slider?.SetValueWithoutNotify(value);
 		}
 
 		/// <summary>
-		/// Sets an integer input value without firing user callbacks.
+		/// Sets an integer input value without raising its change event.
+		/// See <see cref="SetSliderValue"/> for why.
 		/// </summary>
 		private void SetInputValue(IntegerField field, int value)
 		{
-			if (field == null)
-			{
-				return;
-			}
-			bool previous = suppressCallbacks;
-			suppressCallbacks = true;
-			field.value = value;
-			suppressCallbacks = previous;
+			field?.SetValueWithoutNotify(value);
 		}
 
 		/// <summary>
-		/// Updates the hex input text without firing user callbacks.
+		/// Updates the hex input text without raising its change event.
+		/// See <see cref="SetSliderValue"/> for why.
 		/// </summary>
 		private void SetHexText(string value)
 		{
-			if (hexInput == null)
-			{
-				return;
-			}
-			bool previous = suppressCallbacks;
-			suppressCallbacks = true;
-			hexInput.value = value;
-			suppressCallbacks = previous;
+			hexInput?.SetValueWithoutNotify(value);
 		}
 
 		/// <summary>

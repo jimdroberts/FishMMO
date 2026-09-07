@@ -433,6 +433,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			/* A loaded character, like the forward lookup's character-name path requires. Without
+			 * it this was a name-enumeration oracle any authenticated connection could drive at
+			 * the debounce rate before it had even finished spawning. */
+			IPlayerCharacter requester = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (requester == null || !requester.IsFlagged(CharacterFlags.IsLoaded))
+			{
+				return;
+			}
+
 			if (IsRequestDebounced(conn))
 			{
 				return;
