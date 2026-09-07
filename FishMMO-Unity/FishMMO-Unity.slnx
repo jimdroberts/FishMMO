@@ -31,5 +31,6 @@
   <Project Path="WebTransport.Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.Editor.csproj" />
+  <Project Path="FishMMO.Shared.Housing.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
 </Solution>

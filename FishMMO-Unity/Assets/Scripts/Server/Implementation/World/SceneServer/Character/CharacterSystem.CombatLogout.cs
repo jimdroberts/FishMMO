@@ -485,7 +485,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Nothing will run the save or the load, so hand the claim back rather than
 				// leaving the character owned by a server that has forgotten about it.
 				Log.Error("CharacterSystem", $"Failed to enqueue reattach for character {characterID}; releasing its session.");
-				QueuePendingFlush(characterID, charData, new CharacterSessionInfo(heldToken, heldServerID));
+				// The body's rows still have to land: sub-entities on their own lane, the item
+				// flush inside the pending release so it runs before the claim is handed back.
+				EnqueueSubEntitySaves(subEntities);
+				QueuePendingFlush(characterID, charData, new CharacterSessionInfo(heldToken, heldServerID), itemFlush);
 				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 			}
 
