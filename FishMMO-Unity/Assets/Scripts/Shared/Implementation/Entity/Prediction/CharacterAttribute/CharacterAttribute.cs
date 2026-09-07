@@ -128,6 +128,26 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Forgets everything about the previous occupant's persistence: version stream, dirty
+		/// mark and the in-flight snapshot markers.
+		/// </summary>
+		/// <remarks>
+		/// Attributes are built once per pooled object and reused by every character that spawns
+		/// into it. Left alone, a version from the first occupant would be stamped onto rows of
+		/// the second — for any attribute the second has no database row for — and a dirty mark
+		/// from the first would write the second's template default as if it had changed.
+		/// Called from the controller's <c>ResetState</c>.
+		/// </remarks>
+		public void ResetPersistenceState()
+		{
+			Version = 0;
+			PersistenceDirty = false;
+			changeCount = 0;
+			snapshotChangeCount = 0;
+			snapshotVersion = 0;
+		}
+
+		/// <summary>
 		/// The template that defines this attribute's configuration and formulas.
 		/// </summary>
 		public CharacterAttributeTemplate Template { get; private set; }

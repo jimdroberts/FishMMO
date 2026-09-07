@@ -605,6 +605,17 @@ namespace FishMMO.Shared
 			int factionBlockLength = (int)declaredLength;
 			int factionBlockEnd = reader.Position + factionBlockLength;
 
+			/* Race id (packed int, at least 1 byte), derived flag (1 byte) and count (at least 1
+			 * byte) are read unconditionally below; a frame shorter than that would have them read
+			 * from the next behaviour's bytes. Same guard as CharacterAttributeController. */
+			if (factionBlockLength < 3)
+			{
+				Log.Error("FactionController",
+					$"ReadPayload: framed block of {factionBlockLength} bytes is too short to hold a faction payload. Skipping the block.");
+				reader.Position = factionBlockEnd;
+				return;
+			}
+
 			/* The race, before anything derived from it.
 			 *
 			 * A prefab carries a serialized race, but a spawner may override it
@@ -769,8 +780,12 @@ namespace FishMMO.Shared
 
 			//Log.Debug($"Set Faction: {templateID}:{value}");
 
+			/* skipEvent doubles as "this is a restore": the load path installs rows the database
+			 * already holds and stamps their versions afterwards, and the observer update path on
+			 * a client has nothing to persist. Anything else is a change the database has not seen. */
 			if (!skipEvent)
 			{
+				faction.MarkChanged();
 				IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 				Character.Invoke(onFactionChangeTriggers, new FactionEventData(Character, faction.Template, value));
 			}
@@ -852,6 +867,7 @@ namespace FishMMO.Shared
 				factions.Add(template.ID, faction = new Faction(template.ID, amount));
 			}
 			InsertToAllianceGroup(faction);
+			faction.MarkChanged();
 
 #if UNITY_SERVER
 			MarkFactionDirty(template.ID);

@@ -7,13 +7,36 @@
 	public class Faction
 	{
 		/// <summary>
-		/// Version number for this faction instance, used for client synchronization and updates.
-		/// Incremented whenever the faction's state changes in a way that requires client updates (
-		/// e.g., value changes that affect the faction's standing).
-		/// Not incremented for changes that do not affect client state (e.g., internal
-		/// tracking of reputation changes that doesn't meet the next update threshold).
+		/// Persistence version. Advanced by every standing change (<see cref="MarkChanged"/>) and
+		/// again by the save snapshot; compared by <see cref="MarkPersisted"/> so a change made
+		/// while a write was in flight keeps the row dirty. Loaded from the database row on login.
 		/// </summary>
+		/// <remarks>
+		/// Before 2026-09-07 nothing advanced this and nothing wrote factions back at all: every
+		/// kill credit and quest reward was lost on logout. The mutation-side bump is load-bearing
+		/// for the same reason it is on <c>Achievement</c> — a version advanced only by the
+		/// snapshot cannot guard an in-flight change.
+		/// </remarks>
 		public long Version;
+
+		/// <summary>Whether this standing has changed since the database last confirmed it.</summary>
+		public bool PersistenceDirty { get; private set; }
+
+		/// <summary>Records a mutation: dirty, and a new version so a stale confirmation cannot clear it.</summary>
+		public void MarkChanged()
+		{
+			PersistenceDirty = true;
+			++Version;
+		}
+
+		/// <summary>Clears the dirty mark if nothing has changed since the confirmed snapshot was taken.</summary>
+		public void MarkPersisted(long persistedVersion)
+		{
+			if (Version == persistedVersion)
+			{
+				PersistenceDirty = false;
+			}
+		}
 
 		/// <summary>
 		/// The current reputation or standing value for this faction.

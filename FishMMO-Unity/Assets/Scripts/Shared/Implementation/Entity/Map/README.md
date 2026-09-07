@@ -40,7 +40,7 @@ a headless server where no map exists.
 | `MapRegionLabelDetails` / `MapPointOfInterestDetails` | `[Serializable]` | The harvested forms of the two above, stored in the definition |
 | `MapMarker` | `MonoBehaviour` | "Draw this object on the map." Carries a `MapMarkerType` and a `MapMarkerVisibility` |
 | `MapMarkerRegistry` | `static` | Runtime index of live markers, with register/unregister events so a panel does not poll |
-| `MapMarkerType` | `enum` | What the thing is — 16 values, from `PartyMember` through `Vendor`, `Resource`, `Teleporter`, `Landmark`, `Note` |
+| `MapMarkerType` | `enum` | What the thing is — 17 values, from `PartyMember` through `Vendor`, `Resource`, `Teleporter`, `Landmark`, `Note`, `Waypoint` |
 | `MapMarkerVisibility` | `enum` | Who may see it — `Always`, `SelfOnly`, `PartyOrGuild`, `Detection`, `Discovered` |
 | `MapBoundsResolver` | `static` | Derives a usable map rectangle when a scene has no definition |
 | `Editor/WorldMapBaker` | Editor | The bake, behind **FishMMO → World Map → Bake Maps** |
@@ -79,6 +79,15 @@ Add a `MapMarker` and set `Visibility` for who may see it:
 Party and guild members are promoted to full fidelity at runtime regardless of the authored rule, so
 **authoring the strict rule costs nothing** — author `Detection` and let the client widen it, rather
 than authoring a permissive rule the filter then has to narrow.
+
+## Waypoints
+
+`Waypoint` (an interactable, under `Entity/Interactable`) is harvested into
+`WorldSceneDetails.Waypoints` by the world scene details cache rebuild — not into the map
+definition, because the server needs nothing from it and the client needs it whether or not the
+scene was baked. The map draws a waypoint only once the character's `WaypointController` says it
+is unlocked, so `MapMarkerType.Waypoint` is never produced from a `MapMarker` component; the
+client filter drops that type. See the Interactable README for the system.
 
 ## Bounds resolution
 

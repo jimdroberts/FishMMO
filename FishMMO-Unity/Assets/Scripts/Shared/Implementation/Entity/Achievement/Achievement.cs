@@ -6,12 +6,45 @@
 	public class Achievement
 	{
 		/// <summary>
-		/// Version number for this achievement instance, used for client synchronization and updates.
-		/// Incremented whenever the achievement's state changes in a way that requires client updates (e.g., tier or value changes).
-		/// Not incremented for changes that do not affect client state (e.g., internal
-		/// tracking of progress that doesn't meet the next tier requirement).
+		/// Persistence version. Advanced by every mutation (<see cref="MarkChanged"/>) and again
+		/// by the save snapshot, and compared by <see cref="MarkPersisted"/> so a change made while
+		/// a write was in flight keeps the row dirty. Loaded from the database row on login.
 		/// </summary>
+		/// <remarks>
+		/// The mutation-side bump is load-bearing. A version advanced only by the snapshot cannot
+		/// guard an in-flight change — the value that moved still carries the exact version the
+		/// write is confirming — which is the trap the attribute and ability tables fell into.
+		/// </remarks>
 		public long Version;
+
+		/// <summary>
+		/// Whether this achievement has changed since the database last confirmed it. The save
+		/// path skips clean rows.
+		/// </summary>
+		public bool PersistenceDirty { get; private set; }
+
+		/// <summary>
+		/// Records a mutation: dirty, and a new version so a confirmation for the previous state
+		/// cannot clear it.
+		/// </summary>
+		public void MarkChanged()
+		{
+			PersistenceDirty = true;
+			++Version;
+		}
+
+		/// <summary>
+		/// Records that the database holds the state stamped with <paramref name="persistedVersion"/>.
+		/// Clears the dirty mark only if nothing has changed since that snapshot was taken.
+		/// </summary>
+		/// <param name="persistedVersion">The version the confirmed write carried.</param>
+		public void MarkPersisted(long persistedVersion)
+		{
+			if (Version == persistedVersion)
+			{
+				PersistenceDirty = false;
+			}
+		}
 
 		/// <summary>
 		/// The current tier of the achievement (0-based index).

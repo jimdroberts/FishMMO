@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -789,14 +789,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long characterID = character.ID;
 			List<CharacterAttributeData> dtos = new List<CharacterAttributeData>();
 
+			// Version++ AND MarkPersistPending, together — see InteractableSystem.Merchant.
 			foreach (KeyValuePair<int, CharacterAttribute> kvp in attributeController.Attributes)
 			{
 				kvp.Value.Version++;
+				kvp.Value.MarkPersistPending(kvp.Value.Version);
 				dtos.Add(new CharacterAttributeData(0, kvp.Value.Version, characterID, kvp.Key, kvp.Value.Value, 0.0f));
 			}
 			foreach (KeyValuePair<int, CharacterResourceAttribute> kvp in attributeController.ResourceAttributes)
 			{
 				kvp.Value.Version++;
+				kvp.Value.MarkPersistPending(kvp.Value.Version);
 				dtos.Add(new CharacterAttributeData(0, kvp.Value.Version, characterID, kvp.Key, kvp.Value.Value, kvp.Value.CurrentValue));
 			}
 

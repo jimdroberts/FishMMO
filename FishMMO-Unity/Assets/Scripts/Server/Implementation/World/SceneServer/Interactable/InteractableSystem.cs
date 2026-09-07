@@ -163,6 +163,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Group finder: its two requests, its pump, and its tunables. See InteractableSystem.GroupFinder.cs.
 			InitializeGroupFinder();
 
+			// Waypoints: the fast-travel request and the discovery hooks. See InteractableSystem.Waypoint.cs.
+			InitializeWaypoints();
+
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			interactionDebounceMilliseconds = Mathf.Max(0, interactionDebounceMilliseconds);
 			debounceSweepIntervalSeconds = Mathf.Max(0.25f, debounceSweepIntervalSeconds);
@@ -227,6 +230,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			DeinitializeGroupFinder();
+
+			DeinitializeWaypoints();
 
 			// Corpse loot cleanup
 			ClearCorpseSubscriptions();

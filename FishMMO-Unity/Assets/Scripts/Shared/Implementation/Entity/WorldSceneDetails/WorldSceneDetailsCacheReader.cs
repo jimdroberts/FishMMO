@@ -207,6 +207,27 @@ namespace FishMMO.Shared
 						sceneDetails.Teleporters.Add(obj.name, newDetails);
 					}
 
+					// Harvest waypoints. The index is the bit a character's unlock record stores, so a
+					// duplicate is not a cosmetic slip: discovering one would unlock the other.
+					Waypoint[] waypoints = GameObject.FindObjectsByType<Waypoint>(FindObjectsSortMode.None);
+					foreach (Waypoint obj in waypoints)
+					{
+						if (!WaypointUnlockMask.IsValidIndex(obj.WaypointIndex))
+						{
+							Log.Error("WorldSceneDetailsCacheReader", $"Waypoint '{obj.name}' in scene '{currentScene.name}' has index {obj.WaypointIndex}, outside [0, {WaypointUnlockMask.MaxIndex}]. Skipping it.");
+							continue;
+						}
+
+						if (sceneDetails.Waypoints.TryGetValue(obj.WaypointIndex, out SceneWaypointDetails existing))
+						{
+							Log.Error("WorldSceneDetailsCacheReader", $"Duplicate waypoint index {obj.WaypointIndex} in scene '{currentScene.name}': '{existing.Name}' and '{obj.name}'. Waypoint indices must be unique within a scene. Skipping '{obj.name}'.");
+							continue;
+						}
+
+						Log.Debug("WorldSceneDetailsCacheReader", $"Found Waypoint[{obj.WaypointIndex}: {obj.ResolvedName}] at {obj.transform.position}");
+						sceneDetails.Waypoints.Add(obj.WaypointIndex, obj.ToDetails());
+					}
+
 					// Search for interactable teleporters and validate against TeleporterCache.
 					Teleporter[] interactableTeleporters = GameObject.FindObjectsByType<Teleporter>(FindObjectsSortMode.None);
 					foreach (Teleporter obj in interactableTeleporters)

@@ -187,7 +187,7 @@ NPCs use a different faction path than players:
 - **Party System** — `GetAllianceLevel` checks party membership for Ally override.
 - **Guild System** — `GetAllianceLevel` checks guild membership for Ally override.
 - **NPC System** — NPCs use `RaceTemplate.InitialFaction` for static faction identity.
-- **Database Layer** — Factions are persisted and restored via `CharacterFactionData` DTO.
+- **Database Layer** — Factions are persisted and restored via `CharacterFactionData` DTO. Since 2026-09-07 standings are actually written back: `Faction.PersistenceDirty` / `MarkChanged` (set by `SetFaction` without `skipEvent` and by `Add`; `skipEvent: true` is the restore path) and `MarkPersisted`, with `CharacterSystem.Saving.AppendFactionData` writing dirty rows on the periodic save, at despawn before the session release, and for lingering combat-logout bodies. Before that the only writer was character creation, so every kill credit and quest reward was lost on logout.
 - **UI** — `UITKFactions` panel subscribes to `OnUpdateFaction` for real-time standing display.
 - **Target Frames** — `GetAllianceLevelColor` provides nameplate/frame coloring.
 

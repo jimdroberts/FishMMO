@@ -636,6 +636,7 @@ namespace FishMMO.Shared
 					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
 					"spawn payload. The stream cannot be resynchronised; discarding the remainder.");
 				reader.Position += remainingBytes;
+				payloadResourceCurrentValues.Clear();
 				return;
 			}
 			int attributeBlockLength = (int)declaredLength;
@@ -649,6 +650,7 @@ namespace FishMMO.Shared
 					$"ReadPayload: framed block of {attributeBlockLength} bytes cannot contain the shape " +
 					"flag. Skipping this behaviour's payload.");
 				reader.Position = attributeBlockEnd;
+				payloadResourceCurrentValues.Clear();
 				return;
 			}
 			byte shape = reader.ReadUInt8Unpacked();
@@ -664,6 +666,7 @@ namespace FishMMO.Shared
 			{
 				Log.Error("CharacterAttributeController", $"ReadPayload: attribute count {attributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
 				reader.Position = attributeBlockEnd;
+				payloadResourceCurrentValues.Clear();
 				return;
 			}
 
@@ -698,6 +701,7 @@ namespace FishMMO.Shared
 			{
 				Log.Error("CharacterAttributeController", $"ReadPayload: resource attribute count {resourceAttributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
 				reader.Position = attributeBlockEnd;
+				payloadResourceCurrentValues.Clear();
 				return;
 			}
 
@@ -905,6 +909,18 @@ namespace FishMMO.Shared
 			/* Back to the template sheet before the resources are topped up, so the maximum they are
 			 * filled to is this prefab's own rather than the previous occupant's. */
 			RestoreTemplateBaseline();
+
+			/* And the persistence stream with it. The load path stamps each row's version onto
+			 * its attribute; anything it does not stamp must start from zero, not from whatever
+			 * the previous occupant of this pooled object had reached. */
+			foreach (CharacterAttribute attribute in Attributes.Values)
+			{
+				attribute.ResetPersistenceState();
+			}
+			foreach (CharacterResourceAttribute resourceAttribute in ResourceAttributes.Values)
+			{
+				resourceAttribute.ResetPersistenceState();
+			}
 
 			foreach (CharacterResourceAttribute characterResourceAttribute in ResourceAttributes.Values)
 			{

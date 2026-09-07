@@ -17,16 +17,10 @@ namespace FishMMO.Shared
 		public long LastInteractableID { get; set; }
 
 		/// <summary>
-		/// The amount of currency stored in the bank.
-		/// </summary>
-		public long Currency { get; set; }
-
-		/// <summary>
 		/// Called when the bank controller is initialized. Resets currency and adds 100 item slots.
 		/// </summary>
 		public override void OnAwake()
 		{
-			Currency = 0;
 			AddSlots(null, 100);
 		}
 
@@ -38,7 +32,6 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
-			Currency = 0;
 			LastInteractableID = 0;
 			Clear();
 		}

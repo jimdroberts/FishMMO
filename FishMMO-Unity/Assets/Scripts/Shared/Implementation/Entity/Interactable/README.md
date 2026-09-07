@@ -35,7 +35,7 @@ The Interactable system is a server-authoritative, template-driven framework for
 ## Features
 
 - Abstract `Interactable` base class with range checking, rate limiting, and network payload handling
-- Fourteen concrete interactable types: AbilityCrafter, Banker, Bindstone, CapturePoint, Container, DialogueInteractable, DungeonEntrance, GatheringNode, LoreObject, Mailbox, Merchant, Shrine, Switch, Teleporter, WorldItem
+- Fifteen concrete interactable types: AbilityCrafter, Banker, Bindstone, CapturePoint, Container, DialogueInteractable, DungeonEntrance, GatheringNode, LoreObject, Mailbox, Merchant, Shrine, Switch, Teleporter, Waypoint, WorldItem
 - Server-authoritative validation with `sqrMagnitude`-based range checks (no square root)
 - Template-driven configuration via ScriptableObjects per interactable type
 - Scene-object registration and generated naming via `SceneObjectNamer` (name generator, seeded per spawn; 5 bytes on the wire)
@@ -76,6 +76,8 @@ Under `Assets/Templates/Entity/ECA/Interactions/`:
 | `Ability Crafter Interact` | `NPCLookAtInteractorAction`, `SendAbilityCrafterBroadcastAction` | HumanAbilityCrafter |
 | `Dungeon Entrance Interact` | `SendDungeonFinderBroadcastAction` | InstanceDungeonTest |
 | `Teleporter Interact` | `TeleportAction` | every Teleporter |
+| `Waypoint Interact` | `UnlockWaypointAction` (stop on failure), `AchievementIncrementAction` (Waypoints Discovered) | Waypoint prefab |
+| `Waypoint Travel` | `AchievementIncrementAction` (Fast Travels) | Waypoint prefab, `OnTravelTriggers` |
 | `World Item Pickup` | `PickupWorldItemAction` | Small World Item |
 
 Create more with `FishMMO/ECA/Trigger`, or from the FishMMO Dashboard's **ECA → Triggers** category.
@@ -102,6 +104,36 @@ a dead merchant cannot open its shop.
 `CanInteract` is a pure question. Spending the character's interact rate limit is a separate,
 explicit call to `TryConsumeInteractRateLimit`, because three different callers ask the question and
 only the interaction path should pay for it.
+
+## Waypoints
+
+A `Waypoint` is a discoverable fast-travel point (issue #237). It is an ordinary interactable
+whose identity is the pair (scene name, `WaypointIndex`): the index is authored on the component,
+must be unique within its scene, and **must never change once the scene ships** — it is the bit
+position stored in the character's unlock record (`WaypointController`, `character_waypoints`).
+The world scene details cache rebuild reports duplicates and out-of-range indices.
+
+- **Discovery.** Interacting runs the `Waypoint Interact` trigger: `UnlockWaypointAction` sets the
+  bit through `IWaypointController.Unlock`, which raises `OnWaypointUnlocked`; the server's
+  interactable system merges the page into the database and tells the owner. The action is
+  abortable and authored with *Stop Chain On Failure*, so the achievement after it counts each
+  waypoint once. Interacting with an already-discovered waypoint asks the owner's client to open
+  the world map on it instead.
+- **Travel.** Requested from the world map (`WaypointTravelRequestBroadcast`), never by
+  interaction. `InteractableSystem.Waypoint.cs` checks the scene the map showed against the
+  character's current scene, resolves the live object through `WaypointRegistry`, and calls
+  `WaypointTravel.TryTravel`, whose rules (`Decide`) are: can act → not in combat → same scene
+  instance → discovered → the waypoint's authored `TravelConditions` pass. Refusals are reported
+  with a `WaypointTravelRefusalReason`. Arrival runs `OnTravelTriggers` (`Waypoint Travel`).
+- **Other ECA pieces.** `GrantWaypointAction` (unlock by scene name + index, for rewards),
+  `TeleportToWaypointAction` (move to a waypoint in the current scene; can relax discovery,
+  conditions and combat), `WaypointUnlockedCondition`.
+- **Map.** A waypoint is drawn from the character's own record, not from a `MapMarker` — do not
+  put one on the object; `MapMarkerFilter` drops the waypoint type on purpose. Undiscovered
+  waypoints are invisible regardless of fog.
+- **Not yet.** Cross-scene travel: the request and the actions refuse a scene other than the
+  character's current one until the world-map system lands. The storage and wire already carry
+  the scene name so that step needs no schema change.
 
 ## Prerequisites
 

@@ -37,6 +37,39 @@ namespace FishMMO.Shared
 		public ArchetypeTemplate Template { get; private set; }
 
 		/// <summary>
+		/// Persistence version of the character's archetype row. Advanced on every change and by
+		/// the save snapshot; compared by <see cref="MarkPersisted"/>. Loaded from the row on login.
+		/// </summary>
+		public long Version { get; set; }
+
+		/// <summary>Whether the archetype has changed since the database last confirmed it.</summary>
+		public bool PersistenceDirty { get; private set; }
+
+		/// <summary>Clears the dirty mark if nothing has changed since the confirmed snapshot was taken.</summary>
+		public void MarkPersisted(long persistedVersion)
+		{
+			if (Version == persistedVersion)
+			{
+				PersistenceDirty = false;
+			}
+		}
+
+		/// <summary>
+		/// Installs a persisted archetype without events, requirement checks or dirtying — the
+		/// load path.
+		/// </summary>
+		public void Restore(int templateID, long version)
+		{
+			Template = ArchetypeTemplate.Get<ArchetypeTemplate>(templateID);
+			if (Template == null)
+			{
+				Log.Warning("ArchetypeController", $"Restore: no ArchetypeTemplate is registered for ID {templateID}; the character loads without an archetype.");
+			}
+			Version = version;
+			PersistenceDirty = false;
+		}
+
+		/// <summary>
 		/// Resets the archetype controller's state, clearing the current archetype template.
 		/// </summary>
 		/// <param name="asServer">Whether the reset is performed on the server.</param>
@@ -45,6 +78,8 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			Template = null;
+			Version = 0;
+			PersistenceDirty = false;
 		}
 
 		/// <summary>
@@ -108,14 +143,17 @@ namespace FishMMO.Shared
 				return;
 			}
 
-#if UNITY_SERVER
-			// Server-authoritative requirements validation.
-			// Not because a client payload reaches this: ReadPayload only runs server-side for a
-			// PREDICTED spawn, and no prefab in this project enables predicted spawning. It is here
-			// because every other caller — archetype selection, admin tooling, content scripts —
-			// reaches SetArchetype with an id the server has not checked, and the rewards
-			// (abilities, items, buffs, titles, attributes) are granted below.
-			if (base.IsServerStarted)
+			/* Server-authoritative requirements validation, decided at runtime rather than by a
+			 * build define. UNITY_SERVER is a build-target define that is absent in the editor
+			 * the scene server is developed in, so a define-gated check (and the broadcast below)
+			 * silently did nothing there. Not because a client payload reaches this: ReadPayload
+			 * only runs server-side for a PREDICTED spawn, and no prefab enables predicted
+			 * spawning. It is here because every other caller — archetype selection, admin
+			 * tooling, content scripts — reaches SetArchetype with an id the server has not
+			 * checked, and the rewards (abilities, items, buffs, titles, attributes) are granted
+			 * below. */
+			bool isServer = base.NetworkObject != null && base.NetworkObject.IsServerInitialized;
+			if (isServer)
 			{
 				if (!template.MeetsRequirements(PlayerCharacter))
 				{
@@ -123,23 +161,21 @@ namespace FishMMO.Shared
 					return;
 				}
 			}
-#endif
 
 			ArchetypeTemplate oldTemplate = Template;
 			Template = template;
 
-#if UNITY_SERVER
-			if (base.IsServerStarted)
+			if (isServer)
 			{
+				PersistenceDirty = true;
+				++Version;
 				SendArchetypeUpdate(template.ID);
 			}
-#endif
 
 			OnArchetypeChanged?.Invoke(oldTemplate, Template);
 			Character.Invoke(onArchetypeChangeTriggers, new ArchetypeEventData(Character, Template, oldTemplate));
 		}
 
-#if UNITY_SERVER
 		/// <summary>
 		/// Sends archetype updates to owner and observers.
 		/// </summary>
@@ -200,7 +236,6 @@ namespace FishMMO.Shared
 				observer.Broadcast(broadcast, true, channel);
 			}
 		}
-#endif
 
 #if !UNITY_SERVER
 		/// <summary>

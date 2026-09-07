@@ -221,6 +221,8 @@ GameObject:
   - component: {fileID: 7831027635627252520}
   - component: {fileID: 222570663272812273}
   - component: {fileID: 3893398514912584789}
+  - component: {fileID: 7201188053420161329}
+  - component: {fileID: 7201188053420161330}
   m_Layer: 0
   m_Name: Orc
   m_TagString: Untagged
@@ -457,6 +459,37 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+--- !u!114 &7201188053420161329
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e00ff579a1db412785d471af1e78fcce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 16
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 4964627840297570917}
+--- !u!114 &7201188053420161330
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7aae73e6de5159a41b597db1392a6584, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 17
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 4964627840297570917}
+  onArchetypeChangeTriggers: []
 --- !u!114 &5516734705847723694
 MonoBehaviour:
   m_ObjectHideFlags: 0

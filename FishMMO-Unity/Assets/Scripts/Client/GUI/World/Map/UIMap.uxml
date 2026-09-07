@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
 
     <!--
     ╔══════════════════════════════════════════════════════════════╗
@@ -54,6 +54,15 @@
                 <ui:VisualElement name="map-legend-section" class="fish-section map-section">
                     <ui:Label class="fish-label fish-label--title map-section__title" text="SHOW" />
                     <ui:VisualElement name="map-filters" class="map-filters" />
+                </ui:VisualElement>
+
+                <!-- Waypoint: the selected fast-travel point. Built by C# from the clicked marker. -->
+                <ui:VisualElement name="map-waypoint-section" class="fish-section map-section">
+                    <ui:Label class="fish-label fish-label--title map-section__title" text="WAYPOINT" />
+                    <ui:Label name="map-waypoint-name" class="fish-label fish-label--accent map-waypoint__name" text="" />
+                    <ui:Label name="map-waypoint-description" class="fish-label fish-label--caption map-waypoint__description" text="" />
+                    <ui:Button name="map-waypoint-travel" class="fish-button fish-button--primary map-waypoint__travel" text="FAST TRAVEL" />
+                    <ui:Label name="map-waypoint-hint" class="fish-hint map-waypoint__hint" text="" />
                 </ui:VisualElement>
 
                 <!-- Notes -->

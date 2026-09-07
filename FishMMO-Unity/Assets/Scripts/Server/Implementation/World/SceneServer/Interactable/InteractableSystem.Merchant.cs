@@ -695,9 +695,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			long charID = character.ID;
 
 			var dtos = new List<CharacterAttributeData>();
+			/* Version++ AND MarkPersistPending, together — the pair is what makes the dirty flag
+			 * work. A bump alone moves the attribute past the version a periodic save in flight
+			 * recorded, so that save's confirmation clears a mark it no longer owns. */
 			foreach (var kvp in attributeController.Attributes)
 			{
 				kvp.Value.Version++;
+				kvp.Value.MarkPersistPending(kvp.Value.Version);
 				dtos.Add(new CharacterAttributeData(
 					id: 0,
 					version: kvp.Value.Version,
@@ -710,6 +714,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			foreach (var kvp in attributeController.ResourceAttributes)
 			{
 				kvp.Value.Version++;
+				kvp.Value.MarkPersistPending(kvp.Value.Version);
 				dtos.Add(new CharacterAttributeData(
 					id: 0,
 					version: kvp.Value.Version,

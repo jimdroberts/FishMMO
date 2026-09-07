@@ -81,6 +81,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterAchievementEntity> CharacterAchievements { get; set; }
 		/// <summary>Per-character dialogue choice bitmasks.</summary>
 		public DbSet<CharacterDialogueChoiceEntity> CharacterDialogueChoices { get; set; }
+		/// <summary>Per-character discovered-waypoint bitmask pages.</summary>
+		public DbSet<CharacterWaypointEntity> CharacterWaypoints { get; set; }
 		/// <summary>
 		/// Every item a character owns, in whichever container holds it.
 		/// </summary>

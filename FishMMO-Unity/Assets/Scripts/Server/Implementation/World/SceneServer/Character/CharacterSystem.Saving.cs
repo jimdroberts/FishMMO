@@ -63,24 +63,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Snapshot character data on the main thread, pairing each with the claim this
 			// server holds for it so the write can prove ownership.
 			var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership)>(data.CharactersByID.Count);
-			var buffDataList = new List<CharacterBuffData>(data.CharactersByID.Count * 4);
-			var attributeDataList = new List<CharacterAttributeData>(data.CharactersByID.Count * 16);
-			var abilityDataList = new List<CharacterAbilityData>(data.CharactersByID.Count * 8);
-			var petDataList = new List<PetSnapshot>();
+			var subEntities = new SubEntitySnapshot(data.CharactersByID.Count);
 			foreach (var character in data.CharactersByID.Values)
 			{
 				CharacterSessionInfo? ownership = data.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
 					? held
 					: (CharacterSessionInfo?)null;
 				characterDataList.Add((BuildCharacterData(character), ownership));
-				AppendBuffData(character, buffDataList);
-				AppendAttributeData(character, attributeDataList);
-				AppendAbilityData(character, abilityDataList);
-				AppendPetData(character, petDataList);
+				AppendSubEntities(character, subEntities);
 			}
 
 			// Combat-logout bodies have no connection and so are absent from the map above.
-			AppendLingeringCharacterSnapshots(data, characterDataList, buffDataList, attributeDataList, abilityDataList, petDataList);
+			AppendLingeringCharacterSnapshots(data, characterDataList, subEntities);
 
 			if (characterDataList.Count == 0)
 			{
@@ -94,22 +88,98 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
 			}
 
-			if (buffDataList.Count > 0)
+			EnqueueSubEntitySaves(subEntities);
+		}
+
+		/// <summary>
+		/// Every per-character sub-entity row a save carries, captured together on the main
+		/// thread. One character's worth for a despawn or reattach; every resident character's
+		/// worth for the periodic save.
+		/// </summary>
+		/// <remarks>
+		/// One type rather than eight parallel lists threaded through five save paths. Each new
+		/// sub-entity (achievements, waypoints, factions, archetypes) had to be added to every
+		/// one of those paths by hand, and factions were simply missed for the life of the
+		/// project — fetched on login, never written back. With the capture and the saves in one
+		/// place there is one list to extend and no path that can forget a table.
+		/// </remarks>
+		private sealed class SubEntitySnapshot
+		{
+			public readonly List<CharacterBuffData> Buffs;
+			public readonly List<CharacterAttributeData> Attributes;
+			public readonly List<CharacterAbilityData> Abilities;
+			public readonly List<PetSnapshot> Pets;
+			public readonly List<CharacterAchievementData> Achievements;
+			public readonly List<CharacterWaypointData> Waypoints;
+			public readonly List<CharacterFactionData> Factions;
+			public readonly List<CharacterArchetypeData> Archetypes;
+
+			public SubEntitySnapshot(int characterCount = 1)
 			{
-				EnqueuePersistence(() => SaveBuffsAsync(buffDataList));
+				int n = Math.Max(1, characterCount);
+				Buffs = new List<CharacterBuffData>(n * 4);
+				Attributes = new List<CharacterAttributeData>(n * 16);
+				Abilities = new List<CharacterAbilityData>(n * 8);
+				Pets = new List<PetSnapshot>(n);
+				Achievements = new List<CharacterAchievementData>(n * 4);
+				Waypoints = new List<CharacterWaypointData>(n);
+				Factions = new List<CharacterFactionData>(n * 8);
+				Archetypes = new List<CharacterArchetypeData>(n);
 			}
-			if (attributeDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SaveAttributesAsync(attributeDataList));
-			}
-			if (abilityDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SaveAbilitiesAsync(abilityDataList));
-			}
-			if (petDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SavePetsAsync(petDataList));
-			}
+		}
+
+		/// <summary>
+		/// Captures every dirty sub-entity row of one character. Main thread only; must run
+		/// after <see cref="BuildCharacterData"/> for the same character (the pet rows share its
+		/// version counter).
+		/// </summary>
+		private void AppendSubEntities(IPlayerCharacter character, SubEntitySnapshot snapshot)
+		{
+			AppendBuffData(character, snapshot.Buffs);
+			AppendAttributeData(character, snapshot.Attributes);
+			AppendAbilityData(character, snapshot.Abilities);
+			AppendPetData(character, snapshot.Pets);
+			AppendAchievementData(character, snapshot.Achievements);
+			AppendWaypointData(character, snapshot.Waypoints);
+			AppendFactionData(character, snapshot.Factions);
+			AppendArchetypeData(character, snapshot.Archetypes);
+		}
+
+		/// <summary>
+		/// Hands every non-empty list of a snapshot to the persistence lane, independently.
+		/// The periodic and linger paths, where nothing waits on the outcome.
+		/// </summary>
+		private void EnqueueSubEntitySaves(SubEntitySnapshot s)
+		{
+			if (s.Buffs.Count > 0) EnqueuePersistence(() => SaveBuffsAsync(s.Buffs));
+			if (s.Attributes.Count > 0) EnqueuePersistence(() => SaveAttributesAsync(s.Attributes));
+			if (s.Abilities.Count > 0) EnqueuePersistence(() => SaveAbilitiesAsync(s.Abilities));
+			if (s.Pets.Count > 0) EnqueuePersistence(() => SavePetsAsync(s.Pets));
+			if (s.Achievements.Count > 0) EnqueuePersistence(() => SaveAchievementsAsync(s.Achievements));
+			if (s.Waypoints.Count > 0) EnqueuePersistence(() => SaveWaypointsAsync(s.Waypoints));
+			if (s.Factions.Count > 0) EnqueuePersistence(() => SaveFactionsAsync(s.Factions));
+			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes));
+		}
+
+		/// <summary>
+		/// Writes every non-empty list of a snapshot, one after another, on the calling worker.
+		/// The despawn and reattach paths, where the next reader of these rows is about to run.
+		/// </summary>
+		/// <remarks>
+		/// Sequential on purpose: everything the next owner is about to read has to be in the
+		/// database before the claim it reads under is available, and a saturated pool could
+		/// reorder parallel writes behind the release.
+		/// </remarks>
+		private async Task SaveSubEntitiesSequentiallyAsync(SubEntitySnapshot s)
+		{
+			if (s.Attributes.Count > 0) await SaveAttributesAsync(s.Attributes);
+			if (s.Buffs.Count > 0) await SaveBuffsAsync(s.Buffs);
+			if (s.Abilities.Count > 0) await SaveAbilitiesAsync(s.Abilities);
+			if (s.Pets.Count > 0) await SavePetsAsync(s.Pets);
+			if (s.Achievements.Count > 0) await SaveAchievementsAsync(s.Achievements);
+			if (s.Waypoints.Count > 0) await SaveWaypointsAsync(s.Waypoints);
+			if (s.Factions.Count > 0) await SaveFactionsAsync(s.Factions);
+			if (s.Archetypes.Count > 0) await SaveArchetypesAsync(s.Archetypes);
 		}
 
 		/// <summary>
@@ -138,14 +208,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Snapshot character data on the main thread
 			CharacterData charData = BuildCharacterData(character);
-			var buffDataList = new List<CharacterBuffData>(8);
-			var attributeDataList = new List<CharacterAttributeData>(16);
-			var abilityDataList = new List<CharacterAbilityData>(8);
-			var petDataList = new List<PetSnapshot>(1);
-			AppendBuffData(character, buffDataList);
-			AppendAttributeData(character, attributeDataList);
-			AppendAbilityData(character, abilityDataList);
-			AppendPetData(character, petDataList);
+			var subEntities = new SubEntitySnapshot();
+			AppendSubEntities(character, subEntities);
 
 			/* The item flush is captured here, on the main thread, while the containers are still
 			 * live — and it is AWAITED inside the save-and-release below, before the release.
@@ -180,16 +244,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * could ever release the claim: the character stayed Online until its lease
 			 * expired, and every attempt to load it on the destination scene server was
 			 * kicked for the whole two minutes. Hand it to the retry queue instead. */
-			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(
-					charData, buffDataList, attributeDataList, abilityDataList, petDataList, sessionInfo, itemFlush)))
+			/* Keyed on the character, like every incremental item batch, so the flush inside
+			 * runs on the same lane as the writes it supersedes — the ordering requirement
+			 * ICharacterItemService.SaveSnapshotAsync states. Unkeyed, it rode a different lane
+			 * and correctness rested entirely on the journal's sequence claim and the row lock. */
+			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, subEntities, sessionInfo, itemFlush), charData.ID))
 			{
 				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID} — queued for retry.");
-				if (itemFlush != null)
-				{
-					// Not ordered against the retried release any more, but not lost either.
-					EnqueuePersistence(itemFlush, charData.ID);
-				}
-				QueuePendingFlush(charData.ID, charData, sessionInfo);
+				/* The item flush travels WITH the pending release, not on a separate lane: the
+				 * retry runs it before it hands the claim back, so a destination server that
+				 * claims first cannot make the flush fail its ownership assertion. The
+				 * sub-entity rows go out independently; their version guards make a late
+				 * arrival harmless rather than lossy. */
+				EnqueueSubEntitySaves(subEntities);
+				QueuePendingFlush(charData.ID, charData, sessionInfo, itemFlush);
 			}
 
 			// Immediately log out for now.. we could add a timeout later on..?
@@ -264,7 +332,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				rotW: worldRot.w,
 				accessLevel: (byte)(int)character.AccessLevel,
 				online: true,
-				flags: character.Flags & ~(1 << (int)CharacterFlags.IsInCombat),
+				/* IsInCombat is transient. IsLoaded is too, and it is load-bearing on the way back
+				 * in: the load path installs flags before attributes, and a resource attribute
+				 * restored while IsLoaded is set is clamped against a maximum that has no gear or
+				 * buffs yet — a character saved at 950/1000 by a periodic save and then recovered
+				 * after a crash came back at its bare base maximum. Only the graceful exits ever
+				 * cleared the flag; every crash-recovery row carried it. */
+				flags: character.Flags & ~(1 << (int)CharacterFlags.IsInCombat) & ~(1 << (int)CharacterFlags.IsLoaded),
 				version: character.Version,
 				timeCreated: character.TimeCreated,
 				lastSaved: DateTime.UtcNow
@@ -346,10 +420,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private async Task SaveAndReleaseCharacterAsync(
 			CharacterData charData,
-			List<CharacterBuffData> buffs,
-			List<CharacterAttributeData> attributes,
-			List<CharacterAbilityData> abilities,
-			List<PetSnapshot> pets,
+			SubEntitySnapshot subEntities,
 			CharacterSessionInfo? sessionInfo,
 			Func<Task> itemFlush = null)
 		{
@@ -376,21 +447,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * about to read has to be in the database before the claim it reads under is
 			 * available. Awaited in sequence rather than in parallel so a saturated pool cannot
 			 * reorder them behind the release. */
-			if (attributes != null && attributes.Count > 0)
+			if (subEntities != null)
 			{
-				await SaveAttributesAsync(attributes);
-			}
-			if (buffs != null && buffs.Count > 0)
-			{
-				await SaveBuffsAsync(buffs);
-			}
-			if (abilities != null && abilities.Count > 0)
-			{
-				await SaveAbilitiesAsync(abilities);
-			}
-			if (pets != null && pets.Count > 0)
-			{
-				await SavePetsAsync(pets);
+				await SaveSubEntitiesSequentiallyAsync(subEntities);
 			}
 
 			// Release regardless of whether the save landed. Holding the claim back because a
@@ -512,6 +571,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public CharacterData? CharacterData;
 			/// <summary>Session ownership still to release, or null when only a save is outstanding.</summary>
 			public CharacterSessionInfo? Session;
+			/// <summary>The despawn item flush, run before the release it belongs to. Null once it has landed.</summary>
+			public Func<Task> ItemFlush;
 			/// <summary>Earliest UTC time the next attempt may run.</summary>
 			public DateTime NextAttemptUtc;
 			/// <summary>Attempts made so far, used for backoff and for giving up.</summary>
@@ -567,9 +628,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="characterID">Character the work belongs to.</param>
 		/// <param name="charData">Character snapshot to persist, or null if only releasing.</param>
 		/// <param name="sessionInfo">Session ownership to release, or null if only saving.</param>
-		private void QueuePendingFlush(long characterID, CharacterData? charData, CharacterSessionInfo? sessionInfo)
+		private void QueuePendingFlush(long characterID, CharacterData? charData, CharacterSessionInfo? sessionInfo, Func<Task> itemFlush = null)
 		{
-			if (characterID <= 0 || (charData == null && sessionInfo == null))
+			if (characterID <= 0 || (charData == null && sessionInfo == null && itemFlush == null))
 			{
 				return;
 			}
@@ -580,6 +641,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					CharacterData = charData,
 					Session = sessionInfo,
+					ItemFlush = itemFlush,
 					NextAttemptUtc = DateTime.UtcNow,
 					Attempts = 0,
 					InFlight = 0,
@@ -595,6 +657,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (sessionInfo.HasValue)
 					{
 						existing.Session = sessionInfo;
+					}
+					if (itemFlush != null)
+					{
+						existing.ItemFlush = itemFlush;
 					}
 					return existing;
 				});
@@ -658,6 +724,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 
+				/* Items before the release, as on the normal path. The flush proves ownership
+				 * with the lease we still hold; a release that landed first would let the
+				 * destination claim and refuse it. */
+				if (pending.ItemFlush != null)
+				{
+					try
+					{
+						await pending.ItemFlush();
+						pending.ItemFlush = null;
+					}
+					catch (Exception ex)
+					{
+						await Log.Error("CharacterSystem", $"RunPendingFlushAsync: item flush failed for character {characterID}: {ex}");
+					}
+				}
+
 				if (pending.Session.HasValue)
 				{
 					if (await ReleaseCharacterSessionAsync(characterID, pending.Session.Value.ServerID, pending.Session.Value.Token))
@@ -666,7 +748,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 
-				completed = pending.CharacterData == null && pending.Session == null;
+				completed = pending.CharacterData == null && pending.Session == null && pending.ItemFlush == null;
 			}
 			catch (Exception ex)
 			{
@@ -1047,14 +1129,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in attrController.Attributes)
 			{
 				var attr = kvp.Value;
-				// Skip attributes with Version <= 0: these are template-initialized defaults
-				// that were never loaded from DB. Saving them with a stale/invalid version
-				// would poison the batch upsert with a STALE_STATE rejection.
-				if (attr.Version <= 0)
-					continue;
 				/* Unchanged since the database last confirmed it, so there is nothing to write.
 				 * The row is not merely rejected further down — it is never built, never sent, and
-				 * never probed. */
+				 * never probed.
+				 *
+				 * A version of zero is NOT a reason to skip. It used to be ("template-initialized,
+				 * never loaded"), which meant any attribute a character had no row for — every
+				 * template added to the prefab database after the character was created — was
+				 * never written for the life of that character. A dirty zero-version attribute is
+				 * an insert: the bump below makes it version 1, and the upsert's version guard
+				 * still refuses it if a row somehow exists. */
 				if (!attr.PersistenceDirty)
 					continue;
 				attr.Version++;
@@ -1071,8 +1155,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in attrController.ResourceAttributes)
 			{
 				var resAttr = kvp.Value;
-				if (resAttr.Version <= 0)
-					continue;
 				if (!resAttr.PersistenceDirty)
 					continue;
 				resAttr.Version++;
@@ -1590,6 +1672,302 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					ability != null)
 				{
 					ability.MarkPersisted(saved.Version);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Appends a snapshot of every achievement changed since the database last confirmed it.
+		/// Main-thread only. Each appended DTO has its Version bumped on the runtime Achievement.
+		/// </summary>
+		/// <remarks>
+		/// Achievements were fetched on login and never written back — progress reset to the
+		/// loaded values every session. This is the missing save leg, shaped like the ability
+		/// one: <see cref="Achievement.MarkChanged"/> advances the version on mutation, the
+		/// snapshot advances it again, and <see cref="MarkAchievementsPersisted"/> clears the
+		/// mark only when the version still matches.
+		/// </remarks>
+		private void AppendAchievementData(IPlayerCharacter character, List<CharacterAchievementData> achievements)
+		{
+			if (!character.TryGet(out IAchievementController achievementController) ||
+				achievementController.Achievements.Count == 0)
+			{
+				return;
+			}
+
+			foreach (var kvp in achievementController.Achievements)
+			{
+				Achievement achievement = kvp.Value;
+				if (achievement == null || !achievement.PersistenceDirty)
+				{
+					continue;
+				}
+
+				/* Keyed by the dictionary key, not achievement.Template.ID: a template this
+				 * server cannot resolve (a partial content rollout) still has progress worth
+				 * writing, and the key is the same value. */
+				achievement.Version++;
+				achievements.Add(new CharacterAchievementData(
+					id: 0,
+					version: achievement.Version,
+					characterID: character.ID,
+					templateID: kvp.Key,
+					tier: achievement.CurrentTier,
+					value: achievement.CurrentValue));
+			}
+		}
+
+		/// <summary>
+		/// Persists a snapshot of achievement progress asynchronously.
+		/// </summary>
+		private async Task SaveAchievementsAsync(List<CharacterAchievementData> achievements)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterAchievementService>(out var achievementService))
+				{
+					return;
+				}
+
+				DatabaseResult<BulkWriteResult> result = await achievementService.PersistAsync(achievements);
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Achievement save", result);
+
+				// Same rule as abilities: filtered rows were never offered to the database.
+				if (written && result.Data.Filtered == 0)
+				{
+					TryEnqueueMainThread(() => MarkAchievementsPersisted(achievements));
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveAchievementsAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the dirty mark on every achievement a completed write covered. Main thread.
+		/// </summary>
+		private void MarkAchievementsPersisted(List<CharacterAchievementData> achievements)
+		{
+			if (achievements == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < achievements.Count; ++i)
+			{
+				CharacterAchievementData saved = achievements[i];
+
+				if (!TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) ||
+					!character.TryGet(out IAchievementController achievementController))
+				{
+					continue;
+				}
+
+				if (achievementController.Achievements.TryGetValue(saved.TemplateID, out Achievement achievement) &&
+					achievement != null)
+				{
+					achievement.MarkPersisted(saved.Version);
+				}
+			}
+		}
+
+		/// <summary>Scratch list for collecting dirty waypoint pages on the main thread.</summary>
+		private readonly List<WaypointPageSnapshot> waypointPageScratch = new List<WaypointPageSnapshot>();
+
+		/// <summary>
+		/// Appends every discovered-waypoint page the database has not yet confirmed.
+		/// Main-thread only.
+		/// </summary>
+		/// <remarks>
+		/// The unlock path writes each page the moment it changes; this is the retry for a write
+		/// that was lost, and the flush before a session release. A page is dirty until the
+		/// merge is confirmed, so a lost write simply shows up here on the next pass.
+		/// </remarks>
+		private void AppendWaypointData(IPlayerCharacter character, List<CharacterWaypointData> waypoints)
+		{
+			WaypointPersistence.AppendDirtyPages(character, waypoints, waypointPageScratch);
+		}
+
+		/// <summary>
+		/// Merges discovered-waypoint pages into the database asynchronously.
+		/// </summary>
+		private async Task SaveWaypointsAsync(List<CharacterWaypointData> waypoints)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ICharacterWaypointService>(out var waypointService))
+			{
+				return;
+			}
+
+			if (await WaypointPersistence.MergeAsync(waypointService, waypoints, "CharacterSystem"))
+			{
+				TryEnqueueMainThread(() => WaypointPersistence.MarkPersisted(waypoints, ResolveResidentCharacterForWaypoints));
+			}
+		}
+
+		/// <summary>Resolves a connected or lingering character for waypoint write confirmation. Main thread.</summary>
+		private ICharacter ResolveResidentCharacterForWaypoints(long characterID)
+		{
+			return TryGetResidentCharacter(characterID, out IPlayerCharacter character) ? character : null;
+		}
+
+		/// <summary>
+		/// Appends every faction standing changed since the database last confirmed it.
+		/// Main-thread only. Each appended DTO has its Version bumped on the runtime Faction.
+		/// </summary>
+		/// <remarks>
+		/// Factions had no save leg at all before 2026-09-07: the only writer was character
+		/// creation, so every kill credit and quest reward vanished on logout. Same shape as
+		/// achievements — <see cref="Faction.MarkChanged"/> on mutation, a second bump here, and
+		/// <see cref="MarkFactionsPersisted"/> clearing only a still-matching version.
+		/// </remarks>
+		private void AppendFactionData(IPlayerCharacter character, List<CharacterFactionData> factions)
+		{
+			if (!character.TryGet(out IFactionController factionController) ||
+				factionController.Factions.Count == 0)
+			{
+				return;
+			}
+
+			foreach (var kvp in factionController.Factions)
+			{
+				Faction faction = kvp.Value;
+				if (faction == null || !faction.PersistenceDirty)
+				{
+					continue;
+				}
+
+				faction.Version++;
+				factions.Add(new CharacterFactionData(
+					id: 0,
+					version: faction.Version,
+					characterID: character.ID,
+					templateID: kvp.Key,
+					value: faction.Value));
+			}
+		}
+
+		/// <summary>
+		/// Persists a snapshot of faction standings asynchronously.
+		/// </summary>
+		private async Task SaveFactionsAsync(List<CharacterFactionData> factions)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterFactionService>(out var factionService))
+				{
+					return;
+				}
+
+				DatabaseResult<BulkWriteResult> result = await factionService.PersistAsync(factions);
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Faction save", result);
+
+				if (written && result.Data.Filtered == 0)
+				{
+					TryEnqueueMainThread(() => MarkFactionsPersisted(factions));
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveFactionsAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the dirty mark on every faction a completed write covered. Main thread.
+		/// </summary>
+		private void MarkFactionsPersisted(List<CharacterFactionData> factions)
+		{
+			if (factions == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < factions.Count; ++i)
+			{
+				CharacterFactionData saved = factions[i];
+
+				if (!TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) ||
+					!character.TryGet(out IFactionController factionController))
+				{
+					continue;
+				}
+
+				if (factionController.Factions.TryGetValue(saved.TemplateID, out Faction faction) && faction != null)
+				{
+					faction.MarkPersisted(saved.Version);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Appends the character's archetype row when it has changed since the database last
+		/// confirmed it. Main-thread only.
+		/// </summary>
+		private void AppendArchetypeData(IPlayerCharacter character, List<CharacterArchetypeData> archetypes)
+		{
+			if (!character.TryGet(out IArchetypeController archetypeController) ||
+				!archetypeController.PersistenceDirty ||
+				archetypeController.Template == null)
+			{
+				return;
+			}
+
+			archetypeController.Version++;
+			archetypes.Add(new CharacterArchetypeData(
+				id: 0,
+				version: archetypeController.Version,
+				characterID: character.ID,
+				templateID: archetypeController.Template.ID));
+		}
+
+		/// <summary>
+		/// Persists archetype rows asynchronously.
+		/// </summary>
+		private async Task SaveArchetypesAsync(List<CharacterArchetypeData> archetypes)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterArchetypeService>(out var archetypeService))
+				{
+					return;
+				}
+
+				DatabaseResult<BulkWriteResult> result = await archetypeService.PersistAsync(archetypes);
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Archetype save", result);
+
+				if (written && result.Data.Filtered == 0)
+				{
+					TryEnqueueMainThread(() => MarkArchetypesPersisted(archetypes));
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveArchetypesAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the dirty mark on every archetype a completed write covered. Main thread.
+		/// </summary>
+		private void MarkArchetypesPersisted(List<CharacterArchetypeData> archetypes)
+		{
+			if (archetypes == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < archetypes.Count; ++i)
+			{
+				CharacterArchetypeData saved = archetypes[i];
+				if (TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) &&
+					character.TryGet(out IArchetypeController archetypeController))
+				{
+					archetypeController.MarkPersisted(saved.Version);
 				}
 			}
 		}

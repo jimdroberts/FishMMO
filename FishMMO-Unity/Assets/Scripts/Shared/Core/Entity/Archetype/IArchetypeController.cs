@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
@@ -19,6 +19,18 @@ namespace FishMMO.Shared.Core
 		/// The archetype template currently assigned to this character.
 		/// </summary>
 		ArchetypeTemplate Template { get; }
+
+		/// <summary>Persistence version of the archetype row. See <c>ArchetypeController.Version</c>.</summary>
+		long Version { get; set; }
+
+		/// <summary>Whether the archetype has changed since the database last confirmed it.</summary>
+		bool PersistenceDirty { get; }
+
+		/// <summary>Clears the dirty mark if nothing has changed since the confirmed snapshot was taken.</summary>
+		void MarkPersisted(long persistedVersion);
+
+		/// <summary>Installs a persisted archetype without events or dirtying — the load path.</summary>
+		void Restore(int templateID, long version);
 
 		/// <summary>
 		/// Sets the character's archetype by template ID. Looks up the template from the cache and assigns it.

@@ -44,5 +44,11 @@ namespace FishMMO.Shared
 		Landmark,
 		/// <summary>A note the player placed on the world map themselves.</summary>
 		Note,
+
+		/// <summary>
+		/// A discovered fast-travel point, drawn from the character's own unlock record rather than
+		/// from a marker component. Appended last: the enum ordinal is draw order.
+		/// </summary>
+		Waypoint,
 	}
 }

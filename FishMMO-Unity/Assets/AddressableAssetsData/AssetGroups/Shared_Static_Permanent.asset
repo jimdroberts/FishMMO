@@ -405,6 +405,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eb7a456cf8764852991df6a62e8817ac
+    m_Address: Waypoints Discovered
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22cac15846e24e2eb4dd5910cc691105
+    m_Address: Fast Travels
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c6adf150ca547979638fd34f98ad2f4
     m_Address: Poison Frogfolk
     m_ReadOnly: 0

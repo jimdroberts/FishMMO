@@ -253,6 +253,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				itemSnapshotTimer = itemSnapshotIntervalSeconds;
 				SnapshotAllResidentCharacterItems();
+				itemWriteJournal.PruneDeparted(DepartedWatermarkRetention);
 			}
 
 			// A rolled-back item transaction leaves memory ahead of the database. The repair has to
@@ -299,6 +300,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			private readonly Dictionary<long, long> lastAppliedAny = new Dictionary<long, long>();
 			private readonly Dictionary<long, long> lastAppliedSnapshot = new Dictionary<long, long>();
 			private readonly Dictionary<long, CharacterSessionInfo> lastKnownLease = new Dictionary<long, CharacterSessionInfo>();
+			/// <summary>
+			/// When each departed character was forgotten. The despawn flush claims its sequence
+			/// AFTER ForgetCharacter and re-creates the watermarks, so a character that logs out
+			/// leaves an entry behind; the sweep removes those once no batch can still be queued.
+			/// </summary>
+			private readonly Dictionary<long, DateTime> departedUtc = new Dictionary<long, DateTime>();
 			private readonly HashSet<long> reconcileRequests = new HashSet<long>();
 
 			/// <summary>Consecutive reconcile requests per character since its last successful snapshot.</summary>
@@ -450,6 +457,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				lock (gate)
 				{
 					lastKnownLease[characterID] = info;
+					// Resident again; its watermarks are live state, not leftovers.
+					departedUtc.Remove(characterID);
 				}
 			}
 
@@ -550,6 +559,51 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					reconcileRequests.Remove(characterID);
 					reconcileFailures.Remove(characterID);
 					reconcileNotBeforeUtc.Remove(characterID);
+					departedUtc[characterID] = DateTime.UtcNow;
+				}
+			}
+
+			/// <summary>
+			/// Drops the watermarks a departed character's despawn flush re-created, once it has
+			/// been gone longer than any batch could still be queued.
+			/// </summary>
+			/// <remarks>
+			/// The flush claims its sequence after <see cref="ForgetCharacter"/> ran, on purpose
+			/// (see TryClaimSequence), which put one permanent entry per logout into the two
+			/// watermark maps. A character that came back re-registers through
+			/// <see cref="RememberLease"/>, which clears its stamp, so only characters that are
+			/// truly gone are pruned.
+			/// </remarks>
+			/// <param name="olderThan">How long a character must have been gone.</param>
+			/// <returns>How many characters were pruned.</returns>
+			public int PruneDeparted(TimeSpan olderThan)
+			{
+				lock (gate)
+				{
+					if (departedUtc.Count == 0)
+					{
+						return 0;
+					}
+					DateTime cutoff = DateTime.UtcNow - olderThan;
+					List<long> expired = null;
+					foreach (var kvp in departedUtc)
+					{
+						if (kvp.Value <= cutoff)
+						{
+							(expired ??= new List<long>()).Add(kvp.Key);
+						}
+					}
+					if (expired == null)
+					{
+						return 0;
+					}
+					foreach (long characterID in expired)
+					{
+						departedUtc.Remove(characterID);
+						lastAppliedAny.Remove(characterID);
+						lastAppliedSnapshot.Remove(characterID);
+					}
+					return expired.Count;
 				}
 			}
 
@@ -674,6 +728,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// batch is still immutable as far as anything else is concerned.
 			/// </remarks>
 			public IReadOnlyList<CharacterItemIdAssignment> AssignedIdentities;
+
+			/// <summary>
+			/// Slots locked while their items await the identity this batch's write returns.
+			/// Unlocked by the identity write-back on success, or by
+			/// <c>ReleaseBatchLocks</c> on every exit that will never produce one.
+			/// </summary>
+			public List<(ItemContainerType Container, int Slot)> LockedSlots;
+
+			public void AddLockedSlot(ItemContainerType container, int slot)
+			{
+				(LockedSlots ??= new List<(ItemContainerType, int)>(4)).Add((container, slot));
+			}
 
 			/// <summary>True when the batch would write nothing at all.</summary>
 			/// <remarks>
@@ -1031,6 +1097,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * captured by a second batch under id 0 — which is what inserted a second row for one
 			 * item — and the identity write-back can trust that the slot still holds the item it
 			 * was written for. ApplyAssignedIdentities unlocks. */
+			ItemWriteBatch batch = BeginItemBatch(character.ID, operation);
 			IItemContainer target = ResolveContainer(character, container.ToContainerType());
 			if (target != null)
 			{
@@ -1040,11 +1107,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (item != null && item.ID <= 0 && item.Slot >= 0)
 					{
 						target.LockSlot(item.Slot);
+						batch.AddLockedSlot(container.ToContainerType(), item.Slot);
 					}
 				}
 			}
 
-			ItemWriteBatch batch = BeginItemBatch(character.ID, operation);
 			batch.AddItemWrites(BuildItemDataList(character.ID, modifiedItems, container.ToContainerType()));
 			return EnqueueItemBatch(batch);
 		}
@@ -1113,6 +1180,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (registry == null)
 				{
 					await Log.Error("CharacterInventorySystem", "ApplyItemBatchAsync: Database service registry is unavailable");
+					// Not written, and nothing else will write it: the reconcile snapshot is the repair.
+					itemWriteJournal.RequestReconcile(batch.CharacterID);
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1120,6 +1190,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					!registry.TryGet<ICharacterSessionOwnershipService>(out var ownershipService))
 				{
 					await Log.Error("CharacterInventorySystem", "ApplyItemBatchAsync: Failed to resolve IUnitOfWorkService or ICharacterSessionOwnershipService");
+					itemWriteJournal.RequestReconcile(batch.CharacterID);
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1128,6 +1200,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!itemWriteJournal.ShouldApply(batch.CharacterID, batch.Sequence, batch.IsSnapshot))
 				{
 					await Log.Debug("CharacterInventorySystem", $"ApplyItemBatchAsync: skipped superseded {batch.Operation} (CharID={batch.CharacterID}, Seq={batch.Sequence}, Snapshot={batch.IsSnapshot})");
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1136,6 +1209,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: could not begin unit of work for {batch.Operation} (CharID={batch.CharacterID}): {beginResult.ErrorCode} - {beginResult.ErrorMessage}");
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1153,6 +1227,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// now; rewriting our in-memory copy over its state is exactly the duplication the
 					// guard exists to prevent. Our containers are the stale ones.
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: refused {batch.Operation} for character {batch.CharacterID}: {ownership.ErrorCode} - {ownership.ErrorMessage}");
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1168,6 +1243,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Superseded, not failed: a write captured later has already landed, and it is
 					// strictly more current than this one. No reconcile — there is nothing to repair.
 					await Log.Debug("CharacterInventorySystem", $"ApplyItemBatchAsync: skipped superseded {batch.Operation} (CharID={batch.CharacterID}, Seq={batch.Sequence}, Snapshot={batch.IsSnapshot})");
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1177,6 +1253,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await unitOfWork.RollbackAsync();
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: rolled back {batch.Operation} for character {batch.CharacterID}: {applied.ErrorCode} - {applied.ErrorMessage}");
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1185,6 +1262,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: commit failed for {batch.Operation} (CharID={batch.CharacterID}): {commit.ErrorCode} - {commit.ErrorMessage}");
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
+					ReleaseBatchLocks(batch);
 					return;
 				}
 
@@ -1216,6 +1294,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// thread is stalling.
 						await Log.Warning("CharacterInventorySystem",
 							$"ApplyItemBatchAsync: could not queue {assignments.Count} item identity write-back(s) for character {characterID}; they will be reassigned on a later write.");
+						/* The slots must not stay locked for an identity that will never be
+						 * applied. Unlocked, the items keep id 0 and the next snapshot inserts
+						 * them afresh — and prunes the rows this batch created, so the churn the
+						 * comment above describes is bounded to one snapshot interval. */
+						ReleaseBatchLocks(batch);
 					}
 				}
 			}
@@ -1226,6 +1309,53 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 				}
+			}
+		}
+
+		/// <summary>
+		/// Unlocks every slot a batch locked, from a worker thread, for an exit that will never
+		/// reach the identity write-back.
+		/// </summary>
+		/// <remarks>
+		/// A slot locked for an identity that never comes was stuck until the next snapshot
+		/// happened to mint one: unswappable, unusable, and — for a stack split — holding half
+		/// the player's stack hostage. Every non-commit exit of <see cref="ApplyItemBatchAsync"/>
+		/// releases here. The commit path does not: the write-back unlocks each slot as it
+		/// assigns the id, which is the moment the slot is genuinely usable again.
+		/// </remarks>
+		private void ReleaseBatchLocks(ItemWriteBatch batch)
+		{
+			if (batch?.LockedSlots == null || batch.LockedSlots.Count == 0)
+			{
+				return;
+			}
+
+			long characterID = batch.CharacterID;
+			List<(ItemContainerType Container, int Slot)> locked = batch.LockedSlots;
+			batch.LockedSlots = null;
+
+			if (!TryEnqueueMainThread<ICharacterInventorySystemMainThreadQueueData>(() => UnlockSlots(characterID, locked)))
+			{
+				Log.Warning("CharacterInventorySystem",
+					$"ReleaseBatchLocks: could not queue {locked.Count} slot unlock(s) for character {characterID}; they stay locked until the next identity write-back.");
+			}
+		}
+
+		/// <summary>Unlocks slots on a resident character. Main thread only.</summary>
+		private void UnlockSlots(long characterID, List<(ItemContainerType Container, int Slot)> slots)
+		{
+			if (Server == null ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> mappingData) ||
+				!mappingData.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character) ||
+				character == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < slots.Count; ++i)
+			{
+				IItemContainer container = ResolveContainer(character, slots[i].Container);
+				container?.UnlockSlot(slots[i].Slot);
 			}
 		}
 
@@ -1590,7 +1720,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			foreach (long characterID in pending)
 			{
-				if (mappingData.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character))
+				// Connected or lingering: a combat-logout body has no connection but is still
+				// ours to repair, and its logout flush has not run yet.
+				if (TryGetResidentCharacter(mappingData, characterID, out IPlayerCharacter character))
 				{
 					SnapshotCharacterItems(character);
 				}
@@ -1664,6 +1796,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				SnapshotCharacterItems(character);
 			}
+
+			/* Combat-logout bodies are deliberately absent from CharactersByID but are still
+			 * resident, still hold their claim, and can still be looted of nothing — their
+			 * containers are unchanged — yet an item write that failed just before the
+			 * disconnect was never repaired for them. They are snapshotted like everyone else. */
+			lingeringScratch.Clear();
+			CollectLingeringCharacters(lingeringScratch);
+			for (int i = 0; i < lingeringScratch.Count; ++i)
+			{
+				SnapshotCharacterItems(lingeringScratch[i]);
+			}
+		}
+
+		/// <summary>How long a departed character's journal watermarks are kept before the sweep drops them.</summary>
+		private static readonly TimeSpan DepartedWatermarkRetention = TimeSpan.FromMinutes(10);
+
+		/// <summary>Scratch list for the lingering-body sweeps. Main thread only.</summary>
+		private readonly List<IPlayerCharacter> lingeringScratch = new List<IPlayerCharacter>();
+
+		/// <summary>Appends the character system's spawned combat-logout bodies. Main thread only.</summary>
+		private void CollectLingeringCharacters(List<IPlayerCharacter> results)
+		{
+			if (Server?.BehaviourRegistry != null &&
+				Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem) &&
+				characterSystem != null)
+			{
+				characterSystem.CollectLingeringCharacters(results);
+			}
+		}
+
+		/// <summary>Finds a resident character — connected or lingering — by ID. Main thread only.</summary>
+		private bool TryGetResidentCharacter(ICharacterMappingData<NetworkConnection> mappingData, long characterID, out IPlayerCharacter character)
+		{
+			if (mappingData.CharactersByID.TryGetValue(characterID, out character) && character != null)
+			{
+				return true;
+			}
+			lingeringScratch.Clear();
+			CollectLingeringCharacters(lingeringScratch);
+			for (int i = 0; i < lingeringScratch.Count; ++i)
+			{
+				if (lingeringScratch[i].ID == characterID)
+				{
+					character = lingeringScratch[i];
+					return true;
+				}
+			}
+			character = null;
+			return false;
 		}
 
 		/// <summary>
@@ -2276,16 +2457,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				long characterID = character.ID;
 
+				ItemWriteBatch batch = BeginItemBatch(characterID, "StackSplit");
 				if (created)
 				{
 					/* Locked until the identity write-back, as TryPersistGrantedItems does for a
 					 * granted item: nothing may swap, merge into or split a stack the database has
 					 * not written, or a second batch would capture it under id 0 and insert a
-					 * second row for one item. ApplyAssignedIdentities unlocks. */
+					 * second row for one item. ApplyAssignedIdentities unlocks; so does
+					 * ReleaseBatchLocks on any exit that never reaches it. */
 					target.LockSlot(to);
+					batch.AddLockedSlot(toInventory.ToContainerType(), to);
 				}
 
-				ItemWriteBatch batch = BeginItemBatch(characterID, "StackSplit");
 				batch.AddItemWrite(BuildItemData(characterID, remainder, fromInventory.ToContainerType()));
 				batch.AddItemWrite(BuildItemData(characterID, taken, toInventory.ToContainerType()));
 				bool enqueued = EnqueueItemBatch(batch);

@@ -39,6 +39,7 @@ The Achievement system is a data-driven, template-based framework for tracking p
 - **Tier-based rewards** — Each tier can grant abilities, ability events, items, buffs, and titles upon completion.
 - **FishNet network synchronization** — Server-authoritative state broadcast to clients via `AchievementUpdateBroadcast` and `AchievementUpdateMultipleBroadcast`.
 - **Fire-and-forget database persistence** — Reward persistence (abilities, items) uses async services marshalled back to the main thread.
+- **Progress persistence** — `Achievement.PersistenceDirty` / `MarkChanged` / `MarkPersisted` track what the database has not confirmed; `CharacterSystem.Saving.AppendAchievementData` writes dirty rows on the periodic save, at despawn (before the session release) and for lingering combat-logout bodies. Before this leg existed, progress was fetched on login and never written back.
 - **Static events** — `OnCompleteAchievement` and `OnUpdateAchievement` allow any system to react to achievement progress and completion.
 - **ScriptableObject templates** — `AchievementTemplate` blueprints are configured in the Unity Editor with icon, category, description, and tier definitions.
 - **Inventory/bank fallback** — Item rewards attempt inventory first, falling back to bank if inventory lacks space.

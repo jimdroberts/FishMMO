@@ -114,8 +114,13 @@ namespace FishMMO.Shared
 				achievements.Add(templateID, achievement = new Achievement(templateID, tier, value));
 			}
 
+			/* skipEvent doubles as "this is a restore". The load path installs rows the database
+			 * already holds and stamps their versions afterwards; marking those dirty would rewrite
+			 * every achievement a character has on the first save after every login. Anything
+			 * else that sets a value is a change the database has not seen. */
 			if (!skipEvent)
 			{
+				achievement.MarkChanged();
 				IAchievementController.OnUpdateAchievement?.Invoke(Character, achievement);
 			}
 			//Log.Debug($"Achievement Template Set: {achievement.Template.ID}:{achievement.CurrentValue}");
@@ -154,6 +159,7 @@ namespace FishMMO.Shared
 			byte currentTier = achievement.CurrentTier;
 
 			achievement.CurrentValue += amount;
+			achievement.MarkChanged();
 
 			List<AchievementTier> tiers = template.Tiers;
 			if (tiers != null)

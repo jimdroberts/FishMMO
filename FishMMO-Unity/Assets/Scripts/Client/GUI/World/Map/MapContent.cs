@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
@@ -29,6 +30,12 @@ namespace FishMMO.Client
 
 		/// <summary>Draw priority given to notes, above landmarks.</summary>
 		private const int NotePriority = 10;
+
+		/// <summary>Icon size, in UI points, used for discovered waypoints. The largest thing on the map: it is a button.</summary>
+		private const float WaypointSize = 20.0f;
+
+		/// <summary>Draw priority given to waypoints, between landmarks and notes.</summary>
+		private const int WaypointPriority = 8;
 
 		/// <summary>
 		/// The colours a note's pin may be drawn in.
@@ -171,6 +178,65 @@ namespace FishMMO.Client
 					Priority = LandmarkPriority,
 				});
 			}
+		}
+
+		/// <summary>
+		/// Adds the waypoints the character has discovered in a scene to a snapshot list.
+		/// </summary>
+		/// <param name="results">The list to append to.</param>
+		/// <param name="details">The scene's details, holding its authored waypoints. May be null.</param>
+		/// <param name="sceneName">The scene's name, the key the unlock record is kept under.</param>
+		/// <param name="waypoints">The character's unlock record. May be null.</param>
+		/// <param name="forWorldMap">True for the world map, false for the minimap.</param>
+		/// <remarks>
+		/// Only unlocked waypoints are appended, and fog plays no part: a waypoint the character
+		/// has not discovered is absent from the map even when the ground it stands on has been
+		/// explored. Walking past one is not finding it; using it is. That is what keeps a
+		/// waypoint a thing to look for rather than a dot that appears on approach.
+		/// </remarks>
+		public static void AppendWaypoints(List<MapMarkerSnapshot> results, WorldSceneDetails details, string sceneName,
+			IWaypointController waypoints, bool forWorldMap)
+		{
+			if (results == null || details == null || details.Waypoints == null || waypoints == null ||
+				string.IsNullOrEmpty(sceneName))
+			{
+				return;
+			}
+
+			foreach (KeyValuePair<int, SceneWaypointDetails> entry in details.Waypoints)
+			{
+				SceneWaypointDetails waypoint = entry.Value;
+				if (waypoint == null || !waypoints.IsUnlocked(sceneName, entry.Key))
+				{
+					continue;
+				}
+
+				results.Add(new MapMarkerSnapshot()
+				{
+					Position = waypoint.Position,
+					Type = MapMarkerType.Waypoint,
+					Relationship = MapRelationship.NonPlayer,
+					Icon = waypoint.Icon,
+					Tint = Color.white,
+					Label = forWorldMap ? waypoint.Name : null,
+					Tooltip = BuildWaypointTooltip(waypoint, forWorldMap),
+					Size = WaypointSize,
+					Priority = WaypointPriority,
+					IsWaypoint = true,
+					WaypointIndex = entry.Key,
+				});
+			}
+		}
+
+		/// <summary>
+		/// Builds the hover text for a waypoint.
+		/// </summary>
+		private static string BuildWaypointTooltip(SceneWaypointDetails waypoint, bool forWorldMap)
+		{
+			string text = string.IsNullOrEmpty(waypoint.Description)
+				? waypoint.Name
+				: waypoint.Name + "\n" + waypoint.Description;
+			return forWorldMap ? text + "\nClick to select for fast travel" : text;
 		}
 
 		/// <summary>

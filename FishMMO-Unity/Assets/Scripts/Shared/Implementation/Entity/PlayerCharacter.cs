@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 	/// Represents a player-controlled character in the game world, with inventory, abilities, and networked state.
 	/// Implements IPlayerCharacter and extends BaseCharacter with player-specific logic, hotkeys, and event-driven behaviour.
 	///
-	/// <para><b>Coupling note:</b> This class uses 19 <see cref="RequireComponent"/> attributes, creating strong
+	/// <para><b>Coupling note:</b> This class uses 21 <see cref="RequireComponent"/> attributes, creating strong
 	/// coupling between <see cref="PlayerCharacter"/> and its component dependencies. All required components
 	/// are tightly bound to this class and cannot be removed/replaced without modifying this declaration block.
 	/// If a more modular composition approach is desired in the future (e.g., optional components registered
@@ -36,6 +36,8 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(PartyController))]
 	[RequireComponent(typeof(FriendController))]
 	[RequireComponent(typeof(FactionController))]
+	[RequireComponent(typeof(WaypointController))]
+	[RequireComponent(typeof(ArchetypeController))]
 	[RequireComponent(typeof(CharacterPredictionController))]
 	[RequireComponent(typeof(BodyVisibilityManager))]
 	[RequireComponent(typeof(CharacterAppearanceManager))]

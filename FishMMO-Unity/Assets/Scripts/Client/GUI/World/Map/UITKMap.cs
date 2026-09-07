@@ -1,7 +1,9 @@
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishMMO.Logging;
 
 namespace FishMMO.Client
@@ -21,9 +23,16 @@ namespace FishMMO.Client
 	/// scene loaded and costs nothing at runtime.</para>
 	///
 	/// <para><b>What the player can do to it that they cannot do to the minimap.</b> Pan, zoom out
-	/// as far as their Cartography allows, filter by category, and write notes. The notes are the
-	/// reason the panel has a side bar at all; everything else would have fitted in the corner.
-	/// </para>
+	/// as far as their Cartography allows, filter by category, write notes, and fast travel. The
+	/// notes are the reason the panel has a side bar at all; everything else would have fitted in
+	/// the corner.</para>
+	///
+	/// <para><b>Fast travel.</b> A discovered waypoint is a marker like any other until it is
+	/// clicked, which selects it into the side bar's waypoint section; the button there sends a
+	/// <see cref="WaypointTravelRequestBroadcast"/>. Nothing moves until the server answers — a
+	/// refusal comes back with a reason and the button re-enables, an arrival closes the map. The
+	/// click, arrival, refusal and discovery each have a sound slot, and
+	/// <see cref="OnFastTravelClicked"/> is the hook for anything else that wants the click.</para>
 	///
 	/// <para><b>What it does not show.</b> Exactly what the minimap does not show — the marker
 	/// rules are applied by the same <see cref="MapMarkerFilter"/>, so a hostile player who is too
@@ -87,6 +96,27 @@ namespace FishMMO.Client
 		/// <summary>USS class marking the selected colour swatch.</summary>
 		private const string SWATCH_SELECTED_CLASS = "map-swatch--selected";
 
+		/// <summary>Name of the waypoint section container.</summary>
+		private const string WAYPOINT_SECTION_NAME = "map-waypoint-section";
+
+		/// <summary>Name of the label naming the selected waypoint.</summary>
+		private const string WAYPOINT_NAME_LABEL_NAME = "map-waypoint-name";
+
+		/// <summary>Name of the label describing the selected waypoint.</summary>
+		private const string WAYPOINT_DESCRIPTION_LABEL_NAME = "map-waypoint-description";
+
+		/// <summary>Name of the fast travel button.</summary>
+		private const string WAYPOINT_TRAVEL_BUTTON_NAME = "map-waypoint-travel";
+
+		/// <summary>Name of the label explaining the waypoint section's state.</summary>
+		private const string WAYPOINT_HINT_NAME = "map-waypoint-hint";
+
+		/// <summary>
+		/// How long the travel button stays disabled waiting for the server's answer, in seconds.
+		/// A lost reply must not leave the button dead for the rest of the session.
+		/// </summary>
+		private const double TravelResponseTimeout = 5.0;
+
 		/// <summary>How much one notch of the scroll wheel changes the zoom, as a multiplier.</summary>
 		private const float ZoomStep = 1.25f;
 
@@ -98,8 +128,55 @@ namespace FishMMO.Client
 		/// </remarks>
 		private const double MarkerRefreshInterval = 0.25;
 
+		[Header("Fast Travel Sounds")]
+		[Tooltip("Played when the fast travel button is clicked. Optional.")]
+		public AudioClip FastTravelClickSound;
+
+		[Tooltip("Played when the server confirms the character arrived. Optional.")]
+		public AudioClip FastTravelArriveSound;
+
+		[Tooltip("Played when the server refuses the request. Optional.")]
+		public AudioClip FastTravelRefusedSound;
+
+		[Tooltip("Played when a waypoint is discovered. Optional.")]
+		public AudioClip WaypointDiscoveredSound;
+
+		/// <summary>
+		/// Raised when the player clicks the fast travel button, before the request is sent.
+		/// Parameters: the scene name and the waypoint index. The hook for anything that wants
+		/// the click beyond the sound slot above — an FX, a tutorial, analytics.
+		/// </summary>
+		public static event Action<string, int> OnFastTravelClicked;
+
 		/// <summary>The map view mounted into the panel.</summary>
 		private UITKMapView mapView;
+
+		/// <summary>The waypoint section container.</summary>
+		private VisualElement waypointSection;
+
+		/// <summary>Label naming the selected waypoint.</summary>
+		private Label waypointNameLabel;
+
+		/// <summary>Label describing the selected waypoint.</summary>
+		private Label waypointDescriptionLabel;
+
+		/// <summary>Button that asks the server to fast travel.</summary>
+		private Button waypointTravelButton;
+
+		/// <summary>Label explaining the waypoint section's state.</summary>
+		private Label waypointHint;
+
+		/// <summary>Whether a waypoint is selected in the side bar.</summary>
+		private bool hasSelectedWaypoint;
+
+		/// <summary>The selected waypoint's index within the current scene.</summary>
+		private int selectedWaypointIndex;
+
+		/// <summary>Whether a travel request is awaiting the server's answer.</summary>
+		private bool travelPending;
+
+		/// <summary>Time, on the unscaled clock, at which a pending request is given up on.</summary>
+		private double travelPendingUntil;
 
 		/// <summary>Label naming the scene.</summary>
 		private Label titleLabel;
@@ -252,13 +329,37 @@ namespace FishMMO.Client
 				noteAddButton.clicked += AddPendingNote;
 			}
 
+			waypointSection = root.Q<VisualElement>(WAYPOINT_SECTION_NAME);
+			waypointNameLabel = root.Q<Label>(WAYPOINT_NAME_LABEL_NAME);
+			waypointDescriptionLabel = root.Q<Label>(WAYPOINT_DESCRIPTION_LABEL_NAME);
+			waypointTravelButton = root.Q<Button>(WAYPOINT_TRAVEL_BUTTON_NAME);
+			waypointHint = root.Q<Label>(WAYPOINT_HINT_NAME);
+			if (waypointTravelButton != null)
+			{
+				waypointTravelButton.clicked += RequestFastTravel;
+			}
+
 			BuildFilterToggles();
 			BuildColorSwatches();
 
 			ClientMapSystem.OnSceneMapChanged += MapSystem_OnSceneChanged;
 			ClientMapSystem.OnNotesChanged += MapSystem_OnNotesChanged;
 
+			/* Static events on the controller interface, so they can be subscribed before any
+			 * character exists and survive the character being replaced. Unsubscribed in
+			 * OnDestroying; OnStarting re-runs when the tree is rebuilt, and the -= before += keeps
+			 * a rebuild from stacking handlers. */
+			IWaypointController.OnWaypointUnlocked -= Waypoint_OnUnlocked;
+			IWaypointController.OnWaypointUnlocked += Waypoint_OnUnlocked;
+			IWaypointController.OnWaypointTravelled -= Waypoint_OnTravelled;
+			IWaypointController.OnWaypointTravelled += Waypoint_OnTravelled;
+			IWaypointController.OnWaypointTravelRefused -= Waypoint_OnTravelRefused;
+			IWaypointController.OnWaypointTravelRefused += Waypoint_OnTravelRefused;
+			IWaypointController.OnWaypointMapRequested -= Waypoint_OnMapRequested;
+			IWaypointController.OnWaypointMapRequested += Waypoint_OnMapRequested;
+
 			ApplySceneToView();
+			RefreshWaypointPanel();
 		}
 
 		/// <summary>
@@ -268,6 +369,10 @@ namespace FishMMO.Client
 		{
 			ClientMapSystem.OnSceneMapChanged -= MapSystem_OnSceneChanged;
 			ClientMapSystem.OnNotesChanged -= MapSystem_OnNotesChanged;
+			IWaypointController.OnWaypointUnlocked -= Waypoint_OnUnlocked;
+			IWaypointController.OnWaypointTravelled -= Waypoint_OnTravelled;
+			IWaypointController.OnWaypointTravelRefused -= Waypoint_OnTravelRefused;
+			IWaypointController.OnWaypointMapRequested -= Waypoint_OnMapRequested;
 			base.OnDestroying();
 		}
 
@@ -322,6 +427,13 @@ namespace FishMMO.Client
 				return;
 			}
 			nextMarkerRefreshTime = now + MarkerRefreshInterval;
+
+			if (travelPending && now >= travelPendingUntil)
+			{
+				// The server's answer never came. Hand the button back rather than leave it dead.
+				travelPending = false;
+				RefreshWaypointPanel();
+			}
 
 			/* Only on the refresh tick, not every frame. Panning and zooming call ApplyView
 			 * themselves the moment they change something, so the per-frame call this replaced was
@@ -415,6 +527,9 @@ namespace FishMMO.Client
 			ClientMapSystem.Filter.Collect(markerBuffer, Character, true, ClientMapSystem.Fog);
 			MapContent.AppendNotes(markerBuffer, ClientMapSystem.Notes, true);
 			MapContent.AppendPointsOfInterest(markerBuffer, ClientMapSystem.Definition, ClientMapSystem.Fog, true);
+			IWaypointController waypointController = null;
+			Character?.TryGet(out waypointController);
+			MapContent.AppendWaypoints(markerBuffer, ClientMapSystem.SceneDetails, ClientMapSystem.SceneName, waypointController, true);
 
 			for (int i = markerBuffer.Count - 1; i >= 0; --i)
 			{
@@ -569,6 +684,12 @@ namespace FishMMO.Client
 			if (marker.HasValue && marker.Value.NoteID != 0)
 			{
 				SelectNote(marker.Value.NoteID);
+				return;
+			}
+
+			if (marker.HasValue && marker.Value.IsWaypoint)
+			{
+				SelectWaypoint(marker.Value.WaypointIndex);
 				return;
 			}
 
@@ -937,10 +1058,250 @@ namespace FishMMO.Client
 		private void MapSystem_OnSceneChanged()
 		{
 			hasPendingNotePosition = false;
+			/* A selection is per scene: index 3 in the new zone is a different place. The
+			 * pending flag is dropped too — a request sent from the old zone is answered
+			 * NotInScene by the server, and that answer names the old scene, which the refusal
+			 * handler ignores. */
+			hasSelectedWaypoint = false;
+			travelPending = false;
 			ApplySceneToView();
 			CenterOnCharacter();
 			nextMarkerRefreshTime = 0.0;
+			RefreshWaypointPanel();
 		}
+
+		#region Waypoints
+
+		/// <summary>
+		/// Selects a waypoint into the side bar.
+		/// </summary>
+		/// <param name="waypointIndex">The waypoint's index within the current scene.</param>
+		private void SelectWaypoint(int waypointIndex)
+		{
+			hasSelectedWaypoint = true;
+			selectedWaypointIndex = waypointIndex;
+			RefreshWaypointPanel();
+		}
+
+		/// <summary>
+		/// The details of a waypoint in the current scene, when the cache knows it.
+		/// </summary>
+		private static bool TryGetWaypointDetails(int waypointIndex, out SceneWaypointDetails details)
+		{
+			details = null;
+			WorldSceneDetails scene = ClientMapSystem.SceneDetails;
+			return scene != null && scene.Waypoints != null && scene.Waypoints.TryGetValue(waypointIndex, out details) && details != null;
+		}
+
+		/// <summary>
+		/// Sends the fast-travel request for the selected waypoint.
+		/// </summary>
+		/// <remarks>
+		/// The button disables until the server answers or the timeout passes; nothing here
+		/// moves the character or closes the map, because nothing here knows whether the request
+		/// will be honoured. Sound and the hook fire on the click, which is what they describe.
+		/// </remarks>
+		private void RequestFastTravel()
+		{
+			if (!hasSelectedWaypoint || travelPending || Character == null)
+			{
+				return;
+			}
+
+			string sceneName = ClientMapSystem.SceneName;
+			if (string.IsNullOrEmpty(sceneName))
+			{
+				return;
+			}
+
+			if (!Character.TryGet(out IWaypointController controller) ||
+				!controller.IsUnlocked(sceneName, selectedWaypointIndex))
+			{
+				// The selection outlived the record somehow; say so instead of sending a request the server will refuse.
+				SetWaypointHint("You have not discovered this waypoint.");
+				return;
+			}
+
+			ClientUIAudio.Play(FastTravelClickSound);
+			OnFastTravelClicked?.Invoke(sceneName, selectedWaypointIndex);
+
+			travelPending = true;
+			travelPendingUntil = Time.unscaledTimeAsDouble + TravelResponseTimeout;
+			RefreshWaypointPanel();
+
+			Client.Broadcast(new WaypointTravelRequestBroadcast()
+			{
+				SceneName = sceneName,
+				WaypointIndex = selectedWaypointIndex,
+			}, FishNet.Transporting.Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Writes the waypoint section for the current selection and request state.
+		/// </summary>
+		private void RefreshWaypointPanel()
+		{
+			if (waypointSection == null)
+			{
+				return;
+			}
+
+			SceneWaypointDetails details = null;
+			bool known = hasSelectedWaypoint && TryGetWaypointDetails(selectedWaypointIndex, out details);
+
+			if (waypointNameLabel != null)
+			{
+				waypointNameLabel.text = known ? details.Name : "No waypoint selected";
+			}
+			if (waypointDescriptionLabel != null)
+			{
+				string description = known ? details.Description : null;
+				waypointDescriptionLabel.text = description ?? string.Empty;
+				waypointDescriptionLabel.style.display = string.IsNullOrEmpty(description) ? DisplayStyle.None : DisplayStyle.Flex;
+			}
+			if (waypointTravelButton != null)
+			{
+				waypointTravelButton.SetEnabled(known && !travelPending);
+				waypointTravelButton.text = travelPending ? "TRAVELLING…" : "FAST TRAVEL";
+			}
+
+			if (travelPending)
+			{
+				SetWaypointHint("Waiting for the server…");
+			}
+			else if (known)
+			{
+				SetWaypointHint("Fast travel here. You must be able to act and out of combat.");
+			}
+			else
+			{
+				SetWaypointHint("Click a discovered waypoint on the map to select it.");
+			}
+		}
+
+		/// <summary>
+		/// Writes the waypoint section's explanatory line.
+		/// </summary>
+		private void SetWaypointHint(string text)
+		{
+			if (waypointHint != null)
+			{
+				waypointHint.text = text;
+			}
+		}
+
+		/// <summary>
+		/// Whether an event is about the local character. The static events fire for every
+		/// character that raises them on this peer; only the owner's matter here.
+		/// </summary>
+		private bool IsLocal(ICharacter character)
+		{
+			return Character != null && character != null && ReferenceEquals(character, Character);
+		}
+
+		/// <summary>
+		/// A waypoint was discovered: redraw, tell the player, and play the sound.
+		/// </summary>
+		private void Waypoint_OnUnlocked(ICharacter character, string sceneName, int waypointIndex)
+		{
+			if (!IsLocal(character))
+			{
+				return;
+			}
+
+			nextMarkerRefreshTime = 0.0;
+			ClientUIAudio.Play(WaypointDiscoveredSound);
+
+			string name = string.Equals(sceneName, ClientMapSystem.SceneName, StringComparison.Ordinal) &&
+				TryGetWaypointDetails(waypointIndex, out SceneWaypointDetails details)
+				? details.Name
+				: null;
+			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+			{
+				chat.InstantiateChatMessage(ChatChannel.System, "",
+					string.IsNullOrEmpty(name) ? "Waypoint discovered." : $"Waypoint discovered: {name}.");
+			}
+		}
+
+		/// <summary>
+		/// The server moved the character: close the map, the way arriving somewhere does.
+		/// </summary>
+		private void Waypoint_OnTravelled(ICharacter character, string sceneName, int waypointIndex)
+		{
+			if (!IsLocal(character))
+			{
+				return;
+			}
+
+			travelPending = false;
+			ClientUIAudio.Play(FastTravelArriveSound);
+			RefreshWaypointPanel();
+			if (Visible)
+			{
+				Hide();
+			}
+		}
+
+		/// <summary>
+		/// The server refused: hand the button back and say why.
+		/// </summary>
+		private void Waypoint_OnTravelRefused(ICharacter character, string sceneName, int waypointIndex, WaypointTravelRefusalReason reason)
+		{
+			if (!IsLocal(character))
+			{
+				return;
+			}
+
+			travelPending = false;
+			ClientUIAudio.Play(FastTravelRefusedSound);
+			RefreshWaypointPanel();
+			SetWaypointHint(DescribeRefusal(reason));
+		}
+
+		/// <summary>
+		/// The server asked for the map to open on a waypoint — the character used one they had
+		/// already discovered.
+		/// </summary>
+		private void Waypoint_OnMapRequested(ICharacter character, string sceneName, int waypointIndex)
+		{
+			if (!IsLocal(character) || !string.Equals(sceneName, ClientMapSystem.SceneName, StringComparison.Ordinal))
+			{
+				return;
+			}
+
+			if (!Visible)
+			{
+				Show();
+			}
+
+			SelectWaypoint(waypointIndex);
+			if (TryGetWaypointDetails(waypointIndex, out SceneWaypointDetails details))
+			{
+				center = details.Position;
+				ClampCenter();
+				ApplyView();
+			}
+		}
+
+		/// <summary>
+		/// Player-facing text for a refusal.
+		/// </summary>
+		private static string DescribeRefusal(WaypointTravelRefusalReason reason)
+		{
+			switch (reason)
+			{
+				case WaypointTravelRefusalReason.CannotAct: return "You cannot travel right now.";
+				case WaypointTravelRefusalReason.InCombat: return "You cannot fast travel while in combat.";
+				case WaypointTravelRefusalReason.UnknownWaypoint: return "That waypoint is not here.";
+				case WaypointTravelRefusalReason.NotInScene: return "You can only travel to waypoints in the area you are in.";
+				case WaypointTravelRefusalReason.Locked: return "You have not discovered this waypoint.";
+				case WaypointTravelRefusalReason.ConditionsNotMet: return "You do not meet the requirements to travel here.";
+				case WaypointTravelRefusalReason.TooSoon: return "You travelled a moment ago. Try again shortly.";
+				default: return "Fast travel was refused.";
+			}
+		}
+
+		#endregion
 
 		/// <summary>
 		/// Rebuilds the note list when it changes.

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using FishMMO.Shared;
 
 namespace FishMMO.Client
@@ -80,5 +80,11 @@ namespace FishMMO.Client
 
 		/// <summary>Identity of the note this marker came from, or zero when it is not a note.</summary>
 		public long NoteID;
+
+		/// <summary>Whether this marker is a discovered waypoint, addressable by <see cref="WaypointIndex"/>.</summary>
+		public bool IsWaypoint;
+
+		/// <summary>The waypoint's authored index within the scene. Meaningful only when <see cref="IsWaypoint"/>.</summary>
+		public int WaypointIndex;
 	}
 }

@@ -1,4 +1,4 @@
-using FishMMO.Shared;
+﻿using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -110,6 +110,7 @@ namespace FishMMO.Client
 
 				case MapMarkerType.Teleporter:
 				case MapMarkerType.Landmark:
+				case MapMarkerType.Waypoint:
 					return MapFilterCategory.Landmarks;
 
 				case MapMarkerType.Note:

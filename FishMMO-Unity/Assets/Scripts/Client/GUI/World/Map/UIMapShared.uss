@@ -1,4 +1,4 @@
-/*
+﻿/*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     UIMapShared.uss
     Map marker styling  —  shared by the minimap and the world map
@@ -120,4 +120,15 @@
 .map-marker--note .map-marker__icon {
     background-color: var(--map-note);
     border-radius: 2px;
+}
+
+/*
+    A discovered waypoint: a diamond, the one shape nothing else on the map uses, because it is
+    the one marker the player clicks to do something rather than to read something.
+*/
+.map-marker--waypoint .map-marker__icon {
+    background-color: var(--map-waypoint);
+    border-radius: 2px;
+    rotate: 45deg;
+    border-width: 2px;
 }

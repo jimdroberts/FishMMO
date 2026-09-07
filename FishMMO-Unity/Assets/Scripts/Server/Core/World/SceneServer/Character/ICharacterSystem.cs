@@ -1,3 +1,4 @@
+﻿using System.Collections.Generic;
 using System;
 using FishMMO.Shared.Core;
 
@@ -28,6 +29,16 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// account for them.
 		/// </remarks>
 		int LingeringCharacterCount { get; }
+
+		/// <summary>
+		/// Appends every spawned combat-logout body to <paramref name="results"/>.
+		/// </summary>
+		/// <remarks>
+		/// For systems that keep their own per-character state current on a timer — the item
+		/// snapshot, its reconcile drain — and would otherwise skip a body that is still
+		/// resident, still holds its claim and can still be changed by the world.
+		/// </remarks>
+		void CollectLingeringCharacters(List<IPlayerCharacter> results);
 
 		/// <summary>
 		/// Declares that the next disconnect on <paramref name="connection"/> is something the

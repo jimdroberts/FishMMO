@@ -12,11 +12,6 @@
 		long LastInteractableID { get; set; }
 
 		/// <summary>
-		/// The amount of currency stored in the bank.
-		/// </summary>
-		long Currency { get; set; }
-
-		/// <summary>
 		/// Determines if two item slots can be swapped, preventing invalid swaps (e.g., same slot).
 		/// </summary>
 		/// <param name="from">The source slot index.</param>

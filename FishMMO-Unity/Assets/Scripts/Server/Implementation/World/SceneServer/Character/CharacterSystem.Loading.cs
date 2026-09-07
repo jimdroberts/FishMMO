@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
@@ -494,6 +494,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterBuffData> buffData = null;
 				IReadOnlyList<CharacterFactionData> factionData = null;
 				IReadOnlyList<CharacterQuestData> questData = null;
+				IReadOnlyList<CharacterWaypointData> waypointData = null;
+				IReadOnlyList<CharacterArchetypeData> archetypeData = null;
 
 				// --- Fetch the character row and claim its session BEFORE the Unit of Work ---
 				// The claim is the gate: if another server already owns this character we fail
@@ -654,6 +656,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 
+				/* A sub-entity fetch that fails must end the load, not shrug. The character used
+				 * to spawn with whatever had loaded — and the next item snapshot then pruned every
+				 * row a null item list did not vouch for, which is how a transient database fault
+				 * on login destroyed a character's inventory. A refused login costs the player a
+				 * retry; a partial one costs them their things. */
+				async Task AbandonLoadAfterFetchFailure(string what, string errorCode, string errorMessage)
+				{
+					await Log.Error("CharacterSystem",
+						$"Failed to load {what} for character {characterID}: [{errorCode}] {errorMessage}. Abandoning the load so nothing is saved over the unloaded state.");
+					await ReleaseHeldSessionAsync();
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
+						}
+					});
+				}
+
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
 				{
@@ -679,42 +700,92 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (serviceRegistry.TryGet<ICharacterItemService>(out var itemService))
 					{
 						var result = await itemService.FetchAsync(characterID);
-						if (result.IsSuccess) itemData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("items", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						itemData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterAttributeService>(out var attributeService))
 					{
 						var result = await attributeService.FetchAsync(characterID);
-						if (result.IsSuccess) attributeData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("attributes", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						attributeData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterAbilityService>(out var abilityService))
 					{
 						var result = await abilityService.FetchAsync(characterID);
-						if (result.IsSuccess) abilityData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("abilities", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						abilityData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService))
 					{
 						var result = await knownAbilityService.FetchAsync(characterID);
-						if (result.IsSuccess) knownAbilityData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("known abilities", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						knownAbilityData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterAchievementService>(out var achievementService))
 					{
 						var result = await achievementService.FetchAsync(characterID);
-						if (result.IsSuccess) achievementData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("achievements", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						achievementData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterWaypointService>(out var waypointService))
+					{
+						var result = await waypointService.FetchAsync(characterID);
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("waypoints", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						waypointData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterFriendService>(out var friendService))
 					{
 						var result = await friendService.FetchAsync(characterID);
-						if (result.IsSuccess) friendData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("friends", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						friendData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterGuildService>(out var guildService))
 					{
 						var result = await guildService.FetchAsync(characterID);
-						if (result.IsSuccess) guildData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("guild membership", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						guildData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterPartyService>(out var partyService))
 					{
 						var result = await partyService.FetchAsync(characterID);
-						if (result.IsSuccess) partyData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("party membership", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						partyData = result.Data;
 
 						/* A party belongs to one world server, and this character may have
 						 * arrived on a different one.
@@ -768,22 +839,52 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (serviceRegistry.TryGet<ICharacterHotkeyService>(out var hotkeyService))
 					{
 						var result = await hotkeyService.FetchAsync(characterID);
-						if (result.IsSuccess) hotkeyData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("hotkeys", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						hotkeyData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterBuffService>(out var buffService))
 					{
 						var result = await buffService.FetchAsync(characterID);
-						if (result.IsSuccess) buffData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("buffs", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						buffData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterFactionService>(out var factionService))
 					{
 						var result = await factionService.FetchAsync(characterID);
-						if (result.IsSuccess) factionData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("factions", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						factionData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterArchetypeService>(out var archetypeService))
+					{
+						var result = await archetypeService.FetchAsync(characterID);
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("archetype", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						archetypeData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterQuestService>(out var questService))
 					{
 						var result = await questService.FetchAsync(characterID);
-						if (result.IsSuccess) questData = result.Data;
+						if (!result.IsSuccess)
+						{
+							await AbandonLoadAfterFetchFailure("quests", result.ErrorCode.ToString(), result.ErrorMessage);
+							return;
+						}
+						questData = result.Data;
 					}
 
 					// Read-only: commit to cleanly close the transaction
@@ -802,7 +903,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					attributeData, abilityData, knownAbilityData,
 					achievementData, friendData,
 					guildData, partyData,
-					hotkeyData, buffData, factionData, questData);
+					hotkeyData, buffData, factionData, questData, waypointData, archetypeData);
 				/* The main-thread queue is bounded and drops work when it is saturated, and this
 				 * hand-off is the only thing that installs the claim in SessionTokens. A dropped
 				 * item therefore left the character Online with nothing left holding its token —
@@ -1158,6 +1259,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IReadOnlyList<CharacterBuffData> buffData = ctx.BuffData;
 			IReadOnlyList<CharacterFactionData> factionData = ctx.FactionData;
 			IReadOnlyList<CharacterQuestData> questData = ctx.QuestData;
+			IReadOnlyList<CharacterWaypointData> waypointData = ctx.WaypointData;
+			IReadOnlyList<CharacterArchetypeData> archetypeData = ctx.ArchetypeData;
 
 			if (conn == null || !conn.IsActive)
 			{
@@ -1291,6 +1394,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// log in a second time while this session is still running. Clearing it here bounds
 			// that to the crash itself rather than to every session afterwards.
 			character.DisableFlags(CharacterFlags.IsCombatLogged);
+
+			/* Never loaded-with-IsLoaded. The flag is set at the end of this method and cleared on
+			 * graceful exits, but a crash-recovery row carries it — and the resource attributes
+			 * restored below clamp their current value against the maximum whenever it is set,
+			 * before any gear or buff has raised that maximum. BuildCharacterData masks it on the
+			 * way out as well; this is the belt to that brace. */
+			character.DisableFlags(CharacterFlags.IsLoaded);
 
 			if (enteringInstance)
 			{
@@ -1455,6 +1565,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
+			// Discovered waypoints. Restored as persisted, so nothing is dirty after a login.
+			if (waypointData != null && waypointData.Count > 0 &&
+				character.TryGet(out IWaypointController waypointController))
+			{
+				foreach (CharacterWaypointData page in waypointData)
+				{
+					waypointController.Restore(page.SceneName, page.Page, page.Mask);
+				}
+			}
+
 			// Friends
 			if (friendData != null && friendData.Count > 0 &&
 				character.TryGet(out IFriendController friendController))
@@ -1530,8 +1650,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (factionController.Factions.TryGetValue(faction.TemplateID, out Faction fac))
 					{
 						fac.Version = faction.Version;
+						// Restored, not changed: the database already holds this.
+						fac.MarkPersisted(faction.Version);
 					}
 				}
+			}
+
+			// Archetype. One row per character; if there are several, the newest version wins.
+			if (archetypeData != null && archetypeData.Count > 0 &&
+				character.TryGet(out IArchetypeController archetypeController))
+			{
+				CharacterArchetypeData newest = archetypeData[0];
+				for (int i = 1; i < archetypeData.Count; ++i)
+				{
+					if (archetypeData[i].Version > newest.Version)
+					{
+						newest = archetypeData[i];
+					}
+				}
+				archetypeController.Restore(newest.TemplateID, newest.Version);
 			}
 
 			// Quests
@@ -1980,6 +2117,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly IReadOnlyList<CharacterFactionData> FactionData;
 			/// <summary>Pre-fetched quest state data.</summary>
 			public readonly IReadOnlyList<CharacterQuestData> QuestData;
+			/// <summary>Pre-fetched discovered-waypoint pages.</summary>
+			public readonly IReadOnlyList<CharacterWaypointData> WaypointData;
+			/// <summary>Pre-fetched archetype rows.</summary>
+			public readonly IReadOnlyList<CharacterArchetypeData> ArchetypeData;
 
 			/// <summary>
 			/// Initializes a new CharacterLoadContext with all pre-fetched character data.
@@ -2002,6 +2143,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="buffData">Pre-fetched active buff data.</param>
 			/// <param name="factionData">Pre-fetched faction standing data.</param>
 			/// <param name="questData">Pre-fetched quest state data.</param>
+			/// <param name="waypointData">Pre-fetched discovered-waypoint pages.</param>
 			public CharacterLoadContext(
 				NetworkConnection connection, CharacterData characterData,
 				Guid sessionToken, long serverID,
@@ -2017,7 +2159,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterHotkeyData> hotkeyData,
 				IReadOnlyList<CharacterBuffData> buffData,
 				IReadOnlyList<CharacterFactionData> factionData,
-				IReadOnlyList<CharacterQuestData> questData)
+				IReadOnlyList<CharacterQuestData> questData,
+				IReadOnlyList<CharacterWaypointData> waypointData,
+				IReadOnlyList<CharacterArchetypeData> archetypeData)
 			{
 				Connection = connection;
 				CharacterData = characterData;
@@ -2037,6 +2181,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				BuffData = buffData;
 				FactionData = factionData;
 				QuestData = questData;
+				WaypointData = waypointData;
+				ArchetypeData = archetypeData;
 			}
 		}
 		/// <summary>

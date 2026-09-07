@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -56,6 +56,12 @@ namespace FishMMO.Client
 
 		/// <summary>The current scene's map definition, or null when it has none.</summary>
 		public static WorldMapDefinition Definition { get; private set; }
+
+		/// <summary>
+		/// The current scene's details from the cache, or null when the scene is unknown to it.
+		/// Holds the authored waypoints the map draws once they are discovered.
+		/// </summary>
+		public static WorldSceneDetails SceneDetails { get; private set; }
 
 		/// <summary>The world rectangle the current scene's map covers.</summary>
 		public static Rect MapRect { get; private set; }
@@ -283,6 +289,7 @@ namespace FishMMO.Client
 				DetailsCache.Scenes.TryGetValue(sceneName, out details);
 			}
 
+			SceneDetails = details;
 			Definition = details != null ? details.MapDefinition : null;
 			MapRect = MapBoundsResolver.Resolve(Definition, details);
 
@@ -314,6 +321,7 @@ namespace FishMMO.Client
 			Fog?.ReleaseTexture();
 			Fog = null;
 			Definition = null;
+			SceneDetails = null;
 			MapRect = Rect.zero;
 			SceneName = null;
 			Notes.Clear();

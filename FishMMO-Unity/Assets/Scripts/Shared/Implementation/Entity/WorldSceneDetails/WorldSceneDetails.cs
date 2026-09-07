@@ -58,5 +58,11 @@ namespace FishMMO.Shared
 		/// Dictionary of boundaries that define the playable area of the scene.
 		/// </summary>
 		public SceneBoundaryDictionary Boundaries = new SceneBoundaryDictionary();
+
+		/// <summary>
+		/// The scene's waypoints, by authored index. What the client map draws once a waypoint is
+		/// unlocked; the server resolves the live object through <see cref="WaypointRegistry"/>.
+		/// </summary>
+		public SceneWaypointDictionary Waypoints = new SceneWaypointDictionary();
 	}
 }

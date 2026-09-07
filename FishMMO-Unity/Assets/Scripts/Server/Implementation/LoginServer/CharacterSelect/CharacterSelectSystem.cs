@@ -289,7 +289,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 					!TryGetDbService(out ICharacterKnownAbilityService knownAbilityService) ||
 					!TryGetDbService(out ICharacterPetService petService) ||
 					!TryGetDbService(out ICharacterPetAttributeService petAttributeService) ||
-					!TryGetDbService(out ICharacterPetBuffService petBuffService))
+					!TryGetDbService(out ICharacterPetBuffService petBuffService) ||
+					!TryGetDbService(out ICharacterWaypointService waypointService) ||
+					!TryGetDbService(out ICharacterArchetypeService archetypeService))
 				{
 					await Log.Warning("CharacterSelectSystem", "One or more DB services unavailable for character delete.");
 					SendDeleteFailure(conn);
@@ -368,6 +370,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pet attributes for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await petBuffService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pet buffs for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						// Unversioned: the waypoint pages are a merge-only bitmask with no version stream.
+						r = await waypointService.DeleteAsync(characterId);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete waypoints for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						r = await archetypeService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete archetypes for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 					}
 
 					// Soft-delete the character row (also hard-deletes guild/party memberships)

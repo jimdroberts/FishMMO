@@ -975,7 +975,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 					templateID: itemTemplate.TemplateID,
 					slot: itemTemplate.Slot,
 					seed: itemTemplate.Seed,
-					amount: 0
+					// 1, like the starting inventory rows: Item.Initialize skips the stack component
+					// for amount 0, so a stackable starting item would have loaded unstacked.
+					amount: 1
 				));
 			}
 

@@ -1,4 +1,4 @@
-/*
+﻿/*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     UIMap.uss
     World Map Panel  —  Structure & Layout only
@@ -171,6 +171,36 @@
     margin-top: 2px;
     margin-bottom: 2px;
     font-size: 11px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   WAYPOINT
+   ═══════════════════════════════════════════════════════════ */
+
+.map-waypoint__name {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-waypoint__description {
+    font-size: 10px;
+    white-space: normal;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+.map-waypoint__travel {
+    height: 26px;
+    font-size: 11px;
+}
+
+.map-waypoint__hint {
+    margin-top: 4px;
+    font-size: 10px;
+    white-space: normal;
 }
 
 

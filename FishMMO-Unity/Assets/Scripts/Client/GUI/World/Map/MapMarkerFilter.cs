@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -104,6 +104,15 @@ namespace FishMMO.Client
 				}
 
 				if (forWorldMap ? !marker.ShowOnWorldMap : !marker.ShowOnMinimap)
+				{
+					continue;
+				}
+
+				/* Never from a component. A waypoint is drawn from the character's own unlock
+				 * record (MapContent.AppendWaypoints) precisely so that an undiscovered one is
+				 * invisible however close the player streams it; a MapMarker authored with this
+				 * type on the waypoint object would give away exactly that. */
+				if (marker.Type == MapMarkerType.Waypoint)
 				{
 					continue;
 				}

@@ -1235,8 +1235,12 @@ namespace FishMMO.Shared
 			}
 
 			writer.WriteInt32(FilledSlots());
-			foreach (Item item in Items)
+			/* The list position, not item.Slot — the same distrust the persistence snapshot
+			 * applies (CharacterInventorySystem.BuildContainerSnapshot). The two are meant to
+			 * agree; when they do not, the position is where the item actually is. */
+			for (int i = 0; i < Items.Count; ++i)
 			{
+				Item item = Items[i];
 				if (item == null)
 				{
 					continue;
@@ -1246,7 +1250,7 @@ namespace FishMMO.Shared
 					writer.WriteInt64(item.ID);
 				}
 				writer.WriteInt32(item.Template.ID);
-				writer.WriteUInt8Unpacked((byte)item.Slot);
+				writer.WriteUInt8Unpacked((byte)i);
 				writer.WriteInt32(item.IsGenerated ? item.Generator.Seed : 0);
 				if (ownerShape)
 				{

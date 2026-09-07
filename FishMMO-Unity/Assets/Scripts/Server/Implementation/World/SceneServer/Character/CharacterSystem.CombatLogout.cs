@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Object;
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -460,14 +461,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			character.DisableFlags(CharacterFlags.IsLoaded);
 
 			CharacterData charData = BuildCharacterData(character);
-			var buffDataList = new List<CharacterBuffData>(8);
-			var attributeDataList = new List<CharacterAttributeData>(16);
-			var abilityDataList = new List<CharacterAbilityData>(8);
-			var petDataList = new List<PetSnapshot>(1);
-			AppendBuffData(character, buffDataList);
-			AppendAttributeData(character, attributeDataList);
-			AppendAbilityData(character, abilityDataList);
-			AppendPetData(character, petDataList);
+			var subEntities = new SubEntitySnapshot();
+			AppendSubEntities(character, subEntities);
+
+			/* The body's items, captured before it is despawned and awaited before the reload
+			 * below re-reads the rows. Without this the reattach discarded every item change
+			 * whose write had failed while the body stood there. */
+			Func<Task> itemFlush = null;
+			if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
+			{
+				itemFlush = inventorySystem.CaptureDespawnFlush(character, sessionInfo);
+			}
 
 			DespawnLingeringBody(character);
 
@@ -476,7 +480,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!EnqueueAsyncWork(() => ReattachAndLoadAsync(
 					conn, accountName, characterService, serverID,
-					charData, buffDataList, attributeDataList, abilityDataList, petDataList, heldToken)))
+					charData, subEntities, itemFlush, heldToken), charData.ID))
 			{
 				// Nothing will run the save or the load, so hand the claim back rather than
 				// leaving the character owned by a server that has forgotten about it.
@@ -546,10 +550,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ICharacterService characterService,
 			long serverID,
 			CharacterData charData,
-			List<CharacterBuffData> buffs,
-			List<CharacterAttributeData> attributes,
-			List<CharacterAbilityData> abilities,
-			List<PetSnapshot> pets,
+			SubEntitySnapshot subEntities,
+			Func<Task> itemFlush,
 			Guid heldToken)
 		{
 			// Ordering matters: the load below re-reads this row, so anything not written yet is
@@ -566,25 +568,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				QueuePendingFlush(charData.ID, charData, null);
 			}
 
-			if (attributes.Count > 0)
+			if (itemFlush != null)
 			{
-				await SaveAttributesAsync(attributes);
+				try
+				{
+					await itemFlush();
+				}
+				catch (Exception ex)
+				{
+					await Log.Error("CharacterSystem", $"ReattachAndLoadAsync: item flush failed for character {charData.ID}: {ex}");
+				}
 			}
-			if (buffs.Count > 0)
-			{
-				await SaveBuffsAsync(buffs);
-			}
-			if (abilities.Count > 0)
-			{
-				await SaveAbilitiesAsync(abilities);
-			}
-			if (pets.Count > 0)
-			{
-				// Before the load below, like everything above it: PetSystem restores the pet off
-				// the back of the character spawn, and would otherwise read the state the body
-				// had when the linger began rather than the state it ended with.
-				await SavePetsAsync(pets);
-			}
+
+			// Before the load below, like the character row above it: the load re-reads every
+			// one of these tables, and PetSystem restores the pet off the back of the spawn.
+			await SaveSubEntitiesSequentiallyAsync(subEntities);
 
 			// The character ID travels with the token: LoadCharacterAsync has to be able to hand
 			// this claim back on any path that abandons the load, including the ones that fail
@@ -614,14 +612,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="buffs">Destination for buff rows.</param>
 		/// <param name="attributes">Destination for attribute rows.</param>
 		/// <param name="abilities">Destination for ability rows.</param>
-		/// <param name="pets">Destination for pet snapshots.</param>
+		/// <param name="subEntities">Destination for every sub-entity row.</param>
 		private void AppendLingeringCharacterSnapshots(
 			ICharacterMappingData<NetworkConnection> mappingData,
 			List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterData,
-			List<CharacterBuffData> buffs,
-			List<CharacterAttributeData> attributes,
-			List<CharacterAbilityData> abilities,
-			List<PetSnapshot> pets)
+			SubEntitySnapshot subEntities)
 		{
 			if (lingeringCharacters.Count == 0)
 			{
@@ -642,10 +637,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					: (CharacterSessionInfo?)null;
 
 				characterData.Add((BuildCharacterData(character), ownership));
-				AppendBuffData(character, buffs);
-				AppendAttributeData(character, attributes);
-				AppendAbilityData(character, abilities);
-				AppendPetData(character, pets);
+				AppendSubEntities(character, subEntities);
+			}
+		}
+
+		/// <inheritdoc />
+		public void CollectLingeringCharacters(List<IPlayerCharacter> results)
+		{
+			if (results == null)
+			{
+				return;
+			}
+			foreach (var kvp in lingeringCharacters)
+			{
+				IPlayerCharacter character = kvp.Value.Character;
+				if (character != null && character.NetworkObject != null && character.NetworkObject.IsSpawned)
+				{
+					results.Add(character);
+				}
 			}
 		}
 
@@ -664,34 +673,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			CharacterData charData = BuildCharacterData(character);
-			var buffDataList = new List<CharacterBuffData>(8);
-			var attributeDataList = new List<CharacterAttributeData>(16);
-			var abilityDataList = new List<CharacterAbilityData>(8);
-			var petDataList = new List<PetSnapshot>(1);
-			AppendBuffData(character, buffDataList);
-			AppendAttributeData(character, attributeDataList);
-			AppendAbilityData(character, abilityDataList);
-			AppendPetData(character, petDataList);
+			var subEntities = new SubEntitySnapshot();
+			AppendSubEntities(character, subEntities);
 
 			if (!EnqueueAsyncWork(() => SaveCharacterAsync(charData, ownership)))
 			{
 				QueuePendingFlush(charData.ID, charData, null);
 			}
-			if (buffDataList.Count > 0)
+			EnqueueSubEntitySaves(subEntities);
+
+			/* Items too. The linger began without any item write at all, and a lingering body is
+			 * absent from CharactersByID so the periodic item snapshot walked past it as well:
+			 * an item write that had failed before the disconnect stayed unrepaired until the
+			 * reattach, which reloaded the database's version over it. Captured on the main
+			 * thread with the claim the body still holds; keyed on the character so it queues
+			 * behind the incremental writes it supersedes. */
+			if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 			{
-				EnqueuePersistence(() => SaveBuffsAsync(buffDataList));
-			}
-			if (attributeDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SaveAttributesAsync(attributeDataList));
-			}
-			if (abilityDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SaveAbilitiesAsync(abilityDataList));
-			}
-			if (petDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SavePetsAsync(petDataList));
+				Func<Task> itemFlush = inventorySystem.CaptureDespawnFlush(character, ownership);
+				if (itemFlush != null)
+				{
+					EnqueuePersistence(itemFlush, character.ID);
+				}
 			}
 		}
 	}

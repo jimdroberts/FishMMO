@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -227,9 +227,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			/* Winning the right to charge comes first, exactly as claiming a plot comes before
-			 * paying for it. A caller that loses this race must not have taken any money, and one
-			 * that wins holds a period nobody else can bill for. */
+			/* Two shapes of charge, and the difference is who is authoritative for the money.
+			 *
+			 * ONLINE HERE: this server holds the character, so the attribute lives in memory and
+			 * the ordinary persistence path writes it. Winning the right to charge comes first —
+			 * the plot row's tax advance is a compare-and-set, so of every scene server sweeping
+			 * this world exactly one bills the period — and only then is the money taken.
+			 *
+			 * OFFLINE: nobody holds the character. The money is taken straight from the row, and
+			 * the advance and the debit are ONE transaction that also asserts, under the row
+			 * lock, that no server has claimed the character. A second server sweeping the same
+			 * plot either finds the period already advanced (its transaction rolls back, no
+			 * money moves) or finds the character claimed (it skips, no period consumed). The
+			 * unchanged-version write this replaced was refused by the upsert's version guard
+			 * every single time and reported as paid: free rent for anyone who logged off.
+			 *
+			 * ONLINE ELSEWHERE: the offline transaction's ownership assertion fails. Nothing is
+			 * charged and nothing is advanced; the server that holds the character sweeps this
+			 * world too and bills them there. */
+			if (!await IsOwnerOnlineHereAsync(plot.OwnerCharacterID))
+			{
+				await SettleOfflineOutcomeAsync(plotService, plot, dueUtc,
+					await TryChargeOfflineOwnerAsync(plotService, plot, dueUtc, dueUtc + period, plot.OwnerCharacterID, taxPerPeriod, advancePeriod: true));
+				return;
+			}
+
+			/* Online here: the period is won before any money moves, so a lost race takes
+			 * nothing from the player. The probe above spent nothing either. */
 			DatabaseResult<int> advanced = await plotService.TryAdvanceTaxAsync(plot.ID, dueUtc, dueUtc + period);
 			if (!advanced.IsSuccess || advanced.Data != 1)
 			{
@@ -237,21 +261,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (await TryChargeTaxAsync(plot.OwnerCharacterID, taxPerPeriod))
+			OnlineChargeOutcome online = await TryChargeOnlineOwnerAsync(plot.OwnerCharacterID, taxPerPeriod);
+			if (online == OnlineChargeOutcome.NotOnline)
 			{
-				// Paid, so the grace clock stops wherever it had got to.
+				/* Logged out between the probe and the charge. The period is already ours, so the
+				 * debit runs against the row without advancing it again. */
+				await SettleOfflineOutcomeAsync(plotService, plot, dueUtc,
+					await TryChargeOfflineOwnerAsync(plotService, plot, dueUtc, dueUtc + period, plot.OwnerCharacterID, taxPerPeriod, advancePeriod: false));
+				return;
+			}
+			if (online == OnlineChargeOutcome.Charged)
+			{
 				await plotService.ClearTaxDelinquencyAsync(plot.ID);
-
 				RecordLandTax(plot.OwnerCharacterID, taxPerPeriod);
 				MarkPlotChanged(plot.ID);
 				return;
 			}
-
 			/* Unpaid. The mark is only written when there is not one already, so the grace period
 			 * keeps running from the first miss rather than restarting every time they fail again.
 			 * The owner keeps the house until that runs out, which is the point of having one. */
 			await plotService.MarkTaxDelinquentAsync(plot.ID, dueUtc);
-
 			Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} could not pay {taxPerPeriod} tax on plot {plot.ID}.");
 		}
 
@@ -305,83 +334,182 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Takes tax from an owner, wherever their balance currently lives.
+		/// Applies the plot-side consequence of an offline charge: delinquency cleared or marked,
+		/// or nothing at all when another server owns the outcome.
+		/// </summary>
+		private async Task SettleOfflineOutcomeAsync(IPlotService plotService, PlotData plot, DateTime dueUtc, OfflineChargeOutcome outcome)
+		{
+			switch (outcome)
+			{
+				case OfflineChargeOutcome.Paid:
+					await plotService.ClearTaxDelinquencyAsync(plot.ID);
+					RecordLandTax(plot.OwnerCharacterID, taxPerPeriod);
+					MarkPlotChanged(plot.ID);
+					return;
+				case OfflineChargeOutcome.Unpaid:
+					/* The mark is only written when there is not one already, so the grace period
+					 * keeps running from the first miss rather than restarting on every failure. */
+					await plotService.MarkTaxDelinquentAsync(plot.ID, dueUtc);
+					Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} could not pay {taxPerPeriod} tax on plot {plot.ID}.");
+					return;
+				case OfflineChargeOutcome.OwnedElsewhere:
+					Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} is claimed by another server; leaving plot {plot.ID}'s tax for that server's sweep.");
+					return;
+				default:
+					// PeriodAlreadyBilled, or a fault: nothing to settle here.
+					return;
+			}
+		}
+
+		/// <summary>
+		/// Whether this server holds the owner's character. Main-thread lookup; spends nothing.
+		/// </summary>
+		private Task<bool> IsOwnerOnlineHereAsync(long characterID)
+		{
+			TaskCompletionSource<bool> completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			if (!TryEnqueueHousingMainThread(() =>
+			{
+				bool here = Server?.DataContainerRegistry != null &&
+					Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out ICharacterMappingData<NetworkConnection> mappingData) &&
+					mappingData.CharactersByID != null &&
+					mappingData.CharactersByID.ContainsKey(characterID);
+				completion.TrySetResult(here);
+			}))
+			{
+				completion.TrySetResult(false);
+			}
+			return completion.Task;
+		}
+
+		/// <summary>How an offline owner's tax charge ended.</summary>
+		private enum OfflineChargeOutcome
+		{
+			/// <summary>The debit and the period advance committed together.</summary>
+			Paid = 0,
+			/// <summary>The owner could not cover the tax; the period advance committed alone.</summary>
+			Unpaid = 1,
+			/// <summary>Another server holds the character's session; nothing was touched.</summary>
+			OwnedElsewhere = 2,
+			/// <summary>Another server advanced this period first; the debit rolled back.</summary>
+			PeriodAlreadyBilled = 3,
+			/// <summary>A database fault; nothing was touched.</summary>
+			Faulted = 4,
+		}
+
+		/// <summary>
+		/// Charges an owner nobody is hosting, straight from the database, atomically with the
+		/// plot's period advance.
 		/// </summary>
 		/// <remarks>
-		/// Tax falls due whether or not the owner is logged in, and the two cases have to be charged
-		/// differently — an owner charged only while online is an owner who never pays, and an
-		/// online owner charged in the database is an owner who is never actually charged.
-		///
-		/// <para>The second half of that is the subtle one. A logged-in character's balance lives in
-		/// their in-memory attribute controller, and that is what gets written out on their next
-		/// save. Deducting from the stored row underneath them would be overwritten by that save,
-		/// silently, so the money would come back and the plot would show as paid. Worse, they would
-		/// never see the deduction, because nothing told the value they are actually looking at.</para>
-		///
-		/// <para>So an online owner is charged through <see cref="CharacterCurrency"/> on the main
-		/// thread, exactly as any other purchase charges them, and only an owner nobody is playing
-		/// is charged by writing the row.</para>
+		/// <para>Everything happens inside one unit of work. The ownership assertion takes the
+		/// character row's lock and answers "unclaimed" only while no server holds a session for
+		/// it — so no scene server can be mid-save on an in-memory copy this write would then
+		/// silently overwrite, and none can log the character in until the transaction ends. The
+		/// debit is version-gated like every attribute write (<c>version + 1</c>, applied only if
+		/// strictly newer), and the advance is the plot service's compare-and-set. If either
+		/// refuses, the whole thing rolls back and nothing moved.</para>
+		/// <para>This is what makes the sweep safe to run on every scene server of a cluster at
+		/// once: the database, not any server, decides who bills a period.</para>
 		/// </remarks>
-		private async Task<bool> TryChargeTaxAsync(long characterID, long amount)
+		/// <param name="advancePeriod">
+		/// True to win the period inside this transaction (the ordinary offline case); false when
+		/// the caller already advanced it and only the debit is outstanding.
+		/// </param>
+		private async Task<OfflineChargeOutcome> TryChargeOfflineOwnerAsync(
+			IPlotService plotService, PlotData plot, DateTime dueUtc, DateTime nextDueUtc, long characterID, long amount, bool advancePeriod)
 		{
 			if (characterID <= 0 || amount <= 0 || currencyTemplate == null)
 			{
-				return false;
+				return OfflineChargeOutcome.Faulted;
 			}
 
-			OnlineChargeOutcome online = await TryChargeOnlineOwnerAsync(characterID, amount);
-			if (online != OnlineChargeOutcome.NotOnline)
+			if (!TryGetDbService(out ICharacterAttributeService attributeService) ||
+				!TryGetDbService(out IUnitOfWorkService unitOfWorkService) ||
+				!TryGetDbService(out ICharacterSessionOwnershipService ownershipService))
 			{
-				return online == OnlineChargeOutcome.Charged;
+				return OfflineChargeOutcome.Faulted;
 			}
 
-			if (!TryGetDbService(out ICharacterAttributeService attributeService))
+			DatabaseResult<IUnitOfWork> begin = await unitOfWorkService.BeginAsync();
+			if (!begin.IsSuccess || begin.Data == null)
 			{
-				return false;
+				Log.Warning("HousingSystem", $"Offline tax for CharID={characterID}: could not begin a unit of work: {begin.ErrorMessage}");
+				return OfflineChargeOutcome.Faulted;
+			}
+
+			await using IUnitOfWork unitOfWork = begin.Data;
+
+			// Unclaimed, under the row lock, for the whole transaction.
+			DatabaseResult ownership = await ownershipService.AssertOwnershipAsync(characterID, default, allowUnclaimed: true);
+			if (!ownership.IsSuccess)
+			{
+				await unitOfWork.RollbackAsync();
+				return OfflineChargeOutcome.OwnedElsewhere;
 			}
 
 			DatabaseResult<IReadOnlyList<CharacterAttributeData>> attributes = await attributeService.FetchAsync(characterID);
 			if (!attributes.IsSuccess || attributes.Data == null)
 			{
-				return false;
+				await unitOfWork.RollbackAsync();
+				return OfflineChargeOutcome.Faulted;
 			}
 
 			int templateID = currencyTemplate.ID;
+			CharacterAttributeData? currency = null;
 			foreach (CharacterAttributeData attribute in attributes.Data)
 			{
-				if (attribute.TemplateID != templateID)
+				if (attribute.TemplateID == templateID)
 				{
-					continue;
+					currency = attribute;
+					break;
 				}
-
-				if (attribute.Value < amount)
-				{
-					return false;
-				}
-
-				CharacterAttributeData updated = new CharacterAttributeData(
-					attribute.ID,
-					attribute.Version,
-					attribute.CharacterID,
-					attribute.TemplateID,
-					attribute.Value - (int)amount,
-					attribute.CurrentValue);
-
-				DatabaseResult<BulkWriteResult> persisted = await attributeService.PersistAsync(new List<CharacterAttributeData> { updated });
-				return persisted.IsSuccess;
 			}
 
-			return false;
+			bool canPay = currency.HasValue && currency.Value.Value >= amount;
+
+			// The period, first: whoever advances it owns it, whether or not the owner can pay.
+			if (advancePeriod)
+			{
+				DatabaseResult<int> advanced = await plotService.TryAdvanceTaxAsync(plot.ID, dueUtc, nextDueUtc);
+				if (!advanced.IsSuccess)
+				{
+					await unitOfWork.RollbackAsync();
+					return OfflineChargeOutcome.Faulted;
+				}
+				if (advanced.Data != 1)
+				{
+					await unitOfWork.RollbackAsync();
+					return OfflineChargeOutcome.PeriodAlreadyBilled;
+				}
+			}
+
+			if (!canPay)
+			{
+				DatabaseResult unpaidCommit = await unitOfWork.CommitAsync();
+				return unpaidCommit.IsSuccess ? OfflineChargeOutcome.Unpaid : OfflineChargeOutcome.Faulted;
+			}
+
+			CharacterAttributeData row = currency.Value;
+			CharacterAttributeData updated = new CharacterAttributeData(
+				row.ID,
+				row.Version + 1,
+				row.CharacterID,
+				row.TemplateID,
+				row.Value - (int)amount,
+				row.CurrentValue);
+			DatabaseResult<BulkWriteResult> persisted = await attributeService.PersistAsync(new List<CharacterAttributeData> { updated });
+			if (!persisted.IsSuccess || persisted.Data.Applied != 1)
+			{
+				// Refused or superseded: the row moved under us. Nothing is billed this sweep.
+				await unitOfWork.RollbackAsync();
+				Log.Warning("HousingSystem", $"Offline tax for CharID={characterID}: the currency row could not be debited ({(persisted.IsSuccess ? "superseded" : persisted.ErrorMessage)}); rolled back.");
+				return OfflineChargeOutcome.Faulted;
+			}
+
+			DatabaseResult commit = await unitOfWork.CommitAsync();
+			return commit.IsSuccess ? OfflineChargeOutcome.Paid : OfflineChargeOutcome.Faulted;
 		}
 
-		/// <summary>
-		/// What happened when the tax sweep tried to charge an owner who might be logged in.
-		/// </summary>
-		/// <remarks>
-		/// Three outcomes rather than a bool, because "they are not here" and "they are here and
-		/// cannot pay" must not be confused. Folding them together would send an online pauper down
-		/// the offline path and charge their stored row — which their next save would undo.
-		/// </remarks>
 		private enum OnlineChargeOutcome
 		{
 			/// <summary>Nobody is playing this character on this server.</summary>

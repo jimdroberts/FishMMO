@@ -54,6 +54,19 @@ Add a `MapMarker`. Set `Type` for what it is and `Visibility` for who may see it
 Party and guild members are promoted to full fidelity at runtime regardless of the authored rule,
 so authoring the strict rule costs nothing.
 
+## Waypoints and fast travel
+
+A discovered waypoint is drawn as an orange diamond from the character's own unlock record
+(`IWaypointController`, filled by the spawn payload and `WaypointUnlockedBroadcast`) against the
+scene's authored waypoints in `WorldSceneDetails.Waypoints`. `MapContent.AppendWaypoints` is the
+only producer; fog plays no part, and an undiscovered waypoint is absent however close the player
+has walked. Clicking one selects it into the side bar's WAYPOINT section; the button sends
+`WaypointTravelRequestBroadcast` and disables until the server answers (or five seconds pass). A
+refusal re-enables it with the reason; an arrival closes the map. The panel has four clip slots
+(click, arrive, refused, discovered) played through `ClientUIAudio` on the Interface channel, and
+`UITKMap.OnFastTravelClicked` for anything else that wants the click. Only the current scene's
+waypoints are shown or travelable; other scenes wait for the world-map system.
+
 ## The anti-radar story, briefly
 
 The observer system decides which entities exist on a client at all; nothing without a GameObject
