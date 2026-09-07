@@ -2569,10 +2569,72 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Human-readable name of the key a binding currently resolves to.</summary>
+		/// <remarks>
+		/// Two sources, tried in order. The display string asks the live device, so a key reads
+		/// the way the player's own keyboard layout names it. The layout name is what the Input
+		/// System registers for the control path, and is only used when the device's answer has
+		/// nothing printable in it — see <see cref="ReadableKeyName"/>.
+		/// </remarks>
 		private static string DisplayStringFor(InputAction action, int bindingIndex)
 		{
 			string display = action.GetBindingDisplayString(bindingIndex);
-			return string.IsNullOrEmpty(display) ? "Unbound" : display;
+			string layoutName = InputControlPath.ToHumanReadableString(
+				action.bindings[bindingIndex].effectivePath,
+				InputControlPath.HumanReadableStringOptions.OmitDevice);
+			return ReadableKeyName(display, layoutName);
+		}
+
+		/// <summary>
+		/// Picks the name to print for a key: the device's own name when it can be read, else the
+		/// layout's name, else "Unbound".
+		/// </summary>
+		/// <param name="display">What <c>GetBindingDisplayString</c> returned. May be null.</param>
+		/// <param name="layoutName">What the control path's layout calls the key. May be null.</param>
+		/// <remarks>
+		/// The device's name for a key is whatever the operating system reports for it, and for
+		/// keys that do not type a character that is the character they send: Escape came back as
+		/// the ESC control character, which the UI font draws as a hollow box, so every row bound
+		/// to Escape — Cancel, Close Last UI, Menu — showed a square. Space comes back as a space
+		/// and printed a blank button. A name with no visible character in it is not a name, so
+		/// those fall through to the layout's word for the key.
+		/// </remarks>
+		private static string ReadableKeyName(string display, string layoutName)
+		{
+			if (HasPrintableText(display))
+			{
+				return display;
+			}
+			if (HasPrintableText(layoutName))
+			{
+				return layoutName;
+			}
+			return "Unbound";
+		}
+
+		/// <summary>True when at least one character in the text is something a font can draw.</summary>
+		private static bool HasPrintableText(string text)
+		{
+			if (string.IsNullOrEmpty(text))
+			{
+				return false;
+			}
+			for (int i = 0; i < text.Length; ++i)
+			{
+				char c = text[i];
+				if (char.IsWhiteSpace(c) || char.IsControl(c))
+				{
+					continue;
+				}
+				switch (char.GetUnicodeCategory(c))
+				{
+					case System.Globalization.UnicodeCategory.Format:
+					case System.Globalization.UnicodeCategory.PrivateUse:
+					case System.Globalization.UnicodeCategory.OtherNotAssigned:
+						continue;
+				}
+				return true;
+			}
+			return false;
 		}
 
 		/// <summary>
