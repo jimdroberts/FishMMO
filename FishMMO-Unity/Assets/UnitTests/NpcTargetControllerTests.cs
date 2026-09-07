@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
@@ -36,6 +36,21 @@ namespace FishMMO.UnitTests
 
 		private static string Scripts =>
 			Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Shared");
+
+		/// <summary>The text of a source file, with its line endings normalised to \n.</summary>
+		/// <remarks>
+		/// Several proofs below match a pattern that spans a line break. Whether the working tree
+		/// stores a file LF or CRLF is decided by git on checkout and by each developer's
+		/// core.autocrlf, so a bound written with \n silently stops matching on a Windows
+		/// checkout — the assertion then reports the code as missing when it is present and
+		/// unchanged. Reading through here makes the fixture depend on the source rather than on
+		/// how it was checked out.
+		/// </remarks>
+		private static string ReadSource(string path)
+		{
+			return File.ReadAllText(path).Replace("\r\n", "\n");
+		}
+
 
 		/// <summary>
 		/// Every NPC prefab whose root carries an AbilityController also carries a TargetController
@@ -110,7 +125,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void NpcRequiresATargetController()
 		{
-			string npc = File.ReadAllText(Path.Combine(Scripts, "Implementation/Entity/NPC/NPC.cs"));
+			string npc = ReadSource(Path.Combine(Scripts, "Implementation/Entity/NPC/NPC.cs"));
 			LogAssert.IsTrue(npc.Contains("[RequireComponent(typeof(TargetController))]"),
 				"NPC must RequireComponent a TargetController; without it every NPC cast spawns nothing");
 		}
@@ -121,7 +136,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ImmortalNpcTargetingShortCircuits()
 		{
-			string controller = File.ReadAllText(Path.Combine(Scripts, "Implementation/Entity/Target/TargetController.cs"));
+			string controller = ReadSource(Path.Combine(Scripts, "Implementation/Entity/Target/TargetController.cs"));
 
 			int shortCircuit = controller.IndexOf("if (IsImmortalNpc)", System.StringComparison.Ordinal);
 			int resolveScene = controller.IndexOf("PhysicsScene physicsScene = ResolvePhysicsScene();", System.StringComparison.Ordinal);
@@ -139,7 +154,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void AttackCooldownIsArmedOnlyWhenActivateQueued()
 		{
-			string state = File.ReadAllText(Path.Combine(Scripts,
+			string state = ReadSource(Path.Combine(Scripts,
 				"Implementation/Entity/NPC/AI/States/BaseAttackingState.cs"));
 
 			int activate = state.IndexOf("if (!abilityController.Activate(ability.ID, held))", System.StringComparison.Ordinal);
@@ -150,7 +165,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(arm > activate,
 				"the pacing timer must be armed after, and only after, Activate reported success");
 
-			string contract = File.ReadAllText(Path.Combine(Scripts,
+			string contract = ReadSource(Path.Combine(Scripts,
 				"Core/Entity/Prediction/Ability/IAbilityController.cs"));
 			LogAssert.IsTrue(contract.Contains("bool Activate(long referenceID, bool isHeld);"),
 				"IAbilityController.Activate must report whether it queued anything");
