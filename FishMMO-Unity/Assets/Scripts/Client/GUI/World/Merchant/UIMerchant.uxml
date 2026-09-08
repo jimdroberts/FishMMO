@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIMerchant.uss" />
     <ui:VisualElement name="merchant-root" class="fish-panel merchant-panel">
@@ -13,12 +13,20 @@
         </ui:VisualElement>
         <ui:VisualElement name="merchant-tabs" class="merchant-tabs">
             <ui:Button name="merchant-tab-items" text="Items" class="fish-tab merchant-tab" />
-            <ui:Button name="merchant-tab-abilities" text="Abilities" class="fish-tab merchant-tab" />
+            <!--
+                "Abilities" sells finished, ready-to-use abilities; "Templates" sells the templates
+                that still have to be crafted. The template tab used to be called Abilities, which is
+                how a player came to buy one and then find it could not be hotkeyed (issue #247).
+            -->
+            <ui:Button name="merchant-tab-premade" text="Abilities" class="fish-tab merchant-tab" />
+            <ui:Button name="merchant-tab-abilities" text="Templates" class="fish-tab merchant-tab" />
             <ui:Button name="merchant-tab-events" text="Effects" class="fish-tab merchant-tab" />
             <ui:Button name="merchant-tab-sell" text="Sell" class="fish-tab merchant-tab" />
         </ui:VisualElement>
+        <ui:Label name="merchant-hint" text="" class="fish-hint merchant-hint" />
         <ui:ScrollView name="merchant-scroll" class="fish-scroll merchant-scroll">
             <ui:VisualElement name="merchant-items" class="merchant-list" />
+            <ui:VisualElement name="merchant-premade" class="merchant-list" />
             <ui:VisualElement name="merchant-abilities" class="merchant-list" />
             <ui:VisualElement name="merchant-events" class="merchant-list" />
             <ui:VisualElement name="merchant-sell" class="merchant-list" />
@@ -33,7 +41,7 @@
             <ui:Label name="merchant-transaction-name" text="" class="fish-label merchant-transaction__name" />
             <ui:VisualElement name="merchant-quantity-row" class="merchant-quantity-row">
                 <ui:Button name="merchant-qty-less" text="−" class="fish-button merchant-qty-btn" />
-                <ui:IntegerField name="merchant-qty-field" value="1" class="merchant-qty-field" />
+                <ui:IntegerField name="merchant-qty-field" value="1" class="fish-input merchant-qty-field" />
                 <ui:Button name="merchant-qty-more" text="+" class="fish-button merchant-qty-btn" />
                 <ui:Button name="merchant-qty-max" text="Max" class="fish-button merchant-qty-btn merchant-qty-btn--max" />
                 <ui:Label name="merchant-transaction-total" text="" class="fish-label merchant-transaction__total" />

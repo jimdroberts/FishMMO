@@ -23,10 +23,17 @@ namespace FishMMO.Shared
 	/// than any rate change and reads as flicker.
 	/// </para>
 	/// <para>
-	/// <b>It only budgets registered characters.</b> Anything else — interactables, world items,
-	/// scene objects, a character whose entry has not been created yet — is admitted untouched, so
-	/// this is safe to install as a default condition on every object. Their absence would be far
-	/// more confusing than a missing distant stranger, and they are cheap.
+	/// <b>Every classification gets its own budget.</b> Players, Monsters, Interactables, World
+	/// Items, Waypoints and Titans are ranked and capped separately, so a crowd of one kind can
+	/// never squeeze out another — which it used to: forty players in a town square evicted the
+	/// banker they were queueing for, because one shared budget ranked a stationary service NPC
+	/// below every living thing near it. The budget for each kind is authored on its
+	/// <see cref="ClassifiedDistanceCondition"/> asset, where 0 means unlimited.
+	/// </para>
+	/// <para>
+	/// <b>Unclassified objects are admitted untouched.</b> Scene objects and anything whose distance
+	/// condition is a plain FishNet one have no budget to be measured against, so this is safe to
+	/// install as a default condition on every object.
 	/// </para>
 	/// <para>
 	/// Party members within the ability ceiling and the viewer's current target are pinned by the
@@ -56,11 +63,13 @@ namespace FishMMO.Shared
 				return true;
 			}
 
-			/* Not a registered character: not this condition's business. Interactables, world items
-			 * and scene objects are governed by their own distance conditions, and a character is
-			 * registered from OnStartServer, so there is a window during spawn where its entry does
-			 * not exist yet. Admitting is right in every one of those cases. */
-			if (ObserverStreamingRegistry.Get(NetworkObject) == null)
+			/* Characters register themselves from OnStartServer. Everything else that carries a
+			 * classification — a dropped item, a waypoint — has no such hook, so it is picked up
+			 * here on first evaluation; RegisterObject ignores anything unclassified. Either way an
+			 * object with no entry is admitted: during the spawn window a character's entry does not
+			 * exist yet, and an unclassified object never will. */
+			if (ObserverStreamingRegistry.Get(NetworkObject) == null &&
+				ObserverStreamingRegistry.RegisterObject(NetworkObject) == null)
 			{
 				return true;
 			}

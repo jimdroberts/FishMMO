@@ -167,11 +167,47 @@
                           class="fish-hint options-hint" />
 
                 <!--
-                    Nameplates that are up without being targeted. Both ranges are measured from
-                    the player, not the camera, and zero means "target only", which is what the
-                    client did before the ranges existed.
+                    Nameplates: the plate over a character's head, its rows, and which of them are
+                    up without being targeted. Both ranges are measured from the player, not the
+                    camera, and zero means "target only", which is what the client did before the
+                    ranges existed.
+
+                    Draw distance and Hide Behind Geometry are NOT repeated here. Both are
+                    statements about projected world UI as a whole and are set once, above.
                 -->
                 <ui:Label text="NAMEPLATES" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Nameplate Size" class="fish-label options-row-label" />
+                    <ui:Slider name="nameplate-scale-slider" low-value="0.5" high-value="2" class="options-row-field" />
+                    <ui:Label name="nameplate-scale-value" text="1.00x" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Nameplate Opacity" class="fish-label options-row-label" />
+                    <ui:Slider name="nameplate-opacity-slider" low-value="0.2" high-value="1" class="options-row-field" />
+                    <ui:Label name="nameplate-opacity-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Background Opacity" class="fish-label options-row-label" />
+                    <ui:Slider name="nameplate-background-slider" low-value="0" high-value="1" class="options-row-field" />
+                    <ui:Label name="nameplate-background-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:Label text="At zero the names are drawn straight over the world, with no plate behind them."
+                          class="fish-hint options-hint" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Guild Names" class="fish-label options-row-label" />
+                    <ui:Toggle name="nameplate-show-guild-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Titles" class="fish-label options-row-label" />
+                    <ui:Toggle name="nameplate-show-titles-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Maximum On Screen" class="fish-label options-row-label" />
+                    <ui:Slider name="nameplate-max-slider" low-value="8" high-value="256" class="options-row-field" />
+                    <ui:Label name="nameplate-max-value" text="64" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:Label text="Past the maximum the nearest nameplates are kept and the furthest are dropped."
+                          class="fish-hint options-hint" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="NPC Name Range" class="fish-label options-row-label" />
                     <ui:Slider name="worldlabel-npc-range-slider" low-value="0" high-value="200" class="options-row-field" />

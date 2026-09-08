@@ -8,7 +8,8 @@ using UnityEngine;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the execution-order contract that keeps world labels from shimmering (issue #227).
+	/// Pins the execution-order contract that keeps world labels and nameplates from shimmering
+	/// (issue #227).
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -33,10 +34,25 @@ namespace FishMMO.UnitTests
 	/// thing that is silently deleted by an inspector edit or lost when a component is rewritten.
 	/// Hence a test: it asserts the ordering, not the number.
 	/// </para>
+	/// <para>
+	/// <see cref="UITKNameplateLayer"/> projects from the same camera in the same LateUpdate and is
+	/// held to the same contract. It is the one component allowed to share the label layer's order:
+	/// the two never touch a camera, so their order relative to each other does not matter.
+	/// </para>
 	/// </remarks>
 	[TestFixture]
 	public class WorldLabelProjectionOrderTests
 	{
+		/// <summary>
+		/// The layers that project from the camera. Both must run after every camera writer, and
+		/// both are therefore exempt from the "nothing outruns the label layer" guard below.
+		/// </summary>
+		private static readonly Type[] ProjectionLayers =
+		{
+			typeof(UITKWorldLabelLayer),
+			typeof(UITKNameplateLayer),
+		};
+
 		/// <summary>
 		/// The components that place a camera before the labels are projected. Each one writes a
 		/// camera transform from its own <c>LateUpdate</c>.
@@ -68,16 +84,32 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void WorldLabelLayer_ProjectsAfterEveryCameraWriter()
+		public void NameplateLayer_DeclaresTheSameExecutionOrder()
 		{
-			int layerOrder = ExecutionOrderOf(typeof(UITKWorldLabelLayer));
+			DefaultExecutionOrder attribute = (DefaultExecutionOrder)Attribute.GetCustomAttribute(
+				typeof(UITKNameplateLayer), typeof(DefaultExecutionOrder));
 
-			foreach (Type writer in CameraWriters)
+			Assert.IsNotNull(attribute,
+				"UITKNameplateLayer projects nameplates against the camera in LateUpdate, so it needs " +
+				"the same explicit order the world label layer does.");
+			Assert.AreEqual(UITKNameplateLayer.ExecutionOrder, attribute.order,
+				"The attribute and the documented constant must agree.");
+		}
+
+		[Test]
+		public void EveryProjectionLayer_ProjectsAfterEveryCameraWriter()
+		{
+			foreach (Type layer in ProjectionLayers)
 			{
-				int writerOrder = ExecutionOrderOf(writer);
-				Assert.Less(writerOrder, layerOrder,
-					$"{writer.Name} places a camera in LateUpdate, so it must run before " +
-					$"UITKWorldLabelLayer projects against that camera. Orders were {writerOrder} and {layerOrder}.");
+				int layerOrder = ExecutionOrderOf(layer);
+
+				foreach (Type writer in CameraWriters)
+				{
+					int writerOrder = ExecutionOrderOf(writer);
+					Assert.Less(writerOrder, layerOrder,
+						$"{writer.Name} places a camera in LateUpdate, so it must run before " +
+						$"{layer.Name} projects against that camera. Orders were {writerOrder} and {layerOrder}.");
+				}
 			}
 		}
 
@@ -109,7 +141,7 @@ namespace FishMMO.UnitTests
 
 			foreach (Type type in typeof(UITKWorldLabelLayer).Assembly.GetTypes())
 			{
-				if (type == typeof(UITKWorldLabelLayer) || !typeof(MonoBehaviour).IsAssignableFrom(type))
+				if (Array.IndexOf(ProjectionLayers, type) >= 0 || !typeof(MonoBehaviour).IsAssignableFrom(type))
 				{
 					continue;
 				}

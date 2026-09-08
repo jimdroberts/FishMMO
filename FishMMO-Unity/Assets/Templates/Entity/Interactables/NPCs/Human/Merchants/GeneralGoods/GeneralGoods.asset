@@ -31,3 +31,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e6d97319903785e4f8bbdbaa2ba21412, type: 2}
   Items:
   - {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}
+  PremadeAbilities:
+  - {fileID: 11400000, guid: daf8d0eb1f0040e0a81c4744abd7e031, type: 2}

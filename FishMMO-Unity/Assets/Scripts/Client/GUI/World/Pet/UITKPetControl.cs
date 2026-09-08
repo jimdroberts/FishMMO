@@ -441,13 +441,9 @@ namespace FishMMO.Client
 			petMovementOrder = pet.MovementOrder;
 			ReplayStoredPriority(pet);
 
-			if (pet.CharacterNameLabel != null)
+			if (pet.CharacterNameplate != null)
 			{
-				pet.CharacterNameLabel.gameObject.SetActive(true);
-			}
-			if (pet.CharacterGuildLabel != null)
-			{
-				pet.CharacterGuildLabel.gameObject.SetActive(true);
+				pet.CharacterNameplate.Visible = true;
 			}
 
 			if (pet.TryGet(out ICharacterAttributeController attributeController) &&

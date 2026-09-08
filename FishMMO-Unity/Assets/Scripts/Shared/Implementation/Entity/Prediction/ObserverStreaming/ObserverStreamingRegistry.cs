@@ -15,10 +15,12 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Characters register from <c>CharacterPredictionController.OnStartServer</c>, so this covers
-	/// exactly the predicted characters — players, monsters, pets — whose NetworkTransform and
-	/// other per-tick traffic is what an observer's bandwidth is spent on. Interactables and
-	/// world items are static and keep their prefab conditions untouched.
+	/// Characters register from <c>CharacterPredictionController.OnStartServer</c> — players,
+	/// monsters, pets, and the service NPCs built on the same prefab stack — because their
+	/// NetworkTransform and other per-tick traffic is what an observer's bandwidth is spent on.
+	/// Static classified objects (world items, waypoints) have no such hook and are adopted by
+	/// <see cref="ObserverBudgetCondition"/> on first evaluation, so that every classification can
+	/// be budgeted; they cost a position read per pass and nothing on the wire.
 	/// </para>
 	/// <para>
 	/// Runs one pass every <see cref="ObserverStreamingPolicy.RescheduleIntervalTicks"/> ticks
@@ -39,9 +41,21 @@ namespace FishMMO.Shared
 		private static readonly List<Candidate> candidates = new List<Candidate>();
 
 		/// <summary>
-		/// Per viewer, the visibility rank of each character it could observe: object id to rank,
+		/// Per-bucket rank counter reused across viewers. Keyed by
+		/// <see cref="ObserverStreamingEntry.RankBucket"/> so unclassified objects get a bucket of
+		/// their own rather than inflating a real classification's ranks.
+		/// </summary>
+		private static readonly Dictionary<int, int> classRanks = new Dictionary<int, int>();
+
+		/// <summary>
+		/// Per viewer, the visibility rank of each object it could observe: object id to rank,
 		/// rank 0 being the most relevant. Rebuilt every pass and read by
 		/// <c>ObserverBudgetCondition</c>. Inner dictionaries are reused rather than reallocated.
+		/// <para>
+		/// The rank is WITHIN THE OBJECT'S CLASSIFICATION, not across all of them: the fortieth
+		/// player and the first Titan both rank against their own kind. Ranking globally is what let
+		/// a town square full of players evict the banker standing in it.
+		/// </para>
 		/// </summary>
 		private static readonly Dictionary<int, Dictionary<int, int>> ranksByClientId = new Dictionary<int, Dictionary<int, int>>();
 
@@ -50,6 +64,17 @@ namespace FishMMO.Shared
 
 		/// <summary>Per viewer, characters pinned into the budget regardless of rank.</summary>
 		private static readonly Dictionary<int, HashSet<int>> pinnedByClientId = new Dictionary<int, HashSet<int>>();
+
+		/// <summary>
+		/// The budget each ranked object is measured against, by object id. 0 means unlimited.
+		/// </summary>
+		/// <remarks>
+		/// Keyed by object rather than by (viewer, object) because a budget is a property of the
+		/// object's CLASSIFICATION, not of who is looking: every viewer measures a Titan against the
+		/// Titan budget. Kept beside the ranks rather than looked up through the entry so that
+		/// <see cref="IsWithinVisibilityBudget"/> stays a pair of dictionary probes on the hot path.
+		/// </remarks>
+		private static readonly Dictionary<int, int> budgetsByObjectId = new Dictionary<int, int>();
 		private static TimeManager timeManager;
 		private static uint nextPassTick;
 
@@ -64,7 +89,7 @@ namespace FishMMO.Shared
 			public bool Engaged;
 		}
 
-		/// <summary>Number of characters currently registered.</summary>
+		/// <summary>Number of objects currently registered — characters and budgeted statics alike.</summary>
 		public static int Count => entries.Count;
 
 		/// <summary>Viewers ranked in the last pass.</summary>
@@ -118,7 +143,13 @@ namespace FishMMO.Shared
 				return true;
 			}
 
-			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			/* The budget of the observed object's own classification. An unranked object never
+			 * reaches here, and a ranked one always has an entry, so the fallback only covers the
+			 * legacy path where nothing declares a classification. */
+			if (!budgetsByObjectId.TryGetValue(observedObjectId, out int budget))
+			{
+				budget = ObserverStreamingPolicy.VisibilityBudget;
+			}
 			if (budget <= 0)
 			{
 				return true;
@@ -135,16 +166,32 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static ObserverStreamingEntry Register(NetworkObject networkObject, ICharacter character)
 		{
-			if (networkObject == null || character == null)
+			if (networkObject == null)
 			{
 				return null;
 			}
 			if (entriesByObject.TryGetValue(networkObject, out ObserverStreamingEntry existing))
 			{
-				return existing;
+				/* An entry adopted by the budget condition before the character's own registration
+				 * ran has no character behind it: it is never a viewer and scores no party, guild
+				 * or combat. Spawn order (OnStartServer precedes the first observer rebuild) means
+				 * this should not happen today, but pooling or a new spawn path must not be able to
+				 * quietly demote a player to scenery. Replace rather than patch — the entry's
+				 * cached inputs are rebuilt every pass anyway. */
+				if (existing.Character != null || character == null)
+				{
+					return existing;
+				}
+				entries.Remove(existing);
+				entriesByObject.Remove(networkObject);
 			}
 
-			ObserverStreamingEntry entry = new ObserverStreamingEntry(networkObject, character);
+			return Adopt(networkObject, new ObserverStreamingEntry(networkObject, character));
+		}
+
+		/// <summary>Files an entry and starts the scheduler if this is the first one.</summary>
+		private static ObserverStreamingEntry Adopt(NetworkObject networkObject, ObserverStreamingEntry entry)
+		{
 			entriesByObject[networkObject] = entry;
 			entries.Add(entry);
 			networkObject.ObserverSendFilter = entry;
@@ -156,6 +203,49 @@ namespace FishMMO.Shared
 				nextPassTick = timeManager.LocalTick;
 			}
 			return entry;
+		}
+
+		/// <summary>
+		/// Registers a classified object that nothing else registered — a dropped item, a waypoint.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// These have no <c>CharacterPredictionController</c> to register them from, so the call
+		/// comes from <see cref="ObserverBudgetCondition"/> the first time the object is evaluated:
+		/// that condition runs on the server for every object carrying the manager's defaults, and
+		/// it already holds the <c>NetworkObject</c>. The first evaluation defers (the object is
+		/// unranked, which is admitted) and the next scheduling pass ranks it — the same deferral a
+		/// freshly connected viewer gets, and the reason neither shows as a pop-in.
+		/// </para>
+		/// <para>
+		/// Only objects that declare a <see cref="ClassifiedDistanceCondition"/> are taken. Anything
+		/// else has no budget to be measured against, and registering it would cost a per-pass
+		/// position read for a decision that would always be "admit".
+		/// </para>
+		/// </remarks>
+		/// <param name="networkObject">The object to track.</param>
+		/// <returns>The entry, or null when the object is not classified.</returns>
+		public static ObserverStreamingEntry RegisterObject(NetworkObject networkObject)
+		{
+			if (networkObject == null || entriesByObject.ContainsKey(networkObject))
+			{
+				return Get(networkObject);
+			}
+
+			/* Probe before building. This runs on every timed evaluation of every object that
+			 * carries the manager's default conditions — for every connection — and almost all of
+			 * those objects (scene props, ability objects) are unclassified. Constructing an entry
+			 * just to discover that would allocate a dictionary and read a transform per
+			 * evaluation, forever. */
+			if (ObserverStreamingEntry.FindClassifiedCondition(networkObject) == null)
+			{
+				return null;
+			}
+
+			/* If the object is a character after all, register it as one: IsPlayer, party, guild
+			 * and combat all come from the ICharacter, and an entry without it ranks as scenery. */
+			networkObject.TryGetComponent(out ICharacter character);
+			return Adopt(networkObject, new ObserverStreamingEntry(networkObject, character));
 		}
 
 		/// <summary>Unregisters a character, restoring its prefab range and removing the send filter.</summary>
@@ -220,6 +310,7 @@ namespace FishMMO.Shared
 			}
 			ranksByClientId.Clear();
 			rankedClientIds.Clear();
+			budgetsByObjectId.Clear();
 			pinnedByClientId.Clear();
 		}
 
@@ -250,6 +341,7 @@ namespace FishMMO.Shared
 			LastPassPinned = 0;
 			LastPassBudgetExcluded = 0;
 			rankedClientIds.Clear();
+			budgetsByObjectId.Clear();
 
 			// Prune destroyed objects and refresh cached inputs.
 			for (int i = entries.Count - 1; i >= 0; --i)
@@ -303,6 +395,13 @@ namespace FishMMO.Shared
 			cellCounts.Clear();
 			for (int i = 0; i < sceneEntries.Count; ++i)
 			{
+				/* Only characters are crowd. Items and waypoints are in this list to be budgeted,
+				 * and a field of dropped loot must not read as a dense town and shrink the ranges of
+				 * the players standing in it. */
+				if (sceneEntries[i].Character == null)
+				{
+					continue;
+				}
 				long key = CellKey(sceneEntries[i].Position, cellSize);
 				cellCounts.TryGetValue(key, out int count);
 				cellCounts[key] = count + 1;
@@ -361,7 +460,6 @@ namespace FishMMO.Shared
 			int rateCap = ObserverStreamingPolicy.FullRateObserverCap;
 			int engagedBudget = ObserverStreamingPolicy.EngagedFullRateBudget;
 			byte engagedOverflow = ObserverStreamingPolicy.EngagedOverflowInterval;
-			int visibilityBudget = ObserverStreamingPolicy.VisibilityBudget;
 
 			for (int v = 0; v < sceneEntries.Count; ++v)
 			{
@@ -475,13 +573,26 @@ namespace FishMMO.Shared
 
 				candidates.Sort(CompareCandidates);
 
+				/* Rank within classification, so each kind is measured against its own budget.
+				 * classRanks is reset per viewer; the global index i still drives the FULL-RATE cap
+				 * below, because that one is about the total number of streams a client pays for
+				 * and does not care what kind they are. */
+				classRanks.Clear();
 				int engagedSoFar = 0;
 				for (int i = 0; i < candidates.Count; ++i)
 				{
 					Candidate candidate = candidates[i];
-					ranks[candidate.Entry.NetworkObject.ObjectId] = i;
+					int objectId = candidate.Entry.NetworkObject.ObjectId;
 
-					if (visibilityBudget > 0 && !candidate.Pinned && i >= visibilityBudget)
+					int bucket = candidate.Entry.RankBucket;
+					classRanks.TryGetValue(bucket, out int classRank);
+					classRanks[bucket] = classRank + 1;
+
+					int budget = candidate.Entry.VisibilityBudget;
+					ranks[objectId] = classRank;
+					budgetsByObjectId[objectId] = budget;
+
+					if (budget > 0 && !candidate.Pinned && classRank >= budget)
 					{
 						LastPassBudgetExcluded++;
 					}

@@ -265,13 +265,13 @@ namespace FishMMO.Shared
 			gameObject.name = name;
 
 #if !UNITY_SERVER
-			/* The label is optional on a character, and a character is optional on the object: the
-			 * three interactable NPC prefabs carry this component with a label, a Switch carries it
+			/* The plate is optional on a character, and a character is optional on the object: the
+			 * three interactable NPC prefabs carry this component with a plate, a Switch carries it
 			 * with neither. */
 			ICharacter character = transform.GetComponent<ICharacter>();
-			if (character != null && character.CharacterNameLabel != null)
+			if (character != null && character.CharacterNameplate != null)
 			{
-				character.CharacterNameLabel.text = name;
+				character.CharacterNameplate.SetLine(NameplateSlot.Name, name);
 			}
 #endif
 		}

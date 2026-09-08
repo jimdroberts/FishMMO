@@ -150,7 +150,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="builder">The tooltip builder to populate.</param>
 		/// <param name="combineList">Optional list of tooltips to combine (for ability crafting).</param>
-		public virtual void BuildTooltip(TooltipBuilder builder, List<ITooltip> combineList = null)
+		/// <param name="includePrice">Whether to write the summed component price line. A seller with its own price passes false and writes its own.</param>
+		public virtual void BuildTooltip(TooltipBuilder builder, List<ITooltip> combineList = null, bool includePrice = true)
 		{
 			builder.AddLine(Name, 0, TooltipColors.Title, false, "140%");
 
@@ -226,7 +227,11 @@ namespace FishMMO.Shared
 				}
 			}
 
-			if (price > 0)
+			/* The summed component price is what a player pays to CRAFT this combination. A
+			 * premade ability is sold at its own price, so the seller passes includePrice: false
+			 * and writes its own line — two price lines, or the wrong one, would defeat the point
+			 * of showing one at all. */
+			if (includePrice && price > 0)
 			{
 				builder.AddLine($"Price: {price}", 80, TooltipColors.Stat);
 			}

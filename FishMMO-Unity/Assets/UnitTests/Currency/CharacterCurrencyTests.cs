@@ -240,8 +240,8 @@ namespace FishMMO.UnitTests
 			public bool IsSpawned => true;
 			public int Flags { get; set; }
 
-			public WorldLabel CharacterNameLabel { get; set; }
-			public WorldLabel CharacterGuildLabel { get; set; }
+			/// <inheritdoc/>
+			public Nameplate CharacterNameplate { get; set; }
 			public Transform MeshRoot => null;
 
 #if !UNITY_SERVER

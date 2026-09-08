@@ -122,17 +122,11 @@ namespace FishMMO.Shared
 		}
 
 		[SerializeField]
-		private WorldLabel characterNameLabel;
+		private Nameplate characterNameplate;
 		/// <summary>
-		/// The label displaying the character's name above their model.
+		/// The overhead nameplate: name, guild, and whatever else the client stacks on it.
 		/// </summary>
-		public WorldLabel CharacterNameLabel { get { return this.characterNameLabel; } set { this.characterNameLabel = value; } }
-		[SerializeField]
-		private WorldLabel characterGuildLabel;
-		/// <summary>
-		/// The label displaying the character's guild above their model.
-		/// </summary>
-		public WorldLabel CharacterGuildLabel { get { return this.characterGuildLabel; } set { this.characterGuildLabel = value; } }
+		public Nameplate CharacterNameplate { get { return this.characterNameplate; } set { this.characterNameplate = value; } }
 
 		[SerializeField]
 		private Transform meshRoot;

@@ -138,6 +138,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			"ObserverLodBands",
 			"ObserverEngagementRange",
 			"ObserverVisibilityBudget",
+			"ObserverVisibilityBudgets",
 			"ObserverVisibilityBudgetHysteresis",
 			"ObserverEngagedFullRateBudget",
 			"ObserverEngagementRangeCeiling",
@@ -173,7 +174,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"density={ObserverStreamingPolicy.LowDensity}..{ObserverStreamingPolicy.HighDensity}@{ObserverStreamingPolicy.DensityRadius}m " +
 				$"scale={ObserverStreamingPolicy.RangeScaleAtHighDensity} minRange={ObserverStreamingPolicy.MinimumRange}m " +
 				$"reschedule={ObserverStreamingPolicy.RescheduleIntervalTicks} ticks " +
-				$"maxSendInterval={ObserverStreamingPolicy.MaxSendInterval} visibilityBudget={ObserverStreamingPolicy.VisibilityBudget}");
+				$"maxSendInterval={ObserverStreamingPolicy.MaxSendInterval} " +
+				$"visibilityBudget(unclassified)={ObserverStreamingPolicy.VisibilityBudget} budgetOverrides={DescribeBudgetOverrides()}");
+		}
+
+		/// <summary>
+		/// The per-classification budget overrides in force, or "none (asset values)". Budgets
+		/// normally live on the ClassifiedDistanceCondition assets; only an operator override is
+		/// worth announcing here, because it is the one thing the assets cannot tell a reader.
+		/// </summary>
+		private static string DescribeBudgetOverrides()
+		{
+			System.Text.StringBuilder sb = new System.Text.StringBuilder();
+			foreach (ObserverClassification classification in System.Enum.GetValues(typeof(ObserverClassification)))
+			{
+				if (!ObserverStreamingPolicy.HasVisibilityBudgetOverride(classification))
+				{
+					continue;
+				}
+				if (sb.Length > 0)
+				{
+					sb.Append(',');
+				}
+				sb.Append(classification).Append(':')
+					.Append(ObserverStreamingPolicy.ResolveVisibilityBudget(classification, 0));
+			}
+			return sb.Length > 0 ? sb.ToString() : "none (asset values)";
 		}
 
 		/// <summary>

@@ -1926,7 +1926,7 @@ namespace FishMMO.Client
 		/// <param name="c">The player character that was read.</param>
 		private void OnCharacterReadPayload(IPlayerCharacter c)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, c.ID, name => { c.GameObject.name = name; c.CharacterName = name; c.CharacterNameLower = name.ToLowerInvariant(); if (c.CharacterNameLabel != null) c.CharacterNameLabel.text = name; });
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, c.ID, name => { c.GameObject.name = name; c.CharacterName = name; c.CharacterNameLower = name.ToLowerInvariant(); if (c.CharacterNameplate != null) c.CharacterNameplate.SetLine(NameplateSlot.Name, name); });
 		}
 		/// <summary>
 		/// Called when the local character starts. Sets up input controller and UI.
@@ -2274,7 +2274,7 @@ namespace FishMMO.Client
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerId, name =>
 			{
 				if (pet == null || pet.ID != petId) return;
-				if (pet.CharacterGuildLabel) pet.CharacterGuildLabel.text = $"<{name}'s pet>";
+				if (pet.CharacterNameplate != null) pet.CharacterNameplate.SetLine(NameplateSlot.GuildName, $"<{name}'s pet>");
 			});
 		}
 		/// <summary>

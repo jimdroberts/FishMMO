@@ -12,6 +12,12 @@ namespace FishMMO.Client
 	/// from its world position onto this screen-space panel each frame.
 	/// </summary>
 	/// <remarks>
+	/// This layer draws the FREE-FLOATING text: damage and healing numbers, and any other caption
+	/// with a life of its own. Overhead nameplates are not here — a name, a guild and a title are
+	/// one plate with one anchor, drawn by <see cref="UITKNameplateLayer"/> into a sibling
+	/// container beneath this one. See <see cref="Nameplate"/> for why they had to stop being a
+	/// group of labels.
+	///
 	/// UI Toolkit has no world-space render mode, so the labels that used to be TextMeshPro
 	/// components sitting in the scene are now plain data (<see cref="WorldLabel"/>) that this
 	/// layer positions. <c>RuntimePanelUtils.CameraTransformWorldToPanel</c> does the projection,
@@ -23,12 +29,12 @@ namespace FishMMO.Client
 	///
 	/// • <b>Perspective scaling.</b> A world-unit font size is converted to panel points using the
 	///   camera's vertical FOV and the label's distance, so distant labels shrink exactly as they
-	///   did when they were geometry. Callers keep passing world-unit sizes (0.25 for nameplates,
-	///   0.5 for damage and heals) and get the same apparent result at any distance.
+	///   did when they were geometry. Callers keep passing world-unit sizes (0.5 for damage and
+	///   heals) and get the same apparent result at any distance.
 	///
 	/// • <b>Depth ordering.</b> Elements are reordered back-to-front by distance so a near label
 	///   overlaps a far one. UI Toolkit paints in hierarchy order and has no depth buffer, so
-	///   without this the draw order would be creation order, and a distant nameplate could sit on
+	///   without this the draw order would be creation order, and a distant number could sit on
 	///   top of one right in front of the player.
 	///
 	/// What is <em>not</em> reproduced is occlusion by scene geometry: 3D text was hidden behind
@@ -55,8 +61,8 @@ namespace FishMMO.Client
 	///   <see cref="elementPool"/> with their per-label state cleared.
 	///
 	/// • <b>Style writes are diffed.</b> Colour, font size and text are compared against what was
-	///   last pushed and only written when they actually differ, so a nameplate that is not
-	///   changing costs one translate write per frame and nothing else.
+	///   last pushed and only written when they actually differ, so a label that is not changing
+	///   costs one translate write per frame and nothing else.
 	///
 	/// • <b>Depth order uses <c>VisualElement.Sort</c>.</b> Re-adding every child to reorder is
 	///   O(N²) inside the hierarchy list and dirties the tree N times; <c>Sort</c> is one
@@ -114,22 +120,6 @@ namespace FishMMO.Client
 		/// as a frame-time spike.
 		/// </remarks>
 		private const string ANCHOR_NAME = "world-label-anchor";
-
-		/// <summary>
-		/// Line-height factor applied to a stacked label's resolved font size when computing how far
-		/// the label above it must move up.
-		/// </summary>
-		/// <remarks>
-		/// The text element is bottom-anchored (<c>translate: -50% -100%</c> in USS), so the height
-		/// of the label below is exactly how far the next one has to rise to clear it. UI Toolkit's
-		/// default line height is roughly 1.2× the font size; measuring the real resolved height
-		/// would mean reading layout mid-frame, which forces a layout pass — the one cost this class
-		/// exists to avoid.
-		/// </remarks>
-		private const float STACK_LINE_HEIGHT = 1.2f;
-
-		/// <summary>Panel-point gap left between stacked labels so ascenders and descenders never touch.</summary>
-		private const float STACK_GAP = 2.0f;
 
 		/// <summary>
 		/// The active layer, so the label pool can reach it without a scene search.
@@ -213,46 +203,6 @@ namespace FishMMO.Client
 			/// <summary>Frame index this label was last repositioned on, for distant-label stagger.</summary>
 			public int LastMoveFrame;
 
-			/// <summary>
-			/// Whether the label sits on a pooled <see cref="UITKWorldLabel"/>.
-			/// </summary>
-			/// <remarks>
-			/// Cached at registration because it decides the grouping fallback and the alternative
-			/// is a <c>GetComponent</c> per label per frame — a scripting-bridge call this loop is
-			/// written to never make.
-			/// </remarks>
-			public bool Pooled;
-
-			/// <summary>
-			/// Grouping key used when the label has no explicit <see cref="WorldLabel.GroupAnchor"/>:
-			/// the transform root (the character) for prefab-authored labels, null for pooled ones,
-			/// whose root is the pool object.
-			/// </summary>
-			public Transform DefaultGroup;
-
-			/// <summary>The group this label resolved to this frame, or null when ungrouped.</summary>
-			public Transform Group;
-
-			/// <summary>
-			/// Instance ID of <see cref="Group"/>, resolved only when the group reference changes so
-			/// the per-frame stacking sort compares ints instead of calling into native code.
-			/// </summary>
-			public int GroupId;
-
-			/// <summary>Instance ID of the label itself, the deterministic tie-break within a stack.</summary>
-			public int OwnerId;
-
-			/// <summary>
-			/// This frame's raw projected panel position, before any stacking shift.
-			/// </summary>
-			/// <remarks>
-			/// Kept separate from <see cref="PushedPosition"/> so a grouped label's shift is always
-			/// recomputed from the true projection — accumulating a shift on top of an already
-			/// shifted position would make the stack creep upward every frame. It also survives the
-			/// distant-label stagger: a skipped label keeps last projection's base, so it can still
-			/// take a fresh stack slot when a neighbour appears or disappears.
-			/// </remarks>
-			public Vector2 BasePosition;
 		}
 
 		/// <summary>Backing state for each live label.</summary>
@@ -266,9 +216,6 @@ namespace FishMMO.Client
 
 		/// <summary>Labels found to have been destroyed during a frame, collected for removal.</summary>
 		private readonly List<WorldLabel> deadScratch = new List<WorldLabel>();
-
-		/// <summary>Scratch list of this frame's grouped labels, reused so stacking allocates nothing.</summary>
-		private readonly List<LabelBinding> groupScratch = new List<LabelBinding>();
 
 		/// <summary>
 		/// Back-to-front comparison, cached so the per-frame sort allocates no closure.
@@ -284,11 +231,6 @@ namespace FishMMO.Client
 		/// Hierarchy comparison applied to the container's children, cached for the same reason.
 		/// </summary>
 		private static readonly Comparison<VisualElement> RenderIndexComparison = CompareRenderIndex;
-
-		/// <summary>
-		/// Grouping comparison for the stacking pass, cached for the same reason.
-		/// </summary>
-		private static readonly Comparison<LabelBinding> GroupStackComparison = CompareGroupStack;
 
 		/// <summary>
 		/// Camera used for projection. Falls back to <see cref="Camera.main"/> when unset.
@@ -460,8 +402,8 @@ namespace FishMMO.Client
 
 			/* Pushed under every panel. This layer is not a UITKControl — it owns its document
 			 * directly — so it applies its own tier rather than inheriting one. Projected
-			 * nameplates and damage numbers belong to the world, and a nameplate showing through
-			 * an open inventory reads as a bug. See UITKPanelLayer. */
+			 * projected text belongs to the world, and a damage number showing through an open
+			 * inventory reads as a bug. See UITKPanelLayer. */
 			if (document != null)
 			{
 				document.sortingOrder = (float)UITKPanelLayer.WorldOverlay;
@@ -585,15 +527,6 @@ namespace FishMMO.Client
 
 			LabelBinding binding = RentBinding();
 
-			/* Grouping facts that are stable for the life of the registration, cached here so the
-			 * per-frame loop never calls GetComponent or walks the hierarchy. A pooled label's
-			 * transform root is the pool object — shared by every pooled label — so it must never
-			 * be used as a grouping key; a prefab-authored nameplate's root is the character it
-			 * hangs off, which is exactly the key that makes co-anchored nameplates stack. */
-			binding.Pooled = label.GetComponent<UITKWorldLabel>() != null;
-			binding.DefaultGroup = binding.Pooled ? null : label.transform.root;
-			binding.OwnerId = label.GetInstanceID();
-
 			container.Add(binding.Anchor);
 			elements[label] = binding;
 		}
@@ -649,12 +582,6 @@ namespace FishMMO.Client
 			binding.Order = 0;
 			binding.RenderIndex = -1;
 			binding.LastMoveFrame = int.MinValue;
-			binding.Pooled = false;
-			binding.DefaultGroup = null;
-			binding.Group = null;
-			binding.GroupId = 0;
-			binding.OwnerId = 0;
-			binding.BasePosition = new Vector2(float.NaN, float.NaN);
 
 			binding.Text.text = string.Empty;
 
@@ -777,7 +704,6 @@ namespace FishMMO.Client
 
 			sortScratch.Clear();
 			deadScratch.Clear();
-			groupScratch.Clear();
 
 			foreach (KeyValuePair<WorldLabel, LabelBinding> kvp in elements)
 			{
@@ -811,37 +737,15 @@ namespace FishMMO.Client
 				binding.Distance = distance;
 				binding.Order = label.SortOrder;
 
-				/* Group resolution. An explicit anchor (set at runtime, e.g. by the target frame)
-				 * wins; otherwise prefab-authored labels group by their character root and pooled
-				 * labels stay ungrouped — see HandleLabelEnabled. The instance ID is refreshed only
-				 * when the reference actually changes, so the steady state costs two null checks. */
-				Transform group = label.GroupAnchor;
-				if (group == null && !binding.Pooled)
-				{
-					group = binding.DefaultGroup;
-				}
-				if (!ReferenceEquals(binding.Group, group))
-				{
-					binding.Group = group;
-					binding.GroupId = group != null ? group.GetInstanceID() : 0;
-				}
-
 				/* Level of detail. A distant label is repositioned on a frame stride, so on the
 				 * frames it is skipped it keeps last frame's translate — which is why the skip
 				 * happens here, after the culling tests but before any projection work. It still
 				 * joins the sort, because dropping it out would leave it holding a stale render
-				 * index and make the order check below report a false reorder every frame. A
-				 * grouped label also still joins the stacking pass, off its stored base position:
-				 * its own projection can wait, but its slot in the stack cannot, or a neighbour
-				 * appearing mid-stride would draw straight through it. */
+				 * index and make the order check below report a false reorder every frame. */
 				bool distant = cameraStill && DistantLodDistance > 0.0f && distance > DistantLodDistance;
 				if (distant && DistantUpdateInterval > 1 && binding.Displayed &&
 					frame - binding.LastMoveFrame < DistantUpdateInterval)
 				{
-					if (binding.Group != null)
-					{
-						groupScratch.Add(binding);
-					}
 					sortScratch.Add(binding);
 					continue;
 				}
@@ -880,22 +784,7 @@ namespace FishMMO.Client
 					MaxFontSize);
 
 				PushContent(binding, label, fontSize);
-
-				binding.BasePosition = panelPosition;
-
-				/* Ungrouped labels are positioned right here; grouped ones wait for the stacking
-				 * pass, which cannot run until every member of a stack has projected and the draw
-				 * budget has decided who is actually visible. Writing the raw position now and the
-				 * stacked one later would move the element twice in one frame for nothing. */
-				if (binding.Group == null)
-				{
-					ApplyPosition(binding, panelPosition);
-				}
-				else
-				{
-					groupScratch.Add(binding);
-				}
-
+				ApplyPosition(binding, panelPosition);
 				sortScratch.Add(binding);
 			}
 
@@ -913,7 +802,6 @@ namespace FishMMO.Client
 			}
 
 			ApplyBudgetAndDepthOrder();
-			ApplyGroupStacking();
 		}
 
 		/// <summary>
@@ -973,63 +861,6 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Stacks this frame's grouped labels vertically so labels sharing an anchor point read as a
-		/// list instead of painting on top of one another.
-		/// </summary>
-		/// <remarks>
-		/// Nameplates are authored as siblings of the same overhead anchor — name and guild both sit
-		/// at the character's head — so without this they project to the same panel point and
-		/// overlap exactly. The pass sorts the grouped bindings by (group, <see cref="WorldLabel.SortOrder"/>,
-		/// instance ID) and walks each run: the first visible label keeps its true projected
-		/// position, and every subsequent one is raised by the accumulated heights of the visible
-		/// labels below it. Labels are bottom-anchored (<c>translate: -50% -100%</c> in USS), so
-		/// raising one is subtracting from panel Y.
-		/// <para>
-		/// Runs after <see cref="ApplyBudgetAndDepthOrder"/> on purpose: a label the budget hid this
-		/// frame must not hold a slot in the stack, or the survivors would float above an empty gap.
-		/// Ordering by sort order rather than screen height keeps a stack stable — heights change
-		/// every frame with distance, and a stack that reshuffles as the camera moves is worse than
-		/// the overlap it replaced.
-		/// </para>
-		/// </remarks>
-		private void ApplyGroupStacking()
-		{
-			int count = groupScratch.Count;
-			if (count == 0)
-			{
-				return;
-			}
-			if (count > 1)
-			{
-				groupScratch.Sort(GroupStackComparison);
-			}
-
-			int index = 0;
-			while (index < count)
-			{
-				int groupId = groupScratch[index].GroupId;
-				float stacked = 0.0f;
-
-				for (; index < count && groupScratch[index].GroupId == groupId; ++index)
-				{
-					LabelBinding binding = groupScratch[index];
-					if (!binding.Displayed)
-					{
-						continue;
-					}
-
-					ApplyPosition(binding, new Vector2(binding.BasePosition.x, binding.BasePosition.y - stacked));
-
-					/* The resolved on-screen size is what was last pushed onto the element — for a
-					 * stagger-skipped label that is last projection's value, which is also the size
-					 * it is still being drawn at. NaN means nothing was ever pushed, which cannot
-					 * coincide with Displayed, but a clamp floor is cheaper than trusting that. */
-					float fontSize = float.IsNaN(binding.PushedFontSize) ? MinFontSize : binding.PushedFontSize;
-					stacked += fontSize * STACK_LINE_HEIGHT + STACK_GAP;
-				}
-			}
-		}
 
 		/// <summary>
 		/// Writes text, colour and font size onto a label's element, skipping anything unchanged.
@@ -1168,29 +999,6 @@ namespace FishMMO.Client
 			return b.Distance.CompareTo(a.Distance);
 		}
 
-		/// <summary>
-		/// Orders grouped labels so each stack's members are contiguous and in bottom-to-top order.
-		/// </summary>
-		/// <remarks>
-		/// Group ID first so a single walk can consume one stack at a time; then
-		/// <see cref="WorldLabel.SortOrder"/>, which is the authored stack order (name 0, guild 10,
-		/// target caption 100); then instance ID, so two labels with equal sort order still stack in
-		/// a stable order instead of swapping places between frames.
-		/// </remarks>
-		private static int CompareGroupStack(LabelBinding a, LabelBinding b)
-		{
-			int byGroup = a.GroupId.CompareTo(b.GroupId);
-			if (byGroup != 0)
-			{
-				return byGroup;
-			}
-			int byOrder = a.Order.CompareTo(b.Order);
-			if (byOrder != 0)
-			{
-				return byOrder;
-			}
-			return a.OwnerId.CompareTo(b.OwnerId);
-		}
 
 		/// <summary>
 		/// Orders the container's children by the render index assigned this frame.

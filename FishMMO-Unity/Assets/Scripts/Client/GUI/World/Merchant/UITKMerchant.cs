@@ -10,8 +10,9 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit merchant panel.
-	/// Receives the merchant template via a server broadcast and renders its items, abilities, and
-	/// ability events as tabbed entry slots, plus a Sell tab listing the character's own inventory.
+	/// Receives the merchant template via a server broadcast and renders its items, premade
+	/// abilities, ability templates and ability effects as tabbed entry slots, plus a Sell tab
+	/// listing the character's own inventory.
 	/// Selecting an entry opens the transaction footer, where a quantity is chosen and the trade
 	/// explicitly confirmed.
 	/// </summary>
@@ -68,6 +69,15 @@ namespace FishMMO.Client
 
 		/// <summary>Name of the sell tab button.</summary>
 		private const string SELL_TAB_NAME = "merchant-tab-sell";
+
+		/// <summary>Name of the premade abilities tab button.</summary>
+		private const string PREMADE_TAB_NAME = "merchant-tab-premade";
+
+		/// <summary>Name of the premade abilities entry container.</summary>
+		private const string PREMADE_LIST_NAME = "merchant-premade";
+
+		/// <summary>Name of the per-tab hint line under the tabs.</summary>
+		private const string HINT_LABEL_NAME = "merchant-hint";
 
 		/// <summary>Name of the items entry container.</summary>
 		private const string ITEMS_LIST_NAME = "merchant-items";
@@ -129,6 +139,24 @@ namespace FishMMO.Client
 		/// <summary>Tooltip hint appended to entry tooltips.</summary>
 		private const string PURCHASE_HINT = "\r\n\r\nClick to select, then confirm below.";
 
+		/// <summary>Tooltip hint appended to an ability-template entry.</summary>
+		/// <remarks>
+		/// The template tab was the source of issue #247: a player bought "an ability", found
+		/// it on the abilities panel and could not put it on the hotkey bar. The row is where the
+		/// decision to buy is made, so this is where the two-step route is first said.
+		/// </remarks>
+		private const string TEMPLATE_HINT = "\r\n\r\nAbility template. Craft it into a usable ability at an Ability Crafter; it cannot be used or hotkeyed as bought.";
+
+		/// <summary>Tooltip hint appended to an ability-effect entry.</summary>
+		private const string EFFECT_HINT = "\r\n\r\nAbility effect. Added to an ability at an Ability Crafter.";
+
+		/// <summary>Standing hint under the tabs, per tab.</summary>
+		private const string ITEM_TAB_HINT = "Items go to your inventory.";
+		private const string PREMADE_TAB_HINT = "Ready-made abilities. Usable as soon as they are bought.";
+		private const string TEMPLATE_TAB_HINT = "Templates must be crafted at an Ability Crafter before they can be used.";
+		private const string EFFECT_TAB_HINT = "Effects are added to abilities at an Ability Crafter.";
+		private const string SELL_TAB_HINT = "Select something from your bags to sell it.";
+
 		/// <summary>Name of the shared tooltip overlay panel.</summary>
 		private const string TOOLTIP_NAME = "UITooltip";
 
@@ -139,10 +167,11 @@ namespace FishMMO.Client
 		/// How long a buy request waits before the confirm button is handed back.
 		/// </summary>
 		/// <remarks>
-		/// A purchase has no dedicated reply broadcast — success arrives as an inventory update and
-		/// a refusal arrives as nothing at all — so the guard is a short watchdog rather than a
-		/// true request/response pair. Long enough to cover a round trip that waits on a database
-		/// write, short enough that a refused purchase does not leave the button dead.
+		/// Every exit from the server's purchase handler now answers with a
+		/// <see cref="MerchantPurchaseResultBroadcast"/>, so this is a backstop for a reply that
+		/// never arrives at all rather than the ordinary way a refusal is noticed. Long enough to
+		/// cover a round trip that waits on a database write, short enough that a dropped packet
+		/// does not leave the button dead.
 		/// </remarks>
 		private const float BUY_TIMEOUT_SECONDS = 5.0f;
 
@@ -154,6 +183,8 @@ namespace FishMMO.Client
 		private Button eventsTab;
 		/// <summary>The sell tab button.</summary>
 		private Button sellTab;
+		/// <summary>The premade abilities tab button.</summary>
+		private Button premadeTab;
 		/// <summary>The container that holds the item entry slots.</summary>
 		private VisualElement itemsList;
 		/// <summary>The container that holds the ability entry slots.</summary>
@@ -162,6 +193,10 @@ namespace FishMMO.Client
 		private VisualElement eventsList;
 		/// <summary>The container that holds the sellable inventory slots.</summary>
 		private VisualElement sellList;
+		/// <summary>The container that holds the premade ability entry slots.</summary>
+		private VisualElement premadeList;
+		/// <summary>The per-tab hint line under the tabs.</summary>
+		private Label hintLabel;
 
 		/// <summary>The transaction footer root.</summary>
 		private VisualElement transactionFooter;
@@ -171,6 +206,12 @@ namespace FishMMO.Client
 		private Label transactionTotal;
 		/// <summary>Quantity entry field.</summary>
 		private IntegerField quantityField;
+		/// <summary>Quantity decrement button.</summary>
+		private Button quantityLess;
+		/// <summary>Quantity increment button.</summary>
+		private Button quantityMore;
+		/// <summary>Quantity maximum button.</summary>
+		private Button quantityMax;
 		/// <summary>Confirm button.</summary>
 		private Button confirmButton;
 		/// <summary>Status line.</summary>
@@ -209,6 +250,24 @@ namespace FishMMO.Client
 		/// <summary>True when the current selection is a sale rather than a purchase.</summary>
 		private bool selectionIsSale;
 
+		/// <summary>
+		/// Instance ID of the item a sale selection names, or 0 when the selection is a purchase
+		/// or the item has no identity yet.
+		/// </summary>
+		/// <remarks>
+		/// A sale selection points at an inventory SLOT, and the bags change while the panel is
+		/// open — a quest reward lands, a stack is split, a loot roll fills the slot the player
+		/// just emptied. The slot index survives all of that and means something different
+		/// afterwards, so a rebuilt list would leave the footer saying "Sell 5 x Bread" over a slot
+		/// that now holds a weapon. Pinning the identity is what lets the rebuild tell "the same
+		/// item, still there" from "something else, in the same place".
+		/// <para>
+		/// An item awaiting its database identity has ID 0. That cannot be matched, so such a
+		/// selection is dropped on the next rebuild rather than guessed at.
+		/// </para>
+		/// </remarks>
+		private long selectedSaleItemID;
+
 		/// <summary>Watchdog for an outstanding buy request.</summary>
 		private readonly PendingReplyGuard buyGuard = new PendingReplyGuard();
 
@@ -242,10 +301,13 @@ namespace FishMMO.Client
 			abilitiesTab = root.Q<Button>(ABILITIES_TAB_NAME);
 			eventsTab = root.Q<Button>(EVENTS_TAB_NAME);
 			sellTab = root.Q<Button>(SELL_TAB_NAME);
+			premadeTab = root.Q<Button>(PREMADE_TAB_NAME);
 			itemsList = root.Q(ITEMS_LIST_NAME);
 			abilitiesList = root.Q(ABILITIES_LIST_NAME);
 			eventsList = root.Q(EVENTS_LIST_NAME);
 			sellList = root.Q(SELL_LIST_NAME);
+			premadeList = root.Q(PREMADE_LIST_NAME);
+			hintLabel = root.Q<Label>(HINT_LABEL_NAME);
 
 			transactionFooter = root.Q(TRANSACTION_NAME);
 			transactionLabel = root.Q<Label>(TRANSACTION_LABEL_NAME);
@@ -270,21 +332,25 @@ namespace FishMMO.Client
 			{
 				sellTab.clicked += SwitchToSellTab;
 			}
+			if (premadeTab != null)
+			{
+				premadeTab.clicked += () => SwitchTab(MerchantTabType.PremadeAbility);
+			}
 
-			Button less = root.Q<Button>(QUANTITY_LESS_NAME);
-			if (less != null)
+			quantityLess = root.Q<Button>(QUANTITY_LESS_NAME);
+			if (quantityLess != null)
 			{
-				less.clicked += () => NudgeQuantity(-1);
+				quantityLess.clicked += () => NudgeQuantity(-1);
 			}
-			Button more = root.Q<Button>(QUANTITY_MORE_NAME);
-			if (more != null)
+			quantityMore = root.Q<Button>(QUANTITY_MORE_NAME);
+			if (quantityMore != null)
 			{
-				more.clicked += () => NudgeQuantity(1);
+				quantityMore.clicked += () => NudgeQuantity(1);
 			}
-			Button max = root.Q<Button>(QUANTITY_MAX_NAME);
-			if (max != null)
+			quantityMax = root.Q<Button>(QUANTITY_MAX_NAME);
+			if (quantityMax != null)
 			{
-				max.clicked += () => SetQuantity(selectedMaxQuantity);
+				quantityMax.clicked += () => SetQuantity(selectedMaxQuantity);
 			}
 			if (confirmButton != null)
 			{
@@ -297,6 +363,12 @@ namespace FishMMO.Client
 			}
 			if (quantityField != null)
 			{
+				/* Delayed, so the clamp runs when the player finishes rather than on every
+				 * keystroke. Without it a field is effectively untypeable: an IntegerField reports
+				 * a change per character, so entering "12" clamps after the "1" — and where the
+				 * ceiling is 1, EVERY keystroke is rewritten back to 1 the instant it lands, which
+				 * is a box that looks broken rather than one that looks full. */
+				quantityField.isDelayed = true;
 				quantityField.RegisterValueChangedCallback(OnQuantityFieldChanged);
 			}
 		}
@@ -464,11 +536,19 @@ namespace FishMMO.Client
 			int abilityCount = template.Abilities != null ? template.Abilities.Count : 0;
 			int eventCount = template.AbilityEvents != null ? template.AbilityEvents.Count : 0;
 			int itemCount = template.Items != null ? template.Items.Count : 0;
+			int premadeCount = template.PremadeAbilities != null ? template.PremadeAbilities.Count : 0;
 
-			// Pick the first populated tab, preferring the sell tab only when there is nothing to buy.
+			/* Pick the first populated tab, preferring the sell tab only when there is nothing to
+			 * buy. Premade abilities come before templates: they are the thing a player can use at
+			 * once, and a merchant that sells both should open on the simpler offer. */
 			if (itemCount > 0)
 			{
 				currentTab = MerchantTabType.Item;
+				sellTabActive = false;
+			}
+			else if (premadeCount > 0)
+			{
+				currentTab = MerchantTabType.PremadeAbility;
 				sellTabActive = false;
 			}
 			else if (abilityCount > 0)
@@ -517,9 +597,7 @@ namespace FishMMO.Client
 
 			if (msg.Success)
 			{
-				SetStatus(msg.Charged > 0
-					? $"Bought {msg.Quantity} for {msg.Charged}."
-					: $"Bought {msg.Quantity}.");
+				SetStatus(DescribePurchaseSuccess(msg));
 				ClearSelection();
 			}
 			else
@@ -528,6 +606,31 @@ namespace FishMMO.Client
 			}
 
 			RefreshConfirmState();
+		}
+
+		/// <summary>Player-facing wording for a completed purchase, saying where it went.</summary>
+		/// <remarks>
+		/// "Bought 1." was true of a template and told the player nothing about the trip to the
+		/// crafter that comes next. The success line is the last thing they read before opening
+		/// the abilities panel, so it is where the next step belongs.
+		/// </remarks>
+		private static string DescribePurchaseSuccess(MerchantPurchaseResultBroadcast msg)
+		{
+			string bought = msg.Charged > 0
+				? $"Bought {msg.Quantity} for {msg.Charged}."
+				: $"Bought {msg.Quantity}.";
+
+			switch (msg.Type)
+			{
+				case MerchantTabType.Ability:
+					return bought + " Template learned; craft it at an Ability Crafter to use it.";
+				case MerchantTabType.AbilityEvent:
+					return bought + " Effect learned; add it to an ability at an Ability Crafter.";
+				case MerchantTabType.PremadeAbility:
+					return bought + " The ability is on your Abilities tab, ready to hotkey.";
+				default:
+					return bought;
+			}
 		}
 
 		/// <summary>Player-facing wording for a refusal.</summary>
@@ -543,6 +646,10 @@ namespace FishMMO.Client
 					return "You have no room for that.";
 				case MerchantPurchaseFailure.InvalidEntry:
 					return "That offer is no longer available.";
+				case MerchantPurchaseFailure.AlreadyKnown:
+					return "You already know that.";
+				case MerchantPurchaseFailure.AbilityLimit:
+					return "You cannot hold any more abilities.";
 				default:
 					return "The merchant refused that purchase.";
 			}
@@ -581,11 +688,13 @@ namespace FishMMO.Client
 			int abilityCount = BuildEntries(abilitiesList, template?.Abilities, MerchantTabType.Ability);
 			int eventCount = BuildEntries(eventsList, template?.AbilityEvents, MerchantTabType.AbilityEvent);
 			int itemCount = BuildEntries(itemsList, template?.Items, MerchantTabType.Item);
+			int premadeCount = BuildEntries(premadeList, template?.PremadeAbilities, MerchantTabType.PremadeAbility);
 			BuildSellEntries();
 
 			SetTabEnabled(abilitiesTab, abilityCount > 0);
 			SetTabEnabled(eventsTab, eventCount > 0);
 			SetTabEnabled(itemsTab, itemCount > 0);
+			SetTabEnabled(premadeTab, premadeCount > 0);
 			SetTabEnabled(sellTab, template != null && template.BuysItems);
 
 			/* The selection lived in the tree that was just replaced, so it cannot survive a
@@ -653,14 +762,25 @@ namespace FishMMO.Client
 			if (template == null || !template.BuysItems ||
 				Character == null || !Character.TryGet(out IInventoryController inventoryController))
 			{
+				/* No rows can be rebuilt, so a sale selection has nothing left to point at. The
+				 * early exits clear it for the same reason the loop below re-validates it. */
+				DropSaleSelection();
 				return;
 			}
 
 			List<Item> items = inventoryController.Items;
 			if (items == null)
 			{
+				DropSaleSelection();
 				return;
 			}
+
+			/* Re-established below only if the same item is still in the same slot. The rows the
+			 * selection pointed at have just been destroyed, so leaving selectedElement and
+			 * selectedIndex alone would aim the footer at a slot whose contents may have changed
+			 * completely — and confirming would sell whatever is there now. */
+			VisualElement reselected = null;
+			int reselectedMax = 1;
 
 			for (int slot = 0; slot < items.Count; ++slot)
 			{
@@ -671,9 +791,48 @@ namespace FishMMO.Client
 				}
 
 				int unitPayout = UnityEngine.Mathf.FloorToInt(item.Template.Price * template.SellPriceMultiplier);
-				int stack = item.IsStackable ? (int)item.Stackable.Amount : 1;
+				int stack = UnityEngine.Mathf.Max(1, item.IsStackable ? (int)item.Stackable.Amount : 1);
 
-				CreateEntry(sellList, item, MerchantTabType.Item, slot, unitPayout, UnityEngine.Mathf.Max(1, stack), true);
+				VisualElement row = CreateEntry(sellList, item, MerchantTabType.Item, slot, unitPayout, stack, true);
+
+				if (selectionIsSale &&
+					selectedIndex == slot &&
+					selectedSaleItemID != 0 &&
+					item.ID == selectedSaleItemID)
+				{
+					reselected = row;
+					reselectedMax = stack;
+				}
+			}
+
+			if (!selectionIsSale)
+			{
+				return;
+			}
+
+			if (reselected == null)
+			{
+				ClearSelection();
+				return;
+			}
+
+			/* Same item, same slot: keep the footer open and re-point it at the new row. The stack
+			 * may have shrunk while the panel was open, so the quantity is re-clamped rather than
+			 * carried over — the alternative is a confirmed sale of more than the slot holds. */
+			selectedElement = reselected;
+			selectedElement.AddToClassList(ENTRY_SELECTED_CLASS);
+			selectedMaxQuantity = reselectedMax;
+			SetQuantity(CurrentQuantity());
+		}
+
+		/// <summary>
+		/// Drops the selection if it is a sale, and leaves a purchase selection alone.
+		/// </summary>
+		private void DropSaleSelection()
+		{
+			if (selectionIsSale)
+			{
+				ClearSelection();
 			}
 		}
 
@@ -692,6 +851,7 @@ namespace FishMMO.Client
 				case BaseItemTemplate item: return item.Price;
 				case BaseAbilityTemplate ability: return ability.Price;
 				case AbilityEvent abilityEvent: return abilityEvent.Price;
+				case PremadeAbilityTemplate premade: return premade.Price;
 				case Item instance: return instance.Template != null ? instance.Template.Price : 0;
 				default: return 0;
 			}
@@ -702,7 +862,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// One stack for items, because the server grants a purchase as a single Item; exactly one
-		/// for abilities and ability events, which are learned rather than stacked.
+		/// for abilities, premade abilities and ability events, which are learned rather than stacked.
 		/// </remarks>
 		private static int MaxPurchaseQuantity(ITooltip entry)
 		{
@@ -723,9 +883,16 @@ namespace FishMMO.Client
 		/// <param name="unitPrice">Unit price or payout, for display.</param>
 		/// <param name="maxQuantity">Largest quantity this entry allows.</param>
 		/// <param name="isSale">True when this row sells to the merchant rather than buys from it.</param>
-		private void CreateEntry(VisualElement container, ITooltip entry, MerchantTabType tab, int index,
+		/// <returns>The row that was created, so a caller rebuilding a list can re-point a
+		/// selection at it.</returns>
+		private VisualElement CreateEntry(VisualElement container, ITooltip entry, MerchantTabType tab, int index,
 			int unitPrice, int maxQuantity, bool isSale)
 		{
+			/* Captured at build time rather than read back from the inventory at selection time:
+			 * the row and the identity have to describe the same instant, or the pin is worthless.
+			 * Zero for a purchase row, and for an item that has not been given an id yet. */
+			long saleItemID = isSale && entry is Item identified ? identified.ID : 0;
+
 			VisualElement slot = new VisualElement();
 			slot.AddToClassList(ENTRY_CLASS);
 
@@ -751,11 +918,12 @@ namespace FishMMO.Client
 			priceLabel.AddToClassList(ENTRY_PRICE_CLASS);
 			slot.Add(priceLabel);
 
-			slot.RegisterCallback<PointerEnterEvent>(evt => OnEntryPointerEnter(entry, slot));
+			slot.RegisterCallback<PointerEnterEvent>(evt => OnEntryPointerEnter(entry, slot, isSale ? MerchantTabType.None : tab));
 			slot.RegisterCallback<PointerLeaveEvent>(evt => OnEntryPointerLeave(slot));
-			slot.RegisterCallback<PointerDownEvent>(evt => OnEntryPointerDown(evt, slot, tab, index, unitPrice, maxQuantity, name, isSale));
+			slot.RegisterCallback<PointerDownEvent>(evt => OnEntryPointerDown(evt, slot, tab, index, unitPrice, maxQuantity, name, isSale, saleItemID));
 
 			container.Add(slot);
+			return slot;
 		}
 
 		/// <summary>
@@ -763,13 +931,41 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="entry">The hovered entry.</param>
 		/// <param name="owner">The row the tooltip describes.</param>
-		private void OnEntryPointerEnter(ITooltip entry, VisualElement owner)
+		/// <param name="tab">The purchase tab the row is on, or <see cref="MerchantTabType.None"/> for a sale row.</param>
+		private void OnEntryPointerEnter(ITooltip entry, VisualElement owner, MerchantTabType tab)
 		{
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				/* Owned by the row. The tooltip closes itself if that row is removed or hidden,
 				 * which is what happens when the list is rebuilt underneath the pointer. */
-				tooltip.Open(entry.Tooltip() + PURCHASE_HINT, owner);
+				tooltip.Open(entry.Tooltip() + EntryHint(tab) + PURCHASE_HINT, owner);
+			}
+		}
+
+		/// <summary>What a row's tooltip says about the kind of thing it sells.</summary>
+		private static string EntryHint(MerchantTabType tab)
+		{
+			switch (tab)
+			{
+				case MerchantTabType.Ability: return TEMPLATE_HINT;
+				case MerchantTabType.AbilityEvent: return EFFECT_HINT;
+				default: return string.Empty;
+			}
+		}
+
+		/// <summary>The standing hint under the tabs for the visible tab.</summary>
+		private static string TabHint(MerchantTabType tab, bool selling)
+		{
+			if (selling)
+			{
+				return SELL_TAB_HINT;
+			}
+			switch (tab)
+			{
+				case MerchantTabType.PremadeAbility: return PREMADE_TAB_HINT;
+				case MerchantTabType.Ability: return TEMPLATE_TAB_HINT;
+				case MerchantTabType.AbilityEvent: return EFFECT_TAB_HINT;
+				default: return ITEM_TAB_HINT;
 			}
 		}
 
@@ -788,21 +984,21 @@ namespace FishMMO.Client
 		/// Selects an entry and opens the transaction footer for it.
 		/// </summary>
 		private void OnEntryPointerDown(PointerDownEvent evt, VisualElement element, MerchantTabType tab,
-			int index, int unitPrice, int maxQuantity, string name, bool isSale)
+			int index, int unitPrice, int maxQuantity, string name, bool isSale, long saleItemID)
 		{
 			if (evt.button != 0 || Character == null)
 			{
 				return;
 			}
 
-			SelectEntry(element, tab, index, unitPrice, maxQuantity, name, isSale);
+			SelectEntry(element, tab, index, unitPrice, maxQuantity, name, isSale, saleItemID);
 		}
 
 		/// <summary>
 		/// Makes an entry the subject of the transaction footer.
 		/// </summary>
 		private void SelectEntry(VisualElement element, MerchantTabType tab, int index, int unitPrice,
-			int maxQuantity, string name, bool isSale)
+			int maxQuantity, string name, bool isSale, long saleItemID)
 		{
 			selectedElement?.RemoveFromClassList(ENTRY_SELECTED_CLASS);
 
@@ -812,6 +1008,7 @@ namespace FishMMO.Client
 			selectedUnitPrice = unitPrice;
 			selectedMaxQuantity = UnityEngine.Mathf.Max(1, maxQuantity);
 			selectionIsSale = isSale;
+			selectedSaleItemID = saleItemID;
 
 			selectedElement?.AddToClassList(ENTRY_SELECTED_CLASS);
 
@@ -839,6 +1036,8 @@ namespace FishMMO.Client
 			selectedUnitPrice = 0;
 			selectedMaxQuantity = 1;
 			selectionIsSale = false;
+			selectedSaleItemID = 0;
+			RefreshQuantityControls();
 			ShowFooter(false);
 		}
 
@@ -872,7 +1071,50 @@ namespace FishMMO.Client
 				// SetValueWithoutNotify: the change callback re-enters this method otherwise.
 				quantityField.SetValueWithoutNotify(clamped);
 			}
+			RefreshQuantityControls();
 			RefreshTotal();
+		}
+
+		/// <summary>
+		/// Shows the quantity controls only when the selection can actually be traded in more than
+		/// one, and hides them outright when it cannot.
+		/// </summary>
+		/// <remarks>
+		/// A purchase is granted as a single <c>Item</c>, so its ceiling is one stack — and
+		/// <c>MaxStackSize</c> is 1 for anything non-stacking (0 is read as 1 by both sides), which
+		/// every equippable item keeps. There is no quantity to choose for those: −, + and Max all
+		/// clamp straight back to 1 and every character typed into the box is rewritten. Offering
+		/// the choice at all is the mistake, so the controls are removed rather than greyed —
+		/// live-looking controls that silently refuse every input are how this was reported, and a
+		/// disabled row still asks the player to work out why.
+		/// <para>
+		/// The running total stays: it is the one number that matters for a single purchase, and it
+		/// shares this row with the controls being hidden.
+		/// </para>
+		/// </remarks>
+		private void RefreshQuantityControls()
+		{
+			bool adjustable = selectedIndex >= 0 && selectedMaxQuantity > 1;
+			DisplayStyle display = adjustable ? DisplayStyle.Flex : DisplayStyle.None;
+
+			/* Individually, not by hiding merchant-quantity-row: the total label lives in that row
+			 * and must survive. */
+			if (quantityField != null)
+			{
+				quantityField.style.display = display;
+			}
+			if (quantityLess != null)
+			{
+				quantityLess.style.display = display;
+			}
+			if (quantityMore != null)
+			{
+				quantityMore.style.display = display;
+			}
+			if (quantityMax != null)
+			{
+				quantityMax.style.display = display;
+			}
 		}
 
 		/// <summary>
@@ -1053,18 +1295,26 @@ namespace FishMMO.Client
 			SetListVisible(itemsList, !sellTabActive && currentTab == MerchantTabType.Item);
 			SetListVisible(abilitiesList, !sellTabActive && currentTab == MerchantTabType.Ability);
 			SetListVisible(eventsList, !sellTabActive && currentTab == MerchantTabType.AbilityEvent);
+			SetListVisible(premadeList, !sellTabActive && currentTab == MerchantTabType.PremadeAbility);
 			SetListVisible(sellList, sellTabActive);
 
 			SetTabActive(itemsTab, !sellTabActive && currentTab == MerchantTabType.Item);
 			SetTabActive(abilitiesTab, !sellTabActive && currentTab == MerchantTabType.Ability);
 			SetTabActive(eventsTab, !sellTabActive && currentTab == MerchantTabType.AbilityEvent);
+			SetTabActive(premadeTab, !sellTabActive && currentTab == MerchantTabType.PremadeAbility);
 			SetTabActive(sellTab, sellTabActive);
+
+			if (hintLabel != null)
+			{
+				hintLabel.text = TabHint(currentTab, sellTabActive);
+			}
 
 			/* The header count describes the visible tab, so it is re-pointed here rather than
 			 * bound once to the item list at startup. */
 			VisualElement active =
 				sellTabActive ? sellList :
 				currentTab == MerchantTabType.Item ? itemsList :
+				currentTab == MerchantTabType.PremadeAbility ? premadeList :
 				currentTab == MerchantTabType.Ability ? abilitiesList : eventsList;
 			BindListChrome(
 				active,
@@ -1127,6 +1377,7 @@ namespace FishMMO.Client
 			itemsList?.Clear();
 			abilitiesList?.Clear();
 			eventsList?.Clear();
+			premadeList?.Clear();
 			sellList?.Clear();
 		}
 	}

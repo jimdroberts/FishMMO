@@ -23,10 +23,10 @@ namespace FishMMO.UnitTests
 	/// back with the same meaning and kept inside the range the sweep can act on. The rule
 	/// itself: <see cref="ClientNameplateDisplay.Decide"/> is pure arithmetic precisely so its
 	/// truth table can be written down here. And the authoring contract the sweep depends on:
-	/// every playable character prefab actually references its overhead labels — which none of
+	/// every playable character prefab actually references its overhead nameplate — which none of
 	/// them did before this feature, so a player's own name had nowhere to be drawn — and every
-	/// character prefab authors those labels inactive, since the sweep only ever turns labels on
-	/// by transition and a label authored active would be on for everyone from spawn.
+	/// character prefab authors that plate hidden, since the sweep only ever shows plates by
+	/// transition and a plate authored visible would be up for everyone from spawn.
 	/// </para>
 	/// <para>
 	/// Every settings test runs against a scratch <see cref="Configuration"/> swapped in as the
@@ -361,13 +361,13 @@ namespace FishMMO.UnitTests
 		// --- The prefabs are authored the way the sweep assumes ----------------------------------
 
 		[Test]
-		public void EveryPlayableCharacterPrefab_ReferencesItsNameAndGuildLabels()
+		public void EveryPlayableCharacterPrefab_ReferencesItsNameplate()
 		{
-			/* The player prefabs carried both label objects under NameLabels but referenced
-			 * neither, so CharacterNameLabel was null on every player and nothing — not the
+			/* The player prefabs carried the label objects under NameLabels but referenced
+			 * neither, so the overhead plate was null on every player and nothing — not the
 			 * naming system, not the target frame, not this feature — could show a player's
-			 * name. The sweep skips characters with no name label, so a regression here is
-			 * silent: the option does nothing and no error says why. */
+			 * name. The sweep skips characters with no plate, so a regression here is silent:
+			 * the option does nothing and no error says why. */
 			string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { PlayableCharacterPrefabs });
 			LogAssert.IsTrue(guids.Length > 0, $"{PlayableCharacterPrefabs} must contain playable character prefabs");
 
@@ -381,24 +381,19 @@ namespace FishMMO.UnitTests
 					continue;
 				}
 
-				LogAssert.IsNotNull(character.CharacterNameLabel, $"{path} must reference its name label");
-				LogAssert.IsNotNull(character.CharacterGuildLabel, $"{path} must reference its guild label");
-				LogAssert.IsTrue(character.CharacterNameLabel.transform.IsChildOf(prefab.transform),
-					$"{path}'s name label must be one of its own children");
-				LogAssert.IsTrue(character.CharacterGuildLabel.transform.IsChildOf(prefab.transform),
-					$"{path}'s guild label must be one of its own children");
-				LogAssert.IsTrue(character.CharacterNameLabel.SortOrder < character.CharacterGuildLabel.SortOrder,
-					$"{path}'s guild label must stack above its name label");
+				LogAssert.IsNotNull(character.CharacterNameplate, $"{path} must reference its nameplate");
+				LogAssert.IsTrue(character.CharacterNameplate.transform.IsChildOf(prefab.transform),
+					$"{path}'s nameplate must be one of its own children");
 			}
 		}
 
 		[Test]
-		public void EveryCharacterPrefab_AuthorsItsLabelsInactive()
+		public void EveryCharacterPrefab_AuthorsItsNameplateHidden()
 		{
-			/* The sweep and the target frame both work by transition: a label is turned on when
-			 * a rule starts holding and off when it stops. A label authored ACTIVE is on from
-			 * spawn for every client, and stays on until something targets and untargets it —
-			 * which for a player's own labels, with the toggle off, is never. */
+			/* The sweep and the target frame both work by transition: a plate is shown when a
+			 * rule starts holding and hidden when it stops. A plate authored VISIBLE is up from
+			 * spawn for every client, and stays up until something targets and untargets it —
+			 * which for a player's own plate, with the toggle off, is never. */
 			string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { CharacterPrefabs });
 			int checkedPrefabs = 0;
 
@@ -412,17 +407,18 @@ namespace FishMMO.UnitTests
 					continue;
 				}
 
-				WorldLabel[] labels = { character.CharacterNameLabel, character.CharacterGuildLabel };
-				foreach (WorldLabel label in labels)
+				Nameplate plate = character.CharacterNameplate;
+				if (plate == null)
 				{
-					if (label == null)
-					{
-						continue;
-					}
-					++checkedPrefabs;
-					LogAssert.IsFalse(label.gameObject.activeSelf,
-						$"{path} authors {label.gameObject.name} active; nameplates must start hidden");
+					continue;
 				}
+
+				++checkedPrefabs;
+				LogAssert.IsFalse(plate.Visible,
+					$"{path} authors {plate.gameObject.name} visible; nameplates must start hidden");
+				LogAssert.IsTrue(plate.gameObject.activeSelf,
+					$"{path} authors {plate.gameObject.name} inactive; a plate must stay registered so " +
+					"rows written while it is hidden — a name, a guild — are still there when it is shown");
 			}
 
 			LogAssert.IsTrue(checkedPrefabs > 0, "at least one character prefab must carry a nameplate to check");

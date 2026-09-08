@@ -285,9 +285,9 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			// Remove (Clone) from the GameObject name for clarity in the editor.
 			GameObject.name = GameObject.name.Replace("(Clone)", "");
-			if (CharacterNameLabel != null)
+			if (CharacterNameplate != null)
 			{
-				CharacterNameLabel.text = GameObject.name;
+				CharacterNameplate.SetLine(NameplateSlot.Name, GameObject.name);
 			}
 #endif
 		}

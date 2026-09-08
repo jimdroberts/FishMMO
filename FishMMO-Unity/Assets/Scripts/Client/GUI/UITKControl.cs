@@ -499,6 +499,52 @@ namespace FishMMO.Client
 		private bool hasStarted;
 
 		/// <summary>
+		/// One entry per container currently driving a set of header chrome labels through
+		/// <see cref="BindListChrome"/>.
+		/// </summary>
+		/// <remarks>
+		/// A tabbed panel points the SAME count badge, subtitle and empty placeholder at a
+		/// different container every time the player changes tab, and the binding it is replacing
+		/// stays live unless something takes it down. The old container keeps its
+		/// <c>GeometryChangedEvent</c> handler and its refresh closure, so the next time it
+		/// relayouts — which is every time its own tab's contents are rebuilt in the background,
+		/// and again the moment it is hidden and its rect collapses — it writes ITS row count over
+		/// the visible tab's. That is the merchant panel reporting the previous tab's number, and
+		/// the abilities panel has the same shape.
+		/// <para>
+		/// Tracked per control rather than solved inside the refresh closure (by, say, ignoring a
+		/// hidden container) because the stale registration is the actual defect: the closure also
+		/// pins the dead tree's labels alive across a reopen.
+		/// </para>
+		/// </remarks>
+		private readonly List<ListChromeBinding> listChromeBindings = new List<ListChromeBinding>();
+
+		/// <summary>A container and the header chrome it currently drives.</summary>
+		private readonly struct ListChromeBinding
+		{
+			public readonly VisualElement List;
+			public readonly Label Count;
+			public readonly Label Subtitle;
+			public readonly Label Empty;
+
+			public ListChromeBinding(VisualElement list, Label count, Label subtitle, Label empty)
+			{
+				List = list;
+				Count = count;
+				Subtitle = subtitle;
+				Empty = empty;
+			}
+
+			/// <summary>True when this binding writes to any of the given labels.</summary>
+			public bool Conflicts(Label count, Label subtitle, Label empty)
+			{
+				return (count != null && (ReferenceEquals(count, Count) || ReferenceEquals(count, Subtitle) || ReferenceEquals(count, Empty))) ||
+					   (subtitle != null && (ReferenceEquals(subtitle, Count) || ReferenceEquals(subtitle, Subtitle) || ReferenceEquals(subtitle, Empty))) ||
+					   (empty != null && (ReferenceEquals(empty, Count) || ReferenceEquals(empty, Subtitle) || ReferenceEquals(empty, Empty)));
+			}
+		}
+
+		/// <summary>
 		/// The root currently held by <see cref="UITKThemeManager"/> on this panel's behalf.
 		/// Tracked separately from <see cref="Root"/> because the document hands out a new root
 		/// on every enable, and unregistering the wrong one leaks the old tree.
@@ -643,6 +689,7 @@ namespace FishMMO.Client
 
 			this.hasStarted = true;
 			this.startedTreeRoot = root[0];
+			ClearListChromeBindings();
 			OnStarting();
 			OnAfterStarting();
 			AttachDragHandlers();
@@ -715,11 +762,67 @@ namespace FishMMO.Client
 				}
 			}
 
-			list.UnregisterCallback<GeometryChangedEvent>(OnListGeometryChanged);
+			/* Take down every binding this control holds that writes to any of the same labels,
+			 * including a previous binding of this very container. Without it a tabbed panel
+			 * accumulates one live binding per tab the player has visited, all of them aimed at
+			 * one badge, and whichever container happens to relayout last wins — see
+			 * listChromeBindings. */
+			for (int i = this.listChromeBindings.Count - 1; i >= 0; --i)
+			{
+				ListChromeBinding existing = this.listChromeBindings[i];
+				if (!ReferenceEquals(existing.List, list) && !existing.Conflicts(count, subtitle, empty))
+				{
+					continue;
+				}
+
+				UnbindListChrome(existing.List);
+				this.listChromeBindings.RemoveAt(i);
+			}
+
 			list.userData = (Action)Refresh;
 			list.RegisterCallback<GeometryChangedEvent>(OnListGeometryChanged);
+			this.listChromeBindings.Add(new ListChromeBinding(list, count, subtitle, empty));
 
 			Refresh();
+		}
+
+		/// <summary>
+		/// Stops a container driving the header chrome it was bound to.
+		/// </summary>
+		/// <remarks>
+		/// Clearing <c>userData</c> as well as unregistering: the callback is static and reads the
+		/// refresh closure back out of it, so a stale closure left behind would keep a replaced
+		/// visual tree's labels reachable.
+		/// </remarks>
+		private static void UnbindListChrome(VisualElement list)
+		{
+			if (list == null)
+			{
+				return;
+			}
+			list.UnregisterCallback<GeometryChangedEvent>(OnListGeometryChanged);
+			if (list.userData is Action)
+			{
+				list.userData = null;
+			}
+		}
+
+		/// <summary>
+		/// Drops every header-chrome binding this control holds.
+		/// </summary>
+		/// <remarks>
+		/// Called before <see cref="OnStarting"/> re-runs. The elements in those bindings belong to
+		/// a visual tree that has just been replaced, so the new tree's labels are different
+		/// objects and the conflict test in <see cref="BindListChrome"/> would never match them —
+		/// the dead bindings would simply pile up.
+		/// </remarks>
+		private void ClearListChromeBindings()
+		{
+			for (int i = 0; i < this.listChromeBindings.Count; ++i)
+			{
+				UnbindListChrome(this.listChromeBindings[i].List);
+			}
+			this.listChromeBindings.Clear();
 		}
 
 		/// <summary>
@@ -1015,6 +1118,10 @@ namespace FishMMO.Client
 			Log.Debug("UITKControl", $"[{Name}] Visual tree was replaced; re-resolving elements.");
 
 			this.startedTreeRoot = root[0];
+
+			/* The bindings point into the tree that was just replaced. Their labels are gone, so
+			 * BindListChrome could never recognise them as conflicting with the new tree's. */
+			ClearListChromeBindings();
 
 			/* Both halves run. Re-resolving elements alone is not enough: panels that build their
 			 * contents from character state do it in OnPostSetCharacter, so a rebuilt tree would

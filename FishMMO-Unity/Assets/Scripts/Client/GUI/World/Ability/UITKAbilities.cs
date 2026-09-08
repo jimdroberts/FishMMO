@@ -7,10 +7,24 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit abilities panel. Renders the character's abilities, known abilities, and known
-	/// ability events as tabbed icon slots. Hovering shows the entry tooltip; left-clicking a known
-	/// ability picks it up onto the shared drag object so it can be assigned to a hotkey.
+	/// UI Toolkit abilities panel. Renders the character's abilities, known ability templates, and
+	/// known ability events as tabbed icon slots. Hovering shows the entry tooltip; left-clicking a
+	/// usable ability picks it up onto the shared drag object so it can be assigned to a hotkey.
 	/// </summary>
+	/// <remarks>
+	/// <para><b>Only the Abilities tab drags.</b> A template bought from a merchant lands on the
+	/// Templates tab and is not an ability yet — it becomes one at an Ability Crafter, where its
+	/// effects are chosen. The Effects tab holds those effects. Neither can go on the hotkey bar,
+	/// and neither could ever be picked up; the defect (issue #247) was that nothing said so. The
+	/// slots on those tabs looked identical to usable ones, a click on them did nothing, and the
+	/// player concluded dragging was broken.</para>
+	///
+	/// <para>Three things now say so. The slot itself is marked — a corner badge and a dimmed
+	/// icon — so a template reads differently from an ability before anything is touched. The
+	/// tooltip ends with what the entry is and where it goes next. And a click that cannot pick
+	/// the entry up writes the reason to the status line under the list, where the tab's standing
+	/// hint otherwise sits.</para>
+	/// </remarks>
 	public class UITKAbilities : UITKCharacterControl
 	{
 		/// <summary>Name of the abilities tab button.</summary>
@@ -40,6 +54,44 @@ namespace FishMMO.Client
 		/// <summary>USS class applied to an ability slot's icon element.</summary>
 		private const string SLOT_ICON_CLASS = "ability-slot__icon";
 
+		/// <summary>USS class marking a slot that holds a template rather than a usable ability.</summary>
+		private const string SLOT_TEMPLATE_CLASS = "ability-slot--template";
+
+		/// <summary>USS class marking a slot that holds an ability effect.</summary>
+		private const string SLOT_EFFECT_CLASS = "ability-slot--effect";
+
+		/// <summary>USS class applied to the corner badge naming what a non-draggable slot holds.</summary>
+		private const string SLOT_BADGE_CLASS = "ability-slot__badge";
+
+		/// <summary>Name of the status line under the list.</summary>
+		private const string STATUS_LABEL_NAME = "ability-status";
+
+		/// <summary>Tooltip suffix for a known template.</summary>
+		private const string TEMPLATE_TOOLTIP_HINT = "\r\n\r\nAbility template. Take it to an Ability Crafter to craft a usable ability from it. Templates cannot be placed on the hotkey bar.";
+
+		/// <summary>Tooltip suffix for a known effect.</summary>
+		private const string EFFECT_TOOLTIP_HINT = "\r\n\r\nAbility effect. Add it to an ability at an Ability Crafter. Effects cannot be placed on the hotkey bar.";
+
+		/// <summary>Standing hint for the Abilities tab.</summary>
+		private const string ABILITY_TAB_HINT = "Click an ability to pick it up, then click a hotkey slot.";
+
+		/// <summary>Standing hint for the Templates tab.</summary>
+		private const string TEMPLATE_TAB_HINT = "Templates become abilities at an Ability Crafter.";
+
+		/// <summary>Standing hint for the Effects tab.</summary>
+		private const string EFFECT_TAB_HINT = "Effects are added to abilities at an Ability Crafter.";
+
+		/// <summary>What the status line says when a template is clicked.</summary>
+		private const string TEMPLATE_REFUSAL = "That is a template, not an ability yet. Craft it at an Ability Crafter first.";
+
+		/// <summary>What the status line says when an effect is clicked.</summary>
+		private const string EFFECT_REFUSAL = "That is an effect. Add it to an ability at an Ability Crafter.";
+
+		/// <summary>Empty-list wording per tab.</summary>
+		private const string ABILITY_EMPTY = "No abilities learned.";
+		private const string TEMPLATE_EMPTY = "No ability templates known.";
+		private const string EFFECT_EMPTY = "No ability effects known.";
+
 		/// <summary>Name of the shared drag object overlay panel.</summary>
 		private const string DRAG_OBJECT_NAME = "UIDragObject";
 
@@ -63,6 +115,8 @@ namespace FishMMO.Client
 			public ReferenceButtonType Type;
 			/// <summary>Cached tooltip text.</summary>
 			public string Tooltip;
+			/// <summary>The tab the slot belongs to, which decides whether it can be picked up.</summary>
+			public AbilityTabType Tab;
 		}
 
 		/// <summary>Usable ability slots currently rendered.</summary>
@@ -71,6 +125,9 @@ namespace FishMMO.Client
 		private readonly List<AbilitySlot> knownAbilities = new List<AbilitySlot>();
 		/// <summary>Known ability event slots currently rendered.</summary>
 		private readonly List<AbilitySlot> knownAbilityEvents = new List<AbilitySlot>();
+
+		/// <summary>Status line under the list: the tab's standing hint, or why a click was refused.</summary>
+		private Label statusLabel;
 
 		/// <summary>Abilities tab button.</summary>
 		private Button abilityTab;
@@ -121,6 +178,7 @@ namespace FishMMO.Client
 			abilityList = root.Q(ABILITY_LIST_NAME);
 			knownList = root.Q(KNOWN_LIST_NAME);
 			eventsList = root.Q(EVENTS_LIST_NAME);
+			statusLabel = root.Q<Label>(STATUS_LABEL_NAME);
 
 			if (abilityTab != null)
 			{
@@ -318,7 +376,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			CreateSlot(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbility, template.Tooltip(), knownAbilities, knownList);
+			CreateSlot(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbility, template.Tooltip() + TEMPLATE_TOOLTIP_HINT, knownAbilities, knownList);
 		}
 
 		/// <summary>
@@ -332,7 +390,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			CreateSlot(abilityEvent.ID, abilityEvent.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, abilityEvent.Tooltip(), knownAbilityEvents, eventsList);
+			CreateSlot(abilityEvent.ID, abilityEvent.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, abilityEvent.Tooltip() + EFFECT_TOOLTIP_HINT, knownAbilityEvents, eventsList);
 		}
 
 		/// <summary>
@@ -364,6 +422,29 @@ namespace FishMMO.Client
 			}
 			slotRoot.Add(iconElement);
 
+			/* The mark that tells a template from an ability at a glance. Applied to the slot so
+			 * the USS can dim the icon and colour the border, plus a corner badge naming what the
+			 * slot holds — the tooltip and status line explain, this is what makes the player look
+			 * for an explanation in the first place. */
+			string badge = null;
+			if (tabType == AbilityTabType.KnownAbility)
+			{
+				slotRoot.AddToClassList(SLOT_TEMPLATE_CLASS);
+				badge = "craft";
+			}
+			else if (tabType == AbilityTabType.KnownAbilityEvent)
+			{
+				slotRoot.AddToClassList(SLOT_EFFECT_CLASS);
+				badge = "effect";
+			}
+			if (badge != null)
+			{
+				Label badgeLabel = new Label(badge);
+				badgeLabel.AddToClassList(SLOT_BADGE_CLASS);
+				badgeLabel.pickingMode = PickingMode.Ignore;
+				slotRoot.Add(badgeLabel);
+			}
+
 			AbilitySlot slot = new AbilitySlot
 			{
 				Root = slotRoot,
@@ -372,6 +453,7 @@ namespace FishMMO.Client
 				ReferenceID = id,
 				Type = buttonType,
 				Tooltip = tooltip,
+				Tab = tabType,
 			};
 
 			slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(slot));
@@ -409,7 +491,8 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Handles left-click drag pickup for a slot. Mirrors the legacy UIAbilityButton behaviour:
-		/// toggles the drag object, picking up known abilities so they can be dropped on a hotkey.
+		/// toggles the drag object, picking up usable abilities so they can be dropped on a hotkey.
+		/// A slot that cannot be picked up says why instead of doing nothing.
 		/// </summary>
 		/// <param name="evt">The pointer-down event.</param>
 		/// <param name="slot">The clicked slot.</param>
@@ -428,11 +511,73 @@ namespace FishMMO.Client
 			if (dragObject.Visible)
 			{
 				dragObject.Clear();
+				return;
 			}
-			else if (Character.TryGet(out IAbilityController abilityController) &&
-					 abilityController.KnownAbilities.ContainsKey(slot.ReferenceID))
+
+			if (Character.TryGet(out IAbilityController abilityController) &&
+				abilityController.KnownAbilities.ContainsKey(slot.ReferenceID))
 			{
 				dragObject.SetReference(slot.IconSprite, slot.ReferenceID, slot.Type);
+				return;
+			}
+
+			ExplainRefusedPickup(slot);
+		}
+
+		/// <summary>
+		/// Writes why a slot could not be picked up. This was silence, and silence read as a
+		/// broken drag feature rather than as a different kind of entry.
+		/// </summary>
+		/// <param name="slot">The slot the player clicked.</param>
+		private void ExplainRefusedPickup(AbilitySlot slot)
+		{
+			switch (slot.Tab)
+			{
+				case AbilityTabType.KnownAbility:
+					SetStatus(TEMPLATE_REFUSAL);
+					break;
+				case AbilityTabType.KnownAbilityEvent:
+					SetStatus(EFFECT_REFUSAL);
+					break;
+				default:
+					/* An Abilities-tab slot the controller no longer knows — removed under the
+					 * panel, most likely. Nothing to craft; nothing useful to say beyond that. */
+					SetStatus("That ability is no longer available.");
+					break;
+			}
+		}
+
+		/// <summary>
+		/// Writes the status line under the list.
+		/// </summary>
+		private void SetStatus(string text)
+		{
+			if (statusLabel != null)
+			{
+				statusLabel.text = text;
+			}
+		}
+
+		/// <summary>The standing hint for a tab, shown until a click replaces it.</summary>
+		private static string TabHint(AbilityTabType tab)
+		{
+			switch (tab)
+			{
+				case AbilityTabType.KnownAbility: return TEMPLATE_TAB_HINT;
+				case AbilityTabType.KnownAbilityEvent: return EFFECT_TAB_HINT;
+				default: return ABILITY_TAB_HINT;
+			}
+		}
+
+		/// <summary>What an empty tab says. "No abilities learned" over an empty Templates tab is
+		/// the wrong sentence.</summary>
+		private static string EmptyText(AbilityTabType tab)
+		{
+			switch (tab)
+			{
+				case AbilityTabType.KnownAbility: return TEMPLATE_EMPTY;
+				case AbilityTabType.KnownAbilityEvent: return EFFECT_EMPTY;
+				default: return ABILITY_EMPTY;
 			}
 		}
 
@@ -458,13 +603,21 @@ namespace FishMMO.Client
 			VisualElement active =
 				tab == AbilityTabType.Ability ? abilityList :
 				tab == AbilityTabType.KnownAbility ? knownList : eventsList;
+			Label empty = Root?.Q<Label>("ability-empty");
+			if (empty != null)
+			{
+				empty.text = EmptyText(tab);
+			}
 			BindListChrome(
 				active,
 				Root?.Q<Label>("ability-count"),
 				Root?.Q<Label>("ability-subtitle"),
-				Root?.Q<Label>("ability-empty"),
-				"ability",
-				"abilities");
+				empty,
+				tab == AbilityTabType.Ability ? "ability" : tab == AbilityTabType.KnownAbility ? "template" : "effect",
+				tab == AbilityTabType.Ability ? "abilities" : tab == AbilityTabType.KnownAbility ? "templates" : "effects");
+
+			// A tab switch clears any refusal and restores the tab's own hint.
+			SetStatus(TabHint(tab));
 
 			SetTabActive(abilityTab, tab == AbilityTabType.Ability);
 			SetTabActive(knownTab, tab == AbilityTabType.KnownAbility);

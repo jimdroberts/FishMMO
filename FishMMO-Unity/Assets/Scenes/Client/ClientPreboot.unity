@@ -490,6 +490,30 @@ MonoBehaviour:
     m_Bits: 4294967295
   MinFontSize: 8
   MaxFontSize: 24
+--- !u!114 &531818105
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1656606701}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b758f20716b74e6ea8c4eefec68ebb5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.UITKNameplateLayer
+  ProjectionCamera: {fileID: 0}
+  MaxVisibleDistance: 80
+  MaxVisiblePlates: 64
+  DistantLodDistance: 30
+  DistantUpdateInterval: 3
+  OffScreenMargin: 160
+  OccludeBehindGeometry: 0
+  OcclusionMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  MinFontSize: 9
+  MaxFontSize: 26
 --- !u!4 &583672064
 Transform:
   m_ObjectHideFlags: 0
@@ -1079,6 +1103,7 @@ GameObject:
   - component: {fileID: 583672064}
   - component: {fileID: 762671585}
   - component: {fileID: 517877576}
+  - component: {fileID: 531818105}
   m_Layer: 0
   m_Name: UIWorldLabels
   m_TagString: Untagged

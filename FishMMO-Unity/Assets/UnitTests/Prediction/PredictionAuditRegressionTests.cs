@@ -2075,35 +2075,101 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The grid is ANDed with the distance conditions, so an accuracy below twice the largest
-		/// distance silently clips it. This is what made 100 m player visibility actually 35–70 m.
+		/// The grid is ANDed with the distance conditions, so an accuracy below twice a condition's
+		/// reach silently clips it. This is what made 100 m player visibility actually 35–70 m.
 		/// </summary>
+		/// <remarks>
+		/// Measured per PREFAB rather than across every condition asset, because not every object takes
+		/// the grid: a prefab set to <c>IgnoreManager</c> carries only the conditions it declares, which
+		/// is how a Titan reaches 1000 m without demanding a 2500-unit accuracy that would make the grid
+		/// a no-op for everything else. The invariant is "if you take the grid, the grid must reach you".
+		/// </remarks>
 		[Test]
 		public void HashGridAccuracy_CannotClipTheDistanceConditions()
 		{
-            string scene = File.ReadAllText(Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity"));
+			string scene = File.ReadAllText(Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity"));
 			Match accuracy = Regex.Match(scene, @"_accuracy: (\d+)");
 			LogAssert.IsTrue(accuracy.Success, "The SceneServer must configure a HashGrid accuracy.");
 			int accuracyValue = int.Parse(accuracy.Groups[1].Value);
 
-			float largestDistance = 0f;
+			const string gridGuid = "cc503f7541ebd424c94541e6a767efee";
+
+			// Does the ObserverManager hand the grid to every prefab that does not opt out?
+			int defaults = scene.IndexOf("_defaultConditions:", StringComparison.Ordinal);
+			LogAssert.IsTrue(defaults >= 0, "The ObserverManager must declare default conditions.");
+			string defaultBlock = scene.Substring(defaults, scene.IndexOf("--- !u!", defaults, StringComparison.Ordinal) - defaults);
+			bool gridIsADefault = defaultBlock.Contains(gridGuid);
+
+			/* Condition assets by guid, with the furthest distance each one ever answers true from.
+			 * The HIDE distance, not the base distance: checking the base alone left the whole
+			 * hysteresis band outside the grid's reach, so an observed object at 100–125 m was held by
+			 * the distance condition and dropped by the grid depending on which side of a cell boundary
+			 * it sat on — precisely the flicker the hysteresis exists to prevent. */
+			Dictionary<string, (string Name, float Reach)> byGuid = new Dictionary<string, (string, float)>();
 			foreach (string path in Directory.GetFiles(
 				Path.Combine(Application.dataPath, "Settings/ObserverConditions"), "*DistanceCondition.asset"))
 			{
-				Match m = Regex.Match(File.ReadAllText(path), @"_maximumDistance: ([0-9.]+)");
-				if (m.Success)
+				string text = File.ReadAllText(path);
+				Match m = Regex.Match(text, @"_maximumDistance: ([0-9.]+)");
+				if (!m.Success)
 				{
-					largestDistance = Mathf.Max(largestDistance, float.Parse(m.Groups[1].Value,
-						System.Globalization.CultureInfo.InvariantCulture));
+					continue;
+				}
+				float reach = float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+				Match hide = Regex.Match(text, @"_hideDistancePercent: ([0-9.]+)");
+				if (hide.Success)
+				{
+					reach *= 1f + float.Parse(hide.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+				}
+				string guid = Regex.Match(File.ReadAllText(path + ".meta"), @"guid: ([0-9a-f]{32})").Groups[1].Value;
+				byGuid[guid] = (Path.GetFileNameWithoutExtension(path), reach);
+			}
+			LogAssert.IsTrue(byGuid.Count > 0, "At least one distance condition must be authored.");
+
+			List<string> clipped = new List<string>();
+			foreach (string prefab in Directory.GetFiles(
+				Path.Combine(Application.dataPath, "Prefabs"), "*.prefab", SearchOption.AllDirectories))
+			{
+				string text = File.ReadAllText(prefab);
+				int conditions = text.IndexOf("_observerConditions:", StringComparison.Ordinal);
+				if (conditions < 0)
+				{
+					continue;
+				}
+
+				Match overrideType = Regex.Match(text, @"_overrideType: (\d+)");
+				bool ignoresManager = overrideType.Success && overrideType.Groups[1].Value == "3";
+
+				string block = text.Substring(conditions);
+				int blockEnd = block.IndexOf("\n  m_", StringComparison.Ordinal);
+				if (blockEnd > 0)
+				{
+					block = block.Substring(0, blockEnd);
+				}
+
+				bool takesGrid = ignoresManager ? block.Contains(gridGuid) : gridIsADefault;
+				if (!takesGrid)
+				{
+					continue;
+				}
+
+				foreach (Match reference in Regex.Matches(block, @"guid: ([0-9a-f]{32})"))
+				{
+					if (byGuid.TryGetValue(reference.Groups[1].Value, out (string Name, float Reach) condition) &&
+						accuracyValue < condition.Reach * 2f)
+					{
+						clipped.Add($"{Path.GetFileNameWithoutExtension(prefab)} via {condition.Name} ({condition.Reach} m)");
+					}
 				}
 			}
-			LogAssert.IsTrue(largestDistance > 0f, "At least one distance condition must be authored.");
 
-			/* Cells are ceil(accuracy/2) and "nearby" is the 3x3 block, so anything beyond
-			 * accuracy on an axis is always rejected. The grid must therefore reach at least as
-			 * far as the furthest distance condition, or it is the real visibility limit. */
-			LogAssert.IsTrue(accuracyValue >= largestDistance * 2f,
-				$"HashGrid accuracy {accuracyValue} clips a {largestDistance} m distance condition — cells are accuracy/2, so visibility would really be {accuracyValue / 2}–{accuracyValue} m depending on cell alignment.");
+			/* Cells are ceil(accuracy/2) and "nearby" is the 3x3 block, so anything beyond accuracy on
+			 * an axis is always rejected. The grid must therefore reach at least as far as any condition
+			 * it is ANDed with, or it is the real visibility limit. */
+			LogAssert.AreEqual(0, clipped.Count,
+				$"HashGrid accuracy {accuracyValue} clips: {string.Join(", ", clipped)}. Cells are accuracy/2, " +
+				$"so visibility would really be {accuracyValue / 2}–{accuracyValue} m depending on cell alignment. " +
+				"Either raise the accuracy or wire the prefab to IgnoreManager without the grid.");
 		}
 
 		/// <summary>
@@ -3226,8 +3292,8 @@ namespace FishMMO.UnitTests
 			public bool IsTeleporting => false;
 			public bool IsSpawned => true;
 			public int Flags { get; set; }
-			public WorldLabel CharacterNameLabel { get; set; }
-			public WorldLabel CharacterGuildLabel { get; set; }
+			/// <inheritdoc/>
+			public Nameplate CharacterNameplate { get; set; }
 			public Transform MeshRoot => null;
 #if !UNITY_SERVER
 			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
@@ -3256,8 +3322,8 @@ namespace FishMMO.UnitTests
 			public bool IsTeleporting => false;
 			public bool IsSpawned => true;
 			public int Flags { get; set; }
-			public WorldLabel CharacterNameLabel { get; set; }
-			public WorldLabel CharacterGuildLabel { get; set; }
+			/// <inheritdoc/>
+			public Nameplate CharacterNameplate { get; set; }
 			public Transform MeshRoot => null;
 #if !UNITY_SERVER
 			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }

@@ -472,12 +472,24 @@ namespace FishMMO.Shared
 		Unavailable,
 		/// <summary>The entry index or tab did not resolve to something purchasable.</summary>
 		InvalidEntry,
-		/// <summary>The item carries no sale price, so the merchant cannot sell it.</summary>
+		/// <summary>
+		/// The entry is priced below zero, which is not a price. A price of ZERO is free and is
+		/// sold normally — it used to land here, and since <c>Price</c> is an int defaulting to 0
+		/// that made every unedited template unsellable.
+		/// </summary>
 		NotForSale,
 		/// <summary>The character cannot afford the requested quantity.</summary>
 		InsufficientFunds,
 		/// <summary>There is no room to receive the goods.</summary>
 		NoRoom,
+		/// <summary>The character already knows the ability or ability event on offer.</summary>
+		AlreadyKnown,
+		/// <summary>
+		/// The character holds as many usable abilities as the server allows. Its own reason
+		/// rather than <see cref="NoRoom"/>, because the remedy is different: nothing in the bags
+		/// needs clearing, and the merchant panel says so.
+		/// </summary>
+		AbilityLimit,
 	}
 
 	/// <summary>

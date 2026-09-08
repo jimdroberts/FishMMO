@@ -395,16 +395,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sets the character's guild name label (client only). Updates the label text if available.
+		/// Sets the guild row of the character's overhead nameplate (client only).
 		/// </summary>
-		/// <param name="guildName">The name of the guild to set.</param>
+		/// <param name="guildName">The guild's name, or blank when the character has left one.</param>
+		/// <remarks>
+		/// A blank name clears the row rather than leaving an empty one: an empty row would still
+		/// take a line of height on the plate, so every character in the world who is not in a
+		/// guild would carry a visible gap under their name.
+		/// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetGuildName(string guildName)
 		{
 #if !UNITY_SERVER
-			if (CharacterGuildLabel != null)
+			if (CharacterNameplate != null)
 			{
-				CharacterGuildLabel.text = !string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : "";
+				CharacterNameplate.SetLine(NameplateSlot.GuildName,
+					!string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : null);
 			}
 #endif
 		}

@@ -125,6 +125,16 @@ namespace FishMMO.Client
 		private const string WORLDLABEL_PLAYER_RANGE_SLIDER_NAME = "worldlabel-player-range-slider";
 		private const string WORLDLABEL_PLAYER_RANGE_VALUE_NAME = "worldlabel-player-range-value";
 		private const string WORLDLABEL_SHOW_OWN_NAME = "worldlabel-show-own-toggle";
+		private const string NAMEPLATE_SCALE_SLIDER_NAME = "nameplate-scale-slider";
+		private const string NAMEPLATE_SCALE_VALUE_NAME = "nameplate-scale-value";
+		private const string NAMEPLATE_OPACITY_SLIDER_NAME = "nameplate-opacity-slider";
+		private const string NAMEPLATE_OPACITY_VALUE_NAME = "nameplate-opacity-value";
+		private const string NAMEPLATE_BACKGROUND_SLIDER_NAME = "nameplate-background-slider";
+		private const string NAMEPLATE_BACKGROUND_VALUE_NAME = "nameplate-background-value";
+		private const string NAMEPLATE_MAX_SLIDER_NAME = "nameplate-max-slider";
+		private const string NAMEPLATE_MAX_VALUE_NAME = "nameplate-max-value";
+		private const string NAMEPLATE_SHOW_GUILD_NAME = "nameplate-show-guild-toggle";
+		private const string NAMEPLATE_SHOW_TITLES_NAME = "nameplate-show-titles-toggle";
 		private const string COLOR_LIST_NAME = "options-color-list";
 		private const string RESET_COLORS_NAME = "options-reset-colors-btn";
 		private const string CONTROLS_LIST_NAME = "options-controls-list";
@@ -366,6 +376,16 @@ namespace FishMMO.Client
 		private Slider worldLabelPlayerRangeSlider;
 		private Label worldLabelPlayerRangeValueLabel;
 		private Toggle worldLabelShowOwnToggle;
+		private Slider nameplateScaleSlider;
+		private Label nameplateScaleValueLabel;
+		private Slider nameplateOpacitySlider;
+		private Label nameplateOpacityValueLabel;
+		private Slider nameplateBackgroundSlider;
+		private Label nameplateBackgroundValueLabel;
+		private Slider nameplateMaxSlider;
+		private Label nameplateMaxValueLabel;
+		private Toggle nameplateShowGuildToggle;
+		private Toggle nameplateShowTitlesToggle;
 		private VisualElement colorList;
 		private Button resetColorsButton;
 		private VisualElement controlsList;
@@ -532,6 +552,16 @@ namespace FishMMO.Client
 			worldLabelPlayerRangeSlider = Root.Q<Slider>(WORLDLABEL_PLAYER_RANGE_SLIDER_NAME);
 			worldLabelPlayerRangeValueLabel = Root.Q<Label>(WORLDLABEL_PLAYER_RANGE_VALUE_NAME);
 			worldLabelShowOwnToggle = Root.Q<Toggle>(WORLDLABEL_SHOW_OWN_NAME);
+			nameplateScaleSlider = Root.Q<Slider>(NAMEPLATE_SCALE_SLIDER_NAME);
+			nameplateScaleValueLabel = Root.Q<Label>(NAMEPLATE_SCALE_VALUE_NAME);
+			nameplateOpacitySlider = Root.Q<Slider>(NAMEPLATE_OPACITY_SLIDER_NAME);
+			nameplateOpacityValueLabel = Root.Q<Label>(NAMEPLATE_OPACITY_VALUE_NAME);
+			nameplateBackgroundSlider = Root.Q<Slider>(NAMEPLATE_BACKGROUND_SLIDER_NAME);
+			nameplateBackgroundValueLabel = Root.Q<Label>(NAMEPLATE_BACKGROUND_VALUE_NAME);
+			nameplateMaxSlider = Root.Q<Slider>(NAMEPLATE_MAX_SLIDER_NAME);
+			nameplateMaxValueLabel = Root.Q<Label>(NAMEPLATE_MAX_VALUE_NAME);
+			nameplateShowGuildToggle = Root.Q<Toggle>(NAMEPLATE_SHOW_GUILD_NAME);
+			nameplateShowTitlesToggle = Root.Q<Toggle>(NAMEPLATE_SHOW_TITLES_NAME);
 			colorList = Root.Q<VisualElement>(COLOR_LIST_NAME);
 			resetColorsButton = Root.Q<Button>(RESET_COLORS_NAME);
 			controlsList = Root.Q<VisualElement>(CONTROLS_LIST_NAME);
@@ -555,6 +585,7 @@ namespace FishMMO.Client
 			InitializeGameplayToggles();
 			InitializeCrosshairSettings();
 			InitializeWorldLabelSettings();
+			InitializeNameplateSettings();
 			InitializeInterfaceSettings();
 			InitializeColorSettings();
 			InitializeProfileSection();
@@ -1873,6 +1904,108 @@ namespace FishMMO.Client
 				worldLabelShowOwnToggle.SetValueWithoutNotify(ClientWorldLabelSettings.ShowOwnName);
 				worldLabelShowOwnToggle.RegisterValueChangedCallback((evt) =>
 					ClientWorldLabelSettings.SetShowOwnName(evt.newValue));
+			}
+		}
+
+		// ── Nameplates ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Binds the nameplate appearance controls to <see cref="ClientNameplateSettings"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>Separate from the world label rows above because the settings are separate: a
+		/// nameplate is furniture the player looks past all day and a damage number is feedback
+		/// they read for a second, and wanting one faint and the other loud is an ordinary
+		/// preference. The draw distance and the hide-behind-geometry toggle stay shared and are
+		/// not repeated here — see <see cref="ClientNameplateSettings"/>.</para>
+		///
+		/// <para>The background slider reaches zero, unlike the opacity one. Zero background is a
+		/// real look — names over the world with no plate behind them — and the text stays either
+		/// way, so nothing disappears at the end of the travel. Plate opacity stops at a fifth
+		/// instead, because an invisible nameplate is what the ranges below are for and a slider
+		/// that could reach it would be a second, much less discoverable way to turn nameplates
+		/// off.</para>
+		/// </remarks>
+		private void InitializeNameplateSettings()
+		{
+			if (nameplateScaleSlider != null)
+			{
+				nameplateScaleSlider.lowValue = ClientNameplateSettings.MinimumScale;
+				nameplateScaleSlider.highValue = ClientNameplateSettings.MaximumScale;
+
+				float scale = ClientNameplateSettings.Scale;
+				nameplateScaleSlider.SetValueWithoutNotify(scale);
+				UpdateMultiplierLabel(nameplateScaleValueLabel, scale);
+
+				nameplateScaleSlider.RegisterValueChangedCallback((evt) =>
+				{
+					ClientNameplateSettings.SetScale(evt.newValue);
+					UpdateMultiplierLabel(nameplateScaleValueLabel, evt.newValue);
+				});
+			}
+
+			if (nameplateOpacitySlider != null)
+			{
+				nameplateOpacitySlider.lowValue = ClientNameplateSettings.MinimumOpacity;
+				nameplateOpacitySlider.highValue = ClientNameplateSettings.MaximumOpacity;
+
+				float opacity = ClientNameplateSettings.Opacity;
+				nameplateOpacitySlider.SetValueWithoutNotify(opacity);
+				UpdatePercentLabel(nameplateOpacityValueLabel, opacity);
+
+				nameplateOpacitySlider.RegisterValueChangedCallback((evt) =>
+				{
+					ClientNameplateSettings.SetOpacity(evt.newValue);
+					UpdatePercentLabel(nameplateOpacityValueLabel, evt.newValue);
+				});
+			}
+
+			if (nameplateBackgroundSlider != null)
+			{
+				nameplateBackgroundSlider.lowValue = ClientNameplateSettings.MinimumBackgroundOpacity;
+				nameplateBackgroundSlider.highValue = ClientNameplateSettings.MaximumBackgroundOpacity;
+
+				float background = ClientNameplateSettings.BackgroundOpacity;
+				nameplateBackgroundSlider.SetValueWithoutNotify(background);
+				UpdatePercentLabel(nameplateBackgroundValueLabel, background);
+
+				nameplateBackgroundSlider.RegisterValueChangedCallback((evt) =>
+				{
+					ClientNameplateSettings.SetBackgroundOpacity(evt.newValue);
+					UpdatePercentLabel(nameplateBackgroundValueLabel, evt.newValue);
+				});
+			}
+
+			if (nameplateMaxSlider != null)
+			{
+				nameplateMaxSlider.lowValue = ClientNameplateSettings.MinimumMaxVisible;
+				nameplateMaxSlider.highValue = ClientNameplateSettings.MaximumMaxVisible;
+
+				int maximum = ClientNameplateSettings.MaxVisible;
+				nameplateMaxSlider.SetValueWithoutNotify(maximum);
+				UpdateCountLabel(nameplateMaxValueLabel, maximum);
+
+				nameplateMaxSlider.RegisterValueChangedCallback((evt) =>
+				{
+					// A count, so the stored value is an int; the slider itself is continuous.
+					int value = Mathf.RoundToInt(evt.newValue);
+					ClientNameplateSettings.SetMaxVisible(value);
+					UpdateCountLabel(nameplateMaxValueLabel, value);
+				});
+			}
+
+			if (nameplateShowGuildToggle != null)
+			{
+				nameplateShowGuildToggle.SetValueWithoutNotify(ClientNameplateSettings.ShowGuild);
+				nameplateShowGuildToggle.RegisterValueChangedCallback((evt) =>
+					ClientNameplateSettings.SetShowGuild(evt.newValue));
+			}
+
+			if (nameplateShowTitlesToggle != null)
+			{
+				nameplateShowTitlesToggle.SetValueWithoutNotify(ClientNameplateSettings.ShowTitles);
+				nameplateShowTitlesToggle.RegisterValueChangedCallback((evt) =>
+					ClientNameplateSettings.SetShowTitles(evt.newValue));
 			}
 		}
 

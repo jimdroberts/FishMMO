@@ -1,4 +1,4 @@
-namespace FishMMO.Shared
+﻿namespace FishMMO.Shared
 {
 	/// <summary>
 	/// How a currency movement ended.
@@ -87,5 +87,16 @@ namespace FishMMO.Shared
 		/// designer tuning one wants to see the other move separately.
 		/// </remarks>
 		HouseVaultFee = 9,
+
+		/// <summary>
+		/// Buying a complete, premade ability from a merchant.
+		/// </summary>
+		/// <remarks>
+		/// Not folded into <see cref="AbilityLearn"/> or <see cref="AbilityCraft"/>. Those two
+		/// together measure the two-step route to a usable ability; this measures the one-step
+		/// route that competes with it, and a designer pricing one against the other wants to
+		/// see them apart.
+		/// </remarks>
+		AbilityPurchase = 10,
 	}
 }

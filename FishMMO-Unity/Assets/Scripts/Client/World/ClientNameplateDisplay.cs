@@ -12,21 +12,21 @@ namespace FishMMO.Client
 	/// <c>Client.Update</c>.
 	/// </summary>
 	/// <remarks>
-	/// <para><b>Why this is not part of the label layer.</b> <see cref="UITKWorldLabelLayer"/>
-	/// only ever sees labels whose GameObject is active — an inactive <see cref="WorldLabel"/>
-	/// never registers. Nameplates are authored inactive on every character prefab and the target
-	/// frame flips them on and off around the current target, so "show the ones in range" has to
-	/// be decided at the character, by something that can see the characters whose labels are
-	/// currently off. That is this class, walking <c>BaseCharacter.ClientCharacters</c>.</para>
+	/// <para><b>Why this is not part of the nameplate layer.</b> <see cref="UITKNameplateLayer"/>
+	/// answers rendering questions — how far, how many, is it behind a wall. Whether a character
+	/// deserves a nameplate at all is a gameplay question about who the viewer is and who they are
+	/// looking at, and it has to be asked of every character in view, including the ones whose
+	/// plates are currently hidden. That is this class, walking
+	/// <c>BaseCharacter.ClientCharacters</c>.</para>
 	///
-	/// <para><b>Ownership of a label's active state is split three ways</b>, and the split is
-	/// what keeps the three from fighting:</para>
+	/// <para><b>Ownership of a plate's visibility is split three ways</b>, and the split is what
+	/// keeps the three from fighting:</para>
 	/// <list type="bullet">
-	/// <item><description><see cref="UITKTarget"/> turns the current target's labels on, and asks
-	/// <see cref="ShouldStayVisible"/> before turning them off again on clear. Without that ask,
+	/// <item><description><see cref="UITKTarget"/> turns the current target's plate on, and asks
+	/// <see cref="ShouldStayVisible"/> before turning it off again on clear. Without that ask,
 	/// untargeting an NPC standing next to the player blinked its nameplate off for one sweep
 	/// interval before this class put it back.</description></item>
-	/// <item><description><see cref="UITKPetControl"/> turns the player's own pet's labels on;
+	/// <item><description><see cref="UITKPetControl"/> turns the player's own pet's plate on;
 	/// the rule here agrees (an owned character that is not the player is always kept), so a
 	/// sweep never undoes it.</description></item>
 	/// <item><description>This class owns everything else: NPCs and other players by their two
@@ -36,11 +36,11 @@ namespace FishMMO.Client
 	/// </list>
 	///
 	/// <para><b>Cost.</b> One dictionary walk every <see cref="SweepIntervalSeconds"/>, a squared
-	/// distance per NPC, and a <c>SetActive</c> only on a transition. The walk is deliberately not
-	/// per frame: a nameplate appearing a fifth of a second after the player crosses the range is
-	/// invisible, and the walk touches every character in view. Distances use a small hysteresis
-	/// (<see cref="ExitRangeMultiplier"/>) so a character idling exactly on the boundary does not
-	/// toggle every sweep.</para>
+	/// distance per NPC, a standing colour per visible plate, and a visibility flip only on a
+	/// transition. The walk is deliberately not per frame: a nameplate appearing a fifth of a
+	/// second after the player crosses the range is invisible, and the walk touches every character
+	/// in view. Distances use a small hysteresis (<see cref="ExitRangeMultiplier"/>) so a character
+	/// idling exactly on the boundary does not toggle every sweep.</para>
 	/// </remarks>
 	public sealed class ClientNameplateDisplay
 	{
@@ -148,11 +148,11 @@ namespace FishMMO.Client
 		/// Whether a character's nameplate should stay up when the target frame stops framing it.
 		/// </summary>
 		/// <param name="character">The character being untargeted.</param>
-		/// <returns>True to leave the labels on; false to let the target frame turn them off.</returns>
+		/// <returns>True to leave the plate up; false to let the target frame take it down.</returns>
 		/// <remarks>
 		/// Answered from the same rule the sweep applies, so the target frame and the sweep can
 		/// never disagree about a character that is both untargeted and in range. Without a live
-		/// display the answer falls back to the pre-range behaviour: the player's own labels stay,
+		/// display the answer falls back to the pre-range behaviour: the player's own plate stays,
 		/// everything else goes.
 		/// </remarks>
 		public static bool ShouldStayVisible(ICharacter character)
@@ -171,8 +171,8 @@ namespace FishMMO.Client
 				return isOwner;
 			}
 
-			/* The labels are up right now — the frame is asking whether to take them down — so
-			 * the exit distance applies, exactly as it would on the next sweep. */
+			/* The plate is up right now — the frame is asking whether to take it down — so the
+			 * exit distance applies, exactly as it would on the next sweep. */
 			return Decide(
 				isPlayer,
 				isOwner,
@@ -190,7 +190,7 @@ namespace FishMMO.Client
 		/// <param name="isPlayer">Whether the character is a player character.</param>
 		/// <param name="isOwner">Whether this client owns the character: the local player, or their pet.</param>
 		/// <param name="isTargeted">Whether the character is the local player's current target — hovered, or pinned to the target frame.</param>
-		/// <param name="wasVisible">Whether the nameplate is currently up, which selects the exit distance.</param>
+		/// <param name="wasVisible">Whether the plate is currently up, which selects the exit distance.</param>
 		/// <param name="sqrDistance">Squared distance from the local player, in metres squared.</param>
 		/// <param name="npcRange">The NPC nameplate range, in metres; zero or less means target only.</param>
 		/// <param name="playerRange">The other-player nameplate range, in metres; zero or less means target only.</param>
@@ -257,7 +257,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Applies the rule to every character the client knows.
+		/// Applies the rule to every character the client knows, and keeps the standing colour of
+		/// the plates that are up in step with it.
 		/// </summary>
 		private void Sweep()
 		{
@@ -273,17 +274,17 @@ namespace FishMMO.Client
 					continue;
 				}
 
-				WorldLabel nameLabel = character.CharacterNameLabel;
-				if (nameLabel == null)
+				Nameplate plate = character.CharacterNameplate;
+				if (plate == null)
 				{
-					// Nothing to show: a character without an authored nameplate.
+					// Nothing to show: a character authored without a nameplate.
 					continue;
 				}
 
 				bool isPlayer = character is IPlayerCharacter;
 				bool isOwner = character.NetworkObject != null && character.NetworkObject.IsOwner;
 
-				bool wasVisible = nameLabel.gameObject.activeSelf;
+				bool wasVisible = plate.Visible;
 				bool isTargeted = (currentTarget != null && ReferenceEquals(currentTarget, character.Transform)) ||
 					(pinnedTarget != null && ReferenceEquals(pinnedTarget, character.Transform));
 
@@ -297,27 +298,23 @@ namespace FishMMO.Client
 					playerNameRange,
 					showOwnName);
 
+				if (visible && !isOwner)
+				{
+					/* Refreshed every sweep rather than only on the way up, because standing
+					 * changes while a plate is already up: a faction turns on the player, a guild
+					 * mate logs in, an arena assigns teams. The plate ignores a write that does not
+					 * change the colour, so a settled world pays a comparison. The owner's own
+					 * plate is left uncoloured — a player's standing with themselves is not a fact
+					 * about anything, and colouring it would tell them nothing. */
+					plate.AllianceTint = AllianceColor(character);
+				}
+
 				if (visible == wasVisible)
 				{
 					continue;
 				}
 
-				if (visible && !isOwner)
-				{
-					/* Tint on the way up, the way the target frame does, so a hostile that walks
-					 * into range reads as hostile before it is ever targeted. Once per transition
-					 * rather than per sweep: the frame recolours on targeting anyway, and a
-					 * standing relationship does not change while a nameplate is up. */
-					nameLabel.color = AllianceColor(character);
-				}
-
-				nameLabel.gameObject.SetActive(visible);
-
-				WorldLabel guildLabel = character.CharacterGuildLabel;
-				if (guildLabel != null)
-				{
-					guildLabel.gameObject.SetActive(visible);
-				}
+				plate.Visible = visible;
 			}
 		}
 

@@ -1,4 +1,4 @@
-/*
+﻿/*
     UIAbilities.uss
     Layout for the abilities panel. Colours come from FishMMO-Theme.uss.
 */
@@ -62,6 +62,61 @@
     right: 2px;
     bottom: 2px;
     -unity-background-scale-mode: scale-to-fit;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TEMPLATES AND EFFECTS
+   Slots on the Templates and Effects tabs are not abilities and cannot go on the
+   hotkey bar. They used to look identical to the ones that can (issue #247), so
+   the difference is drawn: a dimmed icon, a muted border, and a corner badge that
+   names what the slot holds.
+   ═══════════════════════════════════════════════════════════ */
+
+.ability-slot--template,
+.ability-slot--effect {
+    border-color: var(--abyss-500);
+    border-top-color: var(--abyss-500);
+    border-bottom-color: var(--abyss-500);
+}
+
+.ability-slot--template > .ability-slot__icon,
+.ability-slot--effect > .ability-slot__icon {
+    opacity: 0.7;
+}
+
+.ability-slot__badge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 12px;
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    -unity-text-align: middle-center;
+    color: var(--text-bright);
+    background-color: var(--scrim-80);
+}
+
+.ability-slot--template > .ability-slot__badge {
+    color: var(--gold);
+}
+
+.ability-slot--effect > .ability-slot__badge {
+    color: var(--brand-300);
+}
+
+/*
+    One line under the list. Keeps its height when empty so the panel does not
+    jump between a hint and a refusal.
+*/
+.ability-status {
+    height: 13px;
+    margin-left: 6px;
+    margin-right: 6px;
+    margin-bottom: 4px;
+    font-size: 10px;
+    flex-shrink: 0;
+    overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════

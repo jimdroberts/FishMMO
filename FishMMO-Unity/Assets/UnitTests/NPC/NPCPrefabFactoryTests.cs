@@ -181,7 +181,7 @@ namespace FishMMO.UnitTests.NPCs
 			Assert.IsNotNull(created.GetComponent<CharacterPredictionController>());
 			Assert.IsNotNull(created.GetComponent<CooldownController>());
 			Assert.IsNotNull(created.GetComponent<AbilityController>());
-			Assert.IsNotNull(created.GetComponent<NPC>().CharacterNameLabel, "the name label sub-prefab must survive the clone");
+			Assert.IsNotNull(created.GetComponent<NPC>().CharacterNameplate, "the overhead nameplate must survive the clone");
 
 			// Nothing inside it points at another asset's NetworkObject.
 			Assert.IsEmpty(NetworkObjectBindingValidator.Scan(AssetDatabase.GetAssetPath(created)),

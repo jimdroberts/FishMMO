@@ -226,8 +226,15 @@ namespace FishMMO.Client
 
 			#endregion
 
-			/// <summary>Overhead 3D label displayed above a framed interactable.</summary>
-			public UITKWorldLabel OverheadLabel;
+			/// <summary>
+			/// The overhead plate this card raised, so releasing the card can take it down again.
+			/// </summary>
+			/// <remarks>
+			/// Held rather than re-resolved on release, because the release path runs for targets
+			/// that have already been destroyed — the card must be able to put down what it picked
+			/// up without asking the target anything.
+			/// </remarks>
+			public Nameplate OverheadNameplate;
 
 			/// <summary>
 			/// True while a target is resolved. Reference identity on purpose: a target that was
@@ -320,14 +327,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Releases the observed-buff subscription and the overhead labels.
+		/// Releases the observed-buff subscription and the overhead nameplates.
 		/// </summary>
 		public override void OnDestroying()
 		{
 			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
 
-			ReleaseOverheadLabel(hoverCard);
-			ReleaseOverheadLabel(pinnedCard);
+			ReleaseOverheadNameplate(hoverCard);
+			ReleaseOverheadNameplate(pinnedCard);
 
 			base.OnDestroying();
 		}
@@ -509,7 +516,7 @@ namespace FishMMO.Client
 			}
 
 			PresentCard(hoverCard);
-			UpdateOverheadLabel(hoverCard);
+			UpdateOverheadNameplate(hoverCard);
 		}
 
 		/// <summary>
@@ -591,7 +598,11 @@ namespace FishMMO.Client
 			}
 
 			PresentCard(pinnedCard);
-			ShowCharacterLabels(pinnedCard.Character, pinnedCard.DisplayColor);
+
+			/* The same call the hover path uses, so a pinned target gets a plate whatever it is.
+			 * This used to raise a CHARACTER's plate only, which meant pinning a crate took the
+			 * caption the hover card had raised over it straight back down again. */
+			UpdateOverheadNameplate(pinnedCard);
 		}
 
 		/// <summary>
@@ -1131,28 +1142,20 @@ namespace FishMMO.Client
 						 * and once NPCs in range kept theirs too, answering it in two places meant
 						 * an untargeted NPC beside the player blinked off for a sweep before
 						 * coming back. */
-						bool keepLabels = ClientNameplateDisplay.ShouldStayVisible(character);
-
-						if (!keepLabels)
+						if (!ClientNameplateDisplay.ShouldStayVisible(character) &&
+							character.CharacterNameplate != null)
 						{
-							if (character.CharacterNameLabel != null)
-							{
-								character.CharacterNameLabel.gameObject.SetActive(false);
-							}
-							if (character.CharacterGuildLabel != null)
-							{
-								character.CharacterGuildLabel.gameObject.SetActive(false);
-							}
+							character.CharacterNameplate.Visible = false;
 						}
 					}
 				}
 			}
 
 			/* The original returned EARLY when the last target was the local player or their own
-			 * pet, so the overhead 3D label was never released and the frame never hid — it just
+			 * pet, so the overhead label was never released and the frame never hid — it just
 			 * stopped updating. Keeping the nameplate visible and taking down the card are
 			 * separate decisions; only the first one depends on who the target was. */
-			ReleaseOverheadLabel(card);
+			ReleaseOverheadNameplate(card);
 
 			card.ClearModel();
 			ReleaseIcons(card.ActiveBuffIcons);
@@ -1171,54 +1174,55 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Returns a card's overhead 3D label to the label pool.
+		/// Takes down the plate this card raised over a non-character target.
 		/// </summary>
-		/// <param name="card">The card whose label to release.</param>
-		private static void ReleaseOverheadLabel(TargetCard card)
+		/// <param name="card">The card whose plate to release.</param>
+		/// <remarks>
+		/// Only plates the card raised itself are taken down. A CHARACTER's plate is released
+		/// through <see cref="ClientNameplateDisplay.ShouldStayVisible"/> in
+		/// <see cref="ReleaseCard"/> instead, because the range sweep may want it left up — an
+		/// interactable's plate has no such second owner, so untargeting is the whole rule.
+		/// </remarks>
+		private static void ReleaseOverheadNameplate(TargetCard card)
 		{
-			if (card.OverheadLabel != null)
+			if (card.OverheadNameplate != null)
 			{
-				UITKLabelMaker.Cache(card.OverheadLabel);
-				card.OverheadLabel = null;
+				card.OverheadNameplate.Visible = false;
+				card.OverheadNameplate = null;
 			}
 		}
 
 		/// <summary>
-		/// Turns a character's authored nameplates on, in the frame's faction colour.
+		/// Raises a character's authored nameplate, in the frame's faction colour.
 		/// </summary>
 		/// <param name="character">The character, or null for nothing.</param>
-		/// <param name="color">The faction colour to draw the name in.</param>
-		private static void ShowCharacterLabels(ICharacter character, Color color)
+		/// <param name="color">The faction standing colour the plate is tinted with.</param>
+		private static void ShowCharacterNameplate(ICharacter character, Color color)
 		{
-			if (character == null)
+			Nameplate plate = character?.CharacterNameplate;
+			if (plate == null)
 			{
 				return;
 			}
 
-			if (character.CharacterNameLabel != null)
-			{
-				character.CharacterNameLabel.gameObject.SetActive(true);
-				character.CharacterNameLabel.color = color;
-			}
-			if (character.CharacterGuildLabel != null)
-			{
-				character.CharacterGuildLabel.gameObject.SetActive(true);
-			}
+			plate.AllianceTint = color;
+			plate.Visible = true;
 		}
 
 		/// <summary>
-		/// Updates the overhead 3D label for a card's target: a character's authored nameplates
-		/// in its faction colour, or a pooled caption over an interactable.
+		/// Raises the overhead nameplate for a card's target: a character's own plate in its
+		/// faction colour, or a plate over an interactable.
 		/// </summary>
 		/// <param name="card">The card whose target to label.</param>
 		/// <remarks>
-		/// Only reached from the CHANGE path. It destroys and recreates a pooled GameObject
-		/// label, and the update path used to run it twenty times a second for a target that had
-		/// not moved or changed — a destroy/create cycle per tick of hover.
+		/// Only reached from the CHANGE path. The plate over an interactable is built once and
+		/// then belongs to the interactable, so hovering the same crate twice reuses it; the
+		/// update path used to run this twenty times a second and destroy and rebuild a pooled
+		/// label object every time.
 		/// </remarks>
-		private void UpdateOverheadLabel(TargetCard card)
+		private void UpdateOverheadNameplate(TargetCard card)
 		{
-			ReleaseOverheadLabel(card);
+			ReleaseOverheadNameplate(card);
 
 			Transform target = card.Target;
 			if (target == null)
@@ -1236,43 +1240,19 @@ namespace FishMMO.Client
 					color = factionController.GetAllianceLevelColor(targetFactionController);
 				}
 
-				ShowCharacterLabels(card.Character, color);
+				ShowCharacterNameplate(card.Character, color);
 			}
-			else if (card.Interactable != null)
+			else if (card.Interactable is Interactable interactable)
 			{
-				Vector3 newPos = target.position;
-
-				float colliderHeight = 1.0f;
-
-				Collider collider = target.GetComponent<Collider>();
-				if (collider != null)
+				/* Built on demand and kept by the interactable, so the rows it authored — its name
+				 * and what it is — are written once at Awake rather than reassembled into a string
+				 * here on every hover. Nothing to raise for an interactable with no plate to hang:
+				 * EnsureNameplate only fails when the object is already gone. */
+				Nameplate plate = interactable.EnsureNameplate();
+				if (plate != null)
 				{
-					collider.TryGetDimensions(out colliderHeight, out float radius);
-				}
-
-				newPos.y += colliderHeight;
-
-				string label = card.Interactable.Name;
-
-				if (!string.IsNullOrWhiteSpace(card.Interactable.Title))
-				{
-					string hex = card.Interactable.TitleColor.ToHex();
-					if (!string.IsNullOrWhiteSpace(hex))
-					{
-						label += $"\r\n<<color=#{hex}>{card.Interactable.Title}</color>>";
-					}
-				}
-
-				card.OverheadLabel = UITKLabelMaker.Display3D(label, newPos, Color.grey, 0.25f, 0.0f, true);
-				if (card.OverheadLabel != null && card.OverheadLabel.Label != null)
-				{
-					/* Pooled labels are ungrouped by default because their transform root is the
-					 * pool. This one is pinned over a specific object, so it opts into that
-					 * object's nameplate stack explicitly — with a sort order above the authored
-					 * nameplates (name 0, guild 10) so the caption stacks on top of them instead
-					 * of painting through them. */
-					card.OverheadLabel.Label.GroupAnchor = target.root;
-					card.OverheadLabel.Label.SortOrder = 100;
+					plate.Visible = true;
+					card.OverheadNameplate = plate;
 				}
 			}
 		}

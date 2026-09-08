@@ -27,7 +27,7 @@ namespace FishMMO.UnitTests
 		private const string WorldItemCondition = "Assets/Settings/ObserverConditions/WorldItemDistanceCondition.asset";
 
 		[TestCase(PlayerRoot, PlayerCondition, 100f)]
-		[TestCase(WorldItemRoot, WorldItemCondition, 15f)]
+		[TestCase(WorldItemRoot, WorldItemCondition, 40f)]
 		public void Prefabs_CarryANetworkObserver_WithTheirDistanceCondition(string root, string conditionPath, float expectedDistance)
 		{
 			ObserverCondition condition = UnityEditor.AssetDatabase.LoadAssetAtPath<ObserverCondition>(conditionPath);

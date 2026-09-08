@@ -78,13 +78,16 @@ namespace FishMMO.Shared.Core
 		bool IsFlagged(CharacterFlags flags);
 
 		/// <summary>
-		/// The label displaying the character's name above their model.
+		/// The overhead nameplate: name, guild, and whatever else the client stacks on it.
 		/// </summary>
-		WorldLabel CharacterNameLabel { get; set; }
-		/// <summary>
-		/// The label displaying the character's guild above their model.
-		/// </summary>
-		WorldLabel CharacterGuildLabel { get; set; }
+		/// <remarks>
+		/// One plate per character rather than a label per row. See <see cref="Nameplate"/> for why
+		/// the rows cannot be separate world labels: independently projected rows come apart as the
+		/// camera rotates. Null on a character authored without a plate, which every caller must
+		/// tolerate — the server never has one, and neither does a prefab that has no business
+		/// showing a name.
+		/// </remarks>
+		Nameplate CharacterNameplate { get; set; }
 
 		/// <summary>
 		/// The root transform for the character's mesh/model hierarchy.

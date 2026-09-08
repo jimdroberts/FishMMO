@@ -28,7 +28,7 @@ The system's own C# is split across partial classes of `InteractableSystem`, one
 | Partial class | Handles |
 |---|---|
 | `InteractableSystem.cs` | Broadcast registration, validation, ingress guard, dispatch, NPC look-at, main-thread queue drain |
-| `InteractableSystem.Merchant.cs` | `MerchantPurchaseBroadcast` — item / ability / ability-event purchases |
+| `InteractableSystem.Merchant.cs` | `MerchantPurchaseBroadcast` — item / ability-template / ability-event / premade-ability purchases |
 | `InteractableSystem.AbilityCraft.cs` | `AbilityCraftBroadcast` — crafting an ability from a base plus selected events |
 | `InteractableSystem.Dialogue.cs` | `DialogueChoiceBroadcast` — server-authoritative dialogue sessions |
 | `InteractableSystem.DungeonFinder.cs` | `DungeonFinderBroadcast` — instance lookup and assignment |
@@ -58,7 +58,7 @@ All interaction entry points share a single per-connection `IngressGuard` with a
 - Strict server-side validation for every interaction: connection, character, act-state, scene, scene object, scene-handle match, and `CanInteract`
 - Global per-connection interaction cooldown via shared `IngressGuard` (one interaction at a time per connection)
 - Bounded periodic debounce tracker sweep with configurable TTL, interval, and max removals
-- Merchant purchases with tab-type dispatch (Item, Ability, AbilityEvent), currency validation, and inventory/ability synchronization
+- Merchant purchases with tab-type dispatch (Item, Ability, AbilityEvent, PremadeAbility), currency validation, and inventory/ability synchronization. A premade purchase is the crafting path with the recipe supplied by the merchant's own `PremadeAbilityTemplate`: validated against the crafting rules, refused if a usable ability of that template is already held or the ability cap is reached (`AbilityLimit`), charged through `TrySpend`, persisted and granted via `LearnAbility`, and announced to observers with `AbilityLearnedObserverBroadcast`. Ledger reason `AbilityPurchase`.
 - Ability crafting from base ability plus selected events with duplicate-event rejection, known-event verification, max-learned-ability cap, and currency cost calculation
 - Server-authoritative dialogue sessions with ECA condition/action evaluation, choice bitmask tracking, cached per-character choices, and bounded session/cache capacity
 - ECA-triggered dialogue sessions (no physical interactable required) via `DisplayDialogueAction` static event
@@ -152,7 +152,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | Broadcast | Handler | Partial Class | Purpose |
 |---|---|---|---|
 | `InteractableBroadcast` | `OnServerInteractableBroadcastReceived` | `InteractableSystem.cs` | Generic interaction dispatch to registered handler |
-| `MerchantPurchaseBroadcast` | `OnServerMerchantPurchaseBroadcastReceived` | `InteractableSystem.Merchant.cs` | Merchant item/ability/event purchase |
+| `MerchantPurchaseBroadcast` | `OnServerMerchantPurchaseBroadcastReceived` | `InteractableSystem.Merchant.cs` | Merchant item/template/event/premade-ability purchase |
 | `AbilityCraftBroadcast` | `OnServerAbilityCraftBroadcastReceived` | `InteractableSystem.AbilityCraft.cs` | Ability crafting from base + events |
 | `DungeonFinderBroadcast` | `OnServerDungeonFinderBroadcastReceived` | `InteractableSystem.DungeonFinder.cs` | Dungeon instance assignment |
 | `DialogueChoiceBroadcast` | `OnServerDialogueChoiceBroadcastReceived` | `InteractableSystem.Dialogue.cs` | Dialogue choice progression |
@@ -182,9 +182,20 @@ This is an integrated module within FishMMO. It is included as part of the serve
 3. Confirms interactable is `IMerchant` with matching template ID.
 4. Dispatches by `MerchantTabType`:
    - **Item:** validates index bounds, checks currency, creates `Item`, calls `SendNewItemBroadcast`, deducts cost.
-   - **Ability:** validates index bounds, calls `LearnAbilityTemplate` (validates not already known, checks currency, enqueues async persist, learns ability, broadcasts `KnownAbilityAddBroadcast`).
+   - **Ability:** validates index bounds, calls `LearnAbilityTemplate` (validates not already known, checks currency, enqueues async persist, learns ability, broadcasts `KnownAbilityAddBroadcast`) and answers with whatever it returns.
    - **AbilityEvent:** validates index bounds, calls `LearnAbilityEvent` (same flow as ability but for events, broadcasts `KnownAbilityEventAddBroadcast`).
 5. Increments merchant achievement if configured.
+
+Every exit answers with a `MerchantPurchaseResultBroadcast`, including the learn helpers' own
+refusals — the client arms a watchdog on submit and a silent return reads to the player as "the
+server never replied".
+
+**A price of `0` is free, not "unpriced".** `BaseItemTemplate.Price` and the ability templates'
+`Price` are ints that default to 0, so treating 0 as unsellable refused every unedited template —
+which is every item the shipped merchants offer. Only a negative price is refused
+(`MerchantPurchaseFailure.NotForSale`). At price 0 the currency lookup, the affordability divide
+(a `DivideByZeroException` otherwise) and `CharacterCurrency.TrySpend` (which rejects a
+non-positive amount by design) are all skipped.
 
 ### Ability Crafting
 

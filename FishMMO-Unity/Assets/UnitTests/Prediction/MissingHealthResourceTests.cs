@@ -232,8 +232,8 @@ namespace FishMMO.UnitTests
 			public long ID { get; set; }
 			public int Flags { get; set; }
 			public Collider Collider { get; set; }
-			public WorldLabel CharacterNameLabel { get; set; }
-			public WorldLabel CharacterGuildLabel { get; set; }
+			/// <inheritdoc/>
+			public Nameplate CharacterNameplate { get; set; }
 
 			public string Name => "Stub";
 			public Transform Transform => null;

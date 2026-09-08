@@ -5,10 +5,15 @@ using UnityEngine;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// A piece of text anchored to a position in the world, rendered by whatever UI layer is
-	/// present rather than by a renderer of its own.
+	/// A single piece of text anchored to a position in the world, rendered by whatever UI layer
+	/// is present rather than by a renderer of its own.
 	/// </summary>
 	/// <remarks>
+	/// This is the FREE-FLOATING text: damage and healing numbers, and captions with a life of
+	/// their own. Overhead nameplates are <see cref="Nameplate"/> — a name, a guild line and a
+	/// title are rows of one plate with one anchor, not a group of labels, because separately
+	/// projected rows come apart as the camera rotates.
+	///
 	/// This replaces the <c>TextMeshPro</c> components that used to hang off characters. UI
 	/// Toolkit has no world-space rendering, so a label can no longer *be* a renderer sitting in
 	/// the scene — it is a position plus some text, and the client projects it onto a screen-space
@@ -69,7 +74,7 @@ namespace FishMMO.Shared.Core
 		private Vector3 worldOffset = Vector3.zero;
 
 		[SerializeField]
-		[Tooltip("Draw-order bias within the label layer; also the bottom-to-top order within a nameplate stack.")]
+		[Tooltip("Draw-order bias within the label layer.")]
 		private int sortOrder;
 
 		/// <summary>
@@ -143,32 +148,14 @@ namespace FishMMO.Shared.Core
 		}
 
 		/// <summary>
-		/// Optional sort bias. Higher values draw in front of lower ones within the label layer,
-		/// and stack higher up the screen within a label group.
+		/// Optional draw-order bias. Higher values paint in front of lower ones within the label
+		/// layer, whatever the distances say, and are the last to be dropped by its draw budget.
 		/// </summary>
-		/// <remarks>
-		/// Serialized so prefab-authored nameplates can declare their place in the overhead stack
-		/// (name below, guild above, target caption on top) without a script having to assign it
-		/// at runtime — the labels are plain data components with no controller of their own.
-		/// </remarks>
 		public int SortOrder
 		{
 			get => sortOrder;
 			set => sortOrder = value;
 		}
-
-		/// <summary>
-		/// Optional grouping key for the renderer's vertical stacking. Labels that resolve to the
-		/// same transform are stacked above one another instead of drawn at coincident points.
-		/// </summary>
-		/// <remarks>
-		/// Runtime-only on purpose: a serialized reference could not describe the interesting case,
-		/// which is a pooled label being attached to a target the pool knows nothing about at author
-		/// time. Null means ungrouped — the default for pooled labels, whose transform root is the
-		/// pool object and therefore meaningless as a grouping key; the renderer falls back to the
-		/// transform root only for labels that live on a character.
-		/// </remarks>
-		public Transform GroupAnchor { get; set; }
 
 		/// <summary>
 		/// The world position this label should be drawn at.

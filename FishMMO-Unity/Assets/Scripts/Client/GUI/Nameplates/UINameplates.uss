@@ -1,0 +1,77 @@
+/*
+    UINameplates.uss
+    Layout for the overhead nameplate layer. Every colour on a plate — the standing tint, the
+    background, the border, each row's text — is resolved per plate from its NameplateStyle in C#,
+    so there is no themed colour to declare here. The one exception is the text shadow, which is a
+    legibility measure rather than a plate colour: white text over a bright sky needs it whatever
+    the plate is tinted.
+*/
+
+/*
+    The container must never intercept a click. It covers the whole viewport and sits over the
+    world, and a nameplate is drawn exactly where a player is trying to click the thing under it.
+    picking-mode is also set from C# because it is an element property rather than a style, and a
+    child of an ignoring parent is still picked itself.
+*/
+.nameplate-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+/*
+    Each plate is two elements, for the same reason a world label is.
+
+    The anchor is pinned to the container's origin and moved every frame by writing `translate`
+    from C#. `translate` is a transform: it changes where the element is painted and never marks
+    layout dirty, while writing `left`/`top` would make Yoga re-solve the whole container once per
+    plate per frame.
+
+    The plate's own offset has to be a percentage of its own size — it is centred on the anchor
+    point and stands on it — and the size is not known until the rows have been laid out. One
+    element only gets one `translate`, so the offset lives on the plate child where it is written
+    once from USS and never touched again.
+*/
+.nameplate-anchor {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.nameplate {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    translate: -50% -100%;
+}
+
+/*
+    white-space: nowrap keeps a row breaking only where its writer put a newline, never on width:
+    a name that wrapped would change the plate's height as the player walked toward it.
+
+    Each row's HEIGHT is written from C# (NameplateStyle.LineHeight, one font size by default) and
+    the text is centred in it, because UI Toolkit has no line-height property and its default line
+    box carries about a third of a font size of paragraph leading — right for a paragraph, far too
+    loose for three words over someone's head. Glyphs that reach past that box, which is most
+    ascenders and every descender, still draw in full: nothing here clips them.
+
+    Do NOT add `overflow: hidden` to this rule or to .nameplate. It is what would turn the tight row
+    box into a crop, and the first thing to go would be the tail of every g, y and q.
+*/
+.nameplate-line {
+    -unity-text-align: middle-center;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px var(--shadow-text-hard);
+}
+
+/*
+    The name row carries the plate, so it is the one drawn bold. Everything under it stays regular
+    weight and smaller, which is what makes the stack read as a name with detail beneath it rather
+    than as several lines of equal importance.
+*/
+.nameplate-line--primary {
+    -unity-font-style: bold;
+}

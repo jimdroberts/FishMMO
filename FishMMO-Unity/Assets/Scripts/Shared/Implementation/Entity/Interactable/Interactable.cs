@@ -138,26 +138,103 @@ namespace FishMMO.Shared
 			OnAwake();
 #if !UNITY_SERVER
 			GameObject.name = GameObject.name.Replace("(Clone)", "");
-			ICharacter character = Transform.GetComponent<ICharacter>();
-			/* CharacterGuildLabel is optional — it is assigned from a prefab's label object and a
-			 * character without one leaves it null. PlayerCharacter.SetGuildName already tests for
-			 * that; this did not, so any titled interactable lacking the label threw out of Awake,
-			 * which is how walking into a zone produced a NullReferenceException per titled NPC.
-			 * Nothing was lost besides the label itself: this block is the last statement in the
-			 * client arm, and registration happens in ReadPayload here and in the server arm's
-			 * own SceneObject.Register — so the cost was log noise and a missing title. */
-			if (character != null &&
-				character.CharacterGuildLabel != null &&
-				!string.IsNullOrWhiteSpace(Title))
-			{
-				string hex = TitleColor.ToHex();
-				if (!string.IsNullOrWhiteSpace(hex))
-				{
-					character.CharacterGuildLabel.text = $"<<color=#{hex}>{Title}</color>>";
-				}
-			}
+
+			/* A plate is optional here, and the two ways of not having one are different. A
+			 * character's plate is authored on its prefab and this only writes a row onto it. A
+			 * chest or a harvest node has no plate at all until something asks to see it, and
+			 * building one for every interactable in a zone on the chance that a player eventually
+			 * points at it would be a GameObject per crate. So Awake writes to what is already
+			 * there, and EnsureNameplate builds one for the rest at the moment the target frame
+			 * needs it. */
+			overheadNameplate = ResolveAuthoredNameplate();
+			ApplyNameplateRows();
 #endif
 		}
+
+#if !UNITY_SERVER
+		/// <summary>
+		/// Backing field for <see cref="OverheadNameplate"/>.
+		/// </summary>
+		private Nameplate overheadNameplate;
+
+		/// <summary>
+		/// The overhead plate this interactable's name and title are written onto, or null when it
+		/// has none yet.
+		/// </summary>
+		/// <remarks>
+		/// For an interactable that is also a character — a banker, a merchant — this is the
+		/// character's own plate, so the title stacks under the name the naming system resolved
+		/// rather than fighting it for the same anchor.
+		/// </remarks>
+		public Nameplate OverheadNameplate => overheadNameplate;
+
+		/// <summary>
+		/// Returns this interactable's plate, building one over it if it has none.
+		/// </summary>
+		/// <returns>The plate, or null when there is nothing to hang one on.</returns>
+		/// <remarks>
+		/// The built plate hangs at the top of the object's collider, which is where a caption over
+		/// a chest belongs and what the target frame used to compute for its pooled label. It starts
+		/// hidden, like every authored plate: being able to see a thing's name is the client's
+		/// decision, not the thing's.
+		/// </remarks>
+		public Nameplate EnsureNameplate()
+		{
+			if (overheadNameplate != null)
+			{
+				return overheadNameplate;
+			}
+
+			float height = 1.0f;
+			Collider collider = Transform != null ? Transform.GetComponent<Collider>() : null;
+			if (collider != null)
+			{
+				collider.TryGetDimensions(out height, out float _);
+			}
+
+			overheadNameplate = Nameplate.GetOrCreate(Transform, new Vector3(0.0f, height, 0.0f));
+			ApplyNameplateRows();
+			return overheadNameplate;
+		}
+
+		/// <summary>The plate already on this object, if any.</summary>
+		private Nameplate ResolveAuthoredNameplate()
+		{
+			ICharacter character = Transform != null ? Transform.GetComponent<ICharacter>() : null;
+			if (character != null)
+			{
+				return character.CharacterNameplate;
+			}
+			return Transform != null ? Transform.GetComponentInChildren<Nameplate>(true) : null;
+		}
+
+		/// <summary>
+		/// Writes this interactable's rows onto its plate.
+		/// </summary>
+		/// <remarks>
+		/// The name row is written only for objects that are not characters. A character's name is
+		/// the naming system's to resolve — it arrives from the server, asynchronously, and may
+		/// replace the prefab name long after this runs — so writing the GameObject's name here
+		/// would race it and sometimes win.
+		/// </remarks>
+		private void ApplyNameplateRows()
+		{
+			if (overheadNameplate == null)
+			{
+				return;
+			}
+
+			if (Transform.GetComponent<ICharacter>() == null)
+			{
+				overheadNameplate.SetLine(NameplateSlot.Name, Name);
+			}
+
+			if (!string.IsNullOrWhiteSpace(Title))
+			{
+				overheadNameplate.SetLine(NameplateSlot.InteractableType, $"<{Title}>", TitleColor);
+			}
+		}
+#endif
 
 		/// <summary>
 		/// Registers this interactable in the scene object registry and assigns its ID.

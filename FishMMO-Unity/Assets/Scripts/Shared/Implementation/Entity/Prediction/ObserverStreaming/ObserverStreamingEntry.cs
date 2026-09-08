@@ -39,6 +39,59 @@ namespace FishMMO.Shared
 		/// <summary>True for player characters, which are the only viewers the cap is computed for.</summary>
 		public bool IsPlayer { get; }
 
+		/// <summary>
+		/// What kind of entity this is, read from its <see cref="ClassifiedDistanceCondition"/>.
+		/// </summary>
+		/// <remarks>
+		/// Objects whose distance condition is a plain FishNet <c>DistanceCondition</c>, or which have
+		/// none at all, report <see cref="ObserverClassification.Monster"/> and fall back to the shared
+		/// <c>ObserverStreamingPolicy.VisibilityBudget</c> — the behaviour of the whole system before
+		/// classifications existed.
+		/// </remarks>
+		public ObserverClassification Classification =>
+			classifiedCondition != null ? classifiedCondition.Classification : ObserverClassification.Monster;
+
+		/// <summary>
+		/// The bucket this object is ranked in: its classification, or
+		/// <see cref="UnclassifiedRankBucket"/> when it has none.
+		/// </summary>
+		/// <remarks>
+		/// Distinct from <see cref="Classification"/> on purpose. An unclassified object is measured
+		/// against the shared <c>ObserverStreamingPolicy.VisibilityBudget</c>, so counting it in the
+		/// Monster bucket would push every real monster's rank up against the Monster budget while
+		/// judging the unclassified object itself against a different number.
+		/// </remarks>
+		public int RankBucket => classifiedCondition != null ? (int)classifiedCondition.Classification : UnclassifiedRankBucket;
+
+		/// <summary>Rank bucket for objects with no classification; never a valid enum value.</summary>
+		public const int UnclassifiedRankBucket = -1;
+
+		/// <summary>
+		/// True when this object declares its own classification, and so is ranked and budgeted
+		/// against its own kind rather than against the shared pool.
+		/// </summary>
+		public bool HasClassification => classifiedCondition != null;
+
+		/// <summary>
+		/// How many objects of this kind one viewer may observe. 0 means unlimited.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Per classification, which is what stops one crowd squeezing out another. Under a single
+		/// shared budget the failures were not hypothetical: forty players in a town square evicted the
+		/// banker they were queueing for, because a stationary service NPC scored below every living
+		/// thing near it and nothing distinguished the two costs.
+		/// </para>
+		/// <para>
+		/// A Titan is authored at 0 — unlimited — which is what "always visible when in the scene"
+		/// means here: its range is the only thing that ever hides it.
+		/// </para>
+		/// </remarks>
+		public int VisibilityBudget =>
+			classifiedCondition != null
+				? classifiedCondition.VisibilityBudget
+				: ObserverStreamingPolicy.VisibilityBudget;
+
 		/// <summary>The configured range from the prefab's distance condition, before density scaling.</summary>
 		public float BaseRange { get; }
 
@@ -88,6 +141,7 @@ namespace FishMMO.Shared
 		public int LimitedObserverCount => intervalsByClientId.Count;
 
 		private readonly DistanceCondition distanceCondition;
+		private readonly ClassifiedDistanceCondition classifiedCondition;
 		private readonly NetworkTransformDistanceLod distanceLod;
 		private readonly Dictionary<int, byte> intervalsByClientId = new Dictionary<int, byte>();
 		private IPartyController partyController;
@@ -103,13 +157,66 @@ namespace FishMMO.Shared
 			Character = character;
 			IsPlayer = character is IPlayerCharacter;
 
-			distanceCondition = networkObject.NetworkObserver != null
-				? networkObject.NetworkObserver.GetObserverCondition<DistanceCondition>() as DistanceCondition
-				: null;
+			/* Scanned rather than fetched with GetObserverCondition<DistanceCondition>(): that
+			 * helper matches on GetType() == typeof(T), an EXACT comparison, so it returns null for
+			 * the ClassifiedDistanceCondition subclass the project actually authors. Reading the
+			 * cloned list directly finds either one. */
+			distanceCondition = FindDistanceCondition(networkObject);
+			classifiedCondition = distanceCondition as ClassifiedDistanceCondition;
 			BaseRange = distanceCondition != null ? distanceCondition.GetMaximumDistance() : 0f;
 			AppliedRange = BaseRange;
 			Position = networkObject.transform.position;
 			distanceLod = networkObject.GetComponent<NetworkTransformDistanceLod>();
+		}
+
+		/// <summary>
+		/// The object's distance condition, whatever concrete type it is.
+		/// </summary>
+		/// <remarks>
+		/// The conditions are cloned per object during <c>NetworkObject.Preinitialize</c>, which runs
+		/// before <c>OnStartServer</c> builds this entry, so the list is complete when it is read.
+		/// </remarks>
+		private static DistanceCondition FindDistanceCondition(NetworkObject networkObject)
+		{
+			return FindClassifiedCondition(networkObject) ?? FindPlainDistanceCondition(networkObject);
+		}
+
+		/// <summary>
+		/// The object's <see cref="ClassifiedDistanceCondition"/>, or null. Allocation-free, so the
+		/// registry can ask it on every timed evaluation of every unclassified scene object without
+		/// building an entry it is about to throw away.
+		/// </summary>
+		internal static ClassifiedDistanceCondition FindClassifiedCondition(NetworkObject networkObject)
+		{
+			if (networkObject == null || networkObject.NetworkObserver == null)
+			{
+				return null;
+			}
+			IReadOnlyList<ObserverCondition> conditions = networkObject.NetworkObserver.ObserverConditions;
+			for (int i = 0; i < conditions.Count; ++i)
+			{
+				if (conditions[i] is ClassifiedDistanceCondition found)
+				{
+					return found;
+				}
+			}
+			return null;
+		}
+
+		private static DistanceCondition FindPlainDistanceCondition(NetworkObject networkObject)
+		{
+			if (networkObject.NetworkObserver == null)
+			{
+				return null;
+			}
+			foreach (ObserverCondition condition in networkObject.NetworkObserver.ObserverConditions)
+			{
+				if (condition is DistanceCondition found)
+				{
+					return found;
+				}
+			}
+			return null;
 		}
 
 		/// <summary>Test seam: builds an entry with an explicit distance LOD (or none).</summary>
@@ -133,11 +240,18 @@ namespace FishMMO.Shared
 		{
 			if (!behavioursResolved)
 			{
-				Character.TryGet(out partyController);
-				Character.TryGet(out guildController);
-				Character.TryGet(out damageController);
-				Character.TryGet(out abilityController);
-				Character.TryGet(out targetController);
+				/* Character is null for entries the budget tracks but nobody plays — a dropped
+				 * sword, a waypoint. They have a position and a classification and nothing else,
+				 * so every relevance input below stays at its zero value and they rank purely by
+				 * proximity, which is the only thing that distinguishes one from another. */
+				if (Character != null)
+				{
+					Character.TryGet(out partyController);
+					Character.TryGet(out guildController);
+					Character.TryGet(out damageController);
+					Character.TryGet(out abilityController);
+					Character.TryGet(out targetController);
+				}
 				behavioursResolved = true;
 			}
 

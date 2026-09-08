@@ -95,10 +95,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc/>
-		public WorldLabel CharacterNameLabel { get; set; }
-
-		/// <inheritdoc/>
-		public WorldLabel CharacterGuildLabel { get; set; }
+		public Nameplate CharacterNameplate { get; set; }
 
 		/// <inheritdoc/>
 		public Transform MeshRoot => null;

@@ -40,6 +40,17 @@ namespace FishMMO.Shared
 		public List<BaseItemTemplate> Items;
 
 		/// <summary>
+		/// Complete, ready-to-use abilities this merchant sells. See <see cref="PremadeAbilityTemplate"/>.
+		/// </summary>
+		/// <remarks>
+		/// Distinct from <see cref="Abilities"/>, which sells TEMPLATES that must still be crafted.
+		/// A player who buys from this list can use the ability at once; a player who buys from
+		/// that one has to visit an Ability Crafter first, which is the step issue #247 reported
+		/// as the UI giving no hint about.
+		/// </remarks>
+		public List<PremadeAbilityTemplate> PremadeAbilities;
+
+		/// <summary>
 		/// Whether this merchant buys items from the player.
 		/// </summary>
 		/// <remarks>

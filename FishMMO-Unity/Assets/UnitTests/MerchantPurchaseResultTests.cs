@@ -94,19 +94,125 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void AnUnsellableItemIsRefusedWithAReason()
+		public void AnUnpricedItemIsRefusedWithAReason()
 		{
-			/* What the report actually hit: every item the shipped merchant offers is priced 0, so
-			 * this branch is the one a player meets first. */
+			/* Only a NEGATIVE price is unsellable. A price of zero is free — see
+			 * AFreeItemIsSoldRatherThanRefused. */
 			string body = MethodBody(ReadSource(ServerPath),
 				"private bool TryPurchaseItem", "private void OnServerMerchantSellBroadcastReceived");
 
-			int priceGuard = body.IndexOf("itemTemplate.Price <= 0", StringComparison.Ordinal);
-			LogAssert.IsTrue(priceGuard >= 0, "the zero-price guard must still exist");
+			int priceGuard = body.IndexOf("itemTemplate.Price < 0", StringComparison.Ordinal);
+			LogAssert.IsTrue(priceGuard >= 0, "the nonsense-price guard must still exist");
 
 			int notForSale = body.IndexOf("MerchantPurchaseFailure.NotForSale", StringComparison.Ordinal);
 			LogAssert.IsTrue(notForSale > priceGuard,
-				"an item with no price must be refused as unsellable, not dropped");
+				"an item with a nonsense price must be refused as unsellable, not dropped");
+		}
+
+		[Test]
+		public void AFreeItemIsSoldRatherThanRefused()
+		{
+			/* The reported symptom, and its actual cause: Price is an int that defaults to 0, the
+			 * guard read `Price <= 0`, and so every item on every shipped merchant was refused as
+			 * "not for sale". A price of zero is a price. */
+			string body = MethodBody(ReadSource(ServerPath),
+				"private bool TryPurchaseItem", "private void OnServerMerchantSellBroadcastReceived");
+
+			LogAssert.IsTrue(body.IndexOf("itemTemplate.Price <= 0", StringComparison.Ordinal) < 0,
+				"a price of zero must not refuse the sale");
+
+			/* Both are load-bearing at zero, and for different reasons. The affordability divide is
+			 * a DivideByZeroException that would take the handler down mid-request; TrySpend
+			 * rejects a non-positive amount by design, so calling it would report "insufficient
+			 * funds" for something that costs nothing. */
+			LogAssert.IsTrue(body.Contains("if (unitPrice > 0)"),
+				"the affordability divide must be guarded so a free item cannot divide by zero");
+			LogAssert.IsTrue(body.Contains("if (charge > 0 &&"),
+				"a free item must not be sent through TrySpend, which refuses a non-positive amount");
+		}
+
+		[Test]
+		public void ARefusedAbilityLearnIsNotReportedAsAPurchase()
+		{
+			/* The learn helpers refuse for half a dozen reasons — already known, no ability
+			 * controller, no currency, a full async worker — and the caller used to send
+			 * MerchantPurchaseFailure.None unconditionally afterwards. The player was told the
+			 * purchase succeeded and got nothing. */
+			string source = ReadSource(ServerPath);
+
+			LogAssert.IsTrue(source.Contains("private MerchantPurchaseFailure LearnAbilityGeneric"),
+				"the learn helper must report its outcome rather than swallowing it");
+
+			string body = MethodBody(source,
+				"private void OnServerMerchantPurchaseBroadcastReceived", "private bool TryPurchaseItem");
+
+			LogAssert.IsTrue(body.Contains("MerchantPurchaseFailure failure = LearnAbilityTemplate("),
+				"the ability branch must answer with what the learn actually returned");
+			LogAssert.IsTrue(body.Contains("MerchantPurchaseFailure failure = LearnAbilityEvent("),
+				"and so must the ability-event branch");
+		}
+
+		[Test]
+		public void APremadeAbilityPurchaseAnswersEveryExit()
+		{
+			/* The premade-ability path is the crafting path with the recipe supplied by content,
+			 * and it is held to the same contract as every other purchase: a request the server
+			 * understood and refused is answered with the reason, never dropped. */
+			string source = ReadSource(ServerPath);
+			LogAssert.IsTrue(source.Contains("case MerchantTabType.PremadeAbility:"),
+				"the purchase handler must dispatch the premade-ability tab");
+
+			string body = MethodBody(source,
+				"private bool TryPurchasePremadeAbility", "private MerchantPurchaseFailure LearnAbilityGeneric");
+
+			int returns = 0;
+			int searchFrom = 0;
+			while (true)
+			{
+				int at = body.IndexOf("return false;", searchFrom, StringComparison.Ordinal);
+				if (at < 0)
+				{
+					break;
+				}
+				++returns;
+
+				string between = body.Substring(searchFrom, at - searchFrom);
+				LogAssert.IsTrue(between.Contains("SendPurchaseResult("),
+					"every refusal in TryPurchasePremadeAbility must answer the client before returning");
+				searchFrom = at + 1;
+			}
+			LogAssert.IsTrue(returns >= 5, "the premade path must refuse for its documented reasons");
+
+			LogAssert.IsTrue(body.Contains("KnowsLearnedAbility("),
+				"a premade ability must not be sold twice for the same template");
+			LogAssert.IsTrue(body.Contains("MerchantPurchaseFailure.AbilityLimit"),
+				"a full ability list must be refused with its own reason");
+			LogAssert.IsTrue(body.Contains("offer.Validate("),
+				"a recipe the crafter would refuse must not be sold");
+			LogAssert.IsTrue(body.Contains("AbilityLearnedObserverBroadcast"),
+				"observers must be told about the new ability, as the craft path tells them");
+		}
+
+		[Test]
+		public void TheClientNamesEveryRefusalIncludingTheAbilityLimit()
+		{
+			string client = ReadSource(ClientPath);
+			string body = MethodBody(client, "private static string DescribePurchaseFailure", "private void OnClientMerchantSellResultReceived");
+			LogAssert.IsTrue(body.Contains("MerchantPurchaseFailure.AbilityLimit"),
+				"a refused premade purchase for a full ability list must be worded, not left to the default");
+		}
+
+		[Test]
+		public void APurchaseSuccessSaysWhereThePurchaseWent()
+		{
+			/* Issue #247. "Bought 1." was true of a template and said nothing about the trip to the
+			 * crafter that comes next, so the player went looking for the ability on the hotkey bar. */
+			string client = ReadSource(ClientPath);
+			string body = MethodBody(client, "private static string DescribePurchaseSuccess", "private static string DescribePurchaseFailure");
+			LogAssert.IsTrue(body.Contains("case MerchantTabType.Ability:") && body.Contains("Ability Crafter"),
+				"buying a template must say it needs crafting");
+			LogAssert.IsTrue(body.Contains("case MerchantTabType.PremadeAbility:"),
+				"buying a premade ability must say it is ready to use");
 		}
 
 		[Test]

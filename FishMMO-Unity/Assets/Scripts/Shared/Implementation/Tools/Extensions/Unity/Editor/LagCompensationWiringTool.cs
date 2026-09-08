@@ -90,8 +90,8 @@ namespace FishMMO.Shared
 		/// This is the interest-management half of the migration. Every scene-budget projection in
 		/// the plan assumes a culled visible set; without a <c>NetworkObserver</c> on the player
 		/// prefabs the "visible peers" figure is the whole population and every client pays the
-		/// all-visible row. NPC prefabs already carry observers (30 m interactable, 50 m monster);
-		/// this brings players (100 m) and world items (15 m) in line, using the condition assets
+		/// all-visible row. NPC prefabs already carry observers (100 m interactable, 100 m monster);
+		/// this brings players (100 m) and world items (40 m) in line, using the condition assets
 		/// under <c>Assets/Settings/ObserverConditions</c>.
 		/// </para>
 		/// <para>

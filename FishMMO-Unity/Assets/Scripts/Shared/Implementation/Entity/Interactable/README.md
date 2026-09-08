@@ -45,7 +45,7 @@ The Interactable system is a server-authoritative, template-driven framework for
 - Dialogue tree system with branching nodes, conditions, and actions
 - PvP/PvE capture point objectives with state tracking (Neutral, Capturing, Captured, Contested)
 - Gathering nodes with weighted drop tables, limited uses, and gather timers
-- Merchant tab system supporting abilities, ability events, and items
+- Merchant tab system supporting premade abilities, ability templates, ability events, and items
 
 ## Interaction Behaviour Is ECA Triggers
 
@@ -212,7 +212,9 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 ### MerchantTemplate
 
-**MerchantTemplate** (ScriptableObject): lists of `AbilityTemplate`, `AbilityEvent`, and `BaseItemTemplate` references, organized by `MerchantTabType`.
+**MerchantTemplate** (ScriptableObject): lists of `AbilityTemplate`, `AbilityEvent`, `BaseItemTemplate` and `PremadeAbilityTemplate` references, organized by `MerchantTabType`.
+
+Two of those lists sell abilities, and they sell different things. `Abilities` sells **templates**: the buyer learns the template and must still take it to an Ability Crafter, choose its effects, and craft a usable ability. `PremadeAbilities` sells **finished abilities**: each `PremadeAbilityTemplate` names a base `AbilityTemplate`, the events to bake in, an optional type override and the merchant's own price, and the buyer receives the crafted `Ability` straight into their usable set. A premade recipe is held to the crafting rules (`PremadeAbilityTemplate.Validate`: at most `AdditionalEventSlots` events, at most one type override) on both the inspector and the server, so a premade ability is never something a player could not have built. The UI labels the two tabs "Templates" and "Abilities" respectively, and says under each what a purchase from it needs next — the silence there was issue #247.
 
 ### ShrineTemplate
 
@@ -393,9 +395,10 @@ Interactable/
 │   └── Mailbox.cs                      # Mail access interactable
 ├── Merchant/
 │   ├── Merchant.cs                     # Buy/sell merchant interactable
-│   ├── MerchantTabType.cs              # Enum: None, Ability, AbilityEvent, Item
+│   ├── MerchantTabType.cs              # Enum: None, Ability, AbilityEvent, Item, PremadeAbility
 │   └── Template/
-│       └── MerchantTemplate.cs         # ScriptableObject: Abilities, AbilityEvents, Items
+│       ├── MerchantTemplate.cs         # ScriptableObject: Abilities, AbilityEvents, Items, PremadeAbilities
+│       └── PremadeAbilityTemplate.cs   # ScriptableObject: a finished ability recipe with its own price
 ├── Quest/
 │   └── QuestInteractable.cs            # Quest giver / turn-in interactable
 ├── Shrine/
@@ -454,10 +457,11 @@ ObjectiveState : byte
 └── Contested  = 3
 
 MerchantTabType : byte
-├── None         = 0
-├── Ability      = 1
-├── AbilityEvent = 2
-└── Item         = 3
+├── None           = 0
+├── Ability        = 1   (ability TEMPLATES — crafted at an Ability Crafter)
+├── AbilityEvent   = 2
+├── Item           = 3
+└── PremadeAbility = 4   (finished abilities — usable as bought)
 ```
 
 ### Related Files

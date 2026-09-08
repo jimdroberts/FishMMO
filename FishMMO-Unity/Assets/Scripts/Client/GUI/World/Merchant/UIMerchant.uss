@@ -1,4 +1,4 @@
-/*
+﻿/*
     UIMerchant.uss
     Layout for the merchant panel. Colours come from FishMMO-Theme.uss.
 */
@@ -37,6 +37,20 @@
     flex-grow: 1;
     margin-right: 2px;
     font-size: 11px;
+}
+
+/*
+    One line under the tabs saying what the visible tab sells and where a purchase goes. It is
+    what tells a template apart from a finished ability before anything is bought.
+*/
+.merchant-hint {
+    height: 13px;
+    margin-top: 2px;
+    margin-left: 6px;
+    margin-right: 6px;
+    font-size: 10px;
+    flex-shrink: 0;
+    overflow: hidden;
 }
 
 .merchant-scroll {
@@ -210,7 +224,15 @@
     flex-shrink: 0;
 }
 
-.merchant-transaction__total {
+/*
+    Qualified with the type, so it outranks the theme. `Label.fish-label` in FishMMO-Theme.uss is
+    a type-and-class selector and beats a bare class one, so this rule's alignment lost to the
+    theme's `middle-left` and the running total sat at the LEFT edge of its row — next to the
+    quantity buttons rather than at the trailing edge it was written for. It shows up plainly on a
+    single-item entry, where the quantity controls are hidden and the total is alone on the row.
+*/
+.merchant-transaction__total,
+Label.merchant-transaction__total {
     flex-grow: 1;
     font-size: 12px;
     -unity-text-align: middle-right;

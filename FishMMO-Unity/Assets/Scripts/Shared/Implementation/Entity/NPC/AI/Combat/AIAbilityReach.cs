@@ -89,26 +89,11 @@ namespace FishMMO.Shared
 		/// <returns>The half-extent in metres, 0 when unknown.</returns>
 		public static float ResolvePrefabHalfExtent(Collider collider)
 		{
-			if (collider == null)
-			{
-				return 0f;
-			}
-
-			Vector3 scale = collider.transform.lossyScale;
-			float horizontalScale = Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
-
-			switch (collider)
-			{
-				case BoxCollider box:
-					return Mathf.Max(box.size.x, box.size.z) * 0.5f * horizontalScale;
-				case SphereCollider sphere:
-					return sphere.radius * Mathf.Max(horizontalScale, Mathf.Abs(scale.y));
-				case CapsuleCollider capsule:
-					return Mathf.Max(capsule.radius, capsule.height * 0.5f) * Mathf.Max(horizontalScale, Mathf.Abs(scale.y));
-				default:
-					Vector3 extents = collider.bounds.extents;
-					return Mathf.Max(extents.x, extents.z);
-			}
+			// Shape, never bounds — and the SAME shape reading the Forward spawn offsets by
+			// (AbilityObject.ResolveSpawnPose), so the far face the NPC walks up to is the far
+			// face the volume actually has.
+			Vector3 halfExtents = AbilityPrefabColliderCache.ResolveShapeHalfExtents(collider);
+			return Mathf.Max(halfExtents.x, halfExtents.z);
 		}
 	}
 }

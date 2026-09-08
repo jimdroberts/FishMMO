@@ -229,6 +229,37 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for keeping the player's own nameplate up at all times.</summary>
 		public const string WorldLabelShowOwnNameKey = "WorldLabels.ShowOwnName";
 
+		// ── Nameplates ──────────────────────────────────────────────
+
+		/*
+		 * Under their own prefix rather than the world labels'. The two are drawn by different
+		 * layers with separate budgets, and a player who wants damage numbers loud and nameplates
+		 * faint — or the reverse — is asking for something the shared keys could not express. The
+		 * three keys above that decide WHICH nameplates are up keep their old WorldLabels prefix,
+		 * because renaming them would silently reset the choice of every existing install.
+		 */
+
+		/// <summary>Configuration key for overall nameplate opacity, 0 to 1.</summary>
+		public const string NameplateOpacityKey = "Nameplates.Opacity";
+
+		/// <summary>Configuration key for the nameplate size multiplier.</summary>
+		public const string NameplateScaleKey = "Nameplates.Scale";
+
+		/// <summary>
+		/// Configuration key for how strongly a nameplate's background is painted, 0 to 1, as a
+		/// multiplier on the style's own opacity. Zero leaves the text over the world.
+		/// </summary>
+		public const string NameplateBackgroundOpacityKey = "Nameplates.BackgroundOpacity";
+
+		/// <summary>Configuration key for how many nameplates may be drawn at once.</summary>
+		public const string NameplateMaxVisibleKey = "Nameplates.MaxVisible";
+
+		/// <summary>Configuration key for showing the guild row on a nameplate.</summary>
+		public const string NameplateShowGuildKey = "Nameplates.ShowGuild";
+
+		/// <summary>Configuration key for showing the title row — "&lt;Banker&gt;" — on a nameplate.</summary>
+		public const string NameplateShowTitlesKey = "Nameplates.ShowTitles";
+
 		// ── Interface ───────────────────────────────────────────────
 
 		/// <summary>Configuration key for the interface scale multiplier.</summary>

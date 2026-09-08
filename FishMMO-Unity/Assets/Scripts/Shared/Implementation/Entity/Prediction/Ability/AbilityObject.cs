@@ -2041,13 +2041,21 @@ namespace FishMMO.Shared
 						Collider collider = AbilityPrefabColliderCache.GetPrefabCollider(ability.Template);
 						if (collider != null)
 						{
+							// The caster's collider is live in the scene, so its bounds are real.
 							if (caster.Collider != null)
 							{
 								distance += caster.Collider.bounds.extents.z;
 								height += caster.Collider.bounds.extents.y;
 							}
-							distance += collider.bounds.extents.z;
-							height += collider.bounds.extents.y;
+							/* The prefab's is NOT: it is the prefab asset's collider, never simulated,
+							 * and its bounds are empty. Read as bounds, this term was zero — Punch and
+							 * Orc Slam spawned centred on the caster's surface, half inside it, and an
+							 * NPC that had stopped at the reach AIAbilityReach computed from the real
+							 * shape hit nothing (reported 2026-09-07). Read the shape instead, through
+							 * the same helper the reach uses. */
+							Vector3 prefabHalfExtents = AbilityPrefabColliderCache.ResolveShapeHalfExtents(collider);
+							distance += prefabHalfExtents.z;
+							height += prefabHalfExtents.y;
 						}
 						Vector3 positionOffset = caster.Transform.forward * distance;
 						positionOffset.y += height;

@@ -49,8 +49,8 @@
 }
 
 /*
-    white-space: nowrap keeps a two-line nameplate breaking only where the generator put a
-    newline, never on width.
+    white-space: nowrap keeps a two-line label breaking only where its writer put a newline,
+    never on width.
 */
 .world-label {
     -unity-text-align: middle-center;

@@ -13,8 +13,9 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>Two levers, both server-side.</b> The first is the observer <i>range</i>: FishNet's
 	/// <c>DistanceCondition</c> is cloned per object, so its distance can be changed at runtime
-	/// per character. In a crowd, every extra metre of range multiplies the number of characters
-	/// each client streams, so range is shrunk as local density rises and restored as it falls.
+	/// per character. It is left at the authored value by default — a crowd is bounded by
+	/// <see cref="VisibilityBudget"/>, which cuts by relevance rather than by distance — but can
+	/// still be shrunk with local density; see <see cref="RangeScaleAtHighDensity"/>.
 	/// The second is the observer <i>cap</i>: of everything a client can see, only the
 	/// <see cref="FullRateObserverCap"/> most relevant characters send every unreliable update;
 	/// the rest are sent every Nth, with N chosen by distance. Relevance favours characters in
@@ -138,6 +139,13 @@ namespace FishMMO.Shared
 		// ── Density-scaled range ──
 
 		/// <summary>Radius, in metres, within which other characters count towards local density.</summary>
+		/// <remarks>
+		/// The count is taken from a 3×3 block of cells this size — a deliberate superset of the
+		/// disc, but roughly 2.9× its area, so <see cref="LowDensity"/> and <see cref="HighDensity"/>
+		/// are reached by a crowd about a third as dense as their names suggest. That bias is part of
+		/// why the shrink is off by default; anyone re-enabling it should calibrate against the box,
+		/// not the radius.
+		/// </remarks>
 		public static float DensityRadius { get; set; } = 40f;
 
 		/// <summary>Neighbour count at or below which a character keeps its full configured range.</summary>
@@ -146,11 +154,39 @@ namespace FishMMO.Shared
 		/// <summary>Neighbour count at or above which a character's range is fully scaled down.</summary>
 		public static int HighDensity { get; set; } = 40;
 
-		/// <summary>Fraction of the configured range applied at <see cref="HighDensity"/>.</summary>
-		public static float RangeScaleAtHighDensity { get; set; } = 0.5f;
+		/// <summary>
+		/// Fraction of the configured range applied at <see cref="HighDensity"/>. <b>1 disables the
+		/// density shrink</b>, which is the default.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This was a third existence cull, and the weakest of the three. It hides by DISTANCE and
+		/// per OBJECT — a character in a crowd loses range symmetrically towards everyone, including
+		/// the viewers who most needed to see it — whereas <see cref="VisibilityBudget"/> hides by
+		/// RELEVANCE and per VIEWER, bounding exactly the same quantity (pairs = viewers × budget)
+		/// while keeping the party members, targets and opponents the shrink was blind to.
+		/// </para>
+		/// <para>
+		/// With the budget in place the shrink bought no bandwidth a crowd could notice and cost the
+		/// authored 100 m range: at scale 0.5 a busy town quietly became a 50 m world, then a 25 m
+		/// one at the old floor, which is the culling the 2026-09-08 audit was asked to remove. The
+		/// machinery stays — set <c>ObserverRangeScaleAtHighDensity</c> below 1 to bring it back for
+		/// a deployment that measures a need for it.
+		/// </para>
+		/// </remarks>
+		public static float RangeScaleAtHighDensity { get; set; } = 1f;
 
-		/// <summary>Absolute floor on any scaled range, in metres, so combat never happens out of sight.</summary>
-		public static float MinimumRange { get; set; } = 25f;
+		/// <summary>
+		/// Absolute floor on any scaled range, in metres, so combat never happens out of sight.
+		/// Inert while <see cref="RangeScaleAtHighDensity"/> is 1.
+		/// </summary>
+		/// <remarks>
+		/// Raised from 25 m with the shrink's retirement: 25 m was below every ability reach and
+		/// below the engagement radius that lag compensation assumes, so a re-enabled shrink hitting
+		/// its floor would have despawned characters from inside the range they were being shot at.
+		/// The floor is now half the authored range rather than a quarter of it.
+		/// </remarks>
+		public static float MinimumRange { get; set; } = 50f;
 
 		/// <summary>
 		/// Radius, in metres, inside which a character's transform is sent to an observer at FULL
@@ -190,6 +226,43 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		public static int VisibilityBudget { get; set; } = 40;
+
+		private static readonly Dictionary<ObserverClassification, int> visibilityBudgetOverrides =
+			new Dictionary<ObserverClassification, int>();
+
+		/// <summary>
+		/// The budget in force for <paramref name="classification"/>: the server override when one
+		/// is configured, otherwise <paramref name="authored"/> from the condition asset.
+		/// 0 means unlimited.
+		/// </summary>
+		/// <remarks>
+		/// Every read of a classification's budget goes through here, so an operator's
+		/// <c>ObserverVisibilityBudgets</c> entry and a designer's asset value can never disagree
+		/// about which one is in force.
+		/// </remarks>
+		/// <param name="classification">The classification being budgeted.</param>
+		/// <param name="authored">The value authored on the classification's condition asset.</param>
+		public static int ResolveVisibilityBudget(ObserverClassification classification, int authored)
+		{
+			if (visibilityBudgetOverrides.TryGetValue(classification, out int configured))
+			{
+				return configured < 0 ? 0 : configured;
+			}
+			return authored < 0 ? 0 : authored;
+		}
+
+		/// <summary>Overrides one classification's budget. 0 is unlimited.</summary>
+		public static void SetVisibilityBudget(ObserverClassification classification, int budget)
+		{
+			visibilityBudgetOverrides[classification] = budget < 0 ? 0 : budget;
+		}
+
+		/// <summary>Drops every per-classification override, restoring the authored asset values.</summary>
+		public static void ClearVisibilityBudgetOverrides() => visibilityBudgetOverrides.Clear();
+
+		/// <summary>True when <paramref name="classification"/> has a configured override.</summary>
+		public static bool HasVisibilityBudgetOverride(ObserverClassification classification)
+			=> visibilityBudgetOverrides.ContainsKey(classification);
 
 		/// <summary>
 		/// How far past <see cref="VisibilityBudget"/> an ALREADY VISIBLE character keeps its slot,
@@ -394,6 +467,7 @@ namespace FishMMO.Shared
 				case "ObserverMinimumRange": return TryFloat(value, v => MinimumRange = Mathf.Max(0f, v));
 				case "ObserverRescheduleTicks": return TryInt(value, v => RescheduleIntervalTicks = (uint)Math.Max(1, v));
 				case "ObserverLodBands": return TryParseLodBands(value);
+				case "ObserverVisibilityBudgets": return TryParseVisibilityBudgets(value);
 				default: return false;
 			}
 		}
@@ -445,6 +519,51 @@ namespace FishMMO.Shared
 				bands.Add(new LodBand(distance, interval));
 			}
 			SetLodBands(bands);
+			return true;
+		}
+
+		/// <summary>
+		/// Parses <c>Classification:budget,Classification:budget,...</c> — e.g.
+		/// <c>Player:40,Monster:30,Titan:0</c> — into per-classification overrides. 0 is unlimited.
+		/// </summary>
+		/// <remarks>
+		/// All or nothing: a malformed entry leaves every override untouched, so a typo in one
+		/// classification cannot silently apply the others and leave the server running a
+		/// configuration nobody wrote.
+		/// </remarks>
+		private static bool TryParseVisibilityBudgets(string value)
+		{
+			Dictionary<ObserverClassification, int> parsed = new Dictionary<ObserverClassification, int>();
+			foreach (string part in value.Split(','))
+			{
+				string trimmed = part.Trim();
+				if (trimmed.Length == 0)
+				{
+					continue;
+				}
+				string[] pair = trimmed.Split(':');
+				if (pair.Length != 2)
+				{
+					return false;
+				}
+				if (!Enum.TryParse(pair[0].Trim(), true, out ObserverClassification classification) ||
+					!Enum.IsDefined(typeof(ObserverClassification), classification))
+				{
+					return false;
+				}
+				if (!int.TryParse(pair[1].Trim(), System.Globalization.NumberStyles.Integer,
+						System.Globalization.CultureInfo.InvariantCulture, out int budget) ||
+					budget < 0)
+				{
+					return false;
+				}
+				parsed[classification] = budget;
+			}
+
+			foreach (KeyValuePair<ObserverClassification, int> entry in parsed)
+			{
+				SetVisibilityBudget(entry.Key, entry.Value);
+			}
 			return true;
 		}
 	}
