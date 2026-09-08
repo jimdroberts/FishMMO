@@ -308,6 +308,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<MerchantSellResultBroadcast>(OnClientMerchantSellResultReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<MerchantPurchaseResultBroadcast>(OnClientMerchantPurchaseResultReceived);
 		}
 
 		/// <summary>
@@ -317,6 +318,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<MerchantSellResultBroadcast>(OnClientMerchantSellResultReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<MerchantPurchaseResultBroadcast>(OnClientMerchantPurchaseResultReceived);
 		}
 
 		/// <summary>
@@ -501,6 +503,51 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Handles the server's reply to a sell request.
 		/// </summary>
+		/// <summary>
+		/// Applies the server's answer to a purchase request.
+		/// </summary>
+		/// <remarks>
+		/// The buy watchdog had nothing to clear it before this existed, so every purchase — the
+		/// ones that worked included — eventually reported "No reply from the server". Clearing the
+		/// guard here is what makes the message mean what it says.
+		/// </remarks>
+		private void OnClientMerchantPurchaseResultReceived(MerchantPurchaseResultBroadcast msg, Channel channel)
+		{
+			buyGuard.Clear();
+
+			if (msg.Success)
+			{
+				SetStatus(msg.Charged > 0
+					? $"Bought {msg.Quantity} for {msg.Charged}."
+					: $"Bought {msg.Quantity}.");
+				ClearSelection();
+			}
+			else
+			{
+				SetStatus(DescribePurchaseFailure(msg.Failure));
+			}
+
+			RefreshConfirmState();
+		}
+
+		/// <summary>Player-facing wording for a refusal.</summary>
+		private static string DescribePurchaseFailure(MerchantPurchaseFailure failure)
+		{
+			switch (failure)
+			{
+				case MerchantPurchaseFailure.NotForSale:
+					return "The merchant will not sell that.";
+				case MerchantPurchaseFailure.InsufficientFunds:
+					return "You cannot afford that.";
+				case MerchantPurchaseFailure.NoRoom:
+					return "You have no room for that.";
+				case MerchantPurchaseFailure.InvalidEntry:
+					return "That offer is no longer available.";
+				default:
+					return "The merchant refused that purchase.";
+			}
+		}
+
 		private void OnClientMerchantSellResultReceived(MerchantSellResultBroadcast msg, Channel channel)
 		{
 			sellGuard.Clear();
