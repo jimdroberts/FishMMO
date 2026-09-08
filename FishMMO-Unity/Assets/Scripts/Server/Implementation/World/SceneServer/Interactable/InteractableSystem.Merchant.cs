@@ -25,6 +25,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Handles a <see cref="MerchantPurchaseBroadcast"/> from a client. Validates the merchant interactable,
 		/// checks sufficient currency, and processes the purchase (item, ability, or ability event) based on the tab type.
 		/// </summary>
+		/// <summary>Answers a purchase request. Every exit from the handler goes through here.</summary>
+		/// <remarks>
+		/// The client arms a watchdog when it submits a purchase and has nothing else to clear it.
+		/// A bare return therefore does not read to the player as a refusal — it reads as the
+		/// server never having answered, which is a different problem with a different remedy.
+		/// </remarks>
+		private static void SendPurchaseResult(NetworkConnection conn, MerchantPurchaseBroadcast msg,
+			MerchantPurchaseFailure failure, int quantity = 0, long charged = 0)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			conn.Broadcast(new MerchantPurchaseResultBroadcast()
+			{
+				Index = msg.Index,
+				Type = msg.Type,
+				Success = failure == MerchantPurchaseFailure.None,
+				Failure = failure,
+				Quantity = quantity,
+				Charged = charged,
+			});
+		}
+
 		private void OnServerMerchantPurchaseBroadcastReceived(NetworkConnection conn, MerchantPurchaseBroadcast msg, Channel channel)
 		{
 			if (conn == null)
@@ -35,6 +60,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// validate connection character
 			if (conn.FirstObject == null)
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 				return;
 			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
@@ -43,11 +69,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				!character.TryGet(out IInventoryController inventoryController) ||
 				!CharacterStateValidation.CanAct(character))
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 				return;
 			}
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 				return;
 			}
 
@@ -58,6 +86,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.ID);
 				if (merchantTemplate == null)
 				{
+					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InvalidEntry);
 					return;
 				}
 
@@ -67,12 +96,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					!worldSceneDetailsCache.Scenes.TryGetValue(currentScene, out _))
 				{
 					Log.Debug("InteractableSystem", "Missing Scene:" + currentScene);
+					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 					return;
 				}
 
 				// validate scene object
 				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 				{
+					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 					return;
 				}
 
@@ -96,6 +127,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					!interactable.CanInteract(character) ||
 					merchantTemplate.ID != merchant.Template.ID)
 				{
+					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 					return;
 				}
 
@@ -113,6 +145,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							msg.Index < merchantTemplate.Abilities.Count)
 						{
 							LearnAbilityTemplate(conn, character, merchantTemplate.Abilities[msg.Index]);
+							SendPurchaseResult(conn, msg, MerchantPurchaseFailure.None, 1);
+						}
+						else
+						{
+							SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InvalidEntry);
+							return;
 						}
 						break;
 					case MerchantTabType.AbilityEvent:
@@ -121,9 +159,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							msg.Index < merchantTemplate.AbilityEvents.Count)
 						{
 							LearnAbilityEvent(conn, character, merchantTemplate.AbilityEvents[msg.Index]);
+							SendPurchaseResult(conn, msg, MerchantPurchaseFailure.None, 1);
+						}
+						else
+						{
+							SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InvalidEntry);
+							return;
 						}
 						break;
-					default: return;
+					default:
+						SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InvalidEntry);
+						return;
 				}
 
 				// Increment achievement for any merchant interaction
@@ -188,18 +234,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				msg.Index < 0 ||
 				msg.Index >= merchantTemplate.Items.Count)
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InvalidEntry);
 				return false;
 			}
 
 			BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
 			if (itemTemplate == null || itemTemplate.Price <= 0)
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.NotForSale);
 				return false;
 			}
 
 			if (currencyTemplate == null)
 			{
 				Log.Debug("InteractableSystem", "currencyTemplate is null.");
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 				return false;
 			}
 			/* Balance, not the attribute. CharacterCurrency reads the BASE value, which is the
@@ -207,6 +256,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * force, and spending against it lets a currency buff be spent as money. */
 			if (!CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance))
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 				return false;
 			}
 
@@ -222,12 +272,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			quantity = Math.Min(quantity, affordable);
 			if (quantity < 1)
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InsufficientFunds);
 				return false;
 			}
 
 			long total = quantity * itemTemplate.Price;
 			if (total > int.MaxValue || balance < total)
 			{
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InsufficientFunds);
 				return false;
 			}
 
@@ -238,6 +290,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (!CharacterCurrency.TrySpend(character, currencyTemplate, charge, () => TryPersistMerchantAttributes(character)))
 			{
 				Log.Warning("InteractableSystem", $"TryPurchaseItem: charge of {charge} refused for CharID={character.ID}.");
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InsufficientFunds);
 				return false;
 			}
 
@@ -253,10 +306,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					Log.Error("InteractableSystem", $"TryPurchaseItem: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
 				}
 				RecordCurrencyMovement(character.ID, charge, CurrencyMovementReason.MerchantPurchase, absorbed: false);
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.NoRoom);
 				return false;
 			}
 
 			RecordCurrencyMovement(character.ID, charge, CurrencyMovementReason.MerchantPurchase, absorbed: true);
+			SendPurchaseResult(conn, msg, MerchantPurchaseFailure.None, (int)quantity, charge);
 			return true;
 		}
 

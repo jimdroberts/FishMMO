@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -435,6 +435,49 @@ namespace FishMMO.Shared
 		public int Quantity;
 		/// <summary>Currency actually paid out.</summary>
 		public int Payout;
+	}
+
+	/// <summary>
+	/// Server -> Client result of a <see cref="MerchantPurchaseBroadcast"/>.
+	/// </summary>
+	/// <remarks>
+	/// The same contract the sell path already keeps, for the same reason: the client arms a
+	/// watchdog when it submits a purchase, and a handler that simply returns leaves that
+	/// watchdog to expire into "No reply from the server" — which describes a network fault
+	/// rather than a request the server understood and refused, and invites the player to retry
+	/// something that cannot succeed. Every exit from the purchase handler sends one of these.
+	/// </remarks>
+	public struct MerchantPurchaseResultBroadcast : IBroadcast
+	{
+		/// <summary>The entry index the request named.</summary>
+		public int Index;
+		/// <summary>The tab the request named.</summary>
+		public MerchantTabType Type;
+		/// <summary>True when the purchase went through.</summary>
+		public bool Success;
+		/// <summary>Why the purchase was refused. <see cref="MerchantPurchaseFailure.None"/> on success.</summary>
+		public MerchantPurchaseFailure Failure;
+		/// <summary>Quantity actually granted, after server-side clamping.</summary>
+		public int Quantity;
+		/// <summary>Currency actually charged.</summary>
+		public long Charged;
+	}
+
+	/// <summary>Why a merchant purchase was refused.</summary>
+	public enum MerchantPurchaseFailure : byte
+	{
+		/// <summary>No failure; the purchase succeeded.</summary>
+		None = 0,
+		/// <summary>The merchant, character or session no longer validates.</summary>
+		Unavailable,
+		/// <summary>The entry index or tab did not resolve to something purchasable.</summary>
+		InvalidEntry,
+		/// <summary>The item carries no sale price, so the merchant cannot sell it.</summary>
+		NotForSale,
+		/// <summary>The character cannot afford the requested quantity.</summary>
+		InsufficientFunds,
+		/// <summary>There is no room to receive the goods.</summary>
+		NoRoom,
 	}
 
 	/// <summary>
