@@ -114,5 +114,43 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="lease">The session this server still holds for it, already taken out of the live token map.</param>
 		/// <returns>The flush to await, or null.</returns>
 		Func<Task> CaptureDespawnFlush(IPlayerCharacter character, CharacterSessionInfo? lease);
+
+		/// <summary>
+		/// Persists a two-character exchange — a completed player trade — as ONE database
+		/// transaction: both characters' item rows, both attribute sheets when currency moved,
+		/// and the economy ledger rows.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The in-memory containers have already been mutated, all or nothing, by the caller.
+		/// This captures both halves on the main thread and applies them on a worker under
+		/// BOTH characters' session row locks, so the database can only ever hold the whole
+		/// trade or none of it. A refusal reconciles both characters from memory.
+		/// </para>
+		/// <para>
+		/// An item that crossed whole keeps its identity and is listed as changed by the
+		/// receiver; the upsert re-owns the row. See <see cref="ItemExchangeLeg"/> for what
+		/// each half must carry.
+		/// </para>
+		/// </remarks>
+		/// <param name="first">One character's half.</param>
+		/// <param name="second">The other character's half.</param>
+		/// <param name="operation">Short operation name used in persistence log lines.</param>
+		/// <returns>
+		/// True when the write was enqueued normally; false when the bounded queue was full and
+		/// it ran on the fallback path. Never a rollback signal — memory is already authoritative.
+		/// </returns>
+		bool TryPersistExchange(ItemExchangeLeg first, ItemExchangeLeg second, string operation);
+
+		/// <summary>
+		/// Tells the owning client which inventory slots an operation outside this system
+		/// changed: <paramref name="emptied"/> slots are cleared, then <paramref name="set"/>
+		/// items are written to their slots.
+		/// </summary>
+		/// <remarks>
+		/// Removes go first, and only for slots that are still empty, because an exchange can
+		/// vacate a slot and fill it again in the same step.
+		/// </remarks>
+		void NotifyInventorySlots(IPlayerCharacter character, IReadOnlyList<Item> set, IReadOnlyList<int> emptied);
 	}
 }

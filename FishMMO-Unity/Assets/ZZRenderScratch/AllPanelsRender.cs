@@ -142,6 +142,7 @@ namespace FishMMO.RenderScratch
 				{ "UIFriendList",     Panels.FriendList },
 				{ "UIDungeonFinder",  Panels.DungeonFinder },
 				{ "UIInstance",       Panels.InstancePanel },
+				{ "UITrade",          TradePanelPopulator.Trade },
 			};
 		}
 

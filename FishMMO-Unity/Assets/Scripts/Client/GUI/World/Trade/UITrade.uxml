@@ -1,0 +1,58 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UITrade.uss" />
+    <ui:VisualElement name="trade-root" class="fish-panel trade-panel">
+        <ui:VisualElement name="panel-header" class="fish-panel__header trade-header">
+            <ui:VisualElement class="fish-panel__icon trade-header__icon" />
+            <ui:VisualElement class="trade-header__titles">
+                <ui:Label text="TRADE" class="fish-panel__title" />
+                <ui:Label name="trade-subtitle" text="" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="trade-range" text="" class="fish-badge trade-range" />
+            <ui:Button name="close-button" class="fish-close-btn trade-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <!--
+            Two sides, side by side: the local player on the LEFT, the partner on the RIGHT.
+            Each side is the same column so the two tables compare at a glance; only the
+            interactions differ (the partner's side is read-only), and that difference is
+            carried by the C#, not by two layouts.
+        -->
+        <ui:VisualElement name="trade-columns" class="trade-columns">
+            <ui:VisualElement name="trade-own" class="trade-column trade-column--own">
+                <ui:VisualElement class="trade-column__head">
+                    <ui:Label name="trade-own-name" text="You" class="fish-label trade-column__name" />
+                    <ui:Label name="trade-own-status" text="Not accepted" class="fish-badge trade-column__status" />
+                </ui:VisualElement>
+                <ui:VisualElement name="trade-own-grid" class="trade-grid" />
+                <ui:VisualElement class="trade-currency-row">
+                    <ui:Label text="Currency" class="fish-label fish-label--muted trade-currency__label" />
+                    <ui:IntegerField name="trade-own-currency" value="0" class="fish-input trade-currency__field" />
+                    <ui:Label name="trade-own-balance" text="" class="fish-label fish-label--caption trade-currency__balance" />
+                </ui:VisualElement>
+                <ui:Label name="trade-own-hint" text="Drag items from your bag, or right-click them." class="fish-hint trade-column__hint" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="trade-divider" />
+
+            <ui:VisualElement name="trade-partner" class="trade-column trade-column--partner">
+                <ui:VisualElement class="trade-column__head">
+                    <ui:Label name="trade-partner-name" text="" class="fish-label trade-column__name" />
+                    <ui:Label name="trade-partner-status" text="Not accepted" class="fish-badge trade-column__status" />
+                </ui:VisualElement>
+                <ui:VisualElement name="trade-partner-grid" class="trade-grid" />
+                <ui:VisualElement class="trade-currency-row">
+                    <ui:Label text="Currency" class="fish-label fish-label--muted trade-currency__label" />
+                    <ui:Label name="trade-partner-currency" text="0" class="fish-label trade-currency__value" />
+                </ui:VisualElement>
+                <ui:Label name="trade-partner-hint" text="What they are offering you." class="fish-hint trade-column__hint" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer trade-footer">
+            <ui:Label name="trade-status" text="" class="fish-hint trade-status" />
+            <ui:Button name="trade-accept-btn" text="Accept" class="fish-button fish-button--primary trade-accept" />
+            <ui:Button name="trade-cancel-btn" text="Cancel" class="fish-button fish-button--danger trade-cancel" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

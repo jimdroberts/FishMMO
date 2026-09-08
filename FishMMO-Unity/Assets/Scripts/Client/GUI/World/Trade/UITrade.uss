@@ -1,0 +1,271 @@
+/*
+    UITrade.uss
+    Layout for the player-to-player trade window. Colours come from FishMMO-Theme.uss.
+*/
+
+/*
+    Anchored explicitly, as every window is: the document root fills the screen, so a panel
+    with a size but no position lands in the top-left corner. Centred, because a trade window
+    is a modal-feeling conversation between two people rather than a bag to keep open.
+*/
+.trade-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 560px;
+    height: 312px;
+}
+
+.trade-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.trade-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.trade-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* A stacked title + subtitle needs its two line boxes pinned (see UIMerchant.uss). */
+.trade-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.trade-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+/* The range the server enforces, so the player knows how far they may wander. */
+.trade-range {
+    height: 16px;
+    padding-left: 6px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.trade-close-btn {
+    margin-left: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   THE TWO SIDES
+   ═══════════════════════════════════════════════════════════ */
+
+.trade-columns {
+    flex-direction: row;
+    flex-grow: 1;
+    padding: 6px;
+}
+
+.trade-column {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-basis: 0;
+    padding: 6px;
+    border-radius: 4px;
+    background-color: var(--abyss-800);
+    border-width: 1px;
+    border-color: var(--edge-dark);
+}
+
+/* The local side is the one the player acts on; the accent says "this is yours". */
+.trade-column--own {
+    border-left-width: 2px;
+    border-left-color: var(--brand-400);
+}
+
+.trade-column--partner {
+    border-right-width: 2px;
+    border-right-color: var(--teal);
+}
+
+.trade-divider {
+    width: 6px;
+    flex-shrink: 0;
+}
+
+.trade-column__head {
+    flex-direction: row;
+    align-items: center;
+    height: 20px;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.trade-column__name,
+Label.trade-column__name {
+    flex-grow: 1;
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    color: var(--abyss-100);
+    overflow: hidden;
+}
+
+/*
+    Acceptance is the one piece of state a player must never misread, so it is a badge that
+    changes colour rather than a word that changes. "Accepted" is green; the moment either
+    table changes, both badges fall back to the neutral state together.
+*/
+.trade-column__status {
+    height: 16px;
+    padding-left: 6px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.trade-column__status--accepted {
+    background-color: var(--teal-lo);
+    border-color: var(--teal);
+    color: var(--text-bright);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   THE TABLE: a 4-wide grid of item slots
+   ═══════════════════════════════════════════════════════════ */
+
+.trade-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    margin-bottom: 4px;
+}
+
+.trade-slot {
+    width: 48px;
+    height: 48px;
+    margin: 3px;
+    flex-shrink: 0;
+}
+
+/* Icon fills the slot inside a 3px inset; the theme supplies the scale mode. */
+.trade-slot__icon {
+    position: absolute;
+    left: 3px; top: 3px; right: 3px; bottom: 3px;
+}
+
+.trade-slot__amount {
+    position: absolute;
+    right: 2px;
+    bottom: 1px;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+/* A slot on the partner's side cannot be dragged from or withdrawn; it only reads. */
+.trade-slot--readonly:hover {
+    background-color: var(--abyss-600);
+    border-color: var(--abyss-400);
+    border-top-color: var(--edge-dark);
+    border-bottom-color: var(--edge-light);
+}
+
+.trade-slot--readonly:active {
+    background-color: var(--abyss-600);
+    scale: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CURRENCY
+   ═══════════════════════════════════════════════════════════ */
+
+.trade-currency-row {
+    flex-direction: row;
+    align-items: center;
+    height: 24px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.trade-currency__label,
+Label.trade-currency__label {
+    width: 58px;
+    font-size: 11px;
+    -unity-text-align: middle-left;
+    flex-shrink: 0;
+}
+
+.trade-currency__field {
+    width: 96px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+/* The balance the field is clamped to, so the player sees the ceiling before they hit it. */
+.trade-currency__balance,
+Label.trade-currency__balance {
+    flex-grow: 1;
+    margin-left: 6px;
+    font-size: 10px;
+    -unity-text-align: middle-left;
+    color: var(--abyss-300);
+    overflow: hidden;
+}
+
+/* The partner's offer is a number, not a field: gold, like every price in the game. */
+.trade-currency__value,
+Label.trade-currency__value {
+    flex-grow: 1;
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    color: var(--gold);
+}
+
+.trade-column__hint {
+    margin-top: 4px;
+    height: 24px;
+    font-size: 10px;
+    flex-shrink: 0;
+    white-space: normal;
+    overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+.trade-footer {
+    flex-direction: row;
+    align-items: center;
+    height: 36px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+/*
+    One status line for the whole window: what happens next, or why the last thing did
+    not. It keeps its height when empty so the footer does not jump.
+*/
+.trade-status {
+    flex-grow: 1;
+    height: 13px;
+    font-size: 10px;
+    overflow: hidden;
+}
+
+.trade-accept {
+    width: 96px;
+    height: 24px;
+    margin-right: 4px;
+}
+
+.trade-cancel {
+    width: 74px;
+    height: 24px;
+}

@@ -1327,7 +1327,16 @@ namespace FishMMO.Shared
 				 * consumable path on the same rule, deterministically: the owner sees the zero
 				 * until the server re-sends the slot with the assigned id, so it never queues an
 				 * activation the server would refuse. */
-				if (item != null && item.ID > 0 && item.Template.ID == templateID)
+				/* A locked slot is reserved by something else — a consumable already
+				 * activating out of it, a granted item awaiting its identity, or an item on a
+				 * trade table. The activation would lock it a second time and its completion
+				 * would then unlock the OTHER operation's reservation; skipping it keeps the
+				 * finder on the same rule as every other path that touches a slot, and picks
+				 * another stack of the same template when the player holds one. Deterministic:
+				 * the owner locks offered slots from the authoritative trade state, and the
+				 * server refuses a consumable the owner predicted out of a locked slot. */
+				if (item != null && item.ID > 0 && item.Template.ID == templateID &&
+					!cachedInventoryController.IsSlotLocked(i))
 				{
 					return item;
 				}

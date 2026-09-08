@@ -21,6 +21,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1ddb895a482c4e468cfe73d9abc8fd7a
+    m_Address: Assets/Prefabs/Server/SceneServer/TradeSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a68083bfef2f80fc8ca1af9c8369512
     m_Address: Assets/Prefabs/Server/SceneServer/CharacterSystem.asset
     m_ReadOnly: 0

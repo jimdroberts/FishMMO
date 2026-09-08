@@ -1854,6 +1854,19 @@ namespace FishMMO.Client
 			}
 			));
 
+			/* Offered for every member, whether or not they are currently observed: the roster
+			 * holds only ids and names, and the server is the one that decides whether the two
+			 * of you are close enough (issue #144). A member across the map gets a refusal, not
+			 * a missing entry they would have to go looking for. */
+			entries.Add(("Trade", () =>
+			{
+				if (UIManager.TryGetTK("UITrade", out UITKTrade uiTrade))
+				{
+					uiTrade.RequestTrade(characterID);
+				}
+			}
+			));
+
 			/* Drawing decisions only. The server re-derives both ranks from its own state before
 			 * it acts, so an entry a client should not have offered is refused, not obeyed. */
 			if (model.Rank < partyController.Rank)

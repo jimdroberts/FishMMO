@@ -208,7 +208,6 @@ GameObject:
   - component: {fileID: 3893398514912584789}
   - component: {fileID: 7201188053420161329}
   - component: {fileID: 7201188053420161330}
-  - component: {fileID: 7261305938271040563}
   m_Layer: 0
   m_Name: Orc
   m_TagString: Untagged
@@ -247,17 +246,17 @@ MonoBehaviour:
   NetworkObserver: {fileID: 0}
   _enablePrediction: 1
   _predictionType: 0
-  _graphicalObject: {fileID: 0}
+  _graphicalObject: {fileID: 7261305938271040562}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
   _networkTransform: {fileID: 7831027635627252520}
-  _ownerInterpolation: 1
+  _ownerInterpolation: 2
   _ownerSmoothedProperties: 3
   _adaptiveInterpolation: 3
   _spectatorSmoothedProperties: 3
   _spectatorInterpolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 3
+  _enableTeleport: 1
+  _teleportThreshold: 8
   <PrefabId>k__BackingField: 7
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 7103141421200678220
@@ -1164,16 +1163,3 @@ Transform:
   - {fileID: 6380345929272490936}
   m_Father: {fileID: 4573496687782621817}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &7261305938271040563
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4573496687782621821}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 26bd33a098ae47d2b4357cf5fe8c010e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  graphicalRoot: {fileID: 7261305938271040562}

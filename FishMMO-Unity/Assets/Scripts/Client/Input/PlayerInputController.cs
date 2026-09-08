@@ -610,7 +610,12 @@ namespace FishMMO.Client
 			})));
 			entries.Add(("Trade", new Action(() =>
 			{
-				Log.Debug("PlayerInputController", "Trade is not yet implemented.");
+				// The trade window owns the request: it pre-checks range and state, and the
+				// server applies the same rules again before anyone sees an invitation.
+				if (UIManager.TryGetTK("UITrade", out UITKTrade uiTrade))
+				{
+					uiTrade.RequestTrade(targetCharacterID);
+				}
 			})));
 
 			contextMenu.Open(entries);

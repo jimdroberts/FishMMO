@@ -91,12 +91,6 @@ namespace FishMMO.Shared
 		public int Order => 80;
 
 		/// <summary>
-		/// Between-tick smoothing for the owner's visual; started and stopped from the client
-		/// lifecycle below. Null on prefabs that carry none, which then step at tick rate.
-		/// </summary>
-		private CharacterTickSmoother tickSmoother;
-
-		/// <summary>
 		/// Sets the current platform and snapshots its position for velocity calculation.
 		/// </summary>
 		/// <param name="platform">The platform to set, or null to clear.</param>
@@ -119,7 +113,6 @@ namespace FishMMO.Shared
 			CharacterController = GetComponent<KCCController>();
 			CharacterController.Motor = Motor;
 			Motor.CharacterController = CharacterController;
-			tickSmoother = GetComponent<CharacterTickSmoother>();
 
 			// Initialize the motor's PhysicsScene from the GameObject's scene so that
 			// collision queries (CapsuleCast, OverlapCapsule, Raycast) work on both
@@ -165,7 +158,6 @@ namespace FishMMO.Shared
 			}
 
 			TryBindOwnerCamera();
-			UpdateOwnerSmoothing();
 		}
 
 		/// <summary>
@@ -176,31 +168,6 @@ namespace FishMMO.Shared
 		{
 			base.OnOwnershipClient(prevOwner);
 			TryBindOwnerCamera();
-			UpdateOwnerSmoothing();
-		}
-
-		/// <summary>
-		/// Stops the owner's visual smoothing so a pooled instance is handed on at its rest pose.
-		/// </summary>
-		public override void OnStopClient()
-		{
-			base.OnStopClient();
-			if (tickSmoother != null)
-			{
-				tickSmoother.Stop();
-			}
-		}
-
-		/// <summary>
-		/// Runs the visual smoother exactly while this client owns the character. See
-		/// <see cref="CharacterTickSmoother"/> for why observers must not be smoothed this way.
-		/// </summary>
-		private void UpdateOwnerSmoothing()
-		{
-			if (tickSmoother != null)
-			{
-				tickSmoother.SetOwnerSmoothing(base.IsOwner, this);
-			}
 		}
 
 		/// <summary>

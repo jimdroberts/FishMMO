@@ -1169,6 +1169,325 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+		/// <inheritdoc />
+		public bool TryPersistExchange(ItemExchangeLeg first, ItemExchangeLeg second, string operation)
+		{
+			if (first?.Character == null || second?.Character == null)
+			{
+				return true;
+			}
+
+			ItemWriteBatch firstBatch = CaptureExchangeLeg(first, operation);
+			ItemWriteBatch secondBatch = CaptureExchangeLeg(second, operation);
+
+			if (firstBatch.IsEmpty && secondBatch.IsEmpty && first.CurrencyPaid <= 0 && second.CurrencyPaid <= 0)
+			{
+				// Two empty tables accepted: nothing moved, nothing to write.
+				return true;
+			}
+
+			var ledger = new List<(long characterID, long amount, int reason)>(2);
+			if (first.CurrencyPaid > 0)
+			{
+				ledger.Add((first.Character.ID, first.CurrencyPaid, (int)first.LedgerReason));
+			}
+			if (second.CurrencyPaid > 0)
+			{
+				ledger.Add((second.Character.ID, second.CurrencyPaid, (int)second.LedgerReason));
+			}
+
+			/* One work item for both characters. The lane is the lower character id, purely so
+			 * two trades between the same pair queue behind each other; per-character ORDER is
+			 * not the lane's job — ApplyExchangeAsync claims both characters' journal sequences
+			 * under both row locks, which is where the ordering decision is actually made. */
+			long lane = Math.Min(first.Character.ID, second.Character.ID);
+			ItemWriteBatch[] batches = firstBatch.CharacterID < secondBatch.CharacterID
+				? new[] { firstBatch, secondBatch }
+				: new[] { secondBatch, firstBatch };
+			return EnqueuePersistence(() => ApplyExchangeAsync(batches, ledger, operation), lane);
+		}
+
+		/// <summary>
+		/// Captures one character's half of an exchange as a batch. Main thread.
+		/// </summary>
+		/// <remarks>
+		/// The same rules as <see cref="TryPersistGrantedItems"/> for items with no identity:
+		/// their slots are locked until the write returns one, and <c>ApplyAssignedIdentities</c>
+		/// unlocks them. Attributes ride along only when the leg says currency moved, and then
+		/// the whole sheet does, versioned and marked exactly as the merchant path does it.
+		/// </remarks>
+		private ItemWriteBatch CaptureExchangeLeg(ItemExchangeLeg leg, string operation)
+		{
+			IPlayerCharacter character = leg.Character;
+			ItemWriteBatch batch = BeginItemBatch(character.ID, operation);
+
+			IItemContainer inventory = ResolveContainer(character, ItemContainerType.Inventory);
+
+			if (leg.ChangedInventoryItems != null)
+			{
+				for (int i = 0; i < leg.ChangedInventoryItems.Count; ++i)
+				{
+					Item item = leg.ChangedInventoryItems[i];
+					if (item == null || item.Template == null || item.Slot < 0)
+					{
+						continue;
+					}
+					if (item.ID <= 0 && inventory != null)
+					{
+						inventory.LockSlot(item.Slot);
+						batch.AddLockedSlot(ItemContainerType.Inventory, item.Slot);
+					}
+					batch.AddItemWrite(BuildItemData(character.ID, item, ItemContainerType.Inventory));
+				}
+			}
+
+			if (leg.RemovedInventoryItems != null)
+			{
+				for (int i = 0; i < leg.RemovedInventoryItems.Count; ++i)
+				{
+					batch.AddItemDelete(leg.RemovedInventoryItems[i].ItemID, leg.RemovedInventoryItems[i].Version);
+				}
+			}
+
+			if (leg.PersistAttributes)
+			{
+				batch.AddAttributeWrites(BuildAttributeDataList(character));
+			}
+
+			return batch;
+		}
+
+		/// <inheritdoc />
+		public void NotifyInventorySlots(IPlayerCharacter character, IReadOnlyList<Item> set, IReadOnlyList<int> emptied)
+		{
+			if (character?.Owner == null)
+			{
+				return;
+			}
+
+			/* Removes first, and only for slots that are still empty: a slot one side vacated
+			 * may have been filled by the other side's item in the same exchange, and a remove
+			 * landing after the set would blank the item the client was just told about. */
+			if (emptied != null)
+			{
+				IItemContainer inventory = ResolveContainer(character, ItemContainerType.Inventory);
+				for (int i = 0; i < emptied.Count; ++i)
+				{
+					int slot = emptied[i];
+					if (slot < 0 || (inventory != null && !inventory.IsSlotEmpty(slot)))
+					{
+						continue;
+					}
+					BroadcastEmptiedSlot(character, InventoryType.Inventory, slot);
+				}
+			}
+
+			if (set != null && set.Count > 0)
+			{
+				BroadcastSlots(character, InventoryType.Inventory, set);
+			}
+		}
+
+		/// <summary>
+		/// Applies two characters' batches, and the ledger rows that go with them, inside ONE
+		/// database transaction. Worker thread.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The two-character form of <see cref="ApplyItemBatchAsync"/>, and the same decisions
+		/// in the same order: ownership row locks first — for BOTH characters, in ascending id
+		/// order so two exchanges between the same pair cannot deadlock each other — then the
+		/// journal claim for each under those locks, then the steps, then one commit. Any
+		/// refusal at any point rolls back everything: there is no state in which one
+		/// character's half of a trade has landed and the other's has not.
+		/// </para>
+		/// <para>
+		/// A refusal for either character reconciles BOTH. Memory has already moved on for
+		/// both, and a snapshot for one alone would restate half the trade against a database
+		/// still holding the other half's pre-trade rows — an item held by two rows for one
+		/// snapshot interval. Two reconcile snapshots, each in its own transaction, converge
+		/// on the truth in memory; the window between them is the honest limit and it fails
+		/// toward a transient duplicate row, never a lost item.
+		/// </para>
+		/// <para>
+		/// The ledger rows are written inside the same transaction rather than after it, as
+		/// the merchant path does. That path records after because its deduction was already
+		/// committed elsewhere; here the deduction IS this transaction, so a row written after
+		/// a rollback would describe a payment that did not happen.
+		/// </para>
+		/// </remarks>
+		private async Task ApplyExchangeAsync(ItemWriteBatch[] batches, List<(long characterID, long amount, int reason)> ledger, string operation)
+		{
+			try
+			{
+				var registry = Server?.Database?.ServiceRegistry;
+				if (registry == null)
+				{
+					await Log.Error("CharacterInventorySystem", $"ApplyExchangeAsync: Database service registry is unavailable ({operation}).");
+					ReconcileAndRelease(batches);
+					return;
+				}
+
+				if (!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService) ||
+					!registry.TryGet<ICharacterSessionOwnershipService>(out var ownershipService))
+				{
+					await Log.Error("CharacterInventorySystem", $"ApplyExchangeAsync: Failed to resolve IUnitOfWorkService or ICharacterSessionOwnershipService ({operation}).");
+					ReconcileAndRelease(batches);
+					return;
+				}
+
+				DatabaseResult<IUnitOfWork> beginResult = await unitOfWorkService.BeginAsync();
+				if (!beginResult.IsSuccess || beginResult.Data == null)
+				{
+					await Log.Warning("CharacterInventorySystem", $"ApplyExchangeAsync: could not begin unit of work ({operation}): {beginResult.ErrorCode} - {beginResult.ErrorMessage}");
+					ReconcileAndRelease(batches);
+					return;
+				}
+
+				await using IUnitOfWork unitOfWork = beginResult.Data;
+
+				// Both row locks, ascending id. The caller sorted the array.
+				for (int i = 0; i < batches.Length; ++i)
+				{
+					ItemWriteBatch batch = batches[i];
+					DatabaseResult ownership = await ownershipService.AssertOwnershipAsync(batch.CharacterID, batch.Lease, allowUnclaimed: true);
+					if (!ownership.IsSuccess)
+					{
+						await unitOfWork.RollbackAsync();
+
+						/* Deliberately NOT reconciled, for the reason ApplyItemBatchAsync gives:
+						 * another server is authoritative for this character now, and our copy
+						 * is the stale one. The partner IS reconciled — it is still ours, and
+						 * its half of the trade must not be left unwritten. */
+						await Log.Warning("CharacterInventorySystem", $"ApplyExchangeAsync: refused {operation} for character {batch.CharacterID}: {ownership.ErrorCode} - {ownership.ErrorMessage}");
+						for (int j = 0; j < batches.Length; ++j)
+						{
+							if (batches[j].CharacterID != batch.CharacterID)
+							{
+								itemWriteJournal.RequestReconcile(batches[j].CharacterID);
+							}
+							ReleaseBatchLocks(batches[j]);
+						}
+						return;
+					}
+				}
+
+				// Both claims, under both locks. See ItemWriteJournal.TryClaimSequence.
+				for (int i = 0; i < batches.Length; ++i)
+				{
+					ItemWriteBatch batch = batches[i];
+					if (!itemWriteJournal.TryClaimSequence(batch.CharacterID, batch.Sequence, batch.IsSnapshot))
+					{
+						await unitOfWork.RollbackAsync();
+						/* Superseded for one character means a later snapshot of THAT character
+						 * has landed, which already restated its half from memory. The other
+						 * half has not been written, so the partner is reconciled. */
+						await Log.Debug("CharacterInventorySystem", $"ApplyExchangeAsync: skipped superseded {operation} (CharID={batch.CharacterID}, Seq={batch.Sequence})");
+						for (int j = 0; j < batches.Length; ++j)
+						{
+							if (batches[j].CharacterID != batch.CharacterID)
+							{
+								itemWriteJournal.RequestReconcile(batches[j].CharacterID);
+							}
+							ReleaseBatchLocks(batches[j]);
+						}
+						return;
+					}
+				}
+
+				for (int i = 0; i < batches.Length; ++i)
+				{
+					DatabaseResult applied = await ApplyBatchStepsAsync(registry, batches[i]);
+					if (!applied.IsSuccess)
+					{
+						await unitOfWork.RollbackAsync();
+						await Log.Warning("CharacterInventorySystem", $"ApplyExchangeAsync: rolled back {operation} at character {batches[i].CharacterID}: {applied.ErrorCode} - {applied.ErrorMessage}");
+						ReconcileAndRelease(batches);
+						return;
+					}
+				}
+
+				if (ledger != null && ledger.Count > 0)
+				{
+					if (!registry.TryGet<ICurrencyLedgerService>(out var ledgerService))
+					{
+						await unitOfWork.RollbackAsync();
+						await Log.Error("CharacterInventorySystem", $"ApplyExchangeAsync: ICurrencyLedgerService is not registered; {operation} rolled back.");
+						ReconcileAndRelease(batches);
+						return;
+					}
+					for (int i = 0; i < ledger.Count; ++i)
+					{
+						(long characterID, long amount, int reason) = ledger[i];
+						DatabaseResult recorded = await ledgerService.RecordAsync(characterID, amount, reason, (int)CurrencyMovementState.Absorbed);
+						if (!recorded.IsSuccess)
+						{
+							await unitOfWork.RollbackAsync();
+							await Log.Warning("CharacterInventorySystem", $"ApplyExchangeAsync: ledger row refused for character {characterID}; {operation} rolled back: {recorded.ErrorCode} - {recorded.ErrorMessage}");
+							ReconcileAndRelease(batches);
+							return;
+						}
+					}
+				}
+
+				DatabaseResult commit = await unitOfWork.CommitAsync();
+				if (!commit.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"ApplyExchangeAsync: commit failed ({operation}): {commit.ErrorCode} - {commit.ErrorMessage}");
+					ReconcileAndRelease(batches);
+					return;
+				}
+
+				if (unitOfWork.DisposeFault != null)
+				{
+					await Log.Warning("CharacterInventorySystem", $"ApplyExchangeAsync: unit of work disposal reported {unitOfWork.DisposeFault.Value.ErrorCode} - {unitOfWork.DisposeFault.Value.ErrorMessage}");
+				}
+
+				// Only after the commit, per batch — the same rule as the single-character path.
+				for (int i = 0; i < batches.Length; ++i)
+				{
+					ItemWriteBatch batch = batches[i];
+					if (batch.AssignedIdentities == null || batch.AssignedIdentities.Count == 0)
+					{
+						continue;
+					}
+
+					IReadOnlyList<CharacterItemIdAssignment> assignments = batch.AssignedIdentities;
+					long characterID = batch.CharacterID;
+					if (!TryEnqueueMainThread<ICharacterInventorySystemMainThreadQueueData>(
+							() => ApplyAssignedIdentities(characterID, assignments)))
+					{
+						await Log.Warning("CharacterInventorySystem",
+							$"ApplyExchangeAsync: could not queue {assignments.Count} item identity write-back(s) for character {characterID}; they will be reassigned on a later write.");
+						ReleaseBatchLocks(batch);
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"ApplyExchangeAsync failed ({operation}): {ex}");
+				ReconcileAndRelease(batches);
+			}
+		}
+
+		/// <summary>Requests a reconcile snapshot for, and releases the locks of, every batch.</summary>
+		private void ReconcileAndRelease(ItemWriteBatch[] batches)
+		{
+			if (batches == null)
+			{
+				return;
+			}
+			for (int i = 0; i < batches.Length; ++i)
+			{
+				if (batches[i] == null)
+				{
+					continue;
+				}
+				itemWriteJournal.RequestReconcile(batches[i].CharacterID);
+				ReleaseBatchLocks(batches[i]);
+			}
+		}
+
 		/// <summary>
 		/// Applies one batch inside a single database transaction. Worker thread.
 		/// </summary>
