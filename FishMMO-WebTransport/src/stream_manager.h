@@ -133,7 +133,16 @@ typedef struct wt_stream_manager_s {
      * Prevents a single peer from exhausting memory by opening
      * many streams without sending FIN. */
     atomic_uint         total_recv_bytes;
+
+    /* Bytes handed to MsQuic->StreamSend and not yet reported back by
+     * SEND_COMPLETE, summed over every stream of this connection.  A peer
+     * that stops reading lets msquic buffer without bound; once this
+     * passes WT_MAX_TOTAL_SEND_BUF, wt_stream_manager_send returns
+     * WT_ERR_BUFFER_FULL and the application disconnects the slow client
+     * instead of the process growing until it dies. */
+    atomic_uint         total_send_bytes;
 #define WT_MAX_TOTAL_RECV_BUF  (16 * 1024 * 1024)  /* 16 MB per connection */
+#define WT_MAX_TOTAL_SEND_BUF  (8 * 1024 * 1024)   /* 8 MB in flight per connection */
 
     /* Mutex protecting streams[] array.
      * stream_manager_send (app thread) and stream callbacks

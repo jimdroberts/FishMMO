@@ -37,6 +37,9 @@ static void session_on_stream_data(
 
     if (session->parent_type == WT_PARENT_SERVER) {
         wt_server_s* srv = session->parent.server;
+        /* Transport-level flood gate: one token per framed message,
+         * before the payload ever crosses into managed code. */
+        if (srv && !wt_server_admit_inbound(srv, conn_id)) return;
         if (srv && srv->callbacks.on_stream_data) {
             srv->callbacks.on_stream_data(
                 srv->user_context, conn_id, stream_id, data, length);

@@ -142,10 +142,14 @@ namespace FishNet.Transporting.WebTransport
 		/// <param name="segment">The data segment to send.</param>
 		/// <param name="connectionId">The target connection ID, or -1 for broadcast on the server.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal void Send(ConcurrentQueue<Packet> queue, byte channelId, ArraySegment<byte> segment, int connectionId)
+		/// <returns>
+		/// The connection id of a packet evicted by backpressure, or <see cref="NoDrop"/> when
+		/// nothing was evicted or the packet was not queued at all.
+		/// </returns>
+		internal int Send(ConcurrentQueue<Packet> queue, byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
 			if (GetConnectionState() != LocalConnectionState.Started)
-				return;
+				return NoDrop;
 
 			Packet outgoing = new Packet(connectionId, segment, channelId);
 			queue.Enqueue(outgoing);
@@ -157,11 +161,19 @@ namespace FishNet.Transporting.WebTransport
 			if (queue.Count > MaxOutgoingQueueSize)
 			{
 				if (queue.TryDequeue(out Packet dropped))
+				{
+					int droppedConnection = dropped.ConnectionId;
+					if (dropped.Channel == 0)
+						LogTransportWarning($"[WebTransport] Outgoing queue full ({MaxOutgoingQueueSize}); dropping reliable packet for connection {droppedConnection}.");
 					dropped.Dispose();
-				if (channelId == 0)
-					LogTransportWarning($"[WebTransport] Outgoing queue full ({MaxOutgoingQueueSize}); dropping reliable packet.");
+					return droppedConnection;
+				}
 			}
+			return NoDrop;
 		}
+
+		/// <summary>Sentinel returned by <see cref="Send"/> when no packet was evicted.</summary>
+		protected const int NoDrop = int.MinValue;
 
 		/// <summary>
 		/// Maximum packets in the outgoing queue before backpressure kicks in.

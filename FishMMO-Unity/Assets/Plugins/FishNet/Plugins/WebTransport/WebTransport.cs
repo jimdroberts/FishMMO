@@ -151,6 +151,30 @@ namespace FishNet.Transporting.WebTransport
 		[Tooltip("Per-connection burst allowance in messages.")]
 		[SerializeField]
 		private int inboundMessageBurst = 400;
+
+		/// <summary>
+		/// Connection-level limits enforced inside the native library, before the QUIC handshake
+		/// or any managed code. Negative keeps the native default; zero disables that limit.
+		/// </summary>
+		[Tooltip("Minimum milliseconds between new connections from one IP. -1 = native default (100), 0 = off.")]
+		[SerializeField]
+		private int connectIntervalMs = -1;
+
+		[Tooltip("Concurrent connections one IP may hold. -1 = native default (16), 0 = off.")]
+		[SerializeField]
+		private int maxConnectionsPerIp = -1;
+
+		[Tooltip("Server-wide connections allowed to sit without a finished WebTransport handshake. -1 = native default (512), 0 = off.")]
+		[SerializeField]
+		private int maxHalfOpenConnections = -1;
+
+		[Tooltip("Entries of the shared datagram ring one connection may occupy. -1 = native default (64), 0 = off.")]
+		[SerializeField]
+		private int maxQueuedDatagramsPerConnection = -1;
+
+		[Tooltip("HTTP/3 stream contexts tracked per connection before its session is established. -1 = native default (64), 0 = off.")]
+		[SerializeField]
+		private int maxH3StreamsPerConnection = -1;
 		#endregion
 
 		#region Private
@@ -500,6 +524,22 @@ namespace FishNet.Transporting.WebTransport
 			this.serverSocket?.SetInboundRateLimit(maxInboundMessagesPerSecond, inboundMessageBurst);
 		}
 
+		/// <summary>
+		/// Sets the connection-level limits the native library enforces. Applies at the next
+		/// server start. Negative keeps the native default; zero disables that limit.
+		/// </summary>
+		public void SetNativeLimits(int connectIntervalMilliseconds, int connectionsPerIp, int halfOpenConnections,
+			int queuedDatagramsPerConnection, int h3StreamsPerConnection)
+		{
+			connectIntervalMs = connectIntervalMilliseconds;
+			maxConnectionsPerIp = connectionsPerIp;
+			maxHalfOpenConnections = halfOpenConnections;
+			maxQueuedDatagramsPerConnection = queuedDatagramsPerConnection;
+			maxH3StreamsPerConnection = h3StreamsPerConnection;
+			this.serverSocket?.SetNativeLimits(connectIntervalMs, maxConnectionsPerIp, maxHalfOpenConnections,
+				maxQueuedDatagramsPerConnection, maxH3StreamsPerConnection);
+		}
+
 		public override void SetMaximumClients(int value)
 		{
 			// Range validation is duplicated in ServerSocket.SetMaximumClients.
@@ -635,6 +675,8 @@ namespace FishNet.Transporting.WebTransport
 #endif
 			this.serverSocket.Initialize(this, DatagramMTU, certificatePath, privateKeyPath);
 			this.serverSocket.SetInboundRateLimit(maxInboundMessagesPerSecond, inboundMessageBurst);
+			this.serverSocket.SetNativeLimits(connectIntervalMs, maxConnectionsPerIp, maxHalfOpenConnections,
+				maxQueuedDatagramsPerConnection, maxH3StreamsPerConnection);
 			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
 			// ServerSocket.DefaultAlpn. Override via ServerSocket.Alpn before calling StartConnection if needed.
 			return this.serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);

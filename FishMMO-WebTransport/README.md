@@ -113,12 +113,35 @@ See [src/webtransport_api.h](src/webtransport_api.h) for the complete C API surf
 | `wt_server_poll()` | Drain pending shutdowns + datagrams (call each frame) |
 | `wt_server_send_stream()` / `wt_server_send_datagram()` | Send to a client |
 | `wt_server_disconnect()` | Disconnect a client |
+| `wt_server_set_limits()` | Transport-level abuse limits, before start: per-IP connect interval and concurrent cap, half-open cap, per-connection inbound token bucket with flood kick, per-connection datagram-ring share, per-connection H3 stream-context cap (see below) |
 | `wt_client_create()` / `wt_client_connect()` / `wt_client_disconnect()` / `wt_client_destroy()` | Client lifecycle |
 | `wt_client_poll()` | Drain pending shutdowns + datagrams (call each frame) |
 | `wt_client_send_stream()` / `wt_client_send_datagram()` | Send to the server |
 | `wt_error_string()` | Human-readable error message |
 
 All functions return `WT_OK` (0) on success or a negative error code.
+
+### Transport-level limits
+
+Every limit below is enforced inside the library, before a byte reaches the host application.
+Defaults apply unless `wt_server_set_limits()` is called before `wt_server_start()`; a negative
+argument keeps the default and `0` disables that limit.
+
+| Limit | Default | Scope | On breach |
+|---|---|---|---|
+| Connect interval | 100 ms | per source IP | QUIC refuse (`server_listener_cb`) |
+| Concurrent connections | 16 | per source IP | QUIC refuse |
+| Half-open connections (slot held, no WebTransport session yet) | 512 | server | QUIC refuse |
+| Inbound message rate (streams + datagrams) | 500/s, burst 1000 | per connection | drop; after 200 consecutive refusals the poll thread disconnects the client |
+| Datagram-ring share | 64 of 1024 entries | per connection | drop that client's datagram only |
+| HTTP/3 stream contexts before the session is up | 64 | per connection | abort the stream |
+| Bytes in flight to a peer that is not reading | 8 MB (`WT_MAX_TOTAL_SEND_BUF`) | per connection | `wt_server_send_stream` returns `WT_ERR_BUFFER_FULL`; the host disconnects the slow client |
+
+A native (raw-QUIC) client only becomes a session when its first stream byte arrives, so an idle
+native client counts as half-open until it sends; the H3 handshake deadline (15 s) still bounds it.
+
+`tests/run_limits_e2e.sh <build-dir>` exercises the bucket, the kick, both connection caps and a
+paced sender on loopback (configure with `-DWT_BUILD_TESTS=ON`).
 
 ## Platform Support
 
@@ -180,7 +203,8 @@ FishMMO-WebTransport/
 ├── rebuild_only.ps1            Recompile without re-fetching dependencies
 ├── rebuild_only.bat            cmd.exe wrapper for rebuild_only.ps1
 ├── README.md
-└── src/                        C++ source (7 .cpp + 7 .h)
+├── src/                        C++ source (7 .cpp + 7 .h)
+└── tests/                      wt_limits_e2e (built with -DWT_BUILD_TESTS=ON) + run_limits_e2e.sh
 ```
 
 ### Generated, not tracked

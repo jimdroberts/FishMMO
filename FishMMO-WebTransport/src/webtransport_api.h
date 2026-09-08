@@ -321,6 +321,38 @@ WT_API void wt_server_set_expected_authority(WT_SERVER server, const char* autho
  */
 WT_API void wt_server_set_allow_native_clients(WT_SERVER server, int32_t allow);
 
+/**
+ * Configure the transport-level abuse limits.  Must be called before
+ * wt_server_start().  Any negative value keeps that limit's default.
+ * A value of 0 disables the corresponding limit (unlimited / no kick).
+ *
+ *   connect_interval_ms            min ms between new connections from one IP
+ *                                  bucket (default 100)
+ *   max_connections_per_ip         concurrent slots one IP may hold (default 16)
+ *   max_half_open                  slots held without an established WebTransport
+ *                                  session, server-wide (default 512)
+ *   inbound_messages_per_second    per-connection sustained inbound message
+ *                                  rate, streams + datagrams (default 500)
+ *   inbound_message_burst          per-connection token-bucket capacity (default 1000)
+ *   inbound_overflow_kick          consecutive refused messages before the
+ *                                  connection is disconnected (default 200)
+ *   max_queued_datagrams_per_conn  entries of the shared datagram ring one
+ *                                  connection may occupy (default 64)
+ *   max_h3_streams_per_conn        HTTP/3 stream contexts tracked per
+ *                                  connection before its session is up (default 64)
+ *
+ * @thread_safety Safe to call from any thread before wt_server_start.
+ */
+WT_API void wt_server_set_limits(WT_SERVER server,
+                                 int32_t connect_interval_ms,
+                                 int32_t max_connections_per_ip,
+                                 int32_t max_half_open,
+                                 int32_t inbound_messages_per_second,
+                                 int32_t inbound_message_burst,
+                                 int32_t inbound_overflow_kick,
+                                 int32_t max_queued_datagrams_per_conn,
+                                 int32_t max_h3_streams_per_conn);
+
 /* ═══════════════════════════════════════════════════════════════
  * CLIENT API
  * ═══════════════════════════════════════════════════════════════ */

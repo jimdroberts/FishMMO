@@ -263,6 +263,34 @@ WT_API void wt_server_set_allow_native_clients(WT_SERVER server, int32_t allow)
     wt_api_exit();
 }
 
+WT_API void wt_server_set_limits(WT_SERVER server,
+                                 int32_t connect_interval_ms,
+                                 int32_t max_connections_per_ip,
+                                 int32_t max_half_open,
+                                 int32_t inbound_messages_per_second,
+                                 int32_t inbound_message_burst,
+                                 int32_t inbound_overflow_kick,
+                                 int32_t max_queued_datagrams_per_conn,
+                                 int32_t max_h3_streams_per_conn)
+{
+    if (!wt_api_enter()) { WT_LOG_ERROR("wt_init() not called"); return; }
+    if (server) {
+        wt_server_limits_t* l = &((wt_server_s*)server)->limits;
+        /* Negative = keep default; 0 = disabled; positive = new value. */
+        if (connect_interval_ms >= 0)           l->connect_interval_ms           = (uint32_t)connect_interval_ms;
+        if (max_connections_per_ip >= 0)        l->max_connections_per_ip        = (uint32_t)max_connections_per_ip;
+        if (max_half_open >= 0)                 l->max_half_open                 = (uint32_t)max_half_open;
+        if (inbound_messages_per_second >= 0)   l->inbound_messages_per_second   = (uint32_t)inbound_messages_per_second;
+        if (inbound_message_burst >= 0)         l->inbound_message_burst         = (uint32_t)inbound_message_burst;
+        if (inbound_overflow_kick >= 0)         l->inbound_overflow_kick         = (uint32_t)inbound_overflow_kick;
+        if (max_queued_datagrams_per_conn >= 0) l->max_queued_datagrams_per_conn = (uint32_t)max_queued_datagrams_per_conn;
+        if (max_h3_streams_per_conn >= 0)       l->max_h3_streams_per_conn       = (uint32_t)max_h3_streams_per_conn;
+        if (l->inbound_message_burst == 0 && l->inbound_messages_per_second != 0)
+            l->inbound_message_burst = l->inbound_messages_per_second;
+    }
+    wt_api_exit();
+}
+
 /* ═══════════════════════════════════════════════════════════════
  * CLIENT API  (delegates to client.h _impl functions)
  * ═══════════════════════════════════════════════════════════════ */

@@ -126,7 +126,40 @@ namespace FishNet.Transporting.WebTransport.Server
 			public long LastRefillTicks;
 			public int Overflow;
 			public int Kicked;
+			/// <summary>Events from this connection currently waiting in <see cref="incomingEvents"/>.</summary>
+			public int Pending;
 		}
+
+		/// <summary>
+		/// Share of <see cref="MaxIncomingEvents"/> one connection may occupy. The rate limiter
+		/// bounds how fast a connection can enqueue; this bounds how much of the shared queue it
+		/// can hold when the main thread falls behind, so a stalled frame does not let one
+		/// connection's backlog evict everyone else's.
+		/// </summary>
+		private const int MaxIncomingEventsPerConnection = 1000;
+
+		#region Native limits
+		/* Passed to wt_server_set_limits before wt_server_start. -1 keeps the native default. */
+		private int nativeConnectIntervalMs = -1;
+		private int nativeMaxConnectionsPerIp = -1;
+		private int nativeMaxHalfOpen = -1;
+		private int nativeMaxQueuedDatagramsPerConnection = -1;
+		private int nativeMaxH3StreamsPerConnection = -1;
+
+		/// <summary>
+		/// Sets the connection-level limits enforced inside the native library. Negative keeps
+		/// the native default, zero disables that limit. Takes effect at the next start.
+		/// </summary>
+		internal void SetNativeLimits(int connectIntervalMs, int maxConnectionsPerIp, int maxHalfOpen,
+			int maxQueuedDatagramsPerConnection, int maxH3StreamsPerConnection)
+		{
+			this.nativeConnectIntervalMs = connectIntervalMs;
+			this.nativeMaxConnectionsPerIp = maxConnectionsPerIp;
+			this.nativeMaxHalfOpen = maxHalfOpen;
+			this.nativeMaxQueuedDatagramsPerConnection = maxQueuedDatagramsPerConnection;
+			this.nativeMaxH3StreamsPerConnection = maxH3StreamsPerConnection;
+		}
+		#endregion
 
 		private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, InboundBucket> inboundBuckets =
 			new System.Collections.Concurrent.ConcurrentDictionary<ulong, InboundBucket>();
@@ -154,15 +187,9 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <summary>
 		/// Charges one message to a connection's bucket. False means drop it. Worker thread safe.
 		/// </summary>
-		private bool TryAdmitInbound(ulong nativeConnectionId)
+		private bool TryAdmitInbound(ulong nativeConnectionId, out InboundBucket bucket)
 		{
-			int perSecond = this.inboundMessagesPerSecond;
-			if (perSecond <= 0)
-			{
-				return true;
-			}
-
-			InboundBucket bucket = this.inboundBuckets.GetOrAdd(nativeConnectionId, _ => new InboundBucket()
+			bucket = this.inboundBuckets.GetOrAdd(nativeConnectionId, _ => new InboundBucket()
 			{
 				Tokens = this.inboundMessageBurst,
 				LastRefillTicks = System.Diagnostics.Stopwatch.GetTimestamp(),
@@ -171,6 +198,12 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (System.Threading.Volatile.Read(ref bucket.Kicked) != 0)
 			{
 				return false;
+			}
+
+			int perSecond = this.inboundMessagesPerSecond;
+			if (perSecond <= 0)
+			{
+				return true;
 			}
 
 			lock (bucket)
@@ -201,6 +234,34 @@ namespace FishNet.Transporting.WebTransport.Server
 				}
 				return false;
 			}
+		}
+
+		/// <summary>
+		/// Reserves one slot of a connection's share of the incoming queue. False means drop.
+		/// A connection that keeps arriving over its share while the queue is not draining is
+		/// treated like a flooder. Worker thread safe; release with <see cref="ReleasePendingEvent"/>.
+		/// </summary>
+		private bool TryReservePendingEvent(ulong nativeConnectionId, InboundBucket bucket)
+		{
+			if (System.Threading.Interlocked.Increment(ref bucket.Pending) <= MaxIncomingEventsPerConnection)
+			{
+				return true;
+			}
+			System.Threading.Interlocked.Decrement(ref bucket.Pending);
+			lock (bucket)
+			{
+				if (++bucket.Overflow >= InboundOverflowKickThreshold && bucket.Kicked == 0)
+				{
+					bucket.Kicked = 1;
+					this.pendingInboundKicks.Enqueue(nativeConnectionId);
+				}
+			}
+			return false;
+		}
+
+		private static void ReleasePendingEvent(InboundBucket bucket)
+		{
+			System.Threading.Interlocked.Decrement(ref bucket.Pending);
 		}
 
 		/// <summary>Disconnects flooders. Main thread only; runs before the event drain.</summary>
@@ -519,6 +580,19 @@ namespace FishNet.Transporting.WebTransport.Server
 				return false;
 			}
 
+			/* Transport-level limits live in the native library so a flood is refused before
+			 * it reaches managed code. The inbound budget mirrors the managed bucket so both
+			 * layers agree on what "too fast" means. */
+			WebTransportNative.wt_server_set_limits(this.serverHandle,
+				this.nativeConnectIntervalMs,
+				this.nativeMaxConnectionsPerIp,
+				this.nativeMaxHalfOpen,
+				this.inboundMessagesPerSecond,
+				this.inboundMessagesPerSecond > 0 ? this.inboundMessageBurst : 0,
+				InboundOverflowKickThreshold,
+				this.nativeMaxQueuedDatagramsPerConnection,
+				this.nativeMaxH3StreamsPerConnection);
+
 			int result = WebTransportNative.wt_server_start(this.serverHandle);
 			if (result != 0)
 			{
@@ -702,6 +776,45 @@ namespace FishNet.Transporting.WebTransport.Server
 			DequeueDisconnects();
 		}
 
+		#region Outbound per-connection policy
+		/// <summary>
+		/// Packets queued in <see cref="CommonSocket.outgoing"/> per connection. Main thread only:
+		/// FishNet sends and <see cref="IterateOutgoing"/> both run there. Broadcasts (-1) count
+		/// against nobody.
+		/// </summary>
+		private readonly Dictionary<int, int> outgoingPerConnection = new Dictionary<int, int>();
+
+		/// <summary>
+		/// Connections already being disconnected for outbound reasons (queue share exceeded or
+		/// the native send buffer refused a reliable packet). Suppresses repeat kicks and log spam
+		/// until the disconnect event clears them.
+		/// </summary>
+		private readonly HashSet<int> outboundKicked = new HashSet<int>();
+
+		/// <summary>
+		/// Share of <see cref="CommonSocket.MaxOutgoingQueueSize"/> one connection may hold. The
+		/// queue is drained every frame, so this is a per-frame volume cap; hitting it means the
+		/// server is producing more for one client than a frame can carry.
+		/// </summary>
+		private const int MaxOutgoingPerConnection = 2000;
+
+		/// <summary>
+		/// Disconnects a client whose outbound side can no longer be served, instead of letting the
+		/// shared queue drop other clients' reliable packets. Main thread only.
+		/// </summary>
+		private void KickSlowClient(int connectionId, string reason)
+		{
+			if (!this.outboundKicked.Add(connectionId))
+				return;
+			transport.NetworkManager?.LogWarning($"[WebTransport Server] Disconnecting {connectionId}: {reason}.");
+			if (this.idMapToNative.TryGetValue(connectionId, out ulong nativeId) &&
+				this.serverHandle != null && !this.serverHandle.IsInvalid)
+			{
+				WebTransportNative.wt_server_disconnect(this.serverHandle, nativeId);
+			}
+		}
+		#endregion
+
 		/// <summary>
 		/// Sends data to a single client or broadcasts to all (-1).
 		/// Channel 0 = reliable (stream), Channel 1 = unreliable (datagram).
@@ -709,7 +822,34 @@ namespace FishNet.Transporting.WebTransport.Server
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
-			Send(this.outgoing, channelId, segment, connectionId);
+			if (connectionId != -1)
+			{
+				if (this.outboundKicked.Contains(connectionId))
+					return;
+				this.outgoingPerConnection.TryGetValue(connectionId, out int queued);
+				if (queued >= MaxOutgoingPerConnection)
+				{
+					/* Over its share. A dropped reliable packet leaves the client's stream
+					 * state broken anyway, so end the connection rather than corrupt it;
+					 * an unreliable packet is simply lost. Either way nobody else's packets
+					 * are evicted from the shared queue on this client's account. */
+					if (channelId == 0)
+						KickSlowClient(connectionId, $"outbound queue share exceeded ({MaxOutgoingPerConnection} packets in one frame)");
+					return;
+				}
+				this.outgoingPerConnection[connectionId] = queued + 1;
+			}
+			int evicted = Send(this.outgoing, channelId, segment, connectionId);
+			if (evicted != NoDrop && evicted != -1 &&
+				this.outgoingPerConnection.TryGetValue(evicted, out int evictedQueued))
+			{
+				/* The global cap evicted someone's oldest packet: keep that connection's
+				 * count honest so its share is not permanently understated. */
+				if (evictedQueued <= 1)
+					this.outgoingPerConnection.Remove(evicted);
+				else
+					this.outgoingPerConnection[evicted] = evictedQueued - 1;
+			}
 		}
 
 		/// <summary>
@@ -760,6 +900,9 @@ namespace FishNet.Transporting.WebTransport.Server
 			}
 			base.ClearPacketQueue(this.outgoing);
 			this.disconnectingNext.Clear();
+			this.outgoingPerConnection.Clear();
+			this.outboundKicked.Clear();
+			this.inboundBuckets.Clear();
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -791,6 +934,15 @@ namespace FishNet.Transporting.WebTransport.Server
 				try
 				{
 					int connectionId = pkt.ConnectionId;
+
+					if (connectionId != -1 &&
+						this.outgoingPerConnection.TryGetValue(connectionId, out int queued))
+					{
+						if (queued <= 1)
+							this.outgoingPerConnection.Remove(connectionId);
+						else
+							this.outgoingPerConnection[connectionId] = queued - 1;
+					}
 
 					if (connectionId == -1) // Broadcast
 					{
@@ -838,6 +990,17 @@ namespace FishNet.Transporting.WebTransport.Server
 
 			if (result != 0)
 			{
+				if (this.outboundKicked.Contains(connectionId))
+					return;
+				/* BufferFull on a reliable send means the native library has hit its
+				 * per-connection in-flight cap: the peer is not reading. The packet is
+				 * lost, so the stream is already broken for that client; disconnect it
+				 * before its backlog costs anyone else memory. */
+				if (result == (int)WebTransportNative.WTError.BufferFull && packet.Channel == 0)
+				{
+					KickSlowClient(connectionId, "reliable send refused, native send buffer full (peer not reading)");
+					return;
+				}
 				transport.NetworkManager?.LogWarning(
 					$"[WebTransport Server] Send to {connectionId} failed: {WebTransportNative.ErrorString((WebTransportNative.WTError)result)}");
 			}
@@ -1049,6 +1212,8 @@ namespace FishNet.Transporting.WebTransport.Server
 					{
 						this.clientsLock.ExitWriteLock();
 					}
+					this.outgoingPerConnection.Remove(fishNetId);
+					this.outboundKicked.Remove(fishNetId);
 
 					transport.HandleRemoteConnectionState(
 						new RemoteConnectionStateArgs(RemoteConnectionState.Stopped, fishNetId, transport.Index));
@@ -1076,7 +1241,8 @@ namespace FishNet.Transporting.WebTransport.Server
 			}
 
 			// Per-connection budget, before the copy and before the shared queue.
-			if (!TryAdmitInbound(nativeConnectionId))
+			if (!TryAdmitInbound(nativeConnectionId, out InboundBucket bucket) ||
+				!TryReservePendingEvent(nativeConnectionId, bucket))
 			{
 				return;
 			}
@@ -1096,6 +1262,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
+				ReleasePendingEvent(bucket);
 				transport.NetworkManager?.LogWarning("[WebTransport Server] Incoming event queue full; dropping stream data.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;
@@ -1103,6 +1270,7 @@ namespace FishNet.Transporting.WebTransport.Server
 
 			this.incomingEvents.Enqueue(() =>
 			{
+				ReleasePendingEvent(bucket);
 				try
 				{
 					if (!this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
@@ -1143,7 +1311,8 @@ namespace FishNet.Transporting.WebTransport.Server
 			}
 
 			// Per-connection budget, before the copy and before the shared queue.
-			if (!TryAdmitInbound(nativeConnectionId))
+			if (!TryAdmitInbound(nativeConnectionId, out InboundBucket bucket) ||
+				!TryReservePendingEvent(nativeConnectionId, bucket))
 			{
 				return;
 			}
@@ -1159,6 +1328,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
+				ReleasePendingEvent(bucket);
 				transport.NetworkManager?.LogWarning("[WebTransport Server] Incoming event queue full; dropping datagram data.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;
@@ -1166,6 +1336,7 @@ namespace FishNet.Transporting.WebTransport.Server
 
 			this.incomingEvents.Enqueue(() =>
 			{
+				ReleasePendingEvent(bucket);
 				try
 				{
 					if (!this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))

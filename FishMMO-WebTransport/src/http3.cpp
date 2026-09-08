@@ -1249,8 +1249,32 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
 static h3_stream_ctx_t* h3_stream_ctx_create(HQUIC stream, h3_session_t* h3)
 {
+    /* Per-session cap on tracked stream contexts.  Reserve the slot
+     * under the lock before allocating so concurrent creates cannot
+     * both pass the check.  A NULL return makes the caller abort the
+     * stream, which is the correct answer to a client opening streams
+     * it never completes. */
+    if (h3) {
+        H3_LOCK(h3);
+        if (h3->max_stream_ctx != 0 &&
+            h3->stream_ctx_count >= h3->max_stream_ctx) {
+            H3_UNLOCK(h3);
+            WT_LOG_WARN("H3: stream context cap (%u) reached — refusing stream",
+                        (unsigned)h3->max_stream_ctx);
+            return NULL;
+        }
+        h3->stream_ctx_count++;
+        H3_UNLOCK(h3);
+    }
     h3_stream_ctx_t* sctx = (h3_stream_ctx_t*)calloc(1, sizeof(*sctx));
-    if (!sctx) return NULL;
+    if (!sctx) {
+        if (h3) {
+            H3_LOCK(h3);
+            if (h3->stream_ctx_count > 0) h3->stream_ctx_count--;
+            H3_UNLOCK(h3);
+        }
+        return NULL;
+    }
     sctx->quic_stream = stream;
     sctx->stream_type = -1;
     sctx->h3 = h3;
@@ -1281,6 +1305,7 @@ void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
             *pp = sctx->next;
             sctx->next = NULL;
             sctx->h3 = NULL;
+            if (h3->stream_ctx_count > 0) h3->stream_ctx_count--;
             H3_UNLOCK(h3);
             return;
         }

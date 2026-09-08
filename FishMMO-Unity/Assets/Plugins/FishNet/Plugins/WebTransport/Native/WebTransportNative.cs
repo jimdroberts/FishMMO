@@ -374,6 +374,25 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static extern void wt_server_disconnect(SafeServerHandle server, ulong connectionId);
 
 		/// <summary>
+		/// Configures the transport-level abuse limits. Call before <see cref="wt_server_start"/>.
+		/// A negative value keeps that limit's native default; zero disables it.
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <param name="connectIntervalMs">Minimum milliseconds between connections from one IP bucket.</param>
+		/// <param name="maxConnectionsPerIp">Concurrent connection slots one IP may hold.</param>
+		/// <param name="maxHalfOpen">Server-wide slots held without an established WebTransport session.</param>
+		/// <param name="inboundMessagesPerSecond">Per-connection sustained inbound message rate (streams and datagrams).</param>
+		/// <param name="inboundMessageBurst">Per-connection token-bucket capacity in messages.</param>
+		/// <param name="inboundOverflowKick">Consecutive refused messages before the connection is disconnected.</param>
+		/// <param name="maxQueuedDatagramsPerConnection">Entries of the shared datagram ring one connection may occupy.</param>
+		/// <param name="maxH3StreamsPerConnection">HTTP/3 stream contexts tracked per connection before its session is up.</param>
+		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
+		public static extern void wt_server_set_limits(SafeServerHandle server,
+			int connectIntervalMs, int maxConnectionsPerIp, int maxHalfOpen,
+			int inboundMessagesPerSecond, int inboundMessageBurst, int inboundOverflowKick,
+			int maxQueuedDatagramsPerConnection, int maxH3StreamsPerConnection);
+
+		/// <summary>
 		/// Gets the remote address string for a connected client.
 		/// The returned pointer references internal storage within the server's connection struct.
 		/// The string must be marshaled immediately (no free is required).
@@ -490,6 +509,7 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static int wt_server_send_stream(SafeServerHandle s, ulong c, byte[] d, int l) => -1;
 		public static int wt_server_send_datagram(SafeServerHandle s, ulong c, byte[] d, int l) => -1;
 		public static void wt_server_disconnect(SafeServerHandle s, ulong c) { }
+		public static void wt_server_set_limits(SafeServerHandle s, int a, int b, int c, int d, int e, int f, int g, int h) { }
 		public static IntPtr wt_server_get_client_address(SafeServerHandle s, ulong c) => IntPtr.Zero;
 		public static int wt_server_get_client_count(SafeServerHandle s) => 0;
 		public static int wt_server_get_max_clients(SafeServerHandle s) => 0;

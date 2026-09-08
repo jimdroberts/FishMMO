@@ -536,6 +536,9 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * Reading req->length afterwards is a use-after-free. */
         const uint32_t req_length = req->length;
 
+        /* Account before the call: a synchronous completion would run
+         * SEND_COMPLETE (and its decrement) inside StreamSend. */
+        atomic_fetch_add(&sctx->mgr->total_send_bytes, req_length);
         QUIC_STATUS st = MsQuic->StreamSend(
             stream,
             &req->buf,
@@ -543,6 +546,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             send_flags,
             req);
         if (QUIC_FAILED(st)) {
+            atomic_fetch_sub(&sctx->mgr->total_send_bytes, req_length);
             WT_LOG_ERROR(
                 "StreamSend failed after START_COMPLETE st=0x%x "
                 "stream_id=%llu len=%u fin=%d — free now (no SEND_COMPLETE)",
@@ -573,6 +577,12 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
         /* Exactly one free per successful StreamSend ClientContext. */
+        {
+            sm_send_req_t* done = (sm_send_req_t*)event->SEND_COMPLETE.ClientContext;
+            if (done && done->magic == SM_SEND_REQ_MAGIC && !done->freed && sctx->mgr) {
+                atomic_fetch_sub(&sctx->mgr->total_send_bytes, done->length);
+            }
+        }
         if (event->SEND_COMPLETE.Canceled) {
             WT_LOG_WARN(
                 "SEND_COMPLETE canceled stream_id=%llu — free buffer",
@@ -688,6 +698,7 @@ void wt_stream_manager_init(
     atomic_store(&mgr->conn_closed, false);
     atomic_store(&mgr->handles_invalid, false);
     atomic_init(&mgr->total_recv_bytes, 0);
+    atomic_init(&mgr->total_send_bytes, 0);
 
 #if defined(WT_PLATFORM_WINDOWS)
     InitializeCriticalSection(&mgr->streams_lock_cs);
@@ -898,6 +909,8 @@ static int32_t sm_send_on_open_stream(
         return WT_ERR_INVALID_STATE;
     }
 
+    const uint32_t req_length = req->length;
+    atomic_fetch_add(&mgr->total_send_bytes, req_length);
     QUIC_STATUS st = MsQuic->StreamSend(
         quic_stream,
         &req->buf,
@@ -905,6 +918,7 @@ static int32_t sm_send_on_open_stream(
         QUIC_SEND_FLAG_NONE, /* keep send side open for further replies */
         req);
     if (QUIC_FAILED(st)) {
+        atomic_fetch_sub(&mgr->total_send_bytes, req_length);
         WT_LOG_ERROR(
             "StreamSend on existing stream failed st=0x%x conn=%llu "
             "stream_id=%llu len=%d stamp=SAME_STREAM_REPLY_V2",
@@ -942,6 +956,20 @@ int32_t wt_stream_manager_send(
     }
     if (atomic_load(&mgr->shutting_down)) return WT_ERR_INVALID_STATE;
     if (atomic_load(&mgr->conn_closed)) return WT_ERR_INVALID_STATE;
+
+    /* Outbound backpressure: refuse rather than let msquic buffer without
+     * bound for a peer that has stopped reading.  The caller treats
+     * WT_ERR_BUFFER_FULL on a reliable send as "disconnect this client". */
+    {
+        unsigned in_flight = atomic_load(&mgr->total_send_bytes);
+        if (in_flight + (unsigned)length > (unsigned)WT_MAX_TOTAL_SEND_BUF) {
+            WT_LOG_WARN("Stream send refused: conn=%llu has %u bytes in flight "
+                        "(cap %u) — peer is not reading",
+                        (unsigned long long)mgr->conn_id, in_flight,
+                        (unsigned)WT_MAX_TOTAL_SEND_BUF);
+            return WT_ERR_BUFFER_FULL;
+        }
+    }
 
     /*
      * Stream reuse policy (stamp=STREAM_REUSE_POLICY_V2):

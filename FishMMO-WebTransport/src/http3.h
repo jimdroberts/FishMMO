@@ -199,6 +199,12 @@ typedef struct h3_session_s {
      * streams that outlive the HTTP/3 session teardown.
      * Must be accessed only while holding stream_ctx_lock. */
     struct h3_stream_ctx_s* stream_ctx_list;
+    /* Number of contexts currently linked in stream_ctx_list and the
+     * cap the server enforces on it (0 = unlimited).  Protected by
+     * stream_ctx_lock.  Bounds the per-connection stream contexts a
+     * client can force us to allocate before its session is up. */
+    uint32_t                stream_ctx_count;
+    uint32_t                max_stream_ctx;
 
     /* Mutex protecting stream_ctx_list and h3_stream_ctx_t linked-list
      * operations.  Multiple QUIC worker threads can concurrently unlink

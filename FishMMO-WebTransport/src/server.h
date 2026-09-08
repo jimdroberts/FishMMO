@@ -74,7 +74,65 @@ typedef struct {
      * made at most once per connection rather than on every poll frame
      * between the fallback deadline and the disconnect deadline. */
     atomic_bool             h3_native_fallback_tried;
+
+    /* ── Per-connection inbound flood control ─────────────────────
+     * Token bucket over inbound stream messages + datagrams, refilled
+     * from a monotonic-ms clock.  All QUIC events for one connection
+     * are serialised by msquic onto that connection's worker, so the
+     * bucket has a single writer; atomics are still used because the
+     * listener thread resets the fields at slot claim and the poll
+     * thread reads kick_pending.
+     *   inbound_tokens_milli : remaining budget × 1000 (milli-messages)
+     *   inbound_refill_ms    : monotonic-ms of the last refill
+     *   inbound_refused      : messages refused since the last accept
+     *   kick_pending         : 1 = poll thread must disconnect this
+     *                          connection (flood-kick), consumed with
+     *                          atomic_exchange in wt_server_poll_impl. */
+    uint64_t                inbound_tokens_milli;
+    uint64_t                inbound_refill_ms;
+    atomic_int              inbound_refused;
+    atomic_int              kick_pending;
+
+    /* Datagrams from this connection currently sitting in the shared
+     * dgram_queue.  Bounded by limits.max_queued_datagrams_per_conn so
+     * one flooding client cannot fill the ring for everyone else.
+     * Incremented in DATAGRAM_RECEIVED, decremented in the poll drain. */
+    atomic_int              dgram_queued;
+
+    /* Index+1 of this connection's bucket in ip_conns (0 = not
+     * accounted).  Released exactly once via wt_server_release_ip. */
+    atomic_int              ip_bucket;
+
+    /* 1 while this connection is counted in half_open_count (slot
+     * claimed, WebTransport session not yet established).  Cleared
+     * with atomic_exchange by whichever path finishes first:
+     * on_h3_session_ready or slot release. */
+    atomic_int              half_open_counted;
 } wt_server_conn_t;
+
+/* ── Runtime-configurable limits ────────────────────────────────
+ * Populated with defaults in wt_server_alloc_impl; overridden by
+ * wt_server_set_limits() before wt_server_start().  0 = unlimited
+ * for the caps, 0 = disabled for the kick threshold. */
+typedef struct wt_server_limits_s {
+    uint32_t connect_interval_ms;           /* min ms between connects per IP bucket */
+    uint32_t max_connections_per_ip;        /* concurrent slots one IP may hold */
+    uint32_t max_half_open;                 /* slots held without a WT session */
+    uint32_t inbound_messages_per_second;   /* per-connection sustained rate */
+    uint32_t inbound_message_burst;         /* per-connection bucket capacity */
+    uint32_t inbound_overflow_kick;         /* refusals in a row before disconnect */
+    uint32_t max_queued_datagrams_per_conn; /* share of dgram_queue one client may hold */
+    uint32_t max_h3_streams_per_conn;       /* pre-session H3 stream contexts per connection */
+} wt_server_limits_t;
+
+#define WT_DEFAULT_CONNECT_INTERVAL_MS      100
+#define WT_DEFAULT_MAX_CONNECTIONS_PER_IP   16
+#define WT_DEFAULT_MAX_HALF_OPEN            512
+#define WT_DEFAULT_INBOUND_MSGS_PER_SEC     500
+#define WT_DEFAULT_INBOUND_BURST            1000
+#define WT_DEFAULT_INBOUND_OVERFLOW_KICK    200
+#define WT_DEFAULT_MAX_QUEUED_DGRAMS        64
+#define WT_DEFAULT_MAX_H3_STREAMS           64
 
 /* ── Server structure ───────────────────────────────────────── */
 
@@ -98,6 +156,29 @@ typedef struct wt_server_s {
 
     atomic_int              state;
     atomic_uint             connection_count;
+
+    /* Connections holding a slot without an established WebTransport
+     * session (QUIC handshake and/or H3 CONNECT still in flight).
+     * Capped by limits.max_half_open in server_listener_cb. */
+    atomic_uint             half_open_count;
+
+    wt_server_limits_t      limits;
+
+    /* ── Per-IP concurrent-connection table ──────────────────────
+     * Same FNV-1a keying as rate_limits, but reference-counted and
+     * mutex-protected so buckets are released when their last
+     * connection closes (the rate-limit table never releases).  The
+     * listener callback and SHUTDOWN_COMPLETE are the only users, both
+     * off the hot data path, so a mutex is the simplest correct choice. */
+    struct {
+        uint32_t addr_hash;   /* 0 = empty */
+        uint32_t count;
+    } ip_conns[WT_MAX_CLIENTS];
+#if defined(WT_PLATFORM_WINDOWS)
+    CRITICAL_SECTION        ip_conns_lock;
+#else
+    pthread_mutex_t         ip_conns_lock;
+#endif
 
     wt_server_conn_t*       connections;
     wt_datagram_queue_t     dgram_queue;
@@ -133,7 +214,8 @@ typedef struct wt_server_s {
                                          causing total connection DoS.  4096 matches
                                          WT_MAX_CLIENTS and requires ~4× the IP diversity
                                          to saturate. */
-    #define WT_RATE_LIMIT_INTERVAL_MS 100  /* min 100ms between connects from same bucket */
+    /* Interval lives in limits.connect_interval_ms (default
+     * WT_DEFAULT_CONNECT_INTERVAL_MS, 0 = disabled). */
     struct {
         atomic_int  addr_hash;         /* FNV-1a 32-bit hash of raw address bytes (0 = empty) */
         /* ── FIX #2: 64-bit monotonic-ms timestamp ──────────────────
@@ -185,6 +267,12 @@ int32_t wt_server_send_datagram_impl(
     const uint8_t* data, int32_t length);
 
 void wt_server_disconnect_impl(wt_server_s* server, wt_connection_id_t conn_id);
+
+/** Per-connection inbound admission (stream messages and datagrams).
+ *  Called on the connection's QUIC worker thread.  Returns false when
+ *  the message must be dropped; flags the connection for a poll-thread
+ *  disconnect once limits.inbound_overflow_kick refusals accumulate. */
+bool wt_server_admit_inbound(wt_server_s* server, wt_connection_id_t conn_id);
 
 const char* wt_server_get_client_addr_impl(
     wt_server_s* server, wt_connection_id_t conn_id);

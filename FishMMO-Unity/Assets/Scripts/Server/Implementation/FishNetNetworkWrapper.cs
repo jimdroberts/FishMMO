@@ -158,6 +158,13 @@ namespace FishMMO.Server.Implementation
 			 * (BroadcastMaxMessagesPerSecond) is the second, transport-agnostic line. */
 			int inboundPerSecond = config.GetInt("TransportMaxInboundMessagesPerSecond", 200);
 			int inboundBurst = config.GetInt("TransportInboundMessageBurst", 400);
+			/* Connection-level limits enforced inside the native WebTransport library, before
+			 * the QUIC handshake. -1 keeps the library default, 0 disables the limit. */
+			int connectIntervalMs = config.GetInt("TransportConnectIntervalMs", -1);
+			int maxConnectionsPerIp = config.GetInt("TransportMaxConnectionsPerIP", -1);
+			int maxHalfOpen = config.GetInt("TransportMaxHalfOpenConnections", -1);
+			int maxQueuedDatagrams = config.GetInt("TransportMaxQueuedDatagramsPerConnection", -1);
+			int maxH3Streams = config.GetInt("TransportMaxH3StreamsPerConnection", -1);
 
 			// IPv6 dual-stack support: when enabled, binds both IPv4 and IPv6 on the same port.
 			bool enableIPv6 = string.Equals(config.GetString("EnableIPv6", "false"), "true", StringComparison.OrdinalIgnoreCase);
@@ -207,6 +214,7 @@ namespace FishMMO.Server.Implementation
 #endif
 						wt.SetAllowedOrigins(allowedOrigins);
 						wt.SetInboundRateLimit(inboundPerSecond, inboundBurst);
+						wt.SetNativeLimits(connectIntervalMs, maxConnectionsPerIp, maxHalfOpen, maxQueuedDatagrams, maxH3Streams);
 						if (!ConfigureWebTransport(wt))
 							Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed for Multipass child — TLS certificates not loaded.");
 						configured = true;
@@ -237,6 +245,7 @@ namespace FishMMO.Server.Implementation
 #endif
 				wt.SetAllowedOrigins(allowedOrigins);
 				wt.SetInboundRateLimit(inboundPerSecond, inboundBurst);
+				wt.SetNativeLimits(connectIntervalMs, maxConnectionsPerIp, maxHalfOpen, maxQueuedDatagrams, maxH3Streams);
 				if (!ConfigureWebTransport(wt))
 					Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed -- TLS certificates not loaded.");
 			}

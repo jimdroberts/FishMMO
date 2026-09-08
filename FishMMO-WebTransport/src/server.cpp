@@ -37,6 +37,135 @@ static void fire_connect(wt_server_conn_t* sconn);
 static void fire_disconnect(wt_server_conn_t* sconn, int err);
 static uint64_t rate_limiter_now_ms(void);
 static void wt_server_drain_pending_shutdowns(wt_server_s* server);
+static void wt_server_release_slot_accounting(wt_server_conn_t* conn);
+
+#if defined(WT_PLATFORM_WINDOWS)
+  #define WT_IP_LOCK(s)   EnterCriticalSection(&(s)->ip_conns_lock)
+  #define WT_IP_UNLOCK(s) LeaveCriticalSection(&(s)->ip_conns_lock)
+#else
+  #define WT_IP_LOCK(s)   pthread_mutex_lock(&(s)->ip_conns_lock)
+  #define WT_IP_UNLOCK(s) pthread_mutex_unlock(&(s)->ip_conns_lock)
+#endif
+
+/* ── Per-IP concurrent-connection accounting ─────────────────────
+ * Returns bucket index + 1 on success (stored on the connection so
+ * the release is exact), 0 when the table is saturated (fail open —
+ * matches the rate limiter's saturation policy), or -1 when the IP
+ * already holds limits.max_connections_per_ip slots. */
+static int wt_server_ip_acquire(wt_server_s* srv, uint32_t hash)
+{
+    if (srv->limits.max_connections_per_ip == 0) return 0;
+    if (hash == 0) hash = 1;
+    int result = 0;
+    WT_IP_LOCK(srv);
+    uint32_t start = hash % WT_MAX_CLIENTS;
+    int reuse_idx = -1;   /* first bucket with count 0 seen on the chain */
+    int empty_idx = -1;   /* first never-used bucket (chain end) */
+    for (uint32_t i = 0; i < WT_MAX_CLIENTS; i++) {
+        uint32_t idx = (start + i) % WT_MAX_CLIENTS;
+        uint32_t h = srv->ip_conns[idx].addr_hash;
+        if (h == hash) {
+            if (srv->ip_conns[idx].count >= srv->limits.max_connections_per_ip) {
+                result = -1;
+            } else {
+                srv->ip_conns[idx].count++;
+                result = (int)idx + 1;
+            }
+            break;
+        }
+        if (h == 0) { empty_idx = (int)idx; break; }
+        /* Released buckets keep their hash (see wt_server_ip_release)
+         * so the probe chain is never broken; remember the first one
+         * as a reuse candidate but keep looking for a live match. */
+        if (srv->ip_conns[idx].count == 0 && reuse_idx < 0) reuse_idx = (int)idx;
+    }
+    if (result == 0) {
+        int idx = reuse_idx >= 0 ? reuse_idx : empty_idx;
+        if (idx >= 0) {
+            srv->ip_conns[idx].addr_hash = hash;
+            srv->ip_conns[idx].count = 1;
+            result = idx + 1;
+        }
+        /* else: every bucket is live — fail open, matching the rate
+         * limiter's saturation policy.  Returns 0 (unaccounted). */
+    }
+    WT_IP_UNLOCK(srv);
+    return result;
+}
+
+static void wt_server_ip_release(wt_server_s* srv, int bucket_plus_one)
+{
+    if (bucket_plus_one <= 0 || bucket_plus_one > WT_MAX_CLIENTS) return;
+    WT_IP_LOCK(srv);
+    uint32_t idx = (uint32_t)(bucket_plus_one - 1);
+    if (srv->ip_conns[idx].count > 0) {
+        srv->ip_conns[idx].count--;
+    }
+    /* Deliberately keep addr_hash: clearing a bucket in the middle of
+     * a linear-probe chain would end the chain early and let the same
+     * IP claim a second bucket, splitting (and doubling) its cap.  A
+     * count of 0 marks the bucket reusable by any hash. */
+    WT_IP_UNLOCK(srv);
+}
+
+/* Releases the per-IP slot and the half-open count exactly once for
+ * a connection slot.  Safe to call from any release path; each field
+ * is claimed with atomic_exchange so double calls are harmless. */
+static void wt_server_release_slot_accounting(wt_server_conn_t* conn)
+{
+    if (!conn || !conn->owner) return;
+    wt_server_s* srv = conn->owner;
+    int bucket = atomic_exchange(&conn->ip_bucket, 0);
+    if (bucket > 0) wt_server_ip_release(srv, bucket);
+    if (atomic_exchange(&conn->half_open_counted, 0)) {
+        atomic_fetch_sub(&srv->half_open_count, 1);
+    }
+}
+
+/* ── Per-connection inbound token bucket ─────────────────────────
+ * Called on the connection's QUIC worker for every inbound stream
+ * message and datagram.  Returns true when the message may be
+ * delivered.  After limits.inbound_overflow_kick consecutive refusals
+ * the connection is flagged for disconnect on the poll thread. */
+bool wt_server_admit_inbound(wt_server_s* srv, wt_connection_id_t conn_id)
+{
+    if (!srv || conn_id == 0 || conn_id > srv->max_clients) return false;
+    uint32_t rate = srv->limits.inbound_messages_per_second;
+    if (rate == 0) return true;
+    wt_server_conn_t* conn = &srv->connections[conn_id];
+    if (!atomic_load(&conn->in_use)) return false;
+
+    uint64_t burst_milli = (uint64_t)srv->limits.inbound_message_burst * 1000ULL;
+    if (burst_milli < 1000ULL) burst_milli = 1000ULL;
+    uint64_t now = rate_limiter_now_ms();
+    uint64_t last = atomic_load_u64(&conn->inbound_refill_ms);
+    uint64_t tokens = atomic_load_u64(&conn->inbound_tokens_milli);
+    if (now > last) {
+        uint64_t refill = (now - last) * (uint64_t)rate;  /* ms × msgs/s = milli-msgs */
+        tokens = (tokens + refill > burst_milli) ? burst_milli : tokens + refill;
+        atomic_store_u64(&conn->inbound_refill_ms, now);
+    }
+    if (tokens >= 1000ULL) {
+        atomic_store_u64(&conn->inbound_tokens_milli, tokens - 1000ULL);
+        atomic_store(&conn->inbound_refused, 0);
+        return true;
+    }
+    atomic_store_u64(&conn->inbound_tokens_milli, tokens);
+    int refused = atomic_fetch_add(&conn->inbound_refused, 1) + 1;
+    uint32_t kick_at = srv->limits.inbound_overflow_kick;
+    if (kick_at != 0 && (uint32_t)refused >= kick_at) {
+        int expected = 0;
+        if (atomic_compare_exchange_strong(&conn->kick_pending, &expected, 1)) {
+            WT_LOG_WARN("Client %llu exceeded inbound rate (%u refused) — queuing disconnect",
+                        (unsigned long long)conn_id, (unsigned)refused);
+        }
+    } else if (refused == 1) {
+        WT_LOG_WARN("Client %llu inbound rate limited (%u msg/s, burst %u)",
+                    (unsigned long long)conn_id, (unsigned)rate,
+                    (unsigned)srv->limits.inbound_message_burst);
+    }
+    return false;
+}
 
 /* ── HTTP/3 Handshake Callbacks ─────────────────────────────── */
 
@@ -76,6 +205,12 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
     session->parent_type = WT_PARENT_SERVER;
     session->parent.server = sconn->owner;
     wt_session_wire_callbacks(session);
+
+    /* The WebTransport session is established — this slot no longer
+     * counts against the half-open cap. */
+    if (sconn->owner && atomic_exchange(&sconn->half_open_counted, 0)) {
+        atomic_fetch_sub(&sconn->owner->half_open_count, 1);
+    }
 
     /* Browser CONNECT sessions need WEBTRANSPORT_STREAM framing on data
      * streams so the peer associates them with the WT session, and HTTP/3
@@ -353,7 +488,21 @@ wt_server_s* wt_server_alloc_impl(
 
     atomic_init(&srv->state, WT_SERVER_STOPPED);
     atomic_init(&srv->connection_count, 0);
+    atomic_init(&srv->half_open_count, 0);
     atomic_init(&srv->pending_shutdowns, 0);
+    srv->limits.connect_interval_ms           = WT_DEFAULT_CONNECT_INTERVAL_MS;
+    srv->limits.max_connections_per_ip        = WT_DEFAULT_MAX_CONNECTIONS_PER_IP;
+    srv->limits.max_half_open                 = WT_DEFAULT_MAX_HALF_OPEN;
+    srv->limits.inbound_messages_per_second   = WT_DEFAULT_INBOUND_MSGS_PER_SEC;
+    srv->limits.inbound_message_burst         = WT_DEFAULT_INBOUND_BURST;
+    srv->limits.inbound_overflow_kick         = WT_DEFAULT_INBOUND_OVERFLOW_KICK;
+    srv->limits.max_queued_datagrams_per_conn = WT_DEFAULT_MAX_QUEUED_DGRAMS;
+    srv->limits.max_h3_streams_per_conn       = WT_DEFAULT_MAX_H3_STREAMS;
+#if defined(WT_PLATFORM_WINDOWS)
+    InitializeCriticalSection(&srv->ip_conns_lock);
+#else
+    pthread_mutex_init(&srv->ip_conns_lock, NULL);
+#endif
     atomic_init_u64(&srv->pending_shutdown_head, 0);
     atomic_init_u64(&srv->pending_shutdown_tail, 0);
 
@@ -361,7 +510,15 @@ wt_server_s* wt_server_alloc_impl(
      * (WT_CONNECTION_ID_NONE). Valid connection IDs are 1..max_clients. */
     srv->connections = (wt_server_conn_t*)calloc(
         srv->max_clients + 1, sizeof(wt_server_conn_t));
-    if (!srv->connections) { free(srv); return NULL; }
+    if (!srv->connections) {
+#if defined(WT_PLATFORM_WINDOWS)
+        DeleteCriticalSection(&srv->ip_conns_lock);
+#else
+        pthread_mutex_destroy(&srv->ip_conns_lock);
+#endif
+        free(srv);
+        return NULL;
+    }
 
     srv->h3_sweep_cursor = 1;
     wt_datagram_queue_init(&srv->dgram_queue);
@@ -482,6 +639,11 @@ void wt_server_free_impl(wt_server_s* server)
             server->registration = NULL;
         }
         wt_datagram_queue_destroy(&server->dgram_queue);
+#if defined(WT_PLATFORM_WINDOWS)
+        DeleteCriticalSection(&server->ip_conns_lock);
+#else
+        pthread_mutex_destroy(&server->ip_conns_lock);
+#endif
         free(server->connections);
         free(server);
         return;
@@ -511,6 +673,11 @@ void wt_server_free_impl(wt_server_s* server)
     }
 
     wt_datagram_queue_destroy(&server->dgram_queue);
+#if defined(WT_PLATFORM_WINDOWS)
+    DeleteCriticalSection(&server->ip_conns_lock);
+#else
+    pthread_mutex_destroy(&server->ip_conns_lock);
+#endif
     free(server->connections);
     free(server);
 }
@@ -916,6 +1083,15 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
         wt_server_conn_t* c = &server->connections[i];
         if (!atomic_load(&c->in_use))
             continue;
+        /* Flood kicks are executed here, on the poll thread, so
+         * wt_server_disconnect_impl never runs concurrently with the
+         * application's own disconnect calls. */
+        if (atomic_exchange(&c->kick_pending, 0)) {
+            WT_LOG_WARN("Client %llu disconnected for inbound flooding",
+                        (unsigned long long)c->id);
+            wt_server_disconnect_impl(server, c->id);
+            continue;
+        }
         if (!c->h3_session)
             continue;
         h3_server_poll_deferred(c->h3_session);
@@ -1077,6 +1253,7 @@ void wt_server_disconnect_impl(
      * all new connections (max_clients permanently reached). */
     wt_connection_state_t state = (wt_connection_state_t)atomic_load(&conn->state);
     if (state == WT_CONN_STATE_IDLE) {
+        wt_server_release_slot_accounting(conn);
         atomic_store(&conn->in_use, false);
         /* conn->owner is validated non-NULL by the caller's in_use check.
          * It can ONLY become NULL during wt_server_free_impl, which runs
@@ -1188,8 +1365,10 @@ static bool rate_limiter_check(wt_server_s* srv,
     uint32_t hash = rate_limiter_hash(addr_bytes, addr_len);
     if (hash == 0) hash = 1;  /* 0 = empty slot sentinel */
 
+    /* 0 = per-IP connect rate limiting disabled (wt_server_set_limits). */
+    if (srv->limits.connect_interval_ms == 0) return true;
     uint64_t now = rate_limiter_now_ms();
-    uint64_t interval = (uint64_t)WT_RATE_LIMIT_INTERVAL_MS;
+    uint64_t interval = (uint64_t)srv->limits.connect_interval_ms;
 
     /* Linear-probe the hash table (wrap around). */
     uint32_t start = hash % WT_RATE_LIMIT_BUCKETS;
@@ -1328,6 +1507,7 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
      * the source port would allow a single attacker with multiple
      * ephemeral ports to occupy all 256 rate-limit buckets, bypassing
      * the limiter entirely and exhausting connection slots. */
+    int ip_bucket = 0;
     {
         QUIC_ADDR remote_addr;
         uint32_t addr_len = sizeof(remote_addr);
@@ -1351,6 +1531,16 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
                 if (!rate_limiter_check(srv, ip_bytes, ip_len)) {
                     return QUIC_STATUS_CONNECTION_REFUSED;
                 }
+                /* Concurrent-connection cap per IP.  Released by
+                 * wt_server_release_slot_accounting on every slot
+                 * release path, or right below if no slot is free. */
+                ip_bucket = wt_server_ip_acquire(
+                    srv, rate_limiter_hash(ip_bytes, ip_len));
+                if (ip_bucket < 0) {
+                    WT_LOG_WARN("Refusing connection: IP already holds %u slots",
+                                (unsigned)srv->limits.max_connections_per_ip);
+                    return QUIC_STATUS_CONNECTION_REFUSED;
+                }
             }
             /* If family is unspec or unknown, fall through and allow —
              * failing closed when we can't parse the address would block
@@ -1359,6 +1549,18 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
         /* If GetParam fails, allow the connection — failing closed
          * when the OS can't tell us the remote address would prevent
          * all clients from connecting. */
+    }
+
+    /* ── Half-open cap ───────────────────────────────────────────
+     * Bounds the slots held by connections that have not finished the
+     * WebTransport handshake.  Checked before the slot scan so a
+     * half-open flood cannot reach the O(N) claim loop or TLS. */
+    if (srv->limits.max_half_open != 0 &&
+        atomic_load(&srv->half_open_count) >= srv->limits.max_half_open) {
+        wt_server_ip_release(srv, ip_bucket);
+        WT_LOG_WARN("Refusing connection: %u half-open connections",
+                    (unsigned)srv->limits.max_half_open);
+        return QUIC_STATUS_CONNECTION_REFUSED;
     }
 
     wt_server_conn_t* conn = NULL;
@@ -1383,6 +1585,7 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     if (!conn) {
         /* No free slot — refuse without ConnectionClose. msquic
          * cleans up the handle when CONNECTION_REFUSED is returned. */
+        wt_server_ip_release(srv, ip_bucket);
         return QUIC_STATUS_CONNECTION_REFUSED;
     }
 
@@ -1457,6 +1660,18 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     atomic_store(&conn->dgram_drop_count, 0);
     conn->owner = srv;
 
+    /* Fresh flood-control state for the new occupant.  Ordered before
+     * SetCallbackHandler so the connection's worker thread observes it. */
+    atomic_store_u64(&conn->inbound_tokens_milli,
+                     (uint64_t)srv->limits.inbound_message_burst * 1000ULL);
+    atomic_store_u64(&conn->inbound_refill_ms, rate_limiter_now_ms());
+    atomic_store(&conn->inbound_refused, 0);
+    atomic_store(&conn->kick_pending, 0);
+    atomic_store(&conn->dgram_queued, 0);
+    atomic_store(&conn->ip_bucket, ip_bucket);
+    atomic_store(&conn->half_open_counted, 1);
+    atomic_fetch_add(&srv->half_open_count, 1);
+
     atomic_fetch_add(&srv->connection_count, 1);
 
     MsQuic->SetCallbackHandler((HQUIC)atomic_ptr_load(&conn->quic_conn),
@@ -1467,6 +1682,7 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
         WT_LOG_WARN("ConnectionSetConfiguration: 0x%x", status);
         /* Undo what we set up above; do NOT call ConnectionClose —
          * msquic closes the handle when CONNECTION_REFUSED is returned. */
+        wt_server_release_slot_accounting(conn);
         atomic_store(&conn->in_use, false);
         atomic_fetch_sub(&srv->connection_count, 1);
         return QUIC_STATUS_CONNECTION_REFUSED;
@@ -1589,6 +1805,10 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         sconn->h3_session = h3_session_create(
             conn, true,  /* is_server */
             on_h3_session_ready, on_h3_error, sconn);
+        if (sconn->h3_session && sconn->owner) {
+            sconn->h3_session->max_stream_ctx =
+                sconn->owner->limits.max_h3_streams_per_conn;
+        }
 
         /* ── FIX #3: Set H3 handshake deadline ─────────────────
          * The QUIC idle timeout (120s) is far too long for the
@@ -1857,6 +2077,7 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
         bool was_in_use = atomic_load(&sconn->in_use);
         if (was_in_use) {
+            wt_server_release_slot_accounting(sconn);
             if (sconn->owner) {
                 atomic_fetch_sub(&sconn->owner->connection_count, 1);
             }
@@ -2121,14 +2342,30 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                 if (wt_session_datagram_payload(session, buf->Buffer,
                                                 buf->Length,
                                                 &payload, &payload_len) &&
-                    payload_len > 0) {
-                    if (!wt_datagram_queue_push(
+                    payload_len > 0 &&
+                    wt_server_admit_inbound(sconn->owner, sconn->id)) {
+                    /* Per-connection share of the shared ring: one
+                     * client may not hold more than
+                     * limits.max_queued_datagrams_per_conn entries. */
+                    uint32_t quota = sconn->owner->limits.max_queued_datagrams_per_conn;
+                    bool over_quota = false;
+                    if (quota != 0) {
+                        int queued = atomic_fetch_add(&sconn->dgram_queued, 1);
+                        if ((uint32_t)queued >= quota) {
+                            atomic_fetch_sub(&sconn->dgram_queued, 1);
+                            over_quota = true;
+                        }
+                    }
+                    if (over_quota || !wt_datagram_queue_push(
                             &sconn->owner->dgram_queue,
                             sconn->id, payload,
                             (int32_t)payload_len)) {
+                        if (!over_quota && quota != 0)
+                            atomic_fetch_sub(&sconn->dgram_queued, 1);
                         int prev = atomic_fetch_add(&sconn->dgram_drop_count, 1);
                         if (prev % 100 == 0) {
-                            WT_LOG_WARN("Datagram queue full: %d drops for client %llu",
+                            WT_LOG_WARN("Datagram %s: %d drops for client %llu",
+                                        over_quota ? "quota exceeded" : "queue full",
                                         prev + 1, (unsigned long long)sconn->id);
                         }
                     }
@@ -2165,6 +2402,13 @@ static void on_server_dgram_drain(void* ctx, wt_connection_id_t conn_id,
                                    const uint8_t* data, int32_t length)
 {
     wt_server_s* srv = (wt_server_s*)ctx;
+    if (conn_id != 0 && conn_id <= srv->max_clients) {
+        wt_server_conn_t* c = &srv->connections[conn_id];
+        /* The slot may have been recycled while this entry waited in
+         * the ring; never push the new occupant's count below zero. */
+        int prev = atomic_fetch_sub(&c->dgram_queued, 1);
+        if (prev <= 0) atomic_fetch_add(&c->dgram_queued, 1);
+    }
     if (srv->callbacks.on_datagram) {
         srv->callbacks.on_datagram(srv->user_context,
                                     conn_id, data, length);
