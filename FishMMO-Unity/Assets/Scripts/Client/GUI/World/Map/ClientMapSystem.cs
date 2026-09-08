@@ -174,7 +174,11 @@ namespace FishMMO.Client
 				return;
 			}
 
-			LoadScene(character.SceneName);
+			/* The scene the character is standing in, which inside an instance is the instance
+			 * scene and not SceneName. The server keys waypoint unlocks and validates travel
+			 * requests by this name; drawing SceneName from inside a dungeon showed the open
+			 * world and had every fast-travel request refused as NotInScene. */
+			LoadScene(character.CurrentSceneName());
 		}
 
 		/// <summary>
@@ -194,10 +198,11 @@ namespace FishMMO.Client
 			}
 
 			// A scene change arrives as a field on the character rather than as an event.
-			if (!string.Equals(Character.SceneName, SceneName, StringComparison.Ordinal))
+			string currentScene = Character.CurrentSceneName();
+			if (!string.Equals(currentScene, SceneName, StringComparison.Ordinal))
 			{
 				Flush();
-				LoadScene(Character.SceneName);
+				LoadScene(currentScene);
 			}
 
 			double now = Time.unscaledTimeAsDouble;

@@ -91,6 +91,22 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>Appends the indices registered in a scene, in no particular order.</summary>
+		public static void CollectIndices(int sceneHandle, List<int> results)
+		{
+			if (results == null || !waypointsByScene.TryGetValue(sceneHandle, out Dictionary<int, IWaypoint> scene))
+			{
+				return;
+			}
+			foreach (KeyValuePair<int, IWaypoint> entry in scene)
+			{
+				if (entry.Value != null && entry.Value.GameObject != null)
+				{
+					results.Add(entry.Key);
+				}
+			}
+		}
+
 		/// <summary>Number of waypoints registered in a scene.</summary>
 		public static int Count(int sceneHandle)
 		{

@@ -303,7 +303,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 12365299}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -355,7 +355,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -430,7 +430,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99313407}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -482,7 +482,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -755,7 +755,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: 72dbbbc0-3b12-4768-8206-16bac1b58f4f
+  destinationID: 72dbbbc0-3b12-4768-8206-16bac1b58f4f
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &347432126
 GameObject:
@@ -836,6 +836,7 @@ Terrain:
   m_AllowAutoConnect: 1
   m_EnableHeightmapRayTracing: 1
   m_EnableTreesAndDetailsRayTracing: 0
+  m_EnableHeightmapLODFrustumCulling: 1
   m_TreeMotionVectorModeOverride: 3
 --- !u!4 &347432129
 Transform:
@@ -1081,7 +1082,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 449765938}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -1133,7 +1134,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -1845,7 +1846,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 560362197}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -1897,7 +1898,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -1974,6 +1975,39 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   DestinationID: f5af695c-c112-48c1-b738-41522ab8b500
   GizmoColor: {r: 1, g: 0, b: 1, a: 1}
+--- !u!1 &632550201
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 632550202}
+  m_Layer: 0
+  m_Name: Waypoints
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &632550202
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 632550201}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1522799061}
+  - {fileID: 1666026652}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &692402323
 GameObject:
   m_ObjectHideFlags: 0
@@ -2524,8 +2558,13 @@ MonoBehaviour:
   InitialRespawnTime: 15
   InitialSpawnCount: 0
   MaxSpawnCount: 1
+  UniqueSpawnables: 0
   SpawnType: 0
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 10.47, y: 15.56, z: 25.5}
@@ -2548,6 +2587,15 @@ MonoBehaviour:
         SpawnChance: 0.5
         YOffset: 0
         AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 8938684497020846081
       type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
@@ -2558,6 +2606,15 @@ MonoBehaviour:
         SpawnChance: 0.5
         YOffset: 0
         AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 8938684497020846082
       type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
@@ -2568,6 +2625,15 @@ MonoBehaviour:
         SpawnChance: 0.5
         YOffset: 0
         AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
 --- !u!114 &849065437
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3634,7 +3700,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
+  destinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1305670805
 GameObject:
@@ -3782,7 +3848,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1305670810}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1305670810}
   MaximumSimultaneousHits: 16
   AdditionalSize: 0.1
   Layers:
@@ -3931,8 +3997,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   MaxClients: 200
+  MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
     type: 3}
+  Climate: {fileID: 0}
+  BiomeMap: {fileID: 0}
+  RuntimeTemperatureOffset: 0
+  RuntimeHumidityOffset: 0
 --- !u!4 &1334146826
 Transform:
   m_ObjectHideFlags: 0
@@ -4314,6 +4385,95 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1497544759}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1001 &1522799060
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 632550202}
+    m_Modifications:
+    - target: {fileID: 4131707743960135801, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_Name
+      value: Village Waypoint
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 3.0000305
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.009815216
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 3.0000305
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: WasActiveDuringEdit
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: <SceneId>k__BackingField
+      value: 527433691
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135807, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: WaypointName
+      value: Village Waypoint
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 8056196aa1ba4f2f8e10f6616eacd914, type: 3}
+--- !u!4 &1522799061 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+    type: 3}
+  m_PrefabInstance: {fileID: 1522799060}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1542368377
 GameObject:
   m_ObjectHideFlags: 0
@@ -4384,7 +4544,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1542368377}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -4436,7 +4596,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -5016,12 +5176,106 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1622681168}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1622681168}
   MaximumSimultaneousHits: 16
   AdditionalSize: 0.1
   Layers:
     serializedVersion: 2
     m_Bits: 65
+--- !u!1001 &1666026651
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 632550202}
+    m_Modifications:
+    - target: {fileID: 4131707743960135801, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_Name
+      value: Far Field Waypoint
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 227.60004
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.33828163
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 3.0000305
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: WasActiveDuringEdit
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: <SceneId>k__BackingField
+      value: 4286570475
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135807, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: WaypointName
+      value: Far Field Waypoint
+      objectReference: {fileID: 0}
+    - target: {fileID: 4131707743960135807, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+        type: 3}
+      propertyPath: waypointIndex
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 8056196aa1ba4f2f8e10f6616eacd914, type: 3}
+--- !u!4 &1666026652 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4131707743960135802, guid: 8056196aa1ba4f2f8e10f6616eacd914,
+    type: 3}
+  m_PrefabInstance: {fileID: 1666026651}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1699450705
 GameObject:
   m_ObjectHideFlags: 0
@@ -5347,7 +5601,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1830284267}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -5399,7 +5653,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -5474,7 +5728,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1835022672}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -5526,7 +5780,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -6454,3 +6708,4 @@ SceneRoots:
   - {fileID: 709083585}
   - {fileID: 5871419508359712385}
   - {fileID: 849065438}
+  - {fileID: 632550202}

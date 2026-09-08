@@ -251,6 +251,12 @@ namespace FishMMO.Shared
 			ModelIndex = reader.ReadInt32();
 			RaceName = reader.ReadStringAllocated();
 			SceneName = reader.ReadStringAllocated();
+			/* Written empty when not in an instance. The client map keys everything by the scene
+			 * the character is standing in (CurrentSceneName), which inside an instance is this
+			 * and not SceneName; without it the map drew the open-world scene from inside a dungeon
+			 * and every fast-travel request from there was refused as NotInScene. */
+			string instanceSceneName = reader.ReadStringAllocated();
+			InstanceSceneName = string.IsNullOrEmpty(instanceSceneName) ? null : instanceSceneName;
 			AccessLevel = (AccessLevel)reader.ReadUInt8Unpacked();
 			Flags = reader.ReadInt32();
 
@@ -279,6 +285,7 @@ namespace FishMMO.Shared
 			writer.WriteInt32(ModelIndex);
 			writer.WriteString(RaceName);
 			writer.WriteString(SceneName);
+			writer.WriteString(InstanceSceneName ?? string.Empty);
 			writer.WriteUInt8Unpacked((byte)AccessLevel);
 			writer.WriteInt32(Flags);
 		}

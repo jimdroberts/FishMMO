@@ -174,7 +174,8 @@ namespace FishMMO.Shared
 					SceneTeleporter[] teleports = GameObject.FindObjectsByType<SceneTeleporter>(FindObjectsSortMode.None);
 					foreach (SceneTeleporter obj in teleports)
 					{
-						obj.name = obj.name.Trim();
+						// The same spelling the runtime sends — see TeleporterKey.
+						obj.name = TeleporterKey.Normalize(obj.name);
 
 						if (sceneDetails.Teleporters.ContainsKey(obj.name))
 						{
@@ -232,7 +233,8 @@ namespace FishMMO.Shared
 					Teleporter[] interactableTeleporters = GameObject.FindObjectsByType<Teleporter>(FindObjectsSortMode.None);
 					foreach (Teleporter obj in interactableTeleporters)
 					{
-						obj.name = obj.name.Trim();
+						// The same spelling the runtime sends — see TeleporterKey.
+						obj.name = TeleporterKey.Normalize(obj.name);
 
 						if (sceneDetails.Teleporters.ContainsKey(obj.name))
 						{

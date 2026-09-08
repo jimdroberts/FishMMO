@@ -136,9 +136,15 @@ namespace FishMMO.Shared
 			interactionRangeSqr = InteractionRange * InteractionRange;
 
 			OnAwake();
-#if !UNITY_SERVER
-			GameObject.name = GameObject.name.Replace("(Clone)", "");
 
+			/* Every process, not just the client. The name is a lookup key on the server: a
+			 * cross-scene teleport is resolved by the GameObject name the world scene details
+			 * cache was baked with, and the bake never sees Unity's "(Clone)" suffix. Stripping
+			 * it only under !UNITY_SERVER made a prefab-spawned teleporter resolve in the editor
+			 * and miss in a server build. */
+			GameObject.name = TeleporterKey.Normalize(GameObject.name);
+
+#if !UNITY_SERVER
 			/* A plate is optional here, and the two ways of not having one are different. A
 			 * character's plate is authored on its prefab and this only writes a row onto it. A
 			 * chest or a harvest node has no plate at all until something asks to see it, and

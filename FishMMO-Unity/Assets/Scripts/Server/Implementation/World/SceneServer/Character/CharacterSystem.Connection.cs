@@ -172,18 +172,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Prevent players from teleporting while in combat.
-			// This closes the combat-escape exploit where a player could instantly
-			// teleport to a different scene to avoid death or PvP.
-			if (character.IsFlagged(CharacterFlags.IsInCombat))
-			{
-				CancelTeleport(character, "in combat");
-				return;
-			}
-
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
-				CancelTeleport(character, "SceneServerSystem not found");
+				CancelTeleport(character, "SceneServerSystem not found", "The teleporter is not working right now.", ToastSeverity.Error);
 				return;
 			}
 
@@ -201,72 +192,102 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (sceneServerSystem.WorldSceneDetailsCache == null ||
 				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(currentScene, out WorldSceneDetails details))
 			{
-				CancelTeleport(character, $"scene '{currentScene}' not found in the world scene details cache");
+				CancelTeleport(character, $"scene '{currentScene}' not found in the world scene details cache", "The teleporter is not working right now.", ToastSeverity.Error);
 				return;
 			}
 
 			// Check if teleporter is a valid scene teleporter
-			if (details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
+			if (!details.Teleporters.TryGetValue(TeleporterKey.Normalize(character.TeleporterName), out SceneTeleporterDetails teleporter))
 			{
-				//Log.Debug("CharacterSystem", $"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
+				CancelTeleport(character, $"teleporter '{character.TeleporterName}' not found in scene '{currentScene}'", "The teleporter leads nowhere.", ToastSeverity.Error);
+				return;
+			}
 
-				//Log.Debug("CharacterSystem", $"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
-
-				// Tell the connection to unload the scene it is actually in, which for an
-				// instanced character is the instance rather than SceneName.
-				sceneServerSystem.UnloadSceneForConnection(character.Owner, currentScene);
-
-				// Character becomes immortal when teleporting
-				if (character.TryGet(out ICharacterDamageController damageController))
+			/* A destination in the scene the character is already in is a local move — the same
+			 * thing an interactable Teleporter with a Target does — and nothing more. It used to
+			 * take the cross-scene path below regardless: unload the scene for the connection,
+			 * drop the connection mapping, arm the transfer deadline and clear the instance
+			 * bookkeeping, so a hop across a courtyard was a full round trip through the world
+			 * server, and from inside a dungeon it ejected the player from the instance whose
+			 * name it was returning them to. Same-scene teleports also share the Teleporter's
+			 * policy of not gating combat (decided 2026-09-08); the transfer below still does. */
+			if (string.Equals(teleporter.ToScene, currentScene, StringComparison.Ordinal))
+			{
+				if (character.Motor == null)
 				{
-					//Log.Debug("CharacterSystem", $"{character.CharacterName} is now immortal.");
-					damageController.Immortal = true;
+					CancelTeleport(character, "character has no motor", "The teleporter cannot move you right now.", ToastSeverity.Error);
+					return;
 				}
 
-				NetworkConnection owner = character.Owner;
-
-				// Invoke disconnect early when teleporting because we require the scene the character is in.
-				DispatchCharacterEvent(OnDisconnect, owner, character, nameof(OnDisconnect));
-
-				character.SceneName = teleporter.ToScene;
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
-
-				// Remove the character from an instance if it was in one.
-				character.DisableFlags(CharacterFlags.IsInInstance);
-				character.DisableFlags(CharacterFlags.IsLoaded);
-
-				if (leavingInstance)
-				{
-					/* The character is in the open world again, so the transform is once more
-					 * the open-world position and the instance bookkeeping must not outlive the
-					 * trip. Clearing the id matters: it is what the world server reads to decide
-					 * a character belongs in an instance, and a stale one left behind is a
-					 * standing invitation to route a subsequent session back into a dungeon the
-					 * player already walked out of.
-					 *
-					 * BuildCharacterData reads IsInInstance() — already false by this point — so
-					 * the save below correctly writes the destination as the world position. */
-					character.InstanceID = 0;
-					character.InstanceSceneName = null;
-					character.InstanceSceneHandle = 0;
-					character.LastWorldPosition = teleporter.ToPosition;
-					character.LastWorldRotation = teleporter.ToRotation;
-				}
-
-				// Save the character and fully release the session so the destination scene server can claim it
-				RemoveCharacterConnectionMapping(owner, skipOnDisconnect: true);
-
-				// Nothing here disconnects the client: the transfer relies on the client
-				// reporting the scene unload above, and that report is the only thing that
-				// sends it back to the world server. Arm a deadline so a client that never
-				// reports — crashed, modified, or one whose broadcast was dropped — cannot sit
-				// forever on a scene server that no longer holds its character.
-				ArmTransferDisconnect(owner);
+				// Not a transfer: the character is no longer teleporting the moment it has moved.
+				character.TeleporterName = string.Empty;
+				return;
 			}
-			else
+
+			// Prevent players from teleporting to another scene while in combat.
+			// This closes the combat-escape exploit where a player could instantly
+			// teleport to a different scene to avoid death or PvP.
+			if (character.IsFlagged(CharacterFlags.IsInCombat))
 			{
-				CancelTeleport(character, $"teleporter '{character.TeleporterName}' not found in scene '{currentScene}'");
+				CancelTeleport(character, "in combat", "You cannot teleport while in combat.", ToastSeverity.Warning);
+				return;
 			}
+
+			//Log.Debug("CharacterSystem", $"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
+
+			//Log.Debug("CharacterSystem", $"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
+
+			// Tell the connection to unload the scene it is actually in, which for an
+			// instanced character is the instance rather than SceneName.
+			sceneServerSystem.UnloadSceneForConnection(character.Owner, currentScene);
+
+			// Character becomes immortal when teleporting
+			if (character.TryGet(out ICharacterDamageController damageController))
+			{
+				//Log.Debug("CharacterSystem", $"{character.CharacterName} is now immortal.");
+				damageController.Immortal = true;
+			}
+
+			NetworkConnection owner = character.Owner;
+
+			// Invoke disconnect early when teleporting because we require the scene the character is in.
+			DispatchCharacterEvent(OnDisconnect, owner, character, nameof(OnDisconnect));
+
+			character.SceneName = teleporter.ToScene;
+			character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
+
+			// Remove the character from an instance if it was in one.
+			character.DisableFlags(CharacterFlags.IsInInstance);
+			character.DisableFlags(CharacterFlags.IsLoaded);
+
+			if (leavingInstance)
+			{
+				/* The character is in the open world again, so the transform is once more
+				 * the open-world position and the instance bookkeeping must not outlive the
+				 * trip. Clearing the id matters: it is what the world server reads to decide
+				 * a character belongs in an instance, and a stale one left behind is a
+				 * standing invitation to route a subsequent session back into a dungeon the
+				 * player already walked out of.
+				 *
+				 * BuildCharacterData reads IsInInstance() — already false by this point — so
+				 * the save below correctly writes the destination as the world position. */
+				character.InstanceID = 0;
+				character.InstanceSceneName = null;
+				character.InstanceSceneHandle = 0;
+				character.LastWorldPosition = teleporter.ToPosition;
+				character.LastWorldRotation = teleporter.ToRotation;
+			}
+
+			// Save the character and fully release the session so the destination scene server can claim it
+			RemoveCharacterConnectionMapping(owner, skipOnDisconnect: true);
+
+			// Nothing here disconnects the client: the transfer relies on the client
+			// reporting the scene unload above, and that report is the only thing that
+			// sends it back to the world server. Arm a deadline so a client that never
+			// reports — crashed, modified, or one whose broadcast was dropped — cannot sit
+			// forever on a scene server that no longer holds its character.
+			ArmTransferDisconnect(owner);
 		}
 
 		/// <summary>
@@ -292,10 +313,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		/// <param name="character">Character whose teleport is being cancelled.</param>
 		/// <param name="reason">Why the teleport was declined, for diagnostics.</param>
-		private void CancelTeleport(IPlayerCharacter character, string reason)
+		/// <param name="playerText">What the owner is told. A refusal that says nothing is
+		/// indistinguishable from a lost packet, which is the dead-keypress failure every other
+		/// refusal path here has had to grow an answer for.</param>
+		/// <param name="severity">How the toast reads.</param>
+		private void CancelTeleport(IPlayerCharacter character, string reason, string playerText, ToastSeverity severity)
 		{
 			Log.Debug("CharacterSystem", $"Teleport cancelled for {character.CharacterName}: {reason}.");
 			character.TeleporterName = string.Empty;
+
+			if (character.Owner != null && character.Owner.IsActive && !string.IsNullOrEmpty(playerText))
+			{
+				Server.NetworkWrapper.Broadcast(character.Owner, new ToastBroadcast()
+				{
+					Text = playerText,
+					Severity = severity,
+				}, true, FishNet.Transporting.Channel.Reliable);
+			}
 		}
 
 		/// <summary>

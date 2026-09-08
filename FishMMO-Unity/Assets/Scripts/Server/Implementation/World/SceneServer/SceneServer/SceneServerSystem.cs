@@ -1466,6 +1466,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				long readySceneId = sceneData.ID;
 
+				/* Live-vs-baked waypoint check, deferred one main-thread turn so it runs after
+				 * every scene NetworkObject's OnStartServer regardless of where FishNet raises
+				 * OnLoadEnd relative to scene-object setup. Refusal to enqueue just skips the
+				 * audit; it is a diagnostic, not a gate. */
+				WorldSceneDetailsCache auditCache = WorldSceneDetailsCache;
+				TryEnqueueMainThread(() => WaypointSceneAudit.Audit(sceneName, sceneHandle, auditCache));
+
 				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {sceneName}:{sceneHandle} (SceneID={readySceneId}) to the database.");
 				/* Keyed by the scene row, not by this server.
 				 *

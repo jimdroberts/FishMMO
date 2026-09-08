@@ -34,10 +34,17 @@ namespace FishMMO.Shared
 		}
 #endif
 
-#if UNITY_SERVER
 		/// <summary>
-		/// Called when another collider enters the teleporter's trigger. Teleports the player character if valid and not already teleporting.
+		/// Called when another collider enters the teleporter's trigger. Teleports the player
+		/// character if valid and not already teleporting.
 		/// </summary>
+		/// <remarks>
+		/// Server-only by a runtime check, not <c>#if UNITY_SERVER</c>. That define is absent in
+		/// the editor, where the scene server is developed and run, so the compile-time guard made
+		/// every scene teleporter a dead volume during development while working in a server
+		/// build. The check is the one <c>BaseAction.IsServer</c> uses: the character's network
+		/// object is initialised as a server object on this peer.
+		/// </remarks>
 		/// <param name="other">The collider that entered the trigger.</param>
 		void OnTriggerEnter(Collider other)
 		{
@@ -50,7 +57,12 @@ namespace FishMMO.Shared
 			IPlayerCharacter character = other.gameObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
-				Log.Debug("SceneTeleporter", "Character not found!");
+				return;
+			}
+
+			if (character.NetworkObject == null ||
+				!character.NetworkObject.IsServerInitialized)
+			{
 				return;
 			}
 
@@ -60,9 +72,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Teleport the character to the destination associated with this teleporter's name.
-			character.Teleport(gameObject.name);
+			// Teleport the character to the destination baked under this teleporter's key.
+			character.Teleport(TeleporterKey.Normalize(gameObject.name));
 		}
-#endif
 	}
 }
