@@ -42,6 +42,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private ClientCombatDisplay combatDisplay;
 		private ClientNameplateDisplay nameplateDisplay;
+
+		/// <summary>Writes what observed characters are casting onto their nameplates.</summary>
+		private ClientCastNameplateDisplay castNameplateDisplay;
 		/// <summary>
 		/// Manages client-side fog-of-war visibility.
 		/// </summary>
@@ -369,6 +372,9 @@ namespace FishMMO.Client
 			this.nameplateDisplay = new ClientNameplateDisplay();
 			this.nameplateDisplay.Initialize();
 
+			this.castNameplateDisplay = new ClientCastNameplateDisplay();
+			this.castNameplateDisplay.Initialize(NetworkManager);
+
 			this.fogManager = new ClientFogManager(this);
 			this.fogManager.Initialize();
 
@@ -396,6 +402,7 @@ namespace FishMMO.Client
 			/* Puts up the nameplates of NPCs inside the player's chosen range, and the player's
 			 * own. Same reason it is driven from here: the sweep has no other caller. */
 			nameplateDisplay?.Tick();
+			castNameplateDisplay?.Tick();
 
 			TickDeathDialogFallback();
 			
@@ -431,6 +438,7 @@ namespace FishMMO.Client
 			this.audioListener = null;
 			this.combatDisplay?.Shutdown();
 			this.nameplateDisplay?.Shutdown();
+			this.castNameplateDisplay?.Shutdown();
 			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
 			if (Connection != null)

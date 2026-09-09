@@ -61,6 +61,7 @@ namespace FishMMO.Client
 		private const string PARTNER_GRID_NAME = "trade-partner-grid";
 		private const string PARTNER_CURRENCY_NAME = "trade-partner-currency";
 		private const string STATUS_NAME = "trade-status";
+		private const string CONFIRM_NAME = "trade-confirm-btn";
 		private const string ACCEPT_NAME = "trade-accept-btn";
 		private const string CANCEL_NAME = "trade-cancel-btn";
 
@@ -73,6 +74,9 @@ namespace FishMMO.Client
 		private const string TRADE_SLOT_ICON_CLASS = "trade-slot__icon";
 		private const string TRADE_SLOT_AMOUNT_CLASS = "trade-slot__amount";
 		private const string TRADE_SLOT_READONLY_CLASS = "trade-slot--readonly";
+		private const string TRADE_SLOT_LOCKED_CLASS = "trade-slot--locked";
+		private const string BUTTON_PRIMARY_CLASS = "fish-button--primary";
+		private const string STATUS_CONFIRMED_CLASS = "trade-column__status--confirmed";
 		private const string STATUS_ACCEPTED_CLASS = "trade-column__status--accepted";
 		private const string BADGE_GOOD_CLASS = "fish-badge--good";
 
@@ -115,6 +119,7 @@ namespace FishMMO.Client
 		private VisualElement partnerGrid;
 		private Label partnerCurrencyLabel;
 		private Label statusLabel;
+		private Button confirmButton;
 		private Button acceptButton;
 		private Button cancelButton;
 
@@ -135,6 +140,12 @@ namespace FishMMO.Client
 
 		/// <summary>True between <see cref="TradeOpenedBroadcast"/> and <see cref="TradeClosedBroadcast"/>.</summary>
 		public bool SessionOpen { get; private set; }
+
+		/// <summary>
+		/// True when both sides have confirmed: the table is frozen and only accepting,
+		/// revoking or cancelling is possible.
+		/// </summary>
+		public bool IsLocked => hasState && State.OwnConfirmed && State.PartnerConfirmed;
 
 		/// <summary>The last table the server sent, or default before the first.</summary>
 		public TradeStateBroadcast State { get; private set; }
@@ -176,6 +187,7 @@ namespace FishMMO.Client
 			partnerGrid = root.Q<VisualElement>(PARTNER_GRID_NAME);
 			partnerCurrencyLabel = root.Q<Label>(PARTNER_CURRENCY_NAME);
 			statusLabel = root.Q<Label>(STATUS_NAME);
+			confirmButton = root.Q<Button>(CONFIRM_NAME);
 			acceptButton = root.Q<Button>(ACCEPT_NAME);
 			cancelButton = root.Q<Button>(CANCEL_NAME);
 
@@ -185,6 +197,12 @@ namespace FishMMO.Client
 			{
 				closeButton.clicked -= OnCloseClicked;
 				closeButton.clicked += OnCloseClicked;
+			}
+
+			if (confirmButton != null)
+			{
+				confirmButton.clicked -= OnConfirmClicked;
+				confirmButton.clicked += OnConfirmClicked;
 			}
 
 			if (acceptButton != null)
@@ -428,6 +446,12 @@ namespace FishMMO.Client
 				return false;
 			}
 
+			if (IsLocked)
+			{
+				SetStatus(DescribeRefusal(TradeRefusalReason.TableLocked));
+				return false;
+			}
+
 			if (!Character.TryGet(out IInventoryController inventory) ||
 				!inventory.IsValidSlot(slot) ||
 				inventory.IsSlotLocked(slot) ||
@@ -452,6 +476,12 @@ namespace FishMMO.Client
 		{
 			if (!SessionOpen)
 			{
+				return;
+			}
+
+			if (IsLocked)
+			{
+				SetStatus(DescribeRefusal(TradeRefusalReason.TableLocked));
 				return;
 			}
 			Client.Broadcast(new TradeWithdrawItemBroadcast { Slot = slot }, Channel.Reliable);
@@ -642,13 +672,13 @@ namespace FishMMO.Client
 			PaintGrid(ownSlots, own, ownSide: true);
 			PaintGrid(partnerSlots, partner, ownSide: false);
 
-			PaintStatus(ownStatusLabel, hasState && State.OwnAccepted);
-			PaintStatus(partnerStatusLabel, hasState && State.PartnerAccepted);
+			PaintStatus(ownStatusLabel, hasState && State.OwnConfirmed, hasState && State.OwnAccepted);
+			PaintStatus(partnerStatusLabel, hasState && State.PartnerConfirmed, hasState && State.PartnerAccepted);
 
 			if (ownCurrencyField != null)
 			{
 				ownCurrencyField.SetValueWithoutNotify((int)Mathf.Clamp(hasState ? State.OwnCurrency : 0, 0, int.MaxValue));
-				ownCurrencyField.SetEnabled(SessionOpen && CurrencyTemplateID != 0 && !(hasState && State.OwnAccepted && State.PartnerAccepted));
+				// Enabled state is settled by SetGridEditable below, once the lock is known.
 			}
 			if (ownBalanceLabel != null)
 			{
@@ -659,41 +689,90 @@ namespace FishMMO.Client
 				partnerCurrencyLabel.text = (hasState ? State.PartnerCurrency : 0).ToString();
 			}
 
-			bool bothAccepted = hasState && State.OwnAccepted && State.PartnerAccepted;
+			/* The two-stage footer. Confirm declares this side's offer final; the table is
+			 * FROZEN only once both sides have, and Accept is dead until then — so the accept
+			 * is always a decision about a settled table, never a race against the other
+			 * player's next click. */
+			bool ownConfirmed = hasState && State.OwnConfirmed;
+			bool partnerConfirmed = hasState && State.PartnerConfirmed;
+			bool locked = ownConfirmed && partnerConfirmed;
+			bool ownAccepted = hasState && State.OwnAccepted;
+			bool bothAccepted = ownAccepted && hasState && State.PartnerAccepted;
+
+			if (confirmButton != null)
+			{
+				confirmButton.text = ownConfirmed ? "Revoke" : "Confirm";
+				confirmButton.EnableInClassList(BUTTON_PRIMARY_CLASS, !ownConfirmed);
+				confirmButton.SetEnabled(SessionOpen && hasState && !bothAccepted);
+			}
 			if (acceptButton != null)
 			{
-				acceptButton.text = hasState && State.OwnAccepted ? "Unaccept" : "Accept";
-				acceptButton.SetEnabled(SessionOpen && hasState && !bothAccepted);
+				acceptButton.text = ownAccepted ? "Unaccept" : "Accept";
+				acceptButton.EnableInClassList(BUTTON_PRIMARY_CLASS, locked && !ownAccepted);
+				acceptButton.SetEnabled(SessionOpen && hasState && locked && !bothAccepted);
 			}
 			if (cancelButton != null)
 			{
 				cancelButton.SetEnabled(SessionOpen && !bothAccepted);
 			}
 
+			// Editing the table at all is refused once it is frozen, so say so on the grid.
+			SetGridEditable(!locked);
+
 			if (ownHintLabel != null)
 			{
-				ownHintLabel.text = "Drag items from your bag, or right-click them. Right-click here to take one back.";
+				ownHintLabel.text = locked
+					? "Both offers are locked. Revoke to change yours."
+					: "Drag items from your bag, or right-click them. Right-click here to take one back.";
 			}
 
 			if (bothAccepted)
 			{
 				SetStatus("Both accepted — completing…");
 			}
-			else if (hasState && State.OwnAccepted)
+			else if (locked && ownAccepted)
 			{
 				SetStatus($"Waiting for {PartnerName} to accept.");
 			}
-			else if (hasState && State.PartnerAccepted)
+			else if (locked && hasState && State.PartnerAccepted)
 			{
-				SetStatus($"{PartnerName} has accepted. Review their offer, then accept.");
+				SetStatus($"{PartnerName} has accepted. Nothing can change now — accept to complete.");
+			}
+			else if (locked)
+			{
+				SetStatus("Both offers locked. Review them, then accept.");
+			}
+			else if (ownConfirmed)
+			{
+				SetStatus($"Your offer is final. Waiting for {PartnerName} to confirm.");
+			}
+			else if (partnerConfirmed)
+			{
+				SetStatus($"{PartnerName} has confirmed. Confirm yours to lock the trade.");
 			}
 			else if (SessionOpen)
 			{
-				SetStatus("Any change to either side clears both acceptances.");
+				SetStatus("Confirm when your offer is final. Any change clears both confirmations.");
 			}
 			else
 			{
 				SetStatus(string.Empty);
+			}
+		}
+
+		/// <summary>
+		/// Greys this side's table while it is frozen, so the lock is visible rather than
+		/// only discovered by a refusal.
+		/// </summary>
+		private void SetGridEditable(bool editable)
+		{
+			for (int i = 0; i < ownSlots.Count; ++i)
+			{
+				ownSlots[i].Root.EnableInClassList(TRADE_SLOT_LOCKED_CLASS, !editable);
+			}
+			if (ownCurrencyField != null)
+			{
+				ownCurrencyField.SetEnabled(SessionOpen && editable && CurrencyTemplateID != 0);
 			}
 		}
 
@@ -733,23 +812,22 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static void PaintStatus(Label label, bool accepted)
+		/// <summary>
+		/// Paints one side's badge through the three states a party can be in: still editing,
+		/// offer declared final, and accepted.
+		/// </summary>
+		private static void PaintStatus(Label label, bool confirmed, bool accepted)
 		{
 			if (label == null)
 			{
 				return;
 			}
-			label.text = accepted ? "Accepted" : "Not accepted";
-			if (accepted)
-			{
-				label.AddToClassList(STATUS_ACCEPTED_CLASS);
-				label.AddToClassList(BADGE_GOOD_CLASS);
-			}
-			else
-			{
-				label.RemoveFromClassList(STATUS_ACCEPTED_CLASS);
-				label.RemoveFromClassList(BADGE_GOOD_CLASS);
-			}
+
+			label.text = accepted ? "Accepted" : confirmed ? "Confirmed" : "Editing";
+
+			label.EnableInClassList(STATUS_CONFIRMED_CLASS, confirmed && !accepted);
+			label.EnableInClassList(STATUS_ACCEPTED_CLASS, accepted);
+			label.EnableInClassList(BADGE_GOOD_CLASS, accepted);
 		}
 
 		private void SetStatus(string text)
@@ -767,6 +845,45 @@ namespace FishMMO.Client
 			Hide();
 		}
 
+		private void OnConfirmClicked()
+		{
+			if (!SessionOpen || !hasState)
+			{
+				return;
+			}
+
+			bool confirm = !State.OwnConfirmed;
+
+			/* The same estimate the server makes when it receives the confirmation, made first
+			 * so a player short of bag space is told without a round trip. The server's answer
+			 * is the one that counts; this only saves the wait. */
+			if (confirm && !HasRoomForPartnerOffer(out string shortfall))
+			{
+				SetStatus(shortfall);
+				Toast(shortfall, ToastSeverity.Warning);
+				return;
+			}
+
+			Client.Broadcast(new TradeConfirmBroadcast { Confirm = confirm, Version = State.Version }, Channel.Reliable);
+			SetStatus(confirm ? "Confirming…" : "Revoking your confirmation…");
+		}
+
+		/// <summary>The local bag-room estimate, with the wording to show when it fails.</summary>
+		private bool HasRoomForPartnerOffer(out string shortfall)
+		{
+			shortfall = string.Empty;
+			if (Character == null || !Character.TryGet(out IInventoryController inventory))
+			{
+				return true;
+			}
+			if (TradeRules.HasRoomFor(inventory, State.PartnerOffer, State.OwnOffer, out int required, out int available))
+			{
+				return true;
+			}
+			shortfall = $"{DescribeRefusal(TradeRefusalReason.NoRoom)} ({required} needed, {available} free)";
+			return false;
+		}
+
 		private void OnAcceptClicked()
 		{
 			if (!SessionOpen || !hasState)
@@ -774,17 +891,19 @@ namespace FishMMO.Client
 				return;
 			}
 
+			// Dead until both sides have confirmed; the server refuses it anyway.
+			if (!State.OwnConfirmed || !State.PartnerConfirmed)
+			{
+				SetStatus(DescribeRefusal(TradeRefusalReason.NotConfirmed));
+				return;
+			}
+
 			bool accept = !State.OwnAccepted;
 
-			/* The same estimate the server makes when it receives the accept, made first so a
-			 * player short of bag space is told without a round trip. The server's answer is
-			 * the one that counts; this only saves the wait. */
-			if (accept && Character != null && Character.TryGet(out IInventoryController inventory) &&
-				!TradeRules.HasRoomFor(inventory, State.PartnerOffer, State.OwnOffer, out int required, out int available))
+			if (accept && !HasRoomForPartnerOffer(out string shortfall))
 			{
-				string text = $"{DescribeRefusal(TradeRefusalReason.NoRoom)} ({required} needed, {available} free)";
-				SetStatus(text);
-				Toast(text, ToastSeverity.Warning);
+				SetStatus(shortfall);
+				Toast(shortfall, ToastSeverity.Warning);
 				return;
 			}
 
@@ -802,6 +921,14 @@ namespace FishMMO.Client
 			if (!SessionOpen)
 			{
 				ownCurrencyField.SetValueWithoutNotify(0);
+				return;
+			}
+
+			if (IsLocked)
+			{
+				// Frozen: put the field back to the offer the table actually holds.
+				ownCurrencyField.SetValueWithoutNotify((int)Math.Min(State.OwnCurrency, int.MaxValue));
+				SetStatus(DescribeRefusal(TradeRefusalReason.TableLocked));
 				return;
 			}
 
@@ -1073,6 +1200,8 @@ namespace FishMMO.Client
 				case TradeRefusalReason.InsufficientCurrency: return "You do not have that much currency.";
 				case TradeRefusalReason.NoCurrency: return "Currency cannot be traded here.";
 				case TradeRefusalReason.StaleVersion: return "The offer changed; review it and accept again.";
+				case TradeRefusalReason.TableLocked: return "Both offers are locked. Revoke your confirmation to change yours.";
+				case TradeRefusalReason.NotConfirmed: return "Both sides must confirm their offers before accepting.";
 				case TradeRefusalReason.NoRoom: return "You do not have enough bag space for their offer.";
 				case TradeRefusalReason.PartnerNoRoom: return "They do not have enough bag space for your offer.";
 				default: return "The trade could not be changed.";

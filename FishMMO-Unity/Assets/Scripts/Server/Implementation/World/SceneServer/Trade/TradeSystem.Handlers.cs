@@ -282,6 +282,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				case TradeOfferRefusal.NotOffered: return TradeRefusalReason.NotOffered;
 				case TradeOfferRefusal.NegativeCurrency: return TradeRefusalReason.InsufficientCurrency;
 				case TradeOfferRefusal.StaleVersion: return TradeRefusalReason.StaleVersion;
+				case TradeOfferRefusal.TableLocked: return TradeRefusalReason.TableLocked;
+				case TradeOfferRefusal.NotLocked: return TradeRefusalReason.NotConfirmed;
 				case TradeOfferRefusal.NotAParty: return TradeRefusalReason.NotOpen;
 				default: return TradeRefusalReason.None;
 			}
@@ -452,6 +454,51 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+		private void OnServerTradeConfirmReceived(NetworkConnection conn, TradeConfirmBroadcast msg, Channel channel)
+		{
+			TradeRefusalReason gate = TryResolveOpenSession(conn, out IPlayerCharacter character, out TradeSession session);
+			if (gate != TradeRefusalReason.None)
+			{
+				Refuse(character, session, gate);
+				return;
+			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Confirm, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
+				if (msg.Confirm)
+				{
+					/* Room is checked when an offer is declared final, so a player who cannot
+					 * hold what they are about to be given hears it while the table is still
+					 * theirs to trim. It is checked again at the accept and enforced for real
+					 * by the exchange, which is all-or-nothing on its own. */
+					TradeRefusalReason room = CheckRoom(session, character);
+					if (room != TradeRefusalReason.None)
+					{
+						Refuse(character, session, room);
+						return;
+					}
+				}
+
+				TradeOfferRefusal refusal = session.TryConfirm(character.ID, msg.Confirm, msg.Version);
+				if (refusal != TradeOfferRefusal.None)
+				{
+					Refuse(character, session, ToReason(refusal));
+					return;
+				}
+
+				BroadcastState(session);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
+		}
+
 		private void OnServerTradeAcceptReceived(NetworkConnection conn, TradeAcceptBroadcast msg, Channel channel)
 		{
 			TradeRefusalReason gate = TryResolveOpenSession(conn, out IPlayerCharacter character, out TradeSession session);
@@ -470,10 +517,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (msg.Accept)
 				{
-					/* Room is checked when consent is given, not only when the exchange runs, so
-					 * the player who is short of bag space hears it now — with the table still
-					 * open to be trimmed — instead of after both have accepted. The exchange
-					 * remains all-or-nothing on its own: this is feedback, not the decision. */
+					/* Checked again here, not only at the confirmation: the partner may have
+					 * spent the interval filling their own bag, and a refusal now still leaves
+					 * the trade recoverable by revoking. The exchange remains all-or-nothing on
+					 * its own; this is feedback, not the decision. */
 					TradeRefusalReason room = CheckRoom(session, character);
 					if (room != TradeRefusalReason.None)
 					{

@@ -156,11 +156,32 @@ namespace FishMMO.Shared
 				// Cannot activate an item while dead.
 				return;
 			}
-			if (TryGetItem(index, out Item item))
+
+			if (!TryGetItem(index, out Item item))
 			{
-				Log.Debug("InventoryController", $"Using item in slot[{index}]");
-				//items[index].OnUseItem();
+				return;
 			}
+
+			/* Consumables go through the ability controller, which is what owns activation.
+			 *
+			 * This method was a log line and a commented-out call, so the whole consumable
+			 * pipeline — the queue, the predicted activation window, the cooldown, the slot lock,
+			 * the charge decrement — was unreachable from the game. A potion could be bought,
+			 * carried and hotkeyed, and clicking it did nothing at all.
+			 *
+			 * ActivateConsumable is the only entry point: it pre-filters on the client, queues the
+			 * use into the next replicate, and the server re-validates everything authoritatively.
+			 * Nothing is consumed here. */
+			if (item.Template is ConsumableTemplate &&
+				Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.ActivateConsumable(item);
+				return;
+			}
+
+			/* Anything else has no "use" yet. Said once per attempt rather than silently, because
+			 * silence here is what made the consumable gap invisible for so long. */
+			Log.Debug("InventoryController", $"Item in slot[{index}] has no use action.");
 		}
 
 		/// <summary>

@@ -19,9 +19,9 @@ namespace FishMMO.RenderScratch
 	/// <para>
 	/// Headless: <c>-executeMethod FishMMO.RenderScratch.TradePanelRender.Render</c> with a
 	/// display (xvfb) and WITHOUT <c>-quit</c>; the capture needs frames to elapse, so this
-	/// runs as an <c>EditorApplication.update</c> pump and exits itself. The output path is
-	/// read from <c>FISHMMO_TRADE_RENDER_OUT</c>, defaulting to <c>PanelRenders/UITrade-mock.png</c>
-	/// beside the repository.
+	/// runs as an <c>EditorApplication.update</c> pump and exits itself. One PNG per stage of
+	/// the two-stage flow is written to <c>FISHMMO_TRADE_RENDER_DIR</c>, defaulting to
+	/// <c>PanelRenders/</c> beside the repository.
 	/// </para>
 	/// <para>
 	/// The character comes from <see cref="Rig"/> — a real <c>PlayerCharacter</c> with a fake
@@ -45,29 +45,26 @@ namespace FishMMO.RenderScratch
 		private static PanelSettings settings;
 		private static RenderTexture texture;
 		private static int framesWaited;
-		private static string outputPath;
+		private static string outputDirectory;
+
+		/// <summary>The stages worth looking at, one PNG each.</summary>
+		private static readonly List<TradePanelPopulator.Stage> queue = new List<TradePanelPopulator.Stage>();
+		private static TradePanelPopulator.Stage current;
 
 		[MenuItem("FishMMO/UI Toolkit/Render Trade Panel (mock)")]
 		public static void Render()
 		{
-			outputPath = Environment.GetEnvironmentVariable("FISHMMO_TRADE_RENDER_OUT");
-			if (string.IsNullOrEmpty(outputPath))
+			outputDirectory = Environment.GetEnvironmentVariable("FISHMMO_TRADE_RENDER_DIR");
+			if (string.IsNullOrEmpty(outputDirectory))
 			{
-				outputPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "PanelRenders", "UITrade-mock.png"));
+				outputDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "PanelRenders"));
 			}
-			Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+			Directory.CreateDirectory(outputDirectory);
 
-			try
-			{
-				Mount();
-			}
-			catch (Exception ex)
-			{
-				Debug.LogError($"[TradeRender] mount failed: {ex}");
-				Teardown();
-				if (Application.isBatchMode) EditorApplication.Exit(1);
-				return;
-			}
+			queue.Clear();
+			queue.Add(TradePanelPopulator.Stage.Editing);
+			queue.Add(TradePanelPopulator.Stage.Locked);
+			current = TradePanelPopulator.Stage.None;
 
 			framesWaited = 0;
 			EditorApplication.update -= Pump;
@@ -78,30 +75,67 @@ namespace FishMMO.RenderScratch
 		{
 			try
 			{
-				++framesWaited;
-				if (framesWaited < SETTLE_FRAMES)
+				if (current != TradePanelPopulator.Stage.None)
 				{
-					document?.rootVisualElement?.MarkDirtyRepaint();
+					++framesWaited;
+					if (framesWaited < SETTLE_FRAMES)
+					{
+						document?.rootVisualElement?.MarkDirtyRepaint();
+						return;
+					}
+
+					string path = Path.Combine(outputDirectory, "UITrade-" + current.ToString().ToLowerInvariant() + ".png");
+					Capture(path);
+					Debug.Log($"[TradeRender] wrote {path}");
+					Teardown();
+					current = TradePanelPopulator.Stage.None;
 					return;
 				}
 
-				EditorApplication.update -= Pump;
-				Capture();
-				Teardown();
-				Debug.Log($"[TradeRender] wrote {outputPath}");
-				if (Application.isBatchMode) EditorApplication.Exit(0);
+				if (queue.Count == 0)
+				{
+					EditorApplication.update -= Pump;
+					ReleaseTarget();
+					if (Application.isBatchMode) EditorApplication.Exit(0);
+					return;
+				}
+
+				current = queue[0];
+				queue.RemoveAt(0);
+				Mount(current);
+				framesWaited = 0;
 			}
 			catch (Exception ex)
 			{
 				EditorApplication.update -= Pump;
-				Debug.LogError($"[TradeRender] pump failed: {ex}");
+				Debug.LogError($"[TradeRender] pump failed on {current}: {ex}");
 				Teardown();
+				ReleaseTarget();
 				if (Application.isBatchMode) EditorApplication.Exit(1);
 			}
 		}
 
-		private static void Mount()
+		private static void Mount(TradePanelPopulator.Stage stage)
 		{
+			EnsureTarget();
+
+			host = new GameObject("Render_UITrade_" + stage) { hideFlags = HideFlags.HideAndDontSave };
+			document = host.AddComponent<UIDocument>();
+			document.panelSettings = settings;
+			document.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UXML_PATH);
+
+			TradePanelPopulator.Trade(host, document, stage);
+
+			document.rootVisualElement?.MarkDirtyRepaint();
+		}
+
+		private static void EnsureTarget()
+		{
+			if (texture != null)
+			{
+				return;
+			}
+
 			texture = new RenderTexture(WIDTH, HEIGHT, 24, RenderTextureFormat.ARGB32);
 			texture.Create();
 
@@ -110,18 +144,9 @@ namespace FishMMO.RenderScratch
 			settings.targetTexture = texture;
 			settings.clearColor = true;
 			settings.colorClearValue = new Color(0.055f, 0.059f, 0.059f, 1.0f);
-
-			host = new GameObject("Render_UITrade") { hideFlags = HideFlags.HideAndDontSave };
-			document = host.AddComponent<UIDocument>();
-			document.panelSettings = settings;
-			document.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UXML_PATH);
-
-			TradePanelPopulator.Trade(host, document);
-
-			document.rootVisualElement?.MarkDirtyRepaint();
 		}
 
-		private static void Capture()
+		private static void Capture(string outputPath)
 		{
 			RenderTexture previous = RenderTexture.active;
 			RenderTexture.active = texture;
@@ -142,14 +167,18 @@ namespace FishMMO.RenderScratch
 		private static void Teardown()
 		{
 			if (host != null) UnityEngine.Object.DestroyImmediate(host);
+			host = null;
+			document = null;
+		}
+
+		private static void ReleaseTarget()
+		{
 			if (settings != null) UnityEngine.Object.DestroyImmediate(settings);
 			if (texture != null)
 			{
 				texture.Release();
 				UnityEngine.Object.DestroyImmediate(texture);
 			}
-			host = null;
-			document = null;
 			settings = null;
 			texture = null;
 		}
@@ -158,12 +187,25 @@ namespace FishMMO.RenderScratch
 	/// <summary>The trade window's populator, shared by the one-off render and the all-panels run.</summary>
 	public static class TradePanelPopulator
 	{
+		/// <summary>Which stage of the two-stage flow to draw.</summary>
+		public enum Stage
+		{
+			/// <summary>Nothing mounted.</summary>
+			None = 0,
+
+			/// <summary>Both sides still editing: offers on the table, nobody has confirmed.</summary>
+			Editing,
+
+			/// <summary>Both confirmed — the table is frozen — and the partner has accepted.</summary>
+			Locked,
+		}
+
 		/// <summary>
 		/// Mounts <see cref="UITKTrade"/> on a rigged character and applies a two-sided mock
-		/// table: three of the character's own bag items on the left, three of the partner's
-		/// on the right, currency both ways, the partner already accepted.
+		/// table: some of the character's own bag items on the left, items it does not hold on
+		/// the right, currency both ways, at the requested stage.
 		/// </summary>
-		public static void Trade(GameObject h, UIDocument d)
+		public static void Trade(GameObject h, UIDocument d, Stage stage = Stage.Locked)
 		{
 			PlayerCharacter character = Rig.Build(h);
 
@@ -179,15 +221,20 @@ namespace FishMMO.RenderScratch
 			panel.SetCharacter(character);
 			panel.OpenWith(2002, "Maerwyn", TradeRules.DefaultMaxDistance);
 
+			bool locked = stage == Stage.Locked;
+
 			panel.ApplyState(new TradeStateBroadcast
 			{
 				Version = 7,
 				OwnOffer = OwnOffers(character, 3),
 				OwnCurrency = 125,
+				OwnConfirmed = locked,
 				OwnAccepted = false,
-				PartnerOffer = PartnerOffers(character, 3),
+				PartnerOffer = PartnerOffers(character, 4),
 				PartnerCurrency = 480,
-				PartnerAccepted = true,
+				PartnerConfirmed = locked,
+				// The most informative frame: they have accepted and are waiting on you.
+				PartnerAccepted = locked,
 			});
 		}
 

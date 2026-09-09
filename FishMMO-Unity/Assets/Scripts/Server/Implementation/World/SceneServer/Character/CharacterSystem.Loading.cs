@@ -1521,34 +1521,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			// Abilities (crafted ability instances)
-			if (abilityData != null && abilityData.Count > 0 &&
-				character.TryGet(out IAbilityController abilityController))
+			/* Abilities and knowledge.
+			 *
+			 * ONE branch on the controller, not knowledge nested inside abilities. The knowledge
+			 * restore used to sit inside `abilityData.Count > 0`, so a character who had bought
+			 * templates and effects but not yet crafted anything — every new character, and anyone
+			 * saving up for a craft — was handed an empty Knowledge tab on every login. Their rows
+			 * were in the database and were fetched; nothing read them. */
+			if (character.TryGet(out IAbilityController abilityController))
 			{
-				foreach (CharacterAbilityData ability in abilityData)
+				if (abilityData != null)
 				{
-					Ability newAbility = new Ability(ability.ID, ability.TemplateID, ability.AbilityEvents);
-					newAbility.Version = ability.Version;
-					abilityController.LearnAbility(newAbility, ability.Cooldown);
+					foreach (CharacterAbilityData ability in abilityData)
+					{
+						Ability newAbility = new Ability(ability.ID, ability.TemplateID, ability.AbilityEvents);
+						newAbility.Version = ability.Version;
+						abilityController.LearnAbility(newAbility, ability.Cooldown);
+					}
 				}
 
-				// Known base abilities
-				if (knownAbilityData != null && knownAbilityData.Count > 0)
-				{
-					List<BaseAbilityTemplate> knownTemplates = new List<BaseAbilityTemplate>();
-					foreach (CharacterKnownAbilityData known in knownAbilityData)
-					{
-						BaseAbilityTemplate template = BaseAbilityTemplate.Get<BaseAbilityTemplate>(known.TemplateID);
-						if (template != null)
-						{
-							knownTemplates.Add(template);
-						}
-					}
-					if (knownTemplates.Count > 0)
-					{
-						abilityController.LearnBaseAbilities(knownTemplates);
-					}
-				}
+				RestoreKnownAbilities(character, abilityController, knownAbilityData);
 			}
 
 			// Achievements
@@ -2074,6 +2066,73 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Restores a character's ability knowledge: the base abilities and the effects.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Both kinds come out of one table.</b> Every grant path writes to
+		/// <c>character_known_ability</c> keyed by template id, whether the id names a base ability
+		/// or an ability event. The restore resolved every row as a
+		/// <see cref="BaseAbilityTemplate"/> — which an <see cref="AbilityEvent"/> is not; it
+		/// derives from <c>Trigger</c> and lives in a different cache — so every effect a character
+		/// owned came back null and was dropped. Effects bought from a merchant survived exactly
+		/// until the player logged out.
+		/// </para>
+		/// <para>
+		/// Nothing restored here is news to the database, so the dirty mark the learn methods raise
+		/// is cleared afterwards. Leaving it set would make the first save after every login
+		/// rewrite the character's whole knowledge set.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The character being loaded.</param>
+		/// <param name="abilityController">Its ability controller.</param>
+		/// <param name="knownAbilityData">The rows fetched for it.</param>
+		private static void RestoreKnownAbilities(IPlayerCharacter character, IAbilityController abilityController,
+			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData)
+		{
+			if (knownAbilityData == null || knownAbilityData.Count == 0)
+			{
+				abilityController.KnowledgeDirty = false;
+				return;
+			}
+
+			List<BaseAbilityTemplate> baseAbilities = new List<BaseAbilityTemplate>();
+			List<AbilityEvent> abilityEvents = new List<AbilityEvent>();
+
+			foreach (CharacterKnownAbilityData known in knownAbilityData)
+			{
+				/* Base abilities first, because AbilityTypeOverrideEventType is one of them: it
+				 * extends BaseAbilityTemplate despite being an "event", and asking the event cache
+				 * for it would come back empty. */
+				BaseAbilityTemplate template = BaseAbilityTemplate.Get<BaseAbilityTemplate>(known.TemplateID);
+				if (template != null)
+				{
+					baseAbilities.Add(template);
+					continue;
+				}
+
+				AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(known.TemplateID);
+				if (abilityEvent != null)
+				{
+					abilityEvents.Add(abilityEvent);
+					continue;
+				}
+
+				/* Neither cache has it. Content that was removed, or an addressable that did not
+				 * load — either way the row survives untouched and says so once, rather than
+				 * disappearing on the next save. */
+				Log.Warning("CharacterSystem",
+					$"Character {character.ID} knows template {known.TemplateID}, which this build has not loaded. It stays in the database.");
+			}
+
+			abilityController.LearnBaseAbilities(baseAbilities);
+			abilityController.LearnAbilityEvents(abilityEvents);
+
+			// Restored, not learned: the database already holds every row just applied.
+			abilityController.KnowledgeDirty = false;
+		}
+
+		/// <summary>
 		/// Bundles all pre-fetched character data from the async DB load for main-thread instantiation.
 		/// </summary>
 		private sealed class CharacterLoadContext
@@ -2134,7 +2193,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="itemData">Pre-fetched items, across every container.</param>
 			/// <param name="attributeData">Pre-fetched attribute data.</param>
 			/// <param name="abilityData">Pre-fetched crafted ability data.</param>
-			/// <param name="knownAbilityData">Pre-fetched known base ability data.</param>
+			/// <param name="knownAbilityData">Pre-fetched known ability and ability-event data.</param>
 			/// <param name="achievementData">Pre-fetched achievement data.</param>
 			/// <param name="friendData">Pre-fetched friend data.</param>
 			/// <param name="guildData">Pre-fetched guild membership data.</param>

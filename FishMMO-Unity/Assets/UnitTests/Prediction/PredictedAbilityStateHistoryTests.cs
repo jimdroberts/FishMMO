@@ -124,12 +124,18 @@ namespace FishMMO.UnitTests
 
 		// ── Observer fast-forward ──
 
+		/// <summary>
+		/// Calls the observer fast-forward directly.
+		/// </summary>
+		/// <remarks>
+		/// This used to reach the method by reflection because it was internal. It is public now —
+		/// the client's cast nameplate needs the same arithmetic so an observed cast bar and the
+		/// projectile that cast spawned agree about when the cast began — so the test calls it.
+		/// </remarks>
 		private static uint FastForward(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks)
 		{
-			MethodInfo method = typeof(AbilityController).GetMethod("ComputeObserverFastForwardTicks",
-				BindingFlags.Static | BindingFlags.NonPublic);
-			LogAssert.IsNotNull(method, "AbilityController.ComputeObserverFastForwardTicks must exist.");
-			return (uint)method.Invoke(null, new object[] { estimatedServerTick, serverSpawnTick, interpolationTicks });
+			return AbilityController.ComputeObserverFastForwardTicks(
+				estimatedServerTick, serverSpawnTick, interpolationTicks);
 		}
 
 		[Test]

@@ -190,12 +190,22 @@ namespace FishMMO.Shared
 					Character.Invoke(onAbilityActivateTriggers, aed);
 				}
 
-				// Trigger animation for this ability type on the first authoritative tick.
-				// Avoids replay flicker; observers see animation via NetworkAnimator sync.
+				/* Trigger animation for this ability type on the first authoritative tick.
+				 * Avoids replay flicker.
+				 *
+				 * OWNER-LOCAL ONLY. This used to claim observers saw it "via NetworkAnimator
+				 * sync"; there is no NetworkAnimator on any character prefab, the property on
+				 * BaseCharacter is never assigned, and every method on CharacterAnimationController
+				 * is compiled out of a server build — so nothing was ever synchronised. What
+				 * observers get instead is BroadcastCastState below, which carries the ability type
+				 * an observer-side animation hook would need. */
 				if (!state.ContainsReplayed())
 				{
 					TriggerAbilityAnimation(newAbility.EffectiveType);
 				}
+
+				// Tell observers this character has started casting.
+				BroadcastCastState(state, started: true, referenceID: newAbility.ID, isConsumable: false);
 
 				return true;
 			}
@@ -634,7 +644,12 @@ namespace FishMMO.Shared
 		/// <param name="estimatedServerTick">The observer's estimate of the current server tick (<c>TimeManager.Tick</c>).</param>
 		/// <param name="serverSpawnTick">Server tick the object spawned on.</param>
 		/// <param name="interpolationTicks">Ticks the observer renders its peers behind the server.</param>
-		internal static uint ComputeObserverFastForwardTicks(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks)
+		/// <remarks>
+		/// Public rather than internal because the client's cast nameplate needs the same answer:
+		/// a cast bar started from the raw message would run a round trip behind the projectile the
+		/// same cast spawned. One implementation is what keeps the two agreeing.
+		/// </remarks>
+		public static uint ComputeObserverFastForwardTicks(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks)
 		{
 			long elapsed = (int)(estimatedServerTick - serverSpawnTick);
 			elapsed -= interpolationTicks;
@@ -974,6 +989,51 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Tells this character's observers that an activation started or ended.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Server only, and only on a tick that actually happened — a reconcile replays the start
+		/// of a cast that is already running, and re-sending it would restart every observer's bar
+		/// once per replayed tick.
+		/// </para>
+		/// <para>
+		/// Sent to observers except the owner. The owner does not need it and must not have it: it
+		/// drives its own cast bar from the predicted activation, which is ahead of anything the
+		/// server can tell it, and feeding it this message would replace a correct local bar with a
+		/// stale one arriving a round trip late.
+		/// </para>
+		/// <para>
+		/// Unreliable. A cast is a short-lived visual and both ends of it are re-sent by the next
+		/// activation; the receiver also expires a start on its own duration, so a dropped stop
+		/// cannot strand a nameplate.
+		/// </para>
+		/// </remarks>
+		/// <param name="state">The replicate state, used to skip replayed ticks.</param>
+		/// <param name="started">True for the start of an activation, false for its end.</param>
+		/// <param name="referenceID">The ability instance id, or the item template id for a consumable.</param>
+		/// <param name="isConsumable">True when an item is being used.</param>
+		private void BroadcastCastState(ReplicateState state, bool started, long referenceID, bool isConsumable)
+		{
+			if (!base.IsServerStarted ||
+				state.ContainsReplayed() ||
+				base.NetworkObject == null ||
+				!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+			{
+				return;
+			}
+
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterCastBroadcast
+			{
+				CasterObjectID = base.NetworkObject.ObjectId,
+				ReferenceID = referenceID,
+				IsConsumable = isConsumable,
+				ServerTick = base.TimeManager != null ? base.TimeManager.Tick : 0u,
+				Started = started,
+			}, Channel.Unreliable);
+		}
+
+		/// <summary>
 		/// Spawns a channeled ability object during activation (e.g., beam effects, continuous damage).
 		/// Delegates to <see cref="ResolveTargetAndSpawn"/> which handles replay skipping and seed advance.
 		/// </summary>
@@ -1069,7 +1129,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="activationData">The replicate data for this tick.</param>
 		/// <returns>True if the consumable activation was started, false otherwise.</returns>
-		private bool TryStartConsumable(AbilityActivationReplicateData activationData)
+		/// <param name="state">
+		/// The replicate state. Carried only so the observer cast message can skip replayed ticks,
+		/// exactly as the ability start does — a reconcile replays a use that is already running,
+		/// and re-announcing it would restart every observer's bar.
+		/// </param>
+		private bool TryStartConsumable(AbilityActivationReplicateData activationData, ReplicateState state)
 		{
 			if (activationData.QueuedAbilityID < int.MinValue || activationData.QueuedAbilityID > int.MaxValue)
 			{
@@ -1152,6 +1217,10 @@ namespace FishMMO.Shared
 				cachedInventoryController.LockSlot(item.Slot);
 			}
 			consumableSlot = item.Slot;
+
+			// Observers see a consumable being used exactly as they see an ability being cast.
+			BroadcastCastState(state, started: true, referenceID: consumable.ID, isConsumable: true);
+
 			return true;
 		}
 
@@ -1516,6 +1585,23 @@ namespace FishMMO.Shared
 		internal void Cancel(ReplicateState state = ReplicateState.Invalid, bool suppressCancelEvent = false)
 		{
 			//Log.Debug("Cancel");
+
+			/* Tell observers the activation is over, whatever ended it.
+			 *
+			 * Emitted here rather than at each of the endings — finish, interrupt, explicit cancel,
+			 * death, a failed re-validation — because every one of them funnels through this
+			 * method, and an ending that forgot to send would leave a nameplate reading "Casting"
+			 * for as long as that character stayed in view. Read BEFORE the state below is
+			 * cleared, since currentAbilityID is what says there was anything to end. */
+			if (currentAbilityID != NO_ABILITY)
+			{
+				/* The same reference the start carried: currentAbilityID holds the ability instance
+				 * id, or the consumable's template id when this was an item. The receiver keys on
+				 * the caster — a character has one activation at a time — but naming what ended
+				 * keeps the two messages describing the same thing. */
+				BroadcastCastState(state, started: false, referenceID: currentAbilityID,
+					isConsumable: replicatedFlags.IsFlagged(AbilityActivationFlags.IsConsumable));
+			}
 
 			// Unlock the consumable slot before resetting state.
 			if (consumableSlot >= 0 &&

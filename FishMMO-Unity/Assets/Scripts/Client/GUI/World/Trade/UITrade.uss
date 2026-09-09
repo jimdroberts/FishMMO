@@ -128,6 +128,16 @@ Label.trade-column__name {
     flex-shrink: 0;
 }
 
+/*
+    Confirmed but not yet accepted: this side's offer is final. Distinct from accepted,
+    because the difference is exactly what the second stage is for.
+*/
+.trade-column__status--confirmed {
+    background-color: var(--brand-lo);
+    border-color: var(--brand-400);
+    color: var(--text-bright);
+}
+
 .trade-column__status--accepted {
     background-color: var(--teal-lo);
     border-color: var(--teal);
@@ -164,6 +174,15 @@ Label.trade-column__name {
     bottom: 1px;
     padding-left: 3px;
     padding-right: 3px;
+}
+
+/*
+    Frozen while both sides have confirmed. Reads as "not yours to touch right now" rather
+    than as an error: the player can always get it back by revoking.
+*/
+.trade-slot--locked {
+    opacity: 0.65;
+    border-color: var(--brand-400);
 }
 
 /* A slot on the partner's side cannot be dragged from or withdrawn; it only reads. */
@@ -259,8 +278,14 @@ Label.trade-currency__value {
     overflow: hidden;
 }
 
+.trade-confirm {
+    width: 84px;
+    height: 24px;
+    margin-right: 4px;
+}
+
 .trade-accept {
-    width: 96px;
+    width: 84px;
     height: 24px;
     margin-right: 4px;
 }

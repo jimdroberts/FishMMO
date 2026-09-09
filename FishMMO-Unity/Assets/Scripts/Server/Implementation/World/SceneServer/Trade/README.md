@@ -27,6 +27,30 @@ version, a cancel. Never an item, a template, a seed, a price or a balance. The 
 resolves everything from its own state, and `CharacterStateValidation.CanAct` fronts every
 handler except cancel — a dead or stunned player must still be able to close their window.
 
+## Two stages: confirm, then accept
+
+Trading is deliberately two-stage, because a single accept only makes a last-minute switch
+*unlikely* (you have to win a race against the version check), while two stages make it
+*impossible*:
+
+1. **Confirm** — "this is my final offer". One confirmation changes nothing else; the other
+   party may still edit.
+2. **Both confirmed → the table is FROZEN.** Every change is refused outright
+   (`TradeOfferRefusal.TableLocked` → `TradeRefusalReason.TableLocked`): no item added,
+   withdrawn or re-priced, on either side. Only accepting, revoking and cancelling remain.
+3. **Accept** — refused entirely until the table is frozen (`NotLocked` → `NotConfirmed`), so
+   an acceptance is always a decision about a settled table.
+
+Changing your mind means **revoking**, which unfreezes the table and clears **both**
+acceptances — an acceptance was consent to a frozen table, and the table is no longer frozen.
+The other party's *confirmation* survives a revoke (they have not changed their mind about
+their own offer); any actual change to the table then clears that too, as ever.
+
+Both the confirm and the accept quote the `TradeStateBroadcast.Version` they consent to, so a
+click already in flight when the table changed lands as a no-op rather than as consent to
+something the player never saw. `TradeSession.Touch()` is the single place the invariant
+lives: every mutator bumps the version and clears both confirmations and both acceptances.
+
 ## Reservation: the inventory slot lock
 
 An offered item's inventory slot is **locked** on the server the moment it goes on the
@@ -107,8 +131,10 @@ the outcome closes it. Its despawn flush waits on the same row lock, so it lands
 outcome and is ordered — or voided — by the journal. A committing session whose outcome
 never arrives (main thread unreachable for 60 s) is treated as refused.
 
-Room is also estimated when consent is given (`TradeRules.HasRoomFor`), so a player short
-of bag space is told at Accept with the table still open, not after both have accepted.
+Room is estimated when an offer is **confirmed** and again when it is **accepted**
+(`TradeRules.HasRoomFor`), so a player short of bag space hears it while the table is still
+theirs to trim rather than after both have accepted. The exchange's own all-or-nothing
+refusal remains the decision.
 
 ## Tuning (the `TradeSystem` asset)
 

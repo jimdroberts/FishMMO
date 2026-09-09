@@ -127,6 +127,12 @@ namespace FishMMO.Shared
 
 		/// <summary>They do not have enough free bag slots for what you are offering.</summary>
 		PartnerNoRoom = 14,
+
+		/// <summary>Both sides have confirmed, so the offers are frozen. Revoke to change yours.</summary>
+		TableLocked = 15,
+
+		/// <summary>Nothing to accept yet: both sides must confirm their offers first.</summary>
+		NotConfirmed = 16,
 	}
 
 	/// <summary>
@@ -234,14 +240,33 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Accepts, or un-accepts, the trade as it currently stands.
+	/// Declares this side's offer final, or takes that declaration back.
 	/// </summary>
 	/// <remarks>
-	/// Carries the state version the client was looking at. The server refuses an accept whose
-	/// version is not its current one, which closes the classic race: an offer changed by the
-	/// other party after this client clicked, but before the click arrived, must not be
-	/// accepted by it. The server also clears both acceptances on every change, so this is a
-	/// second lock on the same door rather than the only one.
+	/// Stage one of two. Once BOTH sides have confirmed, the table is frozen — neither party
+	/// can add, withdraw or re-price anything — and only then does
+	/// <see cref="TradeAcceptBroadcast"/> mean anything. Revoking unfreezes the table and
+	/// clears both acceptances, so a player can always change their mind, in full view of the
+	/// other player, but never invisibly at the last instant.
+	/// </remarks>
+	public struct TradeConfirmBroadcast : IBroadcast
+	{
+		/// <summary>True to confirm, false to revoke a confirmation.</summary>
+		public bool Confirm;
+
+		/// <summary>The <see cref="TradeStateBroadcast.Version"/> the client is confirming.</summary>
+		public uint Version;
+	}
+
+	/// <summary>
+	/// Accepts, or un-accepts, the frozen table.
+	/// </summary>
+	/// <remarks>
+	/// Stage two of two: refused until both sides have confirmed. Carries the state version the
+	/// client was looking at, which the server checks against its own — so an accept sent
+	/// before a revoke-change-reconfirm cycle cannot land as consent to a table the player
+	/// never saw. The server also clears both confirmations and both acceptances on every
+	/// change to either offer, so this is a second lock on the same door rather than the only one.
 	/// </remarks>
 	public struct TradeAcceptBroadcast : IBroadcast
 	{
@@ -328,7 +353,10 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public struct TradeStateBroadcast : IBroadcast
 	{
-		/// <summary>Increments on every change to either offer. Quoted back by <see cref="TradeAcceptBroadcast"/>.</summary>
+		/// <summary>
+		/// Increments on every change to either offer. Quoted back by
+		/// <see cref="TradeConfirmBroadcast"/> and <see cref="TradeAcceptBroadcast"/>.
+		/// </summary>
 		public uint Version;
 
 		/// <summary>What this client's character is offering.</summary>
@@ -337,7 +365,10 @@ namespace FishMMO.Shared
 		/// <summary>Currency this client's character is offering.</summary>
 		public long OwnCurrency;
 
-		/// <summary>Whether this client's character has accepted the current version.</summary>
+		/// <summary>Whether this client's character has declared its offer final.</summary>
+		public bool OwnConfirmed;
+
+		/// <summary>Whether this client's character has accepted the frozen table.</summary>
 		public bool OwnAccepted;
 
 		/// <summary>What the other party is offering.</summary>
@@ -346,7 +377,10 @@ namespace FishMMO.Shared
 		/// <summary>Currency the other party is offering.</summary>
 		public long PartnerCurrency;
 
-		/// <summary>Whether the other party has accepted the current version.</summary>
+		/// <summary>Whether the other party has declared its offer final.</summary>
+		public bool PartnerConfirmed;
+
+		/// <summary>Whether the other party has accepted the frozen table.</summary>
 		public bool PartnerAccepted;
 	}
 

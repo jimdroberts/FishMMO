@@ -51,7 +51,13 @@
 
         <ui:VisualElement name="panel-footer" class="fish-panel__footer trade-footer">
             <ui:Label name="trade-status" text="" class="fish-hint trade-status" />
-            <ui:Button name="trade-accept-btn" text="Accept" class="fish-button fish-button--primary trade-accept" />
+            <!--
+                Two stages. Confirm freezes this side's offer; the table is locked only when
+                both sides have, and Accept does nothing until then. That is what makes a
+                last-minute switch impossible rather than merely unlikely.
+            -->
+            <ui:Button name="trade-confirm-btn" text="Confirm" class="fish-button fish-button--primary trade-confirm" />
+            <ui:Button name="trade-accept-btn" text="Accept" class="fish-button trade-accept" />
             <ui:Button name="trade-cancel-btn" text="Cancel" class="fish-button fish-button--danger trade-cancel" />
         </ui:VisualElement>
     </ui:VisualElement>

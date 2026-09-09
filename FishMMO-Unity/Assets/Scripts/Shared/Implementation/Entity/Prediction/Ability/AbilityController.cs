@@ -749,7 +749,7 @@ namespace FishMMO.Shared
 				}
 				else if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
 				{
-					started = TryStartConsumable(activationData);
+					started = TryStartConsumable(activationData, state);
 				}
 				else
 				{

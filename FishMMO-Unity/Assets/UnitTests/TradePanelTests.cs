@@ -111,16 +111,22 @@ namespace FishMMO.UnitTests
 		}
 
 		private static TradeStateBroadcast State(TradeOfferEntry[] own, long ownCurrency, bool ownAccepted,
-			TradeOfferEntry[] partner, long partnerCurrency, bool partnerAccepted, uint version = 3)
+			TradeOfferEntry[] partner, long partnerCurrency, bool partnerAccepted, uint version = 3,
+			bool ownConfirmed = false, bool partnerConfirmed = false)
 		{
+			/* An acceptance is only reachable on a frozen table, so a state that claims one
+			 * implies the confirmation underneath it. Tests that care about the confirm stage
+			 * pass the flags explicitly. */
 			return new TradeStateBroadcast
 			{
 				Version = version,
 				OwnOffer = own ?? Array.Empty<TradeOfferEntry>(),
 				OwnCurrency = ownCurrency,
+				OwnConfirmed = ownConfirmed || ownAccepted,
 				OwnAccepted = ownAccepted,
 				PartnerOffer = partner ?? Array.Empty<TradeOfferEntry>(),
 				PartnerCurrency = partnerCurrency,
+				PartnerConfirmed = partnerConfirmed || partnerAccepted,
 				PartnerAccepted = partnerAccepted,
 			};
 		}
@@ -207,19 +213,22 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(40, Live.Q<IntegerField>("trade-own-currency").value, "own currency field mirrors the table");
 			LogAssert.AreEqual("250", Live.Q<Label>("trade-partner-currency").text, "partner currency is a number");
 
-			LogAssert.AreEqual("Not accepted", Live.Q<Label>("trade-own-status").text, "own status");
+			LogAssert.AreEqual("Editing", Live.Q<Label>("trade-own-status").text, "own status: still editing");
 			LogAssert.AreEqual("Accepted", Live.Q<Label>("trade-partner-status").text, "partner status");
 			LogAssert.IsTrue(Live.Q<Label>("trade-partner-status").ClassListContains("trade-column__status--accepted"), "the partner badge carries the accepted class");
 			LogAssert.IsFalse(Live.Q<Label>("trade-own-status").ClassListContains("trade-column__status--accepted"), "the own badge does not");
 
+			Button confirm = Live.Q<Button>("trade-confirm-btn");
+			LogAssert.AreEqual("Confirm", confirm.text, "the player has not confirmed, so the button offers to");
+			LogAssert.IsTrue(confirm.enabledSelf, "and is enabled");
+
 			Button accept = Live.Q<Button>("trade-accept-btn");
-			LogAssert.AreEqual("Accept", accept.text, "the player has not accepted, so the button offers to");
-			LogAssert.IsTrue(accept.enabledSelf, "and is enabled");
-			LogAssert.IsTrue(Live.Q<Label>("trade-status").text.Contains("Bob has accepted"), "the status line says the partner accepted");
+			LogAssert.AreEqual("Accept", accept.text, "the accept button offers to accept");
+			LogAssert.IsFalse(accept.enabledSelf, "but is dead until both sides confirm");
 		}
 
 		[Test]
-		public void AChange_ThatClearsAcceptances_RepaintsBothBadgesNeutral()
+		public void AChange_ThatClearsConsent_RepaintsBothBadgesNeutral()
 		{
 			trade.OpenWith(22, "Bob", 15.0f);
 			trade.ApplyState(State(null, 0, true, null, 0, true, version: 4));
@@ -227,19 +236,82 @@ namespace FishMMO.UnitTests
 
 			trade.ApplyState(State(new[] { Entry(0, sword, 1) }, 0, false, null, 0, false, version: 5));
 
-			LogAssert.AreEqual("Not accepted", Live.Q<Label>("trade-own-status").text, "own badge cleared");
-			LogAssert.AreEqual("Not accepted", Live.Q<Label>("trade-partner-status").text, "partner badge cleared");
-			LogAssert.IsFalse(Live.Q<Label>("trade-own-status").ClassListContains("trade-column__status--accepted"), "own class removed");
+			LogAssert.AreEqual("Editing", Live.Q<Label>("trade-own-status").text, "own badge cleared");
+			LogAssert.AreEqual("Editing", Live.Q<Label>("trade-partner-status").text, "partner badge cleared");
+			LogAssert.IsFalse(Live.Q<Label>("trade-own-status").ClassListContains("trade-column__status--accepted"), "own accepted class removed");
+			LogAssert.IsFalse(Live.Q<Label>("trade-own-status").ClassListContains("trade-column__status--confirmed"), "own confirmed class removed");
 			LogAssert.AreEqual(5u, trade.State.Version, "the panel tracks the latest version to quote back");
 		}
 
+		// ── The two stages ──────────────────────────────────────────────────────────────────
+
 		[Test]
-		public void BothAccepted_DisablesAcceptAndCancel_AndSaysCompleting()
+		public void Confirming_IsOfferedFirst_AndAcceptIsDeadUntilBothSidesHave()
+		{
+			trade.OpenWith(22, "Bob", 15.0f);
+			trade.ApplyState(State(new[] { Entry(0, sword, 1) }, 0, false, null, 0, false));
+
+			Button confirm = Live.Q<Button>("trade-confirm-btn");
+			Button accept = Live.Q<Button>("trade-accept-btn");
+
+			LogAssert.IsTrue(confirm.enabledSelf, "confirm is available");
+			LogAssert.IsFalse(accept.enabledSelf, "accept is not: nobody has confirmed");
+			LogAssert.IsFalse(trade.IsLocked, "the table is not frozen");
+			LogAssert.IsTrue(Live.Q<Label>("trade-status").text.Contains("Confirm when your offer is final"), "the status says what to do");
+		}
+
+		[Test]
+		public void OneConfirmation_DoesNotUnlockAccept()
+		{
+			trade.OpenWith(22, "Bob", 15.0f);
+			trade.ApplyState(State(null, 0, false, null, 0, false, ownConfirmed: true));
+
+			LogAssert.AreEqual("Confirmed", Live.Q<Label>("trade-own-status").text, "own badge says confirmed");
+			LogAssert.AreEqual("Revoke", Live.Q<Button>("trade-confirm-btn").text, "the button now offers to revoke");
+			LogAssert.IsFalse(Live.Q<Button>("trade-accept-btn").enabledSelf, "accept is still dead");
+			LogAssert.IsFalse(trade.IsLocked, "one side is not a lock");
+			LogAssert.IsTrue(Live.Q<Label>("trade-status").text.Contains("Waiting for Bob to confirm"), "waiting on the partner");
+		}
+
+		[Test]
+		public void BothConfirmed_FreezesTheTable_AndArmsAccept()
+		{
+			trade.OpenWith(22, "Bob", 15.0f);
+			trade.ApplyState(State(new[] { Entry(0, sword, 1) }, 50, false, new[] { Entry(1, arrows, 5) }, 0, false,
+				ownConfirmed: true, partnerConfirmed: true));
+
+			LogAssert.IsTrue(trade.IsLocked, "the table is frozen");
+			LogAssert.IsTrue(Live.Q<Button>("trade-accept-btn").enabledSelf, "accept is armed");
+			LogAssert.AreEqual("Confirmed", Live.Q<Label>("trade-partner-status").text, "the partner badge says confirmed");
+			LogAssert.IsTrue(Live.Q<Label>("trade-own-status").ClassListContains("trade-column__status--confirmed"), "and carries the confirmed class");
+			LogAssert.IsFalse(Live.Q<IntegerField>("trade-own-currency").enabledSelf, "the currency field is frozen");
+			LogAssert.IsTrue(Live.Q<Label>("trade-own-hint").text.Contains("locked"), "the hint says the offers are locked");
+
+			foreach (VisualElement slot in Slots("trade-own-grid"))
+			{
+				LogAssert.IsTrue(slot.ClassListContains("trade-slot--locked"), "every own slot is drawn as frozen");
+			}
+		}
+
+		[Test]
+		public void AFrozenTable_RefusesLocalEdits()
+		{
+			trade.OpenWith(22, "Bob", 15.0f);
+			trade.ApplyState(State(new[] { Entry(4, sword, 1) }, 0, false, null, 0, false,
+				ownConfirmed: true, partnerConfirmed: true));
+
+			LogAssert.IsFalse(trade.TryOfferInventorySlot(2), "offering is refused while frozen");
+			LogAssert.IsTrue(Live.Q<Label>("trade-status").text.Contains("locked"), "and says why");
+		}
+
+		[Test]
+		public void BothAccepted_DisablesEveryControlAndSaysCompleting()
 		{
 			trade.OpenWith(22, "Bob", 15.0f);
 			trade.ApplyState(State(null, 10, true, null, 0, true));
 
 			LogAssert.IsFalse(Live.Q<Button>("trade-accept-btn").enabledSelf, "nothing left to accept");
+			LogAssert.IsFalse(Live.Q<Button>("trade-confirm-btn").enabledSelf, "and nothing left to revoke");
 			LogAssert.IsFalse(Live.Q<Button>("trade-cancel-btn").enabledSelf, "the exchange is decided; it cannot be cancelled");
 			LogAssert.IsFalse(Live.Q<IntegerField>("trade-own-currency").enabledSelf, "the currency field is frozen");
 			LogAssert.IsTrue(Live.Q<Label>("trade-status").text.Contains("completing"), "the status says so");
@@ -249,10 +321,10 @@ namespace FishMMO.UnitTests
 		public void OwnAccepted_OffersToUnaccept()
 		{
 			trade.OpenWith(22, "Bob", 15.0f);
-			trade.ApplyState(State(null, 0, true, null, 0, false));
+			trade.ApplyState(State(null, 0, true, null, 0, false, partnerConfirmed: true));
 
 			LogAssert.AreEqual("Unaccept", Live.Q<Button>("trade-accept-btn").text, "the button withdraws");
-			LogAssert.IsTrue(Live.Q<Label>("trade-status").text.Contains("Waiting for Bob"), "waiting on the partner");
+			LogAssert.IsTrue(Live.Q<Label>("trade-status").text.Contains("Waiting for Bob to accept"), "waiting on the partner");
 		}
 
 		[Test]

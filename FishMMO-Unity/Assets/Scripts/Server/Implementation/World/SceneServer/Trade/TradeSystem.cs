@@ -33,8 +33,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// a second lock on the same door.
 	/// </para>
 	/// <para>
-	/// <b>Any change clears both acceptances</b> (see <see cref="TradeSession"/>), and an accept
-	/// must quote the state version it consents to. <b>Range and state are the server's</b>: a
+	/// <b>Trading is two stages: confirm, then accept.</b> Confirming declares an offer final;
+	/// while both sides have confirmed the table is FROZEN, so nothing on it can change and the
+	/// accept that follows is a decision about a settled table rather than a race against the
+	/// other player's next click. Any change to either offer clears both confirmations and both
+	/// acceptances, and both are quoted against the state version they consent to (see
+	/// <see cref="TradeSession"/>). <b>Range and state are the server's</b>: a
 	/// tick re-checks that both characters are present, able to act, in the same scene
 	/// instance and within <see cref="MaxTradeDistance"/>, and closes the session the moment
 	/// any of that stops being true. The same rule is applied once more at completion.
@@ -100,8 +104,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Offer = 3,
 			Withdraw = 4,
 			Currency = 5,
-			Accept = 6,
-			Cancel = 7,
+			Confirm = 6,
+			Accept = 7,
+			Cancel = 8,
 		}
 
 		/// <summary>An invitation waiting for the target's answer.</summary>
@@ -249,6 +254,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<TradeOfferItemBroadcast>(OnServerTradeOfferItemReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<TradeWithdrawItemBroadcast>(OnServerTradeWithdrawItemReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<TradeSetCurrencyBroadcast>(OnServerTradeSetCurrencyReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<TradeConfirmBroadcast>(OnServerTradeConfirmReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<TradeAcceptBroadcast>(OnServerTradeAcceptReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<TradeCancelBroadcast>(OnServerTradeCancelReceived, true);
 		}
@@ -260,6 +266,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<TradeOfferItemBroadcast>(OnServerTradeOfferItemReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<TradeWithdrawItemBroadcast>(OnServerTradeWithdrawItemReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<TradeSetCurrencyBroadcast>(OnServerTradeSetCurrencyReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<TradeConfirmBroadcast>(OnServerTradeConfirmReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<TradeAcceptBroadcast>(OnServerTradeAcceptReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<TradeCancelBroadcast>(OnServerTradeCancelReceived);
 		}

@@ -89,8 +89,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>A negative currency offer.</summary>
 		NegativeCurrency,
 
-		/// <summary>The accept quoted a version that is no longer current.</summary>
+		/// <summary>The accept or confirmation quoted a version that is no longer current.</summary>
 		StaleVersion,
+
+		/// <summary>Both sides have confirmed, so the table is frozen. Revoke first.</summary>
+		TableLocked,
+
+		/// <summary>Both sides have not confirmed yet, so there is nothing settled to accept.</summary>
+		NotLocked,
 	}
 
 	/// <summary>
@@ -104,12 +110,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// it here. That split is what lets the acceptance rules be tested as a truth table.
 	/// </para>
 	/// <para>
-	/// THE INVARIANT: <b>every change to either offer clears both acceptances and bumps
-	/// <see cref="Version"/>.</b> There is no way to alter what is on the table that leaves an
-	/// acceptance standing, because the classic exploit is exactly that — swap the goods after
-	/// the other party has said yes. <see cref="TryAccept"/> additionally refuses an accept that
-	/// quotes any version but the current one, so a click that was in flight while the table
-	/// changed lands as a no-op rather than as consent to something the player never saw.
+	/// <b>TWO STAGES: CONFIRM, THEN ACCEPT.</b> Confirming says "this is my final offer".
+	/// While both sides have confirmed the table is LOCKED: no item and no currency on either
+	/// side can be changed at all, and only then may either party accept. That is what removes
+	/// the last-minute switch as a category rather than as a race — there is no instant at
+	/// which one player is reading a table the other can still edit. Changing your mind means
+	/// revoking your confirmation first, which unlocks the table and clears both acceptances,
+	/// in full view of the other player.
+	/// </para>
+	/// <para>
+	/// THE INVARIANT: <b>every change to either offer clears both confirmations and both
+	/// acceptances, and bumps <see cref="Version"/>.</b> There is no way to alter what is on
+	/// the table that leaves consent of either kind standing. <see cref="TryConfirm"/> and
+	/// <see cref="TryAccept"/> both refuse a request that quotes any version but the current
+	/// one, so a click that was in flight while the table changed lands as a no-op rather than
+	/// as consent to something the player never saw.
 	/// </para>
 	/// </remarks>
 	public sealed class TradeSession
@@ -125,7 +140,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <summary>Currency on the table.</summary>
 			public long Currency;
 
-			/// <summary>Whether this side has accepted the current <see cref="TradeSession.Version"/>.</summary>
+			/// <summary>
+			/// Whether this side has confirmed its offer as final at the current
+			/// <see cref="TradeSession.Version"/>. Both confirmations freeze the table.
+			/// </summary>
+			public bool Confirmed;
+
+			/// <summary>
+			/// Whether this side has accepted the frozen table. Only reachable while both sides
+			/// are confirmed; cleared the moment either confirmation is revoked.
+			/// </summary>
 			public bool Accepted;
 
 			public Party(long characterID)
@@ -247,7 +271,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			return null;
 		}
 
-		/// <summary>True when both sides have accepted the current version.</summary>
+		/// <summary>
+		/// True when both sides have confirmed their offers: the table is frozen and the only
+		/// things either party may do are accept, revoke, or cancel.
+		/// </summary>
+		public bool IsLocked => First.Confirmed && Second.Confirmed;
+
+		/// <summary>True when both sides have accepted the frozen table.</summary>
 		public bool BothAccepted => First.Accepted && Second.Accepted;
 
 		/// <summary>
@@ -260,6 +290,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void Touch()
 		{
 			Version++;
+			First.Confirmed = false;
+			Second.Confirmed = false;
 			First.Accepted = false;
 			Second.Accepted = false;
 		}
@@ -278,6 +310,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (party == null)
 			{
 				return TradeOfferRefusal.NotAParty;
+			}
+
+			if (IsLocked)
+			{
+				return TradeOfferRefusal.TableLocked;
 			}
 
 			if (party.IndexOfSlot(offer.Slot) >= 0)
@@ -311,6 +348,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (party == null)
 			{
 				return TradeOfferRefusal.NotAParty;
+			}
+
+			if (IsLocked)
+			{
+				return TradeOfferRefusal.TableLocked;
 			}
 
 			int index = party.IndexOfSlot(slot);
@@ -347,6 +389,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return TradeOfferRefusal.NotAParty;
 			}
 
+			if (IsLocked)
+			{
+				return TradeOfferRefusal.TableLocked;
+			}
+
 			if (amount < 0)
 			{
 				return TradeOfferRefusal.NegativeCurrency;
@@ -358,11 +405,71 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Accepts, or withdraws acceptance of, the table as it stands at <paramref name="version"/>.
+		/// Confirms, or revokes the confirmation of, this side's offer as final at
+		/// <paramref name="version"/>.
 		/// </summary>
 		/// <remarks>
+		/// <para>
+		/// Stage one of two. Once BOTH sides have confirmed the table is locked and nothing on
+		/// it can change; that is what makes the accept that follows a decision about a settled
+		/// table rather than a race against the other player's next click.
+		/// </para>
+		/// <para>
+		/// <b>Revoking clears both acceptances.</b> An acceptance is consent to a frozen table,
+		/// and a revocation unfreezes it — so consent given on that basis cannot survive, on
+		/// either side. The other party's CONFIRMATION is left standing: they have not changed
+		/// their mind about their own offer, and making them re-click for someone else's
+		/// revocation is noise. Any actual change to the table clears everything, as ever.
+		/// </para>
+		/// <para>
+		/// Revoking never fails on version, for the same reason withdrawing an acceptance does
+		/// not: taking consent back must always be possible, whatever the player was looking at.
+		/// </para>
+		/// </remarks>
+		public TradeOfferRefusal TryConfirm(long characterID, bool confirm, uint version)
+		{
+			if (Phase != TradePhase.Open)
+			{
+				return TradeOfferRefusal.NotOpen;
+			}
+
+			Party party = PartyOf(characterID);
+			if (party == null)
+			{
+				return TradeOfferRefusal.NotAParty;
+			}
+
+			if (!confirm)
+			{
+				party.Confirmed = false;
+				First.Accepted = false;
+				Second.Accepted = false;
+				return TradeOfferRefusal.None;
+			}
+
+			if (version != Version)
+			{
+				return TradeOfferRefusal.StaleVersion;
+			}
+
+			party.Confirmed = true;
+			return TradeOfferRefusal.None;
+		}
+
+		/// <summary>
+		/// Accepts, or withdraws acceptance of, the frozen table as it stands at
+		/// <paramref name="version"/>.
+		/// </summary>
+		/// <remarks>
+		/// Stage two of two, and only reachable while <see cref="IsLocked"/>: there is nothing
+		/// to accept until both sides have declared their offers final. The version quote is
+		/// kept even though the table cannot change while locked, because an accept sent
+		/// before a revoke-change-relock cycle would otherwise arrive as consent to a table
+		/// the player never saw.
+		/// <para>
 		/// Withdrawing never fails on version: a player taking consent back must always be
-		/// able to, whatever they were looking at. Only granting it is version-gated.
+		/// able to, whatever they were looking at. Only granting it is gated.
+		/// </para>
 		/// </remarks>
 		public TradeOfferRefusal TryAccept(long characterID, bool accept, uint version)
 		{
@@ -383,6 +490,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return TradeOfferRefusal.None;
 			}
 
+			if (!IsLocked)
+			{
+				return TradeOfferRefusal.NotLocked;
+			}
+
 			if (version != Version)
 			{
 				return TradeOfferRefusal.StaleVersion;
@@ -395,10 +507,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Moves an open session into <see cref="TradePhase.Committing"/>.
 		/// </summary>
-		/// <returns>False unless the session was open and both sides had accepted.</returns>
+		/// <returns>False unless the session was open, locked, and both sides had accepted.</returns>
 		public bool TryBeginCommit()
 		{
-			if (Phase != TradePhase.Open || !BothAccepted)
+			if (Phase != TradePhase.Open || !IsLocked || !BothAccepted)
 			{
 				return false;
 			}
@@ -431,9 +543,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Version = Version,
 				OwnOffer = own.ToEntries(),
 				OwnCurrency = own.Currency,
+				OwnConfirmed = own.Confirmed,
 				OwnAccepted = own.Accepted,
 				PartnerOffer = partner.ToEntries(),
 				PartnerCurrency = partner.Currency,
+				PartnerConfirmed = partner.Confirmed,
 				PartnerAccepted = partner.Accepted,
 			};
 		}
