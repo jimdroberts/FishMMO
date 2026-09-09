@@ -6,14 +6,15 @@ namespace FishMMO.Server.Core.World.SceneServer
 {
 	/// <summary>
 	/// One character's half of a two-character exchange, as handed to
-	/// <see cref="ICharacterInventorySystem.TryPersistExchange"/>.
+	/// <see cref="ICharacterInventorySystem.TryRunExchange"/>.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// The in-memory containers have already been mutated by the time this exists; it names
-	/// which rows that mutation touched so the write can be captured on the main thread and
-	/// applied on a worker as one unit with the other character's leg. Live <see cref="Item"/>
-	/// references are read once, at capture, and never on the worker.
+	/// Built on the main thread, inside the apply hop, while both characters' row locks are
+	/// held and immediately after memory was mutated; it names which rows that mutation
+	/// touched so the write can be captured there and applied on the worker as one unit with
+	/// the other character's leg. Live <see cref="Item"/> references are read once, at capture,
+	/// and never on the worker.
 	/// </para>
 	/// <para>
 	/// An item that moved between the two characters whole appears ONLY in the receiver's
@@ -54,5 +55,28 @@ namespace FishMMO.Server.Core.World.SceneServer
 
 		/// <summary>The ledger reason to record <see cref="CurrencyPaid"/> under.</summary>
 		public CurrencyMovementReason LedgerReason = CurrencyMovementReason.PlayerTrade;
+
+		/// <summary>
+		/// Currency this character RECEIVES, which is NOT yet in memory when the leg is captured.
+		/// </summary>
+		/// <remarks>
+		/// Deductions are applied to memory before the write (an escrow: a concurrent spend can
+		/// only spend what is left), but credits are applied only after the commit. A credit
+		/// applied before it could be spent during the write, and a refused write could then not
+		/// take it back exactly. So the attribute row for <see cref="CurrencyTemplateID"/> is
+		/// written as memory plus this amount, and the caller credits memory on success.
+		/// </remarks>
+		public long CurrencyCredit;
+
+		/// <summary>The attribute template <see cref="CurrencyCredit"/> is added to. Zero when no credit.</summary>
+		public int CurrencyTemplateID;
+
+		/// <summary>
+		/// Every inventory slot the exchange read or wrote on this character. Locked from the
+		/// moment memory is applied until the exchange has committed or been undone, so that an
+		/// undo is exact: nothing else can move into, out of, or merge with these slots while
+		/// the outcome is still open.
+		/// </summary>
+		public List<int> TouchedSlots = new List<int>();
 	}
 }

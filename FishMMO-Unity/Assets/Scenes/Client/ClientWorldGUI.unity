@@ -1616,7 +1616,7 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 1
-  CurrencyTemplateID: 0
+  CurrencyTemplateID: -1797163030
 --- !u!114 &1579507548
 MonoBehaviour:
   m_ObjectHideFlags: 0

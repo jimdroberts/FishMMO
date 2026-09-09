@@ -431,6 +431,11 @@ namespace FishMMO.Client
 						UpdateHexValue(hexInput.value);
 					}
 				});
+
+				/* Enter was the only way to commit, so clicking a slider after typing left the
+				 * field reading one colour and the swatch showing another. Leaving the field
+				 * commits it as well; malformed text is put back the same way Enter puts it back. */
+				hexInput.RegisterCallback<FocusOutEvent>((evt) => UpdateHexValue(hexInput.value));
 			}
 
 			if (hsvTexture != null)
@@ -1164,6 +1169,14 @@ namespace FishMMO.Client
 		/// <param name="value">The hexadecimal color string.</param>
 		public void UpdateHexValue(string value)
 		{
+			/* Nothing typed. Re-applying the colour the field already shows would report it to
+			 * the caller as a fresh pick, and the Options panel answers every report with a
+			 * settings write and a theme reload. */
+			if (string.Equals(value, current.ToHex(), System.StringComparison.OrdinalIgnoreCase))
+			{
+				return;
+			}
+
 			if (!TryParseHex(value, out Color newColor))
 			{
 				/* Malformed input is put back rather than applied. Hex.ToColor treats any

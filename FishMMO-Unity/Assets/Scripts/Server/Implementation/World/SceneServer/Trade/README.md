@@ -58,24 +58,54 @@ invitation out or pending, refuses new invitations from either end (`SelfBusy` /
 `TargetBusy`). Invitations lapse after `inviteTtlSeconds`; a decline or lapse arms a
 per-pair cooldown so a refused request cannot be re-sent every debounce interval.
 
-## Completion (`TradeSystem.Commit.cs`)
+## Completion (`TradeSystem.Commit.cs`) — the database commit is the point of truth
 
-1. `TryBeginCommit` — no request from either party is honoured from here.
-2. Re-validate everything: presence, `CanAct`, scene, range, every offered slot, both
-   currency balances, no receiving-balance overflow (currency is an `int` attribute).
-3. Deduct both currency offers (refunded on any later refusal).
-4. `TradeExchange.TryApply`: all-or-nothing in memory. A refusal for room closes with
-   `NoRoom`; both bags are untouched.
-5. Credit both currency offers.
-6. `ICharacterInventorySystem.TryPersistExchange` — **one unit of work**: both characters'
-   item rows (an item that crossed whole keeps its id and is re-owned by the upsert; only an
-   item that merged entirely into a resident stack is deleted), both attribute sheets when
-   currency moved, and the `currency_ledger` rows (`PlayerTrade`, `Absorbed`) — under both
-   characters' session row locks in ascending id order, with both journal sequences claimed
-   under those locks. Any refusal rolls the whole transaction back and reconciles both
-   characters from memory.
-7. `NotifyInventorySlots` for both (removes for still-empty slots first, then sets), then
-   `TradeClosedBroadcast(Completed)`.
+Nothing about a trade is final until the ONE transaction carrying both characters' halves has
+committed, and memory is mutated only while that transaction holds both characters' session
+row locks. That is what makes a server crash at any instant safe:
+
+- **before the commit**: memory is lost, the database rolls back — the trade never happened
+  for either side;
+- **after the commit**: the database holds the whole trade for both, and the next login
+  loads it.
+
+There is no interleaving in which one side's half is durable and the other's is not, because
+there is only one write and it decides. A crash can lose a trade in flight; it cannot
+duplicate one.
+
+Three hops, in this order (`ICharacterInventorySystem.TryRunExchange`):
+
+1. **Main thread, `TryCommit`** — the session moves to `Committing` (no request from either
+   party is honoured), the offered slots stay locked, nothing is mutated.
+2. **Worker** — open the transaction, take BOTH session row locks in ascending id order. No
+   other write for either character can commit until this transaction ends.
+3. **Main thread, `ApplyExchange`, under the locks** — re-validate everything as if the
+   trade were proposed now (presence, `CanAct`, scene, range, every offered slot, both
+   balances, no `int` overflow on receipt); **deduct** both currency offers (an escrow — a
+   concurrent spend can only spend what is left, and a refusal refunds exactly); apply the
+   item exchange in memory all-or-nothing (`TradeExchange.TryApply`); hand back the rows.
+   Sequences and versions are stamped HERE, so every write captured before this instant is
+   older than the trade and every write captured after carries it. Every touched slot on
+   both sides is locked from this instant until the outcome. **Credits are not applied
+   here**: they ride in the written attribute row and land in memory only once the commit
+   is known, so a refusal never has to claw back money already spent.
+4. **Worker** — both characters' item rows (an item that crossed whole keeps its id and is
+   re-owned by the upsert; only an item that merged entirely into a resident stack is
+   deleted), both attribute sheets, the `currency_ledger` rows (`PlayerTrade`, `Absorbed`),
+   commit.
+5. **Main thread, `FinishExchange`** — on commit: credit both, close as `Completed` (the
+   close goes BEFORE the inventory updates, because the clients still hold their local slot
+   locks and their handlers refuse a locked slot), then the set/remove broadcasts. On
+   refusal: `TradeExchange.Applied.Undo()` restores both bags exactly, the deductions are
+   refunded, the session closes with the reason; the inventory system **voids** every batch
+   captured for either character while the applied state was visible
+   (`ItemWriteJournal.VoidCaptures`) — a snapshot or despawn flush captured in that window
+   described a trade that never happened — and reconciles both from the restored memory.
+
+A character that disconnects while the commit is in flight is not closed out of the session;
+the outcome closes it. Its despawn flush waits on the same row lock, so it lands after the
+outcome and is ordered — or voided — by the journal. A committing session whose outcome
+never arrives (main thread unreachable for 60 s) is treated as refused.
 
 Room is also estimated when consent is given (`TradeRules.HasRoomFor`), so a player short
 of bag space is told at Accept with the table still open, not after both have accepted.

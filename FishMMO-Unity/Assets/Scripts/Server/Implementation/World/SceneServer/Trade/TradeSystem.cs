@@ -40,12 +40,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// any of that stops being true. The same rule is applied once more at completion.
 	/// </para>
 	/// <para>
-	/// <b>The exchange is one database commit.</b> Both characters' item rows, both currency
-	/// balances and the ledger rows travel in one unit of work through
-	/// <see cref="ICharacterInventorySystem.TryPersistExchange"/>, under both characters'
-	/// session row locks. The in-memory application that precedes it is itself all-or-nothing
-	/// (<see cref="TradeExchange"/>), so the database can only ever see either the whole trade
-	/// or none of it, and memory never holds half of one.
+	/// <b>The database commit is the point of truth.</b> Both characters' item rows, both
+	/// currency balances and the ledger rows travel in one unit of work through
+	/// <see cref="ICharacterInventorySystem.TryRunExchange"/>, and memory is mutated only while
+	/// that transaction holds both characters' session row locks. A crash at any instant
+	/// therefore leaves the database with the whole trade or none of it, and the next login
+	/// loads exactly that; there is no interleaving in which one side's half is durable and
+	/// the other's is not. See <c>TradeSystem.Commit.cs</c> for the three hops.
 	/// </para>
 	/// </remarks>
 	[CreateAssetMenu(fileName = "TradeSystem", menuName = "FishMMO/Server/SceneServer/Trade System", order = 1)]
@@ -302,7 +303,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (sessionsByCharacter.TryGetValue(character.ID, out TradeSession session))
 			{
-				CloseSessionFor(session, character.ID, TradeCloseReason.PartnerLeft, TradeCloseReason.PartnerLeft);
+				/* A committing session is NOT closed here. Its outcome is being decided by a
+				 * transaction that already holds both row locks; the finish hop closes it either
+				 * way, and closing it now would tear down the state the undo needs. The
+				 * departing character's despawn flush waits on the same row lock, so it lands
+				 * after the outcome and is ordered — or voided — by the journal. */
+				if (session.Phase == TradePhase.Open)
+				{
+					CloseSessionFor(session, character.ID, TradeCloseReason.PartnerLeft, TradeCloseReason.PartnerLeft);
+				}
 			}
 
 			DropInvitesInvolving(character.ID, notifyRequester: true);
@@ -558,7 +567,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			bool wasOpen = session.Phase == TradePhase.Open;
+			bool holdsOfferLocks = session.Phase == TradePhase.Open ||
+				(session.Phase == TradePhase.Committing && (session.Commit == null || !session.Commit.OfferLocksReleased));
 			session.Close();
 
 			IPlayerCharacter first = null;
@@ -566,9 +576,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			TryGetResidentCharacter(session.First.CharacterID, out first);
 			TryGetResidentCharacter(session.Second.CharacterID, out second);
 
-			if (wasOpen)
+			if (holdsOfferLocks)
 			{
-				// Only an open session still holds locks; a committing one released them first.
+				/* An open session holds the offer locks; so does a committing one whose apply
+				 * never ran. A committing session past the apply released them itself, and the
+				 * inventory system owns every lock from there until the outcome. */
 				UnlockOffers(first, session.First);
 				UnlockOffers(second, session.Second);
 			}
@@ -633,9 +645,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			double now = Now;
 			pendingCloses.Clear();
 
+			List<TradeSession> timedOut = null;
 			for (int i = 0; i < sessions.Count; ++i)
 			{
 				TradeSession session = sessions[i];
+				if (session.Phase == TradePhase.Committing)
+				{
+					if (session.Commit != null && !session.Commit.Finished && now > session.Commit.StartedAt + CommitTimeoutSeconds)
+					{
+						(timedOut ??= new List<TradeSession>()).Add(session);
+					}
+					continue;
+				}
 				if (session.Phase != TradePhase.Open || session.NextRangeCheckTime > now)
 				{
 					continue;
@@ -674,6 +695,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				CloseSession(session, firstReason, secondReason);
 			}
 			pendingCloses.Clear();
+
+			if (timedOut != null)
+			{
+				for (int i = 0; i < timedOut.Count; ++i)
+				{
+					TimeOutCommit(timedOut[i]);
+				}
+			}
 		}
 
 		// ── Inventory watch ─────────────────────────────────────────────────────────────────

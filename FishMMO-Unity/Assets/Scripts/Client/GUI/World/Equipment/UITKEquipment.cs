@@ -27,18 +27,6 @@ namespace FishMMO.Client
 		private const string PREVIEW_RT_NAME    = "preview-rt";
 		/// <summary>Name of the close button element in the UXML.</summary>
 		private const string CLOSE_BTN_NAME     = "close-button";
-		/// <summary>Name of the gear tab button element in the UXML.</summary>
-		private const string TAB_GEAR_NAME      = "tab-gear";
-		/// <summary>Name of the stats tab button element in the UXML.</summary>
-		private const string TAB_STATS_NAME     = "tab-stats";
-		/// <summary>Name of the sets tab button element in the UXML.</summary>
-		private const string TAB_SETS_NAME      = "tab-sets";
-		/// <summary>Name of the panel body element in the UXML.</summary>
-		private const string PANEL_BODY_NAME    = "panel-body";
-		/// <summary>Name of the panel footer element in the UXML.</summary>
-		private const string PANEL_FOOTER_NAME  = "panel-footer";
-		/// <summary>Name of the gear score label element in the UXML.</summary>
-		private const string GEAR_SCORE_NAME    = "gear-score";
 		/// <summary>Name of the HP stat label element in the UXML.</summary>
 		private const string STAT_HP_NAME       = "stat-hp";
 		/// <summary>Name of the MP stat label element in the UXML.</summary>
@@ -91,8 +79,6 @@ namespace FishMMO.Client
 
 		/// <summary>USS class for hiding equipment elements.</summary>
 		private const string CSS_HIDDEN         = "eq-hidden";
-		/// <summary>USS class for an active tab button.</summary>
-		private const string CSS_TAB_ACTIVE     = "fish-tab--active";
 		/// <summary>USS class marking a slot as waiting on the server.</summary>
 		private const string CSS_LOCK_PENDING   = "eq-slot__lock--pending";
 		/// <summary>USS class for an attribute category header.</summary>
@@ -152,14 +138,8 @@ namespace FishMMO.Client
 
 		/// <summary>The ScrollView that contains the attribute rows.</summary>
 		private ScrollView attributeList;
-		/// <summary>Root element of the gear tab panel body.</summary>
-		private VisualElement panelBody;
-		/// <summary>Root element of the stats tab panel footer.</summary>
-		private VisualElement panelFooter;
 		/// <summary>Character preview render texture element.</summary>
 		private VisualElement previewRt;
-		/// <summary>Label displaying the gear score.</summary>
-		private Label gearScoreLabel;
 		/// <summary>Label displaying the HP stat value.</summary>
 		private Label statHpLabel;
 		/// <summary>Label displaying the MP stat value.</summary>
@@ -169,9 +149,6 @@ namespace FishMMO.Client
 
 		/// <summary>Camera used for the 3D character preview viewport.</summary>
 		private Camera equipmentViewCamera;
-
-		/// <summary>Currently selected tab name; defaults to GEAR.</summary>
-		private string activeTab = TAB_GEAR_NAME;
 
 		/// <summary>True while this panel holds a subscription on the shared operation tracker.</summary>
 		private bool trackerSubscribed;
@@ -189,15 +166,11 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// Body / footer panels used for tab switching
-			panelBody   = root.Q(PANEL_BODY_NAME);
-			panelFooter = root.Q(PANEL_FOOTER_NAME);
-
-			// Attribute scroll list
+			/* Attribute scroll list. The slot grid above it and this list are both always
+			 * visible, so nothing here decides which half of the panel to draw. */
 			attributeList = root.Q<ScrollView>(ATTR_LIST_NAME);
 
 			// Status-bar labels
-			gearScoreLabel = root.Q<Label>(GEAR_SCORE_NAME);
 			statHpLabel    = root.Q<Label>(STAT_HP_NAME);
 			statMpLabel    = root.Q<Label>(STAT_MP_NAME);
 			statStamLabel  = root.Q<Label>(STAT_STAM_NAME);
@@ -211,11 +184,6 @@ namespace FishMMO.Client
 			{
 				closeBtn.clicked += Hide;
 			}
-
-			// Tab buttons
-			WireTab(root.Q<Button>(TAB_GEAR_NAME),  TAB_GEAR_NAME,  root);
-			WireTab(root.Q<Button>(TAB_STATS_NAME), TAB_STATS_NAME, root);
-			WireTab(root.Q<Button>(TAB_SETS_NAME),  TAB_SETS_NAME,  root);
 
 			/* Equipment slots. The callbacks below are registered on elements that belong to the
 			 * tree being resolved right now — a rebuilt tree brings new elements and the old
@@ -245,9 +213,6 @@ namespace FishMMO.Client
 				slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(slotIndex, slotRoot));
 				slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave(slotRoot));
 			}
-
-			// Apply initial tab state
-			ApplyTabState(root);
 		}
 
 		/// <summary>
@@ -716,66 +681,6 @@ namespace FishMMO.Client
 			return Character != null &&
 				   Character.TryGet(out IEquipmentController equipmentController) &&
 				   equipmentController.IsSlotLocked(slotIndex);
-		}
-
-		/// <summary>
-		/// Wires a tab button's clicked callback and initialises its active CSS class.
-		/// </summary>
-		private void WireTab(Button button, string tabName, VisualElement root)
-		{
-			if (button == null)
-			{
-				return;
-			}
-			button.clicked += () =>
-			{
-				activeTab = tabName;
-				ApplyTabState(root);
-			};
-		}
-
-		/// <summary>
-		/// Applies the active/inactive CSS class to all tab buttons and shows or hides
-		/// the panel body and attribute footer according to the active tab.
-		/// </summary>
-		private void ApplyTabState(VisualElement root)
-		{
-			SetTabActive(root.Q<Button>(TAB_GEAR_NAME),  activeTab == TAB_GEAR_NAME);
-			SetTabActive(root.Q<Button>(TAB_STATS_NAME), activeTab == TAB_STATS_NAME);
-			SetTabActive(root.Q<Button>(TAB_SETS_NAME),  activeTab == TAB_SETS_NAME);
-
-			// GEAR  → show slot grid, hide attribute scroll
-			// STATS → hide slot grid, show attribute scroll
-			// SETS  → hide both (placeholder)
-			bool showBody   = activeTab == TAB_GEAR_NAME;
-			bool showFooter = activeTab == TAB_STATS_NAME;
-
-			SetElementVisible(panelBody,   showBody);
-			SetElementVisible(panelFooter, showFooter);
-		}
-
-		/// <summary>Adds or removes the active styling class on a tab button.</summary>
-		/// <param name="button">The tab button to style.</param>
-		/// <param name="active">Whether the tab is the active tab.</param>
-		private static void SetTabActive(Button button, bool active)
-		{
-			if (button == null)
-			{
-				return;
-			}
-			button.EnableInClassList(CSS_TAB_ACTIVE, active);
-		}
-
-		/// <summary>
-		/// Shows or hides a VisualElement using the display style (no layout space when hidden).
-		/// </summary>
-		private static void SetElementVisible(VisualElement element, bool visible)
-		{
-			if (element == null)
-			{
-				return;
-			}
-			element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 		}
 
 		/// <summary>
@@ -1395,7 +1300,6 @@ namespace FishMMO.Client
 			if (statHpLabel   != null) statHpLabel.text   = "—";
 			if (statMpLabel   != null) statMpLabel.text   = "—";
 			if (statStamLabel != null) statStamLabel.text = "—";
-			if (gearScoreLabel != null) gearScoreLabel.text = "GS: —";
 		}
 
 		/// <summary>

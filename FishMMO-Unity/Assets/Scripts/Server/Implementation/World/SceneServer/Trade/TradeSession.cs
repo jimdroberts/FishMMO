@@ -184,6 +184,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Server time of the next range check. Owned by the system's tick.</summary>
 		public double NextRangeCheckTime;
 
+		/// <summary>
+		/// What the commit has done so far, so a refusal at any point can be undone exactly.
+		/// Null until the commit starts. Owned by <c>TradeSystem.Commit</c>.
+		/// </summary>
+		public sealed class CommitState
+		{
+			/// <summary>Server time the commit was handed to the persistence layer.</summary>
+			public double StartedAt;
+
+			/// <summary>True once the outcome has been handled, whichever way it went.</summary>
+			public bool Finished;
+
+			/// <summary>True once the offered slots' locks were released for the apply.</summary>
+			public bool OfferLocksReleased;
+
+			/// <summary>Currency taken from each side in memory before the write; refunded on refusal.</summary>
+			public long FirstDeducted;
+			public long SecondDeducted;
+
+			/// <summary>The applied item exchange, or null when the apply aborted before mutating.</summary>
+			public TradeExchange.Applied Applied;
+
+			/// <summary>The rows each side's write carried, kept for the client notification.</summary>
+			public TradeExchange.Side FirstSide;
+			public TradeExchange.Side SecondSide;
+
+			/// <summary>Why the session closes if the commit does not land.</summary>
+			public TradeCloseReason FailureReason;
+		}
+
+		/// <summary>The in-flight commit, or null.</summary>
+		public CommitState Commit;
+
 		public TradeSession(long id, long firstCharacterID, long secondCharacterID, int maxOfferSlots)
 		{
 			ID = id;

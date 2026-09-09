@@ -39,19 +39,16 @@
 
                 <!-- fish-panel__title → color, font, tracking  -->
                 <!-- eq-header__title  → flex-shrink, margin    -->
+                <!--
+                    Gear and stats are one view. They were a GEAR / STATS / SETS tab bar, which
+                    made the panel answer only one of the two questions a player opens it to
+                    compare - what is equipped, and what it adds up to - and the third tab was a
+                    placeholder that showed nothing at all. The slot grid and the attribute list
+                    are now both always on screen, so there is no tab bar left to draw.
+                -->
                 <ui:Label name="header-title"
                           class="fish-panel__title eq-header__title"
                           text="EQUIPMENT" />
-
-                <!-- eq-tab-bar → flex-direction row, margin    -->
-                <ui:VisualElement name="tab-bar" class="eq-tab-bar">
-                    <!-- fish-tab        → colors, transitions   -->
-                    <!-- fish-tab—active → active colors         -->
-                    <!-- eq-tab          → height, padding       -->
-                    <ui:Button name="tab-gear"  class="fish-tab fish-tab--active eq-tab" text="GEAR" />
-                    <ui:Button name="tab-stats" class="fish-tab eq-tab"                  text="STATS" />
-                    <ui:Button name="tab-sets"  class="fish-tab eq-tab"                  text="SETS" />
-                </ui:VisualElement>
 
             </ui:VisualElement>
 
@@ -241,6 +238,11 @@
             <!-- eq-divider   → margin-bottom, flex-shrink       -->
             <ui:VisualElement class="fish-divider eq-divider" />
 
+            <!-- Names the list the STATS tab used to name. -->
+            <ui:Label name="attribute-heading"
+                      class="fish-attr-category eq-attr-heading"
+                      text="ATTRIBUTES" />
+
             <!--
                 Attribute rows injected at runtime by UIEquipment.BuildAttributeRows()
 
@@ -286,14 +288,6 @@
                 <ui:Label         class="fish-chip__label eq-chip__label" text="STM" />
                 <ui:Label         name="stat-stam" class="fish-chip__value" text="—" />
             </ui:VisualElement>
-
-            <ui:VisualElement class="eq-spacer" />
-
-            <!-- fish-gear-score → color, font, tracking        -->
-            <!-- eq-gear-score   → flex-shrink                  -->
-            <ui:Label name="gear-score"
-                      class="fish-gear-score eq-gear-score"
-                      text="GS: —" />
 
         </ui:VisualElement>
 

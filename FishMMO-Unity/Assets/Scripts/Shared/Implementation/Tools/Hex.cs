@@ -156,15 +156,29 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static string ToHex(this Color color)
 		{
-			// Scale color components from 0-1 float range to 0-255 integer range.
-			int r = (int)(color.r * 255.0f);
-			int g = (int)(color.g * 255.0f);
-			int b = (int)(color.b * 255.0f);
-			int a = (int)(color.a * 255.0f);
-
-			// Format each integer as a two-digit uppercase hexadecimal string (X2).
+			// Format each byte as a two-digit uppercase hexadecimal string (X2).
 			// Example: 255 -> "FF", 0 -> "00", 10 -> "0A"
-			return string.Format("{0:X2}{1:X2}{2:X2}{3:X2}", r, g, b, a);
+			return string.Format("{0:X2}{1:X2}{2:X2}{3:X2}", ToByte(color.r), ToByte(color.g), ToByte(color.b), ToByte(color.a));
+		}
+
+		/// <summary>
+		/// Scales a 0-1 color component to the 0-255 byte range.
+		/// </summary>
+		/// <remarks>
+		/// This rounds rather than truncates. Truncation loses a step on every value whose scaled
+		/// form is not exact, so a colour typed as "808080" came back from the field as "7F7F7F"
+		/// while the R/G/B inputs beside it - which have always rounded - still read 128. The two
+		/// readouts of one colour must agree, and rounding is what makes the round trip stable:
+		/// byte -> float -> byte returns the byte it started from.
+		/// HDR and unclamped colours are pinned to the representable range instead of overflowing
+		/// the two-digit field.
+		/// </remarks>
+		/// <param name="value">The color component, normally in the 0-1 range.</param>
+		/// <returns>The component as a 0-255 integer.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static int ToByte(float value)
+		{
+			return Mathf.Clamp(Mathf.RoundToInt(value * 255.0f), 0, 255);
 		}
 	}
 }

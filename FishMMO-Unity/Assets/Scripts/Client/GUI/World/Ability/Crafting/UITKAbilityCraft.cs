@@ -35,6 +35,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the craft confirmation button inside the UXML.</summary>
 		private const string CRAFT_BUTTON_NAME = "craft-confirm-btn";
 
+		/// <summary>Name of the status line inside the UXML.</summary>
+		private const string STATUS_NAME = "craft-status";
+
 		/// <summary>Name of the close button inside the UXML.</summary>
 		private const string CLOSE_BUTTON_NAME = "craft-close-btn";
 
@@ -100,26 +103,27 @@ namespace FishMMO.Client
 		/// <summary>How many event slots the selected ability allows.</summary>
 		private int selectedSlotCount;
 
-		/// <summary>True while a craft request is awaiting the server's reply.</summary>
-		private bool craftPending;
+		/// <summary>Submit lock held while a craft request is awaiting the server's reply.</summary>
+		/// <remarks>
+		/// The server answers every craft — accepted or refused — with
+		/// <see cref="AbilityCraftResultBroadcast"/>, so the guard's timeout is a backstop for a
+		/// reply that never arrives rather than the normal way the lock is released. It used to be
+		/// the only way: every refusal on the server was a bare <c>return</c>, so a refused craft
+		/// left the button dead until the watchdog expired and told the player nothing.
+		/// </remarks>
+		private readonly PendingReplyGuard craftGuard = new PendingReplyGuard();
 
-		/// <summary>Unscaled time the pending craft request was sent.</summary>
-		private float craftPendingSince;
+		/// <summary>Seconds to wait for the server's answer to a craft.</summary>
+		private const float CraftReplyTimeoutSeconds = 10.0f;
 
 		/// <summary>Cached reference to the craft confirm button, for the submit lock.</summary>
 		private Button craftButton;
 
-		/// <summary>
-		/// Seconds before a craft request with no reply releases the submit lock.
-		/// </summary>
-		/// <remarks>
-		/// The server answers an accepted craft with <c>AbilityAddBroadcast</c> and answers a
-		/// refused one with silence — every rejection path in
-		/// <c>InteractableSystem.OnServerAbilityCraftBroadcastReceived</c> is a bare <c>return</c>.
-		/// A lock that only a success can release would therefore be permanent after any refusal,
-		/// so it is released on a timeout as well.
-		/// </remarks>
-		private const float CraftReplyTimeoutSeconds = 5.0f;
+		/// <summary>The status line, where refusals and confirmations are written.</summary>
+		private Label statusLabel;
+
+		/// <summary>The status text, kept across the tree rebuilds a hide/show causes.</summary>
+		private string statusText = string.Empty;
 
 		/// <summary>
 		/// Registers the ability crafter broadcast handler when the client is set.
@@ -127,7 +131,7 @@ namespace FishMMO.Client
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
-			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCraftResultBroadcast>(OnClientAbilityCraftResultReceived);
 		}
 
 		/// <summary>
@@ -136,7 +140,7 @@ namespace FishMMO.Client
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
-			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCraftResultBroadcast>(OnClientAbilityCraftResultReceived);
 		}
 
 		/// <summary>
@@ -155,6 +159,7 @@ namespace FishMMO.Client
 
 			descriptionLabel = root.Q<Label>(DESCRIPTION_NAME);
 			costLabel = root.Q<Label>(COST_NAME);
+			statusLabel = root.Q<Label>(STATUS_NAME);
 			eventListContainer = root.Q(EVENT_LIST_NAME);
 
 			mainEntryButton = root.Q<Button>(MAIN_ENTRY_NAME);
@@ -235,9 +240,16 @@ namespace FishMMO.Client
 			BuildEventSlots();
 			UpdateMainDescription();
 
+			/* The status line belongs to the discarded tree too, so it is re-applied here with the
+			 * rest of the selection rather than being lost on a hide/show. */
+			if (statusLabel != null)
+			{
+				statusLabel.text = statusText;
+			}
+
 			if (craftButton != null)
 			{
-				craftButton.SetEnabled(!craftPending);
+				craftButton.SetEnabled(!craftGuard.IsPending);
 			}
 		}
 
@@ -551,10 +563,9 @@ namespace FishMMO.Client
 		{
 			/* Double-submit guard. The craft is a purchase: two clicks a frame apart used to send
 			 * two AbilityCraftBroadcasts, and only the server's 100ms ingress debounce stood
-			 * between the player and paying twice. Released by the AbilityAddBroadcast the server
-			 * sends on success, or by a timeout, because every refusal path on the server is a
-			 * silent return. */
-			if (craftPending)
+			 * between the player and paying twice. Released by the server's answer, which now
+			 * arrives for a refusal as well as a success. */
+			if (craftGuard.IsPending)
 			{
 				return;
 			}
@@ -562,6 +573,7 @@ namespace FishMMO.Client
 			AbilityTemplate main = mainTooltip as AbilityTemplate;
 			if (main == null)
 			{
+				SetStatus("Choose an ability to craft.");
 				return;
 			}
 
@@ -578,38 +590,20 @@ namespace FishMMO.Client
 				}
 			}
 
-			// do we have enough currency to purchase this?
-			if (CurrencyTemplateID == 0)
-			{
-				Log.Debug("UITKAbilityCraft", "CurrencyTemplateID is not set.");
-				return;
-			}
-
-			/* Resolved to a template here rather than passing the raw ID. CharacterCurrency speaks
-			 * in templates only, and this panel is configured with an ID, so the conversion has to
-			 * happen somewhere — doing it at the one call site that needs it is cheaper than a
-			 * parallel ID-shaped API that exists for a single caller. */
-			CharacterAttributeTemplate currencyTemplate = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(CurrencyTemplateID);
-			if (currencyTemplate == null)
-			{
-				Log.Debug("UITKAbilityCraft", $"CurrencyTemplateID {CurrencyTemplateID} did not resolve to a template.");
-				return;
-			}
-
-			/* Reads the BASE value, which is what the server charges against. This used to test
-			 * FinalValue — the base plus every modifier in force — so a character with a
-			 * currency-boosting buff was offered a craft the server would then refuse, and the
-			 * request simply appeared to do nothing.
+			/* The affordability precheck is a COURTESY, not a gate.
 			 *
-			 * TryGetBalance rather than CanAfford, to mirror the server exactly: CanAfford calls a
-			 * non-positive amount affordable without looking, so at the Price 0 every ability
-			 * template currently ships with it would pass a character that has no currency
-			 * attribute at all — which the server still refuses. Same reasoning as the merchant
-			 * ability-learn path, which reads the balance for the same reason. */
-			if (Character == null ||
-				!CharacterCurrency.TryGetBalance(Character, currencyTemplate, out long balance) ||
+			 * It used to be a gate, and a hard one: an unset CurrencyTemplateID — which is exactly
+			 * what this panel shipped with — refused every craft here, before anything was sent, in
+			 * silence. The crafter was unusable for as long as that inspector field stayed at zero
+			 * and nothing in the game said why. The server holds the authoritative balance, charges
+			 * against it, and now answers a craft it cannot afford with a reason, so a client that
+			 * cannot resolve the currency template simply sends the request and lets the server
+			 * answer rather than refusing on the player's behalf. */
+			if (Character != null &&
+				TryGetCurrencyBalance(out long balance) &&
 				balance < price)
 			{
+				SetStatus($"You cannot afford that. It costs {price}.");
 				return;
 			}
 
@@ -623,12 +617,45 @@ namespace FishMMO.Client
 			Client.Broadcast(abilityAddBroadcast, Channel.Reliable);
 
 			SetCraftPending(true);
+			SetStatus("Crafting...");
 
-			SetMainEntry(null);
-			ClearSlots();
+			/* The selection is NOT cleared here. It used to be, on send, so a refused craft threw
+			 * away the ability and every event the player had just chosen and left them to
+			 * rebuild it with no idea what went wrong. It is cleared when the server confirms the
+			 * craft instead. */
+		}
 
-			// update the main description text
-			UpdateMainDescription();
+		/// <summary>
+		/// Reads the character's currency balance, when this panel is configured to know about it.
+		/// </summary>
+		/// <remarks>
+		/// Reads the BASE value, which is what the server charges against. Testing FinalValue — the
+		/// base plus every modifier in force — offered a character with a currency-boosting buff a
+		/// craft the server would then refuse.
+		/// </remarks>
+		/// <param name="balance">The balance, when it could be read.</param>
+		/// <returns>True when the balance is known; false when it is not, which is not a refusal.</returns>
+		private bool TryGetCurrencyBalance(out long balance)
+		{
+			balance = 0;
+
+			if (CurrencyTemplateID == 0)
+			{
+				return false;
+			}
+
+			/* Resolved to a template here rather than passing the raw ID. CharacterCurrency speaks
+			 * in templates only, and this panel is configured with an ID, so the conversion has to
+			 * happen somewhere — doing it at the one call site that needs it is cheaper than a
+			 * parallel ID-shaped API that exists for a single caller. */
+			CharacterAttributeTemplate currencyTemplate = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(CurrencyTemplateID);
+			if (currencyTemplate == null)
+			{
+				Log.Debug("UITKAbilityCraft", $"CurrencyTemplateID {CurrencyTemplateID} did not resolve to a template.");
+				return false;
+			}
+
+			return CharacterCurrency.TryGetBalance(Character, currencyTemplate, out balance);
 		}
 
 		/// <summary>
@@ -637,8 +664,14 @@ namespace FishMMO.Client
 		/// <param name="pending">True while a request is in flight.</param>
 		private void SetCraftPending(bool pending)
 		{
-			craftPending = pending;
-			craftPendingSince = Time.unscaledTime;
+			if (pending)
+			{
+				craftGuard.Begin(CraftReplyTimeoutSeconds);
+			}
+			else
+			{
+				craftGuard.Clear();
+			}
 
 			if (craftButton != null)
 			{
@@ -647,24 +680,86 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Releases a submit lock whose reply never arrived.
+		/// Writes the status line, remembering it across the tree rebuilds a hide/show causes.
 		/// </summary>
-		protected override void OnTick()
+		/// <param name="text">The text to display.</param>
+		private void SetStatus(string text)
 		{
-			if (craftPending && Time.unscaledTime - craftPendingSince >= CraftReplyTimeoutSeconds)
+			statusText = text ?? string.Empty;
+
+			if (statusLabel != null)
 			{
-				SetCraftPending(false);
+				statusLabel.text = statusText;
 			}
 		}
 
 		/// <summary>
-		/// Releases the submit lock when the server confirms the crafted ability.
+		/// Releases a submit lock whose reply never arrived.
+		/// </summary>
+		protected override void OnTick()
+		{
+			if (craftGuard.HasExpired())
+			{
+				SetCraftPending(false);
+				SetStatus("No reply from the server; try again.");
+			}
+		}
+
+		/// <summary>
+		/// Applies the server's answer to a craft request.
 		/// </summary>
 		/// <param name="msg">The broadcast message.</param>
 		/// <param name="channel">The network channel.</param>
-		private void OnClientAbilityAddBroadcastReceived(AbilityAddBroadcast msg, Channel channel)
+		private void OnClientAbilityCraftResultReceived(AbilityCraftResultBroadcast msg, Channel channel)
 		{
 			SetCraftPending(false);
+
+			if (msg.Success)
+			{
+				SetStatus(msg.Charged > 0
+					? $"Crafted for {msg.Charged}. It is on your Abilities tab, ready to hotkey."
+					: "Crafted. It is on your Abilities tab, ready to hotkey.");
+
+				/* Cleared on success only. The crafted ability can no longer be selected — the
+				 * main-entry selector filters out anything already learned — so leaving it in the
+				 * slots would show a selection that cannot be crafted again. */
+				SetMainEntry(null);
+				ClearSlots();
+				UpdateMainDescription();
+				return;
+			}
+
+			SetStatus(DescribeCraftFailure(msg.Failure));
+		}
+
+		/// <summary>Player-facing wording for a refusal.</summary>
+		private static string DescribeCraftFailure(AbilityCraftFailure failure)
+		{
+			switch (failure)
+			{
+				case AbilityCraftFailure.Unavailable:
+					return "That crafter is no longer available.";
+				case AbilityCraftFailure.CannotAct:
+					return "You cannot craft right now.";
+				case AbilityCraftFailure.InvalidEntry:
+					return "That ability is no longer available.";
+				case AbilityCraftFailure.NotKnown:
+					return "You have not learned that ability template yet.";
+				case AbilityCraftFailure.AlreadyCrafted:
+					return "You already have that ability; forget it before crafting it again.";
+				case AbilityCraftFailure.AbilityLimit:
+					return "You cannot hold any more abilities.";
+				case AbilityCraftFailure.InvalidEvents:
+					return "Those effects cannot be combined on that ability.";
+				case AbilityCraftFailure.InsufficientFunds:
+					return "You cannot afford that.";
+				case AbilityCraftFailure.Busy:
+					return "Still handling your last request; try again.";
+				case AbilityCraftFailure.PersistFailed:
+					return "The craft could not be saved; nothing was charged.";
+				default:
+					return "The crafter refused that craft.";
+			}
 		}
 
 		/// <summary>

@@ -277,5 +277,136 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(200, Mathf.RoundToInt(reported.g * 255f), "the green channel the player set survives the HSV round trip");
 			LogAssert.AreEqual(200, Mathf.RoundToInt(Live.Q<Slider>("g-slider").value), "and the slider stays where it was put");
 		}
+
+		/// <summary>
+		/// Every byte survives Color.ToHex. This is the arithmetic the hex field is built on.
+		/// </summary>
+		/// <remarks>
+		/// ToHex used to truncate, so 128/255 came back as 0x7F. The field disagreed with the
+		/// R/G/B inputs beside it, which have always rounded, and a colour typed as "808080" was
+		/// handed straight back as "7F7F7F".
+		/// </remarks>
+		[Test]
+		public void EveryByte_SurvivesTheHexRoundTrip()
+		{
+			for (int value = 0; value <= 255; ++value)
+			{
+				Color colour = new Color(value / 255f, value / 255f, value / 255f, 1f);
+				string expected = value.ToString("X2");
+				LogAssert.AreEqual(expected + expected + expected + "FF", colour.ToHex(), $"byte {value}");
+			}
+		}
+
+		/// <summary>
+		/// A colour typed into the hex field comes back as the colour that was typed.
+		/// </summary>
+		[Test]
+		public void TypingAHexCode_ComesBackUnchanged()
+		{
+			picker.Open(Color.black, c => { });
+
+			picker.UpdateHexValue("808080");
+
+			LogAssert.AreEqual("808080FF", Live.Q<TextField>("hex-input").value, "the code the player typed");
+			LogAssert.AreEqual(128, Live.Q<IntegerField>("r-input").value, "red input agrees with it");
+			LogAssert.AreEqual(128, Live.Q<IntegerField>("g-input").value, "green input agrees with it");
+			LogAssert.AreEqual(128, Live.Q<IntegerField>("b-input").value, "blue input agrees with it");
+		}
+
+		/// <summary>
+		/// The hex field and the R/G/B inputs never disagree about the same colour.
+		/// </summary>
+		[Test]
+		public void DraggingARgbSlider_KeepsTheHexAndTheInputsInAgreement()
+		{
+			picker.Open(Color.black, c => { });
+
+			foreach (int value in new[] { 1, 63, 127, 128, 129, 191, 254 })
+			{
+				Live.Q<Slider>("r-slider").value = value;
+
+				LogAssert.AreEqual(value, Live.Q<IntegerField>("r-input").value, $"red input at {value}");
+				LogAssert.AreEqual(value.ToString("X2"), Live.Q<TextField>("hex-input").value.Substring(0, 2), $"hex red pair at {value}");
+			}
+		}
+
+		/// <summary>
+		/// Leaving the hex field commits what was typed in it, the same way Enter does.
+		/// </summary>
+		/// <remarks>
+		/// Enter was the only commit, so clicking a slider after typing left the field reading one
+		/// colour and the swatch showing another.
+		/// </remarks>
+		[Test]
+		public void LeavingTheHexField_CommitsWhatWasTyped()
+		{
+			Color reported = Color.clear;
+			int reports = 0;
+			picker.Open(Color.black, c => { reported = c; reports++; });
+
+			TextField hex = Live.Q<TextField>("hex-input");
+			hex.value = "00FF00FF";
+			BlurHexField(hex);
+
+			LogAssert.AreEqual(1, reports, "leaving the field is one pick");
+			LogAssert.AreEqual(255, Mathf.RoundToInt(reported.g * 255f), "the colour that was typed");
+			LogAssert.AreEqual(255, Live.Q<IntegerField>("g-input").value, "and the inputs follow it");
+		}
+
+		/// <summary>
+		/// Leaving the hex field untouched reports nothing.
+		/// </summary>
+		/// <remarks>
+		/// Re-applying the colour already on screen would reach the Options panel as a fresh pick,
+		/// and it answers every pick with a settings write and a theme reload.
+		/// </remarks>
+		[Test]
+		public void LeavingTheHexFieldUntouched_ReportsNothing()
+		{
+			int reports = 0;
+			picker.Open(new Color(0.2f, 0.4f, 0.6f, 1.0f), c => reports++);
+
+			BlurHexField(Live.Q<TextField>("hex-input"));
+
+			LogAssert.AreEqual(0, reports, "nothing was typed, so nothing was picked");
+		}
+
+		/// <summary>
+		/// Malformed text is put back rather than applied, on the way out as well as on Enter.
+		/// </summary>
+		[Test]
+		public void LeavingTheHexFieldWithNonsense_PutsTheColourBack()
+		{
+			Color colour = new Color(0.2f, 0.4f, 0.6f, 1.0f);
+			int reports = 0;
+			picker.Open(colour, c => reports++);
+
+			TextField hex = Live.Q<TextField>("hex-input");
+			hex.value = "80808";
+			BlurHexField(hex);
+
+			LogAssert.AreEqual(colour.ToHex(), hex.value, "the colour that is actually selected");
+			LogAssert.AreEqual(0, reports, "half a code is not a pick");
+		}
+
+		/// <summary>
+		/// Gives the hex field focus and takes it away again, the way clicking elsewhere does.
+		/// </summary>
+		/// <remarks>
+		/// The focus controller has to raise the event. A hand-built <c>FocusOutEvent</c> sent
+		/// straight at the field throws inside <c>FocusOutEvent.PostDispatch</c>, because the
+		/// controller never recorded the focus the event claims is being lost.
+		/// <para>
+		/// A TextField delegates focus to its inner text input, so the element that loses focus is
+		/// a child of the field. The picker's handler sits on the field itself and catches it as
+		/// the event bubbles.
+		/// </para>
+		/// </remarks>
+		private static void BlurHexField(TextField hex)
+		{
+			hex.Focus();
+			VisualElement focused = hex.panel?.focusController?.focusedElement as VisualElement;
+			(focused ?? hex).Blur();
+		}
 	}
 }

@@ -116,31 +116,67 @@ namespace FishMMO.Server.Core.World.SceneServer
 		Func<Task> CaptureDespawnFlush(IPlayerCharacter character, CharacterSessionInfo? lease);
 
 		/// <summary>
-		/// Persists a two-character exchange — a completed player trade — as ONE database
-		/// transaction: both characters' item rows, both attribute sheets when currency moved,
-		/// and the economy ledger rows.
+		/// Runs a two-character exchange — a completed player trade — as ONE database
+		/// transaction whose commit is the point of truth, so a crash at any instant leaves the
+		/// database holding either the whole trade or none of it, and memory never diverges
+		/// from that in a direction that duplicates anything.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// The in-memory containers have already been mutated, all or nothing, by the caller.
-		/// This captures both halves on the main thread and applies them on a worker under
-		/// BOTH characters' session row locks, so the database can only ever hold the whole
-		/// trade or none of it. A refusal reconciles both characters from memory.
+		/// THE PROTOCOL, in order, because the order is the guarantee:
 		/// </para>
+		/// <list type="number">
+		///   <item><description>
+		///     Worker: open the transaction and take BOTH characters' session row locks, in
+		///     ascending id order. From here no other write for either character can commit
+		///     until this transaction ends: every write takes the same lock.
+		///   </description></item>
+		///   <item><description>
+		///     Main thread, while the locks are held: <paramref name="applyOnMainThread"/>
+		///     re-validates and mutates memory (or returns null to abort with nothing changed),
+		///     and the resulting rows are captured with their journal sequences and versions
+		///     stamped NOW. Every write captured before this instant therefore carries a lower
+		///     sequence and lower versions than the trade; every write captured after carries
+		///     the trade's content. The slots in <see cref="ItemExchangeLeg.TouchedSlots"/> are
+		///     locked until the outcome is known.
+		///   </description></item>
+		///   <item><description>
+		///     Worker: write both characters' rows and the ledger, commit.
+		///   </description></item>
+		///   <item><description>
+		///     Main thread: unlock, then <paramref name="onFinished"/>(true). On any refusal:
+		///     roll back, unlock, <paramref name="onFinished"/>(false) — the caller undoes its
+		///     memory mutation exactly, which the locks make possible — then every write
+		///     captured from memory while the exchange was applied is VOIDED in the journal,
+		///     because its content described a trade that never happened, and both characters
+		///     are reconciled from the restored memory.
+		///   </description></item>
+		/// </list>
 		/// <para>
-		/// An item that crossed whole keeps its identity and is listed as changed by the
-		/// receiver; the upsert re-owns the row. See <see cref="ItemExchangeLeg"/> for what
-		/// each half must carry.
+		/// Crash analysis: before the commit, memory is lost and the database rolls back — the
+		/// trade never happened for either side. After the commit, the database holds the whole
+		/// trade for both. A write captured before the apply that lands after the commit is
+		/// older by sequence and version and is refused. There is no interleaving in which one
+		/// character's half is durable and the other's is not.
 		/// </para>
 		/// </remarks>
-		/// <param name="first">One character's half.</param>
-		/// <param name="second">The other character's half.</param>
+		/// <param name="first">One party.</param>
+		/// <param name="second">The other party.</param>
+		/// <param name="applyOnMainThread">
+		/// Called on the main thread while both row locks are held. Returns the two legs
+		/// (<paramref name="first"/>'s then <paramref name="second"/>'s) after mutating memory,
+		/// or null to abort before anything was mutated.
+		/// </param>
+		/// <param name="onFinished">
+		/// Called on the main thread once, with true when the transaction committed and false
+		/// when it was aborted or rolled back. Only called with false after a null apply, or
+		/// with the memory mutation still in place and every touched slot already unlocked, so
+		/// the caller can undo it.
+		/// </param>
 		/// <param name="operation">Short operation name used in persistence log lines.</param>
-		/// <returns>
-		/// True when the write was enqueued normally; false when the bounded queue was full and
-		/// it ran on the fallback path. Never a rollback signal — memory is already authoritative.
-		/// </returns>
-		bool TryPersistExchange(ItemExchangeLeg first, ItemExchangeLeg second, string operation);
+		/// <returns>True when the exchange was accepted for execution. False means nothing will run and nothing was changed.</returns>
+		bool TryRunExchange(IPlayerCharacter first, IPlayerCharacter second,
+			Func<ItemExchangeLeg[]> applyOnMainThread, Action<bool> onFinished, string operation);
 
 		/// <summary>
 		/// Tells the owning client which inventory slots an operation outside this system

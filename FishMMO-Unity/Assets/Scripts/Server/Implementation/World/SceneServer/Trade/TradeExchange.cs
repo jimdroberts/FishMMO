@@ -73,6 +73,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <summary>Items placed in this inventory that have no database identity yet.</summary>
 			public readonly List<Item> UnidentifiedPlaced = new List<Item>();
 
+			/// <summary>
+			/// Every slot of this inventory the exchange read or wrote: the offered slots, the
+			/// slots incoming items landed in or merged into, and the slots that emptied. The
+			/// caller locks these for as long as the exchange can still be undone, so that
+			/// <see cref="Applied.Undo"/> restores exactly what it took and nothing has moved
+			/// into a slot it needs to put something back into.
+			/// </summary>
+			public readonly List<int> TouchedSlots = new List<int>();
+
 			/// <summary>Clears every output list, for a retry after a refusal.</summary>
 			public void ClearOutputs()
 			{
@@ -80,11 +89,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Removed.Clear();
 				EmptiedSlots.Clear();
 				UnidentifiedPlaced.Clear();
+				TouchedSlots.Clear();
 			}
 		}
 
 		/// <summary>One item taken out of a giver during the TAKE phase.</summary>
-		private struct Taken
+		internal struct Taken
 		{
 			/// <summary>Which side it came from.</summary>
 			public Side Giver;
@@ -105,10 +115,64 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>One stack whose amount a GIVE may have changed, remembered for rollback.</summary>
-		private struct StackSnapshot
+		internal struct StackSnapshot
 		{
 			public Item Stack;
 			public uint Amount;
+		}
+
+		/// <summary>
+		/// An exchange that has been applied to memory and can still be taken back.
+		/// </summary>
+		/// <remarks>
+		/// Exists because the trade commits to the database BEFORE it is final: memory is
+		/// mutated while both characters' row locks are held, the rows are written, and only
+		/// then is the transaction committed. If the write is refused the memory mutation has to
+		/// be undone exactly, and this holds what that takes. It is only exact while every slot
+		/// in <see cref="Side.TouchedSlots"/> stays locked, which the caller guarantees.
+		/// </remarks>
+		public sealed class Applied
+		{
+			private readonly Side first;
+			private readonly Side second;
+			private readonly List<Taken> taken;
+			private readonly List<(Taken taken, Side receiver, List<Item> modified, int snapshotStart)> gives;
+			private readonly List<StackSnapshot> snapshots;
+			private bool undone;
+
+			internal Applied(Side first, Side second, List<Taken> taken,
+				List<(Taken, Side, List<Item>, int)> gives, List<StackSnapshot> snapshots)
+			{
+				this.first = first;
+				this.second = second;
+				this.taken = taken;
+				this.gives = gives;
+				this.snapshots = snapshots;
+			}
+
+			/// <summary>True once <see cref="Undo"/> has run.</summary>
+			public bool IsUndone => undone;
+
+			/// <summary>
+			/// Puts both inventories back exactly as they were before the exchange. Idempotent.
+			/// </summary>
+			public void Undo()
+			{
+				if (undone)
+				{
+					return;
+				}
+				undone = true;
+
+				for (int g = gives.Count - 1; g >= 0; --g)
+				{
+					UndoGive(gives[g].taken, gives[g].receiver, gives[g].modified, snapshots, gives[g].snapshotStart);
+				}
+				RestoreTaken(taken);
+
+				first.ClearOutputs();
+				second.ClearOutputs();
+			}
 		}
 
 		/// <summary>
@@ -118,7 +182,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>True when the exchange applied. False leaves both inventories untouched.</returns>
 		public static bool TryApply(Side first, Side second, out Failure failure)
 		{
+			return TryApply(first, second, out failure, out _);
+		}
+
+		/// <summary>
+		/// As <see cref="TryApply(Side, Side, out Failure)"/>, and hands back the handle that
+		/// can take the applied exchange back.
+		/// </summary>
+		public static bool TryApply(Side first, Side second, out Failure failure, out Applied applied)
+		{
 			failure = Failure.None;
+			applied = null;
 
 			if (first?.Inventory == null || second?.Inventory == null ||
 				first.Offers == null || second.Offers == null)
@@ -182,6 +256,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				(Taken t, Side receiver, List<Item> modified, _) = gives[i];
 
+				AddUniqueSlot(t.Giver.TouchedSlots, t.Slot);
+
 				if (t.IsPartial)
 				{
 					// The stack that stayed behind shrank.
@@ -221,10 +297,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						AddUnique(receiver.Changed, stack);
 					}
+					if (stack != null && stack.Slot >= 0)
+					{
+						AddUniqueSlot(receiver.TouchedSlots, stack.Slot);
+					}
+				}
+				if (handedHasSlot)
+				{
+					AddUniqueSlot(receiver.TouchedSlots, t.Handed.Slot);
 				}
 			}
 
+			applied = new Applied(first, second, taken, gives, snapshots);
 			return true;
+		}
+
+		private static void AddUniqueSlot(List<int> list, int slot)
+		{
+			if (slot < 0 || list.Contains(slot))
+			{
+				return;
+			}
+			list.Add(slot);
 		}
 
 		/// <summary>True when every offer on a side still names the item and quantity it was made for.</summary>

@@ -836,14 +836,6 @@
     -unity-text-align: middle-left;
 }
 
-.fish-gear-score {
-    color: var(--brand-300);
-    font-size: 10px;
-    -unity-font-style: bold;
-    letter-spacing: 1px;
-    -unity-text-align: middle-right;
-}
-
 
 /* ═══════════════════════════════════════════════════════════
    11. ATTRIBUTE LIST  (runtime-generated rows)

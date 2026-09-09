@@ -19,6 +19,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	public partial class InteractableSystem
 	{
 		/// <summary>
+		/// Answers a craft request, whether it was accepted or refused.
+		/// </summary>
+		/// <remarks>
+		/// Every exit from <see cref="OnServerAbilityCraftBroadcastReceived"/> goes through here.
+		/// The handler used to answer a refusal with silence, which the crafting panel could only
+		/// resolve by letting its submit lock time out — indistinguishable from a server that never
+		/// replied, and the player is told nothing about why the craft did not happen. This is the
+		/// same contract the merchant purchase path keeps with
+		/// <c>MerchantPurchaseResultBroadcast</c>.
+		/// </remarks>
+		/// <param name="conn">Connection that made the request.</param>
+		/// <param name="templateID">Template the request named.</param>
+		/// <param name="failure">Why it was refused, or <see cref="AbilityCraftFailure.None"/>.</param>
+		/// <param name="charged">Currency actually taken.</param>
+		private static void SendCraftResult(NetworkConnection conn, int templateID,
+			AbilityCraftFailure failure, long charged = 0)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			conn.Broadcast(new AbilityCraftResultBroadcast()
+			{
+				TemplateID = templateID,
+				Success = failure == AbilityCraftFailure.None,
+				Failure = failure,
+				Charged = charged,
+			});
+		}
+
+		/// <summary>
 		/// Handles an incoming ability crafting request and validates cost, ownership, and selected events.
 		/// </summary>
 		/// <param name="conn">Requesting client connection.</param>
@@ -34,19 +66,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// validate connection character
 			if (conn.FirstObject == null)
 			{
+				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
 				return;
 			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			
+
 			if (character == null ||
-				!character.TryGet(out IAbilityController abilityController) ||
-				!CharacterStateValidation.CanAct(character))
+				!character.TryGet(out IAbilityController abilityController))
 			{
+				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
+				return;
+			}
+
+			/* Its own reason. "You cannot do that right now" and "that crafter is gone" send the
+			 * player to different places, and CanAct is the gate a dead or stunned character
+			 * actually meets. */
+			if (!CharacterStateValidation.CanAct(character))
+			{
+				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.CannotAct);
 				return;
 			}
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
+				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Busy);
 				return;
 			}
 
@@ -57,6 +100,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				AbilityTemplate mainAbility = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
 				if (mainAbility == null)
 				{
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InvalidEntry);
 					return;
 				}
 
@@ -66,12 +110,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					!worldSceneDetailsCache.Scenes.TryGetValue(currentScene, out _))
 				{
 					Log.Debug("InteractableSystem", "Missing Scene:" + currentScene);
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
 					return;
 				}
 
 				// validate scene object
 				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 				{
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
 					return;
 				}
 
@@ -92,14 +138,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (abilityCrafter == null ||
 					!interactable.CanInteract(character))
 				{
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
 					return;
 				}
 
-				// validate the character can learn the ability
-				if (!abilityController.KnowsAbility(mainAbility.ID) ||
-					abilityController.KnowsLearnedAbility(mainAbility.ID) ||
-					abilityController.KnownAbilities.Count >= maxAbilityCount)
+				/* Split into three answers rather than one silent refusal. They are three
+				 * different situations with three different remedies — buy the template, forget
+				 * the ability you already crafted from it, or make room — and a player who is told
+				 * nothing cannot tell which one they are in. */
+				if (!abilityController.KnowsAbility(mainAbility.ID))
 				{
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.NotKnown);
+					return;
+				}
+				if (abilityController.KnowsLearnedAbility(mainAbility.ID))
+				{
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.AlreadyCrafted);
+					return;
+				}
+				if (abilityController.KnownAbilities.Count >= maxAbilityCount)
+				{
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.AbilityLimit);
 					return;
 				}
 
@@ -111,6 +170,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					// Defense-in-depth: cap event list size to prevent processing oversized payloads.
 					if (msg.Events.Length > maxAbilityCraftEvents)
 					{
+						SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InvalidEvents);
 						return;
 					}
 
@@ -129,6 +189,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					{
 						Log.Debug("InteractableSystem",
 							$"AbilityCraft: rejected {msg.Events.Length} events for template {mainAbility.ID} which allows {mainAbility.AdditionalEventSlots}.");
+						SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InvalidEvents);
 						return;
 					}
 
@@ -140,6 +201,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						if (validatedEvents.Contains(id))
 						{
 							// duplicate events
+							SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InvalidEvents);
 							return;
 						}
 						validatedEvents.Add(id);
@@ -149,6 +211,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						 * inject templates the player never learned. */
 						if (!abilityController.KnowsAbilityEvent(id))
 						{
+							SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InvalidEvents);
 							return;
 						}
 
@@ -172,6 +235,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							if (hasTypeOverride)
 							{
 								Log.Debug("InteractableSystem", "AbilityCraft: rejected multiple ability-type override events.");
+								SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InvalidEvents);
 								return;
 							}
 							hasTypeOverride = true;
@@ -180,6 +244,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 
 						// unknown ability event
+						SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InvalidEvents);
 						return;
 					}
 				}
@@ -188,6 +253,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (currencyTemplate == null)
 				{
 					Log.Debug("InteractableSystem", "currencyTemplate is null.");
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
 					return;
 				}
 				/* Value, not FinalValue.
@@ -200,6 +266,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (!CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance) ||
 					balance < price)
 				{
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InsufficientFunds);
 					return;
 				}
 
@@ -222,6 +289,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					!CharacterCurrency.TrySpend(character, currencyTemplate, price, () => TryPersistMerchantAttributes(character)))
 				{
 					Log.Warning("InteractableSystem", $"AbilityCraft: charge of {price} refused for CharID={character.ID}.");
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InsufficientFunds);
 					return;
 				}
 
@@ -235,10 +303,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						Log.Error("InteractableSystem", $"AbilityCraft: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
 					}
 					RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: false);
+					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.PersistFailed);
 					return;
 				}
 
 				RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: true);
+
+				/* The success answer, sent alongside AbilityAddBroadcast rather than instead of it.
+				 * AbilityAddBroadcast is what grants the ability and is handled by the ability
+				 * controller; this is what the crafting panel reads to release its submit lock and
+				 * say what the craft cost. */
+				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.None, price);
 
 				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 				{

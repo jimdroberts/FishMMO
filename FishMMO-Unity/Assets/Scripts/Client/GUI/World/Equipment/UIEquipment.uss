@@ -45,6 +45,14 @@
     width: 520px;
     flex-direction: column;
     flex-shrink: 0;
+
+    /*
+        The slot grid and the attribute list used to take turns on one tab, so the panel was
+        only ever as tall as the taller of the two. Both are drawn together now, which is
+        enough to run off the bottom of a short screen, so the panel is capped and .eq-footer
+        below is the half that shrinks to fit.
+    */
+    max-height: 84%;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -77,22 +85,6 @@
 .eq-header__title {
     flex-shrink: 0;
     margin-right: 4px;
-}
-
-/* ── Tab bar ───────────────────────────────────────────── */
-
-.eq-tab-bar {
-    flex-direction: row;
-    align-items: center;
-    margin-left: 10px;
-}
-
-.eq-tab {
-    height: 22px;
-    padding-left: 8px;
-    padding-right: 8px;
-    margin-right: 4px;
-    flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -246,6 +238,19 @@
     padding-left: 12px;
     padding-right: 12px;
     padding-bottom: 8px;
+
+    /*
+        The one part of the panel allowed to lose height when .eq-panel hits its cap. Yoga will
+        not shrink a flex child below its content unless min-height is cleared, so both are
+        needed; the ScrollView inside absorbs the loss.
+    */
+    flex-shrink: 1;
+    min-height: 0;
+}
+
+/* Sits directly under .eq-divider, which already carries the gap. */
+.eq-attr-heading {
+    margin-top: 0;
     flex-shrink: 0;
 }
 
@@ -308,14 +313,6 @@
 
 .eq-chip__label {
     margin-right: 3px;
-}
-
-.eq-spacer {
-    flex: 1;
-}
-
-.eq-gear-score {
-    flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════

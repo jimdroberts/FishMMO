@@ -80,6 +80,14 @@
     margin-bottom: 6px;
 }
 
+.craft-status {
+    margin-top: 4px;
+    white-space: normal;
+    min-height: 13px;
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
 .craft-confirm-btn {
     height: 32px;
     margin-top: 8px;

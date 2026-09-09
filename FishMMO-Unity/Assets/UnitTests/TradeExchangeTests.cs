@@ -386,6 +386,62 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(0, a.Changed.Count + b.Changed.Count, "nothing to write");
 		}
 
+		// ── Undo: the commit-refused path ───────────────────────────────────────────────────
+
+		[Test]
+		public void Undo_AfterAMixedExchange_RestoresBothBagsExactly()
+		{
+			Item swordItem = Put(alice, 0, sword, 1);
+			Item aliceArrows = Put(alice, 1, arrows, 9);
+			Item bobArrows = Put(bob, 2, arrows, 4);
+			Item bobBolts = Put(bob, 5, bolts, 6);
+
+			TradeExchange.Side a = Side(alice, OfferOf(swordItem), OfferOf(aliceArrows, 3));
+			TradeExchange.Side b = Side(bob, OfferOf(bobBolts));
+
+			LogAssert.IsTrue(TradeExchange.TryApply(a, b, out _, out TradeExchange.Applied applied), "applies");
+			LogAssert.IsNotNull(applied, "a handle comes back");
+			LogAssert.AreEqual(7u, bobArrows.Stackable.Amount, "precondition: Alice's 3 merged into Bob's 4");
+			LogAssert.IsTrue(bob.ContainsItem(sword), "precondition: the sword crossed");
+
+			applied.Undo();
+
+			LogAssert.IsTrue(applied.IsUndone, "undone");
+			LogAssert.AreSame(swordItem, At(alice, 0), "the sword is back in Alice's slot 0");
+			LogAssert.AreSame(aliceArrows, At(alice, 1), "Alice's arrows are back in slot 1");
+			LogAssert.AreEqual(9u, aliceArrows.Stackable.Amount, "with all 9");
+			LogAssert.AreSame(bobArrows, At(bob, 2), "Bob's arrows are in slot 2");
+			LogAssert.AreEqual(4u, bobArrows.Stackable.Amount, "back at 4");
+			LogAssert.AreSame(bobBolts, At(bob, 5), "Bob's bolts are back in slot 5");
+			LogAssert.AreEqual(6u, bobBolts.Stackable.Amount, "with all 6");
+			LogAssert.IsFalse(bob.ContainsItem(sword), "Bob no longer holds the sword");
+			LogAssert.IsFalse(alice.ContainsItem(bolts), "Alice no longer holds the bolts");
+			LogAssert.AreEqual(0, a.Changed.Count + a.Removed.Count + b.Changed.Count + b.Removed.Count, "the write sets are cleared");
+
+			applied.Undo();
+			LogAssert.AreEqual(9u, aliceArrows.Stackable.Amount, "a second undo changes nothing");
+		}
+
+		[Test]
+		public void TouchedSlots_NameEverySlotTheUndoNeeds()
+		{
+			Item swordItem = Put(alice, 0, sword, 1);
+			Item aliceArrows = Put(alice, 1, arrows, 9);
+			Item bobArrows = Put(bob, 2, arrows, 4);
+			Item bobBolts = Put(bob, 5, bolts, 6);
+
+			TradeExchange.Side a = Side(alice, OfferOf(swordItem), OfferOf(aliceArrows, 3));
+			TradeExchange.Side b = Side(bob, OfferOf(bobBolts));
+
+			LogAssert.IsTrue(TradeExchange.TryApply(a, b, out _, out _), "applies");
+
+			LogAssert.IsTrue(a.TouchedSlots.Contains(0) && a.TouchedSlots.Contains(1), "Alice: both offered slots");
+			LogAssert.IsTrue(a.TouchedSlots.Contains(bobBolts.Slot), "Alice: the slot Bob's bolts landed in");
+			LogAssert.IsTrue(b.TouchedSlots.Contains(5), "Bob: his offered slot");
+			LogAssert.IsTrue(b.TouchedSlots.Contains(2), "Bob: the stack Alice's arrows merged into");
+			LogAssert.IsTrue(b.TouchedSlots.Contains(swordItem.Slot), "Bob: the slot the sword landed in");
+		}
+
 		// ── The accept-time room estimate ───────────────────────────────────────────────────
 
 		private static TradeOfferEntry EntryFor(Item item, uint amount = 0)
