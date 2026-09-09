@@ -53,6 +53,27 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void AFreshMessageAdvancesNothingBecauseTickAlreadyContainsTheTransit()
+		{
+			/* The bug the latency term fixes. The client's Tick is FishNet's estimate of the server's
+			 * PRESENT — last packet tick + one-way + 1 — so for a message that has just arrived,
+			 * Tick − ServerTick IS the transit delay, not lateness. Subtracting only the
+			 * interpolation buffer re-added that transit and every observed projectile led its
+			 * rendered caster by the one-way trip: 4 ticks (133 ms) at 200 ms RTT. With one-way + 1
+			 * removed, a fresh message advances zero and the object spawns at the muzzle. */
+			uint oneWayPlusBias = 4u;
+			uint elapsed = AbilityController.ComputeObserverFastForwardTicks(
+				estimatedServerTick: 104u, serverSpawnTick: 100u, interpolationTicks: 2u, latencyTicks: oneWayPlusBias);
+
+			LogAssert.AreEqual(0u, elapsed, "a message that has just arrived owes no catch-up");
+
+			uint lateByEight = AbilityController.ComputeObserverFastForwardTicks(
+				estimatedServerTick: 112u, serverSpawnTick: 100u, interpolationTicks: 2u, latencyTicks: oneWayPlusBias);
+
+			LogAssert.AreEqual(6u, lateByEight, "and only a genuinely late one is advanced, by its lateness less the render lag");
+		}
+
+		[Test]
 		public void AMessageFromTheFutureClampsToZeroRatherThanRunningBackwards()
 		{
 			/* The observer's tick estimate can lag the server's stamp. A negative elapsed would
@@ -134,16 +155,51 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void ALostStopCannotStrandANameplate()
+		public void AMissingStopCannotStrandANameplate()
 		{
-			/* The stop is unreliable, so it can be lost. Without an expiry the row would read
-			 * "Casting" until that character left view. */
+			/* The stop is reliable now, so loss means a disconnect — but a row must still not
+			 * outlive its cast. The expiry is the safety net, and it has to cover a charged
+			 * ability, which may be HELD past its activation window for up to the hold cap. */
 			string display = ReadSource(DisplayPath);
 
 			LogAssert.IsTrue(display.Contains("ExpiryGraceSeconds"),
 				"a cast must expire on its own duration when no stop arrives");
 			LogAssert.IsTrue(display.Contains("MinimumDwellSeconds"),
 				"and an instant cast must stay up long enough to be seen");
+			LogAssert.IsTrue(display.Contains("ComputeMaxHoldTicks"),
+				"and a held ability's expiry must include the hold cap, or a full charge clears the row two-thirds through");
+		}
+
+		[Test]
+		public void TheCastMessageIsReliableAndAStopNamesWhatItEnds()
+		{
+			/* A stop keyed on the caster alone, on an unreliable channel, could reorder behind the
+			 * next cast's start and clear the wrong row at instant-attack cadence. */
+			string source = ReadSource(ActivationPath);
+			int sender = source.IndexOf("private void BroadcastCastState", StringComparison.Ordinal);
+			string body = source.Substring(sender, Math.Min(2400, source.Length - sender));
+			LogAssert.IsTrue(body.Contains("Channel.Reliable"), "the cast message rides the reliable channel");
+
+			string display = ReadSource(DisplayPath);
+			LogAssert.IsTrue(display.Contains("cast.ReferenceID != referenceID"),
+				"and a stop for a different cast than the row shows is refused");
+		}
+
+		[Test]
+		public void APooledNameplateDoesNotCarryThePreviousCharactersCast()
+		{
+			/* Characters despawn to the object pool, so the plate survives with its rows. Without
+			 * this the next character out of the pool wore "Casting Meteor" from its first frame. */
+			string nameplate = ReadSource("Assets/Scripts/Shared/Core/UI/Nameplates/Nameplate.cs");
+			int disable = nameplate.IndexOf("private void OnDisable()", StringComparison.Ordinal);
+			LogAssert.IsTrue(disable >= 0, "Nameplate must still declare OnDisable");
+			string body = nameplate.Substring(disable, Math.Min(1400, nameplate.Length - disable));
+			LogAssert.IsTrue(body.Contains("ClearLine(NameplateSlot.Status)"),
+				"a plate going back to the pool must drop its transient Status row");
+
+			string display = ReadSource(DisplayPath);
+			LogAssert.IsTrue(display.Contains("CasterStillThis"),
+				"and the display must not touch a plate whose caster has become somebody else");
 		}
 	}
 }

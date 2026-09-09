@@ -941,9 +941,22 @@ namespace FishMMO.Shared
 		/// Announces a combat-state transition locally and to this character's observers.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Applied locally before broadcasting, because a broadcast is never delivered back to its
 		/// sender — without it the server would announce a transition it never raised on itself, and
-		/// anything server-side listening would miss it.
+		/// anything server-side listening would miss it. The local half deliberately runs BEFORE the
+		/// server test as well: this method is reached from the combat timer, which ticks on every
+		/// peer, and a client leaving combat must raise the transition for its own UI whether or not
+		/// it has anything to send.
+		/// </para>
+		/// <para>
+		/// <b>To every observer INCLUDING the owner, and in both sync modes</b> — the two departures
+		/// from the observer-push pattern next to it, and both are deliberate.
+		/// <c>CharacterFlags</c> is not part of the reconcile, so turning state forwarding on does
+		/// not give observers this transition by another route and an <c>ObserverSyncMode</c> gate
+		/// here would simply lose it. The owner is included because the flag drives its own combat
+		/// UI and its regeneration rate, and the server is the authority on when its timer expired.
+		/// </para>
 		/// </remarks>
 		/// <param name="inCombat">True on entering combat, false on leaving.</param>
 		private void BroadcastCombatState(bool inCombat)

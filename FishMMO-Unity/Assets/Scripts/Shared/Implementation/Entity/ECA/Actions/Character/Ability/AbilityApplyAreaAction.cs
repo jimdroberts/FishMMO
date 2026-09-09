@@ -168,6 +168,16 @@ namespace FishMMO.Shared
 						 * rewind scope. An OnHit effect on an area ability used to be placed with no
 						 * point at all and defaulted to the target's origin, so a blast marked every
 						 * victim at its feet rather than on the side facing the explosion. */
+						/* Published before the events, for the reason AbilityObject.ApplyHit gives:
+						 * an authored action may end this object while handling the blast, and the
+						 * impact still has to reach the people watching. Server only, and to
+						 * observers except the owner — see AbilityObject.PublishActionHit, which
+						 * also explains why a repeating pulse must not be deduped on the receiver.
+						 *
+						 * Without this an area effect was invisible to third parties: the blast
+						 * object appeared, and nobody inside it was marked by it. */
+						abilityObject.PublishActionHit(targetCharacter, hitBuffer[i].Point, hitBuffer[i].Normal);
+
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
 							initiator, targetCharacter, abilityObject, hitBuffer[i].Point, hitBuffer[i].Normal, abilityObject.RNG);
 						if (tickToPropagate != null)

@@ -20,14 +20,39 @@ namespace FishMMO.Shared
 		public bool IsReplicateTick { get; }
 
 		/// <summary>
+		/// True when this execution is a reconcile REPLAY of a tick that already ran once.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Deliberately separate from <see cref="IsReplicateTick"/>, which says which CLOCK the
+		/// tick is counted on and nothing about how many times it has been executed. Conflating
+		/// the two was a real defect: every ability spawn and every self-target dispatch carries a
+		/// replicate-domain tick, on the server as much as on the owner, and each of them is
+		/// skipped outright on a replayed tick — so a guard that read the domain flag as "this is a
+		/// replay" answered true for exactly the dispatches that are never replays. The visible
+		/// cost was that <c>PlayFXAction</c> refused every self-buff and self-heal impact effect on
+		/// every peer, permanently; the quieter one was that the owner drew no predicted number for
+		/// a self-heal.
+		/// </para>
+		/// <para>
+		/// Set it only where a dispatch genuinely re-runs during a reconcile. Every current
+		/// dispatch site gates replays before it builds this payload, so nothing sets it today —
+		/// it exists so that a site which does not can say so.
+		/// </para>
+		/// </remarks>
+		public bool IsReplay { get; }
+
+		/// <summary>
 		/// Creates tick event data from a replicate input tick.
 		/// </summary>
 		/// <param name="character">The event initiator.</param>
 		/// <param name="tick">The replicate-domain tick.</param>
-		public TickEventData(ICharacter character, PredictionTick tick) : base(character)
+		/// <param name="isReplay">True when this execution is a reconcile replay of the tick.</param>
+		public TickEventData(ICharacter character, PredictionTick tick, bool isReplay = false) : base(character)
 		{
 			Tick = tick;
 			IsReplicateTick = true;
+			IsReplay = isReplay;
 		}
 
 		/// <summary>

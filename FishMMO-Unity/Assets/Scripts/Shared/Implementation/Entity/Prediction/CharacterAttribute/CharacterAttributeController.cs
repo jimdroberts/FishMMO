@@ -880,6 +880,12 @@ namespace FishMMO.Shared
 			 * changed value can be suppressed as "unchanged". ObservedResourcePushScheduler.Reset
 			 * existed for exactly this and was called from nowhere. */
 			resourcePushScheduler.Reset();
+			/* The sequence window belongs to the character, not to the pooled object. Left behind,
+			 * the next occupant's first pushes would be compared against a stranger's counter and
+			 * silently discarded until it caught up. */
+			observedResourceSequence = 0;
+			lastObservedResourceSequence = 0;
+			hasObservedResourceSequence = false;
 			lastPushedAttributes = null;
 
 			// Reset regen state.
@@ -2215,6 +2221,63 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private ObservedResourcePushScheduler resourcePushScheduler;
 
+		/// <summary>Sequence number stamped on the next resource push this character sends.</summary>
+		private ushort observedResourceSequence;
+
+		/// <summary>Sequence number of the newest resource push this client has applied.</summary>
+		private ushort lastObservedResourceSequence;
+
+		/// <summary>False until the first resource push arrives, when any sequence is newer.</summary>
+		private bool hasObservedResourceSequence;
+
+		/// <summary>
+		/// Whether an arriving resource push is newer than the one already applied.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The resource stream is unreliable, and unreliable means unordered: two pushes sent a few
+		/// ticks apart can arrive the other way round, and without this the receiver applied
+		/// whichever landed last. Reorders are likeliest exactly when pushes are most frequent —
+		/// mid-fight — so the symptom was a health bar that jumped back up after a hit, and at the
+		/// end of a fight a corpse still showing health.
+		/// </para>
+		/// <para>
+		/// Compared as a WRAPPING difference, so the counter rolls over without a special case: a
+		/// message is newer when the signed 16-bit distance from the last applied one is positive.
+		/// That treats anything more than half the sequence space behind as ahead, which is the
+		/// standard trade and cannot be reached here — a reorder spans a few packets, not 32768.
+		/// </para>
+		/// </remarks>
+		/// <param name="sequence">The arriving message's sequence number.</param>
+		/// <returns>True when the message should be applied.</returns>
+		internal bool AcceptObservedResourceSequence(ushort sequence)
+		{
+			if (hasObservedResourceSequence && !IsNewerObservedSequence(sequence, lastObservedResourceSequence))
+			{
+				return false;
+			}
+
+			lastObservedResourceSequence = sequence;
+			hasObservedResourceSequence = true;
+			return true;
+		}
+
+		/// <summary>
+		/// Wrapping "is newer than" for a 16-bit sequence counter.
+		/// </summary>
+		/// <remarks>
+		/// Pure and internal so the wrap boundary can be asserted directly rather than inferred
+		/// from a live controller — the interesting cases are 65535 → 0 and a duplicate, neither of
+		/// which is reachable from a test that has to build a spawned character first.
+		/// </remarks>
+		/// <param name="candidate">The arriving sequence number.</param>
+		/// <param name="applied">The sequence number already applied.</param>
+		/// <returns>True when <paramref name="candidate"/> is strictly newer.</returns>
+		internal static bool IsNewerObservedSequence(ushort candidate, ushort applied)
+		{
+			return (short)(candidate - applied) > 0;
+		}
+
 		/// <summary>
 		/// The attribute sheet as this character's observers last had it, for the change diff.
 		/// </summary>
@@ -2332,20 +2395,14 @@ namespace FishMMO.Shared
 				}, Channel.Reliable);
 			}
 
-			/* Copied, not aliased. CreateAttributeSnapshot rebuilds in place on the next change and
-			 * would otherwise mutate the very baseline the next diff is measured against. */
-			if (currentCount == 0)
-			{
-				lastPushedAttributes = System.Array.Empty<AttributeReconcileEntry>();
-			}
-			else
-			{
-				if (lastPushedAttributes == null || lastPushedAttributes.Length != currentCount)
-				{
-					lastPushedAttributes = new AttributeReconcileEntry[currentCount];
-				}
-				System.Array.Copy(current, lastPushedAttributes, currentCount);
-			}
+			/* Aliased, not copied. CreateAttributeSnapshot allocates a FRESH array on every rebuild
+			 * and hands back the cached one until the sheet dirties, so the reference test at the
+			 * top of this method is a true "nothing changed" — but only if this baseline IS that
+			 * cached instance. It used to be a copy, taken on the belief that the snapshot was
+			 * rebuilt in place, and a copy can never be reference-equal to anything: the fast path
+			 * was dead, and every character paid a full element-wise diff and an Array.Copy per
+			 * tick to discover it had nothing to send. */
+			lastPushedAttributes = currentCount == 0 ? System.Array.Empty<AttributeReconcileEntry>() : current;
 
 			attributePushBuffer.Clear();
 		}
@@ -2403,28 +2460,55 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			BroadcastObservedResources(resourcePushScheduler.LastPushed);
+			/* The settling repeat goes RELIABLE; the stream of changes stays unreliable.
+			 *
+			 * The unreliable stream is self-correcting while a value keeps moving — the next push
+			 * is a handful of ticks behind and supersedes whatever was lost. The confirmation is
+			 * the one send with nothing behind it: it exists precisely because the value has
+			 * STOPPED changing, so losing it strands every observer on the last packet that did
+			 * arrive until the character is next touched. At the end of a fight that value is
+			 * whatever the victim had before the killing blow, and a corpse standing at half
+			 * health is what a double loss looked like — permanently, because the scheduler had
+			 * already cleared the pending confirmation. One reliable packet per burst is a price
+			 * worth paying for the packet that ends it. */
+			BroadcastObservedResources(resourcePushScheduler.LastPushed,
+				decision == ObservedResourcePushScheduler.Decision.Confirm);
 		}
 
 		/// <summary>
 		/// Sends the current resources to this character's observers.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Scoped to <c>NetworkObject.Observers</c>, so it reaches exactly the clients that can see
 		/// this character and no one else — the interest management already in place therefore
 		/// bounds this traffic for free.
+		/// </para>
+		/// <para>
+		/// Every send takes the next sequence number, the confirmation included. A confirmation
+		/// that repeated the last push's number would be discarded by the receiver's own staleness
+		/// test as a duplicate, which is the opposite of what it is for.
+		/// </para>
 		/// </remarks>
-		private void BroadcastObservedResources(CharacterAttributeResourceState state)
+		/// <param name="state">The resource values to send.</param>
+		/// <param name="reliable">True for the settling confirmation, which has no repeat behind it.</param>
+		private void BroadcastObservedResources(CharacterAttributeResourceState state, bool reliable)
 		{
 			if (base.NetworkManager == null || base.NetworkObject == null)
 			{
 				return;
 			}
 
+			unchecked
+			{
+				++observedResourceSequence;
+			}
+
 			/* Observers only. The owner holds these values authoritatively through the reconcile,
 			 * at full precision and every tick, and its client discarded this message on arrival. */
 			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterResourcesBroadcast
 			{
+				Sequence = observedResourceSequence,
 				CharacterObjectID = base.NetworkObject.ObjectId,
 				// Whole units: the same precision the change gate compares at. See the broadcast type.
 				Health = Mathf.RoundToInt(state.Health),
@@ -2433,7 +2517,7 @@ namespace FishMMO.Shared
 				MaxMana = state.MaxMana,
 				Stamina = Mathf.RoundToInt(state.Stamina),
 				MaxStamina = state.MaxStamina,
-			}, Channel.Unreliable);
+			}, reliable ? Channel.Reliable : Channel.Unreliable);
 		}
 
 		/// <summary>True once this client has registered the shared broadcast handler.</summary>
@@ -2477,8 +2561,13 @@ namespace FishMMO.Shared
 		private static void OnAttributesBroadcast(CharacterAttributesBroadcast msg, Channel channel)
 		{
 			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
-			if (nm == null || nm.ClientManager == null)
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
 			{
+				/* Never on the server, which holds the authoritative value this message is a
+				 * rounded copy of. Every other observer handler in the project states that refusal
+				 * and these two did not, so it is written here for the same reason: a broadcast
+				 * handler is registered once per process and must never act on a peer that is
+				 * authoritative for the state it carries. */
 				return;
 			}
 			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
@@ -2558,8 +2647,13 @@ namespace FishMMO.Shared
 		private static void OnResourcesBroadcast(CharacterResourcesBroadcast msg, Channel channel)
 		{
 			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
-			if (nm == null || nm.ClientManager == null)
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
 			{
+				/* Never on the server, which holds the authoritative value this message is a
+				 * rounded copy of. Every other observer handler in the project states that refusal
+				 * and these two did not, so it is written here for the same reason: a broadcast
+				 * handler is registered once per process and must never act on a peer that is
+				 * authoritative for the state it carries. */
 				return;
 			}
 			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
@@ -2585,6 +2679,11 @@ namespace FishMMO.Shared
 			 * that zero into the schedule would clear this controller's pulse timing, and on any
 			 * peer that DOES simulate (the owner never takes this path, but a forwarded object
 			 * would) the next pulse would then be rescheduled from the wrong origin. Values only. */
+			if (!controller.AcceptObservedResourceSequence(msg.Sequence))
+			{
+				return;
+			}
+
 			controller.ApplyObservedResourceState(msg.Health, msg.MaxHealth, msg.Mana, msg.MaxMana, msg.Stamina, msg.MaxStamina);
 		}
 

@@ -198,10 +198,17 @@ namespace FishMMO.UnitTests
 			string source = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/Ability/AbilityObject.cs");
 
-			LogAssert.IsFalse(source.Contains("if (isServer && Caster != null && Caster.IsSpawned)"),
+			/* The dispatch lives in RunHitEvents, shared by the swept hit, the server's echo of it,
+			 * and the action-resolved impact a hitscan or blast publishes — so all three run the
+			 * authored chain the same way and cannot drift apart. */
+			int dispatch = source.IndexOf("private void RunHitEvents", System.StringComparison.Ordinal);
+			LogAssert.IsTrue(dispatch >= 0, "The shared OnHit dispatch must exist.");
+			string body = source.Substring(dispatch, System.Math.Min(1400, source.Length - dispatch));
+
+			LogAssert.IsFalse(body.Contains("isServer"),
 				"OnHit must not be gated on isServer. That gate made authored impact effects invisible " +
 				"to every player and stopped the caster predicting its own hit.");
-			LogAssert.IsTrue(source.Contains("if (Caster != null && Caster.IsSpawned)"),
+			LogAssert.IsTrue(body.Contains("Caster == null || !Caster.IsSpawned"),
 				"The dispatch must still require a live caster — a despawned one has nothing to attribute " +
 				"the hit to and Trigger.Execute rejects a null initiator.");
 		}

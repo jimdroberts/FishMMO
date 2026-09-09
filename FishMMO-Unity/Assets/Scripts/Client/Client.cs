@@ -592,6 +592,8 @@ namespace FishMMO.Client
 			DismissLoadingScreen(suppress: false);
 
 			this.fogManager?.Stop();
+			// Every object id these rows are keyed by is about to mean something else.
+			this.castNameplateDisplay?.Clear();
 
 			/* Abandon any world-scene preload this session started. The flag is what stops a
 			 * second preload from being kicked off, and it is only ever cleared by the batch's
@@ -2253,6 +2255,7 @@ namespace FishMMO.Client
 			UIManager.UnsetCharacter();
 			if (this.regionNameLabel != null && this.regionNameLabel.gameObject != null) this.regionNameLabel.gameObject.SetActive(false);
 			this.fogManager?.Stop();
+			this.castNameplateDisplay?.Clear();
 			if (c?.GameObject != null) Destroy(c.GameObject);
 		}
 		/// <summary>

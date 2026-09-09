@@ -24,6 +24,24 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public struct CharacterResourcesBroadcast : IBroadcast
 	{
+		/// <summary>
+		/// Monotonic per-character counter, incremented on every send.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The stream is unreliable, so it is also UNORDERED: two updates sent a few ticks apart
+		/// can arrive the wrong way round, and the receiver applies whichever landed last. During a
+		/// fight that means a health bar that jumps back up after a hit, and at the end of one it
+		/// meant a corpse still showing health — the reorder is most likely exactly when updates
+		/// are most frequent. The receiver drops anything not newer than what it already applied.
+		/// </para>
+		/// <para>
+		/// Compared with wrapping arithmetic, so the counter may roll over freely. It is per
+		/// character and reset with the rest of the observed state when a pooled object is reused.
+		/// </para>
+		/// </remarks>
+		public ushort Sequence;
+
 		/// <summary>NetworkObject id of the character these resources belong to.</summary>
 		/// <remarks>
 		/// Required because a broadcast is not addressed to a NetworkBehaviour the way an RPC is —
@@ -246,6 +264,27 @@ namespace FishMMO.Shared
 		public Vector3 Normal;
 
 		/// <summary>
+		/// True when an ECA ACTION resolved this impact rather than the object's own sweep.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A hitscan shot and an area blast run their own lag-compensated query and execute the
+		/// OnHit chain directly, so they never touch the object's per-body hit set or its hit
+		/// count. Their impacts were published by nobody at all until this flag existed, and a
+		/// third party watching a gunfight saw beams appear and nothing be hit by them.
+		/// </para>
+		/// <para>
+		/// The flag is what keeps the two kinds apart on the receiver. A swept hit is applied
+		/// through the hit set, which is what makes the message a free no-op for an owner that
+		/// predicted it; an action impact is applied straight to the OnHit chain, because an area
+		/// effect wired to OnTick pulses the same victims repeatedly and the hit set would silence
+		/// every pulse after the first. These are sent to observers EXCEPT the owner for the same
+		/// reason — with no hit set to absorb it, the owner would play each impact twice.
+		/// </para>
+		/// </remarks>
+		public bool DirectImpact;
+
+		/// <summary>
 		/// True when the victim TURNED THIS OBJECT AWAY rather than being struck by it.
 		/// </summary>
 		/// <remarks>
@@ -330,6 +369,17 @@ namespace FishMMO.Shared
 
 		/// <summary>The heading the object left on, packed by <see cref="AimDirectionCompression"/>.</summary>
 		public uint PackedHeading;
+
+		/// <summary>Server tick the turn happened on.</summary>
+		/// <remarks>
+		/// <c>AbilityObject.Redirect</c> resets the trajectory leg to zero elapsed ticks, and the
+		/// closed-form pose reads that counter — so a receiver applying this message without
+		/// advancing it restarts the new leg from the corner at the moment of ARRIVAL, and its
+		/// copy trails the server's by the transit delay for the rest of the object's life. The
+		/// receiver subtracts its own render lag the same way every other observer clock does; see
+		/// <c>AbilityController.ComputeObserverFastForwardTicks</c>.
+		/// </remarks>
+		public uint ServerTick;
 	}
 
 	/// <summary>

@@ -168,9 +168,6 @@ namespace FishMMO.Shared
 				float activationTimeSec = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
 				remainingTicks = (uint)(int)Math.Ceiling(activationTimeSec / (double)base.TimeManager.TickDelta);
 				remainingTicks = ApplyChannelActivationFloor(newAbility, activationData.ActivationFlags, remainingTicks);
-				// A fresh activation owes its observers a reliable opening message; see
-				// BroadcastAbilityActivated.
-				channelSpawnsBroadcast = 0u;
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 				{
 					replicatedFlags.EnableBit(AbilityActivationFlags.IsHeld);
@@ -360,7 +357,12 @@ namespace FishMMO.Shared
 		/// <param name="activationTime">The ability's activation (charge) time in seconds.</param>
 		/// <param name="tickDelta">Fixed seconds per tick.</param>
 		/// <returns>The hold cap in ticks, always at least 1.</returns>
-		internal static uint ComputeMaxHoldTicks(float activationTime, float tickDelta)
+		/// <remarks>
+		/// Public because the observer's cast nameplate has to know it: a charged ability may be
+		/// HELD for this long after its activation window has elapsed, so an expiry sized from the
+		/// activation time alone dropped the row two-thirds of the way through a fully charged cast.
+		/// </remarks>
+		public static uint ComputeMaxHoldTicks(float activationTime, float tickDelta)
 		{
 			if (tickDelta <= 0f)
 			{
@@ -595,16 +597,18 @@ namespace FishMMO.Shared
 			 *
 			 * The fast-forward on the receiving side already accounts for however long a message
 			 * took to arrive, so a retransmitted or late one still lands in the right place. */
-			Channel channel = Channel.Reliable;
-			if (isChannelTick)
-			{
-				if (channelSpawnsBroadcast > 0u)
-				{
-					channel = Channel.Unreliable;
-				}
-				channelSpawnsBroadcast++;
-			}
-
+			/* Reliable for EVERY spawn, the per-tick spawns of a channel included.
+			 *
+			 * The second and later channel spawns used to go unreliably, to save bandwidth while a
+			 * beam was held. That broke an invariant the hit and destroy messages depend on: they
+			 * are reliable and ordered against the activation, so a reliable destroy for a channel
+			 * object that collided on its first tick could overtake its own unreliable activation,
+			 * find no container, and drop — after which the activation landed and spawned an object
+			 * nothing would ever end. It flew its full lifetime on that observer and detonated in
+			 * empty air. An unreliable duplicate arriving after the object died also respawned it
+			 * with a fresh lifetime. Ordering is a correctness requirement here and the reliable
+			 * channel is the only thing that provides it; a channel's per-tick message is ~40 bytes
+			 * and bounded by how long the key is held. */
 			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new AbilityActivatedBroadcast
 			{
 				CasterObjectID = base.NetworkObject.ObjectId,
@@ -618,18 +622,8 @@ namespace FishMMO.Shared
 				SpawnPosition = pose.Position,
 				SpawnRotation = pose.Rotation,
 				ServerTick = base.TimeManager.LocalTick,
-			}, channel);
+			}, Channel.Reliable);
 		}
-
-		/// <summary>
-		/// Activation broadcasts already sent for the channel currently being held.
-		/// </summary>
-		/// <remarks>
-		/// Zero means the next channel spawn is the first of its channel and must go reliably.
-		/// Server-side only — it exists solely to pick a send channel. See
-		/// <see cref="BroadcastAbilityActivated"/>.
-		/// </remarks>
-		private uint channelSpawnsBroadcast;
 
 		/// <summary>
 		/// Ticks an observer should fast-forward a freshly reproduced ability object by, so it
@@ -651,9 +645,73 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public static uint ComputeObserverFastForwardTicks(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks)
 		{
+			return ComputeObserverFastForwardTicks(estimatedServerTick, serverSpawnTick, interpolationTicks, latencyTicks: 0u);
+		}
+
+		/// <summary>
+		/// Ticks to advance a reproduced object by, so it sits level with the caster <i>as this
+		/// observer renders it</i>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The latency term is the whole correction.</b> The client's <c>TimeManager.Tick</c> is
+		/// FishNet's estimate of the server's PRESENT — one-way latency plus a one-tick read bias on
+		/// top of the last packet's tick — so for a message that has just arrived,
+		/// <c>Tick − ServerTick</c> is not "how late the message is"; it IS the transit delay. The
+		/// rendered caster, meanwhile, comes through NetworkTransform and is drawn one-way latency
+		/// plus the interpolation buffer behind the server. Subtracting only the buffer therefore
+		/// re-added the transit delay it should have removed, and every observed projectile led its
+		/// caster by the one-way trip: level at 60 ms, a third of a second out of the muzzle at 200.
+		/// </para>
+		/// <para>
+		/// With the latency removed a fresh message advances zero ticks — the object spawns at the
+		/// muzzle on arrival, a constant <paramref name="interpolationTicks"/> ahead of the rendered
+		/// caster regardless of ping — and the advance is spent only where it is owed: a message that
+		/// genuinely arrived late, and the in-flight objects a new observer is handed on entry.
+		/// Negative differences clamp to zero rather than holding the spawn, because a held object
+		/// cannot receive the hit or destroy message that may already be in flight for it.
+		/// </para>
+		/// </remarks>
+		/// <param name="estimatedServerTick">The observer's estimate of the current server tick (<c>TimeManager.Tick</c>).</param>
+		/// <param name="serverSpawnTick">Server tick the object spawned on.</param>
+		/// <param name="interpolationTicks">Ticks the observer renders its peers behind the server.</param>
+		/// <param name="latencyTicks">One-way latency in ticks, plus the estimator's one-tick read bias.</param>
+		public static uint ComputeObserverFastForwardTicks(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks, uint latencyTicks)
+		{
 			long elapsed = (int)(estimatedServerTick - serverSpawnTick);
 			elapsed -= interpolationTicks;
+			elapsed -= latencyTicks;
 			return elapsed > 0 ? (uint)elapsed : 0u;
+		}
+
+		/// <summary>
+		/// The catch-up an observer owes a reproduced object, read from the live clock.
+		/// </summary>
+		/// <remarks>
+		/// One place for the three readers — the live activation, the in-flight replay a new observer
+		/// receives, and the cast nameplate — so the projectile and the "Casting" row agree about when
+		/// a cast began. Half the measured round trip is the one-way estimate; the added tick is the
+		/// <c>socketReadDelay</c> FishNet bakes into its own tick estimate.
+		/// </remarks>
+		/// <param name="timeManager">The client's time manager.</param>
+		/// <param name="serverTick">The server tick stamped on the message.</param>
+		public static uint ComputeObserverCatchUpTicks(FishNet.Managing.Timing.TimeManager timeManager, uint serverTick)
+		{
+			if (timeManager == null || serverTick == 0u)
+			{
+				return 0u;
+			}
+
+			double tickDelta = timeManager.TickDelta;
+			uint latencyTicks = 1u;
+			if (tickDelta > 0d)
+			{
+				double oneWaySeconds = timeManager.RoundTripTime / 2000d;
+				latencyTicks += (uint)System.Math.Round(oneWaySeconds / tickDelta);
+			}
+
+			return ComputeObserverFastForwardTicks(timeManager.Tick, serverTick,
+				LagCompensationTick.SpectatorInterpolationTicks, latencyTicks);
 		}
 
 		/// <summary>True once this client has registered the shared activation handler.</summary>
@@ -765,6 +823,18 @@ namespace FishMMO.Shared
 				}
 			}
 
+			/* An impact a hitscan or area ACTION resolved takes the undeduped path.
+			 *
+			 * It has no hit-set entry and spends no hit count on any peer, so putting it through
+			 * the swept path would silence every pulse of a repeating area effect after the first —
+			 * see AbilityObjectHitBroadcast.DirectImpact, which also explains why these reach
+			 * observers only. */
+			if (msg.DirectImpact)
+			{
+				abilityObject.ApplyObservedActionHit(hitCharacter, msg.Point, msg.Normal);
+				return;
+			}
+
 			abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal);
 		}
 
@@ -801,7 +871,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			abilityObject.ApplyObservedRedirect(AimDirectionCompression.Decode(msg.PackedHeading));
+			abilityObject.ApplyObservedRedirect(AimDirectionCompression.Decode(msg.PackedHeading),
+				ComputeObserverCatchUpTicks(nm.TimeManager, msg.ServerTick));
 		}
 
 		/// <summary>
@@ -970,6 +1041,18 @@ namespace FishMMO.Shared
 			PredictionTick spawnTick = new PredictionTick(msg.SpawnTick);
 			bool alreadyRunning = AbilityContainerAllocator.IsSpawnAlreadyRunning(ability, msg.Seed, spawnTick);
 
+			/* Catch-up is computed BEFORE the spawn, because Spawn runs the object's OnSpawn chain —
+			 * muzzle flash, cast sound — and a message late enough that the object has already
+			 * lived out its whole lifetime on the server used to play all of that at the origin
+			 * and then die quietly one call later, with no impact to follow. Such a message is
+			 * dropped whole. The duplicate case is exempt: the running object is the truth there. */
+			uint fastForward = ComputeObserverCatchUpTicks(nm.TimeManager, msg.ServerTick);
+			if (!alreadyRunning && nm.TimeManager != null && ability.LifeTime > 0.0f &&
+				fastForward * nm.TimeManager.TickDelta >= ability.LifeTime)
+			{
+				return;
+			}
+
 			AbilityObject spawned = AbilityObject.Spawn(ability, controller.Character, controller.AbilitySpawner, targetInfo,
 				msg.AimOrigin, aimDirection, msg.Seed, spawnTick, pose);
 
@@ -978,14 +1061,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			/* The message took one network delay to get here, during which the server's copy
-			 * kept moving. Catch up, less the interpolation the observer renders its peers behind. */
-			if (spawned != null && nm.TimeManager != null)
-			{
-				uint fastForward = ComputeObserverFastForwardTicks(nm.TimeManager.Tick, msg.ServerTick,
-					LagCompensationTick.SpectatorInterpolationTicks);
-				spawned.FastForward(fastForward);
-			}
+			// See ComputeObserverFastForwardTicks: zero for a fresh message, positive only for a late one.
+			spawned?.FastForward(fastForward);
 		}
 
 		/// <summary>
@@ -1004,9 +1081,11 @@ namespace FishMMO.Shared
 		/// stale one arriving a round trip late.
 		/// </para>
 		/// <para>
-		/// Unreliable. A cast is a short-lived visual and both ends of it are re-sent by the next
-		/// activation; the receiver also expires a start on its own duration, so a dropped stop
-		/// cannot strand a nameplate.
+		/// Reliable, and it has to be: the receiver keys a stop on the caster, and a character casts
+		/// one thing at a time, so an unreliable stop from cast N that reordered behind the start of
+		/// cast N+1 cleared the wrong row — reachable at instant-attack cadence. Two small messages
+		/// per cast is nothing against a reorder that a player can see; the receiver's expiry
+		/// remains as a safety net for a disconnect mid-cast, not for loss.
 		/// </para>
 		/// </remarks>
 		/// <param name="state">The replicate state, used to skip replayed ticks.</param>
@@ -1030,7 +1109,7 @@ namespace FishMMO.Shared
 				IsConsumable = isConsumable,
 				ServerTick = base.TimeManager != null ? base.TimeManager.Tick : 0u,
 				Started = started,
-			}, Channel.Unreliable);
+			}, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -1615,8 +1694,6 @@ namespace FishMMO.Shared
 			currentAbilityID = NO_ABILITY;
 			remainingTicks = 0;
 			chargedHoldTicks = 0;
-			// The next channel starts over and owes its observers a reliable opening message.
-			channelSpawnsBroadcast = 0u;
 
 			// Clear persistent activation flags from replicated state.
 			replicatedFlags.DisableBit(AbilityActivationFlags.IsHeld);

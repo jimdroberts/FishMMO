@@ -930,29 +930,7 @@ namespace FishMMO.Shared
 			 * its own follow-up message below. */
 			Quaternion preEventHeading = SpawnRotation;
 
-			if (Caster != null && Caster.IsSpawned)
-			{
-				var hitEvents = OnHitEvents;
-				if (hitEvents != null)
-				{
-					// Thread the raw authoritative tick if available. TickEventData marks this as non-replicate,
-					// so prediction-domain consumers must route it through their authoritative fallback.
-					uint collisionTick = GetCurrentAuthoritativeTick();
-
-					foreach (var hitEvent in hitEvents.Values)
-					{
-						// The trigger's own TargetSelector handles fan-out.
-						/* The echo flag travels with the event so an action can tell "I decided this"
-						 * from "I was told this". ApplyDamageAction and ApplyHealAction are what read
-						 * it; see AbilityCollisionEventData.IsAuthoritativeEcho. */
-						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
-							Caster, hitCharacter, this, point, normal, RNG, isAuthoritativeEcho);
-
-						collisionEvent.Add(new TickEventData(Caster, collisionTick));
-						hitEvent.Execute(collisionEvent);
-					}
-				}
-			}
+			RunHitEvents(hitCharacter, point, normal, isAuthoritativeEcho);
 
 			// An OnHit action is allowed to end this object (and AbilityHitCountAction is allowed to
 			// extend it); either way the decision below must read the state the actions left behind.
@@ -1052,12 +1030,24 @@ namespace FishMMO.Shared
 		/// <param name="heading">The absolute heading the server's copy left on.</param>
 		internal void ApplyObservedDeflection(Vector3 heading)
 		{
-			if (destroyed)
+			if (destroyed || heading.sqrMagnitude < 1e-8f)
 			{
 				return;
 			}
-			/* Absolute, so applying it to a peer that already predicted the same deflection is a
-			 * no-op rather than a second mirror — see AbilityObjectHitBroadcast.PackedDeflectHeading. */
+
+			/* Absolute, so a peer that already predicted this deflection — the caster's owner,
+			 * which resolves the hit locally and receives the same message half a round trip later
+			 * — treats it as confirmation. The heading being absolute made the direction idempotent
+			 * but not the turn: ApplyDeflection → Redirect resets the leg clock, re-anchors the
+			 * spawn position to wherever the object is NOW, and adds the flown leg to the elapsed
+			 * bookkeeping a second time. Invisible on a straight line, a visible jump on anything
+			 * else. The same comparison ApplyObservedRedirect makes, for the same reason. */
+			Vector3 current = SpawnRotation * Vector3.forward;
+			if (Vector3.Dot(current.normalized, heading.normalized) > 0.99999f)
+			{
+				return;
+			}
+
 			ApplyDeflection(heading);
 		}
 
@@ -1103,6 +1093,137 @@ namespace FishMMO.Shared
 			 * landed, and a receiver second-guessing that with its own copy of the defender's buffs
 			 * is exactly the observer-resolves-its-own-hits failure the echo exists to remove. */
 			ApplyHit(hitCharacter, key, point, normal, Vector3.zero, isAuthoritativeEcho: true);
+		}
+
+		/// <summary>
+		/// Runs this object's OnHit chain for one resolved impact.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Shared by every peer and by both ways an impact reaches this object, so the events an
+		/// authored ability runs cannot depend on which of them resolved it. The tick is stamped
+		/// AUTHORITATIVE (<see cref="GetCurrentAuthoritativeTick"/>): a hit is not part of any
+		/// peer's replicate domain, so prediction-domain consumers must map it themselves.
+		/// </para>
+		/// </remarks>
+		/// <param name="hitCharacter">The character that was hit, or null for scenery.</param>
+		/// <param name="point">World point of impact.</param>
+		/// <param name="normal">Surface normal at the impact.</param>
+		/// <param name="isAuthoritativeEcho">
+		/// True when the hit arrived from the server rather than being resolved here. Reaches the
+		/// events on the collision payload; see
+		/// <see cref="AbilityCollisionEventData.IsAuthoritativeEcho"/>.
+		/// </param>
+		private void RunHitEvents(ICharacter hitCharacter, Vector3 point, Vector3 normal, bool isAuthoritativeEcho)
+		{
+			if (Caster == null || !Caster.IsSpawned)
+			{
+				return;
+			}
+
+			var hitEvents = OnHitEvents;
+			if (hitEvents == null)
+			{
+				return;
+			}
+
+			uint collisionTick = GetCurrentAuthoritativeTick();
+
+			foreach (var hitEvent in hitEvents.Values)
+			{
+				// The trigger's own TargetSelector handles fan-out.
+				/* The echo flag travels with the event so an action can tell "I decided this"
+				 * from "I was told this". ApplyDamageAction and ApplyHealAction are what read
+				 * it; see AbilityCollisionEventData.IsAuthoritativeEcho. */
+				AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
+					Caster, hitCharacter, this, point, normal, RNG, isAuthoritativeEcho);
+
+				collisionEvent.Add(new TickEventData(Caster, collisionTick));
+				hitEvent.Execute(collisionEvent);
+			}
+		}
+
+		/// <summary>
+		/// Publishes one impact that an ECA ACTION resolved, rather than this object's own sweep.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>AbilityApplyHitscanAction</c> and <c>AbilityApplyAreaAction</c> run their own
+		/// lag-compensated query and execute the OnHit chain directly, so they never reach
+		/// <see cref="ApplyHit"/> — and until this existed, every hitscan shot and every blast was
+		/// invisible to third parties. An observer saw the beam object appear and nothing whatever
+		/// happen to the people it went through: no impact effect, no decal, no sound. Only a swept
+		/// projectile's hits were ever published.
+		/// </para>
+		/// <para>
+		/// <b>Not deduped and not counted</b>, which is why it carries its own flag on the wire
+		/// rather than reusing the sweep's path. An area effect wired to OnTick pulses repeatedly
+		/// over the same victims (a lingering trap is authored exactly that way), and a beam wired
+		/// to OnTick does the same — the per-object hit set that makes a swept projectile spend one
+		/// hit per body would collapse every pulse after the first into silence. The budget these
+		/// spend is the action's own <c>MaxHits</c>, resolved per query, and it is not this
+		/// object's <see cref="HitCount"/>.
+		/// </para>
+		/// <para>
+		/// <b>To observers EXCEPT the owner</b>, unlike <see cref="BroadcastHitToObservers"/>. The
+		/// owner resolves these itself (see <see cref="ResolvesHitsLocally"/>) and has already run
+		/// the chain locally; with no hit set to absorb the echo, including the owner would play
+		/// every impact twice on the screen of the player who fired.
+		/// </para>
+		/// </remarks>
+		/// <param name="hitCharacter">The character that was hit, or null for scenery.</param>
+		/// <param name="point">World point of impact.</param>
+		/// <param name="normal">Surface normal at the impact.</param>
+		internal void PublishActionHit(ICharacter hitCharacter, Vector3 point, Vector3 normal)
+		{
+			PublishedHitCount++;
+
+			if (!isServer || Ability == null)
+			{
+				return;
+			}
+
+			NetworkObject casterNob = Caster?.NetworkObject;
+			if (casterNob == null || !casterNob.IsSpawned)
+			{
+				return;
+			}
+
+			NetworkObject victimNob = hitCharacter?.NetworkObject;
+
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(casterNob, new AbilityObjectHitBroadcast
+			{
+				CasterObjectID = casterNob.ObjectId,
+				AbilityID = Ability.ID,
+				ContainerID = ContainerID,
+				ObjectID = ID,
+				VictimObjectID = victimNob != null && victimNob.IsSpawned ? victimNob.ObjectId : 0,
+				Point = point,
+				Normal = normal,
+				DirectImpact = true,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Plays one action-resolved impact on a peer that was told about it.
+		/// </summary>
+		/// <remarks>
+		/// The receiving half of <see cref="PublishActionHit"/>. It runs the OnHit chain and
+		/// nothing else: no hit set, no mitigation, no hit count. Every one of those belongs to the
+		/// peer that RESOLVED the impact, and this peer is by construction not that peer — the
+		/// message is sent to observers only.
+		/// </remarks>
+		/// <param name="hitCharacter">The character that was hit, or null for scenery.</param>
+		/// <param name="point">World point of impact.</param>
+		/// <param name="normal">Surface normal at the impact.</param>
+		internal void ApplyObservedActionHit(ICharacter hitCharacter, Vector3 point, Vector3 normal)
+		{
+			if (destroyed)
+			{
+				return;
+			}
+
+			RunHitEvents(hitCharacter, point, normal, isAuthoritativeEcho: true);
 		}
 
 		/// <summary>
@@ -1183,6 +1304,12 @@ namespace FishMMO.Shared
 				ContainerID = ContainerID,
 				ObjectID = ID,
 				PackedHeading = AimDirectionCompression.Encode(SpawnRotation * Vector3.forward),
+				/* The tick the turn happened on. Redirect resets the leg clock to zero, so a
+				 * receiver that applied this message without advancing it restarted the new leg
+				 * from the corner at the moment the message ARRIVED — leaving its copy a full
+				 * transit delay behind the server's for the rest of the object's life. Every other
+				 * observer message that starts a clock carries this for the same reason. */
+				ServerTick = casterNob.TimeManager != null ? casterNob.TimeManager.Tick : 0u,
 			}, true, Channel.Reliable);
 		}
 
@@ -1196,7 +1323,7 @@ namespace FishMMO.Shared
 		/// a second turn that would reset its leg clock and jump the pose.
 		/// </remarks>
 		/// <param name="heading">The absolute post-chain heading, already decoded.</param>
-		internal void ApplyObservedRedirect(Vector3 heading)
+		internal void ApplyObservedRedirect(Vector3 heading, uint catchUpTicks = 0u)
 		{
 			if (destroyed || heading.sqrMagnitude < 1e-8f)
 			{
@@ -1206,10 +1333,20 @@ namespace FishMMO.Shared
 			Vector3 current = SpawnRotation * Vector3.forward;
 			if (Vector3.Dot(current.normalized, heading.normalized) > 0.99999f)
 			{
+				/* Already on this heading: a peer that ran the fork itself. It turned at the tick
+				 * the server did and its leg clock is already right, so advancing it here would
+				 * push its copy AHEAD of the server's by the transit — the mirror of the bug the
+				 * catch-up exists to remove. */
 				return;
 			}
 
 			Redirect(AimDirectionCompression.ToRotation(AimDirectionCompression.Quantize(heading)));
+
+			/* The new leg is as old as the message. Redirect zeroed ElapsedTicks, and the
+			 * closed-form trajectory reads it, so this is what puts the object where the server
+			 * holds it rather than at the corner. Zero for a message that has just arrived — see
+			 * AbilityController.ComputeObserverFastForwardTicks. */
+			FastForward(catchUpTicks);
 		}
 
 		// ── Detached-phantom registry ──────────────────────────────────────────────
@@ -1372,11 +1509,22 @@ namespace FishMMO.Shared
 		/// observer that learns about a spawn late can place the object where the server has it.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// The closed-form trajectory (<see cref="AbilityMoveTransformAction"/>) reads
 		/// <see cref="ElapsedTicks"/>, so bumping the counter is enough to move the object on its
 		/// next tick; the lifetime is advanced by the same amount so the object still expires on
 		/// the server's schedule. An object fast-forwarded past its lifetime is destroyed quietly —
 		/// it no longer exists on the server, so its destroy effects have already played.
+		/// </para>
+		/// <para>
+		/// <b>Per-tick ECA events are deliberately NOT replayed</b> for the skipped ticks. Catching
+		/// up a second of a channelled flame would fire a second of its OnTick chain in one frame:
+		/// a stack of particle systems at every position the object passed through, and, for any
+		/// authored tick action with a peer-visible effect, that effect repeated as many times as
+		/// the message was late. What the observer owes is the object's POSE — where the server
+		/// holds it now — and advancing the counter is the whole of that debt. The ticks it did not
+		/// run are ticks whose visuals happened before this peer was watching.
+		/// </para>
 		/// </remarks>
 		/// <param name="ticks">Ticks the server has already simulated for this object.</param>
 		public void FastForward(uint ticks)
@@ -1725,9 +1873,34 @@ namespace FishMMO.Shared
 			}
 
 			AbilitySpawnEventData spawnEventData = new AbilitySpawnEventData(caster, ability, abilitySpawner, targetInfo, seed, abilityObject, nextChildID, spawnedAbilityObjects);
-			// Thread the spawn tick so prediction-aware ECA actions (e.g. ApplyBuffAction)
-			// use the deterministic replicate tick rather than target.GetLocalTick().
-			spawnEventData.Add(new TickEventData(caster, abilityObject.SpawnTick));
+
+			/* The spawn tick is REPLICATE-DOMAIN, and that domain belongs to the owning client.
+			 *
+			 * On the server and on the owner it is exactly what prediction-aware actions want:
+			 * ApplyBuffAction writes buff expiry against it, and both peers count in the same
+			 * domain, so a reconcile lands on the same tick the prediction used. On a third-party
+			 * OBSERVER reproducing this spawn from a broadcast, the same number is a foreign
+			 * client's unsynchronised counter — and stamping it replicate-domain told
+			 * ApplyBuffAction it had a same-character prediction tick, which took the direct-Apply
+			 * path and installed a buff locally, at a tick from somebody else's clock, on the one
+			 * peer that must never predict. The observer is handed its own authoritative tick
+			 * instead, which routes through the target controller's domain mapper like every other
+			 * cross-peer effect. Same predicate as ResolvesHitsOnThisPeer, and for the same reason. */
+			NetworkObject spawnCasterNob = caster?.NetworkObject;
+			bool spawnTickIsLocalDomain = ResolvesHitsOnThisPeer(
+				spawnCasterNob != null && spawnCasterNob.IsServerInitialized,
+				spawnCasterNob != null && spawnCasterNob.IsOwner);
+			if (spawnTickIsLocalDomain)
+			{
+				spawnEventData.Add(new TickEventData(caster, abilityObject.SpawnTick));
+			}
+			else
+			{
+				uint observedSpawnTick = spawnCasterNob != null && spawnCasterNob.TimeManager != null
+					? spawnCasterNob.TimeManager.LocalTick
+					: 0u;
+				spawnEventData.Add(new TickEventData(caster, observedSpawnTick));
+			}
 			// Thread the object's deterministic RNG so spawn ECA actions can roll
 			// deterministic values using a shared, already-seeded generator.
 			spawnEventData.RNG = abilityObject.RNG;
@@ -1867,7 +2040,18 @@ namespace FishMMO.Shared
 				return null;
 			}
 
-			if (template.RequiresTarget && targetInfo.Target == null)
+			/* A required target the CALLER had to resolve — but only when the caller is the peer
+			 * that resolved it.
+			 *
+			 * A supplied pose means this is a reproduction: the server already found the target,
+			 * already built the pose from it, and sent that pose. The target transform's only use
+			 * below is producing the pose (AbilitySpawnTarget.Target reads targetInfo.HitPosition),
+			 * so a reproduction needs nothing from it. Refusing here anyway is what made a
+			 * RequiresTarget cast VANISH for any observer that could not see the victim — a
+			 * character outside that client's streaming budget is not in Objects.Spawned, so the
+			 * handler passed a null target and this dropped the whole spawn. The bolt was never
+			 * drawn, and the destroy that ended it referred to an object that had never existed. */
+			if (template.RequiresTarget && targetInfo.Target == null && pose == null)
 			{
 				return null;
 			}

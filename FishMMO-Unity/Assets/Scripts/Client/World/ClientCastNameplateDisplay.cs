@@ -56,6 +56,19 @@ namespace FishMMO.Client
 		{
 			/// <summary>The character's nameplate, so it can be cleared without a lookup.</summary>
 			public Nameplate Plate;
+			/// <summary>
+			/// The caster, so a pooled instance that has since become somebody else is recognised.
+			/// </summary>
+			/// <remarks>
+			/// Characters despawn to the object pool, not to destruction, so the plate stays alive
+			/// and Unity's null test on it says nothing. A caster that is no longer spawned, or that
+			/// has come back out of the pool under a different object id, is not the character this
+			/// row was written for — and its plate must not be touched, because by then it may be
+			/// carrying that new character's own cast.
+			/// </remarks>
+			public NetworkObject Caster;
+			/// <summary>What was being cast, so a stop for a different cast is refused.</summary>
+			public long ReferenceID;
 			/// <summary>Unscaled time the row may first be cleared at.</summary>
 			public float EarliestClear;
 			/// <summary>Unscaled time the row is dropped at, with no stop message.</summary>
@@ -127,8 +140,9 @@ namespace FishMMO.Client
 				 * character died and its body was removed, or it left observer range, and the
 				 * nameplate went with it. Dropping the row here is what stops the sweep from
 				 * touching a destroyed component every frame. */
-				if (cast.Plate == null)
+				if (cast.Plate == null || !CasterStillThis(cast.Caster, pair.Key))
 				{
+					// Gone, or pooled and reborn as someone else. Nameplate.OnDisable cleared the row.
 					expired.Add(pair.Key);
 					continue;
 				}
@@ -151,11 +165,11 @@ namespace FishMMO.Client
 		{
 			if (!msg.Started)
 			{
-				Stop(msg.CasterObjectID);
+				Stop(msg.CasterObjectID, msg.ReferenceID);
 				return;
 			}
 
-			if (!TryResolveObserved(msg.CasterObjectID, out Nameplate plate, out AbilityController controller))
+			if (!TryResolveObserved(msg.CasterObjectID, out NetworkObject caster, out Nameplate plate, out AbilityController controller))
 			{
 				return;
 			}
@@ -179,6 +193,9 @@ namespace FishMMO.Client
 			float remaining = duration - elapsed;
 			if (duration > 0.0f && remaining <= 0.0f)
 			{
+				/* Too late to draw, but not too late to matter: this start supersedes whatever the
+				 * row said before it, so the previous cast's text must not be left standing. */
+				Stop(msg.CasterObjectID, referenceID: 0);
 				return;
 			}
 
@@ -188,16 +205,28 @@ namespace FishMMO.Client
 			active[msg.CasterObjectID] = new ActiveCast
 			{
 				Plate = plate,
+				Caster = caster,
+				ReferenceID = msg.ReferenceID,
 				EarliestClear = now + MinimumDwellSeconds,
-				Expiry = now + Mathf.Max(remaining, 0.0f) + ExpiryGraceSeconds,
+				Expiry = now + Mathf.Max(remaining, 0.0f) + HeldAllowance(msg, controller) + ExpiryGraceSeconds,
 				StopPending = false,
 			};
 		}
 
 		/// <summary>Marks a cast finished, honouring the minimum dwell.</summary>
-		private void Stop(int casterObjectID)
+		/// <param name="casterObjectID">The caster.</param>
+		/// <param name="referenceID">
+		/// What ended, or zero to end whatever is running. A stop naming a different cast than
+		/// the row shows is refused: it belongs to an earlier activation and the row has moved on.
+		/// </param>
+		private void Stop(int casterObjectID, long referenceID)
 		{
 			if (!active.TryGetValue(casterObjectID, out ActiveCast cast))
+			{
+				return;
+			}
+
+			if (referenceID != 0 && cast.ReferenceID != 0 && cast.ReferenceID != referenceID)
 			{
 				return;
 			}
@@ -212,6 +241,52 @@ namespace FishMMO.Client
 			// Too soon to be seen. Tick clears it once the dwell has elapsed.
 			cast.StopPending = true;
 			active[casterObjectID] = cast;
+		}
+
+		/// <summary>
+		/// Drops every row without unregistering. For a world change, where the network manager
+		/// survives but every object id in <see cref="active"/> is about to mean something else.
+		/// </summary>
+		public void Clear()
+		{
+			foreach (KeyValuePair<int, ActiveCast> pair in active)
+			{
+				if (CasterStillThis(pair.Value.Caster, pair.Key))
+				{
+					ClearStatus(pair.Value.Plate);
+				}
+			}
+			active.Clear();
+		}
+
+		/// <summary>Whether the caster this row was written for is still the one under that id.</summary>
+		private static bool CasterStillThis(NetworkObject caster, int objectID)
+		{
+			return caster != null && caster.IsSpawned && caster.ObjectId == objectID;
+		}
+
+		/// <summary>
+		/// Extra time a held ability may legitimately run past its activation window.
+		/// </summary>
+		/// <remarks>
+		/// A charged ability keeps going after <c>remainingTicks</c> hits zero, for up to the cap
+		/// <see cref="AbilityController.ComputeMaxHoldTicks"/> describes — twice the activation
+		/// time, floored at a second. An expiry sized from the activation time alone dropped the
+		/// row two-thirds of the way through a full charge. Granted to every held ability rather
+		/// than charged ones alone: a channel cannot outrun its window, so for it this only
+		/// lengthens a safety net that the reliable stop makes moot.
+		/// </remarks>
+		private float HeldAllowance(CharacterCastBroadcast msg, AbilityController controller)
+		{
+			if (msg.IsConsumable || controller == null || networkManager?.TimeManager == null ||
+				!controller.RequiresHeld(msg.ReferenceID) ||
+				!controller.TryGetAbilityForVisuals(msg.ReferenceID, out Ability ability))
+			{
+				return 0.0f;
+			}
+
+			float tickDelta = (float)networkManager.TimeManager.TickDelta;
+			return AbilityController.ComputeMaxHoldTicks(ability.ActivationTime, tickDelta) * tickDelta;
 		}
 
 		/// <summary>
@@ -281,8 +356,8 @@ namespace FishMMO.Client
 				return 0.0f;
 			}
 
-			uint ticks = AbilityController.ComputeObserverFastForwardTicks(
-				networkManager.TimeManager.Tick, serverTick, LagCompensationTick.SpectatorInterpolationTicks);
+			// The projectile's own catch-up, so the row and the bolt agree about when a cast began.
+			uint ticks = AbilityController.ComputeObserverCatchUpTicks(networkManager.TimeManager, serverTick);
 			return ticks * (float)networkManager.TimeManager.TickDelta;
 		}
 
@@ -317,13 +392,14 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Finds the nameplate and ability controller of an observed character, refusing the local one.
 		/// </summary>
-		private bool TryResolveObserved(int casterObjectID, out Nameplate plate, out AbilityController controller)
+		private bool TryResolveObserved(int casterObjectID, out NetworkObject caster, out Nameplate plate, out AbilityController controller)
 		{
+			caster = null;
 			plate = null;
 			controller = null;
 
 			if (networkManager?.ClientManager == null ||
-				!networkManager.ClientManager.Objects.Spawned.TryGetValue(casterObjectID, out NetworkObject caster) ||
+				!networkManager.ClientManager.Objects.Spawned.TryGetValue(casterObjectID, out caster) ||
 				caster == null ||
 				caster.IsOwner)
 			{

@@ -446,6 +446,14 @@ namespace FishMMO.Shared.Core
 			 * starting from off. */
 			visible = false;
 
+			/* The Status row goes for the same reason. It is transient by definition — casting,
+			 * resting, in combat — and it is written by whoever observed the state, not by the
+			 * character. A character mid-cast that logged out went into the pool with "Casting
+			 * Meteor" still on its plate, and the next character to come out of the pool wore it
+			 * from its first frame. The name and guild rows are rewritten by the payload of the
+			 * new life; nothing rewrites Status, so it is cleared here. */
+			ClearLine(NameplateSlot.Status);
+
 			OnNameplateDisabled?.Invoke(this);
 		}
 

@@ -437,9 +437,10 @@ namespace FishMMO.Shared
 		/// </para>
 		/// <para>
 		/// Delivery is a broadcast scoped to this NetworkObject's observers — the same set that can
-		/// target it. A player who comes into view later is served by <see cref="OnSpawnServer"/>,
-		/// which replays the current list to that one connection; the buffered-RPC behaviour the
-		/// previous <c>ObserversRpc(BufferLast)</c> provided implicitly.
+		/// target it. A player who comes into view later is served by <see cref="WritePayload"/>,
+		/// whose observed branch writes the current list into that one connection's spawn payload;
+		/// the buffered-RPC behaviour the previous <c>ObserversRpc(BufferLast)</c> provided
+		/// implicitly.
 		/// </para>
 		/// </remarks>
 		private void PushObservedBuffs()
@@ -602,64 +603,22 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Replays the current visible buff list to a client that starts observing this character
-		/// after the last change.
-		/// </summary>
-		/// <remarks>
-		/// The change-gated broadcast reaches whoever is observing when the set CHANGES; without
-		/// this, a player targeting a character they just walked up to would see an empty buff bar
-		/// until the next buff event on that character. This restores the replay-to-late-joiners
-		/// behaviour the previous <c>ObserversRpc(BufferLast)</c> carried. An empty list is skipped
-		/// because an empty bar is what the client already assumes.
-		/// <para>
-		/// The owner is skipped: it is not sent the observed list at all (see
-		/// <see cref="BroadcastObservedBuffs"/>) because it builds its own from the simulation
-		/// dictionary the spawn payload just handed it.
-		/// </para>
-		/// </remarks>
-		public override void OnSpawnServer(NetworkConnection connection)
-		{
-			base.OnSpawnServer(connection);
-
-			if (buffs.Count == 0 || base.NetworkManager == null || base.NetworkObject == null)
-			{
-				return;
-			}
-
-			if (PayloadVisibility.IsOwner(this, connection))
-			{
-				return;
-			}
-
-			/* The same gate every other observer push carries. A forwarded object delivers buffs
-			 * through the reconcile and its observers build FX from the simulation dictionary, so
-			 * this list would be a second, competing source for the same state — the one place the
-			 * broadcast and reconcile transports were not held mutually exclusive. */
-			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
-			{
-				return;
-			}
-
-			BuildObservedBuffEntries();
-			if (observedBuffBuffer.Count == 0)
-			{
-				return;
-			}
-
-			/* A full set, always. This connection has no strip to merge into and no baseline in
-			 * common with the delta stream — and deliberately does NOT touch
-			 * lastPushedObservedBuffs, which describes what the EXISTING observers hold and is
-			 * already correct for them. Bringing one late observer up to the same state is exactly
-			 * what makes the shared baseline true for everyone again. */
-			base.NetworkManager.ServerManager.Broadcast(connection, new CharacterBuffsBroadcast
-			{
-				CharacterObjectID = base.NetworkObject.ObjectId,
-				IsFullSet = true,
-				Buffs = observedBuffBuffer.ToArray(),
-				Removed = System.Array.Empty<int>(),
-			}, true, Channel.Reliable);
-		}
+		/* THE LATE-JOINER REPLAY LIVES IN WritePayload, NOT HERE.
+		 *
+		 * There used to be an OnSpawnServer(NetworkConnection) override on this class that sent the
+		 * whole visible strip to each arriving observer as a full-set CharacterBuffsBroadcast. It
+		 * was restoring the buffered-RPC behaviour the ObserversRpc(BufferLast) conversion removed
+		 * — and by then WritePayload was already writing that same strip, in its observed shape, to
+		 * the same connection. FishNet raises both from one event: NetworkObject.WriteSpawn writes
+		 * the payload for a connection and OnSpawnServer fires for it, every time the object is
+		 * spawned for that connection, initial spawn and re-observation alike. So every observer
+		 * entering range was sent the character's entire buff list twice, and in a scene where
+		 * culling churns constantly that is the whole cost paid over again for nothing.
+		 *
+		 * The payload is the copy worth keeping. It is length-framed, it is ordered with the rest
+		 * of that character's state rather than racing it, and it cannot arrive before the object
+		 * it describes exists. See WritePayload's observed branch and ReadObservedPayloadBlock;
+		 * LateJoinerReplayTests pins that pair. */
 
 		/// <summary>
 		/// Sends the server-filtered observer buff list to everyone who can see this character,

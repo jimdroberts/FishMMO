@@ -281,6 +281,18 @@ namespace FishMMO.Shared
 						break;
 					}
 
+					/* Published before the events, exactly as AbilityObject.ApplyHit publishes a
+					 * swept hit before its own: an authored action is free to destroy this object
+					 * while handling the impact, and an observer must be told about the impact
+					 * either way. Server only, and to observers except the owner, which resolved
+					 * this shot itself — see AbilityObject.PublishActionHit.
+					 *
+					 * Without this a hitscan was invisible to everyone but the shooter and the
+					 * server. It has no projectile to watch in flight, so a third party saw the
+					 * beam object appear and nothing whatsoever happen to the people it passed
+					 * through: no impact effect, no decal, no sound. */
+					abilityObject.PublishActionHit(hit.Character, hit.Point, hit.Normal);
+
 					AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
 						initiator, hit.Character, abilityObject, hit.Point, hit.Normal, abilityObject.RNG);
 					if (tickToPropagate != null)

@@ -189,8 +189,7 @@ namespace FishMMO.Shared
 					spawned.ConsumeLifetime(entry.LifeElapsedBeforeStartTicks);
 					if (!spawned.IsDestroyed)
 					{
-						spawned.FastForward(ComputeObserverFastForwardTicks(timeManager.Tick, entry.ServerStartTick,
-							LagCompensationTick.SpectatorInterpolationTicks));
+						spawned.FastForward(ComputeObserverCatchUpTicks(timeManager, entry.ServerStartTick));
 					}
 				}
 			}
@@ -733,9 +732,12 @@ namespace FishMMO.Shared
 		/// receiver reproduces the root, so sending them would spawn each child twice.
 		/// </para>
 		/// <para>
-		/// Objects that cannot be reproduced from a pose alone are skipped rather than sent and
-		/// dropped: a <c>RequiresTarget</c> ability refuses to spawn without a target transform,
-		/// and a live object no longer holds the target it was launched at.
+		/// A <c>RequiresTarget</c> ability is included. Its target transform is needed only to
+		/// BUILD the spawn pose, and this payload carries the pose the server resolved — so the
+		/// object is reproducible without it, and <c>AbilityObject.Spawn</c> waives the
+		/// requirement whenever a pose is supplied. Excluding them here meant a homing bolt in
+		/// flight simply did not exist for anyone who walked into view behind it, and the destroy
+		/// that ended it named an object that peer had never spawned.
 		/// </para>
 		/// </remarks>
 		/// <param name="into">Cleared, then filled with at most <see cref="MAX_PAYLOAD_IN_FLIGHT_OBJECTS"/> entries.</param>
@@ -760,7 +762,7 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-				if (ability.Template == null || ability.Template.RequiresTarget)
+				if (ability.Template == null)
 				{
 					continue;
 				}

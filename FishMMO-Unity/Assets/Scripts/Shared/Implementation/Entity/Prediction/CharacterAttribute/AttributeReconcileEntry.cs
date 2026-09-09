@@ -59,9 +59,17 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Writes a single entry's fields to the network writer.</summary>
+		/// <remarks>
+		/// The id goes UNPACKED and the two numbers packed, which is not an inconsistency. FishNet's
+		/// packing is variable-length with a zig-zag sign bit, so it is a saving only for small
+		/// magnitudes: an attribute value or a modifier is usually one byte, while a template id is
+		/// a deterministic hash spread over the whole 32-bit range and costs FIVE. Every entry of
+		/// every attribute push and every reconcile carried that extra byte. Same reason
+		/// <see cref="ObservedBuffEntry"/> writes its id unpacked.
+		/// </remarks>
 		public void WriteTo(Writer writer)
 		{
-			writer.WriteInt32(TemplateID);
+			writer.WriteInt32Unpacked(TemplateID);
 			writer.WriteInt32(Value);
 			writer.WriteInt32(ExternalModifier);
 		}
@@ -71,7 +79,7 @@ namespace FishMMO.Shared
 		{
 			return new AttributeReconcileEntry
 			{
-				TemplateID = reader.ReadInt32(),
+				TemplateID = reader.ReadInt32Unpacked(),
 				Value = reader.ReadInt32(),
 				ExternalModifier = reader.ReadInt32(),
 			};

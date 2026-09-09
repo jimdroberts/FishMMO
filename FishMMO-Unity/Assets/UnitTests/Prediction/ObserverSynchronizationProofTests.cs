@@ -815,6 +815,7 @@ namespace FishMMO.UnitTests
 		private static CharacterResourcesBroadcast RoundTripResources(CharacterResourcesBroadcast m)
 		{
 			Writer w = new Writer();
+			w.WriteUInt16(m.Sequence);
 			w.WriteInt32(m.CharacterObjectID);
 			w.WriteInt32(m.Health); w.WriteInt32(m.MaxHealth);
 			w.WriteInt32(m.Mana); w.WriteInt32(m.MaxMana);
@@ -822,6 +823,7 @@ namespace FishMMO.UnitTests
 			Reader r = new Reader(w.GetArraySegment(), null);
 			return new CharacterResourcesBroadcast
 			{
+				Sequence = r.ReadUInt16(),
 				CharacterObjectID = r.ReadInt32(),
 				Health = r.ReadInt32(), MaxHealth = r.ReadInt32(),
 				Mana = r.ReadInt32(), MaxMana = r.ReadInt32(),

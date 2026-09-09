@@ -1274,6 +1274,16 @@ namespace FishMMO.Shared
 		/// subject to the observer streaming send filter (that hook lives in the unreliable
 		/// ObserversRpc path), so an observer that is being rate limited still receives this.
 		/// </remarks>
+		/* CALLED FROM INSIDE THE REPLICATE, and that is safe here rather than by luck.
+		 *
+		 * Every other observer push in the project is deferred to OnCreateReconcile, because a
+		 * reconcile replays every tick since the correction and a push raised from inside one would
+		 * be sent once per replayed tick. This one cannot be: the guard below refuses any peer that
+		 * is not the server, and the server never replays — it runs each tick exactly once. The
+		 * owner reaches this method on both its first run and its replays and sends nothing on any
+		 * of them. So the message is emitted once per real equipment change, which is the same
+		 * guarantee the deferred pushes buy, and equipment has no per-tick stream to batch it into
+		 * the way resources and attributes do. */
 		private void PushObservedSlot(byte slot)
 		{
 			FishNet.Object.NetworkObject nob = base.NetworkObject;

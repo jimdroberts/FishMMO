@@ -103,6 +103,14 @@ namespace FishMMO.Shared.Core
 		/// happens nowhere — the exact mistake <see cref="EcaAuthority"/> exists to prevent. This
 		/// answers "have I already done this once", not "am I allowed to do this".
 		/// </para>
+		/// <para>
+		/// It reads <see cref="TickEventData.IsReplay"/> and not <c>IsReplicateTick</c>. The two
+		/// were the same test until the domain flag was found to be true for dispatches that
+		/// cannot be replayed — a spawn chain and a self-target chain are both skipped outright on
+		/// a replayed tick, and both carry a replicate-domain tick on every peer, so this returned
+		/// true for them and false for everything else. Reading the domain flag here suppressed
+		/// every self-buff and self-heal impact effect in the game, on all peers, for good.
+		/// </para>
 		/// </remarks>
 		/// <param name="eventData">The event being executed, or null.</param>
 		/// <returns>True when the event carries a replayed tick.</returns>
@@ -110,7 +118,7 @@ namespace FishMMO.Shared.Core
 		{
 			return eventData != null &&
 				   eventData.TryGet(out TickEventData tickData) &&
-				   tickData.IsReplicateTick;
+				   tickData.IsReplay;
 		}
 
 		/// <summary>

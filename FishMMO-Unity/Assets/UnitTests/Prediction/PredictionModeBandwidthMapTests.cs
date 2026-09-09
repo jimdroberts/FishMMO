@@ -546,6 +546,7 @@ namespace FishMMO.UnitTests
 
 		private static void WriteResourcesBroadcast(Writer w, CharacterResourcesBroadcast m)
 		{
+			w.WriteUInt16(m.Sequence);
 			w.WriteInt32(m.CharacterObjectID);
 			w.WriteInt32(m.Health); w.WriteInt32(m.MaxHealth);
 			w.WriteInt32(m.Mana); w.WriteInt32(m.MaxMana);
