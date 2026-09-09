@@ -12,7 +12,7 @@
     position: absolute;
     left: 50%; top: 50%; translate: -50% -50%;
     width: 560px;
-    height: 312px;
+    height: 300px;
 }
 
 .trade-header {
@@ -181,8 +181,11 @@ Label.trade-column__name {
     than as an error: the player can always get it back by revoking.
 */
 .trade-slot--locked {
-    opacity: 0.65;
+    opacity: 0.5;
+    background-color: var(--abyss-800);
     border-color: var(--brand-400);
+    border-top-color: var(--brand-400);
+    border-bottom-color: var(--brand-400);
 }
 
 /* A slot on the partner's side cannot be dragged from or withdrawn; it only reads. */
@@ -222,6 +225,18 @@ Label.trade-currency__label {
     width: 96px;
     height: 22px;
     flex-shrink: 0;
+}
+
+/*
+    Frozen, not gone. UI Toolkit fades a disabled control until its border and background
+    disappear against the panel, which reads as a missing control rather than a locked one —
+    so the box is restated here.
+*/
+.trade-currency__field:disabled {
+    opacity: 1;
+    background-color: var(--abyss-900);
+    border-color: var(--abyss-600);
+    color: var(--abyss-300);
 }
 
 /* The balance the field is clamped to, so the player sees the ceiling before they hit it. */
@@ -271,11 +286,22 @@ Label.trade-currency__value {
     One status line for the whole window: what happens next, or why the last thing did
     not. It keeps its height when empty so the footer does not jump.
 */
+/*
+    One status line for the whole window: what happens next, or why the last thing did not.
+
+    `flex-shrink` and `min-width` are load-bearing, not tidiness. A Label reports its text
+    width as its minimum, so a long sentence here pushed the three footer buttons off the
+    right edge of the panel and Cancel was drawn outside it. Yielding is what keeps the
+    buttons on screen whatever the status says.
+*/
 .trade-status {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
     height: 13px;
     font-size: 10px;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .trade-confirm {

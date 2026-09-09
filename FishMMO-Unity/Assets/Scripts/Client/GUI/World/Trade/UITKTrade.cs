@@ -736,7 +736,7 @@ namespace FishMMO.Client
 			}
 			else if (locked && hasState && State.PartnerAccepted)
 			{
-				SetStatus($"{PartnerName} has accepted. Nothing can change now — accept to complete.");
+				SetStatus($"{PartnerName} has accepted. Accept to complete.");
 			}
 			else if (locked)
 			{
@@ -752,7 +752,7 @@ namespace FishMMO.Client
 			}
 			else if (SessionOpen)
 			{
-				SetStatus("Confirm when your offer is final. Any change clears both confirmations.");
+				SetStatus("Confirm when your offer is final.");
 			}
 			else
 			{
