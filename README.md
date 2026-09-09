@@ -408,14 +408,12 @@ cd FishMMO-WebTransport
 
 **Output:** `libfishmmo_webtransport.so` placed directly into `../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/linux_x86_64/`
 
-> **The Linux binary is committed to the repository.** If you're deploying on Linux, you can skip this build step. Windows and macOS binaries must be built on their respective platforms.
+> **No native binary is tracked for any platform** (the plugin subdirectories are gitignored), so this step is required on Linux too, on a fresh clone as much as on a deployment server. After a pull that changes `FishMMO-WebTransport/src/`, rebuild: the transport checks the library's ABI version at start-up and refuses a stale one with the rebuild command in the log.
 
 #### Windows (Native Build)
 
-**Prerequisites:**
-- Visual Studio 2022 with C++ workload
-- CMake 3.20+ (`winget install Kitware.CMake`)
-- OpenSSL (`vcpkg install openssl:x64-windows`)
+**Prerequisites (default):**
+- Visual Studio 2022+ with the C++ desktop workload — nothing else
 
 **Build:**
 ```powershell
@@ -423,7 +421,18 @@ cd FishMMO-WebTransport
 .\build_windows.ps1
 ```
 
-**Output:** `fishmmo_webtransport.dll` in `.../Plugins/windows_x86_64/` (msquic is statically linked — no separate `msquic.dll` needed)
+The default build compiles only the wrapper sources against the prebuilt
+`Microsoft.Native.Quic.MsQuic.OpenSSL` NuGet package, whose `msquic.dll` has quictls built in.
+That is the flavour that loads the PEM certificate/key files the server configs point at
+(`CertificatePath` / `PrivateKeyPath`). msquic's Schannel flavour cannot (it reads the Windows
+certificate store only), so it is not a server option; `-Tls Schannel` exists for client-only builds.
+
+**Output:** `fishmmo_webtransport.dll` + `msquic.dll` in `.../Plugins/windows_x86_64/`
+
+**Optional static build** (`.\build_windows.ps1 -Static`) fetches and builds msquic + quictls with
+CMake 3.20+ (`winget install Kitware.CMake`; Ninja recommended) and needs an OpenSSL install for the
+configure step (`vcpkg install openssl:x64-windows`). It produces a single self-contained
+`fishmmo_webtransport.dll` and is slow the first time.
 
 #### Windows Cross-Compile from Linux (Zig)
 
@@ -443,11 +452,11 @@ cd FishMMO-WebTransport
 ```
 
 This script:
-1. Downloads the msquic NuGet package (`Microsoft.Native.Quic.MsQuic.Schannel/2.5.9`)
+1. Downloads the OpenSSL flavour of the msquic NuGet package (`Microsoft.Native.Quic.MsQuic.OpenSSL/2.5.9`) — the one that loads PEM certificates
 2. Extracts headers and DLL from the NuGet package
 3. Compiles all `.cpp` files with `zig c++ -target x86_64-windows-gnu`
 4. Links into a DLL importing `msquic.dll`
-5. Copies both `fishmmo_webtransport.dll` and `msquic.dll` to the Unity plugins directory (cross-compile requires `msquic.dll` alongside the main DLL — unlike native VS builds where msquic is statically linked)
+5. Copies both `fishmmo_webtransport.dll` and `msquic.dll` to the Unity plugins directory (the same pair the default native build produces; only `-Static` folds msquic into a single DLL)
 
 #### macOS (Native Build)
 

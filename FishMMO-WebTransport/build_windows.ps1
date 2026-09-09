@@ -1,17 +1,25 @@
 # Build fishmmo_webtransport.dll for Windows x86_64.
 #
-# Default (fast): Schannel + prebuilt msquic NuGet - compiles only the wrapper
-# sources (seconds after first NuGet download).
+# Default (fast): prebuilt msquic NuGet, OpenSSL flavour - compiles only the
+# wrapper sources (seconds after the first NuGet download). msquic.dll ships
+# with quictls built in, so it loads the PEM certificate/key files the server
+# configs point at. Output: fishmmo_webtransport.dll + msquic.dll.
 #
-# Optional (slow): -Static fetches and builds msquic + quictls via CMake.
+# Optional (slow): -Static fetches and builds msquic + quictls via CMake and
+# links them into a single self-contained fishmmo_webtransport.dll.
 # Prefer Ninja (or VS multi-config) for parallel jobs; never NMake.
+#
+# -Tls Schannel selects the Schannel NuGet flavour instead. CLIENT-ONLY:
+# Schannel reads certificates from the Windows certificate store, cannot load
+# PEM files, and a server built this way refuses to start (WT_ERR_TLS_BACKEND).
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File build_windows.ps1
 #   powershell -ExecutionPolicy Bypass -File build_windows.ps1 -Static
 #   powershell -ExecutionPolicy Bypass -File build_windows.ps1 -Static -Clean
+#   powershell -ExecutionPolicy Bypass -File build_windows.ps1 -Tls Schannel   (client-only)
 #
-# Prerequisites (default / Schannel):
+# Prerequisites (default / NuGet):
 #   Visual Studio 2022+ with C++ desktop workload
 #
 # Prerequisites (-Static):
@@ -22,7 +30,9 @@
 param(
     [switch]$Static,
     [switch]$Clean,
-    [int]$Jobs = 0
+    [int]$Jobs = 0,
+    [ValidateSet("OpenSSL", "Schannel")]
+    [string]$Tls = "OpenSSL"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,11 +46,14 @@ function Get-CpuJobCount {
 }
 
 if (-not $Static) {
-    Write-Host "=== FishMMO WebTransport - Windows (default: Schannel / fast) ==="
+    Write-Host "=== FishMMO WebTransport - Windows (default: NuGet msquic, TLS: $Tls) ==="
     Write-Host "Tip: use -Static for full CMake + static msquic (slow first build)."
     Write-Host ""
-    & "$PSScriptRoot\build_windows_schannel.ps1"
+    & "$PSScriptRoot\build_windows_nuget.ps1" -Tls $Tls
     exit $LASTEXITCODE
+}
+if ($Tls -ne "OpenSSL") {
+    Write-Host "NOTE: -Tls applies to the NuGet build only; -Static always builds quictls (OpenSSL)."
 }
 
 # --- Static msquic path (CMake) --------------------------------

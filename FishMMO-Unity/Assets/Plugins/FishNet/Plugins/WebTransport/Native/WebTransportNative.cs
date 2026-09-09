@@ -124,6 +124,37 @@ namespace FishNet.Transporting.WebTransport.Native
 			BufferFull = -6,
 			/// <summary>Connection ID not found.</summary>
 			NotFound = -7,
+			/// <summary>
+			/// The msquic the native library was linked against cannot host a server with the
+			/// credentials it was given. Today that means a Schannel-flavour build: Schannel loads
+			/// certificates from the Windows certificate store only, so the PEM paths the server
+			/// configs ship with are refused. The fix is a rebuild, not a different certificate.
+			/// </summary>
+			TLSBackend = -8,
+		}
+
+		/// <summary>
+		/// The native ABI this managed side was written against. Must equal <c>WT_ABI_VERSION</c> in
+		/// <c>FishMMO-WebTransport/src/webtransport_api.h</c> (<c>tests/check_abi_version.sh</c> checks the
+		/// pair). Native binaries are not tracked, so a developer whose locally built library predates a
+		/// new export would otherwise crash with <see cref="EntryPointNotFoundException"/> at the first
+		/// call; <see cref="EnsureInitialized"/> compares this first and names the rebuild instead.
+		/// </summary>
+		public const int ExpectedAbiVersion = 3;
+
+		/// <summary>The build step that produces the native library for the running platform.</summary>
+		public static string RebuildHint
+		{
+			get
+			{
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+				return "cd FishMMO-WebTransport && powershell -File build_windows.ps1";
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
+				return "cd FishMMO-WebTransport && ./build_macos.sh";
+#else
+				return "cd FishMMO-WebTransport && ./build_linux.sh";
+#endif
+			}
 		}
 
 		/// <summary>
@@ -159,6 +190,7 @@ namespace FishNet.Transporting.WebTransport.Native
 				WTError.SendFailed => "ERR_SEND_FAILED",
 				WTError.BufferFull => "ERR_BUFFER_FULL",
 				WTError.NotFound => "ERR_NOT_FOUND",
+				WTError.TLSBackend => "ERR_TLS_BACKEND",
 				_ => $"Unknown ({(int)errorCode})"
 			};
 		}
@@ -226,6 +258,42 @@ namespace FishNet.Transporting.WebTransport.Native
 			if (initialized) { initGuard = 0; return true; }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
+			/* Binaries are built per machine, so the library that loads here can be missing,
+			 * or older than this code. Both used to surface as an exception from whichever
+			 * P/Invoke happened first; check the ABI up front and say what to do. */
+			int abi;
+			try
+			{
+				abi = wt_abi_version();
+			}
+			catch (DllNotFoundException ex)
+			{
+				UnityEngine.Debug.LogError(
+					$"[WebTransport] Native library '{LIB}' was not found for this platform. " +
+					$"It is not tracked in the repository and must be built locally: {RebuildHint} " +
+					$"(see FishMMO-WebTransport/README.md). {ex.Message}");
+				initGuard = 0;
+				return false;
+			}
+			catch (EntryPointNotFoundException)
+			{
+				UnityEngine.Debug.LogError(
+					$"[WebTransport] Native library '{LIB}' predates the ABI check (no wt_abi_version export). " +
+					$"It is older than this code and must be rebuilt: {RebuildHint}");
+				initGuard = 0;
+				return false;
+			}
+			if (abi != ExpectedAbiVersion)
+			{
+				UnityEngine.Debug.LogError(
+					$"[WebTransport] Native library ABI mismatch: library reports {abi}, this code expects {ExpectedAbiVersion}. " +
+					(abi < ExpectedAbiVersion
+						? $"The library is older than the C# transport; rebuild it: {RebuildHint}"
+						: "The library is newer than the C# transport; pull the matching FishMMO-Unity revision or rebuild from this tree."));
+				initGuard = 0;
+				return false;
+			}
+
 			int result = wt_init();
 			if (result != 0)
 			{
@@ -233,6 +301,9 @@ namespace FishNet.Transporting.WebTransport.Native
 				initGuard = 0;
 				return false;
 			}
+			UnityEngine.Debug.Log(
+				$"[WebTransport] Native library {Marshal.PtrToStringUTF8(wt_version())} initialised " +
+				$"(ABI {abi}, msquic TLS provider: {TlsProvider})");
 #endif
 			initialized = true;
 			IsLibraryDeinitialized = false; // reset for re-init after Deinitialize()
@@ -272,10 +343,9 @@ namespace FishNet.Transporting.WebTransport.Native
 		}
 
 #if !UNITY_WEBGL || UNITY_EDITOR
-		// Native binary availability (as of 2026-07):
-		//   linux_x86_64:  ✅ libfishmmo_webtransport.so
-		//   windows_x86_64: ❌ fishmmo_webtransport.dll (build with build_windows.ps1)
-		//   mac_x86_64:     ❌ libfishmmo_webtransport.dylib (build with build_macos.sh)
+		// No native binary is tracked for any platform; each machine builds its own
+		// (build_linux.sh / build_windows.ps1 / build_macos.sh in FishMMO-WebTransport).
+		// EnsureInitialized reports a missing or stale library with the rebuild step.
 		private const string LIB = "fishmmo_webtransport";
 
 		// ── P/Invoke marshaling ───────────────────────────────
@@ -492,6 +562,34 @@ namespace FishNet.Transporting.WebTransport.Native
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern IntPtr wt_version();
 
+		/// <summary>WT_ABI_VERSION of the loaded binary. Safe before <see cref="wt_init"/>.</summary>
+		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
+		public static extern int wt_abi_version();
+
+		/// <summary>
+		/// TLS provider inside the linked msquic: "openssl" (loads PEM files, hosts servers),
+		/// "schannel" (Windows certificate store only; client use only), or "unknown" before init.
+		/// </summary>
+		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
+		public static extern IntPtr wt_tls_provider();
+
+		/// <summary>Managed view of <see cref="wt_tls_provider"/>; "unknown" until the library is initialised.</summary>
+		public static string TlsProvider
+		{
+			get
+			{
+				try
+				{
+					IntPtr p = wt_tls_provider();
+					return p == IntPtr.Zero ? "unknown" : (Marshal.PtrToStringUTF8(p) ?? "unknown");
+				}
+				catch (Exception)
+				{
+					return "unknown";
+				}
+			}
+		}
+
 #else  // UNITY_WEBGL && !UNITY_EDITOR — stub implementations
 
 		public static SafeServerHandle wt_server_create(
@@ -530,6 +628,9 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static void wt_deinit() { }
 		public static IntPtr wt_error_string(int errorCode) => IntPtr.Zero;
 		public static IntPtr wt_version() => IntPtr.Zero;
+		public static int wt_abi_version() => ExpectedAbiVersion;
+		public static IntPtr wt_tls_provider() => IntPtr.Zero;
+		public static string TlsProvider => "browser";
 #endif
 	}
 }

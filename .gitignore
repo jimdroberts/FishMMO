@@ -75,10 +75,14 @@ core.[0-9]*
 # Generated per project and applied locally, not shared through source control.
 [Mm]igrations/
 
-# Native WebTransport CMake build directories and cache.
-# build/ is already covered by the [Bb]uild/ rule above; the Schannel tree is not,
+# Native WebTransport build directories and cache.
+# build/ is already covered by the [Bb]uild/ rule above; the other trees are not,
 # because that rule matches the exact directory name only.
-# See FishMMO-WebTransport/build_windows_schannel.ps1.
+# build_win_nuget/  - build_windows_nuget.ps1 (NuGet msquic, OpenSSL or Schannel)
+# build_win/        - build_windows_cross.sh (Zig cross-compile)
+# build_win_schannel/ - the pre-2026-09-09 name of build_win_nuget/; safe to delete
+FishMMO-WebTransport/build_win_nuget/
+FishMMO-WebTransport/build_win/
 FishMMO-WebTransport/build_win_schannel/
 FishMMO-WebTransport/openssl_cache.cmake
 

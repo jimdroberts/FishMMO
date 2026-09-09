@@ -361,7 +361,7 @@
 18. **logging.json** — Single shared FishMMO-Logger sink configuration.
 
 ### Build System
-19. **WebTransport Build** — Per-platform scripts in `FishMMO-WebTransport/`; there is **no** `build_all.sh` master script. `build_linux.sh` (native CMake), `build_windows.ps1` / `build_windows_schannel.ps1` (native CMake on Windows), `build_windows_cross.sh` (Zig 0.13+ cross-compile from Linux — downloads the msquic NuGet package for the import library and runtime DLL, compiles with `zig c++ -target x86_64-windows-gnu`, links via `lld-link --out-implib`), `build_macos.sh` (must build on a Mac — msquic’s quictls dependency contains platform-specific assembly that cannot be cross-compiled), plus `rebuild_only.*` incremental helpers.  
+19. **WebTransport Build** — Per-platform scripts in `FishMMO-WebTransport/`; there is **no** `build_all.sh` master script. `build_linux.sh` (native CMake), `build_windows.ps1` / `build_windows_nuget.ps1` (native on Windows — prebuilt msquic NuGet, OpenSSL flavour by default; `-Static` for CMake), `build_windows_cross.sh` (Zig 0.13+ cross-compile from Linux — downloads the msquic NuGet package for the import library and runtime DLL, compiles with `zig c++ -target x86_64-windows-gnu`, links via `lld-link --out-implib`), `build_macos.sh` (must build on a Mac — msquic’s quictls dependency contains platform-specific assembly that cannot be cross-compiled), plus `rebuild_only.*` incremental helpers.  
 20. **Cross-Platform Paths** — Forward-slash paths in `.csproj` files. `$(Configuration)` used directly (no redundant `BuildConfiguration` property).
 
 ---
@@ -1031,8 +1031,10 @@ Microsoft **msquic v2.5.9** and exposing a C ABI that the C# FishNet transport p
    `FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/{platform}/`. There is no
    copy step to forget.
 8. **Per-Platform Scripts, No Master Build** — `build_linux.sh`, `build_windows.ps1` /
-   `build_windows_schannel.ps1` (native), `build_windows_cross.sh` (Zig 0.13+ cross-compile from
-   Linux, using the msquic NuGet import library and `lld-link --out-implib`), and `build_macos.sh`
+   `build_windows_nuget.ps1` (native; prebuilt msquic NuGet, OpenSSL flavour by default so the
+   PEM server certificates load — Schannel is client-only; `-Static` for CMake),
+   `build_windows_cross.sh` (Zig 0.13+ cross-compile from Linux, using the OpenSSL msquic NuGet
+   import library and `lld-link --out-implib`), and `build_macos.sh`
    — which **must** run on a Mac, because msquic's quictls dependency contains platform-specific
    assembly that cannot be cross-compiled. `rebuild_only.*` are the incremental helpers.
 

@@ -1147,11 +1147,21 @@ TextField.fish-input > #unity-text-input .unity-text-element {
     near-black default and vanish against a dark panel. The chat channel picker showed both
     halves of it at once: "Tab Name" and every channel name rendered as black-on-black.
 
-    Colour only, so none of the layout the scoping was protecting comes back with it.
+    min-width is the other half, and it is a layout fix rather than a colour one. UITK reserves
+    120px for a BaseField's label whatever the label says, which is sized for an inspector row
+    and far too wide for a game panel: the colour picker's hex field sits in a side column about
+    124px across, so "Hex" claimed all of it and the input box was left with nothing and drew
+    nothing at all — reported as "it just says Hex, the hex code is not available". The chat
+    channel picker was the same defect one step short of invisible, "Tab Name" squeezing its
+    input into a sliver. Sizing the label to its own text hands the rest to the field.
+
+    A panel that wants a form's aligned label column still says so itself; the launcher's
+    settings rows set their own 180px and are unaffected by this.
 */
 .fish-input > .unity-base-field__label,
 .fish-toggle > .unity-base-field__label {
     color: var(--abyss-200);
+    min-width: auto;
 }
 
 .fish-input > #unity-text-input,

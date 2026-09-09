@@ -733,28 +733,81 @@ int32_t wt_server_start_impl(wt_server_s* server)
     QUIC_CREDENTIAL_CONFIG cred_cfg;
     memset(&cred_cfg, 0, sizeof(cred_cfg));
 
+    /* This API takes PEM files.  Only msquic's OpenSSL (quictls) provider
+     * loads those; Schannel takes certificates from the Windows store and
+     * answers QUIC_STATUS_NOT_SUPPORTED, and it refuses a server without a
+     * certificate as well.  Say so before msquic does, because its status
+     * alone reads like a bad certificate rather than the wrong build. */
+    if (wt_tls_provider_id() == QUIC_TLS_PROVIDER_SCHANNEL) {
+        WT_LOG_ERROR("Cannot start a server: this library is linked against "
+                     "msquic's Schannel TLS provider, which loads certificates "
+                     "from the Windows certificate store only. The configured "
+                     "PEM files (cert=%s key=%s) cannot be used. Rebuild the "
+                     "native library against the OpenSSL flavour of msquic "
+                     "(build_windows.ps1 default, or -Static).",
+                     server->cert_path[0] ? server->cert_path : "(none)",
+                     server->key_path[0] ? server->key_path : "(none)");
+        MsQuic->ConfigurationClose(server->session_config);
+        MsQuic->RegistrationClose(server->registration);
+        server->session_config = NULL;
+        server->registration = NULL;
+        return WT_ERR_TLS_BACKEND;
+    }
+
     if (server->cert_path[0]) {
+        /* msquic reports an unreadable file as a generic TLS failure; name
+         * the file (as resolved against the process working directory) so
+         * a wrong path or a config copied without its certs is obvious. */
+        const char* files[2] = { cert_file.CertificateFile, cert_file.PrivateKeyFile };
+        for (int i = 0; i < 2; ++i) {
+            FILE* f = fopen(files[i], "rb");
+            if (!f) {
+                WT_LOG_ERROR("Cannot open %s file '%s' (relative paths resolve "
+                             "against the server's working directory)",
+                             i == 0 ? "certificate" : "private key", files[i]);
+                MsQuic->ConfigurationClose(server->session_config);
+                MsQuic->RegistrationClose(server->registration);
+                server->session_config = NULL;
+                server->registration = NULL;
+                return WT_ERR_TLS_FAILED;
+            }
+            fclose(f);
+        }
         cred_cfg.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE;
         cred_cfg.CertificateFile = &cert_file;
     } else {
-        WT_LOG_WARN("No certificate configured — using self-signed certificate. "
-                    "This is INSECURE for production: clients cannot verify "
-                    "the server identity and the connection is vulnerable to "
-                    "MITM attacks. Provide a valid certificate via "
-                    "wt_server_create_with_params().");
-        cred_cfg.Type = QUIC_CREDENTIAL_TYPE_NONE;
-        cred_cfg.Flags = QUIC_CREDENTIAL_FLAG_USE_PORTABLE_CERTIFICATES;
-    }
-
-    status = MsQuic->ConfigurationLoadCredential(
-        server->session_config, &cred_cfg);
-    if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("ConfigurationLoadCredential: 0x%x", status);
+        /* msquic refuses QUIC_CREDENTIAL_TYPE_NONE for a server on every
+         * TLS provider (QUIC_STATUS_INVALID_PARAMETER), and this library
+         * deliberately does not link OpenSSL itself (see CMakeLists.txt),
+         * so it cannot mint a self-signed certificate either.  Earlier
+         * revisions claimed a self-signed fallback here; it never started.
+         * Fail before msquic does, with the reason. */
+        WT_LOG_ERROR("Cannot start a server: no certificate configured. A "
+                     "WebTransport server needs a PEM certificate and private "
+                     "key (server config CertificatePath / PrivateKeyPath).");
         MsQuic->ConfigurationClose(server->session_config);
         MsQuic->RegistrationClose(server->registration);
         server->session_config = NULL;
         server->registration = NULL;
         return WT_ERR_TLS_FAILED;
+    }
+
+    status = MsQuic->ConfigurationLoadCredential(
+        server->session_config, &cred_cfg);
+    if (QUIC_FAILED(status)) {
+        WT_LOG_ERROR("ConfigurationLoadCredential: 0x%x (cert=%s key=%s, TLS provider: %s)",
+                     status,
+                     server->cert_path[0] ? server->cert_path : "(self-signed)",
+                     server->key_path[0] ? server->key_path : "(none)",
+                     wt_tls_provider());
+        MsQuic->ConfigurationClose(server->session_config);
+        MsQuic->RegistrationClose(server->registration);
+        server->session_config = NULL;
+        server->registration = NULL;
+        /* A provider that does not implement this credential type at all is
+         * a build problem, not a certificate problem — keep the two apart. */
+        return status == QUIC_STATUS_NOT_SUPPORTED ? WT_ERR_TLS_BACKEND
+                                                   : WT_ERR_TLS_FAILED;
     }
 
     /* ── Listener ──

@@ -49,7 +49,8 @@ WT_API int32_t wt_init(void)
         atomic_ptr_store(&MsQuic, api);
         /* Release-store: paired with acquire-load in API entry guards.
          * Ensures MsQuic is visible before g_initialised. */
-        WT_LOG_INFO("WebTransport library initialised (msquic %s)", wt_version());
+        WT_LOG_INFO("WebTransport library %s initialised (ABI %d, msquic TLS provider: %s)",
+                    wt_version(), (int)WT_ABI_VERSION, wt_tls_provider());
         return WT_OK;
     }
 
@@ -111,6 +112,37 @@ const char* wt_version(void)
     return "1.0.0";
 }
 
+WT_API int32_t wt_abi_version(void)
+{
+    return WT_ABI_VERSION;
+}
+
+/* ── TLS provider ────────────────────────────────────────────
+ * msquic reports which TLS library it was built with through a global
+ * parameter.  Asked at runtime rather than fixed at compile time so the
+ * answer is true for whichever msquic.dll / static archive was actually
+ * linked, whatever script produced it. */
+int32_t wt_tls_provider_id(void)
+{
+    const QUIC_API_TABLE* api = (const QUIC_API_TABLE*)atomic_ptr_load(&MsQuic);
+    if (!api) return -1;
+    QUIC_TLS_PROVIDER provider;
+    uint32_t len = (uint32_t)sizeof(provider);
+    QUIC_STATUS status = api->GetParam(NULL, QUIC_PARAM_GLOBAL_TLS_PROVIDER,
+                                       &len, &provider);
+    if (QUIC_FAILED(status) || len != (uint32_t)sizeof(provider)) return -1;
+    return (int32_t)provider;
+}
+
+WT_API const char* wt_tls_provider(void)
+{
+    switch (wt_tls_provider_id()) {
+    case QUIC_TLS_PROVIDER_SCHANNEL: return "schannel";
+    case QUIC_TLS_PROVIDER_OPENSSL:  return "openssl";
+    default:                         return "unknown";
+    }
+}
+
 /* ── Error strings ──────────────────────────────────────────── */
 
 const char* wt_error_string(int32_t code)
@@ -124,6 +156,8 @@ const char* wt_error_string(int32_t code)
     case WT_ERR_SEND_FAILED:      return "Send failed";
     case WT_ERR_BUFFER_FULL:      return "Buffer full";
     case WT_ERR_NOT_FOUND:        return "Connection ID not found";
+    case WT_ERR_TLS_BACKEND:      return "TLS backend cannot load the configured credentials "
+                                         "(Schannel msquic: PEM files unsupported, rebuild with the OpenSSL flavour)";
     default:                      return "Unknown error code";
     }
 }

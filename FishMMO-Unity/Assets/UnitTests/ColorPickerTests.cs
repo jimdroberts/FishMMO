@@ -390,6 +390,43 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// The hex field has a box to type in, not just a label.
+		/// </summary>
+		/// <remarks>
+		/// Reported as "it just says Hex; the hex code is not available". UITK reserves 120px for
+		/// a BaseField's label whatever the label says, and the picker's side column is about
+		/// 124px across — so "Hex" took the lot and the input drew nothing. The label is sized to
+		/// its own text now. This asserts on the resolved layout, so it fails again the moment
+		/// anything reintroduces a fixed label width here.
+		/// </remarks>
+		[UnityTest]
+		public IEnumerator TheHexFieldHasRoomToShowItsCode()
+		{
+			picker.Open(new Color(0.2f, 0.4f, 0.6f, 1.0f), c => { });
+
+			// Layout resolves over frames; nothing below means anything until it has.
+			for (int i = 0; i < 6; ++i)
+			{
+				yield return null;
+			}
+
+			TextField hex = Live.Q<TextField>("hex-input");
+			VisualElement label = hex.Q(className: "unity-base-field__label");
+			VisualElement input = hex.Q("unity-text-input");
+
+			LogAssert.IsNotNull(label, "the field still has its label");
+			LogAssert.IsNotNull(input, "and the box the player types in");
+			LogAssert.IsTrue(hex.layout.width > 0f, $"the field itself has width ({hex.layout.width})");
+
+			/* Eight characters at the field's own font size. Below this the code cannot be read,
+			 * which is the whole complaint. */
+			LogAssert.IsTrue(input.layout.width >= 48f,
+				$"the input is wide enough to show a hex code (was {input.layout.width:0.##}px)");
+			LogAssert.IsTrue(label.layout.width < input.layout.width,
+				$"the label does not outweigh the field (label {label.layout.width:0.##}px, input {input.layout.width:0.##}px)");
+		}
+
+		/// <summary>
 		/// Gives the hex field focus and takes it away again, the way clicking elsewhere does.
 		/// </summary>
 		/// <remarks>

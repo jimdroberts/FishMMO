@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Cross-compile fishmmo_webtransport.dll for Windows x86_64.
-# Runs on Linux using Zig 0.13+.  Downloads the msquic NuGet package
-# for the import library and runtime DLL.
+# Runs on Linux using Zig 0.13+.  Downloads the OpenSSL flavour of the msquic
+# NuGet package (Microsoft.Native.Quic.MsQuic.OpenSSL) for the import library
+# and runtime DLL: quictls is built into that msquic.dll, so the result loads
+# the PEM certificate/key files the server configs ship with.  The Schannel
+# flavour cannot (it reads the Windows certificate store only) and would make
+# every server refuse to start with WT_ERR_TLS_BACKEND.
 #
 #   Arch:    sudo pacman -S zig
 #   Manual:  download from https://ziglang.org/download/
@@ -27,14 +31,17 @@ BDIR="build_win"
 UNITY_DIR="../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/windows_x86_64"
 mkdir -p "$BDIR" "$UNITY_DIR"
 
-# ── Step 1: Download msquic NuGet ───────────────────────────────
-MSQUIC_DIR="$BDIR/msquic-win"
+# ── Step 1: Download msquic NuGet (OpenSSL flavour) ────────────
+# Directory is flavour-specific so an older Schannel extraction in
+# build_win/msquic-win/ is never mistaken for this one.
+MSQUIC_PKG="Microsoft.Native.Quic.MsQuic.OpenSSL"
+MSQUIC_DIR="$BDIR/msquic-win-openssl"
 if [ ! -f "$MSQUIC_DIR/build/native/bin/x64/msquic.dll" ]; then
-    echo "Downloading msquic v${MSQUIC_VER}..."
+    echo "Downloading ${MSQUIC_PKG} v${MSQUIC_VER}..."
     mkdir -p "$MSQUIC_DIR"
-    curl -sL "https://www.nuget.org/api/v2/package/Microsoft.Native.Quic.MsQuic.Schannel/${MSQUIC_VER}" \
-        -o "$BDIR/msquic.nupkg"
-    unzip -q -o "$BDIR/msquic.nupkg" -d "$MSQUIC_DIR"
+    curl -sL "https://www.nuget.org/api/v2/package/${MSQUIC_PKG}/${MSQUIC_VER}" \
+        -o "$BDIR/msquic-openssl.nupkg"
+    unzip -q -o "$BDIR/msquic-openssl.nupkg" -d "$MSQUIC_DIR"
 fi
 
 # ── Step 2: Prepare headers ────────────────────────────────────
@@ -113,4 +120,5 @@ cp "$MSQUIC_DLL" "$UNITY_DIR/"
 
 echo ""
 echo "=== Done ==="
+echo "TLS provider: OpenSSL (quictls inside msquic.dll) - loads PEM certificates, hosts servers."
 ls -lh "$UNITY_DIR/fishmmo_webtransport.dll" "$UNITY_DIR/msquic.dll"

@@ -1,9 +1,11 @@
 # Incremental rebuild of fishmmo_webtransport.dll - prefers the fast path.
 #
 # Order:
-#   1. Schannel tree (build_win_schannel) if present, OR no static CMake cache
+#   1. NuGet tree (build_win_nuget) if present, OR no static CMake cache
+#      - re-uses the TLS flavour recorded there (OpenSSL unless you chose
+#        -Tls Schannel, which is client-only)
 #   2. Existing CMake build/ cache (static msquic) with parallel jobs
-#   3. Fall through to default build_windows.ps1 (Schannel)
+#   3. Fall through to default build_windows.ps1 (NuGet, OpenSSL)
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File rebuild_only.ps1
@@ -37,23 +39,26 @@ function Find-CMake {
     return $null
 }
 
-$schannelDir = Join-Path $PSScriptRoot "build_win_schannel"
-$schannelReady = (Test-Path (Join-Path $schannelDir "msquic-win")) -or
-    (Test-Path (Join-Path $schannelDir "obj"))
+$nugetDir = Join-Path $PSScriptRoot "build_win_nuget"
+$nugetReady = (Test-Path (Join-Path $nugetDir "obj")) -or
+    ((Get-ChildItem -Path $nugetDir -Directory -Filter "msquic-*" -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
 $cmakeCache = Join-Path $PSScriptRoot "build\CMakeCache.txt"
 $hasStaticCache = Test-Path $cmakeCache
 
-# Prefer Schannel whenever its tree exists, or when there is no static cache yet.
-if ($schannelReady -or (-not $hasStaticCache)) {
-    Write-Host "=== rebuild_only: Schannel (fast) ==="
-    & "$PSScriptRoot\build_windows_schannel.ps1"
+# Prefer the NuGet tree whenever it exists, or when there is no static cache yet.
+if ($nugetReady -or (-not $hasStaticCache)) {
+    $tls = "OpenSSL"
+    $stamp = Join-Path $nugetDir "last_tls.txt"
+    if (Test-Path $stamp) { $tls = (Get-Content $stamp -Raw).Trim() }
+    Write-Host "=== rebuild_only: NuGet msquic (fast, TLS: $tls) ==="
+    & "$PSScriptRoot\build_windows_nuget.ps1" -Tls $tls
     exit $LASTEXITCODE
 }
 
 Write-Host "=== rebuild_only: CMake static cache ==="
 $cmakeExe = Find-CMake
 if (-not $cmakeExe) {
-    throw "cmake not found. Run build_windows.ps1 (default Schannel) or install CMake."
+    throw "cmake not found. Run build_windows.ps1 (default NuGet/OpenSSL) or install CMake."
 }
 
 $JobCount = Get-CpuJobCount

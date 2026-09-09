@@ -1,28 +1,73 @@
-# Build fishmmo_webtransport.dll for Windows x86_64 using the prebuilt
-# Microsoft.Native.Quic.MsQuic.Schannel NuGet package (no Perl / quictls).
+# Build fishmmo_webtransport.dll for Windows x86_64 against the prebuilt
+# Microsoft.Native.Quic.MsQuic.<Tls> NuGet package. Compiles only the seven
+# wrapper sources — seconds after the first package download. No CMake, no
+# Perl, no quictls build.
+#
+# -Tls OpenSSL (default)
+#   msquic.dll with quictls built in. Loads the PEM certificate/key files the
+#   server configs ship with (CertificatePath / PrivateKeyPath) and is the only
+#   flavour that can host a server for this library. Self-contained: no
+#   OpenSSL installation is needed at build or run time.
+#
+# -Tls Schannel
+#   CLIENT-ONLY. Schannel takes certificates from the Windows certificate
+#   store and msquic answers QUIC_STATUS_NOT_SUPPORTED to the PEM files this
+#   library passes; a server refuses to start with WT_ERR_TLS_BACKEND (-8).
+#   Kept as an escape hatch for client builds on hosts that must not carry a
+#   second TLS stack.
 #
 # Prerequisites:
 #   - Visual Studio 2022/2026 with C++ desktop workload (cl.exe + link.exe)
 #   - Windows 10 SDK
 #
-# Usage:
-#   powershell -ExecutionPolicy Bypass -File build_windows_schannel.ps1
+# Usage (normally via build_windows.ps1, which forwards -Tls):
+#   powershell -ExecutionPolicy Bypass -File build_windows_nuget.ps1
+#   powershell -ExecutionPolicy Bypass -File build_windows_nuget.ps1 -Tls Schannel
 #
 # Output:
 #   ../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/windows_x86_64/
 #     fishmmo_webtransport.dll
-#     msquic.dll
+#     msquic.dll                (the flavour selected by -Tls)
+#
+# Intermediates live in build_win_nuget/ (gitignored): one msquic-<tls>/
+# extraction per flavour, a shared obj/ tree, and last_tls.txt recording which
+# flavour the DLL in the Unity folder was last linked against — switching
+# flavours forces a relink and a fresh msquic.dll copy even when no source
+# changed.
+
+param(
+    [ValidateSet("OpenSSL", "Schannel")]
+    [string]$Tls = "OpenSSL"
+)
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 $MsquicVer = "2.5.9"
-$BuildDir = Join-Path $PSScriptRoot "build_win_schannel"
+$Package = "Microsoft.Native.Quic.MsQuic.$Tls"
+$BuildDir = Join-Path $PSScriptRoot "build_win_nuget"
 $UnityDir = Join-Path $PSScriptRoot "..\FishMMO-Unity\Assets\Plugins\FishNet\Plugins\WebTransport\Plugins\windows_x86_64"
-$MsquicDir = Join-Path $BuildDir "msquic-win"
+$MsquicDir = Join-Path $BuildDir ("msquic-" + $Tls.ToLowerInvariant())
 $ObjDir = Join-Path $BuildDir "obj"
+$TlsStamp = Join-Path $BuildDir "last_tls.txt"
 
-Write-Host "=== FishMMO WebTransport - Windows x86_64 (Schannel / NuGet msquic) ==="
+Write-Host "=== FishMMO WebTransport - Windows x86_64 (NuGet msquic, TLS: $Tls) ==="
+if ($Tls -eq "Schannel") {
+    Write-Host ""
+    Write-Host "WARNING: Schannel build is CLIENT-ONLY for this library."
+    Write-Host "  Schannel loads certificates from the Windows certificate store; the PEM files"
+    Write-Host "  the server configs point at (CertificatePath / PrivateKeyPath) cannot be used,"
+    Write-Host "  so wt_server_start will fail with WT_ERR_TLS_BACKEND (-8) and no port is bound."
+    Write-Host "  Build a server with the default:  .\build_windows.ps1   (OpenSSL flavour)"
+    Write-Host ""
+}
+
+$TlsChanged = $true
+if (Test-Path $TlsStamp) {
+    $last = (Get-Content $TlsStamp -Raw).Trim()
+    if ($last -eq $Tls) { $TlsChanged = $false }
+    else { Write-Host "TLS flavour changed ($last -> $Tls): relinking and refreshing msquic.dll." }
+}
 
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
@@ -43,19 +88,19 @@ Write-Host "VS: $installPath"
 
 New-Item -ItemType Directory -Force -Path $BuildDir, $ObjDir, $UnityDir | Out-Null
 
-$nupkg = Join-Path $BuildDir "msquic.nupkg"
+$nupkg = Join-Path $BuildDir ("msquic-" + $Tls.ToLowerInvariant() + ".nupkg")
 $msquicDll = Join-Path $MsquicDir "build\native\bin\x64\msquic.dll"
 $msquicLib = Join-Path $MsquicDir "build\native\lib\x64\msquic.lib"
 $msquicInc = Join-Path $MsquicDir "build\native\include"
 
 if (-not (Test-Path $msquicDll)) {
-    Write-Host "Downloading Microsoft.Native.Quic.MsQuic.Schannel $MsquicVer..."
-    $url = "https://www.nuget.org/api/v2/package/Microsoft.Native.Quic.MsQuic.Schannel/$MsquicVer"
+    Write-Host "Downloading $Package $MsquicVer..."
+    $url = "https://www.nuget.org/api/v2/package/$Package/$MsquicVer"
     Invoke-WebRequest -Uri $url -OutFile $nupkg -UseBasicParsing
     if (Test-Path $MsquicDir) { Remove-Item $MsquicDir -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $MsquicDir | Out-Null
     # NuGet packages are zip archives; Expand-Archive requires a .zip extension.
-    $zip = Join-Path $BuildDir "msquic.zip"
+    $zip = Join-Path $BuildDir ("msquic-" + $Tls.ToLowerInvariant() + ".zip")
     Copy-Item -Force $nupkg $zip
     Expand-Archive -Path $zip -DestinationPath $MsquicDir -Force
 }
@@ -143,7 +188,7 @@ foreach ($s in $sources) {
 }
 
 $needLink = $true
-if ((Test-Path $outDll) -and ($toCompile.Count -eq 0)) {
+if ((Test-Path $outDll) -and ($toCompile.Count -eq 0) -and (-not $TlsChanged)) {
     $dllTime = (Get-Item $outDll).LastWriteTime
     $anyObjNewer = $false
     foreach ($s in $sources) {
@@ -160,6 +205,7 @@ if ((Test-Path $outDll) -and ($toCompile.Count -eq 0)) {
         $msquicCopyNeeded = $true
     }
     if ((-not $anyObjNewer) -and (-not $msquicCopyNeeded)) {
+        Set-Content -Path $TlsStamp -Value $Tls -NoNewline
         Write-Host "All objects and DLL up to date - nothing to do."
         Get-ChildItem $UnityDir | ForEach-Object {
             $kb = [math]::Round($_.Length / 1KB, 1)
@@ -170,6 +216,7 @@ if ((Test-Path $outDll) -and ($toCompile.Count -eq 0)) {
     if ((-not $anyObjNewer) -and $msquicCopyNeeded) {
         Write-Host "Wrapper DLL up to date; refreshing msquic.dll only..."
         Copy-Item -Force $msquicDll $destMsquic
+        Set-Content -Path $TlsStamp -Value $Tls -NoNewline
         Write-Host "=== Done ==="
         return
     }
@@ -220,6 +267,7 @@ if ($proc.ExitCode -ne 0) {
 if (-not (Test-Path $outDll)) {
     throw "Build reported success but $outDll is missing."
 }
+Set-Content -Path $TlsStamp -Value $Tls -NoNewline
 
 Get-ChildItem $UnityDir | ForEach-Object {
     $kb = [math]::Round($_.Length / 1KB, 1)
@@ -227,4 +275,9 @@ Get-ChildItem $UnityDir | ForEach-Object {
 }
 
 Write-Host ""
+if ($Tls -eq "OpenSSL") {
+    Write-Host "TLS provider: OpenSSL (quictls inside msquic.dll) - loads PEM certificates, hosts servers."
+} else {
+    Write-Host "TLS provider: Schannel - client-only; servers will refuse to start (WT_ERR_TLS_BACKEND)."
+}
 Write-Host "Import the new DLLs in Unity (Assets refresh), then Play MainBootstrap again."

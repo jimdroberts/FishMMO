@@ -548,7 +548,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				return false;
 			}
 
-			string certForLog = useCustomCertificate ? (this.certificatePath ?? "") : "(self-signed)";
+			string certForLog = useCustomCertificate ? (this.certificatePath ?? "") : "(none configured)";
 			string keyForLog = useCustomCertificate ? (this.privateKeyPath ?? "") : "(none)";
 			transport.NetworkManager?.Log(
 				$"[WebTransport Server] Starting bind={bindAddress} port={port} maxClients={maximumClients} cert={certForLog} key={keyForLog} alpn={this.alpn}");
@@ -599,7 +599,8 @@ namespace FishNet.Transporting.WebTransport.Server
 				string errName = WebTransportNative.ErrorString((WebTransportNative.WTError)result);
 				transport.NetworkManager?.LogError(
 					$"[WebTransport Server] wt_server_start failed: code={result} ({errName}). " +
-					$"bind={bindAddress} port={port} cert={certForLog} key={keyForLog}");
+					$"bind={bindAddress} port={port} cert={certForLog} key={keyForLog}" +
+					DescribeStartFailure((WebTransportNative.WTError)result, useCustomCertificate));
 				WebTransportNative.wt_server_destroy(this.serverHandle);
 				this.serverHandle = null;
 				// Free unmanaged callback table on error path.
@@ -617,6 +618,42 @@ namespace FishNet.Transporting.WebTransport.Server
 				$"[WebTransport Server] Started OK bind={bindAddress} port={port}");
 			base.SetConnectionState(LocalConnectionState.Started, true);
 			return true;
+		}
+
+		/// <summary>
+		/// Turns the two TLS start failures into something actionable. The native library logs the
+		/// detail to its own stderr, which a headless server's Player.log does not always carry.
+		/// </summary>
+		private string DescribeStartFailure(WebTransportNative.WTError error, bool useCustomCertificate)
+		{
+			switch (error)
+			{
+				case WebTransportNative.WTError.TLSBackend:
+					return " -- the native library was built against msquic's Schannel TLS provider " +
+						$"(provider reported: {WebTransportNative.TlsProvider}), which reads certificates from the " +
+						"Windows certificate store only and cannot load PEM files or host a server for this transport. " +
+						"Rebuild it against the OpenSSL flavour of msquic: " +
+						"powershell -File build_windows.ps1 (default), or -Static for the CMake build.";
+				case WebTransportNative.WTError.TLSError:
+				{
+					if (!useCustomCertificate || string.IsNullOrEmpty(this.certificatePath))
+						return " -- no certificate configured. A WebTransport server needs a PEM certificate and " +
+							"private key: set CertificatePath and PrivateKeyPath in the server config " +
+							"(msquic refuses a server without one, and the native library does not self-sign).";
+					string cwd = System.IO.Directory.GetCurrentDirectory();
+					string missing = "";
+					if (!string.IsNullOrEmpty(this.certificatePath) && !System.IO.File.Exists(this.certificatePath))
+						missing += $" certificate file not found: '{this.certificatePath}'.";
+					if (!string.IsNullOrEmpty(this.privateKeyPath) && !System.IO.File.Exists(this.privateKeyPath))
+						missing += $" private key file not found: '{this.privateKeyPath}'.";
+					if (missing.Length > 0)
+						return $" --{missing} Relative paths resolve against the working directory '{cwd}'.";
+					return " -- both files exist; check that they are PEM encoded, that the key matches the certificate, " +
+						$"and that the process may read them (TLS provider: {WebTransportNative.TlsProvider}).";
+				}
+				default:
+					return "";
+			}
 		}
 
 		/// <summary>

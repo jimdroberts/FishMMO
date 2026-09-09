@@ -73,6 +73,31 @@ typedef uint64_t wt_stream_id_t;
 #define WT_ERR_SEND_FAILED      -5
 #define WT_ERR_BUFFER_FULL      -6
 #define WT_ERR_NOT_FOUND        -7
+/* The msquic this library was linked against cannot host a server with the
+ * credentials it was given.  Today that means the Schannel TLS provider: it
+ * loads certificates from the Windows certificate store only, so the PEM
+ * file paths this API takes are refused (QUIC_STATUS_NOT_SUPPORTED) and a
+ * server without a certificate is refused too.  Rebuild against the OpenSSL
+ * flavour of msquic (build_windows.ps1 default, or -Static). */
+#define WT_ERR_TLS_BACKEND      -8
+
+/* ── ABI version ────────────────────────────────────────────────
+ * Native binaries are not tracked in the repository; every developer and
+ * deployment builds its own.  A binary that predates a new export fails at
+ * the first P/Invoke with EntryPointNotFoundException, which says nothing
+ * about the cause.  The C# side therefore calls wt_abi_version() before
+ * wt_init() and refuses to continue on a mismatch, naming the rebuild.
+ *
+ * Bump this whenever an exported function is added, removed, or has its
+ * signature or semantics changed, and update ExpectedAbiVersion in
+ * FishMMO-Unity/.../WebTransport/Native/WebTransportNative.cs to match
+ * (tests/check_abi_version.sh verifies the pair).
+ *
+ *   1  original surface up to wt_server_set_allow_native_clients
+ *   2  + wt_server_set_limits (2026-09-07)
+ *   3  + wt_abi_version, wt_tls_provider, WT_ERR_TLS_BACKEND (2026-09-09)
+ */
+#define WT_ABI_VERSION           3
 
 /* ── Callback function pointer types ────────────────────────────
  * These are invoked from QUIC worker threads. Do not call Unity
@@ -155,10 +180,13 @@ typedef struct {
 /**
  * Create a WebTransport server.
  *
- * @param certificate_path  Path to TLS certificate (PEM format), or NULL
- *                          to use a self-signed development certificate.
- * @param private_key_path  Path to TLS private key (PEM format), or NULL
- *                          to use the bundled development key.
+ * @param certificate_path  Path to the TLS certificate (PEM).  Required to
+ *                          start: msquic refuses a server without one on
+ *                          every TLS provider, and this library does not
+ *                          generate self-signed certificates (NULL or ""
+ *                          makes wt_server_start fail with WT_ERR_TLS_FAILED).
+ * @param private_key_path  Path to the TLS private key (PEM), or NULL when
+ *                          the key is in the certificate file.
  * @param alpn              ALPN protocol string, typically "h3".
  * @param bind_address      IP address to bind (e.g. "0.0.0.0" or "127.0.0.1").
  * @param port              UDP port to listen on.
@@ -199,7 +227,13 @@ WT_API void wt_server_destroy(WT_SERVER server);
  * Start accepting connections.  Non-blocking — the server runs on
  * internal QUIC threads.
  *
- * @return WT_OK (0) on success, negative error code on failure.
+ * @return WT_OK (0) on success, negative error code on failure:
+ *         WT_ERR_TLS_BACKEND  the linked msquic (Schannel) cannot load PEM
+ *                             files — rebuild, see wt_tls_provider()
+ *         WT_ERR_TLS_FAILED   a certificate problem: no certificate
+ *                             configured, a file that cannot be opened
+ *                             (the log names it), or msquic rejected it
+ *         WT_ERR_UNKNOWN      registration / listener / bind failure
  *
  * @thread_safety Safe to call from the application thread. Must not be
  *                called concurrently with wt_server_stop.
@@ -526,6 +560,27 @@ WT_API const char* wt_error_string(int32_t error_code);
  *                static constant string.
  */
 WT_API const char* wt_version(void);
+
+/**
+ * Get the ABI version this binary was built from (WT_ABI_VERSION).
+ * Safe to call before wt_init(); it touches no msquic state.  A host that
+ * expects a different value must not call anything else — the missing or
+ * changed export it relies on would throw or misbehave.
+ *
+ * @thread_safety Safe to call from any thread at any time.
+ */
+WT_API int32_t wt_abi_version(void);
+
+/**
+ * Name of the TLS provider inside the msquic this binary is running on:
+ * "openssl" (quictls — loads PEM certificate files, hosts servers),
+ * "schannel" (Windows certificate store only — client use only with this
+ * library), or "unknown" before wt_init() / if msquic does not report it.
+ *
+ * @thread_safety Safe to call from any thread. Returns pointer to
+ *                static constant string.
+ */
+WT_API const char* wt_tls_provider(void);
 
 #ifdef __cplusplus
 }

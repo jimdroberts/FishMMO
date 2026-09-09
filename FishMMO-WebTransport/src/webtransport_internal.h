@@ -131,6 +131,10 @@ typedef int atomic_bool;
 extern "C" {
 #endif
 extern const QUIC_API_TABLE* MsQuic;
+/* msquic's QUIC_TLS_PROVIDER for the linked msquic (0 schannel, 1 openssl),
+ * or -1 before wt_init() / when msquic does not report it.  Defined in
+ * webtransport_api.cpp next to the public wt_tls_provider() string form. */
+int32_t wt_tls_provider_id(void);
 #ifdef __cplusplus
 }
 #endif
