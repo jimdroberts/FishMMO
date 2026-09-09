@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c1f6b44c17e506742a4ac34fb38a59e8, type: 3}
   m_Name: Armor
   m_EditorClassIdentifier: 
-  ID: 722003816
   MinValue: 1
   MaxValue: 3
   CharacterAttribute: {fileID: 11400000, guid: 0892f64b2462ac94db21d06df7047e06, type: 2}

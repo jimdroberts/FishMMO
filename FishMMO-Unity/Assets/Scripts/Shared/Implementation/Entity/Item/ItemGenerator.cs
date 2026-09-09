@@ -146,13 +146,60 @@ namespace FishMMO.Shared
 		{
 			if (equippable is WeaponTemplate weapon)
 			{
-				attributes.Add(weapon.AttackPower.Name, new ItemAttribute(weapon.AttackPower.ID, random.Next(weapon.AttackPower.MinValue, weapon.AttackPower.MaxValue)));
-				attributes.Add(weapon.AttackSpeed.Name, new ItemAttribute(weapon.AttackSpeed.ID, random.Next(weapon.AttackSpeed.MinValue, weapon.AttackSpeed.MaxValue)));
+				attributes.Add(weapon.AttackPower.Name, new ItemAttribute(weapon.AttackPower.ID, RollValue(random, weapon.AttackPower)));
+				attributes.Add(weapon.AttackSpeed.Name, new ItemAttribute(weapon.AttackSpeed.ID, RollValue(random, weapon.AttackSpeed)));
 			}
 			else if (equippable is ArmorTemplate armor)
 			{
-				attributes.Add(armor.ArmorBonus.Name, new ItemAttribute(armor.ArmorBonus.ID, random.Next(armor.ArmorBonus.MinValue, armor.ArmorBonus.MaxValue)));
+				attributes.Add(armor.ArmorBonus.Name, new ItemAttribute(armor.ArmorBonus.ID, RollValue(random, armor.ArmorBonus)));
 			}
+		}
+
+		/// <summary>
+		/// Rolls an authored item attribute range, with <see cref="ItemAttributeTemplate.MaxValue"/>
+		/// INCLUSIVE.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="DeterministicRNG.Next(int, int)"/> takes an EXCLUSIVE upper bound, and every
+		/// authored value range was passed to it directly — so a template authored 1..3 could only
+		/// ever roll 1 or 2, and the authored maximum was unreachable on every item in the game.
+		/// The fields are documented as "the minimum value" and "the maximum value", and a range
+		/// authored as a single number (min == max) has to be able to produce that number, so
+		/// inclusive is the contract. This matters most at the small end: with resistance applied
+		/// as a 1:1 reduction, tiers are authored as tight ranges, and under the old exclusive
+		/// bound every one of them collapsed to its minimum (0..1 was always 0, 1..2 always 1).
+		/// <para>
+		/// Counts and indices elsewhere in this class stay exclusive, which is correct for them.
+		/// This changes the VALUE a given seed produces but not how many draws are taken, so the
+		/// stream stays aligned across peers; existing items re-roll to a new value from the same
+		/// seed the next time they are generated.
+		/// </para>
+		/// </remarks>
+		private static int RollValue(DeterministicRNG random, ItemAttributeTemplate template)
+		{
+			if (template == null)
+			{
+				return 0;
+			}
+			return RollInclusive(random, template.MinValue, template.MaxValue);
+		}
+
+		/// <summary>
+		/// Draws a value in [<paramref name="min"/>, <paramref name="max"/>], both inclusive.
+		/// </summary>
+		internal static int RollInclusive(DeterministicRNG random, int min, int max)
+		{
+			if (random == null || max <= min)
+			{
+				// An inverted or single-point range is the authored value itself, not an error.
+				return min;
+			}
+			// int.MaxValue as the authored maximum would overflow the exclusive bound.
+			if (max == int.MaxValue)
+			{
+				return random.Next(min, max);
+			}
+			return random.Next(min, max + 1);
 		}
 
 		/// <summary>
@@ -177,7 +224,7 @@ namespace FishMMO.Shared
 				 * payload or the reconcile body. Draw the value regardless of whether the slot is
 				 * taken: the RNG stream has to advance identically on every peer, or the item this
 				 * seed describes stops being the same item everywhere. */
-				int rolledValue = random.Next(attributeTemplate.MinValue, attributeTemplate.MaxValue);
+				int rolledValue = RollValue(random, attributeTemplate);
 				if (attributes.ContainsKey(attributeTemplate.Name))
 				{
 					continue;

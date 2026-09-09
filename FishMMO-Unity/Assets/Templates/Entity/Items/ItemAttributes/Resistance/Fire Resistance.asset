@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c1f6b44c17e506742a4ac34fb38a59e8, type: 3}
   m_Name: Fire Resistance
   m_EditorClassIdentifier: 
-  MinValue: 0
-  MaxValue: 0
+  MinValue: 1
+  MaxValue: 3
   CharacterAttribute: {fileID: 11400000, guid: d7d701201e0782a48b10f6acf2656544, type: 2}
