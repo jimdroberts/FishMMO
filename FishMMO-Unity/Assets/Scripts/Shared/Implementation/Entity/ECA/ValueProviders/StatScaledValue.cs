@@ -34,6 +34,22 @@ namespace FishMMO.Shared
 		[SerializeReference, SubclassSelector]
 		public TargetSelector SourceSelector;
 
+		/// <summary>
+		/// Names the attribute it scales from, since the value itself depends on who is casting.
+		/// </summary>
+		/// <inheritdoc/>
+		public string Describe()
+		{
+			CharacterAttributeTemplate attribute = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(AttributeTemplateID);
+			if (attribute == null)
+			{
+				return null;
+			}
+			return ScaleFactor == 1.0f
+				? attribute.Name
+				: $"{ScaleFactor:0.##}x {attribute.Name}";
+		}
+
 		/// <inheritdoc/>
 		public int GetValue(ICharacter initiator, EventData eventData)
 		{

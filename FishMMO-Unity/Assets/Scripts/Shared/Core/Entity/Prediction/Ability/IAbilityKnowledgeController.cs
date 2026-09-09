@@ -40,6 +40,12 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Set of known base ability IDs.
 		/// </summary>
+		/// <summary>
+		/// True when knowledge has been learned that the database has not been told about.
+		/// The character save reads it and clears it once the write lands.
+		/// </summary>
+		bool KnowledgeDirty { get; set; }
+
 		HashSet<int> KnownBaseAbilities { get; }
 		/// <summary>
 		/// Set of known ability event IDs.

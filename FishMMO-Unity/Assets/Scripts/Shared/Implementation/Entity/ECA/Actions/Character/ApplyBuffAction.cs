@@ -23,6 +23,21 @@ namespace FishMMO.Shared
 		/// </summary>
 		public BaseBuffTemplate BuffTemplate;
 
+		/// <summary>Names the buff it applies, and how many stacks when that is fixed.</summary>
+		/// <returns>The wording, or null when no buff is configured.</returns>
+		public override string GetTooltipContribution()
+		{
+			if (BuffTemplate == null)
+			{
+				return null;
+			}
+
+			string stacks = StacksValue?.Describe();
+			return string.IsNullOrEmpty(stacks) || stacks == "1"
+				? $"Applies {BuffTemplate.Name}"
+				: $"Applies {BuffTemplate.Name} ({stacks} stacks)";
+		}
+
 		/// <summary>
 		/// Applies the specified buff to the target character, stacking it the computed number of times.
 		/// </summary>

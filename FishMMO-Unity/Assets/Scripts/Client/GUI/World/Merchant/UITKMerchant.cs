@@ -938,7 +938,17 @@ namespace FishMMO.Client
 			{
 				/* Owned by the row. The tooltip closes itself if that row is removed or hidden,
 				 * which is what happens when the list is rebuilt underneath the pointer. */
-				tooltip.Open(entry.Tooltip() + EntryHint(tab) + PURCHASE_HINT, owner);
+				/* The hints are rows, not text appended to a formatted blob. They read as
+				 * guidance and sit at the bottom under their own styling, rather than becoming
+				 * two more paragraphs of whatever the entry said about itself. */
+				TooltipContent content = entry.BuildContent();
+				string hint = EntryHint(tab);
+				if (!string.IsNullOrWhiteSpace(hint))
+				{
+					content.AddHint(hint);
+				}
+				content.AddHint(PURCHASE_HINT, TooltipPriority.Hint + 1);
+				tooltip.Open(content, owner);
 			}
 		}
 

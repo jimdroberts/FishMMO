@@ -20,16 +20,17 @@ namespace FishMMO.Shared
 		/// Appends a secondary tooltip describing the bonus attributes granted by this buff.
 		/// </summary>
 		/// <param name="builder">The tooltip builder to populate.</param>
-		public override void SecondaryTooltip(TooltipBuilder builder)
+		public override void SecondaryTooltip(TooltipContent content)
 		{
 			if (BonusAttributes == null || BonusAttributes.Count < 1) return;
 
-			builder.AddLine("Bonus Attributes", 20, TooltipColors.Title, false, "140%");
+			content.AddHeader("Bonus Attributes", TooltipPriority.Attributes);
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
 				if (buffAttribute?.Template == null) continue;
-				builder.AddLine($"{buffAttribute.Template.Name}: {buffAttribute.Value}", 21 + i, TooltipColors.Stat);
+				content.AddStat(buffAttribute.Template.Name, buffAttribute.Value.ToString(), TooltipPriority.Attributes + 1 + i,
+					tone: buffAttribute.Value >= 0 ? TooltipTone.Good : TooltipTone.Bad);
 			}
 		}
 

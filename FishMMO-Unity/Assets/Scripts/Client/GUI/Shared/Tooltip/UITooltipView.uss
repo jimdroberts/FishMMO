@@ -1,0 +1,125 @@
+/*
+    UITooltipView.uss
+    Layout for rendered TooltipContent — see UITKTooltipView.
+
+    Loaded by every panel that draws a description: the cursor tooltip, the abilities panel's
+    details pane, and the crafting preview. Colours are written per row by the renderer from
+    TooltipPalette, because a row's colour is decided by what the row MEANS and only the model
+    knows that; this file owns size, spacing and alignment.
+*/
+
+.tip {
+    flex-direction: column;
+}
+
+.tip-titlerow {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 2px;
+    flex-shrink: 0;
+}
+
+.tip-icon {
+    width: 28px;
+    height: 28px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/*
+    flex-shrink: 0 is load-bearing. As a shrinkable child of the title row, a short name in a
+    tooltip whose other rows are narrow was given less width than the word needed and broke
+    mid-word — "Giant" rendered as "Gian" over "t". The name decides how wide the tooltip is;
+    the box's own max-width is what stops a long one from running away.
+*/
+.tip-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    white-space: normal;
+    flex-shrink: 0;
+    flex-grow: 1;
+}
+
+.tip-subtitle {
+    font-size: 10px;
+    -unity-font-style: italic;
+    margin-bottom: 4px;
+    white-space: normal;
+}
+
+.tip-body {
+    font-size: 11px;
+    white-space: normal;
+    margin-bottom: 4px;
+}
+
+.tip-header {
+    font-size: 10px;
+    -unity-font-style: bold;
+    margin-top: 6px;
+    margin-bottom: 2px;
+    white-space: normal;
+}
+
+/*
+    Two columns. The label takes what it needs and the values sit hard against the right edge,
+    so a column of stats reads as a column rather than as ragged sentences.
+*/
+.tip-stat {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 15px;
+}
+
+.tip-stat__label {
+    font-size: 11px;
+    flex-shrink: 1;
+    margin-right: 8px;
+}
+
+.tip-stat__values {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.tip-stat__value {
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+/*
+    The change chip. Its colour says whether the change helped, so it is deliberately set apart
+    from the value it modifies rather than run together with it in one sentence.
+*/
+.tip-stat__delta {
+    font-size: 10px;
+    margin-left: 6px;
+    -unity-font-style: bold;
+}
+
+.tip-requirement,
+.tip-effect {
+    font-size: 11px;
+    white-space: normal;
+    margin-left: 6px;
+}
+
+.tip-hint {
+    font-size: 10px;
+    -unity-font-style: italic;
+    white-space: normal;
+    margin-top: 6px;
+}
+
+.tip-sep {
+    height: 1px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    background-color: var(--abyss-400);
+}
+
+.tip--large { font-size: 15px; }
+.tip--small { font-size: 9px; }

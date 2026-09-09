@@ -912,7 +912,7 @@ namespace FishMMO.Client
 
 			if (item != null)
 			{
-				tooltip.Open(item.Tooltip(), view.Root);
+				tooltip.Open(item, view.Root);
 			}
 		}
 

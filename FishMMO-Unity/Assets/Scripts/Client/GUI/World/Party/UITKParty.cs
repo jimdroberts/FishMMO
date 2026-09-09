@@ -1766,7 +1766,7 @@ namespace FishMMO.Client
 
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
-				tooltip.Open(icon.Template.Tooltip(), icon.Root);
+				tooltip.Open(icon.Template, icon.Root);
 			}
 		}
 

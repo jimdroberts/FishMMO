@@ -31,5 +31,14 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e6d97319903785e4f8bbdbaa2ba21412, type: 2}
   Items:
   - {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}
+  - {fileID: 11400000, guid: 0ec11e24101f9ddd1a002b65004cb524, type: 2}
+  - {fileID: 11400000, guid: a94b344b8c1a49954b87be475ebeb78a, type: 2}
+  - {fileID: 11400000, guid: 0446fdf72ba15d6d08c86d5e4a2c87c6, type: 2}
+  - {fileID: 11400000, guid: 7e2c085140d6878d9b3e877468fec17f, type: 2}
+  - {fileID: 11400000, guid: 970d2a4d7efe92faa9c4dfd7d00abf4c, type: 2}
+  - {fileID: 11400000, guid: 2a69803876db8086d81d72c790a12e9b, type: 2}
+  - {fileID: 11400000, guid: 483b86c675e552786b89be5e0dfb6704, type: 2}
+  - {fileID: 11400000, guid: 4558469513a2e19ba9894d28d5da44c9, type: 2}
+  - {fileID: 11400000, guid: 82ab480977a62c6e1a003b21c5d4044f, type: 2}
   PremadeAbilities:
   - {fileID: 11400000, guid: daf8d0eb1f0040e0a81c4744abd7e031, type: 2}

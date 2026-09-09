@@ -52,39 +52,41 @@ namespace FishMMO.Shared
 		/// Appends a secondary tooltip describing all combined effects.
 		/// </summary>
 		/// <param name="builder">The tooltip builder to populate.</param>
-		public override void SecondaryTooltip(TooltipBuilder builder)
+		public override void SecondaryTooltip(TooltipContent content)
 		{
-			int order = 20;
+			int order = TooltipPriority.Attributes;
 
 			if (BonusAttributes != null && BonusAttributes.Count > 0)
 			{
-				builder.AddLine("Attribute Bonuses", order++, TooltipColors.Title, false, "140%");
+				content.AddHeader("Attribute Bonuses", order++);
 				for (int i = 0; i < BonusAttributes.Count; i++)
 				{
 					BuffAttributeTemplate attr = BonusAttributes[i];
 					if (attr?.Template == null) continue;
-					builder.AddLine($"{attr.Template.Name}: {attr.Value}", order++, TooltipColors.Stat);
+					content.AddStat(attr.Template.Name, attr.Value.ToString(), order++,
+						tone: attr.Value >= 0 ? TooltipTone.Good : TooltipTone.Bad);
 				}
 			}
 
 			if (Flags != null && Flags.Count > 0)
 			{
-				builder.AddLine("State Effects", order++, TooltipColors.Title, false, "140%");
+				content.AddHeader("State Effects", order++);
 				for (int i = 0; i < Flags.Count; i++)
 				{
-					builder.AddLine($"{Flags[i]}", order++, TooltipColors.Stat);
+					content.AddEffect(Flags[i].ToString(), order++);
 				}
 			}
 
 			if (TickAttributes != null && TickAttributes.Count > 0)
 			{
-				builder.AddLine("Per Tick", order++, TooltipColors.Title, false, "140%");
+				content.AddHeader("Per Tick", order++);
 				for (int i = 0; i < TickAttributes.Count; i++)
 				{
 					BuffAttributeTemplate tick = TickAttributes[i];
 					if (tick?.Template == null) continue;
 					string label = tick.Value >= 0 ? "+" : "";
-					builder.AddLine($"{tick.Template.Name}: {label}{tick.Value}/tick", order++, TooltipColors.Stat);
+					content.AddStat(tick.Template.Name, $"{label}{tick.Value}/tick", order++,
+						tone: tick.Value >= 0 ? TooltipTone.Good : TooltipTone.Bad);
 				}
 			}
 		}

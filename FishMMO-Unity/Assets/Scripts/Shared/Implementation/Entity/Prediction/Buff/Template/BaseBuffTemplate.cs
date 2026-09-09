@@ -102,35 +102,22 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the tooltip string for this buff, including name, description, and secondary details.
 		/// </summary>
-		public virtual string Tooltip()
+		public virtual void BuildTooltip(TooltipContent content)
 		{
-			using (var builder = new TooltipBuilder())
-			{
-				BuildTooltip(builder);
-				return builder.Build();
-			}
-		}
-
-		/// <summary>
-		/// Populates the tooltip builder with this buff's tooltip lines.
-		/// Override in derived classes to add additional lines.
-		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		public virtual void BuildTooltip(TooltipBuilder builder)
-		{
-			builder.AddLine(Name, 0, TooltipColors.Title, false, "140%");
+			content.Icon = Icon;
+			content.AddTitle(Name);
 			if (!string.IsNullOrWhiteSpace(Description))
 			{
-				builder.AddLine(Description, 10, TooltipColors.Label);
+				content.AddBody(Description);
 			}
-			SecondaryTooltip(builder);
+			SecondaryTooltip(content);
 		}
 
 		/// <summary>
-		/// Appends additional information to the tooltip (e.g., secondary effects). Override in derived classes.
+		/// Appends what this kind of buff does. Override in derived classes.
 		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		public virtual void SecondaryTooltip(TooltipBuilder builder) { }
+		/// <param name="content">The content being assembled.</param>
+		public virtual void SecondaryTooltip(TooltipContent content) { }
 
 		/// <summary>
 		/// Called when the buff template is loaded into cache. Loads the icon and FX prefab on the client.

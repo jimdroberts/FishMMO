@@ -9,12 +9,15 @@
     gone, every one of these panels stacked there on top of each other. The values restore
     where the panel sat in the uGUI scene, expressed as percentages so they hold at any
     aspect ratio. Dragging overwrites left/top, which is why position is absolute here.
+
+    Wider and taller than the icon grid this replaced: the list carries a name and a line of
+    stats per entry, and the details pane beside it renders the selected entry in full.
 */
 .ability-panel {
     position: absolute;
     left: 50%; top: 50%; translate: -50% -50%;
-    width: 360px;
-    height: 420px;
+    width: 660px;
+    height: 480px;
 }
 
 .ability-header {
@@ -26,152 +29,172 @@
     flex-shrink: 0;
 }
 
+.ability-header__titles {
+    flex-grow: 1;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.ability-count {
+    margin-right: 6px;
+}
+
 .ability-tabs {
     flex-direction: row;
     height: 28px;
     padding-left: 4px;
     padding-right: 4px;
+    flex-shrink: 0;
 }
 
 .ability-tab {
     flex-grow: 1;
     margin-right: 2px;
-    font-size: 11px;
+    font-size: 12px;
 }
 
-.ability-scroll {
+.ability-toolbar {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    padding-left: 6px;
+    padding-right: 6px;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.ability-search__label {
+    font-size: 10px;
+    color: var(--abyss-300);
+    margin-right: 4px;
+}
+
+.ability-search {
+    width: 150px;
+    margin-right: 10px;
+}
+
+.ability-listpane {
+    width: 50%;
+}
+
+.ability-filters {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.ability-filter {
+    height: 20px;
+    font-size: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-right: 4px;
+    flex-grow: 0;
+}
+
+.ability-body {
+    flex-direction: row;
     flex-grow: 1;
     padding: 6px;
 }
 
+.ability-listpane {
+    width: 46%;
+    flex-shrink: 0;
+    margin-right: 6px;
+}
+
+.ability-scroll {
+    flex-grow: 1;
+}
+
 .ability-list {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
 }
 
-.ability-slot {
-    width: 48px;
-    height: 48px;
-    margin: 3px;
-}
-
-.ability-slot__icon {
-    position: absolute;
-    left: 2px;
-    top: 2px;
-    right: 2px;
-    bottom: 2px;
-    -unity-background-scale-mode: scale-to-fit;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   TEMPLATES AND EFFECTS
-   Slots on the Templates and Effects tabs are not abilities and cannot go on the
-   hotkey bar. They used to look identical to the ones that can (issue #247), so
-   the difference is drawn: a dimmed icon, a muted border, and a corner badge that
-   names what the slot holds.
-   ═══════════════════════════════════════════════════════════ */
-
-.ability-slot--template,
-.ability-slot--effect {
-    border-color: var(--abyss-500);
-    border-top-color: var(--abyss-500);
-    border-bottom-color: var(--abyss-500);
-}
-
-.ability-slot--template > .ability-slot__icon,
-.ability-slot--effect > .ability-slot__icon {
-    opacity: 0.7;
-}
-
-.ability-slot__badge {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 12px;
-    font-size: 8px;
-    letter-spacing: 0.5px;
-    -unity-text-align: middle-center;
-    color: var(--text-bright);
-    background-color: var(--scrim-80);
-}
-
-.ability-slot--template > .ability-slot__badge {
-    color: var(--gold);
-}
-
-.ability-slot--effect > .ability-slot__badge {
-    color: var(--brand-300);
+.ability-empty {
+    margin-top: 12px;
 }
 
 /*
-    One line under the list. Keeps its height when empty so the panel does not
-    jump between a hint and a refusal.
+    One row per entry: icon, then name over a line of stats, then a badge saying what kind of
+    entry it is. The icon grid this replaces could show nothing but the icon, so two entries
+    that differed only in their numbers looked identical.
 */
-.ability-status {
-    height: 13px;
-    margin-left: 6px;
-    margin-right: 6px;
-    margin-bottom: 4px;
-    font-size: 10px;
-    flex-shrink: 0;
-    overflow: hidden;
+.ability-entry {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 4px;
+    padding-right: 4px;
+    margin-bottom: 2px;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   HEADER AND EMPTY STATE
-   ═══════════════════════════════════════════════════════════ */
-
-.ability-header__icon {
-    width: 12px;
-    height: 12px;
-    margin-right: 9px;
+.ability-entry__icon {
+    width: 34px;
+    height: 34px;
+    margin-right: 8px;
     flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
-.ability-header__titles {
+.ability-entry__text {
     flex-direction: column;
-    justify-content: center;
     flex-grow: 1;
     overflow: hidden;
 }
 
-.ability-count {
-    min-width: 24px;
+.ability-entry__name {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--abyss-100);
+}
+
+.ability-entry__meta {
+    font-size: 10px;
+    color: var(--abyss-300);
+    overflow: hidden;
+}
+
+.ability-entry__badge {
+    font-size: 8px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    color: var(--abyss-100);
+    background-color: var(--brand-mid);
+    -unity-text-align: middle-center;
+}
+
+.ability-entry__badge--craft   { background-color: rgba(216, 149, 42, 0.35); }
+.ability-entry__badge--effect  { background-color: rgba(63, 201, 192, 0.30); }
+
+/* A knowledge entry is not a usable ability, and the dimmed icon says so before anything is read. */
+.ability-entry--knowledge .ability-entry__icon {
+    opacity: 0.65;
+}
+
+.ability-details {
+    flex-grow: 1;
+    padding: 8px;
+}
+
+.ability-details__scroll {
+    flex-grow: 1;
+}
+
+.ability-details__content {
+    flex-direction: column;
+}
+
+.ability-details__empty {
+    margin-top: 16px;
+}
+
+.ability-status {
     height: 16px;
-    padding-left: 6px;
-    padding-right: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
     flex-shrink: 0;
-}
-
-/* Sizing only — .fish-close-btn carries the colours, border and hover. */
-.ability-close-btn {
-    margin-left: 8px;
-}
-
-/*
-    Shown when the list behind it has nothing in it. A blank scroll area reads
-    as a panel that failed to load; a sentence reads as a panel that loaded and
-    found nothing.
-*/
-.ability-empty {
-    margin-top: 22px;
-    margin-bottom: 22px;
-}
-
-/*
-    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
-    Label a generous intrinsic height, so an unconstrained pair measures taller
-    than the header that contains it — the subtitle then overflows into
-    whatever sits below the header, which is exactly what it did.
-*/
-.ability-header__titles > .fish-panel__title {
-    height: 15px;
-    flex-shrink: 0;
-}
-
-.ability-header__titles > .fish-panel__subtitle {
-    height: 12px;
-    flex-shrink: 0;
+    white-space: normal;
 }

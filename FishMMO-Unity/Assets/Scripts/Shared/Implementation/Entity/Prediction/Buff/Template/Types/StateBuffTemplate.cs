@@ -22,9 +22,9 @@ namespace FishMMO.Shared
 		/// Appends a secondary tooltip describing the state effect.
 		/// </summary>
 		/// <param name="builder">The tooltip builder to populate.</param>
-		public override void SecondaryTooltip(TooltipBuilder builder)
+		public override void SecondaryTooltip(TooltipContent content)
 		{
-			builder.AddLine($"Applies: {Flag}", 20, TooltipColors.Stat);
+			content.AddStat("Applies", Flag.ToString(), TooltipPriority.Effects);
 		}
 
 		/// <summary>

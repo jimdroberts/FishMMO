@@ -132,190 +132,94 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the tooltip string for the ability.
+		/// Writes this template's own description: what it is, what it costs, what it needs.
 		/// </summary>
-		public virtual string Tooltip()
+		/// <remarks>
+		/// Only the template itself. A base ability that a player will craft effects onto is
+		/// described by <see cref="AbilitySummary"/>, which knows about the effects bundled into
+		/// the template as well as the ones the player chose — this override serves the plain
+		/// templates that are not abilities, such as an ability-type override event.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		public virtual void BuildTooltip(TooltipContent content)
 		{
-			using (var builder = new TooltipBuilder())
-			{
-				BuildTooltip(builder);
-				return builder.Build();
-			}
-		}
-
-		/// <summary>
-		/// Populates the tooltip builder with this ability's tooltip lines.
-		/// Includes name, description, stats, conditions, and price.
-		/// When a combine list is provided, aggregates stats and descriptions from combined events/templates.
-		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		/// <param name="combineList">Optional list of tooltips to combine (for ability crafting).</param>
-		/// <param name="includePrice">Whether to write the summed component price line. A seller with its own price passes false and writes its own.</param>
-		public virtual void BuildTooltip(TooltipBuilder builder, List<ITooltip> combineList = null, bool includePrice = true)
-		{
-			builder.AddLine(Name, 0, TooltipColors.Title, false, "140%");
+			content.Icon = Icon;
+			content.AddTitle(Name);
 
 			if (!string.IsNullOrWhiteSpace(Description))
 			{
-				builder.AddLine(Description, 10, TooltipColors.Label);
+				content.AddBody(Description);
 			}
 
-			float activationTime = ActivationTime;
-			float lifeTime = LifeTime;
-			float speed = Speed;
-			float cooldown = Cooldown;
-			float price = Price;
+			if (ActivationTime > 0) content.AddStat("Cast Time", $"{ActivationTime:0.##}s", TooltipPriority.Stats);
+			if (Cooldown > 0) content.AddStat("Cooldown", $"{Cooldown:0.##}s", TooltipPriority.Stats + 1);
+			if (Speed > 0 && LifeTime > 0) content.AddStat("Range", $"{Speed * LifeTime:0.##}m", TooltipPriority.Stats + 2);
+			if (Speed > 0) content.AddStat("Speed", $"{Speed:0.##}m/s", TooltipPriority.Stats + 3);
+			if (LifeTime > 0) content.AddStat("Duration", $"{LifeTime:0.##}s", TooltipPriority.Stats + 4);
 
-			if (combineList != null && combineList.Count > 0)
+			AppendConditions(content, ActivationConditions);
+
+			if (Price > 0)
 			{
-				foreach (ITooltip tooltip in combineList)
-				{
-					if (tooltip == null) continue;
-
-					if (tooltip is AbilityEvent abilityEvent)
-					{
-						builder.AddLine("Ability Event: " + abilityEvent.Name, 15, TooltipColors.Label);
-						activationTime += abilityEvent.ActivationTime;
-						lifeTime += abilityEvent.LifeTime;
-						speed += abilityEvent.Speed;
-						cooldown += abilityEvent.Cooldown;
-						price += abilityEvent.Price;
-					}
-					else if (tooltip is BaseAbilityTemplate template)
-					{
-						if (!string.IsNullOrWhiteSpace(template.Description))
-						{
-							builder.AddLine(template.Description, 15, TooltipColors.Label);
-						}
-						activationTime += template.ActivationTime;
-						lifeTime += template.LifeTime;
-						speed += template.Speed;
-						cooldown += template.Cooldown;
-						price += template.Price;
-					}
-				}
-			}
-
-			if (activationTime > 0) builder.AddLine($"Activation Time: {activationTime}s", 30, TooltipColors.Stat);
-			if (lifeTime > 0) builder.AddLine($"Life Time: {lifeTime}s", 31, TooltipColors.Stat);
-			if (speed > 0) builder.AddLine($"Speed: {speed}m/s", 32, TooltipColors.Stat);
-			if (speed > 0 && lifeTime > 0) builder.AddLine($"Range: {speed * lifeTime}m", 33, TooltipColors.Stat);
-			if (cooldown > 0) builder.AddLine($"Cooldown: {cooldown}s", 34, TooltipColors.Stat);
-
-			// Append resource cost and requirement sections from all condition sources.
-			bool hasResources = false;
-			bool hasRequirements = false;
-			bool hasTargeting = false;
-			bool hasEffects = false;
-
-			AppendConditionLines(builder, ActivationConditions, ref hasResources, ref hasRequirements);
-
-			if (combineList != null)
-			{
-				foreach (ITooltip tooltip in combineList)
-				{
-					if (tooltip is AbilityEvent abilityEvent)
-					{
-						AppendConditionLines(builder, abilityEvent.Conditions, ref hasResources, ref hasRequirements);
-						AppendSelectorLine(builder, abilityEvent.TargetSelector, ref hasTargeting);
-						AppendActionLines(builder, abilityEvent.OnConditionsMetActions, ref hasEffects);
-					}
-					else if (tooltip is BaseAbilityTemplate template && template.ActivationConditions != null)
-					{
-						AppendConditionLines(builder, template.ActivationConditions, ref hasResources, ref hasRequirements);
-					}
-				}
-			}
-
-			/* The summed component price is what a player pays to CRAFT this combination. A
-			 * premade ability is sold at its own price, so the seller passes includePrice: false
-			 * and writes its own line — two price lines, or the wrong one, would defeat the point
-			 * of showing one at all. */
-			if (includePrice && price > 0)
-			{
-				builder.AddLine($"Price: {price}", 80, TooltipColors.Stat);
+				content.AddStat("Craft Cost", Price.ToString(), TooltipPriority.Price);
 			}
 		}
 
 		/// <summary>
-		/// Appends resource cost and requirement tooltip lines from a list of conditions to the builder.
+		/// Writes a condition list as resource costs and requirements.
 		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		/// <param name="conditions">The conditions to process.</param>
-		/// <param name="hasResources">Tracks whether the resource cost header has been written.</param>
-		/// <param name="hasRequirements">Tracks whether the requirements header has been written.</param>
-		private static void AppendConditionLines(TooltipBuilder builder, List<BaseCondition> conditions, ref bool hasResources, ref bool hasRequirements)
+		/// <remarks>
+		/// Shared by every template and event that carries conditions, so a resource cost reads
+		/// the same wherever it is written. Conditions implementing <see cref="IResourceCost"/> are
+		/// costs; everything else with wording is a requirement.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		/// <param name="conditions">The conditions to describe.</param>
+		public static void AppendConditions(TooltipContent content, List<BaseCondition> conditions)
 		{
-			if (conditions == null) return;
+			if (conditions == null)
+			{
+				return;
+			}
+
+			bool wroteCostHeader = false;
+			bool wroteRequirementHeader = false;
+			int costOrder = 1;
+			int requirementOrder = 1;
 
 			foreach (BaseCondition condition in conditions)
 			{
-				if (condition == null) continue;
+				if (condition == null)
+				{
+					continue;
+				}
 
 				if (condition is IResourceCost resourceCost &&
 					resourceCost.ResourceTemplate != null &&
 					resourceCost.ResourceAmount > 0)
 				{
-					if (!hasResources)
+					if (!wroteCostHeader)
 					{
-						builder.AddLine("Resource Cost:", 50, TooltipColors.Label);
-						hasResources = true;
+						content.AddHeader("Resource Cost", TooltipPriority.ResourceCost);
+						wroteCostHeader = true;
 					}
-					builder.AddLine($"{resourceCost.ResourceTemplate.Name}: {resourceCost.ResourceAmount}", 51, TooltipColors.Title, false, "120%");
+					content.AddStat(resourceCost.ResourceTemplate.Name, resourceCost.ResourceAmount.ToString(),
+						TooltipPriority.ResourceCost + costOrder++);
 					continue;
 				}
 
 				string contribution = condition.GetTooltipContribution();
-				if (!string.IsNullOrWhiteSpace(contribution))
+				if (string.IsNullOrWhiteSpace(contribution))
 				{
-					if (!hasRequirements)
-					{
-						builder.AddLine("Requirements:", 60, TooltipColors.Label);
-						hasRequirements = true;
-					}
-					builder.AddLine(contribution, 61, TooltipColors.Title, false, "120%");
+					continue;
 				}
-			}
-		}
 
-		/// <summary>
-		/// Appends an event's <see cref="TargetSelector"/> contribution as a single "Targeting:" line.
-		/// </summary>
-		private static void AppendSelectorLine(TooltipBuilder builder, TargetSelector selector, ref bool hasTargeting)
-		{
-			if (selector == null) return;
-			string contribution = selector.GetTooltipContribution();
-			if (string.IsNullOrWhiteSpace(contribution)) return;
-
-			if (!hasTargeting)
-			{
-				builder.AddLine("Targeting:", 55, TooltipColors.Label);
-				hasTargeting = true;
-			}
-			builder.AddLine(contribution, 56, TooltipColors.Title, false, "120%");
-		}
-
-		/// <summary>
-		/// Appends effect lines from a list of actions to the builder. Each action that returns
-		/// a non-empty <see cref="BaseAction.GetTooltipContribution"/> produces one line under
-		/// the "Effects:" header.
-		/// </summary>
-		private static void AppendActionLines(TooltipBuilder builder, List<BaseAction> actions, ref bool hasEffects)
-		{
-			if (actions == null) return;
-
-			foreach (BaseAction action in actions)
-			{
-				if (action == null) continue;
-				string contribution = action.GetTooltipContribution();
-				if (string.IsNullOrWhiteSpace(contribution)) continue;
-
-				if (!hasEffects)
+				if (!wroteRequirementHeader)
 				{
-					builder.AddLine("Effects:", 70, TooltipColors.Label);
-					hasEffects = true;
+					content.AddHeader("Requirements", TooltipPriority.Requirements);
+					wroteRequirementHeader = true;
 				}
-				builder.AddLine(contribution, 71, TooltipColors.Title, false, "120%");
+				content.AddRequirement(contribution, TooltipPriority.Requirements + requirementOrder++);
 			}
 		}
 	}

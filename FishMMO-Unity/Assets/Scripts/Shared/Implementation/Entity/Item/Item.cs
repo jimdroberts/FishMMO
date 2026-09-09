@@ -401,28 +401,33 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the formatted tooltip string for this item, including ID, slot, template tooltip, and generator info.
+		/// Describes this instance: its template, its generated roll, and where it sits.
 		/// </summary>
-		/// <returns>The formatted tooltip string.</returns>
-		public string Tooltip()
+		/// <param name="content">The content being assembled.</param>
+		public void BuildTooltip(TooltipContent content)
 		{
-			using (var builder = new TooltipBuilder())
-			{
-				BuildTooltip(builder);
-				return builder.Build();
-			}
-		}
+			/* Told that a roll follows, so the template writes what this KIND of item is rather
+			 * than the ranges its instance has already resolved. */
+			bool rolled = IsGenerated && Generator.Attributes.Count > 0;
+			Template?.BuildTooltip(content, rolled);
+			Generator?.BuildTooltip(content);
 
-		/// <summary>
-		/// Populates the tooltip builder with this item's tooltip lines.
-		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		public void BuildTooltip(TooltipBuilder builder)
-		{
-			builder.AddLine($"ID: {ID}", 5, TooltipColors.Label);
-			builder.AddLine($"Slot: {Slot}", 6, TooltipColors.Label);
-			Template?.BuildTooltip(builder);
-			Generator?.BuildTooltip(builder);
+			/* What this stack actually holds, as opposed to what the template says it could. */
+			if (IsStackable && Stackable.Amount > 1)
+			{
+				content.AddStat("Amount", Stackable.Amount.ToString(), TooltipPriority.Identity);
+			}
+
+			/* Identity last, and muted. It is diagnostic — which row of which container this is —
+			 * and it used to be the first two lines of every item tooltip in the game, above the
+			 * item's own name. A slot of -1 means the item is not in a container at all (in
+			 * flight, on a corpse, being previewed), and printing that is worse than printing
+			 * nothing. */
+			if (Slot >= 0)
+			{
+				content.AddStat("Slot", Slot.ToString(), TooltipPriority.Footer, tone: TooltipTone.Muted);
+			}
+			content.AddStat("Item ID", ID.ToString(), TooltipPriority.Footer + 1, tone: TooltipTone.Muted);
 		}
 
 		/// <summary>

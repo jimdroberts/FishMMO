@@ -21,5 +21,8 @@ namespace FishMMO.Shared
 		{
 			return Amount;
 		}
+
+		/// <inheritdoc/>
+		public string Describe() => Amount.ToString();
 	}
 }

@@ -188,14 +188,14 @@ namespace FishMMO.Client
 			label.pickingMode = PickingMode.Ignore;
 			slot.Add(label);
 
-			string tooltip = item.Tooltip();
-			if (!string.IsNullOrWhiteSpace(tooltip))
+			TooltipContent tooltip = item.BuildContent();
+			if (!tooltip.IsEmpty)
 			{
 				slot.RegisterCallback<PointerEnterEvent>(_ =>
 				{
 					if (UIManager.TryGetTK("UITooltip", out UITKTooltip uiTooltip))
 					{
-						uiTooltip.Open(tooltip);
+						uiTooltip.Open(tooltip, slot);
 					}
 				});
 				slot.RegisterCallback<PointerLeaveEvent>(_ =>

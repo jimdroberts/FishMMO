@@ -1,6 +1,8 @@
 ﻿using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
@@ -32,27 +34,27 @@ namespace FishMMO.Client
 		/// </summary>
 		private const string TOOLTIP_BOX_NAME = "tooltip-box";
 		/// <summary>
-		/// Name of the tooltip text label element.
+		/// Name of the element the rendered rows are written into.
 		/// </summary>
-		private const string TOOLTIP_TEXT_NAME = "tooltip-text";
+		private const string TOOLTIP_CONTENT_NAME = "tooltip-content";
 
 		/// <summary>
 		/// The tooltip box container element.
 		/// </summary>
 		private VisualElement tooltipBox;
 		/// <summary>
-		/// The tooltip text label.
+		/// The element rendered rows are written into.
 		/// </summary>
-		private Label tooltipText;
+		private VisualElement contentRoot;
 
 		/// <summary>
-		/// Text the current tooltip is showing.
+		/// The content the current tooltip is showing.
 		/// </summary>
 		/// <remarks>
-		/// Kept so it can be re-applied after the document re-clones the UXML; writing it into
-		/// the label before <c>Show()</c> writes into a tree that is about to be discarded.
+		/// Kept so it can be re-rendered after the document re-clones the UXML; building elements
+		/// before <c>Show()</c> builds them into a tree that is about to be discarded.
 		/// </remarks>
-		private string pendingText = string.Empty;
+		private TooltipContent pendingContent;
 
 		/// <summary>
 		/// The element this tooltip is describing, when the caller supplied one.
@@ -76,7 +78,7 @@ namespace FishMMO.Client
 			}
 
 			tooltipBox = Root.Q<VisualElement>(TOOLTIP_BOX_NAME);
-			tooltipText = Root.Q<Label>(TOOLTIP_TEXT_NAME);
+			contentRoot = Root.Q<VisualElement>(TOOLTIP_CONTENT_NAME);
 
 			// The root should never intercept pointer events.
 			Root.pickingMode = PickingMode.Ignore;
@@ -181,38 +183,44 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Opens the tooltip with the specified text and shows it near the cursor.
+		/// Opens the tooltip describing <paramref name="source"/>.
 		/// </summary>
-		/// <param name="text">Text to display in the tooltip.</param>
-		public void Open(string text)
+		/// <param name="source">The thing being described.</param>
+		/// <param name="owner">The element being hovered. May be null.</param>
+		public void Open(ITooltip source, VisualElement owner = null)
 		{
-			Open(text, null);
+			if (source == null)
+			{
+				ForceHide();
+				return;
+			}
+			Open(source.BuildContent(), owner);
 		}
 
 		/// <summary>
 		/// Opens the tooltip for a specific element, closing it automatically when that element
 		/// is removed, hidden or destroyed.
 		/// </summary>
-		/// <param name="text">Text to display in the tooltip.</param>
+		/// <param name="content">The content to display.</param>
 		/// <param name="owner">The element being described. May be null.</param>
-		public void Open(string text, VisualElement owner)
+		public void Open(TooltipContent content, VisualElement owner = null)
 		{
-			if (string.IsNullOrEmpty(text))
+			if (content == null || content.IsEmpty)
 			{
 				ForceHide();
 				return;
 			}
 
 			this.owner = owner;
-			this.pendingText = text;
+			this.pendingContent = content;
 
 			/* Show before writing. Enabling the document re-clones the UXML, so a label written
 			 * to here would belong to a tree that is discarded microseconds later — the tooltip
 			 * would open, every time, blank. OnAfterShow does the write against the live tree. */
 			Show();
 
-			// Already visible for a different owner: Show is a no-op, so apply the text directly.
-			ApplyText();
+			// Already visible for a different owner: Show is a no-op, so render directly.
+			ApplyContent();
 			UpdatePosition();
 		}
 
@@ -237,7 +245,7 @@ namespace FishMMO.Client
 		/// </summary>
 		protected override void OnAfterShow()
 		{
-			ApplyText();
+			ApplyContent();
 			UpdatePosition();
 		}
 
@@ -250,17 +258,17 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			ApplyText();
+			ApplyContent();
 		}
 
 		/// <summary>
-		/// Writes the pending text into the label, if there is one to write into.
+		/// Renders the pending content, if there is somewhere to render it.
 		/// </summary>
-		private void ApplyText()
+		private void ApplyContent()
 		{
-			if (tooltipText != null)
+			if (contentRoot != null)
 			{
-				tooltipText.text = pendingText;
+				UITKTooltipView.Render(contentRoot, pendingContent);
 			}
 		}
 
@@ -275,7 +283,8 @@ namespace FishMMO.Client
 		private void ForceHide()
 		{
 			owner = null;
-			pendingText = string.Empty;
+			pendingContent = null;
+			contentRoot?.Clear();
 			Hide(false);
 		}
 

@@ -18,6 +18,13 @@ namespace FishMMO.Shared
 		public int Fallback = 0;
 
 		/// <inheritdoc/>
+		/// <summary>
+		/// Nothing to say ahead of time: this reads the damage that landed from the event being handled.
+		/// </summary>
+		/// <inheritdoc/>
+		public string Describe() => null;
+
+		/// <inheritdoc/>
 		public int GetValue(ICharacter initiator, EventData eventData)
 		{
 			if (eventData != null && eventData.TryGet(out DamageEventData damageData))

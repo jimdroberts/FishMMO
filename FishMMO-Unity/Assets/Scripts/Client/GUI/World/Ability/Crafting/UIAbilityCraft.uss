@@ -1,94 +1,215 @@
-﻿/*
+/*
     UIAbilityCraft.uss
-    Layout only — colours come from FishMMO-Theme.uss (.fish-panel, .fish-label, .fish-button, .fish-slot).
+    Layout for the ability crafting panel. Colours come from FishMMO-Theme.uss.
 */
 
-/*
-    Transparent, full-viewport wrapper that centres the window. It must never be picked:
-    picking-mode="Ignore" is set on it in the UXML (a UXML attribute, not a USS property).
-    This panel has no scrim, so a pickable root here is an invisible click blocker over the whole
-    screen — every other window and the entire HUD stop responding while the craft window is open,
-    and UIManager.ControlHasFocus() reports true everywhere, which also kills world/target clicks
-    and the Interact action. Children stay pickable; picking is not inherited.
-*/
 .craft-root {
     flex-grow: 1;
-    align-items: center;
-    justify-content: center;
 }
 
+/*
+    Two columns wide: the recipe on the left, what it would produce on the right. The panel this
+    replaces was a column of unlabelled squares with a paragraph under it, and gave the player no
+    way to tell what an effect was about to do to the ability they were building.
+*/
 .craft-panel {
-    width: 440px;
-    padding: 10px;
-    flex-direction: column;
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 720px;
+    height: 520px;
 }
 
 .craft-header {
     flex-direction: row;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
 
-.craft-title {
-    font-size: 16px;
-    -unity-font-style: bold;
+.craft-header__titles {
+    flex-grow: 1;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .craft-body {
     flex-direction: row;
+    flex-grow: 1;
+    padding: 8px;
 }
 
-.craft-entries {
+.craft-recipe {
+    width: 46%;
+    flex-shrink: 0;
+    margin-right: 8px;
     flex-direction: column;
-    margin-right: 10px;
 }
 
-.craft-main-entry {
-    width: 64px;
-    height: 64px;
-    margin-bottom: 8px;
+.craft-section {
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+
+/* The base ability reads as one wide choice, not as another slot among the effects. */
+.craft-main {
+    height: 52px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.craft-main__icon {
+    width: 40px;
+    height: 40px;
+    margin-right: 8px;
+    flex-shrink: 0;
     -unity-background-scale-mode: scale-to-fit;
+}
+
+.craft-main__text {
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.craft-main__name {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--abyss-100);
+}
+
+.craft-main__meta {
+    font-size: 10px;
+    color: var(--abyss-300);
+}
+
+.craft-slot-scroll {
+    flex-grow: 1;
 }
 
 .craft-event-list {
-    flex-direction: row;
-    flex-wrap: wrap;
-    width: 150px;
-}
-
-.craft-slot {
-    width: 40px;
-    height: 40px;
-    margin: 2px;
-    -unity-background-scale-mode: scale-to-fit;
-}
-
-.craft-info {
-    flex-grow: 1;
     flex-direction: column;
 }
 
-.craft-description {
-    white-space: normal;
+/* One row per slot, so an effect can carry its name, when it fires, and what it costs. */
+.craft-slot {
+    height: 38px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px;
+    padding-right: 6px;
+    margin-bottom: 3px;
+}
+
+.craft-slot__index {
+    width: 16px;
+    font-size: 10px;
+    color: var(--abyss-300);
+    flex-shrink: 0;
+}
+
+.craft-slot__icon {
+    width: 26px;
+    height: 26px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.craft-slot__text {
+    flex-direction: column;
     flex-grow: 1;
-    margin-bottom: 6px;
+    overflow: hidden;
+}
+
+.craft-slot__name {
+    font-size: 11px;
+    color: var(--abyss-100);
+}
+
+.craft-slot__meta {
+    font-size: 9px;
+    color: var(--abyss-300);
+}
+
+.craft-slot__price {
+    font-size: 10px;
+    color: var(--abyss-200);
+    flex-shrink: 0;
+}
+
+/* An empty slot is an invitation, so its text is set apart from a filled one's. */
+.craft-slot--empty .craft-slot__name {
+    color: var(--abyss-300);
+    -unity-font-style: italic;
+}
+
+.craft-slots-empty {
+    margin-top: 8px;
+    white-space: normal;
+}
+
+.craft-preview {
+    flex-grow: 1;
+    padding: 8px;
+    flex-direction: column;
+}
+
+.craft-preview__scroll {
+    flex-grow: 1;
+}
+
+.craft-description {
+    flex-direction: column;
+}
+
+.craft-preview__empty {
+    margin-top: 16px;
+    white-space: normal;
+}
+
+.craft-footer {
+    flex-direction: column;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.craft-cost-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 18px;
 }
 
 .craft-cost {
+    font-size: 12px;
     -unity-font-style: bold;
-    margin-bottom: 6px;
+    color: var(--abyss-100);
+}
+
+.craft-balance {
+    font-size: 10px;
+    color: var(--abyss-300);
+}
+
+.craft-balance--short {
+    color: var(--danger);
 }
 
 .craft-status {
-    margin-top: 4px;
-    white-space: normal;
     min-height: 13px;
+    white-space: normal;
+    margin-top: 2px;
     font-size: 10px;
-    flex-shrink: 0;
 }
 
 .craft-confirm-btn {
     height: 32px;
-    margin-top: 8px;
+    margin-top: 6px;
 }

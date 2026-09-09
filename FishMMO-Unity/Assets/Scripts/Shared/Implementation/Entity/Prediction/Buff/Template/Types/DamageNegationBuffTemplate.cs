@@ -195,7 +195,7 @@ namespace FishMMO.Shared
 		/// Appends a secondary tooltip describing what this buff blocks.
 		/// </summary>
 		/// <param name="builder">The tooltip builder to populate.</param>
-		public override void SecondaryTooltip(TooltipBuilder builder)
+		public override void SecondaryTooltip(TooltipContent content)
 		{
 			string effect;
 			switch (Mode)
@@ -210,15 +210,15 @@ namespace FishMMO.Shared
 					effect = $"Absorbs {Amount} damage";
 					break;
 			}
-			builder.AddLine(effect, 20, TooltipColors.Stat);
+			content.AddEffect(effect, TooltipPriority.Effects);
 			if (RequiresFacing)
 			{
-				builder.AddLine($"Front {FacingAngleDegrees:0}° only", 21, TooltipColors.Label);
+				content.AddBody($"Front {FacingAngleDegrees:0}° only", TooltipPriority.Effects + 1, TooltipTone.Muted);
 			}
 			string shield = Shield != null && Shield.IsActive ? Shield.Describe() : null;
 			if (shield != null)
 			{
-				builder.AddLine($"Blocks projectiles: {shield}", 22, TooltipColors.Stat);
+				content.AddStat("Blocks projectiles", shield, TooltipPriority.Effects + 2);
 			}
 		}
 

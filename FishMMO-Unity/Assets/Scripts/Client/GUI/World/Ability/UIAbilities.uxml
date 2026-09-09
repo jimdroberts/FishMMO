@@ -1,5 +1,6 @@
 ﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
+    <Style src="../../Shared/Tooltip/UITooltipView.uss" />
     <Style src="UIAbilities.uss" />
     <ui:VisualElement name="ability-root" class="fish-panel ability-panel">
         <ui:VisualElement name="panel-header" class="fish-panel__header ability-header">
@@ -11,20 +12,51 @@
             <ui:Label name="ability-count" text="0" class="fish-badge ability-count" />
             <ui:Button name="close-button" class="fish-close-btn ability-close-btn" text="✕" />
         </ui:VisualElement>
+
+        <!--
+            Two tabs, because there are two kinds of thing here and confusing them is the whole
+            problem: an ability is ready to use, and knowledge is a part you take to a crafter.
+            The knowledge tab's own filter row narrows it to base abilities or effects.
+        -->
         <ui:VisualElement name="ability-tabs" class="ability-tabs">
             <ui:Button name="ability-tab-abilities" text="Abilities" class="fish-tab ability-tab" />
-            <ui:Button name="ability-tab-known" text="Templates" class="fish-tab ability-tab" />
-            <ui:Button name="ability-tab-events" text="Effects" class="fish-tab ability-tab" />
+            <ui:Button name="ability-tab-knowledge" text="Knowledge" class="fish-tab ability-tab" />
         </ui:VisualElement>
-        <ui:ScrollView name="ability-scroll" class="fish-scroll ability-scroll">
-            <ui:VisualElement name="ability-list-abilities" class="ability-list" />
-            <ui:VisualElement name="ability-list-known" class="ability-list" />
-            <ui:VisualElement name="ability-list-events" class="ability-list" />
-            <ui:Label name="ability-empty" text="No abilities learned." class="fish-empty ability-empty" />
-        </ui:ScrollView>
+
+        <ui:VisualElement name="ability-toolbar" class="ability-toolbar">
+            <ui:Label text="Search" class="ability-search__label" />
+            <ui:TextField name="ability-search" class="fish-input ability-search" />
+            <ui:VisualElement name="ability-filters" class="ability-filters">
+                <ui:Button name="ability-filter-all" text="All" class="fish-tab ability-filter" />
+                <ui:Button name="ability-filter-bases" text="Base Abilities" class="fish-tab ability-filter" />
+                <ui:Button name="ability-filter-effects" text="Effects" class="fish-tab ability-filter" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="ability-body" class="ability-body">
+            <ui:VisualElement name="ability-listpane" class="ability-listpane">
+                <ui:ScrollView name="ability-scroll" class="fish-scroll ability-scroll">
+                    <ui:VisualElement name="ability-list" class="ability-list" />
+                </ui:ScrollView>
+                <ui:Label name="ability-empty" text="No abilities learned." class="fish-empty ability-empty" />
+            </ui:VisualElement>
+
+            <!--
+                The details pane. Rendered from the selected entry's TooltipContent by
+                UITKTooltipView, so a stat block reads the same here as it does under the cursor
+                and as it does in the crafting preview.
+            -->
+            <ui:VisualElement name="ability-details" class="fish-well ability-details">
+                <ui:ScrollView name="ability-details-scroll" class="fish-scroll ability-details__scroll">
+                    <ui:VisualElement name="ability-details-content" class="ability-details__content" />
+                </ui:ScrollView>
+                <ui:Label name="ability-details-empty" text="Select an entry to see what it does." class="fish-empty ability-details__empty" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <!--
             Status line. Carries the visible tab's standing hint, and replaces it with the reason
-            when a click on a slot cannot pick anything up. See UITKAbilities.
+            when a click on an entry cannot pick anything up. See UITKAbilities.
         -->
         <ui:Label name="ability-status" text="" class="fish-hint ability-status" />
     </ui:VisualElement>

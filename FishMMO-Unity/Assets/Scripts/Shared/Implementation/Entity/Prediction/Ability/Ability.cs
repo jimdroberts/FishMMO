@@ -851,29 +851,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the tooltip string for this ability, using the template and type override if present.
-		/// Caches the result to avoid repeated string allocations.
+		/// Describes this ability as the character actually has it.
 		/// </summary>
-		/// <returns>Formatted tooltip string for the ability.</returns>
-		public string Tooltip()
+		/// <remarks>
+		/// Composed through <see cref="AbilitySummary"/> so a learned ability, the base template it
+		/// came from, and the crafting preview that produced it all report the same numbers. The
+		/// crafted effects are listed separately from the ones the template shipped with, because
+		/// those are the parts the player chose.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		public void BuildTooltip(TooltipContent content)
 		{
-			if (!string.IsNullOrWhiteSpace(CachedTooltip))
-			{
-				return CachedTooltip;
-			}
-
-			using (var builder = new TooltipBuilder())
-			{
-				Template.BuildTooltip(builder);
-				AbilityType abilityType = EffectiveType;
-				if (abilityType != AbilityType.None)
-				{
-					builder.AddLine($"Type: {abilityType}", 90, TooltipColors.Title, false, "120%");
-				}
-				CachedTooltip = builder.Build();
-			}
-
-			return CachedTooltip;
+			AbilitySummary.FromAbility(this).BuildTooltip(content);
 		}
 	}
 }

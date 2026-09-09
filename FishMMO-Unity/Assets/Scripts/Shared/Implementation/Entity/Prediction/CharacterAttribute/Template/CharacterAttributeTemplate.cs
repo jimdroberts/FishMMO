@@ -1,6 +1,8 @@
 ﻿using System;
 using UnityEngine;
 
+using FishMMO.Shared.Core;
+
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Character Attribute", menuName = "FishMMO/Character/Attribute/Character Attribute", order = 1)]
@@ -8,8 +10,18 @@ namespace FishMMO.Shared
 	/// Template that defines a character attribute's configuration, including base values, clamping rules,
 	/// parent/child/dependency relationships, and formula mappings for derived calculations.
 	/// </summary>
-	public class CharacterAttributeTemplate : CachedScriptableObject<CharacterAttributeTemplate>, ICachedObject
+	public class CharacterAttributeTemplate : CachedScriptableObject<CharacterAttributeTemplate>, ICachedObject, ITooltip
 	{
+		/// <summary>
+		/// Attributes carry no icon of their own; the bars and rows that show them supply theirs.
+		/// </summary>
+		/// <remarks>
+		/// Declared because <see cref="ITooltip"/> asks for one. An attribute is describable — the
+		/// resource bars and the character sheet hover it — and it could not satisfy the interface
+		/// without this, which is why it was the one producer left outside the tooltip system.
+		/// </remarks>
+		public UnityEngine.Sprite Icon => null;
+
 		/// <summary>
 		/// Serializable dictionary mapping attribute templates to their formula templates.
 		/// Used to define how child attributes affect this attribute.
@@ -89,35 +101,30 @@ namespace FishMMO.Shared
 		public float InitialValueAsPct { get { return InitialValue * 0.01f; } }
 
 		/// <summary>
-		/// Builds a rich text tooltip string describing this attribute, including name, description, and value ranges.
-		/// Uses <see cref="TooltipColors"/> for consistent formatting.
+		/// Describes the attribute: what it is and the range it lives in.
 		/// </summary>
-		/// <returns>Formatted tooltip string for UI display.</returns>
-		public string Tooltip()
+		/// <param name="content">The content being assembled.</param>
+		public void BuildTooltip(TooltipContent content)
 		{
-			using (var builder = new TooltipBuilder())
+			if (!string.IsNullOrWhiteSpace(Name))
 			{
-				if (!string.IsNullOrWhiteSpace(Name))
-				{
-					builder.AddLine(Name, 0, TooltipColors.Title, false, "120%");
-				}
-				if (!string.IsNullOrWhiteSpace(Description))
-				{
-					builder.AddLine($"Description: {Description}", 10, TooltipColors.Label);
-				}
-				if (InitialValue > 0)
-				{
-					builder.AddLine($"Initial Value: {InitialValue}", 20, TooltipColors.Label);
-				}
-				if (MinValue > 0)
-				{
-					builder.AddLine($"Min Value: {MinValue}", 30, TooltipColors.Label);
-				}
-				if (MaxValue > 0)
-				{
-					builder.AddLine($"Max Value: {MaxValue}", 40, TooltipColors.Label);
-				}
-				return builder.Build();
+				content.AddTitle(Name);
+			}
+			if (!string.IsNullOrWhiteSpace(Description))
+			{
+				content.AddBody(Description);
+			}
+			if (InitialValue > 0)
+			{
+				content.AddStat("Initial", InitialValue.ToString(), TooltipPriority.Stats);
+			}
+			if (MinValue > 0)
+			{
+				content.AddStat("Minimum", MinValue.ToString(), TooltipPriority.Stats + 1);
+			}
+			if (MaxValue > 0)
+			{
+				content.AddStat("Maximum", MaxValue.ToString(), TooltipPriority.Stats + 2);
 			}
 		}
 	}

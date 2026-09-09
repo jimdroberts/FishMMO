@@ -29,6 +29,27 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float ActivationTime;
 
+		/// <summary>Describes the consumable: what it is, what a use costs, and how often.</summary>
+		/// <param name="content">The content being assembled.</param>
+		public override void BuildTooltip(TooltipContent content, bool describingInstance)
+		{
+			base.BuildTooltip(content, describingInstance);
+
+			content.AddSubtitle(ConsumableType.ToString());
+			if (ActivationTime > 0.0f)
+			{
+				content.AddStat("Use Time", $"{ActivationTime:0.##}s", TooltipPriority.Stats);
+			}
+			if (Cooldown > 0.0f)
+			{
+				content.AddStat("Cooldown", $"{Cooldown:0.##}s", TooltipPriority.Stats + 1);
+			}
+			if (ChargeCost > 0)
+			{
+				content.AddStat("Charges per use", ChargeCost.ToString(), TooltipPriority.Stats + 2);
+			}
+		}
+
 		/// <summary>
 		/// Determines if the specified character can consume the given item.
 		/// Checks for valid character, item, stackable status, sufficient charges, and cooldown.

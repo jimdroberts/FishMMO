@@ -119,8 +119,8 @@ namespace FishMMO.Client
 			public int Slot;
 			/// <summary>Overlay shown while a take is in flight.</summary>
 			public VisualElement Pending;
-			/// <summary>Tooltip text for the row.</summary>
-			public string Tooltip;
+			/// <summary>What the row describes, built once when the row is created.</summary>
+			public TooltipContent Tooltip;
 		}
 
 		// ── Private state ─────────────────────────────────────────────────────
@@ -620,7 +620,7 @@ namespace FishMMO.Client
 			view.Root = rowRoot;
 			view.Slot = capturedSlot;
 			view.Pending = pending;
-			view.Tooltip = template.Tooltip();
+			view.Tooltip = template.BuildContent();
 			return view;
 		}
 
@@ -856,8 +856,8 @@ namespace FishMMO.Client
 					continue;
 				}
 
-				string tooltip = rowViews[i].Tooltip;
-				if (!string.IsNullOrWhiteSpace(tooltip) &&
+				TooltipContent tooltip = rowViews[i].Tooltip;
+				if (tooltip != null && !tooltip.IsEmpty &&
 					UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltipPanel))
 				{
 					/* With the row as owner, so the tooltip closes itself when the row is

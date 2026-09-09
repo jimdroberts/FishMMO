@@ -313,9 +313,18 @@ namespace FishMMO.RenderScratch
 			UITKTooltip t = h.AddComponent<UITKTooltip>();
 			t.Document = d;
 			t.OnStarting();
-			t.Open("<size=120%>Tideward Charm</size>\nBinds a fragment of the reef to its bearer.\n" +
-				"<color=#7FC9FF>+14 Armor</color>\n<color=#7FC9FF>+6 Tide Resistance</color>\n" +
-				"Requires level 40.");
+			/* Structured content, as every producer now emits. The renderer lays the stats out in
+			 * columns; the harness no longer hand-writes rich text to fake that. */
+			TooltipContent content = new TooltipContent();
+			content.AddTitle("Tideward Charm");
+			content.AddSubtitle("Trinket");
+			content.AddBody("Binds a fragment of the reef to its bearer.");
+			content.AddHeader("Attributes", TooltipPriority.Attributes);
+			content.AddStat("Armor", "+14", TooltipPriority.Attributes + 1, tone: TooltipTone.Good);
+			content.AddStat("Tide Resistance", "+6", TooltipPriority.Attributes + 2, tone: TooltipTone.Good);
+			content.AddHeader("Requirements", TooltipPriority.Requirements);
+			content.AddRequirement("Requires level 40.", TooltipPriority.Requirements + 1);
+			t.Open(content);
 		}
 
 		public static void ContextMenu(GameObject h, UIDocument d)

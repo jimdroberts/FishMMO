@@ -69,6 +69,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0446fdf72ba15d6d08c86d5e4a2c87c6
+    m_Address: Traveler's Rations
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 04774df3f83c483d927a41a18a00a527
     m_Address: Tidebound
     m_ReadOnly: 0
@@ -161,6 +167,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0e5b4519d246431aa1799a5aa5e06470
     m_Address: Thornwild
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0ec11e24101f9ddd1a002b65004cb524
+    m_Address: Minor Healing Potion
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -405,18 +417,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: eb7a456cf8764852991df6a62e8817ac
-    m_Address: Waypoints Discovered
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 22cac15846e24e2eb4dd5910cc691105
-    m_Address: Fast Travels
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c6adf150ca547979638fd34f98ad2f4
     m_Address: Poison Frogfolk
     m_ReadOnly: 0
@@ -533,6 +533,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 227021df2b20bff40ab713a1a868b1d3
     m_Address: Health Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22cac15846e24e2eb4dd5910cc691105
+    m_Address: Fast Travels
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -689,6 +695,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a666181fba14f54a8a1e2729e38e44e
     m_Address: Test Sword
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a69803876db8086d81d72c790a12e9b
+    m_Address: Scroll of Lesser Flame
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -927,6 +939,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4558469513a2e19ba9894d28d5da44c9
+    m_Address: Scroll of Flame Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4574058ec202495ab7a106995b168cfe
     m_Address: Turtlefolk
     m_ReadOnly: 0
@@ -947,6 +965,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 47a314e5ec0d4d37955c95120444a08a
     m_Address: Storm Elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 483b86c675e552786b89be5e0dfb6704
+    m_Address: Scroll of Projectile Motion
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1568,6 +1592,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e2c085140d6878d9b3e877468fec17f
+    m_Address: Tideborn Restorative
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7ed37c112e3848db873591af2eb549d2
     m_Address: Dragon
     m_ReadOnly: 0
@@ -1606,6 +1636,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 81dd6c8841df66e44ad306e2ef34aaee
     m_Address: Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82ab480977a62c6e1a003b21c5d4044f
+    m_Address: Codex of the Burning Sphere
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1898,6 +1934,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 970d2a4d7efe92faa9c4dfd7d00abf4c
+    m_Address: Scroll of Lesser Fireball
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 97d22a3a2f8b475fbe35aa7ff18cb860
     m_Address: Talonbear
     m_ReadOnly: 0
@@ -2104,6 +2146,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a8806efef219fca4997d05df4237cdf2
     m_Address: Grassland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a94b344b8c1a49954b87be475ebeb78a
+    m_Address: Minor Mana Potion
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2979,6 +3027,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eab1242282cf4fc3b49aa312e2e6f2f0
     m_Address: Spider Elf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eb7a456cf8764852991df6a62e8817ac
+    m_Address: Waypoints Discovered
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

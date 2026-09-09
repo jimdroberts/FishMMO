@@ -38,18 +38,19 @@ namespace FishMMO.Shared
 		/// Appends a secondary tooltip describing the per-tick resource effects.
 		/// </summary>
 		/// <param name="builder">The tooltip builder to populate.</param>
-		public override void SecondaryTooltip(TooltipBuilder builder)
+		public override void SecondaryTooltip(TooltipContent content)
 		{
 			if (TickAttributes == null || TickAttributes.Count < 1) return;
 
-			builder.AddLine("Per Tick", 20, TooltipColors.Title, false, "140%");
+			content.AddHeader("Per Tick", TooltipPriority.Attributes);
 			for (int i = 0; i < TickAttributes.Count; i++)
 			{
 				BuffAttributeTemplate tickAttribute = TickAttributes[i];
 				if (tickAttribute?.Template == null) continue;
 
 				string label = tickAttribute.Value >= 0 ? "+" : "";
-				builder.AddLine($"{tickAttribute.Template.Name}: {label}{tickAttribute.Value}/tick", 21 + i, TooltipColors.Stat);
+				content.AddStat(tickAttribute.Template.Name, $"{label}{tickAttribute.Value}/tick", TooltipPriority.Attributes + 1 + i,
+					tone: tickAttribute.Value >= 0 ? TooltipTone.Good : TooltipTone.Bad);
 			}
 		}
 

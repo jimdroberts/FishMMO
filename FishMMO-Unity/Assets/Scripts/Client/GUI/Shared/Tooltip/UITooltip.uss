@@ -13,7 +13,6 @@
     padding: 6px 8px;
 }
 
-.tooltip-text {
-    white-space: normal;
-    font-size: 12px;
+.tooltip-content {
+    flex-direction: column;
 }

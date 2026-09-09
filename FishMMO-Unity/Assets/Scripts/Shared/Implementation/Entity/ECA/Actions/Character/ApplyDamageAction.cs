@@ -34,6 +34,43 @@ namespace FishMMO.Shared
 		public DamageAttributeTemplate DamageAttributeTemplate;
 
 		/// <summary>
+		/// Says how much damage of what kind, in the ability's own colour.
+		/// </summary>
+		/// <remarks>
+		/// This was <c>null</c>, inherited from <see cref="BaseAction"/> — so the single most
+		/// important thing an offensive ability does was absent from its tooltip. A "Lesser Fire
+		/// Damage" effect described itself with nothing but its name.
+		/// <para>
+		/// The colour comes from the damage type's own <c>DisplayColor</c>, which is data the
+		/// content already carries and which the floating combat numbers already use, so a fire
+		/// effect reads as fire in both places.
+		/// </para>
+		/// </remarks>
+		/// <returns>The wording, or null when neither the amount nor the type is known.</returns>
+		public override string GetTooltipContribution()
+		{
+			string amount = DamageValue?.Describe();
+			string type = DamageAttributeTemplate != null ? DamageAttributeTemplate.Name : null;
+
+			if (amount == null && type == null)
+			{
+				return null;
+			}
+			/* "Deals 3 Fire Damage damage". The damage types are authored as "Fire Damage" and
+			 * "Physical Damage", so appending the word again stutters; a type that does not
+			 * already say it still needs it. */
+			bool typeSaysDamage = type != null &&
+				type.EndsWith("damage", System.StringComparison.OrdinalIgnoreCase);
+			string suffix = typeSaysDamage ? string.Empty : " damage";
+
+			if (amount == null)
+			{
+				return $"Deals {type}{suffix}";
+			}
+			return type == null ? $"Deals {amount} damage" : $"Deals {amount} {type}{suffix}";
+		}
+
+		/// <summary>
 		/// Applies damage to the target character using the computed value and attribute template.
 		/// Runs on the server and on the client that owns the initiator — see the note on the class.
 		/// </summary>

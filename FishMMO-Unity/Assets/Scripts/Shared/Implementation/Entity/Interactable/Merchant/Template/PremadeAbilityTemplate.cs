@@ -144,14 +144,20 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// The finished ability's tooltip: the base ability with its events folded in, the
-		/// merchant's own price, and a line saying it needs no crafting.
+		/// Describes the finished ability this offer sells, at the price it sells for.
 		/// </summary>
-		public string Tooltip()
+		/// <remarks>
+		/// The composition is the one a crafter would produce from the same parts, so the offer
+		/// cannot advertise numbers the bought ability will not have. The craft cost is suppressed:
+		/// this is sold at its own price and two price lines would defeat the point of showing one.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		public void BuildTooltip(TooltipContent content)
 		{
 			if (Ability == null)
 			{
-				return this.name;
+				content.AddTitle(this.name);
+				return;
 			}
 
 			List<ITooltip> components = new List<ITooltip>();
@@ -170,21 +176,14 @@ namespace FishMMO.Shared
 				components.Add(TypeOverride);
 			}
 
-			using (var builder = new TooltipBuilder())
-			{
-				Ability.BuildTooltip(builder, components, includePrice: false);
-				builder.AddLine("Premade ability. Ready to use as soon as it is bought; no crafting needed.", 5, TooltipColors.Value);
+			AbilitySummary.Compose(Ability, components).BuildTooltip(content, showDeltas: false, includePrice: false);
 
-				AbilityType type = TypeOverride != null ? TypeOverride.OverrideAbilityType : Ability.Type;
-				if (type != AbilityType.None)
-				{
-					builder.AddLine($"Type: {type}", 90, TooltipColors.Title, false, "120%");
-				}
-				if (Price > 0)
-				{
-					builder.AddLine($"Price: {Price}", 80, TooltipColors.Stat);
-				}
-				return builder.Build();
+			content.AddBody("Premade ability. Ready to use as soon as it is bought; no crafting needed.",
+				TooltipPriority.Description + 1, TooltipTone.Good);
+
+			if (Price > 0)
+			{
+				content.AddStat("Price", Price.ToString(), TooltipPriority.Price);
 			}
 		}
 

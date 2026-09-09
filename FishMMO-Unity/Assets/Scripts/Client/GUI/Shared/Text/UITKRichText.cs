@@ -8,19 +8,22 @@ namespace FishMMO.Client
 	/// UI Toolkit <c>Label</c> renders correctly.
 	/// </summary>
 	/// <remarks>
-	/// Tooltips, chat lines and world labels are all built by shared code — <c>TooltipBuilder</c>,
-	/// <c>RichText</c>, <c>ChatHelper</c> — that predates UI Toolkit and emits TextMeshPro tags.
+	/// Chat lines and world labels are built by shared code — <c>RichText</c>, <c>ChatHelper</c> —
+	/// that predates UI Toolkit and emits TextMeshPro tags.
 	/// Almost all of them are common to both parsers, but one is not: <c>&lt;size=120%&gt;</c>.
 	/// TextMeshPro reads a percentage as a multiple of the current size; UI Toolkit's parser
 	/// accepts absolute lengths and signed offsets only, and a percentage makes it drop the tag —
 	/// so every item name, ability name and attribute header silently loses its emphasis.
 	///
 	/// Rewriting at display time rather than at the source keeps a single markup dialect in the
-	/// shared assembly, which the server also compiles, and leaves the tooltip text usable by
-	/// anything else that wants it.
+	/// shared assembly, which the server also compiles.
+	///
+	/// Tooltips no longer come through here: <c>TooltipContent</c> carries a size as data and
+	/// <c>UITKTooltipView</c> renders it as USS, which sidesteps the percentage problem entirely
+	/// rather than patching it up afterwards.
 	///
 	/// Sizes are resolved against a caller-supplied base rather than tracked through nesting.
-	/// The generators never nest <c>&lt;size&gt;</c> — each builder line opens and closes its own —
+	/// The generators never nest <c>&lt;size&gt;</c> — each line opens and closes its own —
 	/// so a single base is exact for the markup that actually exists, and predictable for the
 	/// markup that does not.
 	/// </remarks>

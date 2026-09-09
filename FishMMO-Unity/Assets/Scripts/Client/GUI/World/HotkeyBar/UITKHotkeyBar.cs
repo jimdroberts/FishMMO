@@ -831,21 +831,21 @@ namespace FishMMO.Client
 					if (Character.TryGet(out IInventoryController inventoryController) &&
 						inventoryController.TryGetItem((int)referenceID, out Item inventoryItem))
 					{
-						tooltip.Open(inventoryItem.Tooltip(), slot.Root);
+						tooltip.Open(inventoryItem, slot.Root);
 					}
 					break;
 				case ReferenceButtonType.Equipment:
 					if (Character.TryGet(out IEquipmentController equipmentController) &&
 						equipmentController.TryGetItem((int)referenceID, out Item equippedItem))
 					{
-						tooltip.Open(equippedItem.Tooltip(), slot.Root);
+						tooltip.Open(equippedItem, slot.Root);
 					}
 					break;
 				case ReferenceButtonType.Ability:
 					if (Character.TryGet(out IAbilityController abilityController) &&
 						abilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability))
 					{
-						tooltip.Open(ability.Tooltip(), slot.Root);
+						tooltip.Open(ability, slot.Root);
 					}
 					break;
 				default:

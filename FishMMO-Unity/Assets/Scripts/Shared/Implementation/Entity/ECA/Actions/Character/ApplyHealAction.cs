@@ -18,6 +18,14 @@ namespace FishMMO.Shared
 		[SerializeReference, SubclassSelector]
 		public IIntValueProvider HealValue;
 
+		/// <summary>Says how much it heals, when the amount is knowable ahead of the cast.</summary>
+		/// <returns>The wording, or null when the amount is only known at execution time.</returns>
+		public override string GetTooltipContribution()
+		{
+			string amount = HealValue?.Describe();
+			return amount == null ? "Heals the target" : $"Heals {amount}";
+		}
+
 		/// <summary>
 		/// Restores health to the target character using the computed value.
 		/// </summary>

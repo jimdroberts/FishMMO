@@ -52,25 +52,68 @@ namespace FishMMO.Shared
 		public Sprite Icon { get { return this.icon; } }
 
 		/// <summary>
-		/// Returns the tooltip string for the ability event.
+		/// Describes what this effect is and what adding it to an ability would do.
 		/// </summary>
-		/// <returns>The tooltip string for the ability event.</returns>
-		public string Tooltip()
+		/// <remarks>
+		/// Written as the CHANGE it represents rather than as absolute numbers, because that is
+		/// what the player is deciding about: an effect on its own has no cast time, it adds one.
+		/// Signs are therefore always shown, and the tone says whether the change helps.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		public virtual void BuildTooltip(TooltipContent content)
 		{
-			using (var builder = new TooltipBuilder())
+			content.Icon = Icon;
+			content.AddTitle(Name);
+			content.AddSubtitle($"Ability Effect · {AbilitySummary.EventCategory(this)}");
+
+			AddModifier(content, "Cast Time", ActivationTime, "s", moreIsBetter: false, TooltipPriority.Stats);
+			AddModifier(content, "Cooldown", Cooldown, "s", moreIsBetter: false, TooltipPriority.Stats + 1);
+			AddModifier(content, "Speed", Speed, "m/s", moreIsBetter: true, TooltipPriority.Stats + 2);
+			AddModifier(content, "Duration", LifeTime, "s", moreIsBetter: true, TooltipPriority.Stats + 3);
+
+			BaseAbilityTemplate.AppendConditions(content, Conditions);
+
+			string targeting = TargetSelector?.GetTooltipContribution();
+			if (!string.IsNullOrWhiteSpace(targeting))
 			{
-				BuildTooltip(builder);
-				return builder.Build();
+				content.AddHeader("Targeting", TooltipPriority.Targeting);
+				content.AddEffect(targeting, TooltipPriority.Targeting + 1);
+			}
+
+			if (OnConditionsMetActions != null)
+			{
+				int order = 1;
+				foreach (BaseAction action in OnConditionsMetActions)
+				{
+					string effect = action?.GetTooltipContribution();
+					if (string.IsNullOrWhiteSpace(effect))
+					{
+						continue;
+					}
+					if (order == 1)
+					{
+						content.AddHeader("Effects", TooltipPriority.Effects);
+					}
+					content.AddEffect(effect, TooltipPriority.Effects + order++);
+				}
+			}
+
+			if (Price > 0)
+			{
+				content.AddStat("Craft Cost", Price.ToString(), TooltipPriority.Price);
 			}
 		}
 
-		/// <summary>
-		/// Populates the tooltip builder with this ability event's tooltip lines.
-		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		public virtual void BuildTooltip(TooltipBuilder builder)
+		/// <summary>Writes one modifier row, or nothing when this effect does not change that stat.</summary>
+		private static void AddModifier(TooltipContent content, string label, float value, string suffix, bool moreIsBetter, int priority)
 		{
-			builder.AddLine("Ability Event: " + Name, 0, TooltipColors.Title);
+			if (Mathf.Abs(value) < 0.0005f)
+			{
+				return;
+			}
+
+			string formatted = value > 0.0f ? $"+{value:0.##}{suffix}" : $"{value:0.##}{suffix}";
+			content.AddStat(label, formatted, priority, tone: AbilitySummary.ToneForDelta(value, moreIsBetter));
 		}
 
 		/// <summary>

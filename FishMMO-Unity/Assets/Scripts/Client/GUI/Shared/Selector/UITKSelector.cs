@@ -303,12 +303,12 @@ namespace FishMMO.Client
 				button.AddToClassList("fish-row__name");
 				button.AddToClassList("selector-entry");
 
-				string tooltipText = tooltipObject.Tooltip();
+				ITooltip hovered = tooltipObject;
 				button.RegisterCallback<PointerEnterEvent>((evt) =>
 				{
-					if (!string.IsNullOrEmpty(tooltipText) && UIManager.TryGetTK("UITooltip", out UITKTooltip tooltip))
+					if (UIManager.TryGetTK("UITooltip", out UITKTooltip tooltip))
 					{
-						tooltip.Open(tooltipText, button);
+						tooltip.Open(hovered, button);
 					}
 				});
 				button.RegisterCallback<PointerLeaveEvent>((evt) =>

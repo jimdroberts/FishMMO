@@ -130,6 +130,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public static void ApplyToAll()
 		{
+			ApplyTooltipPalette();
+
 			// Copied because a panel destroyed mid-walk would otherwise mutate the set.
 			VisualElement[] snapshot = new VisualElement[roots.Count];
 			roots.CopyTo(snapshot);
@@ -137,6 +139,32 @@ namespace FishMMO.Client
 			{
 				Apply(snapshot[i]);
 			}
+		}
+
+		/// <summary>
+		/// Points the tooltip palette at the current theme.
+		/// </summary>
+		/// <remarks>
+		/// Tooltip rows carry a tone rather than a colour, and the palette is what turns a tone
+		/// into one. It lives in the shared assembly because the producers do — a template builds
+		/// its description without knowing a client exists — so the client pushes the theme into
+		/// it here rather than the shared code reaching for a theme it cannot see.
+		/// <para>
+		/// Only the two colours the theme actually carries are overridden. The semantic ones
+		/// (better, worse, notable) are meanings rather than skin, in the same way a health bar is
+		/// red in every theme, so they stay at the palette's defaults.
+		/// </para>
+		/// </remarks>
+		private static void ApplyTooltipPalette()
+		{
+			UITKTheme theme = Current;
+
+			Color title = theme != null && theme.HasOverride("Text") ? theme.Text : TooltipPalette.Title;
+			Color label = theme != null && theme.HasOverride("TooltipLabel") ? theme.TooltipLabel : TooltipPalette.Label;
+			Color stat = theme != null && theme.HasOverride("Highlight") ? theme.Highlight : TooltipPalette.Stat;
+
+			TooltipPalette.Initialize(title, label, stat,
+				TooltipPalette.Good, TooltipPalette.Bad, TooltipPalette.Muted, TooltipPalette.Accent);
 		}
 
 		/// <summary>

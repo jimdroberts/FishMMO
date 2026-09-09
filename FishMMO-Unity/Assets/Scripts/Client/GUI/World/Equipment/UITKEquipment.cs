@@ -854,7 +854,7 @@ namespace FishMMO.Client
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				// With an owner, so the tooltip closes itself if this slot is rebuilt under it.
-				tooltip.Open(item.Tooltip(), owner);
+				tooltip.Open(item, owner);
 			}
 		}
 

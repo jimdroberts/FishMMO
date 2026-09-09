@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -9,40 +9,47 @@ using FishMMO.Logging;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit ability crafting panel. The player selects a base ability for the main entry
-	/// and optional ability events for each additional event slot, then crafts the resulting
-	/// ability for a currency cost. Slot buttons are built at runtime rather than instantiated
-	/// from a prefab, and use the shared
-	/// <see cref="UITKSelector"/> for picking and <see cref="UITKTooltip"/> for hover info.
+	/// UI Toolkit ability crafting panel: a base ability, the effects configured onto it, and a
+	/// live preview of what the two would produce.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Crafting is the game's ability designer. A base ability is the core — a fireball that hangs
+	/// in the air — and effects configure it: one to move it forward, one to make it bigger. Each
+	/// effect pays for itself in cooldown, cast time and resource cost as well as in currency, and
+	/// the point of this panel is that the player can see that trade before they commit.
+	/// </para>
+	/// <para>
+	/// The preview is composed by <see cref="AbilitySummary"/> — the same composition the server
+	/// performs when it builds the crafted ability, and the same one the finished ability's tooltip
+	/// reports afterwards. It used to be a third, separate calculation that ignored the effects a
+	/// template already ships with, so the preview and the ability the player received disagreed.
+	/// Every stat now also carries what the chosen effects changed it by.
+	/// </para>
+	/// </remarks>
 	public class UITKAbilityCraft : UITKCharacterControl
 	{
-		/// <summary>The maximum number of event slots allowed for crafting an ability.</summary>
+		/// <summary>The maximum number of event slots the panel will draw for one ability.</summary>
 		private const int MAX_CRAFT_EVENT_SLOTS = 10;
 
-		/// <summary>Name of the main ability entry button inside the UXML.</summary>
+		/// <summary>Element names inside the UXML.</summary>
 		private const string MAIN_ENTRY_NAME = "craft-main-entry";
-
-		/// <summary>Name of the ability description label inside the UXML.</summary>
 		private const string DESCRIPTION_NAME = "craft-description";
-
-		/// <summary>Name of the crafting cost label inside the UXML.</summary>
+		private const string PREVIEW_EMPTY_NAME = "craft-preview-empty";
 		private const string COST_NAME = "craft-cost";
-
-		/// <summary>Name of the event slot container inside the UXML.</summary>
+		private const string BALANCE_NAME = "craft-balance";
 		private const string EVENT_LIST_NAME = "craft-event-list";
-
-		/// <summary>Name of the craft confirmation button inside the UXML.</summary>
+		private const string SLOTS_HEAD_NAME = "craft-slots-head";
+		private const string SLOTS_EMPTY_NAME = "craft-slots-empty";
 		private const string CRAFT_BUTTON_NAME = "craft-confirm-btn";
-
-		/// <summary>Name of the status line inside the UXML.</summary>
+		private const string CLOSE_BUTTON_NAME = "craft-close-btn";
 		private const string STATUS_NAME = "craft-status";
 
-		/// <summary>Name of the close button inside the UXML.</summary>
-		private const string CLOSE_BUTTON_NAME = "craft-close-btn";
-
-		/// <summary>USS class applied to runtime-created event slot buttons.</summary>
+		/// <summary>USS class applied to runtime-created effect slot rows.</summary>
 		private const string SLOT_CLASS = "craft-slot";
+
+		/// <summary>USS class marking a slot with nothing in it.</summary>
+		private const string SLOT_EMPTY_CLASS = "craft-slot--empty";
 
 		/// <summary>
 		/// The template ID for the currency used to craft abilities.
@@ -53,71 +60,25 @@ namespace FishMMO.Client
 		/// <summary>The last interactable ID used for crafting.</summary>
 		private long lastInteractableID = 0;
 
-		/// <summary>The main ability entry button.</summary>
+		/// <summary>The base ability entry button.</summary>
 		private Button mainEntryButton;
 
-		/// <summary>The tooltip data currently assigned to the main entry.</summary>
-		private ITooltip mainTooltip;
+		/// <summary>The container the composed preview is rendered into.</summary>
+		private VisualElement descriptionRoot;
 
-		/// <summary>The label displaying the ability description.</summary>
-		private Label descriptionLabel;
+		/// <summary>The preview's placeholder, shown until a base ability is chosen.</summary>
+		private Label previewEmpty;
 
-		/// <summary>The label displaying the crafting cost.</summary>
+		/// <summary>The cost and balance labels.</summary>
 		private Label costLabel;
+		private Label balanceLabel;
 
-		/// <summary>The container holding the event slot buttons.</summary>
+		/// <summary>The container holding the effect slot rows.</summary>
 		private VisualElement eventListContainer;
 
-		/// <summary>Runtime-created event slots.</summary>
-		private readonly List<EventSlot> eventSlots = new List<EventSlot>();
-
-		/// <summary>
-		/// Represents a single ability event slot: its button and assigned tooltip data.
-		/// </summary>
-		private sealed class EventSlot
-		{
-			/// <summary>The slot index.</summary>
-			public int Index;
-
-			/// <summary>The slot button element.</summary>
-			public Button Button;
-
-			/// <summary>The tooltip data assigned to this slot, if any.</summary>
-			public ITooltip Tooltip;
-		}
-
-		/// <summary>
-		/// The event templates chosen for each slot, as plain data.
-		/// </summary>
-		/// <remarks>
-		/// <see cref="eventSlots"/> holds <see cref="Button"/>s, which belong to one visual tree,
-		/// and <c>UIDocument</c> re-clones the tree on every enable. Keeping the SELECTION only in
-		/// those buttons meant a hide/show — or any tree rebuild — silently emptied a half-built
-		/// craft while the panel still looked populated to the code that reads it.
-		/// </remarks>
-		private readonly List<ITooltip> selectedEvents = new List<ITooltip>();
-
-		/// <summary>The base ability selected for the craft, as plain data.</summary>
-		private ITooltip selectedMain;
-
-		/// <summary>How many event slots the selected ability allows.</summary>
-		private int selectedSlotCount;
-
-		/// <summary>Submit lock held while a craft request is awaiting the server's reply.</summary>
-		/// <remarks>
-		/// The server answers every craft — accepted or refused — with
-		/// <see cref="AbilityCraftResultBroadcast"/>, so the guard's timeout is a backstop for a
-		/// reply that never arrives rather than the normal way the lock is released. It used to be
-		/// the only way: every refusal on the server was a bare <c>return</c>, so a refused craft
-		/// left the button dead until the watchdog expired and told the player nothing.
-		/// </remarks>
-		private readonly PendingReplyGuard craftGuard = new PendingReplyGuard();
-
-		/// <summary>Seconds to wait for the server's answer to a craft.</summary>
-		private const float CraftReplyTimeoutSeconds = 10.0f;
-
-		/// <summary>Cached reference to the craft confirm button, for the submit lock.</summary>
-		private Button craftButton;
+		/// <summary>The effects header and the note shown when an ability takes no effects.</summary>
+		private Label slotsHead;
+		private Label slotsEmpty;
 
 		/// <summary>The status line, where refusals and confirmations are written.</summary>
 		private Label statusLabel;
@@ -125,8 +86,42 @@ namespace FishMMO.Client
 		/// <summary>The status text, kept across the tree rebuilds a hide/show causes.</summary>
 		private string statusText = string.Empty;
 
+		/// <summary>Cached reference to the craft confirm button, for the submit lock.</summary>
+		private Button craftButton;
+
+		/// <summary>The slot rows currently built.</summary>
+		private readonly List<VisualElement> slotRows = new List<VisualElement>();
+
 		/// <summary>
-		/// Registers the ability crafter broadcast handler when the client is set.
+		/// The effects chosen for each slot, as plain data.
+		/// </summary>
+		/// <remarks>
+		/// The rows are <see cref="VisualElement"/>s belonging to one visual tree, and
+		/// <c>UIDocument</c> re-clones the tree on every enable. Keeping the SELECTION only in
+		/// those rows meant a hide/show — or any tree rebuild — silently emptied a half-built craft
+		/// while the panel still looked populated to the code that reads it.
+		/// </remarks>
+		private readonly List<ITooltip> selectedEvents = new List<ITooltip>();
+
+		/// <summary>The base ability selected for the craft.</summary>
+		private AbilityTemplate selectedMain;
+
+		/// <summary>How many effect slots the selected ability allows.</summary>
+		private int selectedSlotCount;
+
+		/// <summary>Submit lock held while a craft request is awaiting the server's reply.</summary>
+		/// <remarks>
+		/// The server answers every craft — accepted or refused — with
+		/// <see cref="AbilityCraftResultBroadcast"/>, so the guard's timeout is a backstop for a
+		/// reply that never arrives rather than the normal way the lock is released.
+		/// </remarks>
+		private readonly PendingReplyGuard craftGuard = new PendingReplyGuard();
+
+		/// <summary>Seconds to wait for the server's answer to a craft.</summary>
+		private const float CraftReplyTimeoutSeconds = 10.0f;
+
+		/// <summary>
+		/// Registers the ability crafter broadcast handlers when the client is set.
 		/// </summary>
 		public override void OnClientSet()
 		{
@@ -135,7 +130,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Unregisters the ability crafter broadcast handler when the client is unset.
+		/// Unregisters the ability crafter broadcast handlers when the client is unset.
 		/// </summary>
 		public override void OnClientUnset()
 		{
@@ -144,12 +139,12 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Queries panel elements and wires the main entry, craft, and close buttons.
+		/// Queries panel elements and wires the base entry, craft, and close buttons.
 		/// </summary>
 		public override void OnStarting()
 		{
-			/* Every Button in eventSlots belongs to the tree that was just discarded. */
-			eventSlots.Clear();
+			/* Every row in slotRows belongs to the tree that was just discarded. */
+			slotRows.Clear();
 
 			VisualElement root = Root;
 			if (root == null)
@@ -157,18 +152,20 @@ namespace FishMMO.Client
 				return;
 			}
 
-			descriptionLabel = root.Q<Label>(DESCRIPTION_NAME);
+			descriptionRoot = root.Q(DESCRIPTION_NAME);
+			previewEmpty = root.Q<Label>(PREVIEW_EMPTY_NAME);
 			costLabel = root.Q<Label>(COST_NAME);
-			statusLabel = root.Q<Label>(STATUS_NAME);
+			balanceLabel = root.Q<Label>(BALANCE_NAME);
 			eventListContainer = root.Q(EVENT_LIST_NAME);
+			slotsHead = root.Q<Label>(SLOTS_HEAD_NAME);
+			slotsEmpty = root.Q<Label>(SLOTS_EMPTY_NAME);
+			statusLabel = root.Q<Label>(STATUS_NAME);
 
 			mainEntryButton = root.Q<Button>(MAIN_ENTRY_NAME);
 			if (mainEntryButton != null)
 			{
 				mainEntryButton.clicked += MainEntry_OnLeftClick;
 				mainEntryButton.RegisterCallback<PointerDownEvent>(OnMainEntryPointerDown);
-				mainEntryButton.RegisterCallback<PointerEnterEvent>(OnMainEntryPointerEnter);
-				mainEntryButton.RegisterCallback<PointerLeaveEvent>(OnSlotPointerLeave);
 			}
 
 			craftButton = root.Q<Button>(CRAFT_BUTTON_NAME);
@@ -182,22 +179,19 @@ namespace FishMMO.Client
 			{
 				closeButton.clicked += Hide;
 			}
-
-			UpdateMainDescription();
 		}
 
-		/// <summary>
-		/// Clears all event slots when the UI is being destroyed.
-		/// </summary>
+		/// <summary>Clears all slots when the UI is being destroyed.</summary>
 		public override void OnDestroying()
 		{
 			ClearSlots();
+			base.OnDestroying();
 		}
 
 		/// <summary>
-		/// Handles the broadcast message for ability crafting. Updates the interactable ID and shows the UI.
+		/// Opens the panel for a crafter the player interacted with.
 		/// </summary>
-		/// <param name="msg">The broadcast message containing ability crafting info.</param>
+		/// <param name="msg">The broadcast message carrying the crafter's ID.</param>
 		/// <param name="channel">The network channel.</param>
 		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg, Channel channel)
 		{
@@ -215,7 +209,6 @@ namespace FishMMO.Client
 		protected override void OnAfterStarting()
 		{
 			base.OnAfterStarting();
-
 			ApplySelection();
 		}
 
@@ -229,240 +222,228 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void ApplySelection()
 		{
-			mainTooltip = selectedMain;
-
-			if (mainEntryButton != null)
-			{
-				SetButtonIcon(mainEntryButton, selectedMain != null ? selectedMain.Icon : null);
-				mainEntryButton.text = selectedMain != null ? selectedMain.Name : "";
-			}
-
+			ApplyMainEntry();
 			BuildEventSlots();
-			UpdateMainDescription();
+			RefreshPreview();
 
-			/* The status line belongs to the discarded tree too, so it is re-applied here with the
-			 * rest of the selection rather than being lost on a hide/show. */
 			if (statusLabel != null)
 			{
 				statusLabel.text = statusText;
 			}
-
 			if (craftButton != null)
 			{
 				craftButton.SetEnabled(!craftGuard.IsPending);
 			}
 		}
 
-		/// <summary>
-		/// Opens the selector for base abilities to assign the main entry.
-		/// </summary>
-		private void MainEntry_OnLeftClick()
+		/// <summary>Draws the base ability row from the current selection.</summary>
+		private void ApplyMainEntry()
 		{
-			if (Character != null &&
-				Character.TryGet(out IAbilityController abilityController) &&
-				UIManager.TryGetTK("UISelector", out UITKSelector uiSelector))
+			if (mainEntryButton == null)
 			{
-				List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(abilityController.KnownBaseAbilities);
-
-				// remove abilities we already have learned, you must forget an old ability before you can craft it again
-				templates.RemoveAll(t => abilityController.KnowsLearnedAbility(t.ID));
-
-				uiSelector.Open(templates, (i) =>
-				{
-					AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(i);
-					if (template != null)
-					{
-						SetMainEntry(template);
-						SetEventSlots(template.AdditionalEventSlots);
-
-						// update the main description text
-						UpdateMainDescription();
-					}
-				});
+				return;
 			}
+
+			mainEntryButton.Clear();
+			mainEntryButton.text = string.Empty;
+
+			VisualElement icon = new VisualElement();
+			icon.AddToClassList("craft-main__icon");
+			icon.pickingMode = PickingMode.Ignore;
+			if (selectedMain?.Icon != null)
+			{
+				icon.style.backgroundImage = new StyleBackground(selectedMain.Icon);
+			}
+			mainEntryButton.Add(icon);
+
+			VisualElement text = new VisualElement();
+			text.AddToClassList("craft-main__text");
+			text.pickingMode = PickingMode.Ignore;
+
+			Label name = new Label(selectedMain != null ? selectedMain.Name : "Choose a base ability");
+			name.AddToClassList("craft-main__name");
+			name.pickingMode = PickingMode.Ignore;
+			text.Add(name);
+
+			Label meta = new Label(selectedMain != null
+				? DescribeSlots(selectedMain.AdditionalEventSlots)
+				: "Click to pick from the base abilities you know");
+			meta.AddToClassList("craft-main__meta");
+			meta.pickingMode = PickingMode.Ignore;
+			text.Add(meta);
+
+			mainEntryButton.Add(text);
+		}
+
+		/// <summary>How many effects an ability accepts, in words.</summary>
+		private static string DescribeSlots(int slots)
+		{
+			if (slots <= 0)
+			{
+				return "Takes no additional effects";
+			}
+			return slots == 1 ? "1 effect slot" : $"{slots} effect slots";
 		}
 
 		/// <summary>
-		/// Clears the main entry and event slots on right-click.
+		/// Opens the selector for base abilities.
 		/// </summary>
+		private void MainEntry_OnLeftClick()
+		{
+			if (Character == null ||
+				!Character.TryGet(out IAbilityController abilityController) ||
+				!UIManager.TryGetTK("UISelector", out UITKSelector uiSelector))
+			{
+				return;
+			}
+
+			List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(abilityController.KnownBaseAbilities);
+
+			// An ability already crafted from a template must be forgotten before it can be crafted again.
+			templates.RemoveAll(t => abilityController.KnowsLearnedAbility(t.ID));
+
+			if (templates.Count == 0)
+			{
+				SetStatus("You know no base abilities you have not already crafted.");
+				return;
+			}
+
+			uiSelector.Open(templates, (i) =>
+			{
+				AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(i);
+				if (template == null)
+				{
+					return;
+				}
+
+				SetMainEntry(template);
+				SetEventSlots(template.AdditionalEventSlots);
+				RefreshPreview();
+			});
+		}
+
+		/// <summary>Clears the base ability and every slot on right-click.</summary>
 		private void MainEntry_OnRightClick()
 		{
 			SetMainEntry(null);
 			ClearSlots();
-
-			// update the main description text
-			UpdateMainDescription();
+			BuildEventSlots();
+			RefreshPreview();
 		}
 
 		/// <summary>
-		/// Opens the selector for ability events to assign an event slot.
+		/// Opens the selector for effects to put in one slot.
 		/// </summary>
-		/// <param name="index">The index of the event slot.</param>
+		/// <param name="index">The index of the slot.</param>
 		private void EventEntry_OnLeftClick(int index)
 		{
-			if (index < 0 ||
-				index >= eventSlots.Count)
+			if (index < 0 || index >= selectedSlotCount)
 			{
 				return;
 			}
 
-			if (Character != null &&
-				Character.TryGet(out IAbilityController abilityController) &&
-				UIManager.TryGetTK("UISelector", out UITKSelector uiSelector))
+			if (Character == null ||
+				!Character.TryGet(out IAbilityController abilityController) ||
+				!UIManager.TryGetTK("UISelector", out UITKSelector uiSelector))
 			{
-				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownAbilityEvents);
-
-				// remove duplicate events
-				foreach (EventSlot slot in eventSlots)
-				{
-					if (slot.Tooltip is AbilityTypeOverrideEventType)
-					{
-						templates.RemoveAll(t => t is AbilityTypeOverrideEventType);
-					}
-					if (slot.Tooltip is ICachedObject cached)
-					{
-						templates.Remove(cached);
-					}
-				}
-
-				uiSelector.Open(templates, (i) =>
-				{
-					AbilityEvent template = AbilityEvent.Get<AbilityEvent>(i);
-					if (template != null)
-					{
-						SetEventSlot(index, template);
-					}
-
-					// update the main description text
-					UpdateMainDescription();
-				});
+				return;
 			}
+
+			List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownAbilityEvents);
+
+			/* Anything already in another slot is not offered again. An ability holds one entry per
+			 * event, and the server refuses a duplicate outright, so offering it would only produce
+			 * a craft that cannot succeed. */
+			for (int i = 0; i < selectedEvents.Count; ++i)
+			{
+				if (i == index)
+				{
+					continue;
+				}
+				if (selectedEvents[i] is AbilityTypeOverrideEventType)
+				{
+					templates.RemoveAll(t => t is AbilityTypeOverrideEventType);
+				}
+				if (selectedEvents[i] is ICachedObject cached)
+				{
+					templates.Remove(cached);
+				}
+			}
+
+			if (templates.Count == 0)
+			{
+				SetStatus("You know no other effects to add.");
+				return;
+			}
+
+			uiSelector.Open(templates, (i) =>
+			{
+				AbilityEvent template = AbilityEvent.Get<AbilityEvent>(i);
+				if (template != null)
+				{
+					SetEventSlot(index, template);
+					RefreshPreview();
+				}
+			});
 		}
 
-		/// <summary>
-		/// Clears an event slot on right-click.
-		/// </summary>
-		/// <param name="index">The index of the event slot.</param>
+		/// <summary>Empties a slot on right-click.</summary>
+		/// <param name="index">The index of the slot.</param>
 		private void EventEntry_OnRightClick(int index)
 		{
-			if (index > -1 &&
-				index < eventSlots.Count)
+			if (index > -1 && index < selectedSlotCount)
 			{
 				SetEventSlot(index, null);
-
-				// update the main description text
-				UpdateMainDescription();
+				RefreshPreview();
 			}
 		}
 
-		/// <summary>
-		/// Assigns the main entry tooltip and updates its icon and label.
-		/// </summary>
-		/// <param name="tooltip">The tooltip data, or null to clear.</param>
-		private void SetMainEntry(ITooltip tooltip)
+		/// <summary>Assigns the base ability.</summary>
+		private void SetMainEntry(AbilityTemplate template)
 		{
-			mainTooltip = tooltip;
-			selectedMain = tooltip;
-			if (mainEntryButton != null)
-			{
-				SetButtonIcon(mainEntryButton, tooltip != null ? tooltip.Icon : null);
-				mainEntryButton.text = tooltip != null ? tooltip.Name : "";
-			}
+			selectedMain = template;
+			ApplyMainEntry();
 		}
 
-		/// <summary>
-		/// Assigns an event slot's tooltip and updates its icon and label.
-		/// </summary>
-		/// <param name="index">The index of the event slot.</param>
-		/// <param name="tooltip">The tooltip data, or null to clear.</param>
+		/// <summary>Assigns a slot's effect and redraws that row.</summary>
 		private void SetEventSlot(int index, ITooltip tooltip)
 		{
-			if (index < 0 ||
-				index >= eventSlots.Count)
+			if (index < 0 || index >= selectedSlotCount)
 			{
 				return;
 			}
-
-			EventSlot slot = eventSlots[index];
-			slot.Tooltip = tooltip;
-			SetButtonIcon(slot.Button, tooltip != null ? tooltip.Icon : null);
-			slot.Button.text = tooltip != null ? tooltip.Name : "";
 
 			while (selectedEvents.Count <= index)
 			{
 				selectedEvents.Add(null);
 			}
 			selectedEvents[index] = tooltip;
+
+			BuildEventSlots();
 		}
 
 		/// <summary>
-		/// Updates the main ability description and crafting cost display.
+		/// Sets how many effect slots the panel offers.
 		/// </summary>
-		private void UpdateMainDescription()
+		/// <param name="count">The template's allowance.</param>
+		private void SetEventSlots(int count)
 		{
-			if (descriptionLabel == null)
+			/* The per-ability limit. The server enforces this too — it used to accept up to a
+			 * global 32 events regardless of what the template allowed, so this method was the ONLY
+			 * thing standing between a crafted packet and a 32-effect ability on a 0-slot
+			 * template. */
+			selectedSlotCount = Mathf.Clamp(count, 0, MAX_CRAFT_EVENT_SLOTS);
+
+			selectedEvents.Clear();
+			for (int i = 0; i < selectedSlotCount; ++i)
 			{
-				return;
+				selectedEvents.Add(null);
 			}
 
-			if (mainTooltip == null)
-			{
-				descriptionLabel.text = "";
-				if (costLabel != null)
-				{
-					costLabel.text = "Cost: ";
-				}
-				return;
-			}
-
-			long price = 0;
-			AbilityTemplate abilityTemplate = mainTooltip as AbilityTemplate;
-			if (abilityTemplate != null)
-			{
-				price = abilityTemplate.Price;
-			}
-
-			if (eventSlots.Count > 0)
-			{
-				List<ITooltip> tooltips = new List<ITooltip>();
-				foreach (EventSlot slot in eventSlots)
-				{
-					if (slot.Tooltip == null)
-					{
-						continue;
-					}
-					tooltips.Add(slot.Tooltip);
-
-					AbilityEvent abilityEvent = slot.Tooltip as AbilityEvent;
-					if (abilityEvent != null)
-					{
-						price += abilityEvent.Price;
-					}
-				}
-
-				if (mainTooltip is AbilityTemplate mainAbilityTemplate)
-				{
-					descriptionLabel.text = mainAbilityTemplate.TooltipWithEvents(tooltips);
-				}
-				else
-				{
-					descriptionLabel.text = mainTooltip.Tooltip();
-				}
-			}
-			else
-			{
-				descriptionLabel.text = mainTooltip.Tooltip();
-			}
-
-			if (costLabel != null)
-			{
-				costLabel.text = "Cost: " + price.ToString();
-			}
+			BuildEventSlots();
 		}
 
-		/// <summary>
-		/// Removes all event slot buttons from the UI.
-		/// </summary>
+		/// <summary>Removes every slot row and forgets what was in them.</summary>
 		private void ClearSlots()
 		{
 			ClearSlotViews();
@@ -470,39 +451,18 @@ namespace FishMMO.Client
 			selectedSlotCount = 0;
 		}
 
-		/// <summary>
-		/// Detaches the event slot buttons without forgetting which events were chosen.
-		/// </summary>
+		/// <summary>Detaches the slot rows without forgetting which effects were chosen.</summary>
 		private void ClearSlotViews()
 		{
-			foreach (EventSlot slot in eventSlots)
+			foreach (VisualElement row in slotRows)
 			{
-				if (slot.Button != null)
-				{
-					slot.Button.RemoveFromHierarchy();
-				}
+				row?.RemoveFromHierarchy();
 			}
-			eventSlots.Clear();
+			slotRows.Clear();
 		}
 
 		/// <summary>
-		/// Builds the specified number of event slot buttons for ability crafting.
-		/// </summary>
-		/// <param name="count">The number of event slots to create.</param>
-		private void SetEventSlots(int count)
-		{
-			/* The per-ability limit. The server now enforces this too — it used to accept up to a
-			 * global 32 events regardless of what the template allowed, so this method was the ONLY
-			 * thing standing between a crafted packet and a 32-event ability on a 0-slot
-			 * template. */
-			selectedSlotCount = Mathf.Clamp(count, 0, MAX_CRAFT_EVENT_SLOTS);
-
-			BuildEventSlots();
-		}
-
-		/// <summary>
-		/// Rebuilds the event slot buttons for the current selection and re-applies the chosen
-		/// events to them.
+		/// Rebuilds the slot rows for the current selection.
 		/// </summary>
 		private void BuildEventSlots()
 		{
@@ -522,107 +482,254 @@ namespace FishMMO.Client
 				selectedEvents.RemoveRange(selectedSlotCount, selectedEvents.Count - selectedSlotCount);
 			}
 
-			int count = selectedSlotCount;
-			for (int i = 0; i < count && i < MAX_CRAFT_EVENT_SLOTS; ++i)
+			for (int i = 0; i < selectedSlotCount && i < MAX_CRAFT_EVENT_SLOTS; ++i)
 			{
-				EventSlot slot = new EventSlot()
-				{
-					Index = i,
-				};
+				slotRows.Add(BuildSlotRow(i, selectedEvents[i]));
+			}
 
-				Button button = new Button();
-				button.AddToClassList("fish-slot");
-				button.AddToClassList(SLOT_CLASS);
-
-				int captured = i;
-				button.clicked += () => EventEntry_OnLeftClick(captured);
-				button.RegisterCallback<PointerDownEvent>((evt) =>
-				{
-					if (evt.button == 1)
-					{
-						EventEntry_OnRightClick(captured);
-					}
-				});
-				button.RegisterCallback<PointerEnterEvent>((evt) => OpenTooltip(slot.Tooltip));
-				button.RegisterCallback<PointerLeaveEvent>(OnSlotPointerLeave);
-
-				slot.Button = button;
-				slot.Tooltip = i < selectedEvents.Count ? selectedEvents[i] : null;
-				SetButtonIcon(button, slot.Tooltip != null ? slot.Tooltip.Icon : null);
-				button.text = slot.Tooltip != null ? slot.Tooltip.Name : "";
-
-				eventSlots.Add(slot);
-				eventListContainer.Add(button);
+			/* Both notes describe a real state and neither is an error: an ability with no slots is
+			 * cast exactly as its template ships, and no base ability chosen yet is where every
+			 * craft starts. */
+			if (slotsHead != null)
+			{
+				slotsHead.style.display = selectedSlotCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+			if (slotsEmpty != null)
+			{
+				bool show = selectedSlotCount == 0;
+				slotsEmpty.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+				slotsEmpty.text = selectedMain == null
+					? string.Empty
+					: "This ability takes no additional effects. It is cast exactly as it comes.";
 			}
 		}
 
+		/// <summary>Builds one slot row.</summary>
+		/// <param name="index">The slot index.</param>
+		/// <param name="chosen">What is in it, or null.</param>
+		private VisualElement BuildSlotRow(int index, ITooltip chosen)
+		{
+			VisualElement row = new VisualElement();
+			row.AddToClassList("fish-row");
+			row.AddToClassList(SLOT_CLASS);
+			if (chosen == null)
+			{
+				row.AddToClassList(SLOT_EMPTY_CLASS);
+			}
+
+			Label ordinal = new Label((index + 1).ToString());
+			ordinal.AddToClassList("craft-slot__index");
+			ordinal.pickingMode = PickingMode.Ignore;
+			row.Add(ordinal);
+
+			VisualElement icon = new VisualElement();
+			icon.AddToClassList("craft-slot__icon");
+			icon.pickingMode = PickingMode.Ignore;
+			if (chosen?.Icon != null)
+			{
+				icon.style.backgroundImage = new StyleBackground(chosen.Icon);
+			}
+			row.Add(icon);
+
+			VisualElement text = new VisualElement();
+			text.AddToClassList("craft-slot__text");
+			text.pickingMode = PickingMode.Ignore;
+
+			Label name = new Label(chosen != null ? chosen.Name : "Empty effect slot");
+			name.AddToClassList("craft-slot__name");
+			name.pickingMode = PickingMode.Ignore;
+			text.Add(name);
+
+			Label meta = new Label(DescribeSlotContents(chosen));
+			meta.AddToClassList("craft-slot__meta");
+			meta.pickingMode = PickingMode.Ignore;
+			text.Add(meta);
+			row.Add(text);
+
+			int price = chosen is AbilityEvent abilityEvent ? abilityEvent.Price
+				: chosen is BaseAbilityTemplate baseTemplate ? baseTemplate.Price
+				: 0;
+			if (price > 0)
+			{
+				Label priceLabel = new Label(price.ToString());
+				priceLabel.AddToClassList("craft-slot__price");
+				priceLabel.pickingMode = PickingMode.Ignore;
+				row.Add(priceLabel);
+			}
+
+			int captured = index;
+			row.RegisterCallback<PointerDownEvent>(evt =>
+			{
+				if (evt.button == 1)
+				{
+					EventEntry_OnRightClick(captured);
+				}
+				else if (evt.button == 0)
+				{
+					EventEntry_OnLeftClick(captured);
+				}
+			});
+
+			eventListContainer.Add(row);
+			return row;
+		}
+
+		/// <summary>What a slot's contents do, in one line.</summary>
+		private static string DescribeSlotContents(ITooltip chosen)
+		{
+			switch (chosen)
+			{
+				case null:
+					return "Click to choose an effect  ·  right-click to clear";
+				case AbilityEvent abilityEvent:
+					{
+						List<string> parts = new List<string> { AbilitySummary.EventCategory(abilityEvent) };
+						AppendModifier(parts, abilityEvent.Cooldown, "s cd");
+						AppendModifier(parts, abilityEvent.ActivationTime, "s cast");
+						AppendModifier(parts, abilityEvent.Speed, "m/s");
+						AppendModifier(parts, abilityEvent.LifeTime, "s life");
+						return string.Join("  ·  ", parts);
+					}
+				case AbilityTypeOverrideEventType typeOverride:
+					return $"changes the ability to {typeOverride.OverrideAbilityType}";
+				default:
+					return string.Empty;
+			}
+		}
+
+		/// <summary>Appends a signed modifier, or nothing when the effect does not change that stat.</summary>
+		private static void AppendModifier(List<string> parts, float value, string suffix)
+		{
+			if (Mathf.Abs(value) < 0.0005f)
+			{
+				return;
+			}
+			parts.Add(value > 0.0f ? $"+{value:0.##}{suffix}" : $"{value:0.##}{suffix}");
+		}
+
 		/// <summary>
-		/// Validates currency, broadcasts the craft request to the server, and resets the panel.
+		/// Recomposes the preview from the current recipe and redraws the cost.
+		/// </summary>
+		/// <remarks>
+		/// The whole point of the panel. <see cref="AbilitySummary"/> composes the base ability
+		/// with the chosen effects using the same rules the server will, and the rendered content
+		/// carries a delta on every stat an effect moved — so "this costs 4 more mana and 1.2s more
+		/// cooldown" is visible before the craft, not discovered after it.
+		/// </remarks>
+		private void RefreshPreview()
+		{
+			if (selectedMain == null)
+			{
+				UITKTooltipView.Render(descriptionRoot, null);
+				SetDisplayed(previewEmpty, true);
+				SetCost(0);
+				return;
+			}
+
+			SetDisplayed(previewEmpty, false);
+
+			AbilitySummary summary = AbilitySummary.Compose(selectedMain, selectedEvents);
+			TooltipContent content = new TooltipContent();
+			summary.BuildTooltip(content, showDeltas: summary.HasCraftedEvents, includePrice: false);
+			UITKTooltipView.Render(descriptionRoot, content);
+
+			SetCost(summary.CraftPrice);
+		}
+
+		/// <summary>Writes the cost line and says whether the character can pay it.</summary>
+		private void SetCost(int price)
+		{
+			if (costLabel != null)
+			{
+				/* "Free" rather than "Cost: 0". Every ability and effect in the project currently
+				 * ships at a price of zero, so this is the line a player actually meets, and a
+				 * zero reads as a value that failed to load rather than as a price. */
+				costLabel.text = selectedMain == null ? "Cost: —"
+					: price > 0 ? $"Cost: {price}"
+					: "Cost: Free";
+			}
+
+			if (balanceLabel == null)
+			{
+				return;
+			}
+
+			if (!TryGetCurrencyBalance(out long balance))
+			{
+				balanceLabel.text = string.Empty;
+				balanceLabel.RemoveFromClassList("craft-balance--short");
+				return;
+			}
+
+			balanceLabel.text = $"You have {balance}";
+			balanceLabel.EnableInClassList("craft-balance--short", balance < price);
+		}
+
+		/// <summary>
+		/// Sends the craft request.
 		/// </summary>
 		public void OnCraft()
 		{
 			/* Double-submit guard. The craft is a purchase: two clicks a frame apart used to send
 			 * two AbilityCraftBroadcasts, and only the server's 100ms ingress debounce stood
-			 * between the player and paying twice. Released by the server's answer, which now
-			 * arrives for a refusal as well as a success. */
+			 * between the player and paying twice. Released by the server's answer, which arrives
+			 * for a refusal as well as a success. */
 			if (craftGuard.IsPending)
 			{
 				return;
 			}
 
-			AbilityTemplate main = mainTooltip as AbilityTemplate;
-			if (main == null)
+			if (selectedMain == null)
 			{
-				SetStatus("Choose an ability to craft.");
+				SetStatus("Choose a base ability to craft.");
 				return;
 			}
 
-			long price = main.Price;
+			AbilitySummary summary = AbilitySummary.Compose(selectedMain, selectedEvents);
 
 			List<int> eventIds = new List<int>();
-			foreach (EventSlot slot in eventSlots)
+			foreach (ITooltip chosen in selectedEvents)
 			{
-				AbilityEvent abilityEvent = slot.Tooltip as AbilityEvent;
-				if (abilityEvent != null)
+				switch (chosen)
 				{
-					eventIds.Add(abilityEvent.ID);
-					price += abilityEvent.Price;
+					case AbilityEvent abilityEvent:
+						eventIds.Add(abilityEvent.ID);
+						break;
+					case AbilityTypeOverrideEventType typeOverride:
+						eventIds.Add(typeOverride.ID);
+						break;
 				}
 			}
 
-			/* The affordability precheck is a COURTESY, not a gate.
+			/* The affordability check is a COURTESY, not a gate.
 			 *
 			 * It used to be a gate, and a hard one: an unset CurrencyTemplateID — which is exactly
 			 * what this panel shipped with — refused every craft here, before anything was sent, in
-			 * silence. The crafter was unusable for as long as that inspector field stayed at zero
-			 * and nothing in the game said why. The server holds the authoritative balance, charges
-			 * against it, and now answers a craft it cannot afford with a reason, so a client that
-			 * cannot resolve the currency template simply sends the request and lets the server
-			 * answer rather than refusing on the player's behalf. */
+			 * silence. The server holds the authoritative balance, charges against it, and answers
+			 * a craft it cannot afford with a reason, so a client that cannot resolve the currency
+			 * template sends the request and lets the server answer rather than refusing on the
+			 * player's behalf. */
 			if (Character != null &&
 				TryGetCurrencyBalance(out long balance) &&
-				balance < price)
+				balance < summary.CraftPrice)
 			{
-				SetStatus($"You cannot afford that. It costs {price}.");
+				SetStatus($"You cannot afford that. It costs {summary.CraftPrice} and you have {balance}.");
 				return;
 			}
 
-			AbilityCraftBroadcast abilityAddBroadcast = new AbilityCraftBroadcast()
+			Client.Broadcast(new AbilityCraftBroadcast()
 			{
 				InteractableID = lastInteractableID,
-				TemplateID = main.ID,
+				TemplateID = selectedMain.ID,
 				Events = eventIds.ToArray(),
-			};
-
-			Client.Broadcast(abilityAddBroadcast, Channel.Reliable);
+			}, Channel.Reliable);
 
 			SetCraftPending(true);
 			SetStatus("Crafting...");
 
-			/* The selection is NOT cleared here. It used to be, on send, so a refused craft threw
-			 * away the ability and every event the player had just chosen and left them to
-			 * rebuild it with no idea what went wrong. It is cleared when the server confirms the
-			 * craft instead. */
+			/* The recipe is NOT cleared here. It used to be, on send, so a refused craft threw away
+			 * the ability and every effect the player had just chosen and left them to rebuild it
+			 * with no idea what went wrong. It is cleared when the server confirms the craft. */
 		}
 
 		/// <summary>
@@ -639,7 +746,7 @@ namespace FishMMO.Client
 		{
 			balance = 0;
 
-			if (CurrencyTemplateID == 0)
+			if (CurrencyTemplateID == 0 || Character == null)
 			{
 				return false;
 			}
@@ -658,9 +765,7 @@ namespace FishMMO.Client
 			return CharacterCurrency.TryGetBalance(Character, currencyTemplate, out balance);
 		}
 
-		/// <summary>
-		/// Arms or releases the submit lock and reflects it on the confirm button.
-		/// </summary>
+		/// <summary>Arms or releases the submit lock and reflects it on the confirm button.</summary>
 		/// <param name="pending">True while a request is in flight.</param>
 		private void SetCraftPending(bool pending)
 		{
@@ -679,9 +784,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Writes the status line, remembering it across the tree rebuilds a hide/show causes.
-		/// </summary>
+		/// <summary>Writes the status line, remembering it across tree rebuilds.</summary>
 		/// <param name="text">The text to display.</param>
 		private void SetStatus(string text)
 		{
@@ -693,9 +796,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Releases a submit lock whose reply never arrived.
-		/// </summary>
+		/// <summary>Releases a submit lock whose reply never arrived.</summary>
 		protected override void OnTick()
 		{
 			if (craftGuard.HasExpired())
@@ -721,11 +822,12 @@ namespace FishMMO.Client
 					: "Crafted. It is on your Abilities tab, ready to hotkey.");
 
 				/* Cleared on success only. The crafted ability can no longer be selected — the
-				 * main-entry selector filters out anything already learned — so leaving it in the
-				 * slots would show a selection that cannot be crafted again. */
+				 * base-ability selector filters out anything already learned — so leaving it in the
+				 * recipe would show a craft that cannot be repeated. */
 				SetMainEntry(null);
 				ClearSlots();
-				UpdateMainDescription();
+				BuildEventSlots();
+				RefreshPreview();
 				return;
 			}
 
@@ -744,7 +846,7 @@ namespace FishMMO.Client
 				case AbilityCraftFailure.InvalidEntry:
 					return "That ability is no longer available.";
 				case AbilityCraftFailure.NotKnown:
-					return "You have not learned that ability template yet.";
+					return "You have not learned that base ability yet.";
 				case AbilityCraftFailure.AlreadyCrafted:
 					return "You already have that ability; forget it before crafting it again.";
 				case AbilityCraftFailure.AbilityLimit:
@@ -762,9 +864,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Handles right-click on the main entry button.
-		/// </summary>
+		/// <summary>Handles right-click on the base ability row.</summary>
 		/// <param name="evt">The pointer down event.</param>
 		private void OnMainEntryPointerDown(PointerDownEvent evt)
 		{
@@ -774,67 +874,12 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Opens the tooltip for the main entry on hover.
-		/// </summary>
-		/// <param name="evt">The pointer enter event.</param>
-		private void OnMainEntryPointerEnter(PointerEnterEvent evt)
+		/// <summary>Shows or hides an element without disturbing its layout rules.</summary>
+		private static void SetDisplayed(VisualElement element, bool displayed)
 		{
-			OpenTooltip(mainTooltip);
-		}
-
-		/// <summary>
-		/// Hides the tooltip when the pointer leaves a slot or the main entry.
-		/// </summary>
-		/// <param name="evt">The pointer leave event.</param>
-		private void OnSlotPointerLeave(PointerLeaveEvent evt)
-		{
-			CloseTooltip();
-		}
-
-		/// <summary>
-		/// Opens the shared tooltip for the provided tooltip data, if any.
-		/// </summary>
-		/// <param name="tooltip">The tooltip data to display.</param>
-		private void OpenTooltip(ITooltip tooltip)
-		{
-			if (tooltip != null &&
-				UIManager.TryGetTK("UITooltip", out UITKTooltip uiTooltip))
+			if (element != null)
 			{
-				uiTooltip.Open(tooltip.Tooltip());
-			}
-		}
-
-		/// <summary>
-		/// Hides the shared tooltip.
-		/// </summary>
-		private void CloseTooltip()
-		{
-			if (UIManager.TryGetTK("UITooltip", out UITKTooltip uiTooltip))
-			{
-				uiTooltip.Hide();
-			}
-		}
-
-		/// <summary>
-		/// Sets a button's background image to the supplied icon, or clears it when null.
-		/// </summary>
-		/// <param name="button">The button to update.</param>
-		/// <param name="icon">The icon sprite, or null to clear.</param>
-		private static void SetButtonIcon(Button button, Sprite icon)
-		{
-			if (button == null)
-			{
-				return;
-			}
-
-			if (icon != null)
-			{
-				button.style.backgroundImage = new StyleBackground(icon);
-			}
-			else
-			{
-				button.style.backgroundImage = StyleKeyword.None;
+				element.style.display = displayed ? DisplayStyle.Flex : DisplayStyle.None;
 			}
 		}
 	}

@@ -203,13 +203,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientKnownAbilityAddBroadcastReceived(KnownAbilityAddBroadcast msg, Channel channel)
 		{
-			BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(msg.TemplateID);
-			if (baseAbilityTemplate != null)
-			{
-				LearnBaseAbility(baseAbilityTemplate);
-
-				OnAddKnownAbility?.Invoke(baseAbilityTemplate);
-			}
+			/* LearnBaseAbility raises OnAddKnownAbility itself, and only when the template is new.
+			 * Raising it here as well put two rows in the abilities panel for one learn. */
+			LearnBaseAbility(BaseAbilityTemplate.Get<BaseAbilityTemplate>(msg.TemplateID));
 		}
 
 		/// <summary>
@@ -227,14 +223,11 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Learn all templates before firing events so listeners that query
-			// KnownBaseAbilities see a consistent, fully-populated set.
+			/* One call, which learns each template and raises its event. The two used to be
+			 * separate so that listeners saw a fully-populated set before the first event; nothing
+			 * reads the set from the event handler, and the split is what let a duplicate broadcast
+			 * add a second row. */
 			LearnBaseAbilities(knownAbilityBuffer);
-
-			foreach (BaseAbilityTemplate baseAbilityTemplate in knownAbilityBuffer)
-			{
-				OnAddKnownAbility?.Invoke(baseAbilityTemplate);
-			}
 		}
 
 		/// <summary>
@@ -242,13 +235,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientKnownAbilityEventAddBroadcastReceived(KnownAbilityEventAddBroadcast msg, Channel channel)
 		{
-			AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(msg.TemplateID);
-			if (abilityEvent != null)
-			{
-				LearnAbilityEvent(abilityEvent);
-
-				OnAddKnownAbilityEvent?.Invoke(abilityEvent);
-			}
+			// LearnAbilityEvent raises OnAddKnownAbilityEvent itself — see the base-ability handler.
+			LearnAbilityEvent(AbilityEvent.Get<AbilityEvent>(msg.TemplateID));
 		}
 
 		/// <summary>
@@ -266,14 +254,8 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Learn all events before firing notifications so listeners that query
-			// KnownAbilityEvents see a consistent, fully-populated set.
+			// One call, which learns each event and raises its own — see the base-ability handler.
 			LearnAbilityEvents(knownAbilityEventBuffer);
-
-			foreach (AbilityEvent abilityEvent in knownAbilityEventBuffer)
-			{
-				OnAddKnownAbilityEvent?.Invoke(abilityEvent);
-			}
 		}
 
 		/// <summary>

@@ -113,6 +113,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly List<CharacterWaypointData> Waypoints;
 			public readonly List<CharacterFactionData> Factions;
 			public readonly List<CharacterArchetypeData> Archetypes;
+			public readonly List<CharacterKnownAbilityData> KnownAbilities;
 
 			public SubEntitySnapshot(int characterCount = 1)
 			{
@@ -125,6 +126,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Waypoints = new List<CharacterWaypointData>(n);
 				Factions = new List<CharacterFactionData>(n * 8);
 				Archetypes = new List<CharacterArchetypeData>(n);
+				KnownAbilities = new List<CharacterKnownAbilityData>(n * 8);
 			}
 		}
 
@@ -143,6 +145,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendWaypointData(character, snapshot.Waypoints);
 			AppendFactionData(character, snapshot.Factions);
 			AppendArchetypeData(character, snapshot.Archetypes);
+			AppendKnownAbilityData(character, snapshot.KnownAbilities);
 		}
 
 		/// <summary>
@@ -159,6 +162,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (s.Waypoints.Count > 0) EnqueuePersistence(() => SaveWaypointsAsync(s.Waypoints));
 			if (s.Factions.Count > 0) EnqueuePersistence(() => SaveFactionsAsync(s.Factions));
 			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes));
+			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities));
 		}
 
 		/// <summary>
@@ -180,6 +184,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (s.Waypoints.Count > 0) await SaveWaypointsAsync(s.Waypoints);
 			if (s.Factions.Count > 0) await SaveFactionsAsync(s.Factions);
 			if (s.Archetypes.Count > 0) await SaveArchetypesAsync(s.Archetypes);
+			if (s.KnownAbilities.Count > 0) await SaveKnownAbilitiesAsync(s.KnownAbilities);
 		}
 
 		/// <summary>
@@ -1873,6 +1878,106 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveFactionsAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Captures a character's ability knowledge, when any of it is new since the last write.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Knowledge was the one sub-entity this save never covered. It reached the database only
+		/// through the paths that grant it — a merchant purchase, an achievement reward — each
+		/// writing its own row as it went. Anything that learned by another route wrote nothing:
+		/// a lore object's grant and a scroll's grant lasted exactly as long as the session.
+		/// </para>
+		/// <para>
+		/// Written whole rather than per row because the controller keeps knowledge as two id sets
+		/// with nothing to hang a per-entry version on. That is affordable because it is gated on
+		/// <see cref="IAbilityKnowledgeController.KnowledgeDirty"/>, which is set only when
+		/// something genuinely new is learned — a character that learns nothing writes nothing, and
+		/// the rows are versioned upserts, so a re-write of a row the database already has is
+		/// filtered rather than applied.
+		/// </para>
+		/// </remarks>
+		private void AppendKnownAbilityData(IPlayerCharacter character, List<CharacterKnownAbilityData> knownAbilities)
+		{
+			if (!character.TryGet(out IAbilityController abilityController) ||
+				!abilityController.KnowledgeDirty)
+			{
+				return;
+			}
+
+			/* Base abilities and events share one table, keyed by template id — the same table the
+			 * merchant and achievement paths write to, one row at a time. */
+			foreach (int templateID in abilityController.KnownBaseAbilities)
+			{
+				knownAbilities.Add(new CharacterKnownAbilityData(
+					id: 0,
+					version: 1,
+					characterID: character.ID,
+					templateID: templateID));
+			}
+			foreach (int templateID in abilityController.KnownAbilityEvents)
+			{
+				knownAbilities.Add(new CharacterKnownAbilityData(
+					id: 0,
+					version: 1,
+					characterID: character.ID,
+					templateID: templateID));
+			}
+		}
+
+		/// <summary>
+		/// Persists a snapshot of ability knowledge asynchronously.
+		/// </summary>
+		private async Task SaveKnownAbilitiesAsync(List<CharacterKnownAbilityData> knownAbilities)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService))
+				{
+					return;
+				}
+
+				DatabaseResult<BulkWriteResult> result = await knownAbilityService.PersistAsync(knownAbilities);
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Known ability save", result);
+
+				if (written)
+				{
+					TryEnqueueMainThread(() => MarkKnowledgePersisted(knownAbilities));
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveKnownAbilitiesAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the knowledge dirty mark on every character a completed write covered. Main thread.
+		/// </summary>
+		/// <remarks>
+		/// Not gated on <c>Filtered == 0</c>, unlike the faction and attribute marks. A knowledge
+		/// row carries no per-entry version to advance — every row is written at version 1 — so a
+		/// row the database already holds is EXPECTED to filter, and treating that as a failed
+		/// write would leave the character permanently dirty and rewrite the whole set every save.
+		/// </remarks>
+		private void MarkKnowledgePersisted(List<CharacterKnownAbilityData> knownAbilities)
+		{
+			if (knownAbilities == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < knownAbilities.Count; ++i)
+			{
+				if (TryGetResidentCharacter(knownAbilities[i].CharacterID, out IPlayerCharacter character) &&
+					character.TryGet(out IAbilityController abilityController))
+				{
+					abilityController.KnowledgeDirty = false;
+				}
 			}
 		}
 

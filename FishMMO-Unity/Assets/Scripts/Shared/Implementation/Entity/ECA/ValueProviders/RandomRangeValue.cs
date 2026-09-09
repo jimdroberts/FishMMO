@@ -25,6 +25,9 @@ namespace FishMMO.Shared
 		public int Max = 1;
 
 		/// <inheritdoc/>
+		public string Describe() => Min == Max ? Max.ToString() : $"{Min} - {Max}";
+
+		/// <inheritdoc/>
 		public int GetValue(ICharacter initiator, EventData eventData)
 		{
 			int min = Min;

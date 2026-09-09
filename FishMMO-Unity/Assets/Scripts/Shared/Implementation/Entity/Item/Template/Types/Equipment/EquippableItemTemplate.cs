@@ -16,6 +16,20 @@ namespace FishMMO.Shared
 		public ItemSlot Slot;
 
 		/// <summary>
+		/// Describes the item and the slot it is worn in.
+		/// </summary>
+		/// <remarks>
+		/// The slot was not in the tooltip at all, in either the old system or the first pass of
+		/// this one — so nothing on screen distinguished a helm from a pair of boots but the name.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		public override void BuildTooltip(TooltipContent content, bool describingInstance)
+		{
+			base.BuildTooltip(content, describingInstance);
+			content.AddSubtitle(Slot.ToString());
+		}
+
+		/// <summary>
 		/// The maximum number of attributes the item will have when it's generated.
 		/// </summary>
 		[Tooltip("The maximum number of attributes the item will have when it's generated.")]

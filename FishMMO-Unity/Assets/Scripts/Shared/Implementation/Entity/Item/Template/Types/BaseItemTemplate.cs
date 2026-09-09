@@ -86,31 +86,65 @@ namespace FishMMO.Shared
 		public Mesh Mesh { get { return this.loadedMesh; } }
 
 		/// <summary>
-		/// Returns the formatted tooltip string for this item, including name and price.
+		/// Describes the item: what it is called and what it is worth.
+		/// Override in derived types to add their own rows.
 		/// </summary>
-		/// <returns>The formatted tooltip string.</returns>
-		public virtual string Tooltip()
+		/// <param name="content">The content being assembled.</param>
+		public void BuildTooltip(TooltipContent content)
 		{
-			using (var builder = new TooltipBuilder())
+			BuildTooltip(content, describingInstance: false);
+		}
+
+		/// <summary>
+		/// Describes the item, either as a kind of thing or as one the player is holding.
+		/// </summary>
+		/// <remarks>
+		/// The distinction matters for anything that rolls. A template can only say what an item of
+		/// this kind CAN be — "Attack Power 1 - 3" — while an instance knows what it rolled, and
+		/// <see cref="ItemGenerator"/> writes that. Printing both put the range and the roll in the
+		/// same tooltip under two different names, which reads as two separate bonuses.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		/// <param name="describingInstance">True when an instance's own rolled values follow.</param>
+		public virtual void BuildTooltip(TooltipContent content, bool describingInstance)
+		{
+			content.Icon = Icon;
+			content.AddTitle(Name);
+
+			if (IsStackable)
 			{
-				BuildTooltip(builder);
-				return builder.Build();
+				content.AddStat("Stacks to", MaxStackSize.ToString(), TooltipPriority.Stats + 9, tone: TooltipTone.Muted);
+			}
+
+			if (Price > 0)
+			{
+				content.AddStat("Price", Price.ToString(), TooltipPriority.Price);
 			}
 		}
 
 		/// <summary>
-		/// Populates the tooltip builder with this item's tooltip lines.
-		/// Override in derived types to add additional lines.
+		/// Writes an attribute the item grants, as the range it can roll.
 		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		public virtual void BuildTooltip(TooltipBuilder builder)
+		/// <remarks>
+		/// A template describes what an item of this kind CAN be, not what one particular item is:
+		/// the value is rolled per instance by <see cref="ItemGenerator"/>, which writes the rolled
+		/// number itself. A single number here would be a promise the item does not keep.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		/// <param name="label">What the attribute is called on this item.</param>
+		/// <param name="attribute">The attribute template, or null.</param>
+		/// <param name="priority">Where the row sorts.</param>
+		protected static void AddAttributeRange(TooltipContent content, string label, ItemAttributeTemplate attribute, int priority, bool describingInstance = false)
 		{
-			builder.AddLine(Name, 0, TooltipColors.Title, false, "120%");
-			builder.AddSeparator(10);
-			if (Price > 0)
+			if (attribute == null || describingInstance)
 			{
-				builder.AddLine($"Price: {Price}", 80, TooltipColors.Label);
+				return;
 			}
+
+			string value = attribute.MinValue == attribute.MaxValue
+				? attribute.MaxValue.ToString()
+				: $"{attribute.MinValue} - {attribute.MaxValue}";
+			content.AddStat(label, value, priority, tone: TooltipTone.Good);
 		}
 
 		/// <summary>

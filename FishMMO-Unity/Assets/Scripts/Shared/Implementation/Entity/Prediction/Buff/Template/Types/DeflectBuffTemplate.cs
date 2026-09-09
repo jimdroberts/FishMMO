@@ -116,12 +116,13 @@ namespace FishMMO.Shared
 		/// Appends a secondary tooltip describing the deflect window.
 		/// </summary>
 		/// <param name="builder">The tooltip builder to populate.</param>
-		public override void SecondaryTooltip(TooltipBuilder builder)
+		public override void SecondaryTooltip(TooltipContent content)
 		{
-			builder.AddLine($"Deflects projectiles within {DeflectAngleDegrees:0}°", 20, TooltipColors.Stat);
+			content.AddEffect($"Deflects projectiles within {DeflectAngleDegrees:0}°", TooltipPriority.Effects);
 			if (MaxDeflections > 0)
 			{
-				builder.AddLine(MaxDeflections == 1 ? "Deflects one attack" : $"Deflects {MaxDeflections} attacks", 21, TooltipColors.Label);
+				content.AddBody(MaxDeflections == 1 ? "Deflects one attack" : $"Deflects {MaxDeflections} attacks",
+					TooltipPriority.Effects + 1, TooltipTone.Muted);
 			}
 		}
 

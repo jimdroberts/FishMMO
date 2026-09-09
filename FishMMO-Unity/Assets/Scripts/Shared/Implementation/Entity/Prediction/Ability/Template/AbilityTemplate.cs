@@ -150,31 +150,19 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the tooltip string for the ability, including type if set.
+		/// Describes the ability as it would exist with only the effects this template ships with.
 		/// </summary>
-		/// <returns>The tooltip string for the ability.</returns>
-		public override string Tooltip()
+		/// <remarks>
+		/// Composed rather than read off the fields. The template's own numbers are not the
+		/// ability's numbers: the events bundled into it contribute cast time, cooldown, speed and
+		/// lifetime too, and a tooltip that ignored them advertised a fireball with none of the
+		/// speed its bundled movement effect supplies. <see cref="AbilitySummary"/> is the one
+		/// place that composition happens.
+		/// </remarks>
+		/// <param name="content">The content being assembled.</param>
+		public override void BuildTooltip(TooltipContent content)
 		{
-			return TooltipWithEvents(null);
-		}
-
-		/// <summary>
-		/// Returns a tooltip string composed with optional event tooltips, including type if set.
-		/// Used by ability crafting to preview the composed ability tooltip.
-		/// </summary>
-		/// <param name="combineList">Optional list of event tooltips to combine.</param>
-		/// <returns>The composed tooltip string.</returns>
-		public string TooltipWithEvents(List<ITooltip> combineList)
-		{
-			using (var builder = new TooltipBuilder())
-			{
-				BuildTooltip(builder, combineList);
-				if (Type != AbilityType.None)
-				{
-					builder.AddLine($"Type: {Type}", 90, TooltipColors.Title, false, "120%");
-				}
-				return builder.Build();
-			}
+			AbilitySummary.Compose(this).BuildTooltip(content);
 		}
 	}
 }

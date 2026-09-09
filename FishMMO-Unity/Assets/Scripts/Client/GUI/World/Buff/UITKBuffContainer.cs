@@ -460,10 +460,15 @@ namespace FishMMO.Client
 
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
-				string text = string.IsNullOrEmpty(TooltipHint)
-					? template.Tooltip()
-					: template.Tooltip() + TooltipHint;
-				tooltip.Open(text, owner);
+				/* The hint is a row of the content now, not a string glued onto the end of a
+				 * formatted blob — so it renders as guidance rather than as another paragraph of
+				 * the buff's own description. */
+				TooltipContent content = template.BuildContent();
+				if (!string.IsNullOrEmpty(TooltipHint))
+				{
+					content.AddHint(TooltipHint);
+				}
+				tooltip.Open(content, owner);
 			}
 		}
 

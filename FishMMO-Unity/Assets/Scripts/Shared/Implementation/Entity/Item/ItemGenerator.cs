@@ -68,23 +68,23 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Populates the tooltip builder with generator information and all generated attributes.
-		/// Uses <see cref="TooltipColors"/> for consistent formatting.
+		/// Describes what this item rolled: its seed and every attribute that came out of it.
 		/// </summary>
-		/// <param name="builder">The tooltip builder to populate.</param>
-		public void BuildTooltip(TooltipBuilder builder)
+		/// <param name="content">The content being assembled.</param>
+		public void BuildTooltip(TooltipContent content)
 		{
-			builder.AddLine($"Seed: {Seed}", 40, TooltipColors.Label);
 			if (attributes.Count > 0)
 			{
-				builder.AddLine("Attributes", 50, TooltipColors.Label, false, "125%");
-				int i = 0;
+				content.AddHeader("Attributes", TooltipPriority.Attributes);
+				int i = 1;
 				foreach (ItemAttribute attribute in attributes.Values)
 				{
-					builder.AddLine($"{attribute.Template.Name}: <color={TooltipColors.Value}>{attribute.Value}</color>", 51 + i, null, false, "110%");
-					i++;
+					content.AddStat(attribute.Template.Name, attribute.Value.ToString(),
+						TooltipPriority.Attributes + i++, tone: TooltipTone.Good);
 				}
 			}
+
+			content.AddStat("Seed", Seed.ToString(), TooltipPriority.Footer + 2, tone: TooltipTone.Muted);
 		}
 
 		/// <summary>

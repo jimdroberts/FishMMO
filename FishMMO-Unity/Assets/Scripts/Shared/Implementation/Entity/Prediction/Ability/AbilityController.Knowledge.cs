@@ -48,6 +48,17 @@ namespace FishMMO.Shared
 		private Dictionary<int, long> templateToAbilityID;
 
 		/// <summary>
+		/// True when this character has learned something the database has not been told about.
+		/// </summary>
+		/// <remarks>
+		/// Knowledge is the one sub-entity the character save never wrote: it was persisted only by
+		/// the paths that grant it, one row at a time, so anything that learned by another route —
+		/// a scroll, a lore object — knew it until relog and then did not. The save reads this flag
+		/// and clears it once the write lands.
+		/// </remarks>
+		public bool KnowledgeDirty { get; set; }
+
+		/// <summary>
 		/// All known base ability template IDs for this character.
 		/// </summary>
 		public HashSet<int> KnownBaseAbilities { get; private set; }
@@ -106,14 +117,7 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < abilityTemplates.Count; ++i)
 			{
-				BaseAbilityTemplate template = abilityTemplates[i];
-				if (template != null)
-				{
-					if (!KnownBaseAbilities.Contains(template.ID))
-					{
-						KnownBaseAbilities.Add(template.ID);
-					}
-				}
+				LearnBaseAbility(abilityTemplates[i]);
 			}
 			return true;
 		}
@@ -130,10 +134,17 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			if (!KnownBaseAbilities.Contains(template.ID))
+			/* Only when it is NEW. The set add is idempotent, but the event and the dirty mark are
+			 * not: a re-learn that raised the event would put a second row in the abilities panel,
+			 * and one that marked the character dirty would rewrite the whole knowledge table on
+			 * the next save for nothing. */
+			if (!KnownBaseAbilities.Add(template.ID))
 			{
-				KnownBaseAbilities.Add(template.ID);
+				return true;
 			}
+
+			KnowledgeDirty = true;
+			OnAddKnownAbility?.Invoke(template);
 			return true;
 		}
 
@@ -159,12 +170,9 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			foreach (var abilityEvent in abilityEvents)
+			foreach (AbilityEvent abilityEvent in abilityEvents)
 			{
-				if (abilityEvent == null) continue;
-
-				KnownAbilityEvents.Add(abilityEvent.ID);
-				CategorizeAbilityEvent(abilityEvent);
+				LearnAbilityEvent(abilityEvent);
 			}
 			return true;
 		}
@@ -181,8 +189,15 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			KnownAbilityEvents.Add(abilityEvent.ID);
+			// New only — see LearnBaseAbility for why the event and the dirty mark are gated.
+			if (!KnownAbilityEvents.Add(abilityEvent.ID))
+			{
+				return true;
+			}
+
 			CategorizeAbilityEvent(abilityEvent);
+			KnowledgeDirty = true;
+			OnAddKnownAbilityEvent?.Invoke(abilityEvent);
 			return true;
 		}
 
