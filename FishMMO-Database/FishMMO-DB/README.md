@@ -10,7 +10,10 @@ This document describes the project layout, the supported platforms, and — at 
 - [Supported Platforms](#supported-platforms)
 - [Architecture](#architecture)
 - [Key Components](#key-components)
+- [Table inventory](#table-inventory)
+- [Items live in one table](#items-live-in-one-table)
 - [Configuration](#configuration)
+- [Credentials are never in appsettings.json](#credentials-are-never-in-appsettingsjson)
 - [Recommended appsettings files](#recommended-appsettings-files)
 - [Environment variables by OS](#environment-variables-by-os)
 - [Overriding individual settings via environment variables](#overriding-individual-settings-via-environment-variables)
@@ -20,9 +23,11 @@ This document describes the project layout, the supported platforms, and — at 
 - [Flow Diagram](#flow-diagram)
 - [Notes](#notes)
 - [Character session ownership](#character-session-ownership)
+- [Expired leases are not "online"](#expired-leases-are-not-online)
 - [Scene instance identity](#scene-instance-identity)
 - [Scene rows are reaped, not just written](#scene-rows-are-reaped-not-just-written)
 - [The channel-switch cooldown lives on the character](#the-channel-switch-cooldown-lives-on-the-character)
+- [Kick requests expire](#kick-requests-expire)
 
 ## Supported Platforms
 
@@ -42,28 +47,46 @@ This document describes the project layout, the supported platforms, and — at 
 
 ```
 FishMMO-DB/
-├── Data/                       POCO entities + enums shared across servers
-├── Migrations/                 EF Core migrations (created by FishMMO-DB-Migrator)
+├── Data/                       Plain data records + enums shared across servers
+│   ├── Arena/                    ArenaMatchData, ArenaMatchComposer, ArenaRatingSource
+│   ├── Character/                Per-character sub-entity records, including CharacterItemData
+│   │                             and its ItemContainerType discriminator
+│   ├── Enums/                    ChatChannel, SceneStatus, SceneType, CharacterSessionState,
+│   │                             ArenaMatchStatus, ArenaSeatStatus, GroupFinderQueueStatus, …
+│   ├── GroupFinder/              GroupFinderQueueData, GroupFinderMatchData
+│   ├── Guild/                    Guild, rank, log, application and update records
+│   ├── Housing/                  PlotData, PlotStructureData, PlotAccessData, PlotVaultData,
+│   │                             PlotUpdateData
+│   └── Party/                    Party records
+├── Migrations/                 EF Core migrations (created by FishMMO-DB-Migrator; gitignored,
+│                                 so a checkout has none until they are generated locally)
 ├── Exceptions/                 Typed database exceptions
 ├── Npgsql/                     Concrete PostgreSQL implementation
-│   ├── NpgsqlDbContext.cs        EF Core DbContext
+│   ├── NpgsqlDbContext.cs        EF Core DbContext — one DbSet per table
 │   ├── NpgsqlDbContextFactory.cs Factory + interceptors + monitoring wiring
-│   ├── NpgsqlDbConfiguration.cs  Reads IConfiguration → connection string
+│   ├── NpgsqlDbConfiguration.cs  Reads the `Npgsql` IConfiguration section → connection string
 │   ├── NpgsqlServiceRegistry.cs  IDatabaseServiceRegistry implementation
-│   ├── Entities/                 EF Core entity types
-│   ├── EntityConfigurations/     Fluent EF Core configurations
+│   ├── SchemaValidationResult.cs Pending-migration report returned by ValidateSchemaAsync
+│   ├── DbContextExtensions.cs    GetTableName<TEntity>(), for services that emit raw SQL
+│   ├── Entities/                 EF Core entity types (Login / Scene / World)
+│   ├── EntityConfigurations/     Fluent EF Core configurations (see EntityConfigurations/README.md)
 │   ├── Services/                 Per-domain service implementations
-│   │   └── Interfaces/             IAccountService, ICharacterService, IEmailQueueService, …
+│   │   ├── BaseService.cs          Execution wrappers, transient retry, raw-SQL helpers
+│   │   ├── UnitOfWorkService.cs    IUnitOfWork — one ambient transaction across several services
+│   │   └── Interfaces/             IAccountService, ICharacterItemService, IPlotService, …
+│   │       └── Actions/              IPersistAction, IFetchByKeyAction, … reusable method shapes
 │   └── Monitoring/               Health / Metrics / Diagnostics (see Monitoring/README.md)
-├── Unity/                          Unity MonoBehaviour wrapper (see Unity/README.md)
+├── Unity/                      Unity MonoBehaviour wrapper, commented out (see Unity/README.md)
 ├── Database.cs                 High-level orchestrator (IDatabase implementation)
 ├── IDatabase.cs                Public contract consumed by servers / services
 ├── IDatabaseServiceRegistry.cs Per-domain service registry contract
-├── AppSettings.cs              Strongly-typed appsettings.json binder
+├── AppSettings.cs              Strongly-typed binder for the `Npgsql` appsettings section
+├── DatabaseSecrets.cs          Credential resolver — env vars / platform secrets file only
 ├── DatabaseConfigurationHelper.cs  Convenience helpers for IConfiguration builders
 ├── DatabaseErrorCodes.cs       Stable error code enum returned via DatabaseResult
 ├── DatabaseResult.cs           Result<T> envelope (IsSuccess / ErrorCode / Data)
-└── appsettings.json            Default config (do NOT commit secrets)
+└── BulkWriteResult.cs          What a batched, version-gated write actually did:
+                                 Filtered (refused) vs Superseded (lost the version race)
 ```
 
 ## Key Components
@@ -71,15 +94,77 @@ FishMMO-DB/
 | Component | Responsibility |
 |---|---|
 | `Database` | High-level orchestrator. Wraps an `INpgsqlDbContextFactory` and an `IDatabaseServiceRegistry`. Consumed by servers as `IDatabase`. |
-| `IDatabase` | Public contract: `ServiceRegistry`, `ContextFactory`, async lifecycle. |
+| `IDatabase` | Public contract: `ServiceRegistry`, `DbContextFactory`, `HealthMonitor`, `MetricsTracker`, `Shutdown` / `ShutdownAsync`. |
 | `IDatabaseServiceRegistry` | Per-domain service lookup (`TryGet<TService>(out var svc)`). |
 | `NpgsqlDbContext` / `NpgsqlDbContextFactory` | EF Core context + factory with connection interceptors driving `ConnectionPoolMetrics`. |
-| `NpgsqlServiceRegistry` | Wires `IAccountService`, `ICharacterService`, `IChatService`, `IEmailQueueService`, `ILoginServerService`, etc. |
-| `NpgsqlDbConfiguration` | Builds the connection string from `IConfiguration` (`ConnectionStrings:NpgsqlConnection` or `Npgsql:*`). |
-| `AppSettings` | Strongly-typed `appsettings.json` binder (Npgsql). |
+| `NpgsqlServiceRegistry` | Holds the services. It registers nothing itself — `Database.RegisterNpgsqlServicesByReflection` discovers every `I*Service` in `FishMMO.Database.Npgsql.Services.Interfaces`, pairs it with the single concrete class in `FishMMO.Database.Npgsql.Services` (or a sub-namespace) that implements it, and constructs it with the `INpgsqlDbContextFactory`. Adding a table therefore needs no wiring: create the interface and the implementation and it is registered. A name that matches zero or several implementations throws at startup. |
+| `NpgsqlDbConfiguration` | Builds the connection string from the `Npgsql` section of `IConfiguration`, plus credentials resolved by `DatabaseSecrets`. There is no `ConnectionStrings` key. |
+| `AppSettings` / `NpgsqlSettings` | Strongly-typed binder for the `Npgsql` section: `Host`, `Port`, `Database`, `Schema`, `CommandTimeout`, `ConnectionTimeout`, `MinPoolSize`, `MaxPoolSize`, `QueryPerformanceTracking`, `RetryPolicy`. Deliberately no `Username` or `Password`. |
+| `DatabaseSecrets` | The only source of credentials: `FISHMMO_DB_*` environment variables, then the platform secrets file. See [Credentials are never in appsettings.json](#credentials-are-never-in-appsettingsjson). |
+| `BaseService` | Base class for every service: execution wrappers, transient-failure retry, exception mapping, and the `{0}` → `@p0` placeholder rewriting used by the raw-SQL paths. |
+| `IUnitOfWorkService` / `IUnitOfWork` | One ambient transaction shared by several services, finalized only by `CommitAsync` or `RollbackAsync`. |
 | `DatabaseResult<T>` / `DatabaseErrorCodes` | Uniform error envelope returned from every service. |
+| `BulkWriteResult` | Outcome of a batched, version-gated write. Separates `Filtered` (the service refused the row) from `Superseded` (the row lost the version race, and the stored value is the newer one). |
 | `Monitoring/` (under Npgsql) | Health probes, pool metrics, query performance diagnostics. See [`Npgsql/Monitoring/README.md`](./Npgsql/Monitoring/README.md). |
-| `Unity/DatabaseHealthService` | MonoBehaviour that surfaces all of the above to Unity headless servers. See [`Unity/README.md`](./Unity/README.md). |
+| `Unity/DatabaseHealthService` | Reference MonoBehaviour that would surface all of the above to Unity headless servers. The file is **entirely commented out** — this project targets .NET Standard 2.1 and cannot reference `UnityEngine`, so it is not compiled by anything today. See [`Unity/README.md`](./Unity/README.md). |
+
+## Table inventory
+
+55 tables, one entity type and one `IEntityTypeConfiguration<T>` apiece — the folders under
+`Npgsql/Entities/` and `Npgsql/EntityConfigurations/` mirror each other exactly. The table name
+each configuration declares with `ToTable(...)` is the authority; the C# names are
+`<Name>Entity` / `<Name>EntityConfiguration`.
+
+| Group | Tables |
+|---|---|
+| (root) | `deployment_secrets` |
+| `Login/` | `accounts`, `auth_tokens`, `connection_token_keys`, `email_queue`, `login_servers`, `login_server_signing_keys`, `two_factor_recovery_codes` |
+| `World/` | `world_servers`, `kick_requests` |
+| `Scene/` | `scenes`, `scene_servers`, `chat`, `quests`, `group_finder_queue` |
+| `Scene/Character/` | `characters`, `character_abilities`, `character_achievements`, `character_archetypes`, `character_attributes`, `character_buffs`, `character_dialogue_choices`, `character_factions`, `character_friends`, `character_guild`, `character_hotkeys`, `character_item`, `character_itemcooldowns`, `character_knownabilities`, `character_mail`, `character_party`, `character_pet`, `character_pet_attributes`, `character_pet_buffs`, `character_quests`, `character_skills`, `character_waypoints`, `currency_ledger` |
+| `Scene/Guild/` | `guilds`, `guild_rank`, `guild_log`, `guild_application`, `guild_updates` |
+| `Scene/Party/` | `parties`, `party_updates` |
+| `Scene/Arena/` | `arena_match`, `arena_match_member`, `arena_season`, `arena_rating`, `arena_penalty` |
+| `Scene/Housing/` | `plots`, `plot_structures`, `plot_access`, `plot_vault`, `plot_updates` |
+
+The newer groups and what owns them:
+
+| Group | Service(s) | Notes |
+|---|---|---|
+| `group_finder_queue` | `IGroupFinderQueueService` | The dungeon and arena queue. Shared by every scene server on a world server, each running the same matching pump; every state change is a single statement or single transaction whose `WHERE` re-asserts the state it expects, so two servers acting at once give one winner and one no-op. `TryFormArenaMatchAsync` is the only thing that creates an arena match, inside the transaction that takes its players out of the queue. |
+| `arena_*` | `IArenaMatchService`, `IArenaRatingService`, `IArenaPenaltyService` | Match status only ever moves forward — the `WHERE` refuses a status lower than the current one, so a late write from a server that lost the instance cannot reopen an ended match. Ratings are keyed by season; `arena_penalty` is the deserter queue-lock. |
+| `plot_*` / `plots` | `IPlotService`, `IPlotStructureService`, `IPlotAccessService`, `IPlotVaultService`, `IPlotUpdateService` | Plots are scoped to a world server: the same scene runs on every world, and an unscoped row would show one player's house as owned land to everybody on every other world. Every ownership change reports its affected-row count and the caller must check it — treating zero as success sells one plot to two players. |
+| `character_waypoints` | `ICharacterWaypointService` | Bitmask pages, OR-merged rather than replaced. `MergeAsync` is idempotent and can never clear a bit; a character does not un-discover a place. |
+| `currency_ledger` | `ICurrencyLedgerService` | Append-only, written after the balance change is persisted and the outcome known. A lost row is a gap in reporting, never a gap in the economy. |
+
+## Items live in one table
+
+`character_item` replaced `character_inventory`, `character_equipment` and `character_bank`.
+The three tables had three identity sequences, so inventory row 42 and equipment row 42 were two
+different items wearing the same number — which made an item id useless as an identity and forced
+a second, process-local id alongside it.
+
+| Concern | Shape at HEAD |
+|---|---|
+| Key | `character_item.id`, database-generated on first insert. It is the **item's** identity, not the slot's. |
+| Container | `ItemContainerType` (`Inventory` = 0, `Equipment` = 1, `Bank` = 2), an ordinary mutable column. Its numeric values must match `FishMMO.Shared.InventoryType`; `ItemContainerTypeParityTests` pins the pairing. |
+| Slot | An ordinary mutable column. Moving an item updates the row it already had. |
+| Uniqueness | A unique index on `(character_id, container, slot)` — one item per slot. It is **not** the upsert conflict target; the primary key is. |
+| Entity / data | `CharacterItemEntity`, `CharacterItemData`, `CharacterEntity.Items`, `NpgsqlDbContext.CharacterItems`. |
+| Service | `ICharacterItemService`, replacing `ICharacterInventoryService` / `ICharacterEquipmentService` / `ICharacterBankService`. |
+
+A `CharacterItemData.ID` of zero means "never written": the write paths draw the next identity from
+the table's sequence and return it, and the caller must write that value back onto the runtime item.
+
+`SaveSnapshotAsync(characterId, containers, items)` is the backstop for the incremental per-item
+writes, which can be silently rejected by the version gate. It deletes and re-inserts every row for
+the containers it names — supplied identities are preserved, zero ids draw new ones and come back in
+`CharacterItemIdAssignment`. Deleting first is what makes it immune to the unique index: two items
+swapping slots have no intermediate state in which both hold the same one. Containers **not** listed
+are left untouched, so a caller that could read only two of the three does not prune the third.
+It is deliberately not version-gated, since version gating is the very mechanism it exists to
+survive.
+
 
 ## Configuration
 
@@ -112,19 +197,19 @@ Keep shared defaults in `appsettings.json`, and only override differences in env
 - `appsettings.Development.json`
 - `appsettings.Production.json`
 
-Example override file:
+Example override file. Note that every key this library reads lives **inside** the `Npgsql`
+section — `NpgsqlDbConfiguration` binds `configuration.GetSection("Npgsql")` and nothing else — and
+that there is no `Username` or `Password` key at any level:
 
 ```json
 {
   "Npgsql": {
     "Host": "127.0.0.1",
     "Database": "fishmmo_dev",
-    "Username": "postgres",
-    "Password": "dev_password"
-  },
-  "QueryPerformanceTracking": {
-    "Enabled": true,
-    "Level": "Basic"
+    "QueryPerformanceTracking": {
+      "Enabled": true,
+      "Level": "Basic"
+    }
   }
 }
 ```
@@ -232,18 +317,43 @@ Use double underscores (`__`) for nested keys:
 - `Npgsql__Host`
 - `Npgsql__Port`
 - `Npgsql__Database`
-- `Npgsql__Username`
-- `Npgsql__Password`
+- `Npgsql__Schema`
 - `Npgsql__CommandTimeout`
+- `Npgsql__MinPoolSize` / `Npgsql__MaxPoolSize`
+- `Npgsql__QueryPerformanceTracking__Enabled` / `__Level` / `__SlowQueryThresholdMs` / `__SampleRate`
+
+`Npgsql__Username` and `Npgsql__Password` are **not** in that list and do nothing. Credentials
+have their own resolver — see [Credentials are never in appsettings.json](#credentials-are-never-in-appsettingsjson).
 
 Example (fish):
 
 ```fish
 set -x Npgsql__Host 10.0.0.25
 set -x Npgsql__Database fishmmo
-set -x Npgsql__Username postgres
-set -x Npgsql__Password super_secret
+set -x FISHMMO_DB_USERNAME postgres
+set -x FISHMMO_DB_PASSWORD super_secret
 ```
+
+## Credentials are never in appsettings.json
+
+`NpgsqlDbConfiguration` binds the non-sensitive settings from the `Npgsql` section and then asks
+`DatabaseSecrets` for the username and password. There is no `IConfiguration` fallback for either:
+the keys were removed from `NpgsqlSettings` entirely, so putting them in a JSON file has no effect
+at all rather than a partial one.
+
+Resolution order, first wins:
+
+1. Environment variables — `FISHMMO_DB_USERNAME`, `FISHMMO_DB_PASSWORD`
+2. Platform secrets file:
+   - Linux: `/etc/fishmmo/db-secrets.env`
+   - Windows: `%ProgramData%\FishMMO\db-secrets.env`
+
+The secrets file is `KEY=VALUE`, one per line, with `#` comments and blank lines ignored. On Linux
+it should be `chmod 600` and owned by the service user.
+
+`FISHMMO_DB_HOST`, `FISHMMO_DB_PORT` and `FISHMMO_DB_NAME` are resolved the same way and override
+the JSON values, so a container deployment can configure the database entirely from environment
+variables.
 
 ---
 

@@ -1,6 +1,6 @@
 # AI System (NPC & Pet)
 
-**Short description:** Server-authoritative NPC brain — a tick-driven state machine over data-defined archetypes, with a shared combat decision core, threat tracking, NavMesh movement with stuck recovery, multi-attacker spacing, and distance-based level of detail.
+**Short description:** Server-authoritative NPC brain — a tick-driven state machine over data-defined archetypes, with a shared combat decision core, threat tracking, tick-stepped NavMesh movement with stuck and off-mesh recovery, multi-attacker spacing and separation, and distance-based level of detail.
 
 ## Table of Contents
 
@@ -31,7 +31,9 @@ The system is layered so that **archetypes are data, not code**:
 | `AICombatPersonality` | Ability preferences, flee threshold, targeting mode. |
 | `AIAbilityRotation` | Optional condition-driven ability selection, evaluated before the default scorer. |
 | `AIBehaviorTree` | Optional decision layer above the state machine, for scripted and boss encounters. |
-| `AggressionController` | Threat table and target selection. |
+| `AggressionController` | Threat table, vulnerability scoring and target selection. |
+| `AIStateClock` | Schedules each state's updates and reports the real interval one covers. |
+| `AIAbilityReach` / `AIKiteBudget` / `AISeparation` | Pure helpers the combat and movement paths lean on — how far an ability really hits, how long an NPC may kite, and how bodies push apart. |
 
 Melee, archer, caster, healer, defender and rogue behaviour all fall out of four serialized numbers fed into the shared decision — `PreferredDistance`, `MinComfortDistance`, `EmergencyRetreatThreshold`, and the controller's personality. A designer builds a new archetype by creating an asset, not by writing a class. Only three archetypes carry code, because they need something the numbers cannot express: healers scan for injured allies, defenders body-block for one, and rogues open from a target's rear arc.
 
@@ -56,17 +58,28 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 - **Exact deltas.** Elapsed time per AI tick is computed from the fixed tick rate, not measured from a variable frame. There is no drift to correct and no spike to clamp.
 - **Facing runs on the network tick**, matching the `NetworkTransform` send rate — faster is work nobody sees, slower makes an NPC's head snap between orientations while its position interpolates smoothly. Smoothing is `1 - e^(-rate * dt)`, which is identical at any step size.
 - **Deterministic stagger.** NPCs are spread across the tick interval by a monotonic AI tick index, so the spread is identical on a server running at 200 FPS and one at 30.
+- **A state is handed the interval it actually covers.** A state asks to be updated every `updateRate` seconds while the brain ticks far more often; `AIStateClock` accumulates the ticks in between and reports the real elapsed time as `AIController.StateDeltaTime`. Every timer a state advances — attack pacing, unreachable-target patience, retreat — reads `StateDeltaTime`, not `LastAiDeltaTime`. Fed the brain's tick delta instead, a 1.2 s attack cooldown took ten seconds of wall clock.
 
 ### Level of detail
 
 - Four tiers by distance to the nearest player observer, each with its own update interval in AI ticks: **Active** (full pipeline), **Nearby** (no behaviour tree, no boss script, no proactive sweep — combat still works, entry is event-driven), **Far** (movement only, combat disengages), **Dormant** (wake-up check only).
 - Three profiles ship: `Standard AI LOD`, `Dense Population AI LOD`, `Companion AI LOD` (pets stay responsive — they are always beside the player and always on screen).
+- **Distance is measured, not inferred from the observer set.** `TryGetNearestPlayerSqrDistance` asks `ObserverStreamingRegistry` how far the nearest viewer is; `ResolveLodTier` treats an unanswered measurement as `Active`, because an unanswered question is not permission to suspend a brain.
+- The out-of-combat enemy sweep gates on `AIController.HasNearbyPlayer`, **not** `Observers.Count`. The observer set is a bandwidth budget, so a monster evicted from every viewer's budget had no observers, stopped sweeping entirely and could not aggro the player standing in front of it.
+- The leash reset a Far transition performs — interrupt, full heal, threat clear, boss phase reset — re-asks proximity itself (`AllowsLeashReset`) rather than trusting the tier that triggered it. A tier says how much work to do; only distance says whether a fight is really over.
 
 ### Combat
 
 - One `BaseAttackingState` shared by every archetype, plus `HealerAttackingState`, `DefenderAttackingState` and `RogueAttackingState` where behaviour cannot be expressed as tuning.
 - **Range hysteresis.** An NPC already attacking tolerates a target drifting 10% past its ability range before giving chase. Without it a strafing target flips the NPC between Attack and CloseDistance every tick, toggling `isStopped` and making it shudder in place.
 - **Combat slots.** Several attackers on one target claim distinct angular slots around it rather than all pathing to the same point. Ring capacity is derived from geometry — how many agents of a given radius fit on a circle — and overflow attackers form a staggered second rank.
+- **Reach, not `Ability.Range`.** `Ability.Range` is `Speed × LifeTime` — how far a projectile travels — so every ability whose object does not travel (a punch spawned in front of the caster, a held ball of flame, a self buff) reports zero, and the planner read that zero as "cannot reach": a melee orc walked up to its target and stood there, a caster held its archetype's distance and never cast. `AIAbilityReach.Resolve` falls back to geometry — caster radius + twice the ability object's half-extent + `REACH_SLACK`, floored at `MIN_REACH`, or `DEFAULT_TARGETED_REACH` (20 m) for an object spawned on the target. Half-extents come from the collider's shape via `AbilityPrefabColliderCache.ResolveShapeHalfExtents`, because a prefab **asset**'s `bounds` are empty. Issue #220.
+- **Spacing is fitted to the kit the NPC really has.** `AICombatDecision.ResolveSpacing` caps `PreferredDistance` at `AIController.MaxOffensiveReach` and drops a `MinComfortDistance` at or beyond that reach: backing away to a range you cannot hit from is not kiting. The state asset's spacing is a hope, not a fact — the Caster archetype prefers 22 m and an orc mage using it may know one ability that reaches 1.25 m. An NPC that knows no abilities keeps its spacing as authored.
+- **Kiting is budgeted.** `AIKiteBudget` drains while the NPC backs away; once spent, both the panic radius and the comfort band are suspended for `KiteRecoverySeconds` and the NPC stands and fights, then the budget refills (standing still refunds at `REFUND_RATE`, half rate). Backing away also runs at `KiteSpeedMultiplier` of run speed so a pursuing player gains ground. Unbounded and at player run speed, a kiting caster was a fight nobody could close.
+- **A refused activation is not a pacing event.** `ActivateAbility` arms the `AttackCooldown` timer only when `IAbilityController.Activate` actually queued something, so a refusal is retried on the next brain tick rather than leaving the NPC standing next to its target waiting out a cooldown for an attack it never made.
+- **Target identity is the character ID, not the Transform.** A pooled `NetworkObject` keeps its Transform and components across occupants, so when a target despawned and its object was re-issued to somebody else the cached Transform still compared equal and every null/active/alive check passed — the NPC silently continued its attack on a character that never engaged it. `AIController.Target` returns null once the ID recorded at target time stops matching.
+- **The sweep sees whole bodies.** Overlap results resolve through `TargetOrdering.ResolveHitKey`, so a character whose hitbox hangs off a child transform is detectable at all (a bare `GetComponent` on the collider found no `ICharacter`, making such a character invisible to every NPC while remaining able to attack them) and a multi-collider character is counted once. Query buffers regrow through `TargetOrdering.TryGrowQueryBuffer` until a query stops coming back full — a fixed buffer let the physics broadphase pick an arbitrary, run-varying subset of a large fight. Corpses are filtered out by `AITargetSelection.IsValidTarget`; the healer's ally scan does all of the same.
+- **Death is a full stop.** `NPC.Despawn` disables the brain and calls `AIController.HaltMovement`, which clears the path, drops the target and look target, empties the threat table and releases the combat slot. Without it a corpse held its ring slot around its victim for the whole of its decay, and the pooled object came back still walking toward wherever the previous occupant's killer had stood.
 - **Unreachable-target break-off.** A target standing somewhere the NPC cannot path to produces a partial path; the NPC gives up after `UnreachableTargetTimeout` and drops that target's threat so the next sweep does not immediately re-acquire it.
 - **Abilities classify themselves.** An archetype never names the abilities it should use. `AIAbilityClassifier` reads the ECA actions attached to an ability and derives what it does — heal, damage, control, dispel, taunt — so a healer archetype works on any creature whose spellbook contains a heal, and picks up one added later without being edited.
 - Personality styles: Balanced, Aggressive, Defensive, Cautious, Berserker, **Pathetic**, **Determined**, **Rampaging**. A Pathetic personality is guaranteed a retreat threshold even if the field is left at zero; fearless styles ignore one entirely.
@@ -74,6 +87,11 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 
 ### Movement
 
+- **The agent simulates; the tick moves the body.** `updatePosition` and `updateRotation` are off. `StepAgent` advances the transform by `velocity × tickDelta` once per network tick, re-seats `Agent.nextPosition` on the result (which projects it back onto the mesh, so y follows the ground), and turns the heading toward the velocity at the agent's `angularSpeed` unless a `LookTarget` owns the facing. The displacement a `NetworkTransform` samples is therefore identical every tick for a given speed, whatever frame rate the server happened to run at. Off-mesh links are traversed by the agent itself and simply followed.
+- **Separation replaces crowd avoidance.** `obstacleAvoidanceType` is `NoObstacleAvoidance` on every NPC agent, because Unity's crowd is one global simulation and a scene server stacks instances of the same world scene at the same coordinates — an NPC in one instance steered around NPCs in every other. `AISeparation.Resolve` takes its place: neighbours come from the NPC's own `PhysicsScene`, so the push is scene-scoped by construction, and it moves the body without turning it. Attackers around a target are spaced by `AICombatSlots`; separation covers the wander, idle and approach cases the ring does not.
+- **Stuck detection reads the displacement that was applied**, not `NavMeshAgent.velocity`. With avoidance off nothing ever blocks the simulated velocity, so it could not tell a walking NPC from one whose every step the NavMesh projection clamped back to the same point.
+- **Off-mesh recovery.** A failed `WarpTo` (a spawn point with no mesh in reach) or the mesh going away underneath an agent (a stacked scene instance unloading its copy of the `NavMeshData`) leaves `isOnNavMesh` false for good, and every guard then reads `AgentIsUsable` as false — an NPC frozen mid-stride until the pool recycles it. `RecoverIfOffMesh` re-seats it where it stands, then at `Home`, once per `OFF_MESH_RESEAT_INTERVAL` (1 s), warning once per episode rather than once a second.
+- Every warp mirrors the agent's position onto the transform (`SyncTransformToAgent`); with `updatePosition` off nothing else does, and the `NetworkTransform` would keep sending the old spot until the next tick's step.
 - Destination requests report what actually happened: `Complete`, `Partial`, `Failed` or `Throttled`. Unity does not fail a path to an unreachable destination — it silently returns the closest reachable point — so callers need to tell those apart.
 - `HasArrived` requires a complete path to exist. An agent whose destination never took reports zero remaining distance and no pending path, which the naive test reads as "arrived".
 - NavMesh sampling widens on retry rather than silently doing nothing.
@@ -91,7 +109,9 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 - `AggressionDispatcher` takes **one** global subscription for the process. Damage dispatches by dictionary lookup on the defender — O(1) regardless of NPC count. Previously every NPC subscribed individually, so one sword swing invoked one delegate per NPC alive.
 - **A pet and its owner share threat.** `Pet.PetOwner` declares the pair to the dispatcher (`LinkPet`/`UnlinkPet`), and a hit on either is delivered as threat to both — hit the owner and the pet engages, hit the pet and the owner engages (an NPC owner through its own aggression state). Keyed on characters, so an NPC given a pet gets the rule with no further wiring. The attacker is never a sharer, so an owner hitting its own pet generates nothing. Credit runs the other way as well: a pet's hit is recorded against its owner too, for the full amount, so an NPC struck by a summon hates the summoner and a player cannot shed threat by cycling pets.
 - Threat decay and staleness share a single tick-advanced `Clock`, so expiry means "this many seconds of AI time without an event" rather than wall-clock time that disagreed with the decay whenever LOD throttled the NPC.
-- `ApplyTauntAction` and `ApplyThreatAction` are ECA actions that let abilities generate threat: a taunt guarantees top threat rather than adding a flat bonus a long fight has already outgrown.
+- **Target choice is by threat *score*, not raw points.** `AggressionController.GetThreatScore` scales an entry's points by `VulnerabilityMultiplier` — `LowHealthThreatMultiplier` below `LowHealthThreshold`, `LowResourceThreatMultiplier` below `LowResourceThreshold`, compounding. Anything meaning to move a character up or down the order has to reason in that space.
+- `ApplyTauntAction` and `ApplyThreatAction` are ECA actions that let abilities generate threat: a taunt guarantees top threat rather than adding a flat bonus a long fight has already outgrown. It gets there by clearing `highestRaw × AggressionController.MaximumVulnerabilityMultiplier` — the table stores raw points and holds no character references, so it cannot compute another entry's score, but that product bounds every actual score. Comparing raw points, as it used to, made the "guarantee" not one.
+- `AggressionDispatcher.TryFindHighestThreatAgainst` scans the registered tables for the NPC that hates a given character most. A click-time query, not a tick-time one — it backs the pet attack command's highest-threat step.
 
 ### Behaviour trees
 
@@ -134,6 +154,10 @@ The fastest route is the dashboard: `FishMMO > FishMMO Dashboard > NPCs > +` ope
 | `RepathInterval` | `0.5` | Minimum seconds between throttled `SetDestination` calls |
 | `StuckTimeout` | `2.5` | Seconds of no progress before the NPC counts as stuck |
 | `StuckWarpTimeout` | `8.0` | Seconds stuck before it is warped free; 0 disables |
+| `SeparationRadius` | `0` | Distance at which another NPC body starts pushing this one away; 0 = twice the agent radius |
+| `SeparationSpeed` | `1.0` | Push speed when fully overlapped, m/s; 0 disables separation |
+
+`Archetype` is the only serialized state slot. `InitialState`, `IdleState`, `AttackingState`, `Personality`, `AbilityRotation`, `BehaviorTree`, `LodSettings`, `EnemySweepRate` and `AvoidancePriority` are read-only properties that read straight through to it (or to a boss phase's override, where one is in force).
 
 ### AIArchetypeTemplate
 
@@ -153,7 +177,9 @@ The fastest route is the dashboard: `FishMMO > FishMMO Dashboard > NPCs > +` ope
 | `AggressionStaleTimeout` | `30.0` | Seconds before a drained entry is forgotten |
 | `AggressionVarietyChance` | `0.15` | Chance of picking the second-highest threat |
 
-Assigning a different archetype to an initialised controller — a spawner's `ArchetypeOverride`, a harness clone — takes effect immediately: the threat table is retuned, the avoidance priority is re-applied, and every state is read live. Boss phases put their overrides in front of the archetype's slots rather than writing into the shared asset, and the controller drops them when the script resets or the instance is pooled.
+Assigning a different archetype to an initialised controller — a spawner's `ArchetypeOverride`, a harness clone — takes effect immediately: `ApplyArchetypeTuning` retunes the threat table and re-applies the avoidance priority, and every state is read live. The archetype the prefab was authored with is captured on first initialisation and restored by `ResetState`, so a spawner override does not ride a recycled instance into the next spawner.
+
+Boss phases call `AIController.SetPhaseOverrides`, which puts the phase's attacking state, behaviour tree and ability rotation *in front of* the archetype's slots rather than writing into the shared asset; a slot the phase leaves null keeps whatever an earlier phase installed, and `ClearPhaseOverrides` drops them when the script resets or the instance is pooled. There is deliberately no other override layer: `AIArchetypeTemplate.ApplyTo` and its `OverrideThreatTuning` opt-in are gone, and the archetype's threat tuning always applies.
 
 ### BaseAttackingState
 
@@ -169,6 +195,9 @@ Assigning a different archetype to an initialised controller — a spawner's `Ar
 | `UseCombatSlots` | `true` | Spread multiple attackers into a ring |
 | `UnreachableTargetTimeout` | `6.0` | Seconds before breaking off an unreachable target |
 | `OwnerLeashRange` | `30` | Pets only: distance from owner before breaking off |
+| `KiteBudgetSeconds` | `2.5` | Seconds of backing away allowed per window; 0 = unlimited |
+| `KiteRecoverySeconds` | `5.0` | Seconds the NPC holds its ground once the budget is spent |
+| `KiteSpeedMultiplier` | `0.8` | Run speed multiplier while backing away |
 
 ### AILodSettings
 
@@ -286,6 +315,10 @@ A state entered mid-fight for positioning (orbit, flank, flee) must have `KeepsC
 | Pet follow | Run a player through doorways and around props; the pet should keep up without wedging |
 | Pet stance | Passive never engages, Defensive answers an attack on the owner, Aggressive hunts |
 | Stuck recovery | Wedge an NPC against geometry; it should repath, then warp free after `StuckWarpTimeout` |
+| Off-mesh recovery | Spawn an NPC away from any NavMesh; it re-seats within a second, or warns once naming the position |
+| Attack pacing | `AttackCooldown` should elapse in wall-clock seconds, not brain ticks — `StateDeltaTime`, not `LastAiDeltaTime` |
+| Kiting terminates | Chase a caster on foot; it backs away for `KiteBudgetSeconds`, then stands and fights for `KiteRecoverySeconds` |
+| Reach on static abilities | An NPC whose only ability does not travel should close and strike, not stand at its archetype's preferred distance |
 | Behaviour tree cycle safety | Connect a node to its own ancestor in the editor; the connection is refused |
 
 ## Flow Diagram
@@ -295,6 +328,8 @@ A state entered mid-fight for positioning (orbit, flank, flee) must have `KeepsC
 ```mermaid
 flowchart TD
     Tick[TimeManager.OnTick 30 Hz] --> Face[FaceLookTarget]
+    Tick --> Step[StepAgent: velocity x tickDelta<br/>+ separation, re-seat, heading]
+    Tick --> Off[RecoverIfOffMesh]
     Tick --> Gate{AI tick gate<br/>every Nth network tick}
     Gate -->|no| Done[return]
     Gate -->|yes| Lod{LOD tier}
@@ -316,8 +351,10 @@ BaseAttackingState.UpdateState
 │      ├─ Activation in progress? → hold and auto-release charged abilities
 │      ├─ Roll for a movement-variety manoeuvre
 │      ├─ PickAbility (rotation → personality-weighted scorer)
-│      ├─ BuildContext (distance, spacing, health, personality, was-attacking)
+│      ├─ BuildContext (distance, reach, fitted spacing, health,
+│      │                personality, was-attacking, kite exhausted)
 │      ├─ AICombatDecision.Plan → intent
+│      ├─ Charge the kite budget, set agent speed
 │      └─ ExecutePlan
 │           ├─ Flee              → RetreatState
 │           ├─ EmergencyRetreat  → interrupt, break away
@@ -370,11 +407,15 @@ AI/
 ├── Combat/
 │   ├── AIAbilityClassifier.cs     # Derives what an ability does from its ECA actions
 │   ├── AIAbilityIntent.cs         # Heal / Damage / Control / Dispel / Threat flags
-│   ├── AICombatDecision.cs        # The shared, Unity-free combat decision
+│   ├── AIAbilityReach.cs          # How far an ability really hits from; Range is 0 for anything static
+│   ├── AICombatDecision.cs        # The shared, Unity-free combat decision, plus ResolveSpacing
 │   ├── AICombatIntent.cs
 │   ├── AICombatSlots.cs           # Ring slotting so attackers do not converge on one point
+│   ├── AIKiteBudget.cs            # Per-NPC kiting allowance and recovery hold
 │   ├── AIMovementResult.cs
-│   └── AITargetSelection.cs       # Random / weakest / nearest picking
+│   ├── AISeparation.cs            # Scene-scoped body separation, in place of crowd avoidance
+│   ├── AIStateClock.cs            # Per-state update scheduling and the interval each update covers
+│   └── AITargetSelection.cs       # Random / weakest / nearest picking, and target validity
 ├── States/
 │   ├── BaseAttackingState.cs      # The one attacking state; archetypes are its tuning
 │   ├── MeleeAttackingState.cs     # Preset

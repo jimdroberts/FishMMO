@@ -57,6 +57,7 @@ The Logging subsystem (`Logging/` subdirectory) provides Unity-specific integrat
 - **Version management** — reads `VersionConfig` ScriptableObject and optionally validates against `version.txt` in standalone builds.
 - **Dynamic Addressable load-path override** — `DynamicAddressableLoadPathSystem` replaces remote asset URL domains at runtime via `Addressables.ResourceManager.InternalIdTransformFunc`.
 - **Graceful async shutdown** — handles `Application.wantsToQuit`, editor play-mode exit (`EditorApplication.playModeStateChanged`), and `OnDestroy` with deferred quit, logging config save, `Log.Shutdown()`, and Addressable asset release.
+- **`OnClientShutdownStarting`** — raised once at the very start of a standalone client's shutdown, before any teardown, so a handler still has the window and render state intact. It exists for the launcher, which returns the window to its own size before exit: a standalone player creates its next window in the mode recorded at the previous quit, and this process always quits from the game. `Screen.SetResolution` takes effect at the *end* of the frame it is requested in, so `PerformAsyncShutdown` yields one frame unconditionally before doing anything else — the awaits after it may complete synchronously and cannot be relied on to provide that frame. Invocation is isolated in `try/catch`, and it is not raised in the editor (no window to size) or on a server.
 - **Duplicate-start and duplicate-completion guards** — `StartBootstrap()` tracks `hasStartedBootstrap`; `hasCompletedPreload` and `hasCompletedPostload` ensure `OnCompletePreload()` and `OnCompleteProcessing()` each run at most once.
 - **Ownership-checked log hook release** — `Log.OnInternalLogMessage` is a single-cast static assigned by every bootstrap system's `Awake()`, so several are alive at once and the last to wake owns it. `OnDestroy()` clears it only if this instance is the current owner; clearing unconditionally silenced internal logging for every system still shutting down.
 - **Boot survives a missing `VersionConfig`** — `MainBootstrapSystem` logs the error and continues with an unknown version instead of aborting `OnPreload()`. Aborting left the load queue empty, which made every downstream phase report "done" instantly and produced a permanently black screen; carrying on lets the launcher come up and report the bad version to the player.
@@ -431,6 +432,7 @@ Application.wantsToQuit / Editor ExitingPlayMode / OnDestroy
     └── InitiateShutdown()
             │
             ├── Guard: skip if already shutting down
+            ├── OnClientShutdownStarting?.Invoke()  (!UNITY_EDITOR && !UNITY_SERVER, isolated)
             ├── GraphicsCleanup() — releases Addressable assets
             ├── UnityLoggerBridge.Shutdown() — restores Unity's default log handler
             │
@@ -440,6 +442,7 @@ Application.wantsToQuit / Editor ExitingPlayMode / OnDestroy
             │
             └── Standalone path:
                 └── PerformAsyncShutdown()
+                        ├── await Task.Yield() — one frame, unconditionally
                         ├── Save logging config to disk
                         ├── await Log.Shutdown()
                         ├── canQuitApplication = true

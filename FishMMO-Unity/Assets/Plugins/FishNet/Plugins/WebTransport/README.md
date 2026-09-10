@@ -6,10 +6,14 @@ QUIC/HTTP3 transport for FishMMO via FishNet.
 
 | Platform | Backend | Status |
 |----------|---------|--------|
-| Linux x86_64 | Native `libfishmmo_webtransport.so` | Shipped |
-| Windows x86_64 | Native `fishmmo_webtransport.dll` | Build required |
+| Linux x86_64 | Native `libfishmmo_webtransport.so` | Build required |
+| Windows x86_64 | Native `fishmmo_webtransport.dll` (+ `msquic.dll`) | Build required |
 | macOS x86_64 | Native `libfishmmo_webtransport.dylib` | Build required |
 | WebGL | Browser WebTransport API | JSLib bridge |
+
+No native binary is tracked for any platform, Linux included — every machine
+builds its own from `FishMMO-WebTransport/`. See
+[Plugins/README.md](Plugins/README.md) for the per-platform commands.
 
 ## Architecture
 
@@ -20,6 +24,62 @@ QUIC/HTTP3 transport for FishMMO via FishNet.
 
 Both channels are real. Nothing is remapped: unreliable traffic travels as
 datagrams on every platform, browsers included.
+
+## Native library contract
+
+Because no binary is tracked, the library that loads at runtime can be older
+than the C# that calls it. `WebTransportNative.EnsureInitialized` checks that
+before anything else:
+
+- `wt_abi_version()` must equal `WebTransportNative.ExpectedAbiVersion` (**3**,
+  paired with `WT_ABI_VERSION` in `FishMMO-WebTransport/src/webtransport_api.h`;
+  `FishMMO-WebTransport/tests/check_abi_version.sh` verifies the pair). A
+  mismatch, a `DllNotFoundException`, or a library too old to export
+  `wt_abi_version` at all is logged with `WebTransportNative.RebuildHint` — the
+  build command for the running platform — and initialisation returns `false`
+  instead of throwing `EntryPointNotFoundException` from some later P/Invoke.
+- `wt_tls_provider()` is read into `WebTransportNative.TlsProvider` and logged
+  alongside `wt_version()` once initialisation succeeds. Only the OpenSSL
+  (quictls) flavour of msquic can load PEM files and host a server; a
+  Schannel-flavour build fails `wt_server_start` with
+  `WTError.TLSBackend` (-8), and `ServerSocket.DescribeStartFailure` turns that
+  code — and the two certificate-shaped `WTError.TLSError` cases — into the
+  rebuild or the missing-file path.
+
+## Abuse limits and backpressure
+
+The server socket bounds what one connection can cost, inbound and outbound.
+Nothing here is per-account: it is all keyed on the connection.
+
+**Inbound.** `ServerSocket` charges every stream message and datagram to a
+per-connection token bucket on the QUIC worker thread, before any unmanaged copy
+(`TryAdmitInbound`). The default budget is serialised on the transport component
+— `maxInboundMessagesPerSecond` 200, `inboundMessageBurst` 400 — and a
+connection that keeps sending after its bucket empties is disconnected once
+`InboundOverflowKickThreshold` (100) consecutive messages have been refused. The
+disconnect is queued to `pendingInboundKicks` and issued from the main thread in
+`DrainInboundKicks`, because msquic must not be re-entered from its own
+callback. A second cap, `MaxIncomingEventsPerConnection` (1000 of the shared
+`MaxIncomingEvents` 10000), stops one connection's backlog from evicting
+everyone else's when the main thread falls behind.
+
+**Native mirror.** `ServerSocket.StartConnection` passes the same budget to
+`wt_server_set_limits` before `wt_server_start`, so a flood is refused inside the
+library too. The five connection-shaped limits — `connectIntervalMs`,
+`maxConnectionsPerIp`, `maxHalfOpenConnections`,
+`maxQueuedDatagramsPerConnection`, `maxH3StreamsPerConnection` — default to `-1`,
+meaning "keep the native default"; `0` disables one. `WebTransport.SetNativeLimits()`
+and `WebTransport.SetInboundRateLimit()` change them from code, the latter also
+on a live socket.
+
+**Outbound.** `SendToClient` counts queued packets per connection in
+`outgoingPerConnection` and refuses at `MaxOutgoingPerConnection` (2000) of the
+shared `CommonSocket.MaxOutgoingQueueSize` (10000). A reliable packet over that
+share, or a `WTError.BufferFull` from a reliable send (the native
+per-connection in-flight cap, 8 MB), means the peer is not reading and its
+stream is already broken, so `KickSlowClient` disconnects it rather than let the
+shared queue drop other clients' reliable packets. Broadcasts (`connectionId ==
+-1`) count against nobody.
 
 ## Wire format
 
@@ -108,10 +168,12 @@ boundary, which is exactly why the wrapper exists.
 
 ## TLS
 
-The **server** presents a certificate the same way it always has, via
-`CertificatePath` / `PrivateKeyPath` in its `.cfg`. Nothing about server TLS
-changed, and the server never uses the JavaScript bridge — that exists only in
-WebGL *client* builds.
+The **server** presents a certificate via `CertificatePath` / `PrivateKeyPath` in
+its `.cfg`. Both are required: the native library generates nothing self-signed,
+and msquic refuses a server with no credential, so an unset or unreadable path
+fails `wt_server_start` with `WTError.TLSError` and the log names the file and
+the working directory it was resolved against. The server never uses the
+JavaScript bridge — that exists only in WebGL *client* builds.
 
 `SetServerCertificateHashes` is a **client** setting despite the name, which
 comes from the W3C option it feeds (`serverCertificateHashes` — "hashes *of the*

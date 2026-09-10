@@ -91,7 +91,7 @@ These features are implemented by the concrete authenticators that consume the c
 - **Connection IP cache TTL** — `LastSeenCacheTracker<int, string>` with bounded sweep to prevent unbounded memory growth.
 - **AccountManager backstop sweep** — `ArrivalOrderTracker` with oldest-first traversal purges stale SRP/encryption state.
 - **Max pending auth cap** — `MaxPendingAuthConnections` (10,000) prevents memory exhaustion from half-open connection floods.
-- **Bounded channel capacity** — verify: 500, proof: 500, token: 500, account creation: 1000; all with `DropWrite` → `ServerBusy`.
+- **Bounded channel capacity** — verify: 500, proof: 500, token: 500; all with `DropWrite` → `ServerBusy`. Account creation does not use a channel: it hands work to `AsyncWorkerData`, whose admission cap is `maxOutstandingItems` (16,384, overridable with `AsyncWorkerMaxOutstandingItems`).
 - **Time-sliced main-thread drain** — `maxMainThreadActionsPerUpdate` (100) prevents frame spikes from queue bursts.
 
 ## Prerequisites
@@ -414,7 +414,13 @@ Network Thread (UDP Gates)              Worker Threads (Async)              Main
 | `verifyChannel` | 500 | 2 | `DropWrite` → `ServerBusy` | ServerAuthenticator (SRP) |
 | `proofChannel` | 500 | 2 | `DropWrite` → `ServerBusy` + disconnect | ServerAuthenticator (SRP) |
 | `tokenChannel` | 500 | 2 | `DropWrite` → `ServerBusy` | TokenServerAuthenticator |
-| `AsyncWorkerData` | 1000 | configurable | `DropWrite` → `ServerBusy` | AccountCreationSystem |
+
+`AsyncWorkerData` (used by `AccountCreationSystem`) is deliberately **not** in this table. It is
+not a channel and has no drop policy: a `SemaphoreSlim` gates concurrency, per-entity work is
+serialised through an `OrderedLane`, and `Enqueue` refuses once `maxOutstandingItems` (16,384,
+overridable with the `AsyncWorkerMaxOutstandingItems` config key) items are accepted but
+unfinished.
+
 
 ### SRP Request Lifecycle
 

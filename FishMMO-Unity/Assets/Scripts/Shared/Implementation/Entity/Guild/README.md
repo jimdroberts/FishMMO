@@ -128,11 +128,32 @@ The guild ID is synced via SyncVar at 1.0s intervals on the unreliable channel (
 | Event | Parameters | Description |
 |-------|------------|-------------|
 | `OnReceiveGuildInvite` | `long inviterCharacterID` | Guild invitation received |
-| `OnAddGuildMember` | `long characterID, long guildID, GuildRank rank, string location` | Member added to guild list |
+| `OnAddGuildMember` | `GuildAddBroadcast` | Member added to the guild list. The broadcast carries `GuildID` plus one `GuildAddEntry` (`Member`); `GuildAddMultipleBroadcast` carries the guild id **once** and a list of entries, re-attaching it per row so the same handler serves a roster refresh and a single add |
 | `OnValidateGuildMembers` | `HashSet<long> memberIDs` | Full member set received for validation |
 | `OnRemoveGuildMember` | `long memberID` | Member removed from guild list |
 | `OnLeaveGuild` | _(none)_ | Local character left the guild |
 | `OnReceiveGuildResult` | `GuildResultType result` | Result of a guild operation |
+| `OnReceiveGuildInfo` | `long guildID, string name, string notice, string motd` | Descriptive text arrived |
+| `OnReceiveGuildLog` | `GuildLogEntry[] entries` | Recent activity, newest first |
+| `OnReceiveGuildRanks` | `GuildRankListBroadcast` | The rank ladder |
+| `OnReceiveGuildRecruitmentInfo` | `GuildRecruitmentInfoBroadcast` | Recruitment listing state |
+| `OnReceiveGuildDirectory` | `GuildDirectoryEntry[]` | Browsable guild directory |
+| `OnReceiveGuildApplications` | `GuildApplicationEntry[]` | Pending applications |
+| `OnReceiveGuildCreationCost` | `int currencyTemplateID, long amount` | The creation fee, both 0 when there is none (issue #186) |
+
+The creation fee is also **stored** on the controller as `CreationCostCurrencyTemplateID` /
+`CreationCost`, not only raised, because the guild panel is usually bound after the broadcast
+arrives: it reads the stored values when it binds and listens for changes afterwards.
+
+### Pooling reset
+
+`ResetState(bool)` calls `ClearGuildStanding()` and nulls every event subscriber. `ID` is a SyncVar
+and FishNet's own reset returns it to its default, but the three plain fields behind it —
+`RankOrder`, `Permissions`, `LeaderRankOrder` — are written from roster broadcasts and would
+otherwise stay exactly as the previous occupant of the pool slot left them: a guildless character
+inheriting a leader's permission mask draws every officer control in the guild panel, and the server
+refuses each one with a result the panel cannot explain. `ClearGuildStanding` is reused rather than
+repeated so the leave path and the reset path cannot drift apart.
 
 ### Broadcast Types
 

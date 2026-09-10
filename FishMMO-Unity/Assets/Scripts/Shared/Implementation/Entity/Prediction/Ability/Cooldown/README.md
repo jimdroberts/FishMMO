@@ -23,7 +23,7 @@ The Cooldown system manages per-ability cooldowns for FishMMO characters using i
 
 > Note: See the Detailed File-Level Topology in the parent `Prediction/README.md` (`../../README.md#detailed-file-level-topology`) for a file-level call/serialization topology and per-file interactions.
 
-`CooldownController` implements `IPredictableController` (Order=90), running after `BuffController` (80) and before `CharacterAttributeController` (95) in the unified prediction pipeline driven by `CharacterPredictionController`. On each tick, it calls `ExpireElapsed()` to remove finished cooldowns. Reconcile snapshots use `CooldownReconcileEntry[]` arrays with index-delta compression for bandwidth-efficient network synchronization.
+`CooldownController` implements `IPredictableController` (Order=90), running after `KCCPlayer` (80) and `BuffController` (85) and before `CharacterAttributeController` (95) and `AbilityController` (100) in the unified prediction pipeline driven by `CharacterPredictionController`. On each tick, it calls `ExpireElapsed()` to remove finished cooldowns. Reconcile snapshots use `CooldownReconcileEntry[]` arrays with index-delta compression for bandwidth-efficient network synchronization.
 
 ## Supported Platforms
 
@@ -167,7 +167,29 @@ Lightweight struct for reconcile snapshot serialization.
 | `PopulateInput`     | No-op — cooldowns have no owner input                                        |
 | `OnReplicate`       | Calls `ExpireElapsed(input.GetTick())` — deterministic expiry per tick       |
 | `OnCreateReconcile` | Writes `CreateReconcileSnapshot()` → `CooldownReconcileEntry[]`             |
-| `OnReconcile`       | Calls `RestoreFromReconcile(entries)` to replace all cooldowns with server state |
+| `OnReconcile`       | Returns immediately unless this peer is the owner or the object is forwarded (`ObserverSyncMode.ObserversConsumeReconcile`); otherwise calls `RestoreFromReconcile(entries)` to replace all cooldowns with server state |
+
+#### Cooldowns are owner state, on both paths
+
+The owner always reconciles — this is the authority for its own cooldown simulation and the
+correction that removes a cooldown it mispredicted. A non-owner reconciles only a **forwarded**
+object, because that is the only mode in which it runs the ability simulation at all. With
+forwarding off an observer never receives this reconcile, so the guard states the contract rather
+than defending against a message that cannot arrive.
+
+The spawn payload had already decided the same fact:
+`AbilityController.WritePayload` calls `cooldownController.Write(writer, includeEntries: isOwner)`,
+and a non-owner connection receives the **same framed block with a zero count** — `IsOnCooldown` is
+consulted only inside the caster's own replicate, which observers do not run for peers, and the one
+case where an observer does run it (forwarded mode) is served by the absolute reconcile FishNet
+sends on the tick an observer is added. Keeping the block framed leaves `Read()` unchanged. Without
+the reconcile guard the two paths disagreed about the same fact the moment forwarding was switched
+on.
+
+The `ICooldownController` static events are gated on `IsLocalOwner` inside
+`RestoreFromReconcile` as well as at `AddCooldown`/`ExpireElapsed`, because reconcile
+deserialisation also runs for objects the local player does not own and these events drive the
+local player's hotkey bar.
 
 ### Network Serialization
 
@@ -175,7 +197,9 @@ Lightweight struct for reconcile snapshot serialization.
 
 Used by `ReadPayload`/`WritePayload` for initial character spawn:
 
-- **Write**: `int count`, then per cooldown: `long abilityID`, `uint startTick`, `uint durationTicks`
+- **Write**: `uint currentDomainTick`, a 4-byte block length, then `int count` and per cooldown
+  `long abilityID`, `uint startTick`, `uint durationTicks`. `Write(writer, includeEntries: false)`
+  writes the same framed block with a count of zero for a non-owner connection
 - **Read**: Reads entries and discards any already expired relative to `currentTick`
 
 #### Delta Serialization (Reconcile)

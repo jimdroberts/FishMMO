@@ -14,10 +14,14 @@ The settings screen itself is `UITKOptions` in
 | `ClientSettings` | The single owner of `Configuration.GlobalSettings`. Names every key, clamps every read, owns the one debounced write. |
 | `ClientSettingsBootstrap` | Loads the store before any scene, applies everything from the boot hook. |
 | `ClientSettingsPump` | Drives the debounced write and forces it out on focus loss, pause and quit. |
-| `ClientDisplaySettings` | Display modes, quality, VSync, frame-rate cap, brightness. |
+| `ClientDisplaySettings` | Display modes, quality, VSync, frame-rate cap, brightness, anisotropic filtering. |
+| `ClientCameraSettings` | Look sensitivity onto `KCCCamera.RotationSpeed`, and the antialiasing mode. |
 | `ClientAudioSettings` | Per-channel volumes and the unfocused mute. |
 | `ClientAudioFocusWatcher` | Reports window focus so the unfocused mute has something to act on. |
 | `AudioChannel` | The volume groups. |
+| `ClientCrosshairSettings` | Whether the crosshair is drawn, and its shape, size and opacity. |
+| `ClientNameplateSettings` | Overhead nameplate opacity, scale, background strength, budget, guild and title rows. |
+| `ClientWorldLabelSettings` | World-label scale, distance, opacity, budget, occlusion, and the per-kind nameplate ranges. |
 | `UIProfile` | Reads and writes a shareable UI layout/colour file, separate from `Configuration.cfg`. |
 
 ## Boot order
@@ -37,7 +41,8 @@ MainBootstrapSystem.OnPreload()          (first scene's Awake)
   └── OnApplyClientBootSettings?.Invoke()
       └── ClientSettingsBootstrap.Apply()                  (guarded: runs once per session)
           ├── ClientSettings.ApplyAll()
-          │   ├── display   — quality, mode, VSync, frame rate, brightness, scene hook
+          │   ├── display   — quality, mode, VSync, frame rate, brightness, anisotropic, scene hook
+          │   ├── camera    — look sensitivity onto KCCCamera, antialiasing
           │   ├── audio     — channel levels, master onto the listener, focus watcher
           │   ├── interface — UI scale onto the shared PanelSettings
           │   └── theme     — UITKThemeManager.Reload()
@@ -87,11 +92,20 @@ files.
 
 | Group | Keys |
 |---|---|
-| Display | `VSync`, `Frame Rate Limit`, `Brightness`, `Resolution Width`, `Resolution Height`, `Refresh Rate`, `Fullscreen`, `Quality Level` |
+| Display | `VSync`, `Frame Rate Limit`, `Brightness`, `Resolution Width`, `Resolution Height`, `Refresh Rate`, `Fullscreen`, `Quality Level`, `Anisotropic Filtering` |
+| Camera | `Look Sensitivity`, `Antialiasing` |
 | Audio | `Audio.Volume.<Channel>`, `Audio.MuteWhenUnfocused` |
 | Gameplay | `ShowDamage`, `ShowHeals`, `ShowAchievementCompletion`, `IgnorePartyInvites`, `IgnoreGuildInvites` |
+| Crosshair | `Crosshair.Enabled`, `Crosshair.Style`, `Crosshair.Size`, `Crosshair.Opacity` |
+| World labels | `WorldLabels.Scale`, `WorldLabels.Distance`, `WorldLabels.Opacity`, `WorldLabels.MaxVisible`, `WorldLabels.Occlude`, `WorldLabels.NpcNameRange`, `WorldLabels.PlayerNameRange`, `WorldLabels.ShowOwnName` |
+| Nameplates | `Nameplates.Opacity`, `Nameplates.Scale`, `Nameplates.BackgroundOpacity`, `Nameplates.MaxVisible`, `Nameplates.ShowGuild`, `Nameplates.ShowTitles` |
+| Map | `Map.MinimapZoom`, `Map.MinimapRotates`, `Map.MinimapFrameRate`, `Map.ShowCoordinates` |
 | Interface | `UI.Scale`, `UI.SnapGridSize`, `UI.Panel.<PanelName>.X` / `.Y`, `UIThemeVersion`, `<Name>ColorR/G/B/A` |
 | Input | `InputBindingOverrides` (the Input System's override JSON) |
+
+`UI.SnapGridSize` and `UI.Panel.<name>.X` / `.Y` are named by `UITKPanelPositions` rather than by
+`ClientSettings`, since the panel layer owns them; everything else in the table is a
+`ClientSettings` constant.
 
 Quality is stored by **name**, not index: levels can be reordered between builds and an index
 saved against the old order silently selects a different level. A name that no longer exists is
@@ -204,15 +218,82 @@ Levels are stored as slider positions and applied through a squared curve, so th
 slider lands near the middle of the perceived range. The stored value is always the slider
 position, so the curve can change later without invalidating anybody's settings.
 
-**Only `Master` is offered today.** It is applied to `AudioListener.volume`, which scales
-everything the scene plays. The other five channels keep their key, default, stored level and
-change event so that wiring up an audio system later is adding entries to
-`ClientAudioSettings.PlayableChannels` — but nothing in the client owns an `AudioSource` yet, so
-sliders for them would save perfectly and change nothing audible. A control that does nothing is
-worse than a missing one.
+**All six channels are offered.** `PlayableChannels` now lists every member of `AudioChannel`,
+so the Audio tab builds a slider per channel. `Master` is still special: it is applied to
+`AudioListener.volume`, which scales everything the scene plays, and `EffectiveVolume(channel)`
+folds it into whichever channel is asked for — nothing should ever play *on* Master.
+
+The other five reach sound through `ChannelAudioSource` (in
+[`Client/Audio`](../Audio)), a `[RequireComponent(typeof(AudioSource))]` component that captures
+the source's authored volume once and rescales it by `EffectiveVolume` of its channel whenever
+`OnVolumeChanged` fires. Assign `AuthoredVolume` rather than `AudioSource.volume` when code wants
+to change how loud a sound sits in the mix, or the next slider move overwrites it. `ClientUIAudio`
+is the first consumer: it adds one on the `Interface` channel. There is deliberately no
+`AudioMixer` — a mixer's groups and exposed parameters live in a binary asset, and a parameter set
+before the mixer has loaded is silently dropped, which is the state the client boots in.
+
+`ClientAudioSettings.ResetToDefaults` stays scoped to `PlayableChannels`, which is now every
+channel; the scoping remains so that a channel retired from the list stops being written rather
+than lingering in `Configuration.cfg` as a setting nobody is shown.
 
 Muting when unfocused is a volume decision, not a pause: it is applied on top of Master rather
 than by writing zero into it, so the saved level is not destroyed by switching windows.
+
+## Camera
+
+`ClientCameraSettings` is separate from `ClientDisplaySettings` because it writes to a **scene
+object**, not to Unity's global state, and that object does not exist for the whole session.
+
+- **Look sensitivity** (`Look Sensitivity`, 0.1–1.0, default 0.5) is written onto
+  `KCCCamera.RotationSpeed`. `ApplyLookSensitivity` returns `false` when there is no camera yet,
+  which is the normal state at boot — `PlayerInputController.Initialize` applies it again once the
+  local character is in the world. Without that second apply the camera would keep its authored
+  speed for the whole session and the saved value would look ignored. Only `ApplySaved` logs;
+  dragging the slider does not.
+- Sensitivity is observable only while the cursor is locked. With mouse mode on the camera does not
+  turn at all, so the slider looks broken if tested there — there is simply no look input to scale.
+- **Antialiasing** (`Antialiasing`) is a project enum, `AntialiasingOption`: `Off`, `Fast` (FXAA),
+  `Balanced` (SMAA, the default) and `Temporal` (TAA). Deliberately not Unity's `AntialiasingMode`,
+  because a reordering there would silently change what an existing saved file means. It is applied
+  to the main camera's `UniversalAdditionalCameraData`, with `antialiasingQuality` forced to `High`.
+  It is post-process antialiasing, not MSAA: MSAA lives on the render pipeline asset and is chosen
+  by the quality level, so exposing it here would give two controls one set of edges to fight over.
+
+`ClientDisplaySettings` also owns **anisotropic filtering** (`Anisotropic Filtering`), applied
+through `ApplyAnisotropicFiltering` alongside the other quality writes and therefore covered by the
+same editor restore.
+
+## Crosshair, nameplates and world labels
+
+Three separate models, all read straight off `ClientSettings` and all edited from the **Gameplay**
+tab. Each raises an `OnChanged` event that the drawing layer subscribes to, and each default is
+what its layer already drew with no configuration at all — so a fresh install looks unchanged and
+only a player who moves something changes anything.
+
+| Model | Consumer | What it owns |
+|---|---|---|
+| `ClientCrosshairSettings` | `UITKCrosshair` | `Enabled`, `Style` (`Cross` / `Dot` / `Circle`, applied as one of `StyleClasses` on the icon), `Size` (4–32 pt, default 8), `Opacity` (0.1–1) |
+| `ClientNameplateSettings` | `UITKNameplateLayer` | `Opacity` (0.2–1), `Scale` (0.5–2), `BackgroundOpacity` (0–1, a multiplier on each style's own opacity), `MaxVisible` (8–256, default 64), `ShowGuild`, `ShowTitles` |
+| `ClientWorldLabelSettings` | `UITKWorldLabelLayer`, and `ClientNameplateDisplay` for the three visibility rules | `Scale` (0.5–2), `Distance` (10–200 m, default 80), `Opacity` (0.2–1), `MaxVisible` (16–256, default 64), `Occlude` (default off), `NpcNameRange` / `PlayerNameRange` (0–200 m, default 30; zero means target only), `ShowOwnName` |
+
+**Why nameplates and world labels are split.** They are drawn by different layers with separate
+budgets and answer different questions: a damage number is feedback read for a second, a nameplate
+is furniture looked past all day. Wanting one loud and the other faint is an ordinary preference a
+single shared opacity could not express.
+
+**What stays shared** is the draw distance and the hide-behind-geometry toggle — statements about
+projected world UI as a whole — plus the two ranges and the own-name toggle, which keep their
+original `WorldLabels.*` keys because moving them would silently reset every existing install.
+
+Draw distance and both visible caps are performance controls rather than taste: they bound the
+client's hottest UI loop, one projection, one style diff and one sort entry per label per frame.
+Scale *multiplies* the computed size and its clamp bounds together, since a label's font size is
+derived from its world size and camera distance — a fixed point size would throw away the
+perspective behaviour, and scaling without moving the clamp would be swallowed by the upper bound
+as soon as the player walked close.
+
+Crosshair **colour** is deliberately absent here: `Crosshair` is already a themed colour in
+`UITKTheme.ColorNames`, edited from the Interface tab's colour list.
 
 ## UI profiles
 
@@ -251,9 +332,15 @@ and spaces, and anything containing a path separator.
 | Display mode cannot strand the player | Apply a mode, do not press Keep | Reverts after 12s; nothing persisted |
 | Rebinding | Click a row, press a key | Bound; duplicates refused with an explanation; Escape cancels; Backspace clears |
 | Profile round trip | Save, change things, load | Layout, colours and scale restored; unrelated `.cfg` refused |
+| Look sensitivity survives boot | Set it, restart, enter the world without touching the slider | The camera turns at the saved rate; the boot apply logs "no camera yet" |
+| Per-channel audio | Drop Music, click a UI button | Interface sounds unchanged; only the Music channel drops |
+| Label budget | Lower Max Visible in a crowd | Nearest labels kept, furthest dropped |
 
 ## Related
 
-- [Settings panel](../GUI/World/Options) — the five-tab UI over this model
+- [Settings panel](../GUI/World/Options) — the five-tab UI over this model (Display, Audio,
+  Gameplay, Controls, Interface; the crosshair, nameplate and world-label rows are on Gameplay)
+- [Client audio](../Audio) — `ChannelAudioSource` and `ClientUIAudio`, the consumers of the
+  channel levels
 - [Bootstrap](../../Shared/Implementation/Bootstrap/README.md) — where the apply hook is raised
 - [Launcher](../Launcher/README.md) — shares the same `Configuration` instance

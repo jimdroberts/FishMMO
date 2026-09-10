@@ -104,8 +104,11 @@ FishMMO-CMS/**/appsettings.json
 /Builds/
 
 # --- API Documentation (docfx) ---
-# docfx.json, toc.yml, docs/, publish.sh, etc. are tracked; only the
-# generated metadata/site output is not.
+# The entire docfx toolchain is intentionally local-only: the sources
+# (docfx.json, toc.yml, docs/, templates/, tools/, publish.sh) are NOT tracked
+# here, and neither is the generated metadata/site output. publish.sh builds the
+# site and syncs it into the separate FishMMO-Website repo, which is what the
+# published docs are served from.
 /Documentation/
 
 # Local clone of the gh-pages doc-hosting repo (jimdroberts/FishMMO-Website).

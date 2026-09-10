@@ -38,8 +38,9 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - **Value model** with Allied/Neutral/Hostile grouping and fast dictionary lookups
 - **Matrix-based editor** for configuring default NxN inter-faction relationships
 - **Combat-based adjustment** — Killing NPCs or players shifts faction standings proportionally
-- **NPC static relationships** — NPCs use `RaceTemplate.InitialFaction` without accumulating changes
-- **Network synchronization** — Owner-targeted and observer-targeted FishNet broadcasts
+- **NPC static relationships** — NPCs use `RaceTemplate.InitialFaction` without accumulating changes, and their roster is **derived on every peer** rather than sent
+- **Network synchronization** — Owner-targeted and observer-targeted FishNet broadcasts, on different terms: the owner gets exact values, everyone else gets a sign
+- **Dirty-set tick subscription** — the flush tick is held only while something is dirty, so a settled character costs no per-tick delegate at all
 - **Alliance coloring** — Green (Ally), Sky Blue (Neutral), Red (Enemy) for nameplates/frames
 - **Clamped reputation** — Values bounded to `[Minimum, Maximum]` (default `[-10000, 10000]`)
 - **Static events** — `OnUpdateFaction` fired on every faction change for UI and system hooks
@@ -128,6 +129,11 @@ The `FactionMatrixTemplate` provides an editor tool for configuring default inte
 | `SetFaction(templateID, value)` | Sets absolute value, updates alliance group, fires event |
 | `Add(template, amount)` | Adds amount to current value, clamps to bounds, fires event |
 
+Both also call `Faction.MarkChanged()`, which sets `PersistenceDirty` **and bumps `Version`**. The
+mutation-side bump is what lets `MarkPersisted(persistedVersion)` refuse to clear a row that changed
+while its write was in flight — a version advanced only by the save snapshot cannot guard an
+in-flight change. `SetFaction(..., skipEvent: true)` is the restore path and leaves the row clean.
+
 Both methods skip adjustment for NPC characters to prevent NPCs from accumulating faction changes.
 
 ### Combat-Based Adjustment
@@ -154,8 +160,31 @@ AdjustFaction(defender, alliedPercent, hostilePercent)
 
 #### Payload Serialization (FishNet Reader/Writer)
 
-- **WritePayload**: Writes `Int32(count)`, then for each faction: `Int32(templateID)`, `Int32(value)`.
-- **ReadPayload**: Clears all dictionaries, reads payload, and calls `SetFaction(id, value)` for each entry.
+The payload is framed by a byte count so `ReadPayload` can resynchronise after rejecting an
+untrustworthy one — every `NetworkBehaviour` on the object shares a single unframed buffer, so an
+abort without framing would leave every behaviour after this one reading at the wrong offset.
+
+It then writes `raceTemplateID` (unpacked — template IDs are full-range 32-bit hashes, so FishNet's
+signed-packed form would spend five bytes on the most-multiplied id in the game) and a
+**derived-roster** flag:
+
+- **Derived roster** — every ordinary NPC. Nothing further is written. Both ends call
+  `InitializeTemplateFactions()` and rebuild the table from `RaceTemplate.InitialFaction` (allied at
+  `Maximum`, neutral at 0, hostile at `Minimum`, mirroring
+  `CharacterCreateSystem.BuildStartingFactionEntries`). An NPC never changes faction, so its roster
+  is a pure function of immutable template data every peer already holds; sending it would be wasted
+  bytes and a second source of truth. `FactionController.FactionsAreTemplateDerived` reports which
+  case a controller is in.
+- **Owned roster** — a player's persisted standings, or a pet's copy of its owner's (`CopyFrom`
+  clears the derived flag). Written **per receiver**, with the shape byte on the wire so the reader
+  never guesses: the **owner** gets exact `Int32` standings, **everyone else** gets one sign byte
+  per entry. Varying by connection is safe because FishNet builds the spawn message per receiving
+  connection.
+
+`WritePayload` also seeds the per-channel baselines (`lastSentFactionValues`,
+`lastSentObserverSigns`) with what it just sent. Faction rows are installed before
+`ServerManager.Spawn`, so without that seed the first flush after every spawn re-sent the entire
+table as no-op writes.
 
 #### Client Broadcast Receivers
 
@@ -163,9 +192,26 @@ AdjustFaction(defender, alliedPercent, hostilePercent)
 |-----------|---------|
 | `FactionUpdateBroadcast` | Owner-targeted single faction update |
 | `FactionUpdateMultipleBroadcast` | Owner-targeted bulk faction update |
-| `CharacterObserverFactionUpdateBroadcast` | Observer-targeted faction updates with `CharacterID` routing |
+| `CharacterObserverFactionUpdateBroadcast` | Observer-targeted **sign** updates with `CharacterID` routing |
 
 Observer-targeted updates resolve the destination controller through `BaseCharacter.ClientCharacters` and apply updates on the resolved `IFactionController` instance.
+
+**Observers get a sign, not a value.** `NewValue` on the observer channel carries -1, 0 or +1 and
+nothing more, and a message goes out only when a standing actually *crosses zero* — because the only
+observer-side reader of a peer's factions is `GetAllianceLevel`, which asks whether the peer's
+standing with one of the viewer's own hostile factions is greater than zero, and `UITKFactions`
+refuses to render any character but the local one. Every mob kill credits standing, so the exact
+integer used to go out reliably to every observer on every reputation tick, to be reduced to a
+boolean on arrival — and it handed a packet-inspecting client a peer's precise progression. Full
+precision stays on the owner-only `FactionUpdateBroadcast` / `FactionUpdateMultipleBroadcast`,
+which are sent whenever the exact value moves. The two audiences therefore keep their own
+baselines: a kill that nudges a standing from 4000 to 4100 is an owner message and no observer
+message at all.
+
+**The flush tick belongs to the dirty set, not to the lifetime.** `TimeManager.OnTick` is
+subscribed when something is marked dirty and dropped the moment the set drains, so a settled
+character — nearly every character, nearly all of the time — pays nothing per tick. Before this,
+every server-side character invoked an immediately-returning flush thirty times a second.
 
 ### Static Events
 
@@ -179,6 +225,8 @@ NPCs use a different faction path than players:
 
 - **No accumulation**: `SetFaction` and `Add` early-return for NPCs (`Character as NPC != null`) to prevent NPCs from changing standings through combat.
 - **Static relationships**: NPC faction relationships are determined by their `RaceTemplate.InitialFaction`, which references a `FactionTemplate` with pre-configured `DefaultAllied`/`DefaultHostile` sets.
+- **Derived, not transmitted**: `InitializeTemplateFactions()` builds the roster from that template — allied at `Maximum`, neutral at 0, hostile at `Minimum` — and runs on **every** peer: from `InitializeOnce` on the server and from `ReadPayload` on a client. Both ends compute the same table from the same immutable asset rather than one end being told. The values mirror `CharacterCreateSystem.BuildStartingFactionEntries`; if those diverge, an NPC and a freshly created player of the same race would disagree about the same faction.
+- **Pets are the exception**: `CopyFrom` installs the owner's standings, which no template derives, so it clears `FactionsAreTemplateDerived` and the pet's roster travels like a player's.
 - **Alliance checks**: When evaluating alliance level against an NPC, the system checks the NPC's `InitialFaction.ID` directly against the player's `Hostile` dictionary, rather than iterating the NPC's dynamic standings.
 
 ### External Integration Points

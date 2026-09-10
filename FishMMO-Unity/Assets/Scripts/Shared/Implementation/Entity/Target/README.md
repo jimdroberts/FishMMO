@@ -120,6 +120,9 @@ This is an integrated module within the FishMMO project. No separate installatio
 | `TogglePinnedTarget` | `bool TogglePinnedTarget()`                            | Pins the hovered character, or releases the pin when nothing (or the pinned character) is hovered |
 | `TryPinTarget`   | `bool TryPinTarget(Transform)`                            | Pins a specific character; refused for non-characters, unspawned objects and oneself |
 | `ClearPinnedTarget` | `void ClearPinnedTarget()`                             | Releases the pin |
+| `ClientSelectedTargetObjectId` | `int`                                      | Server-side: the `NetworkObject.ObjectId` the owning client last reported it is following, or 0 |
+| `HasClientSelectedTarget` | `bool`                                          | Server-side: whether a report has been received at all |
+| `ServerSetClientSelectedTarget` | `void ServerSetClientSelectedTarget(int)` | Records a verified report; ignored off-server |
 
 ### Client-Side Update Loop
 
@@ -138,7 +141,12 @@ The hover target is the right readout for action combat — abilities go where t
 1. The `PinTarget` input action (`F` by default) calls `TogglePinnedTarget()`: it pins the character under the pointer, or releases the pin when the pointer is on nothing or on the pinned character itself.
 2. Only spawned characters other than the player can be pinned. Scenery and interactables stay hover-only, so pinning never gets between the player and a door.
 3. Each trace tick the controller asks `PinnedTargetRules.ShouldRelease` whether the pin still holds. It is released when the target is destroyed or despawned on this client, when it dies, or when it moves beyond `RELEASE_DISTANCE` (75 m, deliberately wider than the 50 m acquisition range so a target pinned at the edge does not flicker). Nothing else releases it — not the pointer, not a panel opening.
-4. The pinned target takes precedence in the advisory `TargetSelectionBroadcast`, so the streaming budget never evicts the character the player is tracking.
+4. The pinned target takes precedence in the advisory `TargetSelectionBroadcast`: on the trace tick
+   the client reports whichever character its frame is following — the pinned one if there is one,
+   else the hovered one, and 0 for scenery or nothing — rate-limited to one send every 0.2 s and
+   only when the answer changed. The server verifies the claim and stores it as
+   `ClientSelectedTargetObjectId`, so the streaming budget never evicts the character the player is
+   tracking.
 
 **The pin is never a combat target.** Ability acquisition remains a server-side lag-compensated raycast from the replicated aim; the pin only changes what the player is shown. `UITKTarget` draws it as a second card beside the hover card, `ClientNameplateDisplay` keeps its nameplate up, and the party and guild invite buttons fall back to it when nothing is hovered.
 
@@ -158,9 +166,14 @@ This prevents the player from always targeting themselves when the camera is beh
 - **PlayerCharacter** — `TargetController` is a `[RequireComponent]` on `PlayerCharacter`, ensuring every player entity has targeting capability.
 - **NPC** — `TargetController` is also a `[RequireComponent]` on `NPC`. An NPC never runs the mouse path (it is owner-only and compiled out of dedicated servers); the server-side brain aims through `AIController.VirtualCameraRotation`, which `AbilityController` replicates as the NPC's aim, and `UpdateTarget()` traces from that aim exactly as it does for a player. Without the component the NPC's casts complete and spawn nothing — see issue #232 and `FishMMO > AI > Audit NPC Prefabs`. An **immortal** NPC (authored on `CharacterDamageController`, or a corpse) has no reason to target anything: `UpdateTarget()` short-circuits to a miss for it before any trace, and the repair/audit tooling leaves its mask alone.
 
-### Cleanup
+### Reset and cleanup
 
 `OnDestroying()` nulls all three event delegates (`OnChangeTarget`, `OnUpdateTarget`, `OnClearTarget`) and resets `Last` and `Current` to `default` to prevent dangling references.
+
+`ResetState(bool)` is the pooling reset: it clears `Last` / `Current`, forgets the pin, drops the
+server's `ClientSelectedTargetObjectId` / `HasClientSelectedTarget`, and clears the client's send
+throttle — so a recycled character does not inherit the previous occupant's target or its
+selection report.
 
 ## Operational Checks
 
@@ -244,6 +257,7 @@ Frame N+3:
 Target/
 ├── ITargetController.cs    # Target controller interface
 ├── TargetController.cs      # Per-entity controller (CharacterBehaviour)
+├── PinnedTargetRules.cs     # Pure release rule for the pinned target, plus RELEASE_DISTANCE
 └── TargetInfo.cs            # Lightweight target data struct
 ```
 

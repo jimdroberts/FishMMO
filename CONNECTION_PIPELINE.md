@@ -190,7 +190,7 @@
 ```mermaid
 sequenceDiagram
     actor Player
-    participant Launcher as ClientLauncher, (plain MonoBehaviour)
+    participant Launcher as ClientLauncher, (MonoBehaviour + ILauncherView)
     participant API as api.fishmmo.com, (NGINX → Patcher)
     participant CMS as News Host, (Constants.Configuration.LauncherHtmlUrl)
 
@@ -214,12 +214,12 @@ sequenceDiagram
     alt Client < Server, and patch_available == false
         Launcher->>Launcher: PatchUnavailable, "download the latest full client", (button re-runs the version check)
     else Client < Server, and patch_available == true
-        Launcher->>Launcher: PlayButtonUpdate() (auto-entered), → DownloadingPatch
+        Launcher->>Launcher: AutoUpdate on → PlayButtonUpdate() (auto-entered), → DownloadingPatch, AutoUpdate off → UpdateAvailable (waits for the player)
         Launcher->>API: GET /{clientVersion} (patch ZIP), same APIHost that answered the version check
         alt 200 OK
             API-->>Launcher: {from}-{to}.zip stream
             Launcher->>Launcher: Write to Patches/{from}-{to}.zip, • Constants.GetPatchesDirectory(), • ZIP magic check (PK\x03\x04), • SHA-256 verify vs manifest
-            Launcher->>Launcher: ApplyingPatch, → SystemUpdaterLauncher.LaunchUpdater(), (-version, -latestversion, -pid, -exe)
+            Launcher->>Launcher: ApplyingPatch, → SystemUpdaterLauncher.LaunchUpdater(), (-version, -latestversion, -pid, -exe, -patches)
             Note over Launcher: Launcher does NOT wait for the updater to exit —, it watches 10s for a fast failure, then quits so the, updater (which kills it by PID) can replace the binaries
         else 204 No Content (already up to date)
             API-->>Launcher: 204, no body
@@ -232,9 +232,17 @@ sequenceDiagram
     end
 ```
 
-**Launcher states** (`LauncherState.cs`): `LoadingNews`, `Connecting`, `CheckingVersion`, `DownloadingPatch`,
-`ApplyingPatch`, `ReadyToPlay`, `ClientAhead`, `ConnectionFailed`, `VersionCheckFailed`, `PatchDownloadFailed`,
-`UpdaterFailed`, `LaunchFailed`, `PatchUnavailable`, `VersionError`, `ServerRejectedVersion`.
+**Launcher states** (`LauncherState.cs`): `LoadingNews`, `Connecting`, `CheckingVersion`, `UpdateAvailable`,
+`DownloadingPatch`, `ApplyingPatch`, `ReadyToPlay`, `ClientAhead`, `ConnectionFailed`, `VersionCheckFailed`,
+`PatchDownloadFailed`, `UpdaterFailed`, `LaunchFailed`, `PatchUnavailable`, `VersionError`,
+`ServerRejectedVersion`, `Cancelled`.
+
+> `UpdateAvailable` is reachable only when `LauncherSettings.AutoUpdate` is off. With it on — the default, and
+> how the launcher has always behaved — an out-of-date client goes straight to `DownloadingPatch` without
+> parking on an Update button.
+
+> The launcher renders through `ILauncherView`; `UITKClientLauncher` (`Client/GUI/Launcher/`) is its sole
+> implementation, so the flow above is UI-toolkit-driven rather than drawn by `ClientLauncher` itself.
 
 > `ServerRejectedVersion` is wired into the UI state machine but not yet driven by the version-check endpoint —
 > version rejection is currently reported during the handshake as `ClientAuthenticationResult.VersionMismatch`
@@ -334,7 +342,7 @@ sequenceDiagram
 
     Client->>Server: ClientHandshake {,   PublicKey: client_x25519_pub,,   Cookie: hmac_cookie_bytes,,   ConnectionToken: null, }
 
-    Server->>Server: Phase 2: Cookie Verification, • HMAC-SHA256 verify with rollover,   (current + previous time bucket), • Per-IP rate limit check (250ms debounce), • Global rate limit check (500/sec)
+    Server->>Server: Phase 2: Cookie Verification, • HMAC-SHA256 verify with rollover,   (current + previous time bucket), • Per-IP rate limit check (8 completions per sliding 2s window), • Global rate limit check (500/sec)
 
     Server->>Server: X25519 ECDH Key Agreement, • Generate server ephemeral keypair, • Compute shared secret, • HKDF derive session keys:,   - ClientToServerKey (AES-256),   - ServerToClientKey (AES-256),   - ClientNoncePrefix,   - ServerNoncePrefix
 
@@ -1097,9 +1105,9 @@ in the same order. The order is the contract, not an implementation detail.
 |---|---|---|
 | Teleporter | `IPlayerCharacter_OnTeleport` | Releasing before the client reports its scene unload; `ArmTransferDisconnect` covers a client that never reports |
 | Bind-point respawn (different scene) | `OnClientRespawnAtBindPointBroadcastReceived` | Releasing before `conn.Disconnect` |
-| Channel switch | `SceneChannelSystem` → `ICharacterSystem.BeginChannelTransfer` | `BeginDeliberateTransfer` |
-| Dungeon entry | `InteractableSystem` → `EnterInstance` | `BeginDeliberateTransfer` |
-| Leave instance | `RequestLeaveInstanceBroadcast` / `/leaveinstance` → `TryLeaveInstance` | `BeginDeliberateTransfer` |
+| Channel switch | `SceneChannelSystem` → `ICharacterSystem.BeginChannelTransfer` | `SuppressCombatLingerOnDisconnect` |
+| Dungeon / arena entry | `InteractableSystem` → `EnterInstance` | `SuppressCombatLingerOnDisconnect` |
+| Leave instance | `RequestLeaveInstanceBroadcast` / `/leaveinstance` → `TryLeaveInstance` | `SuppressCombatLingerOnDisconnect` |
 
 1. **Gate on `CanActOrMove`** — refused while dead, teleporting, frozen, mid-load or in combat.
    Combat matters most: every one of these is instant and lands the player where their attacker
@@ -1117,7 +1125,7 @@ in the same order. The order is the contract, not an implementation detail.
 4. **Save and fully release before the connection drops.** The destination's `TryClaimAsync`
    requires `session_state = Offline` or an expired lease, so a transfer that lingers cannot be
    claimed on arrival.
-5. **Mark the disconnect as deliberate.** Combat-logout linger exists to punish a dropped
+5. **Suppress combat-logout linger for the server-initiated disconnect.** Combat-logout linger exists to punish a dropped
    connection, and a transfer *is* a dropped connection. A transfer that lingered would leave
    the body — and its claim — on the source server while the row says the character belongs to
    the destination, which then loses the claim race and kicks the arriving client on every
@@ -1276,7 +1284,7 @@ Suspicion: a flood of connection requests, handshake attempts, or API calls from
 1. **Verify NGINX rate limits are active** — check `limit_req_zone` and `limit_conn_zone` counters via `nginx -s reopen` logs or live metrics. Confirm the zones are not exhausted by legitimate traffic.
 2. **Enable stricter limits** — reduce `limit_req` to 5r/s (API) and 1r/s (patch), tighten `limit_conn` to 5 conn/IP. Apply at NGINX edge; no game-server restart required.
 3. **Check nonce cache pressure** — if the `ClientGate` nonce LRU exceeds 20,000 entries, the `Array.Sort` on eviction causes CPU spikes. Consider restarting the IPFetch/Patcher processes to flush the cache.
-4. **If the attack targets QUIC game ports**, the game server's per-IP handshake debounce (250ms) and global cap (500/sec) provide the last line of defense. Monitor `MaxPendingAuthConnections` (10,000) — if hit, legitimate clients are locked out.
+4. **If the attack targets QUIC game ports**, the game server's per-IP handshake limiter (8 per sliding 2s window) and global cap (500/sec) provide the last line of defense. Monitor `MaxPendingAuthConnections` (10,000) — if hit, legitimate clients are locked out.
 
 #### Account Takeover
 
@@ -1317,7 +1325,7 @@ Suspicion: the TLS private key for `game.fishmmo.com` (or `api.fishmmo.com`) has
 │                                                              │
 │  LAYER 3: Game Server                                       │
 │  ├─ Global handshake cap: 500/sec                           │
-│  ├─ Per-IP handshake debounce: 250ms                        │
+│  ├─ Per-IP handshake limit: 8 per 2s window                 │
 │  ├─ Pending auth cap: 10,000                                │
 │  ├─ Auth TTL sweep: 15s stale, 60s hard deadline            │
 │  ├─ Per-account rate limit: 1s (SRP verify)                 │
@@ -1475,10 +1483,15 @@ scene transfer or bind-point respawn.
 |---------|-------------|-----------|-----------|-----------------|
 | **Native client** | ✅ | ✅ | ✅ | N/A |
 | **Server** | ✅ | ✅ | ✅ | N/A |
-| **WebTransport (QUIC)** | ✅ (via C++ lib) | ✅ (via C++ lib) | ❌ (binary missing) | ✅ (via browser WebTransport API + server HTTP/3) |
+| **WebTransport (QUIC)** | ✅ (via C++ lib) | ✅ (via C++ lib) | ✅ (via C++ lib, built locally with `build_macos.sh` — must be built on a Mac) | ✅ (via browser WebTransport API + server HTTP/3) |
 | **TLS certificate pinning** | ✅ | ✅ | ✅ | N/A (browser handles) |
 | **API request signing** | ✅ | ✅ | ✅ | ✅ |
 | **IL2CPP scripting** | ✅ | ✅ | ✅ | ✅ (WASM) |
+
+> **Native plugin note:** No native WebTransport binary is tracked for any platform —
+> `FishMMO-Unity/.gitignore` excludes `Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/*/`.
+> Each platform's library is produced locally by the matching script in `FishMMO-WebTransport/`
+> (`build_windows.ps1`, `build_linux.sh`, `build_macos.sh`) and must be built on that platform.
 
 > **WebGL note:** The C++ msquic server includes a full HTTP/3 WebTransport handshake implementation
 > in `src/http3.cpp`. The server auto-detects browser clients by inspecting the first byte of the
@@ -1596,12 +1609,13 @@ Application wants to quit
 
 | Constant | Value | Location |
 |----------|-------|----------|
-| `APIHost` | `https://api.fishmmo.com/` | `Constants.cs` |
-| `GameHost` | `game.fishmmo.com` | `Constants.cs` |
+| `APIHost` | `GeneratedHostConfig.ApiHost` (build-time substituted; committed value is the `FISHMMO_SENTINEL_PLACEHOLDER_API_HOST` sentinel) | `Constants.cs` → `HostConfig.generated.cs` |
+| `GameHost` | `GeneratedHostConfig.GameHost` (build-time substituted; committed value is the `FISHMMO_SENTINEL_PLACEHOLDER_GAME_HOST` sentinel) | `Constants.cs` → `HostConfig.generated.cs` |
 | `AuthStaleTtlSeconds` | 15s | `BaseAuthenticatorCore.cs` |
 | `AuthHardDeadlineSeconds` | 60s | `BaseAuthenticatorCore.cs` |
 | `MaxPendingAuthConnections` | 10,000 | `BaseAuthenticatorCore.cs` |
-| `HandshakeIpDebounceSeconds` | 0.25s | `BaseAuthenticatorCore.cs` |
+| `HandshakeIpWindowSeconds` | 2s | `BaseAuthenticatorCore.cs` |
+| `HandshakeIpBurstLimit` | 8 | `BaseAuthenticatorCore.cs` |
 | `MaxGlobalHandshakesPerSecond` | 500 | `BaseAuthenticatorCore.cs` |
 | `TokenExpirationMinutes` | 10 (configurable) | `ServerAuthenticator.cs` |
 | `renewalTokenExpirationMinutes` | 10 (configurable) | `TokenServerAuthenticator.cs` |
@@ -1620,6 +1634,7 @@ Application wants to quit
 | `waitingQueueTtlSeconds` | 45s (configurable) | `WorldSceneSystem.cs` |
 | `SceneLoadWaitTtlMultiplier` | 4× `waitingQueueTtlSeconds` | `WorldSceneSystem.cs` |
 | `InstanceReadyGraceSeconds` | 180s | `WorldSceneSystem.cs` |
+| `DefaultMaxInstanceLifetimeMinutes` | 120 min (configurable via `MaxInstanceLifetimeMinutes`) | `SceneServerSystem.cs` |
 | `StaleSceneRowGraceSeconds` | 300s | `WorldSceneSystem.cs` |
 | `SceneServerPulseStaleSeconds` | 60s | `WorldSceneSystem.cs` |
 | `channelSwitchCooldownSeconds` | 10s (configurable) | `SceneChannelSystem.cs` |
@@ -1673,7 +1688,7 @@ Common operational procedures for FishMMO game servers. These procedures assume 
 
 - **Build the server binary** via the FishMMO Dashboard (Build → Server) targeting the desired platform and server type (Login/World/Scene).
 - **Copy the binary and its `.cfg` file** to the deployment host. Use the appropriate template from `FishMMO-Setup/Production/` (e.g., `SceneServer.cfg` for a new scene server).
-- **Register the server** in the database: insert a row into the `world_scenes` or `login_servers` table with the server's address, port, and metadata. The IPFetch/LoginServer discovery queries read these tables.
+- **Let the server register itself.** Servers write and pulse their own rows on first successful start — there is no hand-inserted registration step. Confirm the row appears in `login_servers`, `world_servers` or `scene_servers` (individual scene instances land in `scenes`); the IPFetch/LoginServer discovery queries read these tables.
 - **Add a new NGINX stream block** via `gen-fishmmo-stream-config.sh` if the server uses a port that hasn't been opened yet, then reload NGINX with `nginx -t && nginx -s reload`.
 - **Verify** by checking server logs for "Initialization Complete" and confirming client connections succeed.
 
@@ -1687,7 +1702,7 @@ Common operational procedures for FishMMO game servers. These procedures assume 
 ### Handle a DDoS Attack
 
 - **Enable NGINX edge rate limits** immediately: drop `limit_req` to 5r/s (API), 1r/s (patch), and `limit_conn` to 5 conn/IP. No server restart required; NGINX reloads limits on config change.
-- **Verify game-server defenses** are active: the handshake global cap (500/sec), per-IP debounce (250ms), and pending auth cap (10,000) are compiled-in constants that cannot be changed at runtime — if overwhelmed, consider adding additional NGINX stream proxy nodes.
+- **Verify game-server defenses** are active: the handshake global cap (500/sec), per-IP limiter (8 completions per sliding 2 s window, sustaining 4/sec/IP), and pending auth cap (10,000) are compiled-in constants that cannot be changed at runtime — if overwhelmed, consider adding additional NGINX stream proxy nodes.
 - **Check nonce cache pressure** in `ClientGate`: if the LRU exceeds 20,000 entries, the eviction sort causes CPU spikes. Restart IPFetch/Patcher processes to flush the cache.
 - **Scale horizontally** by adding NGINX proxy instances behind a load balancer, then distributing game server ports across them.
 
@@ -1755,9 +1770,10 @@ All FishMMO servers read configuration from `.cfg` files in the working director
 | `ServerName` | string | `"TestName"` | All | Human-readable server instance name shown in logs and window title. |
 | `MaximumClients` | int | `4000` | All | Maximum concurrent client connections. Overrides the FishNet transport default of 100. |
 | `Address` | string | `"127.0.0.1"` | All | Bind address. `127.0.0.1` = loopback, the default and the expected deployment — the server accepts datagrams only from an NGINX on the same host. Set `0.0.0.0` **only** when NGINX runs on a different machine, and firewall the port to that proxy host; binding all interfaces otherwise puts the game server directly on the internet. |
-| `Port` | ushort | `7777` | All | Network port. Defaults: Login=7770, World=7780, Scene=7781 (code default) / 7790 (file default). |
-| `StaleSceneTimeout` | int | `5` | All | Minutes an empty **open-world** scene instance stays loaded before it is unloaded and its scene row deleted. Read by the SceneServer. |
-| `StaleInstanceSceneTimeout` | int | `2` | All | Minutes an empty **Group/PvP (instanced)** scene stays loaded. Shorter than `StaleSceneTimeout` because a dungeon instance belongs to one character or party and is unlikely to be wanted again once empty. Code fallback `5`. |
+| `Port` | ushort | `7777` | All | Network port. Per-server-type defaults (`FileServerConfiguration.GetDefaultPort`): Login=7770, World=7780, Scene=7790. |
+| `StaleSceneTimeout` | int | `5` | Scene | Minutes an empty **open-world** scene instance stays loaded before it is unloaded and its scene row deleted. Only the SceneServer reads it (`SceneServerSystem.ResolveStaleTimeoutMinutes`); the templates ship it in all three files. |
+| `StaleInstanceSceneTimeout` | int | `2` | Scene | Minutes an empty **Group/PvP (instanced)** scene stays loaded. Shorter than `StaleSceneTimeout` because a dungeon instance belongs to one character or party and is unlikely to be wanted again once empty. Only the SceneServer reads it (`SceneServerSystem.ResolveStaleTimeoutMinutes`). Code fallback `5`. |
+| `MaxInstanceLifetimeMinutes` | int | `120` (code fallback) | Scene | Minutes an instanced scene may exist before it is closed regardless of who is inside, measured from the scene row's creation. **Not present in any template** — add the key by hand to override the fallback. A dungeon difficulty declaring its own `LifetimeMinutes` overrides it for instances opened at that difficulty. |
 | `CertificatePath` | string | platform-specific | All | PEM certificate path for QUIC/TLS termination. Platform defaults: Linux=`/etc/fishmmo/certs/fullchain.pem`, Windows=`C:\ProgramData\FishMMO\certs\fullchain.pem`, macOS=`/usr/local/share/fishmmo/certs/fullchain.pem`. |
 | `PrivateKeyPath` | string | platform-specific | All | PEM private key path for QUIC/TLS termination. Same platform-specific pattern as `CertificatePath` with `privkey.pem`. |
 
@@ -1773,6 +1789,11 @@ All FishMMO servers read configuration from `.cfg` files in the working director
 | `Smtp:FromAddress` | string | `"noreply@fishmmo.com"` | Login | Email From address for outgoing verification emails. Overridable via `FISHMMO_SMTP_FROM_ADDRESS` env var. |
 | `Smtp:FromName` | string | `"FishMMO"` | Login | Display name for the From address. Overridable via `FISHMMO_SMTP_FROM_NAME` env var. |
 | `Smtp:UseSsl` | bool (string) | `true` | Login | Enable SSL/TLS for SMTP. Production must be `true`. Overridable via `FISHMMO_SMTP_USE_SSL` env var. |
+| `AllowedOrigins` | string (CSV) | `https://play.fishmmo.com` | Login | Comma-separated CORS origins permitted for WebGL clients. |
+| `LoginQueueUpdateRateSeconds` | float | `2.0` | Login | How often queued clients receive a position update. |
+| `LoginQueueMaxSize` | int | `500` | Login | Queue capacity; clients beyond it are rejected outright rather than queued. |
+| `LoginQueueAdmissionRatePerSecond` | float | `5.0` | Login | Rate at which queued clients are admitted to the login server. |
+| `LoginQueueTimeoutSeconds` | int | `300` | Login | Maximum wait before a queued client is timed out. |
 
 ### Secret Keys (not stored in .cfg files)
 

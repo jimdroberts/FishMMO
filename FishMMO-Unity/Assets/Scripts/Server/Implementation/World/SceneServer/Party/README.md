@@ -1,6 +1,6 @@
 # Party System
 
-**Short description:** SceneServer social subsystem for party lifecycle and member synchronization, handling party creation, invitations, accept/decline, leaving, member removal, rank transfer, periodic membership reconciliation, achievement triggers, and chat-based invite commands.
+**Short description:** SceneServer social subsystem for party lifecycle and member synchronization, handling party creation, invitations, accept/decline, leaving, member removal, rank transfer, periodic membership reconciliation, a per-tick live vitals pump with per-encounter combat meters, achievement triggers, and chat-based invite commands.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Party system is the SceneServer social subsystem for party lifecycle and member synchronization. It handles party creation, invitations, invitation accept/decline, leaving, member removal, rank transfer, periodic membership reconciliation, and party chat invite commands.
+The Party system is the SceneServer social subsystem for party lifecycle and member synchronization. It handles party creation, invitations, invitation accept/decline, leaving, member removal, rank transfer, periodic membership reconciliation, the live member-vitals pump, and party chat invite commands.
 
 The implementation uses a split execution model:
 - **Main thread:** request validation, in-memory controller/tracker updates, ingress guard checks, invitation sweep, and network broadcasts.
@@ -48,7 +48,7 @@ All party mutations emit a party update marker (`IPartyUpdateService.PersistAsyn
 - Party deletion when the last member leaves
 - Leader-initiated member removal with rank validation
 - Leader-initiated rank transfer (promote member to leader, demote self to member) with rollback on partial failure
-- Periodic party update pump fetching database changes and broadcasting `PartyAddMultipleBroadcast` snapshots to local online members
+- Periodic party update pump fetching database changes and broadcasting `PartyAddMultipleBroadcast` snapshots (one `PartyID` plus a `PartyAddEntry[]` of `CharacterID`, `Rank`, and a quantised `HealthPCT` byte) to local online members
 - Removed-member detection via diff between cached and fetched member sets, with immediate `PartyLeaveBroadcast` dispatch
 - Per-connection ingress debounce and in-flight guard across all seven operations (`Create`, `Invite`, `AcceptInvite`, `DeclineInvite`, `Leave`, `Remove`, `ChangeRank`)
 - Bounded ingress guard sweep with configurable TTL, interval, and max removals
@@ -56,6 +56,13 @@ All party mutations emit a party update marker (`IPartyUpdateService.PersistAsyn
 - Character connect/disconnect hooks for tracker maintenance and health-percentage persistence
 - Async worker backpressure via `TryEnqueueAsyncWork` (rejects when queue unavailable/full, logs warning)
 - Per-system main-thread queue isolation with configurable drain cap per frame
+- Live member vitals pushed every periodic tick from in-memory controllers (`BroadcastPartyVitals`), never from the database: the roster row's health is written only on connect and disconnect, so a bar fed from it sat frozen for the whole session
+- Vitals are grouped by **Unity scene handle**, not by scene server: one payload per scene group, so a player in a dungeon is never told the live health of a member standing in a city
+- Absence is the signal — a member on another scene server, in another scene, or offline is simply omitted, and the client greys them out by counting the pumps they were missing from. The recipient's own row is therefore always included even though the client ignores its values and derives its own bars from the local reconciled controller every tick
+- Quantised payload (`PartyVitalsQuantiser`): the three fractions travel as one byte each (0..255) and the meters as `ushort` points per second, replacing four bytes per value with one or two
+- The buff array — by far the largest part of the payload — is sent only when the visible set actually changed, gated by a per-character content signature (`ComputeObservedBuffSignature`, whole-second resolution so a falling duration does not report a change every pump); `PartyMemberVitalsEntry.BuffsChanged` says whether `Buffs` is authoritative, and the signature is dropped when the character leaves the scene server so their first payload back always carries the set
+- Buffs are read straight from `IBuffController.Buffs` at the server's current tick (`Buff.RemainingSeconds`), so nothing has to be re-based against the age of a push, and expired entries are dropped rather than sent as a zero-length bar; capped at `maxVitalsBuffsPerMember`
+- Per-encounter damage and healing meters in `PartyCombatMeterData`, fed by `ICharacterDamageController.OnDamaged` / `OnHealed`. Credit resolves to the controlling **player** (a `Pet`'s contribution counts for its `PetOwner`), unmetered characters are rejected early, and an encounter is defined purely by activity: `encounterTimeoutSeconds` of quiet starts a new one, with `meterMinimumWindowSeconds` as the divisor floor so an opening hit cannot divide by ~0
 - Optimistic concurrency via versioned `CharacterPartyData` for all membership mutations
 - Graceful failure semantics: invalid requests fail closed with no mutation; permission/capacity checks enforced before persistence; async failures logged without blocking main thread
 
@@ -77,6 +84,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
    - `PartySystemRuntimeData` → `IPartySystemRuntimeData`
    - `PartyCharacterMappingData` → `IPartyCharacterMappingData`
    - `PartySystemMainThreadQueueData` → `IPartySystemMainThreadQueueData`
+   - `PartyCombatMeterData` → `IPartyCombatMeterData`
    - `AsyncWorkerData` (shared async work queue)
 3. Verify that `ICharacterSystem<NetworkConnection, Scene>` is registered in `BehaviourRegistry` for connect/disconnect event subscriptions.
 4. Optionally assign `PartyCreateAchievementTemplate` and `PartyJoinAchievementTemplate` in the inspector to trigger achievements on party creation and joining.
@@ -101,6 +109,12 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `ingressSweepIntervalSeconds` | float | 5.0 | Seconds between bounded ingress guard cleanup sweeps |
 | `ingressEntryTtlSeconds` | float | 30.0 | Seconds before stale ingress guard entries are removed |
 | `ingressSweepMaxRemovals` | int | 128 | Maximum stale ingress guard entries removed per sweep |
+| `encounterTimeoutSeconds` | float | 6.0 | Idle seconds after which the DPS/HPS meters reset for a new encounter |
+| `meterMinimumWindowSeconds` | float | 1.0 | Minimum seconds used as the DPS/HPS divisor |
+| `meterSweepIntervalSeconds` | float | 10.0 | Seconds between bounded combat meter cleanup sweeps |
+| `meterSweepMaxScan` | int | 64 | Max combat meter entries scanned per sweep |
+| `meterSweepMaxRemove` | int | 64 | Max combat meter entries removed per sweep |
+| `maxVitalsBuffsPerMember` | int | 16 | Max buffs/debuffs sent per member on the vitals pump |
 | `PartyCreateAchievementTemplate` | AchievementTemplate | — | Achievement template incremented when a party is created |
 | `PartyJoinAchievementTemplate` | AchievementTemplate | — | Achievement template incremented when a player joins a party |
 
@@ -115,7 +129,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 | Thread | Work |
 |---|---|
-| Main thread | Request validation, ingress guards, invitation sweep, ingress sweep, controller/tracker updates, broadcast dispatch, queue drain |
+| Main thread | Request validation, ingress guards, invitation sweep, ingress sweep, combat meter sweep, controller/tracker updates, vitals pump, broadcast dispatch, queue drain |
 | Async worker | Database reads/writes (`CreatePartyAsync`, `ValidateAndSendPartyInviteAsync`, `AcceptPartyInviteAsync`, `LeavePartyAsync`, `RemovePartyMemberAsync`, `ChangePartyRankAsync`, `FetchAndProcessPartyUpdatesAsync`, `PersistPartyMemberAndNotifyAsync`, `PersistPartyUpdateAsync`) |
 
 ## Usage Examples
@@ -140,11 +154,11 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 1. Validates connection, spawned object, and ingress guard.
 2. Confirms the requester is not already in a party (`partyController.ID == 0`).
-3. Captures character ID, scene name, and health percentage.
+3. Captures character ID and health percentage.
 4. Enqueues `CreatePartyAsync`:
    - Creates party via `IPartyService.CreateAsync`.
    - Persists leader membership via `ICharacterPartyService.PersistAsync`.
-   - Marshals to main thread: sets controller ID/rank, adds tracker entry, broadcasts `PartyCreateBroadcast` with party ID and location, increments `PartyCreateAchievementTemplate`.
+   - Marshals to main thread: sets controller ID/rank, adds tracker entry, broadcasts `PartyCreateBroadcast` (party ID only — the scene name it used to carry told the client nothing it did not already know), increments `PartyCreateAchievementTemplate`.
 
 ### Invite / Accept / Decline
 
@@ -159,7 +173,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 2. Enqueues `AcceptPartyInviteAsync`:
    - Re-checks party capacity via `ICharacterPartyService.FetchManyAsync`.
    - Persists membership and party update marker.
-   - Marshals to main thread: sets controller ID/rank, removes pending invitation, adds tracker entry, broadcasts `PartyAddBroadcast` to the new member, increments `PartyJoinAchievementTemplate`.
+   - Marshals to main thread: sets controller ID/rank, removes pending invitation, adds tracker entry, broadcasts `PartyAddBroadcast` (a `PartyID` plus one `PartyAddEntry` member row) to the new member, increments `PartyJoinAchievementTemplate`.
 
 **Decline** (`OnServerPartyDeclineInviteBroadcastReceived`):
 1. Validates connection and removes the pending invitation entry (synchronous, no async work).
@@ -205,8 +219,31 @@ This is an integrated module within FishMMO. It is included as part of the serve
      - Updates `LastFetchTime`.
      - Computes removed members (diff previous cached vs current) and sends `PartyLeaveBroadcast` to each.
      - Refreshes `PartyMemberTracker` cache.
-     - Broadcasts `PartyAddMultipleBroadcast` snapshots (including `PartyID`, `CharacterID`, `Rank`, `HealthPCT`) to all local online members.
+     - Broadcasts `PartyAddMultipleBroadcast` snapshots (`PartyID` once, then a `PartyAddEntry` per member: `CharacterID`, `Rank`, quantised `HealthPCT`) to all local online members.
 4. Releases pump lock in `finally`.
+
+### Live Member Vitals
+
+`BroadcastPartyVitals()` runs at the top of every `OnPeriodicUpdate`, independently of the
+database pump and of whether that pump is in flight:
+
+1. For each tracked party, `GroupPartyMembersByScene` buckets the members this scene server
+   hosts by `GameObject.scene.handle` (lists come from a pool and are returned by
+   `ReleaseSceneGroups`).
+2. `BroadcastSceneGroupVitals` builds one `PartyMemberVitalsEntry` per member:
+   - `BuildObservedBuffs` copies `IBuffController.Buffs` at the current domain tick, dropping
+     anything already expired and stopping at `maxVitalsBuffsPerMember`; a member with no buffs
+     yields null rather than an empty array.
+   - `HasObservedBuffSetChanged` compares a signature of that set against the last one sent for
+     the character and sets `BuffsChanged`; unchanged sets travel as a null `Buffs`.
+   - The three resource fractions go through `PartyVitalsQuantiser.FractionToByte`, and the
+     meter sample (`IPartyCombatMeterData.GetSample`) through `RateToUInt16`.
+3. One `PartyMemberVitalsUpdateBroadcast` is sent to every member of the group, including the
+   one each row describes.
+
+Meters are fed outside this path, from `ICharacterDamageController.OnDamaged` / `OnHealed` via
+`RecordCombatMeterContribution`, and swept on a bounded cycle by `SweepCombatMeters`.
+`CharacterSystem_OnDisconnect` forgets both the character's meter and its buff signature, whether or not they were in a party.
 
 ### Failure Semantics
 
@@ -225,7 +262,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | Initialization success | Confirm `PartySystem` logs "Initialized (MaxPartySize=6, UpdatePumpRate=1s)" without errors on server startup |
 | Data containers available | Verify `IPartySystemRuntimeData`, `IPartyCharacterMappingData`, and `IPartySystemMainThreadQueueData` all resolve from `DataContainerRegistry` |
 | Chat commands registered | Confirm `/pi` and `/invite` are available in party chat and route to `OnPartyInvite` |
-| Party creation | Send `PartyCreateBroadcast` from a character not in a party; confirm `PartyCreateBroadcast` reply with new party ID and location |
+| Party creation | Send `PartyCreateBroadcast` from a character not in a party; confirm the `PartyCreateBroadcast` reply carries the new party ID |
 | Party invite | As party leader, send `PartyInviteBroadcast` with a valid target; confirm target receives `PartyInviteBroadcast` |
 | Invite target already in party | Invite a character already in a party; confirm inviter receives `ChatBroadcast` with `PARTY_ERROR_TARGET_IN_PARTY` |
 | Accept invitation | Target sends `PartyAcceptInviteBroadcast`; confirm `PartyAddBroadcast` reply with correct party ID, rank, and health |
@@ -240,6 +277,11 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | Rank change rollback | Simulate demotion failure after promotion; confirm target promotion is rolled back |
 | Periodic update pump | Wait for `UpdatePumpRate`; confirm `FetchAndProcessPartyUpdatesAsync` fires and members receive `PartyAddMultipleBroadcast` |
 | Removed member detection | Remove a member on another server; confirm local server detects the diff and sends `PartyLeaveBroadcast` |
+| Vitals pump | Take damage in a party; confirm party members in the same scene receive `PartyMemberVitalsUpdateBroadcast` with a changed `HealthPCT` byte within one tick |
+| Cross-scene isolation | Put two party members in different scenes on one scene server; confirm neither appears in the other's vitals payload |
+| Buff gating | Hold a steady buff set; confirm entries arrive with `BuffsChanged = false` and a null `Buffs`, and that gaining or losing a buff sends the set again |
+| Buff signature reset | Move a member to another scene server and back; confirm their first payload carries the buff array again |
+| Combat meter | Deal damage through a pet; confirm the owner's `DamagePerSecond` moves, and that it returns to 0 after `encounterTimeoutSeconds` of quiet |
 | Ingress debounce | Send rapid consecutive party requests from the same connection; confirm excess requests are dropped |
 | Ingress in-flight guard | Send overlapping async party requests; confirm only one is processed at a time per operation type |
 | Ingress sweep | Wait for `ingressSweepIntervalSeconds`; confirm stale guard entries are cleaned up |
@@ -272,7 +314,7 @@ OnServerPartyCreateBroadcastReceived(conn, msg, channel)
 ├─ 1. Validate connection + spawned object
 ├─ 2. Acquire ingress guard (Create)
 ├─ 3. Confirm requester not already in a party
-├─ 4. Capture characterID, sceneName, healthPCT
+├─ 4. Capture characterID, healthPCT, worldServerID
 └─ 5. TryEnqueueIngressWork → CreatePartyAsync
        │
        ├─ IPartyService.CreateAsync → newPartyID
@@ -376,7 +418,7 @@ OnPeriodicUpdate(deltaTime)
               │    ├─ Diff previous cached members vs current
               │    ├─ Removed members → reset controller, Broadcast PartyLeaveBroadcast
               │    ├─ Update PartyMemberTracker cache
-              │    └─ Build PartyAddMultipleBroadcast (PartyID, CharacterID, Rank, HealthPCT)
+              │    └─ Build PartyAddMultipleBroadcast (PartyID + PartyAddEntry[])
               └─ Broadcast PartyAddMultipleBroadcast to each local online member
        │
        └─ finally: EndUpdatePump
@@ -405,6 +447,7 @@ Party/
 ├── PartySystemRuntimeData.cs          # Pending invitation map, last update fetch cursor, ingress guard, pump lock
 ├── PartySystemMainThreadQueueData.cs  # Per-system main-thread action queue container
 ├── PartyCharacterMappingData.cs       # Party online/cached membership trackers
+├── PartyCombatMeterData.cs            # Per-encounter damage/healing meters keyed by character ID
 └── README.md                          # System documentation
 ```
 
@@ -414,6 +457,7 @@ Party/
 - `Server/Core/World/SceneServer/Party/IPartySystemRuntimeData.cs`
 - `Server/Core/World/SceneServer/Party/IPartyCharacterMappingData.cs`
 - `Server/Core/World/SceneServer/Party/IPartySystemMainThreadQueueData.cs`
+- `Server/Core/World/SceneServer/Party/IPartyCombatMeterData.cs`
 
 ### Inheritance Hierarchy
 
@@ -423,7 +467,8 @@ ServerBehaviour
 
 RuntimeDataContainer
 ├── PartySystemRuntimeData : IPartySystemRuntimeData
-└── PartyCharacterMappingData : IPartyCharacterMappingData
+├── PartyCharacterMappingData : IPartyCharacterMappingData
+└── PartyCombatMeterData : IPartyCombatMeterData
 
 SystemMainThreadQueueData
 └── PartySystemMainThreadQueueData : IPartySystemMainThreadQueueData

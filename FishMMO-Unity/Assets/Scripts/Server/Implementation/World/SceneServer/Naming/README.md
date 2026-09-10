@@ -46,6 +46,7 @@ All database lookups are deduplicated with concurrent in-flight tracking diction
 - TTL-based caches (`CharacterNameByIdCache`, `GuildNameByIdCache`, `CharacterIdByNameCache`, `CharacterNameByNameCache`) with configurable expiry and bounded sweep
 - Negative-result cache (`CharacterMissingByNameCache`) prevents repeated DB lookups for nonexistent names
 - Per-connection request debounce via configurable `requestDebounceMilliseconds`
+- Both directions require a loaded requester before any lookup work: the forward character-name branch rejects a requester whose `SceneName` is empty, and the reverse path rejects one that is not `IsFlagged(CharacterFlags.IsLoaded)` — without it the reverse lookup was a name-enumeration oracle any authenticated connection could drive at the debounce rate before it had finished spawning
 - Concurrent in-flight deduplication per lookup key with `MaxInFlightLookups` cap (5 000)
 - Async database lookups queued via `TryEnqueueAsyncWork` with backpressure (rejects when queue is unavailable/full, logs warning)
 - Per-system main-thread queue isolation via `NamingSystemMainThreadQueueData` with configurable drain cap per frame
@@ -121,6 +122,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 2. Checks per-connection request debounce.
 3. Resolves `INamingSystemRuntimeData` and `INamingSystemMappingData`.
 4. **Character name:**
+   - Require the requester to be a spawned `IPlayerCharacter` with a non-empty `SceneName`; otherwise return (blocks cross-server name harvesting).
    - Check local `ICharacterMappingData<NetworkConnection>.CharactersByID`; if found, upsert cache and reply immediately.
    - Else check `CharacterNameByIdCache`; if hit, reply immediately.
    - Else enqueue async DB lookup (`FetchCharacterNameAsync`) with in-flight deduplication.
@@ -133,17 +135,18 @@ This is an integrated module within FishMMO. It is included as part of the serve
 `OnServerReverseNamingBroadcastReceived(conn, msg, channel)`:
 
 1. Validates connection and spawned player object.
-2. Checks per-connection request debounce.
-3. Rejects null/empty names with immediate not-found response.
-4. Rejects oversized names (exceeding `Authentication.CharacterNameMaxLength`).
-5. Normalizes input to lowercase invariant.
-6. **Character name:**
+2. Requires the requester to be an `IPlayerCharacter` flagged `CharacterFlags.IsLoaded`; otherwise returns before the debounce is even consulted.
+3. Checks per-connection request debounce.
+4. Rejects null/whitespace names with immediate not-found response.
+5. Rejects oversized names (exceeding `Authentication.CharacterNameMaxLength`) silently, with no reply.
+6. Normalizes input to lowercase invariant.
+7. **Character name:**
    - Check local `CharactersByLowerCaseName` mapping; if found, upsert caches, clear missing cache, reply immediately.
    - Else check `CharacterMissingByNameCache`; if hit, reply with not-found.
    - Else check `CharacterIdByNameCache` + `CharacterNameByNameCache`; if both hit, reply immediately.
    - Else enqueue async DB lookup (`FetchCharacterByNameAsync`) with in-flight deduplication.
    - If database unavailable, send not-found response immediately.
-7. **Guild name:** Not currently implemented in reverse path.
+8. **Guild name:** Not currently implemented in reverse path.
 
 ### Failure Semantics
 
@@ -169,6 +172,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | Negative cache hit | Repeat the not-found lookup; confirm no second DB query and immediate not-found reply |
 | Oversized name rejection | Send `ReverseNamingBroadcast` with a name exceeding `CharacterNameMaxLength`; confirm no processing occurs |
 | Request debounce | Send rapid consecutive naming requests from the same connection; confirm excess requests are dropped |
+| Loaded-requester gate | Send `ReverseNamingBroadcast` from a connection whose character is not yet flagged `IsLoaded`; confirm no lookup and no reply |
 | In-flight deduplication | Send duplicate forward lookups for the same ID concurrently; confirm only one DB query is issued |
 | In-flight cap enforcement | Saturate `MaxInFlightLookups` (5 000); confirm additional lookups are rejected and warning is logged |
 | Cache sweep | Wait for sweep interval; confirm stale cache entries are removed without errors |
@@ -181,11 +185,15 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 ```mermaid
 flowchart LR
-    Caller[Character/Guild/Pet create] --> Sys[NamingSystem]
-    Sys -->|profanity + length + chars| Rules[Validation rules]
-    Sys -->|uniqueness query| DB[(PostgreSQL)]
-    Rules --> Sys
-    Sys -->|approve / reject| Caller
+    Client[Client] -->|NamingBroadcast / ReverseNamingBroadcast| Sys[NamingSystem]
+    Sys -->|loaded requester + debounce| Gate[Ingress checks]
+    Gate --> Local[ICharacterMappingData]
+    Local -->|miss| Cache[TTL caches]
+    Cache -->|miss| Async[TryEnqueueAsyncWork]
+    Async --> DB[(PostgreSQL)]
+    DB --> Queue[NamingSystemMainThreadQueueData]
+    Queue --> Sys
+    Sys -->|reply on same broadcast type| Client
 ```
 
 ### Forward Naming (ID → Name)
@@ -198,6 +206,7 @@ OnServerNamingBroadcastReceived(conn, msg, channel)
 ├─ 3. Resolve INamingSystemRuntimeData + INamingSystemMappingData
 │
 ├─ CharacterName:
+│  ├─ 3a. Require requester IPlayerCharacter with non-empty SceneName
 │  ├─ 4a. Check local CharactersByID mapping
 │  │      └── Hit → upsert cache, SendNamingBroadcast (immediate)
 │  ├─ 4b. Check CharacterNameByIdCache
@@ -220,8 +229,9 @@ OnServerNamingBroadcastReceived(conn, msg, channel)
 OnServerReverseNamingBroadcastReceived(conn, msg, channel)
 │
 ├─ 1. Validate connection + spawned object
+├─ 1b. Require requester IPlayerCharacter flagged CharacterFlags.IsLoaded
 ├─ 2. Check per-connection request debounce
-├─ 3. Reject null/empty name → SendReverseNamingBroadcast(id=0, empty)
+├─ 3. Reject null/whitespace name → SendReverseNamingBroadcast(id=0, empty)
 ├─ 4. Reject oversized name (> CharacterNameMaxLength)
 ├─ 5. Normalize name to lowercase invariant
 │

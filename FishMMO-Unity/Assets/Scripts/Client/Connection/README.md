@@ -32,7 +32,7 @@ more specific and more accurate.
 - Maximum attempts: 10 (configurable)
 - Base delay: 5 seconds (configurable)
 - Maximum delay: 60 seconds (configurable)
-- Algorithm: `baseDelay * 2^attempt` with 25% random jitter
+- Algorithm: `baseDelay * 2^min(attempt, 6)` with 25% random jitter, then capped at the maximum delay
 - **Exception — deliberate scene handoffs.** The first retry after a `Scene` connection drops
   uses `SceneHandoffReconnectDelay` (0.25 s, jittered) instead of the full base delay. A
   scene-to-scene transfer *is* a deliberate drop: the scene server releases the character and

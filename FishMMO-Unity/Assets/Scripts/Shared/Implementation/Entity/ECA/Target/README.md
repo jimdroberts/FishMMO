@@ -26,16 +26,49 @@ The Target Selector system is the **targeting layer** of FishMMO's ECA (Event-Co
 | Platform | Status | Notes |
 | --- | --- | --- |
 | Windows / Linux / macOS (Editor) | Supported | Primary authoring environment. |
-| Standalone Players (Win / Linux / macOS) | Supported | Builds compile everywhere, but see the authority note below — most selectors yield nothing on a client. |
+| Standalone Players (Win / Linux / macOS) | Supported | Builds compile everywhere; see the authority note below for which selectors a client resolves. |
 | Headless Linux Server | Supported | Selectors run on the SceneServer for authoritative target resolution. |
-| Android / iOS / WebGL | Supported | As above: only the five peer-agnostic selectors evaluate on a client. |
+| Android / iOS / WebGL | Supported | As above. |
 
-**Authority.** Nine of the fourteen selectors — every one that runs a physics query, plus
-`AllCharactersTargetSelector` and `TargetedEntitySelector` — open with `IsAuthoritativePeer` (`EcaAuthority.IsServer`) and `yield break` on a
-client. They exist to resolve hits authoritatively, and a client asking the same question against
-interpolated peer positions would answer differently. The five that DO run on both peers are
-`Initiator`, `Event`, `Children`, `NamedSceneObject` and `TaggedSceneObject`; only those need to agree
-across peers, and `TargetOrdering` is what makes them agree.
+**Authority.** Selection is **not** authority — a selector answers "which bodies are in this
+volume", never "what may be done to them" — so the gate is deliberately wider than server-only.
+
+- **Eight spatial selectors** (`Area`, `Cone`, `Line`, `Chain`, `Nearest`, `Furthest`, `Random`,
+  `TargetedEntity`) gate on `ResolvesTargetsLocally`: **the server, or the client that owns the
+  initiator**. An observer still answers false. This is what gives an area, cone, line or chain
+  ability client-side prediction at all; while selection was server-only the selector yielded an
+  empty set on the caster's own machine, no downstream action ran, and "hit what you see" applied
+  only to projectiles (whose hits come from `AbilityObject`'s sweep, not a selector).
+- **One selector is still server-only:** `AllCharactersTargetSelector`, via `IsAuthoritativePeer`
+  (`EcaAuthority.IsServer`).
+- **Five are peer-agnostic:** `Initiator`, `Event`, `Children`, `NamedSceneObject`,
+  `TaggedSceneObject`. `TargetOrdering` is what makes those agree.
+
+What makes the two peers agree on a spatial selection is not reproducible float arithmetic: the
+server gathers inside `GatherRewound`, rewound to the caster's view, and the client gathers against
+its live world, which *is* that view — which is why `LagCompensationTick.TryResolve` answers false
+off-server rather than rewinding twice. Both query the same world, rank it with the same
+distance-then-identity order, and cap the same list. The residual disagreement is interpolation
+error at the volume boundary, the same bound a swept projectile hit has always carried, and it
+self-corrects: a body only the client picked has its predicted damage undone by the next
+authoritative resource push and its number greyed out unconfirmed (`PredictedCombatEvents`), a
+predicted buff the server never applies is dropped at `BuffController`'s confirmation deadline, and
+a body only the server picked arrives as an ordinary combat report.
+
+`ResolvesTargetsLocally` defers to the **ability object** when the event carries one
+(`AbilityObject.ResolvesHitsLocally`) rather than using `EcaAuthority.MayPredict` directly. A
+despawned caster — including one that merely left an observer's streaming range — has its in-flight
+ability objects detached and its caster replaced by a `SnapshotCharacter` phantom with no
+`NetworkObject`, and both `MayPredict` and `IsServer` read "nothing networked to ask" as
+permission; without the deferral a phantom's OnTick trigger would let every client resolve
+selections. Events with no ability object (a buff tick, a region trigger) keep the plain
+`MayPredict` answer.
+
+`TargetSelector.ResolvesSelectionsLocally` is the same predicate made public, because
+`TriggerExecution` has to tell an **empty** selection ("nobody was standing there" — run nothing)
+apart from a **declined** one ("this peer may not look" — still play the authored presentation).
+Two copies of that predicate drifting apart is how an observer starts resolving somebody else's
+hits.
 
 Requirements: Unity 6.3 LTS with FishNet. Selectors depend only on the shared FishMMO entity layer; no platform-specific APIs.
 
@@ -46,17 +79,19 @@ Selectors are pure data: a `TargetSelector` subclass holds parameters in seriali
 ```
 Entity/ECA/Target/
 ├── TargetSelector.cs                     # Abstract base (SelectTargets + Conditions + helpers)
+├── TargetOrdering.cs                     # Buffer growth, hit-root resolution, ranking, dedupe, caps
 ├── InitiatorTargetSelector.cs            # The entity that fired the trigger
 ├── EventTargetSelector.cs                # Whatever the event already carries as Target
 ├── NearestTargetSelector.cs              # Closest candidate within a radius
 ├── FurthestTargetSelector.cs             # Furthest candidate within a radius
-├── RandomTargetSelector.cs               # Random pick within a radius (uses EventData.RNG)
+├── RandomTargetSelector.cs               # Random pick within a radius (own IndependentRNG stream)
 ├── AreaTargetSelector.cs                 # Sphere overlap around the context point
 ├── ConeTargetSelector.cs                 # Cone-shaped AoE
 ├── LineTargetSelector.cs                 # Ray / line cast from the context point
 ├── ChainTargetSelector.cs                # Bounces target-to-target up to a hop limit
 ├── ChildrenTargetSelector.cs             # Direct children of the context object
-├── AllCharactersTargetSelector.cs        # Every ICharacter in the active scene
+├── AllCharactersTargetSelector.cs        # Every ICharacter in the context's scene (server-only)
+├── TargetedEntitySelector.cs             # The caster's resolved target entity, range-checked
 ├── NamedSceneObjectTargetSelector.cs     # Scene object resolved by name at fire time
 └── TaggedSceneObjectTargetSelector.cs    # Scene objects resolved by Unity tag at fire time
 ```
@@ -69,10 +104,12 @@ Entity/ECA/Target/
 | `InitiatorTargetSelector` | Returns the initiator's `GameObject`. |
 | `EventTargetSelector` | Returns the target already present on the `EventData`. |
 | `NearestTargetSelector` / `FurthestTargetSelector` | Single closest / furthest valid candidate within a radius, excluding the context object. |
-| `RandomTargetSelector` | One random valid candidate within a radius, drawn from `EventData.RNG`. Server-only (see the authority note), so the RNG buys run-to-run reproducibility, not client/server agreement. |
+| `RandomTargetSelector` | One random valid candidate within a radius. Draws from a stream of its **own** (`EventData.IndependentRNG` under `RandomSelectionSalt`), never the event's shared generator: the shared one is advanced by side effect along an ability object's payload chain, and a draw taken behind a peer gate would advance it only on the peers that pass — putting an observer's copy of a forking projectile on a heading the server never took. Exactly one draw per selection whatever the candidate count, so the caster's client can take the draw alongside the server without the two streams diverging. |
 | `AreaTargetSelector` / `ConeTargetSelector` / `LineTargetSelector` | Geometric queries around the context point. |
 | `ChainTargetSelector` | Walks target to target, accumulating a chain up to a configured hop count. |
+| `TargetedEntitySelector` | The caster's own resolved target (`ITargetController.Current`), validated by `MaximumRange` and optionally by line of sight against world geometry. Its outcome is an entity reference rather than a volume query, so it does not depend on peer position at all. |
 | `NamedSceneObjectTargetSelector` / `TaggedSceneObjectTargetSelector` | Asset-safe scene lookup by name or tag, resolved at fire time. |
+| `TargetOrdering` | Not a selector. The shared ordering module: query-buffer sizing and growth, hit-root/body-key resolution, distance and identity ranking, per-body dedupe, and the `MaxHits` cap. Also used by the ability actions, which resolve hits without a selector. |
 
 Filtering is not a selector. Rather than layering "tag" or "faction" selectors over source selectors, every selector carries its own `Conditions` list and yields only candidates that satisfy it — see [Anatomy of `TargetSelector`](#3-anatomy-of-targetselector).
 
@@ -90,8 +127,10 @@ Selectors are configured in-place on `ScriptableObject` assets that reference tr
 | Identity / event | [InitiatorTargetSelector.cs](InitiatorTargetSelector.cs), [EventTargetSelector.cs](EventTargetSelector.cs) | Use the event's own Initiator / Target |
 | Spatial | [AreaTargetSelector.cs](AreaTargetSelector.cs), [ConeTargetSelector.cs](ConeTargetSelector.cs), [LineTargetSelector.cs](LineTargetSelector.cs), [ChainTargetSelector.cs](ChainTargetSelector.cs) | Geometric queries around a context point |
 | Distance | [NearestTargetSelector.cs](NearestTargetSelector.cs), [FurthestTargetSelector.cs](FurthestTargetSelector.cs) | Closest / furthest within a radius |
-| Random | [RandomTargetSelector.cs](RandomTargetSelector.cs) | Random pick within a radius (uses `EventData.RNG` for determinism) |
-| Scene-wide | [AllCharactersTargetSelector.cs](AllCharactersTargetSelector.cs) | Every `ICharacter` in the active scene |
+| Random | [RandomTargetSelector.cs](RandomTargetSelector.cs) | Random pick within a radius (its own `IndependentRNG` stream, not the event's shared generator) |
+| Scene-wide | [AllCharactersTargetSelector.cs](AllCharactersTargetSelector.cs) | Every `ICharacter` in the context's scene (server-only) |
+| Entity reference | [TargetedEntitySelector.cs](TargetedEntitySelector.cs) | The caster's resolved target, range- and optionally sight-checked |
+| Ordering module | [TargetOrdering.cs](TargetOrdering.cs) | Buffers, ranking, dedupe and caps, shared with the ability actions |
 | Hierarchy | [ChildrenTargetSelector.cs](ChildrenTargetSelector.cs) | Direct children of the context object |
 | Scene lookup | [NamedSceneObjectTargetSelector.cs](NamedSceneObjectTargetSelector.cs), [TaggedSceneObjectTargetSelector.cs](TaggedSceneObjectTargetSelector.cs) | Resolve a scene object by name / Unity tag at runtime (asset-safe) |
 
@@ -154,8 +193,8 @@ Every selector inherits these slots from the abstract base ([TargetSelector.cs](
 ```csharp
 public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 {
-    // 1. Server only. A physics query is not reproducible across peers.
-    if (!IsAuthoritativePeer(eventData)) yield break;
+    // 1. The server, or the client that owns the initiator. An observer resolves nothing.
+    if (!ResolvesTargetsLocally(eventData)) yield break;
 
     GameObject context = GetContext(eventData);
     if (context == null) yield break;
@@ -240,7 +279,12 @@ instead of corrupting it.
 ### Random
 | Selector | Yields |
 |---|---|
-| `RandomTargetSelector` | One random candidate within `Radius`. Uses `eventData.RNG` when present, else a stream derived from the event's identity, for reproducible selection. Server-only. |
+| `RandomTargetSelector` | One random candidate within `Radius`, drawn from its own `EventData.IndependentRNG(RandomSelectionSalt)` stream (seeded from the initiator's network id, the event's tick and the salt — values every peer agrees on). `MaxHits` is applied **before** the draw, so the roll comes from the `MaxHits` nearest bodies. |
+
+### Entity-reference (no volume query)
+| Selector | Yields |
+|---|---|
+| `TargetedEntitySelector` | The caster's resolved target from `ITargetController.Current`, if it is within `MaximumRange` (default 30) and, when `RequireLineOfSight` is set, not blocked by `LineOfSightBlockers` from `EyeHeight`. Never yields the caster itself. The EverQuest / WoW model: the server's own raycast from the replicated aim decided the target (`AbilityController.ResolveTargetAndSpawn`), so a client cannot name its victim through this path, and the only positional test left has metres of tolerance — the outcome is the same at 8 ms and at 300 ms, with no rewind and no history buffer. Sight is tested against world geometry only, never characters. |
 
 ### Scene-wide / hierarchy
 | Selector | Yields |
@@ -276,6 +320,14 @@ Two ways:
      nearest-first sort, so it really does mean "the 4 nearest". (Before the 2026-08-28 audit it sorted by
      network identity and the cap kept the four lowest ObjectIds regardless of distance.)
 2. One action with `ChainTargetSelector` on the trigger.
+
+### "Hit whoever I have targeted, at any latency"
+Set `Trigger.TargetSelector = TargetedEntitySelector`. It resolves the caster's
+`ITargetController.Current` rather than querying a volume, so the answer does not depend on where
+either peer thinks anyone is standing — the range check is the only positional test and it is
+authored generously on purpose. Prefer it over a thin `LineTargetSelector` for instant ranged
+attacks: a raycast has no width to absorb the render-vs-server gap (measured at 0.45 m on a
+same-city connection and 2.2 m at 300 ms).
 
 ### "AoE around the impact point"
 - Trigger `TargetSelector = AreaTargetSelector` (radius, layer). Conditions can filter to enemies of the initiator via `HasFactionCondition` or similar.
@@ -330,7 +382,7 @@ The convention `eventData?.TargetCharacter ?? initiator` reads the base-class fi
 
 ## 7. Determinism notes
 
-- `RandomTargetSelector` and any value provider that rolls (`RandomRangeValue`, `RandomRangeFloatValue`, `ApplyDispelAction`) read `EventData.RNG`. Always seed `RNG` on `EventData` for events that originate from a deterministic context (ability casts, collisions). Selectors do **not** propagate or fork RNG state — `EventData.Fork` shares the same RNG reference so all downstream targets draw from one deterministic stream.
+- Value providers that roll (`RandomRangeValue`, `RandomRangeFloatValue`, `ApplyDispelAction`) read `EventData.RNG`; `RandomTargetSelector` deliberately does not — see its entry above. Always seed `RNG` on `EventData` for events that originate from a deterministic context (ability casts, collisions). Selectors do **not** propagate or fork RNG state — `EventData.Fork` shares the same RNG reference so all downstream targets draw from one deterministic stream.
 - Avoid `UnityEngine.Random` inside custom selectors. Use `eventData.RNG` instead.
 - **Ordering is part of determinism.** Any selector that caps, takes "the first", or rolls an index must
   impose a total order first — `TargetOrdering.SortByDistance` when the cap should mean "nearest",
@@ -344,7 +396,13 @@ The convention `eventData?.TargetCharacter ?? initiator` reads the base-class fi
   sees, in its own order. Then **re-query while the buffer comes back full**
   (`TargetOrdering.TryGrowQueryBuffer`): a non-allocating query returns at most `buffer.Length` results
   and says nothing about how many it discarded. `TryGrowQueryBuffer` is grow-only — a
-  reallocate-on-mismatch would silently undo the previous cast's growth every time.
+  reallocate-on-mismatch would silently undo the previous cast's growth every time. Growth stops at
+  `TargetOrdering.MaximumQueryBufferSize` (256, matching `AbilityObjectSweep`'s ceiling so every query
+  in the project truncates at the same point); reaching it logs a warning **once per session**, because
+  beyond it the broadphase truncates in its own order and no ordering downstream can recover the
+  discarded set. Warned rather than thrown: dropping the query would be worse than an arbitrary subset
+  of it, but this was the one failure in the target system with no symptom other than an ability
+  quietly choosing different victims in a crowd.
 
 - **The pipeline is fixed: query → grow while full → resolve hit root → rank → dedupe by body → cap.**
   Each step is where it is for a reason:
@@ -362,11 +420,12 @@ The convention `eventData?.TargetCharacter ?? initiator` reads the base-class fi
 
 - **A capped selection must never be computed by a peer that cannot agree on the answer.** A
   distance-ordered cap cannot be made peer-agreed by arithmetic, because peers hold different
-  positions — identity order is the only perfectly agreed key and it is gameplay nonsense. So every
-  capped selection must be either **(a)** server-only, or **(b)** run inside a rewind to the caster's
-  view, where both peers see the same world. Every selector here is (a) via `IsAuthoritativePeer`, and
-  additionally (b) via `GatherRewound`. A selector that is neither is a bug, and a different bug from
-  cap ordering.
+  positions — identity order is the only perfectly agreed key and it is gameplay nonsense. So a
+  capped selection must be computed by a peer that sees the caster's world: **the server, rewound to
+  that view by `GatherRewound`, or the client that owns the initiator, whose live world already is
+  it.** That is exactly what `ResolvesTargetsLocally` admits and what it excludes — an observer,
+  which holds every character interpolated against its own latency and is going to be told what
+  happened. A selector that caps without that gate is a bug, and a different bug from cap ordering.
 
 - **Rank inside the rewind scope.** `GatherRewound` holds one scope open across the query, the ranking
   and the conditions. Measuring distances after the scope closes selects out of the caster's world and
@@ -380,8 +439,10 @@ The convention `eventData?.TargetCharacter ?? initiator` reads the base-class fi
 2. Inherit `TargetSelector`, mark `[Serializable]`.
 3. Implement `SelectTargets(EventData)` using the skeleton above.
 4. Surface tunable fields with `[Tooltip]` so they render usefully in the Inspector.
-5. Gate on `IsAuthoritativePeer(eventData)` first. A physics query is not reproducible across peers,
-   so it runs where hits are authoritative and nowhere else.
+5. Gate on `ResolvesTargetsLocally(eventData)` first — the server, or the client that owns the
+   initiator. Reach for `IsAuthoritativePeer` only when you can say why a client must see *nothing*;
+   "the effect is authoritative" is not that reason, because the action's own `EcaAuthority.IsServer`
+   gate already handles it one level down and this one would merely delete the caster's feedback.
 6. Gather **eagerly** through `GatherRewound`, then yield from the materialised list. Never `yield`
    while the world is displaced.
 7. Allocate the hit buffer **locally**, not as a shared field. A candidate's conditions can themselves

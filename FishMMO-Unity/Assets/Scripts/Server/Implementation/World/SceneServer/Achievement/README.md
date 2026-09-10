@@ -38,8 +38,8 @@ All DB writes are queued through `TryEnqueueAsyncWork(...)` to `IAsyncWorkerData
 - Event-driven achievement progress tracking via `IAchievementController.OnUpdateAchievement` and `IAchievementController.OnCompleteAchievement`
 - Real-time client notification of achievement progress and tier updates via `AchievementUpdateBroadcast`
 - Ability reward processing: learns unknown base abilities and ability events, skips already-known entries, broadcasts additions
-- Item reward processing with inventory-first placement and automatic bank fallback when inventory capacity is insufficient
-- Batched slot broadcast payloads for inventory and bank item changes
+- Item reward processing with inventory-first placement and automatic bank fallback when inventory capacity is insufficient; the destination container is chosen once, before any item is placed, so a reward set is never split across inventory and bank
+- Item rewards are granted through `ICharacterInventorySystem.TryGrantItem`, the inventory system's single funnel. The funnel places the item, broadcasts the slot, persists it and writes back the identity the database assigns. This system does not place, broadcast or persist items itself: doing so left every reward at `ID == 0` — unequippable, and rewritten as a fresh row on every save until a snapshot repaired it
 - Asynchronous persistence of all reward side effects through `IAsyncWorkerData` to avoid blocking gameplay
 - Per-learned-template DB persistence queuing for known abilities
 - Per-modified-slot DTO capture on main thread with async persistence queuing for items
@@ -72,7 +72,7 @@ The following optional persistence services are resolved from the DB registry at
 | Service | Purpose |
 |---|---|
 | `ICharacterKnownAbilityService` | Persists newly learned abilities and ability events |
-| `ICharacterItemService` | Persists inventory item slot changes from rewards |
+| `ICharacterItemService` | Resolved at reward time and passed to `HandleItemRewards`, which no longer uses it — item persistence belongs to the inventory system's grant funnel. The parameter is kept so the call site reads as before |
 
 ### Threading Model
 
@@ -99,8 +99,9 @@ And unsubscribes on deinitialize.
 | `AchievementUpdateBroadcast` | Notify current progress/tier updates |
 | `KnownAbilityAddMultipleBroadcast` | Notify newly learned base abilities |
 | `KnownAbilityEventAddMultipleBroadcast` | Notify newly learned ability events |
-| `InventorySetMultipleItemsBroadcast` | Notify inventory item reward changes |
-| `BankSetMultipleItemsBroadcast` | Notify bank item reward changes |
+| `ChatBroadcast` (`ChatChannel.System`) | Tells the owner when inventory and bank are both too full to deliver the item rewards |
+
+Item slot updates (`InventorySetMultipleItemsBroadcast`, `BankSetMultipleItemsBroadcast`) are sent by `CharacterInventorySystem` as part of the grant funnel, not by this system.
 
 ### External Integration Points
 
@@ -108,9 +109,10 @@ And unsubscribes on deinitialize.
 |---|---|
 | `AchievementController` (`IAchievementController`) | Event source for achievement updates and completions |
 | `AbilityController` (`IAbilityController`) | Ability learn/known checks |
-| `InventoryController` / `BankController` | Item placement and slot changes |
+| `InventoryController` / `BankController` | Free-slot capacity check that chooses the reward destination |
+| `CharacterInventorySystem` (`ICharacterInventorySystem`) | `TryGrantItem` — placement, slot broadcast, persistence and identity write-back for every item reward |
 | `AsyncWorkerData` (`IAsyncWorkerData`) | Queued non-blocking persistence |
-| Database services | Known ability/inventory/bank persistence |
+| Database services | Known ability persistence |
 
 ### Reward Categories
 
@@ -129,16 +131,11 @@ Behavior:
 
 `HandleItemRewards(...)`:
 
-1. Checks reward list.
-2. Attempts inventory route first if sufficient free slots.
-3. Falls back to bank route if inventory capacity is insufficient and bank has room.
-4. For each modified slot:
-   - build DTO on main thread
-   - queue async persistence (`PersistInventorySlotAsync` / `PersistBankSlotAsync`)
-   - add slot update broadcast payload
-5. Sends batched slot broadcasts:
-   - `InventorySetMultipleItemsBroadcast`
-   - `BankSetMultipleItemsBroadcast`
+1. Checks reward list; returns when empty.
+2. Resolves `ICharacterInventorySystem` from `Server.BehaviourRegistry`. Without it the rewards are dropped and an error is logged — there is no local placement path any more.
+3. Chooses a destination: `InventoryType.Inventory` when `IInventoryController.FreeSlots()` covers the whole reward list, otherwise `InventoryType.Bank` when `IBankController.FreeSlots()` does.
+4. If neither has room, sends the owner a `ChatBroadcast` on `ChatChannel.System` ("Your inventory and bank are full…") and returns.
+5. Calls `inventorySystem.TryGrantItem(character, new Item(template, 1), destination)` per reward, skipping null templates and logging a warning for any item the funnel refuses to place.
 
 ## Operational Checks
 
@@ -148,8 +145,10 @@ Behavior:
 | Progress broadcast delivery | Trigger an achievement update and verify `AchievementUpdateBroadcast` reaches the client |
 | Ability reward learn | Complete an achievement with ability rewards; confirm `KnownAbilityAddMultipleBroadcast` is sent and ability is learned |
 | Ability event reward learn | Complete an achievement with ability-event rewards; confirm `KnownAbilityEventAddMultipleBroadcast` is sent |
-| Item reward — inventory route | Complete an achievement with item rewards when inventory has free slots; verify `InventorySetMultipleItemsBroadcast` |
+| Item reward — inventory route | Complete an achievement with item rewards when inventory has free slots; verify `InventorySetMultipleItemsBroadcast` arrives from the grant funnel |
 | Item reward — bank fallback | Complete an achievement with item rewards when inventory is full but bank has room; verify `BankSetMultipleItemsBroadcast` |
+| Item reward — both full | Complete an achievement with item rewards when neither container has room; verify the System-channel refusal message and that no item is placed |
+| Reward item identity | Inspect a rewarded item after the grant; its `ID` must be the database-assigned row id, not `0` (the funnel writes the identity back and re-sends the slot) |
 | Async persistence queuing | Check logs for successful `TryEnqueueAsyncWork` calls after reward application |
 | Persistence failure graceful degradation | Simulate persistence queue failure; confirm warning is logged and gameplay state remains intact |
 
@@ -198,11 +197,11 @@ IAchievementController_HandleAchievementRewards(...)
 │      │    └── Skip known → Learn unknown → Queue DB persist → Broadcast
 │      │
 │      └── Item rewards (HandleItemRewards)
-│           ├── Try inventory route (if free slots)
-│           ├── Fallback to bank route (if inventory full)
-│           ├── Build DTO on main thread per modified slot
-│           ├── Queue async persistence per slot
-│           └── Send batched InventorySetMultipleItemsBroadcast / BankSetMultipleItemsBroadcast
+│           ├── Resolve ICharacterInventorySystem (drop + error if absent)
+│           ├── Choose destination once: Inventory → Bank → refuse
+│           ├── Refusal → System ChatBroadcast to the owner
+│           └── Per reward → ICharacterInventorySystem.TryGrantItem
+│                └── funnel places, broadcasts, persists, writes back ID
 │
 └─ Reward application: immediate in memory
    Persistence: queued asynchronously via IAsyncWorkerData
@@ -232,4 +231,3 @@ ServerBehaviour
 ## License
 
 This project is subject to the FishMMO project license.
-- **Database services** — known ability/inventory/bank persistence.

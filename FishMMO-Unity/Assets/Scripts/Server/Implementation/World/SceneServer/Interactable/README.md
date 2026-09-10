@@ -1,6 +1,6 @@
 # Interactable System
 
-**Short description:** SceneServer subsystem that validates player interactions with world objects and dispatches them into the interactable's own ECA triggers, plus the follow-up broadcasts those interactions produce — merchant purchases, ability crafting, dialogue sessions, dungeon finders, mailboxes, and containers.
+**Short description:** SceneServer subsystem that validates player interactions with world objects and dispatches them into the interactable's own ECA triggers, plus the follow-up broadcasts those interactions produce — merchant purchases and sales, ability crafting, dialogue sessions, the dungeon finder, the group finder queue, arena queueing and match coordination, mailboxes, containers, corpse looting, and waypoint fast travel.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Interactable system is the SceneServer subsystem responsible for validating and processing all player interactions with world interactable objects. It handles generic interaction dispatch, merchant item/ability/event purchases, ability crafting, server-authoritative dialogue sessions, dungeon finder instance assignment, mailbox operations, container item retrieval, and NPC look-at behavior.
+The Interactable system is the SceneServer subsystem responsible for validating and processing all player interactions with world interactable objects. It handles generic interaction dispatch, merchant item/ability/event/premade purchases and sales, ability crafting, server-authoritative dialogue sessions, dungeon finder instance assignment, the shared group finder queue, arena queueing and the arena match state machine, mailbox operations, container item retrieval, corpse looting, waypoint fast travel, and NPC look-at behavior.
 
 **Interaction behaviour is data, not code.** There is no server-side handler registry: `InteractableSystem` validates the request and then calls `IInteractable.ExecuteOnInteract(eventData)`, which fires the `OnInteractTriggers` list authored on the interactable prefab through the [ECA trigger system](../../../../../Shared/Implementation/Entity/ECA/Target/README.md). What a banker, shrine, or teleporter *does* lives in the Trigger assets designers wire onto it, so adding a new kind of interaction requires no C# in this system at all.
 
@@ -28,12 +28,17 @@ The system's own C# is split across partial classes of `InteractableSystem`, one
 | Partial class | Handles |
 |---|---|
 | `InteractableSystem.cs` | Broadcast registration, validation, ingress guard, dispatch, NPC look-at, main-thread queue drain |
-| `InteractableSystem.Merchant.cs` | `MerchantPurchaseBroadcast` — item / ability-template / ability-event / premade-ability purchases |
+| `InteractableSystem.Merchant.cs` | `MerchantPurchaseBroadcast` / `MerchantSellBroadcast` — item / ability-template / ability-event / premade-ability purchases, and selling back |
 | `InteractableSystem.AbilityCraft.cs` | `AbilityCraftBroadcast` — crafting an ability from a base plus selected events |
 | `InteractableSystem.Dialogue.cs` | `DialogueChoiceBroadcast` — server-authoritative dialogue sessions |
-| `InteractableSystem.DungeonFinder.cs` | `DungeonFinderBroadcast` — instance lookup and assignment |
-| `InteractableSystem.Mailbox.cs` | `MailFetchBroadcast` / `MailSendBroadcast` / `MailDeleteBroadcast` |
+| `InteractableSystem.DungeonFinder.cs` | `DungeonFinderListBroadcast` / `DungeonFinderCreateBroadcast` / `DungeonFinderJoinBroadcast` — browsing, opening and joining a run. `DungeonFinderBroadcast` is now purely the server's message opening the panel and is **not** accepted from a client. |
+| `InteractableSystem.GroupFinder.cs` | `GroupFinderQueueBroadcast` / `GroupFinderLeaveBroadcast` — the shared cross-server queue table, its per-server pump, group formation and late-join backfill |
+| `InteractableSystem.Arena.cs` | `ArenaQueueBroadcast`, `ArenaProfileRequestBroadcast`, `ArenaHistoryRequestBroadcast`, `ArenaLeaderboardRequestBroadcast` — arena boards queue solo or as a pre-made party onto the same group finder queue as arena rows |
+| `InteractableSystem.ArenaMatch.cs` | `ArenaReadyResponseBroadcast` — the match coordinator: Gathering → ReadyCheck → Countdown → Live → Ended, for every arena match hosted on this scene server |
+| `InteractableSystem.Mailbox.cs` | `MailFetchBroadcast` / `MailSendBroadcast` / `MailDeleteBroadcast` / `MailClaimAttachmentBroadcast` |
 | `InteractableSystem.Container.cs` | `ContainerTakeItemBroadcast` — retrieving items from an open container |
+| `InteractableSystem.Corpse.cs` | `CorpseLootTakeItemBroadcast` / `CorpseLootTakeCurrencyBroadcast` / `CorpseLootTakeAllBroadcast` / `CorpseLootCloseBroadcast` — a shared loot pile on a dead NPC, kept in step across every looter |
+| `InteractableSystem.Waypoint.cs` | `WaypointTravelRequestBroadcast` — fast travel, plus persisting a discovered waypoint page |
 
 The implementation uses a split execution model:
 - **Main thread:** request validation, ingress guard checks, trigger execution, dialogue session management, debounce sweep, and network broadcasts.
@@ -60,9 +65,16 @@ All interaction entry points share a single per-connection `IngressGuard` with a
 - Bounded periodic debounce tracker sweep with configurable TTL, interval, and max removals
 - Merchant purchases with tab-type dispatch (Item, Ability, AbilityEvent, PremadeAbility), currency validation, and inventory/ability synchronization. A premade purchase is the crafting path with the recipe supplied by the merchant's own `PremadeAbilityTemplate`: validated against the crafting rules, refused if a usable ability of that template is already held or the ability cap is reached (`AbilityLimit`), charged through `TrySpend`, persisted and granted via `LearnAbility`, and announced to observers with `AbilityLearnedObserverBroadcast`. Ledger reason `AbilityPurchase`.
 - Ability crafting from base ability plus selected events with duplicate-event rejection, known-event verification, max-learned-ability cap, and currency cost calculation
-- Server-authoritative dialogue sessions with ECA condition/action evaluation, choice bitmask tracking, cached per-character choices, and bounded session/cache capacity
+- Server-authoritative dialogue sessions with ECA condition/action evaluation, choice bitmask tracking, cached per-character choices bound to the character lifecycle (`OnAfterLoadCharacter` loads, `OnDisconnect` releases), and bounded session/cache capacity
 - ECA-triggered dialogue sessions (no physical interactable required) via `DisplayDialogueAction` static event
-- Dungeon finder with entrance validation, existing-instance lookup, party-member instance conflict checking, async scene enqueue, and main-thread character state marshaling
+- Dungeon finder split into three separately-authorised requests: list (browse), create (open a run), join (enter somebody else's). Entrance validation, existing-instance lookup, party-member instance conflict checking, async scene enqueue, main-thread character state marshaling, and the `/closedungeon` / `/closeinstance` chat commands
+- Group finder: a database queue table shared by every scene server on the world server, a per-server pump that heartbeats and acts on its own queued characters, formation in one locking transaction (so no matchmaker process is needed and two servers racing produce one group), late-join backfill into runs already open, a leash to the board, and stale-row sweeping
+- Arena queueing on the same queue rows: solo or as a pre-made party (every member connected here, inside the same board's leash, free of instances and live matches, and fitting one team of the format — all or none). Team assignment is written by `IGroupFinderQueueService.TryFormArenaMatchAsync`. Profile, history and leaderboard lookups answer from the database
+- Arena match coordination, owned by whichever scene server hosts the instance: Gathering (wait for seats, drop absentees), ReadyCheck (a decline or a silence cancels and locks the culprit out of the queue), Countdown (move to team spawns; `ArenaTeamRegistry` reports every seat as an ally so nobody can be hurt yet), Live (kills, objectives, respawns at team spawn, backfill window, disconnect grace, ends on score limit / clock / walkover), Ended (tallies, result, ratings, PvP attributes, reward hook, results screen)
+- Corpse looting of a shared pile: the corpse is the authority, the client sends only a scene object ID and a slot index, and every looter's window is kept in step. Its own ingress operation code with a 50 ms debounce rather than the one-second general interaction debounce
+- Waypoint fast travel validated end to end on the server (the map's scene must be the character's scene, the waypoint must be live in that scene instance, and `WaypointTravel.TryTravel` applies can-act / not-in-combat / discovered / conditions), with every refusal reported so the map can re-enable its button and say why. Discovery itself is an ECA action on the waypoint's trigger; this system hears `IWaypointController.OnWaypointUnlocked` and merges the page into the database
+- Merchant sell-back via `MerchantSellBroadcast`
+- Mail attachments claimed via `MailClaimAttachmentBroadcast`
 - Mailbox operations: fetch (async DB read → broadcast mail list), send (input validation, async DB write), and delete (async soft-delete)
 - Container item retrieval with slot validation, inventory transfer, and auto-despawn on empty
 - NPC look-at behavior via `OnInteractNPC` triggering AI controller idle-state transition
@@ -102,7 +114,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
    - `InteractableSystemRuntimeData` → `IInteractableSystemRuntimeData`
    - `InteractableSystemMainThreadQueueData` → `IInteractableSystemMainThreadQueueData`
    - `AsyncWorkerData` (shared async work queue)
-5. On initialize, `InteractableSystem` registers nine broadcast handlers (`InteractableBroadcast`, `MerchantPurchaseBroadcast`, `AbilityCraftBroadcast`, `DungeonFinderBroadcast`, `DialogueChoiceBroadcast`, `MailFetchBroadcast`, `MailSendBroadcast`, `MailDeleteBroadcast`, `ContainerTakeItemBroadcast`), subscribes to `IDialogueInteractable.OnServerDialogueRequested`, and clamps inspector parameters.
+5. On initialize, `InteractableSystem` registers twenty-five broadcast handlers (see [Broadcast Handlers](#broadcast-handlers)), subscribes to `IDialogueInteractable.OnServerDialogueRequested`, adds the `/closedungeon` and `/closeinstance` chat commands, hooks `ICharacterSystem.OnAfterLoadCharacter` / `OnDisconnect` for the dialogue choice cache and the group finder rows, then calls `InitializeGroupFinder()` (which chains `InitializeArena()` → `InitializeArenaMatches()`) and `InitializeWaypoints()`, and clamps inspector parameters.
 6. On deinitialize, it drains the remaining main-thread queue, clears ingress guard state, unregisters all broadcast handlers, unsubscribes dialogue events, and clears dialogue session/choice caches.
 7. Clients send the appropriate broadcast to trigger interactions; the server validates, processes, optionally persists to database, and replies with result broadcasts.
 
@@ -121,6 +133,13 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `maxAbilityCount` | int | 25 | Maximum number of crafted abilities a character may learn |
 | `maxAbilityCraftEvents` | int | 32 | Maximum number of ability events allowed per craft request (defense-in-depth payload cap) |
 | `currencyTemplate` | CharacterAttributeTemplate | — | Currency attribute required to buy merchant items and abilities |
+| `waypointTravelDebounceMilliseconds` | int | 2000 | Minimum milliseconds between fast-travel requests from one connection |
+| `groupFinderPumpIntervalSeconds` | float | 2.0 | How often this server pumps the shared queue on behalf of its own waiters |
+| `groupFinderStalePulseSeconds` | float | 30.0 | How long a queue row may go without a heartbeat before it is stale |
+| `groupFinderTransferGraceSeconds` | float | 60.0 | Grace for a matched character being handed between scene servers |
+| `groupFinderBackfillRetrySeconds` | float | 10.0 | Delay before retrying a failed late-join backfill |
+| `groupFinderStaleSweepIntervalSeconds` | float | 30.0 | How often stale queue rows are swept |
+| `groupFinderLeashMeters` | float | 8.0 | How far a queued player may stray from the board before being dequeued |
 
 ### Dialogue Constants
 
@@ -136,12 +155,42 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `MaxMailSubjectLength` | 200 | Maximum subject length for outgoing mail |
 | `MaxMailBodyLength` | 4000 | Maximum body length for outgoing mail |
 
+### Ingress Guard Operation Codes
+
+Each family of requests takes its own operation code on the shared per-connection
+`IngressGuard`, so one family's debounce cannot silence another's. Operation 0 is the
+general interaction guard governed by `interactionDebounceMilliseconds`.
+
+| Code | Constant | Debounce |
+|---|---|---|
+| 0 | (general interaction) | `interactionDebounceMilliseconds` (1000 ms default) |
+| 1 | `CorpseLootOperation` | `CorpseLootDebounceMilliseconds` = 50 |
+| 10 | `DungeonListOperation` | `DungeonListDebounceMilliseconds` = 2000 |
+| 11 | `DungeonEnterOperation` | — |
+| 12 | `GroupFinderQueueOperation` | `GroupFinderQueueDebounceMilliseconds` = 2000 |
+| 13 | `GroupFinderLeaveOperation` | `GroupFinderLeaveDebounceMilliseconds` = 1000 |
+| 14 | `ArenaQueueOperation` | `ArenaQueueDebounceMilliseconds` = 2000 |
+| 15 | `ArenaLookupOperation` | `ArenaLookupDebounceMilliseconds` = 1000 |
+| 16 | `ArenaReadyOperation` | `ArenaReadyDebounceMilliseconds` = 250 |
+| 20 | `WaypointTravelOperation` | `waypointTravelDebounceMilliseconds` (2000 ms default) |
+
+### Dungeon and Arena Constants
+
+| Constant | Value | Description |
+|---|---|---|
+| `MaxListedInstances` | 24 | Cap on runs returned by a dungeon finder list request |
+| `ArenaLeaderboardRows` | 50 | Rows returned by a leaderboard request |
+| `ArenaHistoryRows` | 20 | Rows returned by a history request |
+| `ArenaBackfillPerPump` | 4 | Backfill seats attempted per pump |
+| `ArenaTickSeconds` | 1.0 | The arena match coordinator's tick |
+| `ArenaCancelledSeconds` | 5 | How long a cancelled match's notice is shown before teardown |
+
 ### Threading Model
 
 | Thread | Work |
 |---|---|
 | Main thread | Request validation, ingress guards, handler dispatch, dialogue session management, debounce sweep, main-thread queue drain, broadcast dispatch |
-| Async worker | Database reads/writes (`PersistInventoryItemsAsync`, `PersistAbilityAsync`, `PersistKnownAbilityAsync`, `ProcessDungeonFinderAsync`, `CheckCharacterPartyInstanceAsync`, `FetchMailAsync`, `SendMailAsync`, `DeleteMailAsync`) |
+| Async worker | Database reads/writes: inventory, ability and known-ability persistence, dungeon finder scene assignment and party-instance checks, mail fetch/send/delete/claim, the group finder queue pump (heartbeat, read back, form, backfill, stale sweep), arena queue rows, match formation and result writes, arena profile/history/leaderboard lookups, and waypoint page merges |
 
 ## Usage Examples
 
@@ -154,24 +203,47 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `InteractableBroadcast` | `OnServerInteractableBroadcastReceived` | `InteractableSystem.cs` | Generic interaction dispatch to registered handler |
 | `MerchantPurchaseBroadcast` | `OnServerMerchantPurchaseBroadcastReceived` | `InteractableSystem.Merchant.cs` | Merchant item/template/event/premade-ability purchase |
 | `AbilityCraftBroadcast` | `OnServerAbilityCraftBroadcastReceived` | `InteractableSystem.AbilityCraft.cs` | Ability crafting from base + events |
-| `DungeonFinderBroadcast` | `OnServerDungeonFinderBroadcastReceived` | `InteractableSystem.DungeonFinder.cs` | Dungeon instance assignment |
+| `DungeonFinderListBroadcast` | `OnServerDungeonFinderListBroadcastReceived` | `InteractableSystem.DungeonFinder.cs` | Browse the runs a character may join |
+| `DungeonFinderCreateBroadcast` | `OnServerDungeonFinderCreateBroadcastReceived` | `InteractableSystem.DungeonFinder.cs` | Open a new run and get the instance assignment |
+| `DungeonFinderJoinBroadcast` | `OnServerDungeonFinderJoinBroadcastReceived` | `InteractableSystem.DungeonFinder.cs` | Join a run already open |
 | `DialogueChoiceBroadcast` | `OnServerDialogueChoiceBroadcastReceived` | `InteractableSystem.Dialogue.cs` | Dialogue choice progression |
 | `MailFetchBroadcast` | `OnServerMailFetchBroadcastReceived` | `InteractableSystem.Mailbox.cs` | Fetch mail list from database |
 | `MailSendBroadcast` | `OnServerMailSendBroadcastReceived` | `InteractableSystem.Mailbox.cs` | Send mail to another character |
 | `MailDeleteBroadcast` | `OnServerMailDeleteBroadcastReceived` | `InteractableSystem.Mailbox.cs` | Soft-delete a mail entry |
+| `MerchantSellBroadcast` | `OnServerMerchantSellBroadcastReceived` | `InteractableSystem.Merchant.cs` | Sell an inventory item back to a merchant |
+| `MailClaimAttachmentBroadcast` | `OnServerMailClaimAttachmentBroadcastReceived` | `InteractableSystem.Mailbox.cs` | Claim a mail attachment |
 | `ContainerTakeItemBroadcast` | `OnServerContainerTakeItemBroadcastReceived` | `InteractableSystem.Container.cs` | Take item from container |
+| `CorpseLootTakeItemBroadcast` | `OnServerCorpseLootTakeItemBroadcastReceived` | `InteractableSystem.Corpse.cs` | Take one slot from a corpse's loot pile |
+| `CorpseLootTakeCurrencyBroadcast` | `OnServerCorpseLootTakeCurrencyBroadcastReceived` | `InteractableSystem.Corpse.cs` | Take the corpse's currency |
+| `CorpseLootTakeAllBroadcast` | `OnServerCorpseLootTakeAllBroadcastReceived` | `InteractableSystem.Corpse.cs` | Take everything the corpse holds |
+| `CorpseLootCloseBroadcast` | `OnServerCorpseLootCloseBroadcastReceived` | `InteractableSystem.Corpse.cs` | Close the loot window and drop the subscription |
+| `GroupFinderQueueBroadcast` | `OnServerGroupFinderQueueBroadcastReceived` | `InteractableSystem.GroupFinder.cs` | Join the shared group finder queue |
+| `GroupFinderLeaveBroadcast` | `OnServerGroupFinderLeaveBroadcastReceived` | `InteractableSystem.GroupFinder.cs` | Leave the queue |
+| `ArenaQueueBroadcast` | `OnServerArenaQueueBroadcastReceived` | `InteractableSystem.Arena.cs` | Queue for an arena format, solo or as a pre-made party |
+| `ArenaProfileRequestBroadcast` | `OnServerArenaProfileRequestReceived` | `InteractableSystem.Arena.cs` | Read a character's arena rating and record |
+| `ArenaHistoryRequestBroadcast` | `OnServerArenaHistoryRequestReceived` | `InteractableSystem.Arena.cs` | Read recent matches |
+| `ArenaLeaderboardRequestBroadcast` | `OnServerArenaLeaderboardRequestReceived` | `InteractableSystem.Arena.cs` | Read the season leaderboard |
+| `ArenaReadyResponseBroadcast` | `OnServerArenaReadyResponseReceived` | `InteractableSystem.ArenaMatch.cs` | Accept or decline the ready check |
+| `WaypointTravelRequestBroadcast` | `OnServerWaypointTravelRequestBroadcastReceived` | `InteractableSystem.Waypoint.cs` | Fast travel to a discovered waypoint |
 
 ### Generic Interaction Dispatch
 
 `OnServerInteractableBroadcastReceived(conn, msg, channel)`:
 
 1. Validates connection, spawned object, and character.
-2. Acquires ingress guard.
+2. Acquires ingress guard (`EndIngressGuard` in a `finally`).
 3. Validates scene via `WorldSceneDetailsCache`.
 4. Validates scene object via `ValidateSceneObject` (existence + same-scene check).
-5. Gets `IInteractable` component and calls `CanInteract(character)`.
-6. Calls `interactable.CanInteract(character)`, then `ExecuteOnInteract` to run the prefab's `OnInteractTriggers`.
-7. Calls `handler.HandleInteraction(interactable, character, sceneObject, this)`.
+5. Resolves the interactable with `InteractableResolver.Resolve(sceneObject)`.
+6. Calls `interactable.CanInteract(character)`, then `interactable.TryConsumeInteractRateLimit(character)`.
+   Every refusal above logs at Debug with the reason (corpse / in-range / rate-limited) — the branches
+   used to decline in silence, which made "I pressed E and nothing happened" undiagnosable.
+7. If the interactable is an `ILootableCorpse`, calls `OpenCorpseLoot` **directly**, not through a
+   trigger: corpse looting is intrinsic to any NPC that can die, so a missing `OnInteractTriggers`
+   entry must not make a creature silently unlootable.
+8. Calls `interactable.ExecuteOnInteract(new PlayerInteractionEventData(...))` to run the prefab's
+   `OnInteractTriggers`. The event data carries a `SendNewItemBroadcast` callback so triggers that
+   grant items can tell the client.
 
 ### Merchant Purchase
 
@@ -361,12 +433,25 @@ again, was then swallowed by the ingress guard.
 
 ### Inventory Persistence
 
+This system does not place, broadcast or persist items itself. Both entry points delegate to
+`CharacterInventorySystem`, which is the one grant funnel that hands an item its database identity:
+
 `SendNewItemBroadcast(conn, character, inventoryController, newItem)`:
 
-1. Calls `TryAddItem` on inventory controller.
-2. Collects modified item data for DB persistence and broadcast.
-3. Broadcasts `InventorySetMultipleItemsBroadcast` to client.
-4. Enqueues `PersistInventoryItemsAsync` via async worker; falls back to direct async persistence with warning if worker rejects.
+1. Requires an `IPlayerCharacter`; refuses otherwise.
+2. Resolves `ICharacterInventorySystem` from `Server.BehaviourRegistry`. **If it is absent the grant
+   is refused** rather than persisted without a write-back — an item that never learns its id cannot
+   be equipped, used or moved, so the caller's own fallback (put it back on the corpse, refund the
+   purchase) is the better outcome.
+3. Returns `inventorySystem.TryGrantItem(playerCharacter, newItem, InventoryType.Inventory)`.
+
+`PersistInventoryChanges(character, changed, removed)` hands rows a sale or a mail attachment
+changed to `inventorySystem.PersistInventoryChanges` — the journalled batch. The caller has already
+told the client. Same registry-absent refusal, logged as an error.
+
+The place/broadcast/persist body used to live here and was one of three copies (quest and
+achievement systems had their own); only this one wrote the identity back, which is why they were
+collapsed into `CharacterInventorySystem.TryGrantItem`.
 
 ### Interactable Types
 
@@ -390,11 +475,15 @@ conventionally wired to do.
 | `LoreObject` | Idempotently grants abilities / events / items |
 | `Mailbox` | Opens the mail UI; achievement |
 | `Merchant` | Opens the merchant UI with the template ID; NPC look-at |
-| `Quest` | Offers and turns in quests |
+| `PlotFoundation` | Housing: the placed foundation a plot's row points at; `ClaimPlotAction` buys it |
+| `QuestInteractable` | Offers and turns in quests |
 | `Shrine` | Heals health/mana by percentage, applies buff stacks; achievement |
 | `Switch` | Toggles `ISwitchTarget` activate/deactivate; achievement |
 | `Teleporter` | Teleports via direct transform or named destination; achievement |
+| `Waypoint` | The shipped `Waypoint Interact` trigger runs `UnlockWaypointAction` and the discovery achievement. Travel is **not** an interaction: it is requested from the map, validated by the server, and the arrival runs `OnTravelTriggers` |
 | `WorldItem` | Picks up the item with a concurrency guard, adjusts stack or despawns; achievement |
+| `ArenaBoard` | Opens the arena panel: queueing, profile, history, leaderboard |
+| `ArenaObjective` | A flag stand or control point; its trigger runs `InteractWithArenaObjectiveAction`, which the match coordinator scores |
 
 Because the mapping is authored per prefab rather than compiled in, two
 `Shrine` prefabs can behave differently, and a prefab whose `OnInteractTriggers`
@@ -436,7 +525,7 @@ list is empty is interactable but inert — see [Operational Checks](#operationa
 | Dialogue range check | Move out of range during dialogue; confirm session ends with `DialogueEndBroadcast` |
 | ECA dialogue | Trigger `DisplayDialogueAction`; confirm dialogue session starts without physical interactable |
 | Dialogue session cap | Fill `MaxActiveDialogueSessions`; confirm new sessions are rejected with warning |
-| Dungeon finder | Send `DungeonFinderBroadcast` at dungeon entrance; confirm character is assigned instance and disconnected |
+| Dungeon finder | Send `DungeonFinderCreateBroadcast` at a dungeon entrance; confirm character is assigned an instance and handed off |
 | Dungeon party conflict | Have a party member in an instance of dungeon A; confirm the finder refuses dungeon B with `PartyInstanceExists` |
 | Dungeon re-entry | Leave an instance, return to the entrance, confirm the finder resolves the held run and re-enters it — then repeat after the run's *opener* has logged out, which is what the party-ID match exists for |
 | Dungeon list debounce | Hold Refresh; confirm the client greys the button and the server answers `OnCooldown` rather than falling silent |
@@ -497,7 +586,7 @@ OnServerInteractableBroadcastReceived(conn, msg, channel)
 │      └── Same-scene handle check
 ├─ 5. GetComponent<IInteractable>() + CanInteract(character)
 ├─ 6. Resolve interactable.GetType() → lookup in InteractableHandlers
-└─ 7. handler.HandleInteraction(interactable, character, sceneObject, this)
+└─ 7. ILootableCorpse -> OpenCorpseLoot, then interactable.ExecuteOnInteract(...)
        │
        └── (Trigger actions: broadcast, state change, achievement, etc.)
 ```
@@ -664,8 +753,10 @@ OnServerMailDeleteBroadcastReceived(conn, msg, channel)
 OnUpdate(deltaTime)
 │
 ├─ 1. DrainMainThreadQueue (up to maxMainThreadActionsPerFrame)
-└─ 2. SweepDebounceTrackers()
-       └── IngressGuard.Sweep(interval, ttl, maxRemovals)
+├─ 2. SweepDebounceTrackers()
+│      └── IngressGuard.Sweep(interval, ttl, maxRemovals)
+├─ 3. Group finder pump (every groupFinderPumpIntervalSeconds) + stale sweep + leash check
+└─ 4. Arena match tick (every ArenaTickSeconds, per match hosted on this server)
 ```
 
 ## Project Structure
@@ -677,11 +768,16 @@ Interactable/
 ├── README.md                                  # This document
 ├── InteractableSystem.cs                      # Main SceneServer interactable subsystem (validation, dispatch, NPC look-at, update loop)
 ├── InteractableSystem.AbilityCraft.cs         # Partial: ability craft broadcast handling and async persistence
+├── InteractableSystem.Arena.cs                # Partial: arena board queueing (solo and pre-made party), profile/history/leaderboard
+├── InteractableSystem.ArenaMatch.cs           # Partial: the arena match state machine for matches hosted here
 ├── InteractableSystem.Container.cs            # Partial: container take-item broadcast handling
+├── InteractableSystem.Corpse.cs               # Partial: corpse loot pile, item/currency/take-all/close
 ├── InteractableSystem.Dialogue.cs             # Partial: server-authoritative dialogue sessions, ECA evaluation, choice tracking
-├── InteractableSystem.DungeonFinder.cs        # Partial: dungeon finder broadcast handling and async instance assignment
-├── InteractableSystem.Mailbox.cs              # Partial: mail fetch/send/delete broadcast handling and async persistence
-├── InteractableSystem.Merchant.cs             # Partial: merchant purchase broadcast handling (items, abilities, events)
+├── InteractableSystem.DungeonFinder.cs        # Partial: list/create/join, async instance assignment, /closedungeon
+├── InteractableSystem.GroupFinder.cs          # Partial: the shared cross-server queue table, its pump, formation and backfill
+├── InteractableSystem.Mailbox.cs              # Partial: mail fetch/send/delete/claim-attachment and async persistence
+├── InteractableSystem.Merchant.cs             # Partial: merchant purchase and sell handling (items, abilities, events, premades)
+├── InteractableSystem.Waypoint.cs             # Partial: fast-travel request and waypoint page persistence
 ├── InteractableSystemMainThreadQueueData.cs   # Main-thread action queue container
 └── InteractableSystemRuntimeData.cs           # Runtime state (IngressGuard)
 ```
@@ -704,11 +800,16 @@ ServerBehaviour
 └── InteractableSystem : IInteractableSystem (partial class)
         ├── InteractableSystem.cs              # Core: init, deinit, validation, dispatch, update loop
         ├── InteractableSystem.AbilityCraft.cs  # Ability crafting broadcast + persistence
+        ├── InteractableSystem.Arena.cs         # Arena queueing + lookups
+        ├── InteractableSystem.ArenaMatch.cs    # Arena match state machine
         ├── InteractableSystem.Container.cs     # Container take-item broadcast
+        ├── InteractableSystem.Corpse.cs        # Corpse loot pile
         ├── InteractableSystem.Dialogue.cs      # Dialogue session management + ECA
         ├── InteractableSystem.DungeonFinder.cs # Dungeon finder async flow
-        ├── InteractableSystem.Mailbox.cs       # Mail fetch/send/delete async flows
-        └── InteractableSystem.Merchant.cs      # Merchant purchase + ability learning
+        ├── InteractableSystem.GroupFinder.cs   # Shared queue table, pump, formation, backfill
+        ├── InteractableSystem.Mailbox.cs       # Mail fetch/send/delete/claim async flows
+        ├── InteractableSystem.Merchant.cs      # Merchant purchase/sell + ability learning
+        └── InteractableSystem.Waypoint.cs      # Fast travel + waypoint page persistence
 
 RuntimeDataContainer
 └── InteractableSystemRuntimeData : IInteractableSystemRuntimeData
@@ -725,13 +826,15 @@ handler:
 NetworkBehaviour
 └── Interactable : IInteractable, ISpawnable      # OnInteractTriggers + ExecuteOnInteract
     ├── AbilityCrafter        ├── GatheringNode
-    ├── Banker                ├── LoreObject
-    ├── Bindstone             ├── Mailbox
-    ├── CapturePoint          ├── Merchant
-    ├── Container             ├── Quest
-    ├── DialogueInteractable  ├── Shrine
-    ├── DungeonEntrance       ├── Switch
-    ├── Teleporter            └── WorldItem
+    ├── ArenaBoard            ├── LoreObject
+    ├── ArenaObjective        ├── Mailbox
+    ├── Banker                ├── Merchant
+    ├── Bindstone             ├── PlotFoundation
+    ├── CapturePoint          ├── QuestInteractable
+    ├── Container             ├── Shrine
+    ├── DialogueInteractable  ├── Switch
+    ├── DungeonEntrance       ├── Teleporter
+    ├── Waypoint              └── WorldItem
 ```
 
 ## License

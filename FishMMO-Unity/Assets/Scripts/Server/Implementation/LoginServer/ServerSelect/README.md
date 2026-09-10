@@ -38,8 +38,8 @@ Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) prevent
 | Broadcast | Direction | Purpose |
 |-----------|-----------|---------|
 | `RequestServerListBroadcast` | Client → Server | Request the list of active world servers |
-| `ServerListBroadcast` | Server → Client | Response containing `List<WorldServerDetails>` of active world servers |
-| `WorldSceneConnectBroadcast` | Server → Client | Provides address and port for connecting to a specific world scene server |
+| `ServerListBroadcast` | Server → Client | Response containing a `WorldServerDetails[]` of active world servers. A fixed-size array, not a `List<T>`: FishNet serializes on the network thread, and the server replaces the whole array rather than mutating entries in place. |
+| `WorldSceneConnectBroadcast` | Server → Client | Carries only the port of a world scene server; the address is always `Constants.Configuration.GameHost` |
 
 ### Failure Response Behaviour
 
@@ -47,7 +47,7 @@ All request flows guarantee a response to the client, even on failure, to preven
 
 - **World Server Service Unavailable:** An empty `ServerListBroadcast` is sent and a warning is logged.
 - **Database Fetch Failure:** An empty `ServerListBroadcast` is sent with the error message logged.
-- **Async Enqueue Failure:** The in-flight gate is released immediately and a warning is logged.
+- **Async Enqueue Failure:** The in-flight gate is released immediately and a `ServerBusyBroadcast` is sent via `SendServerBusy`.
 - **Unexpected Exception:** Caught in the `ProcessServerListRequestAsync` catch block, logged, and the in-flight gate is released in the `finally` block.
 
 ### Authentication Check
@@ -68,7 +68,7 @@ Before processing any `RequestServerListBroadcast`, the system verifies the conn
 ## Features
 
 - **Active world server list** — async database fetch via `IWorldServerService.FetchActiveAsync`, filtered by configurable `idleTimeout` (default 60s)
-- **DTO mapping** — maps `WorldServerData` rows to `WorldServerDetails` (Name, LastPulse, Address, Port, CharacterCount, Locked)
+- **DTO mapping** — maps `WorldServerData` rows to `WorldServerDetails` (Name, Port, CharacterCount, Locked). The DTO carries no address and no pulse timestamp: every server is reached through the same host, and the pulse age is already spent server-side as the `idleTimeout` filter, so sending it would only invite the client to re-derive a decision the server has made.
 - **Per-connection in-flight gating** — `ConcurrentDictionary<int, byte>` prevents duplicate concurrent server-list requests per connection
 - **Post-release cooldown** — configurable `serverListCooldownMilliseconds` (default 1000ms) gap between successive requests enforced via `NextAllowedRequestUtcByClientId`
 - **Bounded main-thread draining** — configurable `maxMainThreadResponsesPerFrame` to time-slice response dispatch and avoid frame spikes
@@ -157,7 +157,7 @@ Client sends: RequestServerListBroadcast { }
 Server validates authentication, checks in-flight gate and cooldown
 Server enqueues async work → fetches active servers from DB (filtered by idleTimeout)
 Server maps WorldServerData rows to WorldServerDetails DTOs
-Server sends: ServerListBroadcast { Servers = [ { Name, LastPulse, Address, Port, CharacterCount, Locked }, ... ] }
+Server sends: ServerListBroadcast { Servers = [ { Name, Port, CharacterCount, Locked }, ... ] }
 ```
 
 ### Server List Request — Failure (Service Unavailable)
@@ -175,8 +175,11 @@ Server releases in-flight gate
 ```
 Client sends: RequestServerListBroadcast { }
 Server checks NextAllowedRequestUtcByClientId → cooldown not expired
-Request silently dropped (client must wait for cooldown to expire)
+Server sends: ServerListBroadcast { Servers = [] }    // answered, not dropped
 ```
+
+The same empty answer is sent when the in-flight gate is already held. The client is
+always answered so its request never hangs waiting on a reply that will not come.
 
 ### Server List Request — Unauthenticated
 
@@ -193,8 +196,8 @@ Server kicks connection with KickReason.UnusualActivity
 | System initializes | Login server startup logs | `"ServerSelectSystem: Initialized (idleTimeout=60s)"` in debug log |
 | Server list works | Authenticate and request server list | Client receives `ServerListBroadcast` with active world server entries |
 | Idle timeout filtering | Set `idleTimeout` low, stop a world server | Stopped server excluded from list after timeout expires |
-| In-flight gating | Rapid-fire requests from same connection | Only one request processed at a time; subsequent requests silently dropped |
-| Cooldown enforcement | Send request immediately after previous completes | Request rejected until 1-second cooldown expires |
+| In-flight gating | Rapid-fire requests from same connection | Only one request processed at a time; subsequent requests answered with an empty `ServerListBroadcast` |
+| Cooldown enforcement | Send request immediately after previous completes | Empty `ServerListBroadcast` returned until the 1-second cooldown expires |
 | Authentication enforcement | Send request without authenticating | Connection kicked with `KickReason.UnusualActivity` |
 | Disconnect cleanup | Client disconnects mid-flow | In-flight and cooldown entries removed for that connection |
 | Failure responses | DB service unavailable or query failure | Client receives empty `ServerListBroadcast` (never hangs) |
@@ -293,7 +296,7 @@ Server/Core/LoginServer/ServerSelect/
 
 Shared/Implementation/Network/ServerSelect/
 ├── ServerSelectBroadcasts.cs                # Network broadcast structs (RequestServerListBroadcast, ServerListBroadcast, WorldSceneConnectBroadcast)
-└── ServerAddress.cs                         # Serializable server address with HTTPS formatting
+└── ServerAddress.cs                         # ServerAddress / ServerAddresses, including the IPFetch connection token
 
 Shared/Implementation/Network/
 └── WorldServerDetails.cs                    # Serializable world server details DTO
@@ -323,8 +326,10 @@ RuntimeDataContainer
 ```
 IBroadcast
 ├── RequestServerListBroadcast      → (empty, no fields)
-├── ServerListBroadcast             → List<WorldServerDetails>
-└── WorldSceneConnectBroadcast      → string Address, ushort Port
+├── ServerListBroadcast             → WorldServerDetails[] Servers
+├── WorldSceneConnectBroadcast      → ushort Port
+├── RequestConnectionTokenBroadcast → (empty, no fields)
+└── ConnectionTokenBroadcast        → string ConnectionToken
 ```
 
 #### Shared Data Classes
@@ -332,19 +337,18 @@ IBroadcast
 ```
 WorldServerDetails
 ├── Name            : string
-├── LastPulse       : DateTime
-├── Address         : string
 ├── Port            : ushort
-├── CharacterCount  : int
+├── CharacterCount  : int    // server enforces >= 0
 └── Locked          : bool
 
 ServerAddress
-├── Address         : string
-├── Port            : ushort
-└── HTTPSAddress()  : string    // formats as https://Address:Port/
+├── Address         : string    // internal bind address
+└── Port            : ushort
 
 ServerAddresses
-└── Addresses       : List<ServerAddress>
+├── Addresses       : List<ServerAddress>    // internal use
+├── Ports           : List<ushort>           // client use
+└── ConnectionToken : string                 // one-time token issued by IPFetch
 ```
 
 ### External Integration Points

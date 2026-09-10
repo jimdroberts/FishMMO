@@ -47,11 +47,12 @@ Concrete per-system containers (e.g., `PartySystemRuntimeData`, `GuildSystemRunt
 - **Reflection-based factory with validation** — `RuntimeDataContainerFactory.CreateContainer(Type)` validates that the type is non-null, non-abstract, not an interface, assignable to `IRuntimeDataContainer`, and has a public parameterless constructor before calling `Activator.CreateInstance`.
 - **Type-safe registry** — `RuntimeDataContainerRegistry` extends `ServerComponentRegistry` and provides `Register<T>()`, `Unregister<T>()`, `TryGet<T>(out T)`, `Get<T>()`, `InitializeAll(IServer)`, and `DeinitializeAll()`. Behaviours access containers via `Server.DataContainerRegistry.TryGet<IMyData>(out var data)`.
 - **Lifecycle management** — `InitializeAll` iterates registered containers, calling `container.Initialize(server, serverManager)` which sets references and calls the abstract `InitializeOnce()`. `DeinitializeAll` calls `Clear()` then `Deinitialize()` on each unique instance (deduplicated via `HashSet`), then empties the registry.
-- **Bounded async work queue (AsyncWorkerData)** — Replaces fire-and-forget `_ = SomeAsync(...)` with backpressure-aware scheduling. Uses multiple `System.Threading.Channels.Channel<AsyncWorkItem>` (one per worker, `BoundedChannelFullMode.DropWrite`, capacity 1024). Supports round-robin enqueue and entity-keyed consistent-hashing enqueue for FIFO ordering per entity. Exposes `PendingCount` and `CompletedCount` for monitoring. Performs graceful shutdown: cancels workers, completes writers, drains remaining items, waits up to 10 seconds for worker tasks.
+- **Bounded async work queue (AsyncWorkerData)** — Replaces fire-and-forget `_ = SomeAsync(...)` with backpressure-aware scheduling. Concurrency is bounded by a `SemaphoreSlim` (`maxConcurrency`, default 32), not by a fixed set of worker loops, so an item awaiting a database call or a main-thread hand-off delays only the items ordered behind it. Admission is bounded separately: `Enqueue` returns `false` once `maxOutstandingItems` (default 16384) items are accepted but unfinished. `Enqueue(work, entityKey)` appends to a per-key `OrderedLane` — a chain of `ContinueWith` continuations held in a `ConcurrentDictionary<long, OrderedLane>` and retired when the key empties — giving FIFO order per entity while different keys proceed independently; `entityKey` 0 means "no ordering requirement" and takes the unordered path. Dispatch always goes through `Task.Run` / `TaskScheduler.Default`, so nothing ever executes inline on the enqueuing (main) thread. Exposes `PendingCount` and `CompletedCount` for monitoring.
+- **Shutdown drains rather than discards (AsyncWorkerData)** — `Clear()` only stops accepting new work; it does not throw away what was already accepted, because the work pending at shutdown is precisely the character saves and session releases the behaviours enqueued as they tore down. `OnDeinitialize` then polls `outstandingCount` for up to `DrainTimeoutMilliseconds` (3000), clamped to whatever is left of the process-wide teardown budget by `UnitySyncOverAsync.ClampToShutdownBudget`. The `SemaphoreSlim` is dropped, never disposed — an item that outlived the drain still holds it.
 - **Main-thread action marshalling (MainThreadQueueData)** — Abstract base container with a `Queue<Action>` guarded by `lock`. Background threads call `TryEnqueue(Action)` (bounded at 10 000 pending actions). Main thread calls `Drain()` or `Drain(int maxActions)` each frame, which copies actions under lock then invokes outside the lock to minimize lock hold time. Uses a reusable `drainBuffer` list to avoid per-call allocation.
 - **Per-system queue isolation (SystemMainThreadQueueData)** — Abstract subclass of `MainThreadQueueData` that concrete per-system queue containers inherit, ensuring each system gets its own isolated queue instance via the `DataContainerRegistry`.
-- **Diagnostic counters** — `AsyncWorkerData` tracks `CompletedCount` (atomic `Interlocked.Read`) and `PendingCount` (sum of all channel reader counts). Work items carry an optional `CallerName` for error logging attribution.
-- **Structured logging** — All lifecycle events (`Initialize`, `Deinitialize`, worker startup/shutdown, errors) are logged via `FishMMO.Logging.Log` with category tags (`"AsyncWorkerData"`, `"RuntimeDataContainerRegistry"`).
+- **Diagnostic counters** — `AsyncWorkerData` tracks `CompletedCount` (atomic `Interlocked.Read`) and `PendingCount` (accepted minus running, floored at 0 — an item that is actually executing is reported by neither counter). Work items carry an optional `CallerName` for error logging attribution.
+- **Structured logging** — Lifecycle events are logged via `FishMMO.Logging.Log` with category tags (`"AsyncWorkerData"`, `"MainThreadQueue"`, `"RuntimeDataContainerRegistry"`). Routine lifecycle lines are `Debug`; only genuine faults — a work item that threw, a queued action that threw, a container that failed to initialize — reach `Error`/`Warning`.
 
 ## Prerequisites
 
@@ -59,8 +60,8 @@ Concrete per-system containers (e.g., `PartySystemRuntimeData`, `GuildSystemRunt
 - FishNet networking framework (`FishNet.Connection.NetworkConnection`, `FishNet.Managing.Server.ServerManager`)
 - FishMMO server core assemblies (`FishMMO.Server.Core` — `IRuntimeDataContainer`, `IRuntimeDataContainerFactory`, `IRuntimeDataContainerRegistry`, `IServerComponent`, `IServerComponentRegistry`, `ServerComponentRegistry`, `RequiresDataContainerAttribute`, `IAsyncWorkerData`, `IMainThreadQueueData`)
 - FishMMO logging (`FishMMO.Logging.Log`)
-- `System.Threading.Channels` (for `AsyncWorkerData` bounded channel work queues)
-- `System.Threading` (`Interlocked`, `CancellationTokenSource`, `Task`) for async worker lifecycle
+- `System.Collections.Concurrent` (`ConcurrentDictionary` for `AsyncWorkerData`'s per-entity ordering lanes)
+- `System.Threading` (`SemaphoreSlim`, `Interlocked`, `Volatile`, `Task`) for async worker lifecycle
 
 ## Installation / Build
 
@@ -136,7 +137,7 @@ public class MySystem : ServerBehaviour
 public class PersistenceSystem : ServerBehaviour { ... }
 ```
 
-2. Enqueue work (round-robin):
+2. Enqueue work (unordered — runs as soon as a concurrency slot is free):
 
 ```csharp
 if (Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker))
@@ -149,7 +150,7 @@ if (Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker))
 
 ```csharp
 asyncWorker.Enqueue(() => SaveCharacterAsync(charData), characterID);
-// Same characterID always routes to the same worker — FIFO ordering guaranteed
+// Same characterID shares one ordering lane — FIFO guaranteed; other keys run concurrently
 ```
 
 ### Using MainThreadQueueData for Thread Marshalling
@@ -215,15 +216,14 @@ client is the backstop: no login-flow panel waits on a reply without a deadline.
 
 | Parameter | Location | Default | Description |
 |-----------|----------|---------|-------------|
-| Worker count | `AsyncWorkerData.DEFAULT_WORKER_COUNT` | `4` | Number of async worker loops spawned at initialization |
-| Channel capacity | `AsyncWorkerData.DEFAULT_CHANNEL_CAPACITY` | `1024` | Bounded capacity per worker channel; `DropWrite` when full (backpressure) |
+| `AsyncWorkerMaxConcurrency` | Server configuration file (falls back to `AsyncWorkerData.maxConcurrency`) | `32` | Work items executing at once. Must stay under the database connection pool (`AppSettings.MaxPoolSize`, 100 by default); clamped to a minimum of 1 |
+| `AsyncWorkerMaxOutstandingItems` | Server configuration file (falls back to `AsyncWorkerData.maxOutstandingItems`) | `16384` | Items accepted but unfinished before `Enqueue` returns `false`; clamped up to at least the concurrency limit |
 | Max queue capacity | `MainThreadQueueData.MaxQueueCapacity` | `10000` | Maximum pending actions before `TryEnqueue` returns `false` |
-| Channel full mode | `AsyncWorkerData` | `BoundedChannelFullMode.DropWrite` | Items are silently dropped when channel is full |
-| Channel single reader | `AsyncWorkerData` | `true` | Each channel has exactly one reader (its worker loop) |
-| Shutdown timeout | `AsyncWorkerData.OnDeinitialize` | `10 seconds` | Maximum wait time for worker tasks to complete during shutdown |
+| Drain timeout | `AsyncWorkerData.DrainTimeoutMilliseconds` | `3000` ms | Bounded wait for in-flight work in `OnDeinitialize`, further clamped by `UnitySyncOverAsync.ClampToShutdownBudget` |
+| Drain poll interval | `AsyncWorkerData.DrainPollMilliseconds` | `25` ms | Sleep between outstanding-count checks while draining |
 | `InitializationPriority` | `[RequiresDataContainer]` attribute | `0` | Lower values initialize first; set per-attribute on each ServerBehaviour |
 
-All values are compile-time constants. To adjust, modify the source constants and rebuild.
+The two `AsyncWorker*` keys are read once, in `InitializeOnce`, via `Server.Configuration.GetInt` — the fields hold the defaults, so a deployment that names neither key gets 32/16384. Everything else is a compile-time constant; to adjust, modify the source and rebuild.
 
 ## Usage Examples
 
@@ -360,10 +360,10 @@ public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 | Deduplication | Declare same container type on multiple behaviours | Only one instance created; all behaviours share it |
 | Priority ordering | Assign different `InitializationPriority` values | Lower-priority containers initialize first |
 | Factory validation | Pass an abstract type or interface to `RuntimeDataContainerFactory.CreateContainer` | `InvalidOperationException` with descriptive message |
-| Async worker startup | Check log `"AsyncWorkerData"` → `"Initialized (4 workers, 1024 capacity per channel)"` | Worker count and capacity match constants |
-| Async worker backpressure | Enqueue more than 1024 items to a single worker channel | `Enqueue` returns `false`; item is dropped |
-| Async worker entity ordering | Enqueue multiple items with the same `entityKey` | All items route to the same worker and execute in FIFO order |
-| Async worker shutdown | Stop the server | Log `"Worker N shutdown complete."` for each worker; `"Deinitialized (Completed=X, Remaining=Y)"` |
+| Async worker startup | Check debug log `"AsyncWorkerData"` → `"Initialized (MaxConcurrency=32, MaxOutstanding=16384)"` | Values match the configured (or default) limits |
+| Async worker backpressure | Hold more than `maxOutstandingItems` items accepted-but-unfinished | `Enqueue` returns `false`; the caller handles the refusal rather than the item being silently dropped |
+| Async worker entity ordering | Enqueue multiple items with the same non-zero `entityKey` | All items share one `OrderedLane` and execute in FIFO order; items with other keys run concurrently |
+| Async worker shutdown | Stop the server | Debug log `"Deinitialized (Completed=X, Remaining=Y)"`; `Remaining` is 0 unless the drain budget expired first |
 | Main-thread queue capacity | Enqueue more than 10 000 actions without draining | `TryEnqueue` returns `false` |
 | Main-thread drain | Call `Drain()` on main thread after enqueueing actions | All queued actions execute; drain returns count |
 | Registry DeinitializeAll | Stop server | Each unique container instance has `Clear()` and `Deinitialize()` called exactly once (deduplicated via `HashSet`) |
@@ -408,7 +408,7 @@ Server.Start()
             │       ├── container.Initialize(server, serverManager)
             │       │   ├── Set Server + ServerManager references
             │       │   ├── Call InitializeOnce()
-            │       │   │   ├── AsyncWorkerData: create channels, spawn worker loops
+            │       │   │   ├── AsyncWorkerData: read config, create semaphore + lanes
             │       │   │   ├── MainThreadQueueData: queue ready at construction
             │       │   │   └── Custom containers: init trackers, set timestamps
             │       │   └── Set Initialized = true
@@ -427,12 +427,12 @@ Server.Start()
   │  ServerBehaviour (main thread)                                  │
   │    ├── Receives broadcast → reads/writes container data         │
   │    ├── asyncWorkerData.Enqueue(() => PersistAsync(data))        │
-  │    │       └── Round-robin or entity-keyed → worker channel     │
+  │    │       └── Unordered or entity-keyed → ordering lane        │
   │    └── mainThreadQueue.Drain() (each frame in OnLateUpdate)     │
   │             └── Copy-under-lock → invoke outside lock           │
   │                                                                 │
-  │  AsyncWorkerData (background threads)                           │
-  │    ├── Worker loops: await channel.Reader.ReadAllAsync(ct)      │
+  │  AsyncWorkerData (thread pool)                                  │
+  │    ├── Task.Run → await concurrencyGate.WaitAsync()             │
   │    ├── Execute work item → Interlocked.Increment(completedCount)│
   │    └── On error: log with CallerName attribution                │
   │                                                                 │
@@ -446,13 +446,14 @@ Server.Stop()
             ├── Deduplicate instances via HashSet<IRuntimeDataContainer>
             ├── For each unique instance:
             │   ├── container.Clear()
-            │   │   ├── AsyncWorkerData: drain all channels without executing
+            │   │   ├── AsyncWorkerData: stop accepting; accepted work is kept
             │   │   ├── MainThreadQueueData: clear queue under lock
             │   │   └── Custom containers: clear dictionaries, reset timestamps
             │   └── container.Deinitialize()
             │       ├── Call OnDeinitialize()
-            │       │   ├── AsyncWorkerData: cancel CTS → complete writers →
-            │       │   │   wait workers (10s timeout) → log stats → dispose CTS
+            │       │   ├── AsyncWorkerData: stop accepting → poll outstanding
+            │       │   │   (3s, clamped to shutdown budget) → log stats → drop
+            │       │   │   the semaphore (never disposed) and the lanes
             │       │   ├── MainThreadQueueData: drain remaining actions
             │       │   └── Custom containers: cleanup resources
             │       └── Reset Initialized, Server, ServerManager to null
@@ -467,7 +468,7 @@ Server/
 │   ├── IRuntimeDataContainer.cs              # Marker + generic data container interface (extends IServerComponent)
 │   ├── IRuntimeDataContainerFactory.cs       # Factory interface: CreateContainer(Type), IsValidContainerType(Type)
 │   ├── IRuntimeDataContainerRegistry.cs      # Registry interface (extends IServerComponentRegistry)
-│   ├── IAsyncWorkerData.cs                   # Interface: Enqueue (round-robin + entity-keyed), PendingCount, CompletedCount
+│   ├── IAsyncWorkerData.cs                   # Interface: Enqueue (unordered + entity-keyed), PendingCount, CompletedCount
 │   ├── IMainThreadQueueData.cs               # Interface: TryEnqueue(Action), Drain(), Drain(int maxActions)
 │   └── RequiresDataContainerAttribute.cs     # [RequiresDataContainer(typeof(T), InitializationPriority = N)]
 │
@@ -475,7 +476,7 @@ Server/
     ├── RuntimeDataContainer.cs               # Abstract base: Initialized, Server, ServerManager, Initialize → InitializeOnce, Deinitialize → OnDeinitialize, Clear
     ├── RuntimeDataContainerFactory.cs        # Reflection factory: Activator.CreateInstance with type validation
     ├── RuntimeDataContainerRegistry.cs       # Concrete registry: InitializeAll (cast + iterate), DeinitializeAll (HashSet dedup)
-    ├── AsyncWorkerData.cs                    # Bounded channel work queue: 4 workers, 1024 capacity, DropWrite, entity-keyed hashing
+    ├── AsyncWorkerData.cs                    # Semaphore-bounded pool: 32 concurrent, 16384 outstanding, per-entity ordering lanes
     ├── MainThreadQueueData.cs                # Abstract main-thread queue: lock + Queue<Action>, copy-then-invoke Drain, 10K cap
     └── SystemMainThreadQueueData.cs          # Abstract subclass of MainThreadQueueData for per-system queue isolation
 ```
@@ -510,7 +511,8 @@ RuntimeDataContainer (abstract)
     │   • Clear() [abstract]
     │
     ├── AsyncWorkerData : IAsyncWorkerData
-    │       4 worker loops, BoundedChannel<AsyncWorkItem>, round-robin + entity-keyed enqueue
+    │       SemaphoreSlim concurrency gate, ConcurrentDictionary<long, OrderedLane>,
+    │       unordered + entity-keyed enqueue, bounded drain on teardown
     │
     ├── MainThreadQueueData (abstract) : IMainThreadQueueData
     │   │   Queue<Action> + lock, TryEnqueue (10K cap), copy-then-invoke Drain

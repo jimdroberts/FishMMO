@@ -17,6 +17,7 @@
   - [Ability (Runtime Instance)](#ability-runtime-instance)
   - [AbilityObject](#abilityobject)
   - [Snapshot System](#snapshot-system)
+  - [AbilitySummary (tooltip composition)](#abilitysummary-tooltip-composition)
 - [Operational Checks](#operational-checks)
 - [Flow Diagram](#flow-diagram)
   - [Ability Lifecycle](#ability-lifecycle)
@@ -62,6 +63,9 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - **Hit dedupe per object per target** — once per body for the object's whole life, so a stationary field does not drain its hit count into one victim in a fraction of a second
 - **Hit count tracking** with automatic destruction on hit count depletion, spent only by the peer that decided the hit
 - **Pet ability support** with dedicated PetAbilityTemplate and spawn bounding boxes
+- **Predicted selection for every ability shape** — area, cone, line, chain and self-target abilities resolve on the caster's own client through `TargetSelector.ResolvesTargetsLocally`, with two deliberate exceptions (zone-wide selection and pet summons)
+- **One tooltip composition** — `AbilitySummary` serves the template tooltip, the learned ability's tooltip, the knowledge panel and the crafting preview, so a preview and the crafted result cannot disagree
+- **Ability type overrides** — an `AbilityTypeOverrideEventType` crafted onto an ability replaces its `AbilityType`; `Ability.EffectiveType` is what the grounding check reads
 
 ### Security Features
 
@@ -176,7 +180,20 @@ The controller tracks what the character has learned:
 
 | Event                | Signature                          | Description                        |
 |----------------------|------------------------------------|------------------------------------|
-| `OnCanManipulate`    | `Func<bool>`                       | Checked before activation (e.g., not stunned) |
+| `OnCanManipulate`    | `Func<bool>`                       | Checked before activation (e.g., not stunned) — an add/remove pair over `canManipulateHandlers` |
+| `OnUpdate`           | `Action<string, float, float>`     | UI cast bar updates                |
+| `OnInterrupt`        | `Action`                           | Current ability interrupted        |
+| `OnCancel`           | `Action`                           | Current ability cancelled          |
+| `OnReset`            | `Action`                           | Ability UI reset                   |
+| `OnPredictionMismatch` | `Action<uint>`                   | Owner-only: the reconcile for that tick disagreed with the recorded prediction |
+| `OnAbilityDenied`    | `Action<long>`                     | Owner-only: the server refused that ability id (driven by the `Denied` flag, not by a seed mismatch) |
+| `OnAddAbility`       | `Action<Ability>`                  | New crafted ability learned        |
+| `OnRemoveAbility`    | `Action<long>`                     | A known ability was removed        |
+| `OnAddKnownAbility`  | `Action<BaseAbilityTemplate>`      | New base template learned          |
+| `OnAddKnownAbilityEvent` | `Action<AbilityEvent>`         | New event template learned         |
+| `OnConsumableUsed`   | `Action<ICharacter, int, int>`     | A consumable was consumed (`AbilityController.Activation.cs`) |
+| `OnConsumableItemChanged` | `Action<ICharacter, Item, int, bool>` | Consumable slot contents changed |
+| `OnObservedActivationCatchUp` | `static Action<CharacterCastBroadcast>` | Observer-side: a cast already in progress was caught up on (`AbilityController.Networking.cs`) |
 
 ### Death gate
 
@@ -198,13 +215,6 @@ The gate sits on the *start* decision only, not at the top of `OnReplicate`:
 It tests health rather than `CharacterFlags.IsDead` for the reason given in
 [CharacterAttribute](../CharacterAttribute/README.md#the-dead-state-invariant): flags are
 spawn-payload only and go stale on the client after the first death.
-| `OnUpdate`           | `Action<string, float, float>`     | UI cast bar updates                |
-| `OnInterrupt`        | `Action`                           | Current ability interrupted        |
-| `OnCancel`           | `Action`                           | Current ability cancelled          |
-| `OnReset`            | `Action`                           | Ability UI reset                   |
-| `OnAddAbility`       | `Action<Ability>`                  | New crafted ability learned        |
-| `OnAddKnownAbility`  | `Action<BaseAbilityTemplate>`      | New base template learned          |
-| `OnAddKnownAbilityEvent` | `Action<AbilityEvent>`         | New event template learned         |
 
 ### Template System
 
@@ -400,6 +410,32 @@ Only `TryGet<ICharacterAttributeController>()` is supported. All other behaviour
 
 A read-only `ICharacterAttributeController` that clones all `CharacterAttribute` instances from the live controller. Stat-scaled abilities continue to resolve damage/healing values correctly even after the caster is gone.
 
+### AbilitySummary (tooltip composition)
+
+`AbilitySummary` is the single composition behind every ability tooltip. An ability's numbers
+used to be worked out in three places that disagreed — `Ability` summed the template, its bundled
+events and any crafted events; the template's own tooltip summed only the template plus whatever
+the crafting panel handed it; and the crafting panel added a third rule for price. A player
+comparing a crafting preview against the ability they received was comparing two calculations.
+
+| Member | Purpose |
+|--------|---------|
+| `AbilityStatBlock` | The four numbers (`ActivationTime`, `LifeTime`, `Speed`, `Cooldown`) plus `HitCount`, with `Range => Speed * LifeTime` |
+| `Compose(AbilityTemplate, IReadOnlyList<ITooltip> chosen = null)` | Builds a summary for a template plus the effects currently chosen in the crafting panel |
+| `FromAbility(Ability)` | Builds a summary for a learned runtime ability |
+| `BaseStats` / `Stats` | The template with only its bundled effects, beside the fully composed ability — what lets the crafting UI show what each chosen effect actually changed |
+| `TemplateEvents` / `CraftedEvents` | The two event sources kept apart for that comparison |
+| `BaseResourceCosts` / `ResourceCosts` | Same split for resource costs |
+| `Requirements` / `Targeting` / `Effects` | Prose rows for the tooltip body |
+| `CraftPrice`, `HasCraftedEvents` | Crafting price and whether anything was chosen |
+| `BuildTooltip(TooltipContent content, bool showDeltas = false, bool includePrice = true)` | Emits typed tooltip rows; `includePrice` is what lets a learned ability's tooltip omit the crafting price |
+| `FormatDelta` / `ToneForDelta` / `EventCategory` | Delta text and `TooltipTone` selection for the crafting preview |
+
+Type overrides participate: an `AbilityTypeOverrideEventType` chosen as a crafting event replaces
+the ability's `AbilityType`, which the runtime instance exposes as
+`Ability.EffectiveType` (`TypeOverride?.OverrideAbilityType ?? Template.Type`) and which
+`PassesGroundingCheck` tests at activation.
+
 ## Operational Checks
 
 Use the following checks to verify the Ability system is functioning correctly:
@@ -485,6 +521,37 @@ Queue Activation (player presses hotbar key)
 
 The `AbilityController` uses FishNet's **Replicate/Reconcile** prediction model for responsive ability activation.
 
+#### What the caster's own client resolves
+
+Every ability *shape* now predicts, not just projectiles. Spatial selection used to be
+server-only, so an area, cone, line or chain ability produced nothing at all on the caster's
+screen until the reconcile arrived. All spatial selectors now gate on
+`TargetSelector.ResolvesTargetsLocally` (server, or the client that owns the initiator), and
+`AbilityObject.Spawn`'s `AbilitySpawnTarget.Self` branch dispatches its `OnHitEvents` on the
+same predicate a swept projectile hit uses (`ResolvesHitsOnThisPeer`).
+
+Selection is not authority. A selector answers "which bodies are in this volume"; each action
+re-asks what may be done to them one level down — `ApplyDamageAction`, `ApplyHealAction` and
+`ApplyBuffAction` gate on `EcaAuthority.MayPredict`, while `ApplyThreatAction`,
+`ApplyTauntAction`, `ApplyReviveAction`, `ApplyDispelAction`, the equip actions and the
+achievement action gate on `EcaAuthority.IsServer` and stay server-only. Agreement between the
+two peers rests on rewind, not on reproducible float arithmetic: the server gathers inside
+`TargetSelector.GatherRewound`, rewound to the caster's view, and the client gathers against its
+live world, which *is* that view (this is why `LagCompensationTick.TryResolve` answers false off
+the server).
+
+Two deliberate exceptions remain:
+
+| Exception | Why |
+|-----------|-----|
+| `AllCharactersTargetSelector` | Still gated on `TargetSelector.IsAuthoritativePeer`. It asks "who is in the ZONE", and a client holds only the characters observer streaming has spawned for it — predicting would be systematic under-selection, not a boundary mispick. It is also the only selector paying a full-scene component scan. A zone-wide effect therefore has no predicted feedback. |
+| `PetAbilityTemplate` summons | `AbilityObject.Spawn` fires the static `OnPetSummon` and returns null; the only subscriber is the server's `PetSystem`, because the pet is a networked spawn. The cast's cooldown and cost are still predicted; the pet itself is not. `CanActivateOptimistic` refuses to *queue* a re-summon while a pet exists — the server has no such check, so removing that filter makes re-summoning work. |
+
+`AbilityObject.SpawnsWorldObject(template)` is the matching test for what an **observer** must be
+told about: it is false for pet templates, for `AbilitySpawnTarget.Self`, and for prefab-less
+templates, and it is what stops `NoSpawn` being stamped onto every completed self-buff.
+
+
 #### Replicate Data (`AbilityActivationReplicateData`)
 
 | Field              | Type   | Description                                        |
@@ -535,6 +602,29 @@ Three signals are distinguished, because they mean different things:
 A denied activation refunds itself: the cooldown table and the resource state both ride the same
 reconcile, so the authoritative snapshot simply has no cooldown and full resources.
 
+#### Draw order: providers above the gate, independent streams for server-only consumers
+
+`AbilityObject.RNG` is seeded from the activation seed and then **shared by side effect** across
+that object's OnSpawn / OnTick / OnHit / OnDestroy payloads — `RandomRangeValue` and
+`RandomRangeFloatValue` consume it through `EventData.RNG`. Two rules follow, and both are
+load-bearing:
+
+- **Evaluate a value provider before any peer gate, never after.** A draw taken behind
+  `EcaAuthority.MayPredict`, an `IsServer` test or `AbilityObject.ResolvesHitsLocally` advances
+  the generator only on the peers that pass, and an ungated action later in the same chain
+  (`AbilityForkHitAction`) then reads a different number — which put an observer's copy of a
+  forking projectile on a heading the server never took, permanently, from its first hit. Draw,
+  then gate on what to *do* with the value. `ResolveTargetAndSpawn` follows the same rule when it
+  advances `currentSeed` on a replayed tick whose spawn it skips.
+- **A server-only consumer takes its own stream, not the shared one.** `EventData.IndependentRNG(salt)`
+  returns a generator memoised per (event chain, salt) — unlike `DeriveRNG(salt)`, which is a pure
+  factory and hands back a fresh generator on every call, so two draws would repeat rather than
+  advance. Its sequence is a function of the initiator's network identity, the event's tick and the
+  salt, so every peer agrees on it without the shared generator being touched. **Salt 0 is
+  reserved** (the shared `RNG` is `DeriveRNG(0)`); use a distinct non-zero constant per call site —
+  existing ones are `RandomTargetSelector`'s `RandomSelectionSalt` (`0x52414E44`) and
+  `ApplyDispelAction`'s `DispelSelectionSalt` (`0x4453504C`).
+
 ## Project Structure
 
 ### Directory Structure
@@ -548,9 +638,12 @@ Ability/
 ├── AbilityController.Knowledge.cs      # Knowledge partial (Learn/Knows methods, event dictionaries)
 ├── AbilityController.Networking.cs     # Network partial (broadcast handlers, ReadPayload/WritePayload)
 ├── AbilityObject.cs                    # Spawned ability object (MonoBehaviour, lifetime/collision/tick management)
-├── AbilityObjectSnapshot.cs
-- AbilityPrefabColliderCache.cs
-- AbilityContainerAllocator.cs            # Immutable snapshot for detached ability objects
+├── AbilityObjectSnapshot.cs            # Immutable snapshot for detached ability objects
+├── AbilityObjectSweep.cs               # AbilitySweepHit + the swept overlap/cast query that replaces Unity collision callbacks
+├── AbilityPrefabColliderCache.cs       # Prefab collider lookup + ResolveShapeHalfExtents (prefab-asset bounds are empty)
+├── AbilityContainerAllocator.cs        # Deterministic container/object ids shared by predicted and authoritative copies
+├── AbilitySummary.cs                   # AbilityStatBlock + AbilitySummary: the one composition behind every ability tooltip
+├── PredictedAbilityStateHistory.cs     # Per-tick ring of the owner's predicted (seed, abilityID), so reconcile compares like with like
 ├── Activation/
 │   └── AbilityActivationReplicateData.cs    # IReplicateData: ActivationFlags (int), QueuedAbilityID (long)
 ├── Cooldown/

@@ -51,7 +51,12 @@ The subsystem uses a split execution model:
 - **Pending scene TTL** — bounded sweep with configurable timeout, interval, and max removals per pass; expired requests are failed in the database and cleaned up locally
 - **Flat O(1) handle lookup** — `SceneInstanceByHandle` provides constant-time lookup for unload, routing, and character count adjustment, replacing O(worlds × scenes) nested iteration
 - **Empty container cleanup** — unload handler prunes empty scene-name and world-server dictionaries to prevent memory leak from scene churn
-- **Async enqueue with fallback** — every `TryEnqueueAsyncWork` return value is checked; failures fire the async method directly so the database is never left with stale state
+- **Bounded persistence enqueue** — scene-lifecycle database writes (`SetSceneReadyAsync`, `UpdateSceneStatusAsync`, `DeleteSceneAsync`) go through `EnqueuePersistence`, which falls back to the thread pool with a logged error when the async worker channel is full. Relief for a saturated pool is never unbounded work fired from the frame thread, and the database is never left with stale state
+- **Load-aware scene placement** — `SceneServerPlacementPolicy.ResolveDequeueBudget` tapers this server's per-pulse dequeue budget by its own scene count and character count. `ISceneService.DequeueAsync` is a `FOR UPDATE SKIP LOCKED` take-the-oldest, so without this whichever server pulses first claims everything in its window regardless of load; a full server returns a budget of `0` and leaves the row queued for a peer with room. No cluster query, no peer visibility, so no stale view of the cluster can make the decision wrong
+- **Deliberate-exit reclaim** — `NoteDeliberateInstanceExit` marks `ISceneInstanceDetails.VacatedDeliberately` when an occupant leaves by choice rather than by losing its connection. A non-open-world instance carrying that mark is reaped on the next pulse (`staleSceneTimeoutMinutes` forced to `0`) instead of holding a placement slot for the idle timeout. Any arrival clears the mark in `AddCharacterCount`, so a rejoined instance is not destroyed out from under a live run
+- **Policy configuration push** — `ApplyObserverStreamingConfiguration` and `ApplyPlacementConfiguration` run during initialization, forwarding recognised `Observer*` and `Placement*` configuration keys into `ObserverStreamingPolicy` and `SceneServerPlacementPolicy`. Both log their resolved values at startup, because a misconfigured cap does not error — it quietly stops this server taking work, and the symptom surfaces on a different machine as uneven load
+- **Scene-set instance broadcast** — `BroadcastToInstance(ISceneInstanceDetails, string)` addresses the instance through FishNet's `SceneConnections` set for `details.Handle`, one dictionary probe and one serialization, rather than walking every connection the scene server knows and rebuilding the same bytes per recipient
+- **Waypoint scene audit hook** — after a scene reports ready, `WaypointSceneAudit.Audit(sceneName, sceneHandle, cache)` is deferred one main-thread turn so it runs after every scene `NetworkObject`'s `OnStartServer`. It is a diagnostic, not a gate: a refused enqueue simply skips the audit
 - **Character count integration** — connect/load increments and disconnect decrements tracked per scene instance via `SceneInstanceDetails.AddCharacterCount`; `LastExit` updated when a scene becomes empty for stale detection
 - **Connection routing helpers** — `TryLoadSceneForConnection` and `UnloadSceneForConnection` manage per-connection scene visibility through FishNet
 - **PhysicsTicker setup** — each loaded scene gets a `PhysicsTicker` GameObject with `HideFlags.DontSave` for explicit cleanup safety and local physics support
@@ -124,8 +129,18 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `StaleSceneTimeout` | `int` | Minutes before a stale (empty) **open-world** scene is unloaded; checked via `Server.Configuration.TryGetInt`. Code fallback `60` |
+| `StaleSceneTimeout` | `int` | Minutes before a stale (empty) **open-world** scene is unloaded; checked via `Server.Configuration.TryGetInt`. Code fallback `5`; the templates ship `5`. An idle open-world scene is no longer free — it occupies a slot in the placement budget that a populated scene could use — so the old one-hour hold was retired. Five minutes still absorbs a player crossing a zone boundary and stepping back |
 | `StaleInstanceSceneTimeout` | `int` | Minutes before a stale (empty) **Group/PvP (instanced)** scene is unloaded. Deliberately shorter — a dungeon instance belongs to one character or party, so once it empties it is unlikely to be wanted again, while each one holds a full physics scene. Code fallback `5`; the templates ship `2` |
+| `PlacementSoftCapScenes` | `int` | Scenes hosted at or below which this server keeps its full per-pulse dequeue budget. Default `4` |
+| `PlacementHardCapScenes` | `int` | Scenes hosted at or above which this server claims nothing. Default `12` |
+| `PlacementSoftCapCharacters` | `int` | Characters hosted at or below which this server keeps its full budget. Default `200` |
+| `PlacementHardCapCharacters` | `int` | Characters hosted at or above which this server claims no new scenes. Default `600` |
+| `Observer*` | `string` | Twenty optional per-observer streaming keys (`ObserverFullRateCap`, `ObserverDistanceWeight`, `ObserverVisibilityBudgets`, `ObserverMaxSendInterval`, …) forwarded verbatim to `ObserverStreamingPolicy.ApplySetting`. Absent keys leave the policy at its defaults; a malformed value is logged and ignored |
+
+None of the `Placement*` or `Observer*` keys ship in the setup templates; each is optional and
+absent means "use the policy default". `SceneServerPlacementPolicy` is pure and static, so the
+whole placement decision is unit tested without a database, a pulse, or a cluster
+(`Assets/UnitTests/Server/SceneServerPlacementPolicyTests.cs`).
 
 ## Usage Examples
 
@@ -177,6 +192,12 @@ sceneServerSystem.UnloadScene(sceneHandle);
 | Character count tracking | Connect/disconnect characters to a scene | `SceneInstanceDetails.CharacterCount` matches expected count |
 | Main-thread queue draining | Enqueue actions via async workers | Actions execute on main thread within `maxMainThreadActionsPerFrame` per frame |
 | Pulse overlap prevention | Trigger rapid pulses | `TryBeginPulse` rejects concurrent pulse; `Interlocked.CompareExchange` gate active |
+| Placement configuration applied | Check startup logs for the `Scene placement: scenes soft=… hard=…, characters soft=… hard=…` line | Values match the `Placement*` configuration keys, or the policy defaults when absent |
+| Observer streaming configuration applied | Check startup logs for the `Observer streaming: cap=… density=…` line | Values match the `Observer*` configuration keys; malformed values logged as `Ignoring malformed observer streaming setting` |
+| Placement backs off under load | Bring one node past `PlacementSoftCapScenes` or `PlacementSoftCapCharacters` | That node claims fewer scenes per pulse; past the hard caps it claims none and the row is taken by a peer |
+| Deliberate exit reclaims the instance | Leave a Group/PvP instance by choice (not by disconnect) as its last occupant | Instance is unloaded on the next pulse rather than after `StaleInstanceSceneTimeout` |
+| Rejoin clears the reap mark | Re-enter a deliberately vacated instance before the next pulse | `VacatedDeliberately` is cleared; a later disconnect falls back to the normal idle timeout |
+| Waypoint audit runs | Load a scene containing waypoints | `WaypointSceneAudit.Audit` reports any live-vs-baked mismatch after the scene reports ready |
 | Graceful shutdown | Stop scene server | Stale scene rows deleted; events unsubscribed; main-thread queue fully drained |
 
 ## Flow Diagram
@@ -228,7 +249,9 @@ flowchart LR
 │  ┌─ Async Worker ─────────────────────────────────────────┐  │
 │  │ 1. PulseAsync → server heartbeat                       │  │
 │  │ 2. PulseBatchAsync → per-scene heartbeats              │  │
-│  │ 3. DequeueAsync (×maxScenesLoadedPerPulse)             │  │
+│  │ 3. ResolveDequeueBudget(scenes, characters,            │  │
+│  │      maxScenesLoadedPerPulse)                          │  │
+│  │    └─ DequeueAsync (×dequeueBudget; 0 when full)       │  │
 │  │    └─ TryEnqueueMainThread → ProcessSceneLoadRequest   │  │
 │  │ 4. EndPulse (finally)                                  │  │
 │  └────────────────────────────────────────────────────────┘  │
@@ -247,7 +270,8 @@ flowchart LR
 │    │ 1. Extract sceneDataKey from ServerParams[0]            │
 │    │ 2. Resolve PendingSceneInfo, remove from PendingScenes  │
 │    │ 3a. Failure → UpdateSceneStatusAsync(Failed)            │
-│    │ 3b. Success → ProcessScene + SetSceneReadyAsync         │
+│    │ 3b. Success → ProcessScene + WaypointSceneAudit.Audit    │
+│    │              + SetSceneReadyAsync                        │
 │    ▼                                                         │
 │  ProcessScene(scene, sceneType, worldServerID)               │
 │    1. Add to nested WorldScenes hierarchy                    │
@@ -259,7 +283,7 @@ flowchart LR
 │              Scene Unload Flow                               │
 │                                                              │
 │  UnloadScene(handle) [explicit]                              │
-│    │ 1. TryEnqueueAsyncWork → DeleteSceneAsync           │
+│    │ 1. EnqueuePersistence → DeleteSceneAsync            │
 │    │ 2. FishNet UnloadConnectionScenes                       │
 │    ▼                                                         │
 │  SceneManager_OnUnloadEnd(args)                              │
@@ -278,7 +302,13 @@ flowchart LR
 │       sceneHandle, ±1)                                       │
 │       └─ TryGetSceneInstanceDetails (O(1) flat lookup)       │
 │          └─ instance.AddCharacterCount(amount)               │
-│             └─ If CharacterCount < 1 → LastExit = UtcNow     │
+│             ├─ If CharacterCount < 1 → LastExit = UtcNow     │
+│             └─ Else → VacatedDeliberately = false            │
+│                                                              │
+│  Deliberate exit (CharacterSystem.Connection)                │
+│    └─ NoteDeliberateInstanceExit(worldServerID, name, id)    │
+│       └─ instance.VacatedDeliberately = true                 │
+│          └─ Next pulse: non-open-world → timeout 0 → reap    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -287,7 +317,12 @@ flowchart LR
 ```
 SceneServer/
 ├── SceneServerSystem.cs                    # Core scene server orchestration: initialization, pulses,
-│                                           #   load/unload processing, character count, connection routing
+│                                           #   load/unload processing, character count, connection routing,
+│                                           #   policy configuration push, instance lifetime
+├── SceneServerSystem.ServerControl.cs      # Partial: lock / scheduled-shutdown control state, warnings
+├── SceneServerSystem.AdminCommands.cs      # Partial: the in-game /admin command surface
+├── SceneServerPlacementPolicy.cs           # Pure static placement policy: soft/hard caps and the
+│                                           #   per-pulse dequeue budget taper
 ├── SceneServerRuntimeData.cs              # Scene server identity (ID, IsLocked), atomic pulse gate,
 │                                           #   reusable zero-allocation buffers, pending scene sweep timer
 ├── SceneServerSystemMainThreadQueueData.cs # Concrete main-thread queue container for marshalling
@@ -295,7 +330,8 @@ SceneServer/
 ├── SceneInstanceMappingData.cs            # WorldScenes nested hierarchy, flat SceneInstanceByHandle
 │                                           #   and SceneNameByHandle maps, PendingScenes tracking
 ├── SceneInstanceDetails.cs                # Per-instance metadata: WorldServerID, SceneServerID, Name,
-│                                           #   Handle, SceneType, CharacterCount, StalePulse, LastExit
+│                                           #   Handle, SceneType, CharacterCount, StalePulse, LastExit,
+│                                           #   VacatedDeliberately
 └── README.md                              # This documentation
 ```
 
@@ -325,6 +361,7 @@ ISceneInstanceDetails
 | `ISceneInstanceMappingData` | World/scene/handle mapping hierarchy, flat lookups, and pending tracking |
 | `ISceneInstanceDetails` | Per-instance runtime metadata and character count with stale detection |
 | `PendingSceneInfo` | Readonly struct combining `SceneData` + `EnqueuedUtc` in a single map entry |
+| `SceneServerPlacementPolicy` | Static, database-free policy deciding how many pending scenes this server claims per pulse |
 
 ## License
 

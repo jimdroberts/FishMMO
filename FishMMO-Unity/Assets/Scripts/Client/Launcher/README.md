@@ -9,6 +9,7 @@
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Configuration](#configuration)
+- [Window Mode](#window-mode)
 - [State Machine](#state-machine)
 - [The Update Path](#the-update-path)
 - [Handoff to the Game](#handoff-to-the-game)
@@ -83,6 +84,8 @@ drawing.
 - **Patch integrity verification** — the server reports the expected SHA-256 and byte size up front; the downloaded archive is hashed and rejected on mismatch.
 - **Unreachable-update detection** — the server states whether it holds a patch *from this specific version*, so a client with no upgrade path lands in `PatchUnavailable` (reinstall required) rather than looping forever on a request that can only 404.
 - **Transient-state watchdog** — any state with no interactive button is forced back to a recoverable one after `transientStateTimeoutSeconds`. Download progress resets the timer, so a slow patch is never interrupted. This is a catch-all for a coroutine that dies (Unity logs the exception and silently stops it), not a substitute for per-operation error handling.
+- **Cancellable waits** — `CheckingVersion` and `DownloadingPatch` put **Cancel** on the button rather than disabling it, and land in `Cancelled` rather than in a failure state, so the log does not report an error for the player doing what the button offered.
+- **Window mode owned for the whole process** — see [Window Mode](#window-mode).
 - **Re-entrancy interlocks** — `isConnecting`, `isLaunching`, and `isUpdating` guard the three entry points. The button state alone is insufficient, because the update flow is also entered directly from the version check.
 - **Signed requests** — every call carries an `X-FishMMO-Client` HMAC header via `ClientApiSigner`, which the IPFetch and Patcher servers' `ClientGate` middleware validates.
 
@@ -102,7 +105,6 @@ drawing.
 | `htmlViewURL` | `string` | `""` | Per-scene override for the news URL. **Leave empty.** |
 | `divClass` | `string` | `content` | CSS class of the `div` whose text is extracted from the fetched page |
 | `newsFallbackSummary` | `string` (`TextArea`) | built-in blurb | Shown in the news pane when no feed is configured, and when a fetch fails |
-| `defaultScreenWidth` / `defaultScreenHeight` | `int` | — | Window size applied on launch |
 | `transientStateTimeoutSeconds` | `float` | `120` | Watchdog timeout for states with no interactive button |
 
 > **Why `htmlViewURL` defaults to empty.** A non-empty default gets baked into the scene the first time it is saved, and the serialized copy then silently wins over the build-time configured value for every subsequent build — which is exactly how a stale hard-coded URL once shipped. Resolution happens at read time instead: `HtmlViewURL` falls back to `Constants.Configuration.LauncherHtmlUrl` whenever the override is blank.
@@ -196,15 +198,51 @@ Two layout decisions are enforced in code rather than in the stylesheet:
   the full panel width. The affirmative action is where the eye and the cursor finish, and the
   destructive one is far enough away that neither is reachable by a mis-click on the other.
 
+## Window Mode
+
+`LauncherWindow` is a static class that owns the window mode for the whole process. It exists
+because a standalone player creates its window **before any script runs**, in the mode Unity
+remembered from the previous clean exit — and since the launcher and the game share one process
+that always exits from the game in fullscreen, every launch after the first opened fullscreen,
+played the splash screen fullscreen, loaded two addressable scenes, and only then shrank to the
+launcher's size when `ClientLauncher.Awake` ran (issue #221).
+
+| Moment | What happens |
+|---|---|
+| `RuntimeInitializeLoadType.SubsystemRegistration` | `ResetStaticState` clears the per-session statics, for play sessions with domain reload off |
+| `RuntimeInitializeLoadType.BeforeSceneLoad` (standalone only, `#if !UNITY_EDITOR && !UNITY_WEBGL`) | `CaptureNativeMode` reads the display's own resolution and refresh rate **before** anything resizes the window, `LauncherSettings.EnsureLoaded()` loads the store, `ApplyLauncherMode()` puts the window into the launcher's windowed size, `IsActive` becomes true, and `MainBootstrapSystem.OnClientShutdownStarting` is subscribed |
+| `ClientLauncher.Awake` | `ApplyWindowSize()` calls `LauncherWindow.ApplyLauncherMode()` again. Normally a no-op — `IsInLauncherMode` short-circuits when the mode is already in force — so it is purely the fallback for a failed boot-time request |
+| Hand-off to the game | `ClientLauncher.RestoreGameDisplayMode` applies the saved mode, or the captured native mode borderless-fullscreen when nothing is saved |
+| `MainBootstrapSystem` shutdown | `RestoreForNextLaunch` puts the window back to the launcher's size a frame before the process quits, so Unity records *that* mode and the next launch is created in it |
+
+**The boot-time display apply is deliberately skipped on this path.** `ClientDisplaySettings.ApplySaved`
+guards `ApplySavedDisplayMode()` with `if (!LauncherWindow.IsActive)`: applying the game's saved
+mode during the first scene's `Awake` only put the window into fullscreen behind the splash screen
+for the launcher to shrink again seconds later. Everything else in that method — quality, VSync,
+anisotropic filtering, frame rate, brightness — still runs. The editor and WebGL boot straight into
+the game, keep `IsActive` false, and keep the boot-time apply.
+
+The two mechanisms cover different failures: the exit-time restore is what makes a normal launch
+flash-free, and the boot-time correction is what carries a launch after a crash skipped the
+restore. Unity's own `Screenmanager*` player prefs are never written directly — the mode in force
+at quit is the only thing recorded.
+
+Sizes: `DefaultWidth`/`DefaultHeight` are 1024x768 (matching the Player Settings default window, so
+a fresh install's very first window is already the right size) and `MinWidth`/`MinHeight` are
+480x360, mirroring the min-width and min-height in `UILauncher.uss`. `ResolveWindowSize()` prefers
+the player's last size from `LauncherSettings.GetWindowSize`, which clamps it against the current
+display. `SetScreenResolution` retries at 60 Hz when a display rejects the refresh rate it
+reported.
+
 ## State Machine
 
 | State | Button | Click action | Meaning |
 |---|---|---|---|
 | `LoadingNews` | disabled | — | Fetching the news page |
 | `Connecting` | disabled | — | Contacting the API host |
-| `CheckingVersion` | disabled | — | Comparing installed version to the server's |
+| `CheckingVersion` | **Cancel** | `CancelVersionCheck` | Comparing installed version to the server's. Cancellable: it walks every API host with its own timeout and retry budget, so it can last minutes; per-attempt progress moves to the status line |
 | `UpdateAvailable` | **Update** | `PlayButtonUpdate` | A patch exists and `Launcher.AutoUpdate` is off — the player starts it |
-| `DownloadingPatch` | disabled | — | Progress bar visible; heartbeats the watchdog |
+| `DownloadingPatch` | **Cancel** | `CancelUpdate` | Progress bar visible; heartbeats the watchdog. Cancellable for the same reason, with the progress bar carrying the message |
 | `ApplyingPatch` | disabled | — | Updater has been handed the install |
 | `ReadyToPlay` | **Play** | `PlayButtonLaunch` | Versions match |
 | `ClientAhead` | enabled | `PlayButtonConnect` | Client is newer than the server — re-check, do **not** allow Play |
@@ -216,6 +254,7 @@ Two layout decisions are enforced in code rather than in the stylesheet:
 | `UpdaterFailed` | enabled | `PlayButtonConnect` | Re-check, then retry the update |
 | `LaunchFailed` | enabled | `PlayButtonConnect` | Back to the version check — a failing scene load is often fixed by re-patching |
 | `VersionError` | enabled | `PlayButtonConnect` | Retry; version parse failures can be transient after a partial patch |
+| `Cancelled` | enabled | `PlayButtonConnect` | The player cancelled a version check or a download. Deliberately not a failure state: failures are logged at `Error`, and a cancellation is the player using a button that was offered |
 
 > `ServerRejectedVersion` is defined and wired into the state machine but not currently reachable. Version rejection is presently handled during the authentication handshake (`ClientAuthenticationResult.VersionMismatch`) and rendered through a separate UI path. The state exists for a future version-check endpoint that rejects a client outright without offering a patch.
 
@@ -274,6 +313,8 @@ The signing secret lives in `GeneratedClientSecret.Secret` (`ClientApiSecret.gen
 | News renders | Launch a standalone build | News panel populated; on failure, a logged warning, `newsFallbackSummary` in the pane, and the flow continues to the version check |
 | No feed configured | Launch with an empty or still-sentinel news URL | No request is issued; the pane shows `newsFallbackSummary` rather than an error |
 | Launcher gets out of the way | Press **Play** in the editor and in a build | Launcher UI disappears at the handoff on both paths, even where the scene unload no-ops |
+| Launcher opens windowed | Play to fullscreen, quit, relaunch the build | Splash screen and launcher are both at the launcher's window size — no fullscreen flash |
+| Fullscreen survives the hand-off | Save fullscreen in Options, quit, relaunch, press **Play** | Launcher is windowed, the game comes up fullscreen |
 | Host failover | Point the first candidate at a dead host | Debug log per failed candidate, then success on the next |
 | Up-to-date client | Launch at the server's version | Button reads **Play** |
 | Patch applied | Launch an outdated client with a published patch | Download progress → `ApplyingPatch` → launcher exits → client restarts at the new version, and `Patches/` is empty afterwards |
@@ -330,7 +371,9 @@ flowchart TD
 ```
 Client/Launcher/
 ├── ClientLauncher.cs            # MonoBehaviour: state machine, orchestration
-├── LauncherState.cs             # The 16 UI/process states
+├── LauncherWindow.cs            # Process-lifetime window mode: boot sizing, native mode capture,
+│                                #   exit-time restore (issue #221)
+├── LauncherState.cs             # The 17 UI/process states
 ├── LauncherSettings.cs          # Typed access to the persisted Launcher.* settings + their clamps
 ├── PatchInfo.cs                 # Server patch metadata: UpToDate, PatchAvailable, Sha256, Size
 ├── VersionFetch.cs              # Version response parsing

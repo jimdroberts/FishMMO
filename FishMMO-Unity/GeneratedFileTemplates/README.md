@@ -45,9 +45,12 @@ to the API and to neither writer, and the build kept working for whoever added i
 So both restore paths also compare each existing generated file against its template
 and report every member the template declares that the file does not:
 
-- `restore-generated-files.sh` prints the missing members and exits `1`.
-- The Editor logs them on load, quoting the template's declaration so it can be
-  pasted straight in.
+- `restore-generated-files.sh` prints the missing members and exits `1`. It
+  compares public `const` / `static readonly` field names only.
+- The Editor's `Assets/Editor/GeneratedFiles/GeneratedFileDriftCheck.cs` logs them
+  on load, quoting the template's declaration — doc comment included — so it can
+  be pasted straight in. It compares public type declarations as well as fields,
+  so a whole missing nested class is reported too.
 
 The file is never patched automatically — it holds real values. Paste the missing
 declaration in, or delete the file and restore it, which discards those values.

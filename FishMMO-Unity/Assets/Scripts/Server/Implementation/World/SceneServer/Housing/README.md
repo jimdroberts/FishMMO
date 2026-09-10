@@ -2,7 +2,10 @@
 
 Land ownership, building, tax, and who is allowed through the door.
 
-The system is a `ServerBehaviour` on the scene server, split across partials by concern:
+`HousingSystem` is a `ServerBehaviour` ScriptableObject asset on the scene server
+(`FishMMO/Server/SceneServer/Housing System`), split across partials by concern. It declares
+`[RequiresDataContainer]` for `HousingSystemMainThreadQueueData` and `AsyncWorkerData`, so every
+database answer comes back through the main-thread queue:
 
 | File | Concern |
 | --- | --- |
@@ -13,11 +16,31 @@ The system is a `ServerBehaviour` on the scene server, split across partials by 
 | `HousingSystem.Access.cs` | Grants, revocation, and eviction |
 | `HousingSystem.Vault.cs` | Where a house goes when its owner loses the land |
 | `HousingSystem.Sync.cs` | Keeping plots consistent across channels |
-| `HousingSystem.Network.cs` | The client-facing broadcasts |
+| `HousingSystem.Network.cs` | The client-facing broadcasts and the ingress guard |
+| `HousingSystemMainThreadQueueData.cs` | The concrete main-thread action queue container |
+
+`InitializeOnce` does nothing but log when housing is off; when it is on it runs
+`SubscribeToPlots`, `RegisterHousingBroadcasts` and `SubscribeToCharacterLifecycle`. That last
+one hooks `ICharacterSystem.OnDisconnect` and `OnDespawnCharacter` to `EndBuildingFor`, so a
+build session cannot outlive the character holding it -- a disconnect is a player leaving, a
+despawn is a hand-off to another scene server, and both would otherwise leave the plot shut
+until the sweep timed it out.
 
 Housing is **off by default**. `HousingOwnershipMode.Neither` means a server that has not asked
 for housing carries none of its persistent world state, recurring tax, or destruction of unpaid
 plots.
+
+## The wire
+
+Ten broadcasts, all registered `requireAuthentication: true`:
+`HousingBeginBuildingBroadcast`, `HousingEndBuildingBroadcast`, `HousingFinishBuildingBroadcast`,
+`HousingPlaceStructureBroadcast`, `HousingRemoveStructureBroadcast`, `HousingGrantAccessBroadcast`,
+`HousingRevokeAccessBroadcast`, `HousingVaultRequestBroadcast`, `HousingVaultRetrieveBroadcast`,
+`HousingVaultForfeitBroadcast`.
+
+Claiming is **not** among them. A plot is bought by interacting with its foundation, through the
+ECA action `ClaimPlotAction` -- so the same interaction pipeline that fronts merchants and
+dialogue fronts land purchase, and the client needs no housing-specific request to buy.
 
 ## What identifies a plot
 
@@ -67,6 +90,23 @@ against a specific failure. They are not interchangeable.
 - **Release the land, then vault its contents.** Released-then-vaulted leaves a moment where free
   land still has a house on it, which the next owner can see and report. The reverse leaves a moment
   where somebody still owns a plot whose house has silently vanished.
+
+## Tuning (the `HousingSystem` asset)
+
+| Field | Default | Concern |
+| --- | --- | --- |
+| `ownershipMode` | `Neither` | Who may own land; `Neither` disables housing entirely |
+| `currencyTemplate` | -- | The `Currency` attribute purchases and fees are charged against |
+| `taxPerPeriod` | 0 | The recurring charge |
+| `taxPeriodDays` | 7 | How often it falls due |
+| `taxGraceDays` | 14 | How long past the **first** missed payment before reclamation |
+| `taxSweepIntervalSeconds` | 300 | How often this server looks for due plots |
+| `vaultBaseFee` | 100 | The `baseFee` in the retrieval formula |
+| `vaultFeePercentPerDay` | 10 | The `rate` in the retrieval formula |
+| `plotSyncIntervalSeconds` | 10 | How often `plot_updates` is polled |
+| `accessSweepIntervalSeconds` | 0.5 | How often standing occupants are re-checked for eviction |
+| `housingDebounceMilliseconds` | 250 | Per-request ingress debounce |
+| `housingGlobalRateMilliseconds` | 50 | Per-connection floor between any two housing requests |
 
 ## Tax and grace
 

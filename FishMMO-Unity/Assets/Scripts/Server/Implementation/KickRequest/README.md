@@ -23,7 +23,7 @@ The Kick Request system enforces account disconnect requests issued through the 
 
 The system is split into a Core interface layer and an Implementation layer:
 
-- **Core layer** (`Server/Core/World/KickRequest/`) — Defines `IKickRequestSystem`, `IKickRequestSystemQueueData`, and `IKickRequestSystemMainThreadQueueData` as engine-agnostic contracts. Other systems can query or modify runtime pump parameters (`UpdatePumpRate`, `UpdateFetchCount`) without referencing the implementation.
+- **Core layer** (`Server/Core/KickRequest/`) — Defines `IKickRequestSystem`, `IKickRequestSystemQueueData`, and `IKickRequestSystemMainThreadQueueData` as engine-agnostic contracts. Other systems can query or modify runtime pump parameters (`UpdatePumpRate`, `UpdateFetchCount`) without referencing the implementation.
 - **Implementation layer** (`Server/Implementation/KickRequest/`) — Provides three concrete classes:
   - **`KickRequestSystem`** — Orchestrates polling, validation, and kick execution. Extends `ServerBehaviour` and implements `IKickRequestSystem`.
   - **`KickRequestSystemQueueData`** — Tracks polling cursor state (`LastFetchTime`, `LastPosition`) and an overlap gate (`IsProcessing`). Extends `RuntimeDataContainer`.
@@ -50,11 +50,11 @@ Database and polling work run asynchronously via `AsyncWorkerData`, while all Fi
 - **Overlap protection** — `IKickRequestSystemQueueData.IsProcessing` is checked under a lock before each poll to prevent concurrent overlapping database fetches.
 - **Main-thread kick dispatch** — All disconnects are enqueued via `TryEnqueueMainThread<IKickRequestSystemMainThreadQueueData>` and drained on the main thread each frame, respecting `maxMainThreadActionsPerFrame` to avoid frame spikes.
 - **The player is told they were kicked** — `DisconnectWithNotice(AdministrativeKick, terminal: true)`, never `NetworkConnection.Kick(...)`. FishNet does not carry a kick reason to the client, so a plain `Kick` landed the player on the login screen with no explanation *and* left the client's reconnect loop to spend all ten attempts dialling back into a server that would refuse them again. `Kick` would also have discarded the notice: it calls `Disconnect(true)`, which stops the transport immediately and throws away everything still queued for the tick. `Terminal = true` is what stops the retry loop, because an operator kick does not resolve by retrying.
-- **Disconnect cleanup** — When a remote connection stops, the system asynchronously deletes any pending kick request for that account from the database, preventing stale requests from re-triggering after legitimate disconnect/reconnect cycles.
+- **Disconnect cleanup that cannot be dropped** — When a remote connection stops, the system deletes any pending kick request for that account from the database, preventing stale requests from re-triggering after legitimate disconnect/reconnect cycles. This delete goes through `EnqueuePersistence`, not `TryEnqueueAsyncWork`: the connection is already gone, so there is nobody to tell if the write was refused, and a delete that is silently dropped kicks the account again on its next login. `EnqueuePersistence` falls back to running the work directly on the thread pool when the worker channel is full, and logs an Error when it does. The work is keyed by `accountName.GetDeterministicHashCode()`, so repeated cleanups for one account stay ordered.
 - **Configurable pump rate** — Poll interval (`updatePumpRate`) and fetch count (`updateFetchCount`) are exposed as serialized fields and runtime properties, tunable via the Unity Inspector or code.
 - **Periodic update integration** — Registers with `IPeriodicUpdateSystem` for fixed-rate polling cadence rather than relying on per-frame checks.
 - **Graceful shutdown drain** — On deinitialization, the system drains all remaining main-thread actions so clients receive their final disconnect messages.
-- **Async worker backpressure** — All database operations are submitted via `TryEnqueueAsyncWork`, which returns `false` when the worker pool is full. Warnings are logged on enqueue failure.
+- **Async worker backpressure** — The periodic poll is submitted via `TryEnqueueAsyncWork`, which returns `false` when the worker pool is full and logs a warning; a skipped poll costs nothing, because the next tick re-reads the same cursor. The disconnect cleanup deliberately does not use it — see above.
 
 ## Prerequisites
 
@@ -160,7 +160,8 @@ if (database.ServiceRegistry.TryGet<IKickRequestService>(out var kickService))
 | Disconnect cleanup | Disconnect an account with a pending kick request | Kick request deleted from database |
 | Overlap protection | Set `updatePumpRate` very low with slow DB | Only one `ProcessKickRequestsAsync` runs at a time |
 | Main-thread drain | Insert many kick requests at once | Kicks processed at `maxMainThreadActionsPerFrame` per frame |
-| Enqueue backpressure | Saturate async worker pool | Warning logged: `"Failed to enqueue..."` |
+| Poll backpressure | Saturate async worker pool | Warning logged: `"Failed to enqueue periodic kick-request processing work item."` |
+| Cleanup backpressure | Saturate the pool, then disconnect an account with a pending kick request | Error logged: `"persistence running via direct fallback"`; the request is still deleted |
 | Graceful shutdown | Stop the server with pending kick actions | All queued actions drain before shutdown completes |
 
 ## Flow Diagram
@@ -238,8 +239,8 @@ flowchart LR
 │  │    ├─ AccountManager.GetAccountNameByConnection(conn) │   │
 │  │    │                                                 │   │
 │  │    ▼  [Async Worker Thread]                          │   │
-│  │  TryEnqueueAsyncWork(DeleteKickRequestAsync)         │   │
-│  │    │  keyed by accountName.GetHashCode()             │   │
+│  │  EnqueuePersistence(DeleteKickRequestAsync)          │   │
+│  │    │  keyed by GetDeterministicHashCode()            │   │
 │  │    │                                                 │   │
 │  │    ▼                                                 │   │
 │  │  kickRequestService.DeleteAsync(accountName)         │   │
@@ -292,7 +293,7 @@ RuntimeDataContainer
 | Account Service | `IAccountService` | Last-login timestamp checks for stale request filtering |
 | Account Manager | `AccountManager` | Account-to-connection lookup and reverse cleanup mapping |
 | Periodic Update System | `IPeriodicUpdateSystem` | Fixed-rate polling cadence registration |
-| Async Worker Data | `AsyncWorkerData` | Bounded async execution with enqueue backpressure |
+| Async Worker Data | `AsyncWorkerData` | Bounded async execution with enqueue backpressure, plus the `EnqueuePersistence` fallback used by disconnect cleanup |
 | Main Thread Queue Data | `IKickRequestSystemMainThreadQueueData` | Thread-safe dispatch of network kick operations |
 
 ### Threading Model

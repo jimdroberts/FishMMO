@@ -110,8 +110,8 @@ PartyRank : byte
 |--------------------------------|--------------------------------------------------|--------------------------------------------------------------|
 | `PartyCreateBroadcast`         | `OnClientPartyCreateBroadcastReceived`            | Sets `ID` and `Rank = Leader`, invokes `OnPartyCreated`      |
 | `PartyInviteBroadcast`         | `OnClientPartyInviteBroadcastReceived`            | Invokes `OnReceivePartyInvite` with inviter ID               |
-| `PartyAddBroadcast`            | `OnClientPartyAddBroadcastReceived`               | Updates local `ID`/`Rank` if self, invokes `OnAddPartyMember`|
-| `PartyAddMultipleBroadcast`    | `OnClientPartyAddMultipleBroadcastReceived`       | Validates member set, then processes each add individually   |
+| `PartyAddBroadcast`            | `OnClientPartyAddBroadcastReceived`               | Carries `PartyID` plus one `PartyAddEntry` (`Member`). Updates local `ID`/`Rank` if self, invokes `OnAddPartyMember` |
+| `PartyAddMultipleBroadcast`    | `OnClientPartyAddMultipleBroadcastReceived`       | Carries `PartyID` **once** and a list of `PartyAddEntry`. Validates the member set, then re-attaches the party id to each entry so the per-row handler is identical to a single add |
 | `PartyLeaveBroadcast`          | `OnClientPartyLeaveBroadcastReceived`             | Resets `ID = 0`, `Rank = None`, invokes `OnLeaveParty`       |
 | `PartyRemoveBroadcast`         | `OnClientPartyRemoveBroadcastReceived`            | Invokes `OnRemovePartyMember` with member ID                 |
 
@@ -121,12 +121,22 @@ PartyRank : byte
 |--------------------------|-----------------------------------------|--------------------------------------------------|
 | `ID`                     | `long`                                  | The party ID (0 = not in a party)                |
 | `Rank`                   | `PartyRank`                             | Character's rank within the party                |
-| `OnPartyCreated`         | `Action<string>`                        | Fired when a party is successfully created       |
+| `OnPartyCreated`         | `Action`                                | Fired when a party is successfully created       |
 | `OnReceivePartyInvite`   | `Action<long>`                          | Fired when an invite is received (inviter ID)    |
-| `OnAddPartyMember`       | `Action<long, PartyRank, float>`        | Fired when a member is added (ID, rank, HP%)     |
+| `OnAddPartyMember`       | `Action<long, PartyRank, float>`        | Fired when a member is added (ID, rank, HP fraction). The wire carries one **byte**; `PartyVitalsQuantiser.ByteToFraction` expands it before the event |
 | `OnValidatePartyMembers` | `Action<HashSet<long>>`                 | Fired to validate the full member set            |
 | `OnRemovePartyMember`    | `Action<long>`                          | Fired when a member is removed                   |
 | `OnLeaveParty`           | `Action`                                | Fired when the local character leaves the party  |
+
+### Pooling reset
+
+`ResetState(bool)` clears `ID`, `Rank` and every event subscriber. Neither field is a SyncVar, so
+nothing else returns them to their defaults — a recycled object that kept `ID` would report the
+previous occupant's party to every caller asking whether this character is grouped (friendly-fire
+and loot-eligibility checks among them) until a party broadcast happened to overwrite it, which for
+a character that never joins a party is never. The subscribers are per-spawn: each is held by an
+owner-side panel bound to the character being torn down, so a controller that kept them would push
+the next character's roster into the previous character's UI.
 
 ### Character Connect/Disconnect
 

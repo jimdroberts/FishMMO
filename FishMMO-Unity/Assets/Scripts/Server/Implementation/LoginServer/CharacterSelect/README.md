@@ -21,7 +21,7 @@
 
 The Character Select system manages the character list, delete, and select workflows on the login server. It keeps the network handler path lightweight by queuing database-heavy work onto `AsyncWorkerData`, then marshals all FishNet broadcast responses back onto the Unity main thread through a dedicated main-thread queue container (`CharacterSelectSystemMainThreadQueueData`).
 
-Per-connection in-flight gating prevents a single client from queuing multiple concurrent list/select/delete operations, and a post-release cooldown (`RequestCooldownMilliseconds = 2000`) prevents rapid sequential spam. Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) avoids frame spikes.
+Per-connection in-flight gating prevents a single client from queuing multiple concurrent operations, and a post-release cooldown (`RequestCooldownMilliseconds = 2000`) prevents rapid sequential spam. List requests have their own gate and cooldown (`InFlightListRequests` / `NextAllowedListRequestUtc`), separate from select/delete: sharing one pair meant the list request the client issues on arrival armed a two-second cooldown that then refused the player's very next click on Play. Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) avoids frame spikes.
 
 ### Threading Model
 
@@ -29,7 +29,7 @@ Per-connection in-flight gating prevents a single client from queuing multiple c
 |--------|------|
 | Network / Main | Broadcast receive, fast validation, enqueue async work |
 | Async Workers | Database fetch / delete / select operations |
-| Main Thread | FishNet `Broadcast` and `Kick` operations via queued actions |
+| Main Thread | FishNet `Broadcast` and `DisconnectWithNotice` operations via queued actions |
 
 `OnUpdate` drains queued main-thread actions every frame, capped by `maxMainThreadResponsesPerFrame`. `OnDeinitialize` drains all remaining actions so clients receive final messages.
 
@@ -38,19 +38,23 @@ Per-connection in-flight gating prevents a single client from queuing multiple c
 | Broadcast | Direction | Purpose |
 |-----------|-----------|---------|
 | `CharacterRequestListBroadcast` | Client → Server | Request list of characters for the authenticated account |
-| `CharacterListBroadcast` | Server → Client | Response containing `List<CharacterDetails>` |
+| `CharacterListBroadcast` | Server → Client | Response containing `CharacterDetails[]` |
+| `CharacterListResultBroadcast` | Server → Client | Sent instead of a list when the request cannot be answered: `CharacterListResult.Busy` or `.Failed` |
+| `ServerBusyBroadcast` | Server → Client | Accompanies `Busy` when the async worker pool refused the work (`SendServerBusy`) |
 | `CharacterDeleteBroadcast` | Client → Server | Request deletion of a named character |
 | `CharacterDeleteBroadcast` | Server → Client | Echo confirming deletion (character name) or failure (empty name) |
 | `CharacterSelectBroadcast` | Client → Server | Request selection of a named character |
-| `ServerListBroadcast` | Server → Client | Response containing `List<WorldServerDetails>` of active world servers |
+| `CharacterSelectResultBroadcast` | Server → Client | Terminal answer for every selection: `Success`, `OtherCharacterInWorld` (with the offending `CharacterName`), or `Failed` |
+| `ServerListBroadcast` | Server → Client | Sent after a successful selection, containing `WorldServerDetails[]` of active world servers |
 
 ### Failure Response Behaviour
 
 All request flows guarantee a response to the client, even on failure, to prevent indefinite client hangs:
 
-- **Character List:** On DB service unavailability or fetch failure, an empty `CharacterListBroadcast` is sent.
-- **Character Select:** On any failure (service unavailability, UoW failure, ownership mismatch, commit failure, or world server fetch failure), an empty `ServerListBroadcast` is sent. If the character does not exist or belongs to another account, the connection is kicked with `KickReason.UnusualActivity`.
+- **Character List:** An empty `CharacterListBroadcast` is deliberately *not* used as the failure answer — it is indistinguishable from "this account has no characters", so a database outage reached the player as their characters having been deleted. A refusal sends `CharacterListResultBroadcast` with `Busy` (cooldown, in-flight duplicate, or a saturated worker pool) or `Failed` (service unavailable or the fetch itself failed).
+- **Character Select:** Every selection gets a `CharacterSelectResultBroadcast`, success included — the client arms a reply deadline when it sends the request and only this message ends it. Failure paths (service unavailability, UoW failure, `SetSelectedAsync` failure, ownership verification failure, commit failure, world server fetch failure) send `Failed`. A character already in the world on the same account sends `OtherCharacterInWorld` carrying that character's name; re-selecting the *same* character is allowed, since that is how a player rejoins a combat-logged body. `FetchInWorldCharacterAsync` fails closed: a failed read refuses the selection rather than falling through it.
 - **Character Delete:** On failure, a `CharacterDeleteBroadcast` with an empty `CharacterName` is sent. The in-flight guard releases so the user can retry.
+- **Protocol violations:** A select request naming a character that does not exist, or one owned by another account, ends the connection with `DisconnectWithNotice(conn, DisconnectNoticeReason.ProtocolViolation, terminal: true)` — the client is told why before the socket closes. There are no `NetworkConnection.Kick` calls in this system.
 
 ## Supported Platforms
 
@@ -65,17 +69,20 @@ All request flows guarantee a response to the client, even on failure, to preven
 
 ## Features
 
-- **Character list retrieval** — async database fetch via `ICharacterService.FetchManyAsync`, maps `CharacterData` rows to `CharacterDetails` (name, scene, race template ID)
+- **Character list retrieval** — async database fetch via `ICharacterService.FetchManyAsync`, maps `CharacterData` rows to `CharacterDetails` (name, scene, race template ID, and `IsCombatLogged` from `CharacterFlags.IsCombatLogged`), sent as `CharacterDetails[]`
+- **Equipment preview not populated** — `CharacterDetails.EquippedItems` exists on the DTO for dressing the select-screen preview model, but this system leaves it `null`, which the field documents as "not sent" (distinct from an empty array meaning "wearing nothing"). No server code populates it at HEAD.
 - **Character deletion** — atomic Unit of Work transaction covering sub-entity cleanup and soft-delete of the character row
 - **Character selection** — atomic Unit of Work transaction with defense-in-depth ownership verification and `SetSelectedAsync`
 - **World server routing** — after successful selection, fetches active world servers via `IWorldServerService.FetchActiveAsync` and sends `ServerListBroadcast`
 - **Per-connection in-flight gating** — `ConcurrentDictionary<int, byte>` prevents duplicate concurrent operations per connection
-- **Post-release cooldown** — 2-second gap between successive requests enforced via `NextAllowedRequestUtc`
+- **Post-release cooldown** — 2-second gap between successive requests enforced via `NextAllowedRequestUtc`, with `NextAllowedListRequestUtc` tracking list requests independently
+- **Separate list gate** — list requests use `InFlightListRequests` / `NextAllowedListRequestUtc` so the automatic list fetch on arrival cannot throttle the deliberate selection that immediately follows it
+- **Single-character-in-world enforcement** — `ICharacterService.FetchInWorldCharacterAsync` refuses a selection while another character on the account is still in the world; the read fails closed
 - **Bounded main-thread draining** — configurable `maxMainThreadResponsesPerFrame` to time-slice response dispatch
 - **Character name validation** — `Authentication.IsAllowedCharacterName` check on delete and select before any async work
 - **Disconnect cleanup** — `OnRemoteConnectionStopped` removes in-flight and cooldown entries for disconnected clients
 - **Configurable deletion retention** — `KeepDeleteData` toggle controls whether sub-entity rows are preserved or purged
-- **Sub-entity deletion** — when `KeepDeleteData` is false, deletes abilities, achievements, attributes, bank, buffs, equipment, factions, friends, hotkeys, inventory, known abilities, and pets (guild/party memberships handled by `CharacterService.DeleteAsync`)
+- **Sub-entity deletion** — when `KeepDeleteData` is false, deletes abilities, achievements, attributes, buffs, factions, friends, hotkeys, items, known abilities, pets, pet attributes, pet buffs, waypoints, and archetypes (guild/party memberships handled by `CharacterService.DeleteAsync`). Inventory, bank and equipment share one table, so `ICharacterItemService.DeleteAsync` covers all three in a single statement. `ICharacterWaypointService.DeleteAsync` takes no version — the waypoint pages are a merge-only bitmask with no version stream. Deletes run with `deleteVersion = long.MaxValue` to unconditionally pass the per-entity version guards, and failures are logged but do not abort: the character-row soft-delete is the critical operation and orphaned sub-entity rows are harmless.
 
 ## Prerequisites
 
@@ -85,7 +92,7 @@ All request flows guarantee a response to the client, even on failure, to preven
   - `ICharacterService`
   - `IWorldServerService`
   - `IUnitOfWorkService`
-  - `ICharacterAbilityService`, `ICharacterAchievementService`, `ICharacterAttributeService`, `ICharacterItemService`, `ICharacterBuffService`, `ICharacterItemService`, `ICharacterFactionService`, `ICharacterFriendService`, `ICharacterHotkeyService`, `ICharacterItemService`, `ICharacterKnownAbilityService`, `ICharacterPetService`
+  - `ICharacterAbilityService`, `ICharacterAchievementService`, `ICharacterAttributeService`, `ICharacterBuffService`, `ICharacterFactionService`, `ICharacterFriendService`, `ICharacterHotkeyService`, `ICharacterItemService`, `ICharacterKnownAbilityService`, `ICharacterPetService`, `ICharacterPetAttributeService`, `ICharacterPetBuffService`, `ICharacterWaypointService`, `ICharacterArchetypeService`
 - `AccountManager` for connection-to-account mapping
 - `AsyncWorkerData` runtime data container for background task dispatch
 - `DataContainerRegistry` with required containers registered
@@ -135,8 +142,10 @@ This is an integrated module within the FishMMO server framework. No separate in
 
 | Property | Type | Purpose |
 |----------|------|---------|
-| `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent list/select/delete operations |
-| `NextAllowedRequestUtc` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp; enforces `RequestCooldownMilliseconds` gap between successive requests |
+| `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent select/delete operations |
+| `NextAllowedRequestUtc` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp for select/delete; enforces `RequestCooldownMilliseconds` |
+| `InFlightListRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate for list requests, tracked separately from select/delete |
+| `NextAllowedListRequestUtc` | `ConcurrentDictionary<int, DateTime>` | Per-connection cooldown timestamp for list requests |
 
 **Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
 
@@ -162,7 +171,9 @@ This is an integrated module within the FishMMO server framework. No separate in
 ```
 Client sends: CharacterRequestListBroadcast { }
 Server validates account, fetches characters from DB
-Server sends: CharacterListBroadcast { Characters = [ { CharacterName, SceneName, RaceTemplateID }, ... ] }
+Server sends: CharacterListBroadcast { Characters = [ { CharacterName, SceneName, RaceTemplateID, IsCombatLogged }, ... ] }
+Server sends: CharacterListResultBroadcast { Result = Busy }    // refused: cooldown / in-flight / worker pool full
+Server sends: CharacterListResultBroadcast { Result = Failed }  // service unavailable or fetch failed
 ```
 
 ### Character Delete Request (Client → Server → Client)
@@ -178,8 +189,14 @@ Server sends: CharacterDeleteBroadcast { CharacterName = "" }         // failure
 
 ```
 Client sends: CharacterSelectBroadcast { CharacterName = "MyHero" }
-Server validates account + ownership, sets selected, fetches world servers
-Server sends: ServerListBroadcast { Servers = [ { Name, LastPulse, Address, Port, CharacterCount, Locked }, ... ] }
+Server validates account + ownership, refuses if another character is in the world,
+sets selected, fetches world servers
+Server sends: CharacterSelectResultBroadcast { Result = Success, CharacterName = "MyHero" }
+Server sends: ServerListBroadcast { Servers = [ { Name, Port, CharacterCount, Locked }, ... ] }
+
+// refusals
+Server sends: CharacterSelectResultBroadcast { Result = OtherCharacterInWorld, CharacterName = "MyOtherHero" }
+Server sends: CharacterSelectResultBroadcast { Result = Failed, CharacterName = "MyHero" }
 ```
 
 ## Operational Checks
@@ -192,9 +209,10 @@ Server sends: ServerListBroadcast { Servers = [ { Name, LastPulse, Address, Port
 | Character selection works | Select a character | Client receives `ServerListBroadcast` with active world servers |
 | In-flight gating | Rapid-fire requests from same connection | Only one request processed at a time; subsequent requests silently dropped |
 | Cooldown enforcement | Send request immediately after previous completes | Request rejected until 2-second cooldown expires |
-| Ownership verification | Attempt to select/delete another account's character | Connection kicked with `KickReason.UnusualActivity` (select) or failure response (delete) |
+| Ownership verification | Attempt to select/delete another account's character | Connection closed via `DisconnectWithNotice(DisconnectNoticeReason.ProtocolViolation, terminal: true)` (select) or `CharacterDeleteBroadcast` with an empty name (delete) |
 | Disconnect cleanup | Client disconnects mid-flow | In-flight and cooldown entries removed for that connection |
-| Failure responses | DB service unavailable or query failure | Client receives empty list response (never hangs) |
+| Failure responses | DB service unavailable or query failure | Client receives `CharacterListResultBroadcast`/`CharacterSelectResultBroadcast` with a reason — never an empty list, never silence |
+| Second character in world | Select character B while A is still in the world | `CharacterSelectResultBroadcast { OtherCharacterInWorld, CharacterName = A }`; re-selecting A itself is allowed |
 | KeepDeleteData=false | Delete character with retention disabled | All sub-entity rows purged before character soft-delete |
 
 ## Flow Diagram
@@ -251,9 +269,10 @@ Client                    LoginServer                        Database
   |                           |-- Release in-flight gate        |
 
 * Sub-entity deletion only when KeepDeleteData == false.
-  Deletes: abilities, achievements, attributes, bank, buffs,
-  equipment, factions, friends, hotkeys, inventory,
-  known abilities, pets. Guild/party handled by CharacterService.
+  Deletes: abilities, achievements, attributes, buffs, factions,
+  friends, hotkeys, items (inventory + bank + equipment in one
+  statement), known abilities, pets, pet attributes, pet buffs,
+  waypoints, archetypes. Guild/party handled by CharacterService.
 ```
 
 ### Character Select Flow
@@ -270,6 +289,8 @@ Client                    LoginServer                        Database
   |                           |       |-- FetchAsync ---------->|
   |                           |       |<-- CharacterData -------|
   |                           |       |-- Verify ownership      |
+  |                           |       |-- FetchInWorldCharacter>|
+  |                           |       |   (fail-closed refusal) |
   |                           |       |-- SetSelectedAsync ---->|
   |                           |       |-- FetchByAccountAsync ->|
   |                           |       |   (defense-in-depth)    |
@@ -279,6 +300,7 @@ Client                    LoginServer                        Database
   |                           |       |<-- WorldServerData[] ---|
   |                           |       |                         |
   |                           |<- Enqueue main-thread response  |
+  |<-- CharacterSelectResultBroadcast (Success)                 |
   |<-- ServerListBroadcast    |                                 |
   |                           |-- Release in-flight gate        |
 ```
@@ -299,8 +321,8 @@ Server/Core/LoginServer/CharacterSelect/
 └── ICharacterSelectSystemMainThreadQueueData.cs # Main-thread queue data interface
 
 Shared/Implementation/Network/CharacterSelect/
-├── CharacterSelectBroadcasts.cs                # Network broadcast structs (request list, list, delete, select)
-└── CharacterDetails.cs                         # Serializable character details (name, scene, race template ID)
+├── CharacterSelectBroadcasts.cs                # Broadcast structs + CharacterListResult / CharacterSelectResult enums
+└── CharacterDetails.cs                         # CharacterDetails and EquippedItemEntry
 
 Shared/Implementation/Network/
 ├── WorldServerDetails.cs                       # Serializable world server details (name, address, port, etc.)
@@ -331,10 +353,14 @@ RuntimeDataContainer
 ```
 IBroadcast
 ├── CharacterRequestListBroadcast
-├── CharacterListBroadcast          → List<CharacterDetails>
+├── CharacterListBroadcast          → CharacterDetails[]
+├── CharacterListResultBroadcast    → CharacterListResult (Busy = 0, Failed = 1)
 ├── CharacterDeleteBroadcast        → string CharacterName
 ├── CharacterSelectBroadcast        → string CharacterName
-└── ServerListBroadcast             → List<WorldServerDetails>
+├── CharacterSelectResultBroadcast  → CharacterSelectResult (Success = 0,
+│                                     OtherCharacterInWorld = 1, Failed = 2)
+│                                     + string CharacterName
+└── ServerListBroadcast             → WorldServerDetails[]
 ```
 
 #### Shared Data Classes
@@ -343,12 +369,16 @@ IBroadcast
 CharacterDetails
 ├── CharacterName   : string
 ├── SceneName       : string
-└── RaceTemplateID  : int
+├── RaceTemplateID  : int
+├── IsCombatLogged  : bool
+└── EquippedItems   : EquippedItemEntry[]   (left null by this system)
+
+EquippedItemEntry
+├── Slot            : ItemSlot
+└── TemplateID      : int
 
 WorldServerDetails
 ├── Name            : string
-├── LastPulse       : DateTime
-├── Address         : string
 ├── Port            : ushort
 ├── CharacterCount  : int
 └── Locked          : bool
@@ -366,6 +396,7 @@ WorldServerDetails
 | `AsyncWorkerData` | Centralized background task queue for async database work |
 | `CharacterSelectSystemMainThreadQueueData` | Guarantees main-thread-safe network dispatch |
 | `Authentication` | Character name validation via `IsAllowedCharacterName` |
+| `ICharacterWaypointService`, `ICharacterArchetypeService` | Sub-entity cleanup on delete when `KeepDeleteData` is false |
 
 ## License
 

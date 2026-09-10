@@ -40,10 +40,10 @@ a headless server where no map exists.
 | `MapRegionLabelDetails` / `MapPointOfInterestDetails` | `[Serializable]` | The harvested forms of the two above, stored in the definition |
 | `MapMarker` | `MonoBehaviour` | "Draw this object on the map." Carries a `MapMarkerType` and a `MapMarkerVisibility` |
 | `MapMarkerRegistry` | `static` | Runtime index of live markers, with register/unregister events so a panel does not poll |
-| `MapMarkerType` | `enum` | What the thing is — 17 values, from `PartyMember` through `Vendor`, `Resource`, `Teleporter`, `Landmark`, `Note`, `Waypoint` |
+| `MapMarkerType` | `enum` | What the thing is — 18 values, from `Self` and `PartyMember` through `Vendor`, `Resource`, `Teleporter`, `Landmark`, `Note`, `Waypoint` |
 | `MapMarkerVisibility` | `enum` | Who may see it — `Always`, `SelfOnly`, `PartyOrGuild`, `Detection`, `Discovered` |
 | `MapBoundsResolver` | `static` | Derives a usable map rectangle when a scene has no definition |
-| `Editor/WorldMapBaker` | Editor | The bake, behind **FishMMO → World Map → Bake Maps** |
+| `Editor/WorldMapBaker` | Editor | The bake, behind **FishMMO → World Map → Bake Maps**; **Remove Baked Maps** undoes it |
 
 ## Authoring a scene's map
 
@@ -53,7 +53,9 @@ a headless server where no map exists.
    `WorldMapDefinition` under `Assets/Prefabs/Shared/WorldMaps/` if there is not one already,
    assigns it to that scene's `WorldSceneSettings`, migrates the loading image off the component,
    derives the map bounds from the scene's boundaries and terrain, harvests the labels and
-   landmarks, photographs the scene from overhead, and registers the image as an addressable.
+   landmarks, photographs the scene from overhead, and registers the image as an addressable in the
+   `ClientWorldMaps` group. **FishMMO → World Map → Remove Baked Maps** deletes the bake folder and
+   that group again.
 3. Rebuild the world scene details cache so `WorldSceneDetails.MapDefinition` points at it.
 
 The bake needs a graphics device. Under `-nographics` everything except the photograph is still
@@ -110,11 +112,11 @@ Map/
 ├── MapPointOfInterestDetails.cs # Harvested form stored in the definition
 ├── MapMarker.cs                 # "Draw this object on the map"
 ├── MapMarkerRegistry.cs         # Runtime index + register/unregister events
-├── MapMarkerType.cs             # 16 marker kinds
+├── MapMarkerType.cs             # 18 marker kinds
 ├── MapMarkerVisibility.cs       # 5 visibility rules
 ├── MapBoundsResolver.cs         # Definition → SceneBoundary → terrain fallback chain
 └── Editor/
-    ├── WorldMapBaker.cs         # FishMMO → World Map → Bake Maps
+    ├── WorldMapBaker.cs         # FishMMO → World Map → Bake Maps / Remove Baked Maps
     └── FishMMO.Shared.Map.Editor.asmdef
 ```
 

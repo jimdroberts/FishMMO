@@ -137,6 +137,9 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 - **RejectAndPurge unified failure handling** — All failure paths use a shared helper to atomically notify, disconnect, and purge, preventing information leakage through inconsistent error timing.
 - **Error indistinguishability** — Most failure paths disconnect without protocol-level detail, preventing oracle attacks.
 - **Connection IP caching** — `LastSeenCacheTracker<int, string>` with 120 s TTL caches resolved IP strings to avoid repeated allocations on hot paths, and optionally stores real client IPs recovered from connection tokens (proxy deployments). Behind an L4 proxy, connection IP recovery requires the client to include a connection token validated via `IConnectionTokenService`; the recovered real IP is stored in the same cache for rate-limiting purposes.
+- **Hop-token minting** — `BaseServerAuthenticator` answers `RequestConnectionTokenBroadcast` with `ConnectionTokenBroadcast`, so a client can carry a verified real IP across a Login → World → Scene hop. The handler is registered with `requireAuthentication: true`, so an unauthenticated peer cannot use it as an IP oracle or a token faucet. `TryMintConnectionToken` signs `"{keyId:}{realIp}|{expiryUnix}"` with HMAC-SHA256 and emits `base64url(payload).base64url(signature)`, matching the IPFetch encoding, with a `MintedConnectionTokenTtlSeconds` (60 s) lifetime. The IP is the one this server resolved — never a client-supplied value — so a stolen token grants nothing beyond what the holder of that IP already has. Signing keys under 32 bytes are refused, and an ambiguous key map (no `"shared"` entry, more than one usable key) refuses to guess. A failed mint replies with an *empty* token rather than silence, so the waiting client fails fast instead of blocking on its own timeout.
+- **Per-connection token-mint debounce** — `ExpiringKeyTracker<int>` keyed on `conn.ClientId` admits one `RequestConnectionTokenBroadcast` per `TokenMintRateLimitDuration` (1 s). Excess requests are *dropped, not answered* — the reply is the cost being limited. Swept alongside the handshake limiter (`maxScan: 64`, `maxRemove: 16`) and removed on disconnect, because FishNet recycles ClientIds.
+- **Connection-token key refresh logs only changes** — `KeyRefreshLoop` reloads the signing-key map from the database every 60 s. `KeySetChanged` compares key *identifiers* only, never the secret bytes: a rotation issues a new key id, and touching secret material on a timer to answer a logging question is not worth it. A changed set logs at `Info` (that is the event that explains why tokens which verified a moment ago stopped); an unchanged refresh logs at `Debug`. This path used to report success at `Warning` on every pass — three roles produced over five hundred Warnings in three hours saying nothing had changed.
 - **Token generation and issuance** — LoginServer generates HMAC-signed auth tokens with configurable expiration (default 10 min), encrypted with session keys, and persisted for revocation support.
 - **Token revocation** — World/Scene servers verify token revocation status via database hash lookup before granting access.
 - **Protocol version negotiation** — `CryptoHelper.NegotiateProtocolVersion` with version range binding in the ECDH transcript hash prevents downgrade attacks.
@@ -193,9 +196,25 @@ These are the only configurable values that live in the Unity wrapper classes:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `maxMainThreadActionsPerUpdate` | 100 | Max queued main-thread actions drained per Update frame |
-| `useConnectionIdForRateLimit` | false | Use connection ID instead of remote IP for rate limiting. Enable when behind a NAT/proxy/load balancer |
-| `tokenExpirationMinutes` | 10 min | Auth token expiration (`ServerAuthenticator` only; Inspector-configurable) |
+| `maxMainThreadActionsPerUpdate` | 100 | Max queued main-thread actions drained per `Update` frame (`BaseServerAuthenticator`) |
+| `authHandshakeTimeoutSeconds` | 15 s | How long a newly-connected client has to send a valid `ClientHandshake` before disconnect (`BaseServerAuthenticator`) |
+| `tokenExpirationMinutes` | 10 min | Auth token expiration (`ServerAuthenticator` only) |
+| `renewalTokenExpirationMinutes` | 10 min | Lifetime of renewal-issued tokens (`TokenServerAuthenticator`) |
+| `renewalRefreshFraction` | 0.5 (`[Range(0.1, 0.9)]`) | Fraction of the token lifetime after which a connection's token is re-minted (`TokenServerAuthenticator`) |
+| `requireTokenRealIp` | true | Require presented auth tokens to carry a verified real client IP. Keep enabled behind the L4 proxy; disable only when clients connect to this server directly (`TokenServerAuthenticator`) |
+
+### BaseServerAuthenticator Constants (this directory)
+
+These live in the Unity wrapper, not in FishMMO-Auth.
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `HandshakeRateLimitInterval` | 100 ms | Minimum interval between accepted `ClientHandshake` broadcasts per rate-limit key (10/sec) |
+| `RevokeRateLimitDuration` | 5 s | Per-IP debounce on token revocation broadcasts |
+| `RevokeGlobalRateLimitDuration` | 100 ms | Global revocation cap (10/sec), the safety net for when the per-IP key falls back to `conn:{clientId}` behind an L4 proxy |
+| `TokenMintRateLimitDuration` | 1 s | Per-connection debounce on `RequestConnectionTokenBroadcast` |
+| `MintedConnectionTokenTtlSeconds` | 60 s | Lifetime of a minted hop connection token |
+| *(key refresh)* | 60 s | `KeyRefreshLoop` interval for reloading the connection-token signing keys |
 
 ### BaseAuthenticatorCore Constants (FishMMO-Auth)
 
@@ -303,6 +322,10 @@ authenticator.OnClientAuthenticationResult += (conn, authenticated) =>
 | Global handshake cap | Silent drop (no disconnect) when rate exceeded; handshake counter resets each wall-clock second |
 | Pending auth cap | Log warning: `"Pending auth cap (10000) reached — handshake(s) dropped."` (rate-limited to 1 per 5 s) |
 | Main-thread back-pressure | Log warning: `"Main-thread queue back-pressure: N actions remain after draining 100."` |
+| Hop token minted | Debug log `"Hop token minted for conn=N len=... keys=K"`. Every Login→World and World→Scene hop mints one, so this is Debug on purpose — and it deliberately omits the client's address |
+| Hop token mint failed | Warning `"Hop token mint FAILED for conn=N — sending empty token."`; the client still receives a `ConnectionTokenBroadcast` with an empty token |
+| Hop token flood | Send `RequestConnectionTokenBroadcast` twice within one second on the same connection — the second is dropped with no reply |
+| Signing keys rotated | `Info`: `"Connection token keys changed: now N active key(s) (was ...)"`. A steady state logs `"Connection token keys unchanged"` at Debug only |
 | Cookie rotation | In-flight handshakes with old cookies fail verification and disconnect after authenticator restart |
 | Token revocation | `TokenRevoked` result returned for revoked tokens |
 | Token expiration | `TokenExpired` result returned for expired tokens |
@@ -619,6 +642,8 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 | `SrpSuccessBroadcast` | Server → Client | Encrypted server proof + auth result + encrypted token |
 | `TokenAuthBroadcast` | Client → Server | Encrypted auth token |
 | `TwoFactorVerifyBroadcast` | Client → Server | Encrypted TOTP or recovery code + sequence number |
+| `RequestConnectionTokenBroadcast` | Client → Server | Ask for a hop token for the next server (requires an authenticated connection) |
+| `ConnectionTokenBroadcast` | Server → Client | The minted hop token, or an empty string when minting failed |
 | `ClientAuthResultBroadcast` | Server → Client | Authentication result code |
 
 ### Authentication Results
@@ -674,6 +699,8 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 | **ExpiringKeyTracker Sweep** | `OnAuthSweep()` / `OnUpdate()` in subclasses evicts stale debounce/rate-limit entries |
 | **Token Renewal Sweep** | `TokenServerAuthenticator.SweepTokenRenewals()` (every 5 s) re-mints tokens due for refresh; entries are removed on `OnConnectionStopped` and cleared by `ShutdownWorkers()` |
 | **Cookie Key Rotation** | `InitializeWorkers()` regenerates HMAC key; `ShutdownWorkers()` zeroes it — in-flight cookies fail-closed |
+| **Connection-Token Key Refresh** | `KeyRefreshLoop` reloads `s_dbConnectionTokenKeyMap` from the database every 60 s; only a changed key set is logged above `Debug` |
+| **Rate-limiter sweeps** | Each auth sweep evicts expired entries from the handshake, token-mint (`maxScan: 64`, `maxRemove: 16`) and revocation limiters (the global one holds a single key, so it sweeps 1/1) |
 
 ### Token Renewal
 

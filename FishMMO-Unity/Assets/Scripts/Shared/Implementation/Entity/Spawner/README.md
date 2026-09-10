@@ -149,6 +149,13 @@ The scale is deliberately uniform: a non-uniform scale would desynchronise the N
 
 Each `ItemRoll` carries its own template, stack range and weight. `OnValidate` repairs inverted stack ranges and negative weights, which would otherwise be a spawn-time exception on a live server rather than a bad item.
 
+`OnSpawned` writes the rolled template and stack amount onto the spawned `WorldItem`, plus a
+non-zero **generation seed** onto the `WorldItem` (two 16-bit draws from
+`DeterministicRNG.Shared`, retried while zero). Zero is `Item.Initialize`'s sentinel for "derive a
+seed from the database id", and a freshly granted item has no id — so a drop spawned without one
+rolled its attributes from `RNG(0)`, identically for every drop of that template, and re-rolled
+them differently after the next relog once a real row id existed.
+
 ### ObjectSpawnType Enum
 
 ```

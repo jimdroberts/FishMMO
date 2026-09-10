@@ -346,10 +346,26 @@ public class PartySystem : ServerBehaviour { }
 [RequiresDataContainer(typeof(AsyncWorkerData))]
 public class CharacterSystem : ServerBehaviour { }
 
+// HousingSystem.cs and TradeSystem.cs declare theirs the same way
+[RequiresDataContainer(typeof(HousingSystemMainThreadQueueData))]
+[RequiresDataContainer(typeof(AsyncWorkerData))]
+public partial class HousingSystem : ServerBehaviour { }
+
+[RequiresDataContainer(typeof(TradeSystemMainThreadQueueData))]
+[RequiresDataContainer(typeof(TradeSystemRuntimeData))]
+[RequiresDataContainer(typeof(AsyncWorkerData))]
+public partial class TradeSystem : ServerBehaviour { }
+
 // Result: Only ONE AsyncWorkerData instance created for the whole server
 // Systems access containers via their interfaces:
 Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var data)
 ```
+
+> **A disabled behaviour still initializes successfully.** `HousingSystem.InitializeOnce` returns
+> `Initialized` *early* — subscribing to nothing and claiming no state — when `IsHousingEnabled` is
+> false (ownership mode `Neither`, the default). Its containers are still created, because
+> `[RequiresDataContainer]` is read from the type before anything runs. A server that has not asked
+> for housing therefore reports a clean initialization, not a skipped one.
 
 **4.5 SERVER BEHAVIOUR INITIALIZATION**
 ```
@@ -382,7 +398,11 @@ Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var data)
                     → Mark Initialized = true
             • Behaviours are awaited ONE AT A TIME in registration order, so a behaviour may
               depend on state published by an earlier one (LoginServerSystem's registered
-              server ID, for example).
+              server ID, for example). A behaviour may also require another behaviour
+              outright: TradeSystem.InitializeOnce returns FailedToFindRequiredDependency
+              when ICharacterInventorySystem is absent from Server.BehaviourRegistry, so a
+              SceneServer scene whose ServerBehaviours list omits CharacterInventorySystem
+              retries and then exits 1 rather than starting.
 
         → if no failures: start the transport and stop
         → else: log, wait (backoff doubles from 2s, capped at 30s), retry
@@ -413,6 +433,14 @@ public override ServerComponentInitializationStatus InitializeOnce()
     return ServerComponentInitializationStatus.Initialized;
 }
 ```
+
+> **A partial class registers its own broadcasts.** `InteractableSystem` splits its
+> `InitializeOnce` work across partials — `InteractableSystem.Arena.cs`, `.ArenaMatch.cs`,
+> `.GroupFinder.cs`, `.Waypoint.cs` — as does `ChatSystem.ArenaChat.cs`. Each contributes its own
+> `RegisterBroadcast` calls and, where the operation needs one, its own per-operation ingress
+> guard: `InteractableSystem.Waypoint.cs` declares `WaypointTravelOperation = 20` with a 2000 ms
+> debounce alongside the `WaypointTravelRequestBroadcast` registration. Adding a partial is enough
+> to add a broadcast — nothing central lists them.
 
 **4.6 Physics and Network Start** *(inside the initialization coroutine's completion path)*
 ```
@@ -508,10 +536,12 @@ Unity Engine Start
     │                   │   │   │       ╰─ SceneServer
     │                   │   │   │
     │                   │   │   ╰─ #else (Standalone)
+    │                   │   │       ├─ No args (args.Length < 2) → ALL from BootList
     │                   │   │       ├─ args[1] == "LOGIN"  → LoginServer only
     │                   │   │       ├─ args[1] == "WORLD"  → WorldServer only
     │                   │   │       ├─ args[1] == "SCENE"  → SceneServer only
-    │                   │   │       ╰─ No args/unknown     → ALL from BootList
+    │                   │   │       ╰─ Unknown args[1]     → Close() → Server.Quit()
+    │                   │   │                                (no BootList fallback)
     │                   │   │
     │                   │   ╰─ AddressableLoadProcessor.EnqueueLoad(selectedScenes)
     │                   │
@@ -536,10 +566,12 @@ Unity Engine Start
     │                   │           │               ╰─▶ OnFinalizeSetup(remoteAddress)
     │                   │           │                   ├─ CoreServer.Initialize(remoteAddress, sceneName)
     │                   │           │                   ├─ Create ServerAddressProvider
+    │                   │           │                   ├─ AccountManager = IServerAuthenticator
+    │                   │           │                   │       .CreateAccountManager()  (MUST precede
+    │                   │           │                   │        AttachLoginAuthenticator)
     │                   │           │                   ├─ NetworkWrapper.ApplyTransportConfiguration()
     │                   │           │                   ├─ NetworkWrapper.AttachLoginAuthenticator()
-    │                   │           │                   ├─ NetworkWrapper.AttachServerConnectionStateEventHandler()
-    │                   │           │                   ├─ AccountManager = new AccountManager()
+    │                   │           │                   ├─ NetworkWrapper.RegisterServerConnectionStateEventHandler()
     │                   │           │                   │
     │                   │           │                   ├─▶ DATA CONTAINER INITIALIZATION
     │                   │           │                   │   ├─ DataContainerRegistry = new()
@@ -685,7 +717,8 @@ MainBootstrap (persistent, DontDestroyOnLoad)
             └─ SceneServer.unity
                 ├─ NetworkManager
                 ├─ Server (MonoBehaviour)
-                └─ ServerBehaviours (CharacterSystem, PartySystem, etc.)
+                └─ ServerBehaviours (CharacterSystem, PartySystem, HousingSystem,
+                                     TradeSystem, InteractableSystem, etc.)
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -699,10 +732,15 @@ MainBootstrapSystem.OnApplicationWantsToQuit()
     • Returns false (defer quitting)
     ↓
 InitiateShutdown()
+    • OnClientShutdownStarting (client standalone only, #if !UNITY_EDITOR && !UNITY_SERVER)
+      — raised FIRST, while the window and render state are still intact
     • Graphics cleanup (release addressables)
     • UnityLoggerBridge.Shutdown()
     ↓
 PerformAsyncShutdown() (standalone only)
+    • await Task.Yield() — unconditional, so a display-mode change requested by an
+      OnClientShutdownStarting handler lands (Screen.SetResolution applies at frame end)
+      before Application.Quit
     • Save logging.json config
     • Log.Shutdown() (flush logs)
     • Set canQuitApplication = true
@@ -732,7 +770,9 @@ Application.Quit()
 > disconnects clients that have done nothing wrong. `CharacterSystem.OnDeinitialize` clears its
 > watchdog and rate-limit maps for exactly this reason — `characterResidencyDeadlines`,
 > `sceneLoadDeadlines`, `startScenesAckedClientIds`, `pendingTransferDisconnects`,
-> `deliberateTransferClientIds` and the three rate-limit maps; `WorldSceneSystem.OnDeinitialize`
+> `suppressCombatLingerClientIds`, and the three rate-limit maps
+> (`authCallbackLastTimeByAccount`, `sceneUnloadLastTimeByClientId`,
+> `validatedSceneLastTimeByClientId`); `WorldSceneSystem.OnDeinitialize`
 > does the same before its early-return guards, since that state has no dependencies to check
 > first. The consequence is not always a spurious disconnect: `startScenesAckedClientIds` records
 > that a connection has *completed* a handshake step, so a stale entry makes the next session on

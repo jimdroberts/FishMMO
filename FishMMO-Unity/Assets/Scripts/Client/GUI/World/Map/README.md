@@ -13,33 +13,70 @@ revealed or filtered on one appears identically on the other.
 | Scene authoring components | `MapRegionLabel`, `MapPointOfInterest` | Shared |
 | "Put this object on the map" | `MapMarker`, `MapMarkerRegistry` | Shared |
 | Bounds fallback when nothing is authored | `MapBoundsResolver` | Shared |
-| Bake + migration | `WorldMapBaker` | Shared (Editor) |
+| Bake | `WorldMapBaker` | Shared (Editor) |
 | Shared runtime state | `ClientMapSystem` | Client |
 | Overhead camera and frame cap | `MinimapCameraRenderer` | Client |
 | Visibility rules and throttling | `MapMarkerFilter`, `MapRelationshipTracker` | Client |
+| Landmarks, notes and waypoints as markers | `MapContent` | Client |
+| Which categories the player wants drawn | `MapFilters`, `MapFilterCategory` | Client |
 | Explored territory | `FogOfWarMap`, `FogOfWarStore` | Client |
 | Player annotations | `MapNote`, `MapNoteStore` | Client |
 | Skill scaling seam | `Cartography`, `ICartographyProvider` | Client |
 | Drawing | `UITKMapView`, `MapViewTransform` | Client |
+
+## World maps are build output, not source
+
+Nothing under `Assets/Prefabs/Shared/WorldMaps/` — `WorldMapDefinition.BakedDirectory` — is
+committed, and neither is the `ClientWorldMaps` addressable group. Both are gitignored, produced by
+a client build and removed again afterwards.
+
+A **client** build runs, around the addressables step:
+
+1. `WorldMapBaker.BakeAll()` — for every world scene, load it, find its `WorldSceneSettings`, take
+   the definition assigned there or create a transient one at `WorldMapDefinition.BakedAssetPath`,
+   copy the scene's `SceneTransitionImage` into it, harvest the `MapRegionLabel` and
+   `MapPointOfInterest` components, derive bounds through `MapBoundsResolver.FromOpenScene` when
+   none are authored, photograph the scene from 2000 m up over the `Default`, `Ground` and `Water`
+   layers into an image whose longest edge is 2048 px, and add that image to the `ClientWorldMaps`
+   addressable group.
+2. `WorldSceneDetailsCacheBuilder.Rebuild()` — so `WorldSceneDetails.MapDefinition` points at the
+   fresh definitions.
+3. The build.
+4. `WorldMapBaker.CleanBakedMaps()` and a second cache rebuild, leaving the project as it was found.
+
+**Server builds skip both**, which is what keeps map images out of server bundles; the group name
+carries "Client" so that a group which somehow lingered would still be excluded by substring. A
+bake that throws is logged and does not fail the build — the world map falls back to a plain
+background. `BakeWorldMaps` / `CleanWorldMaps` in `CustomBuildTool` are the two hooks.
+
+The bake writes no scene. It reads the loading image off `WorldSceneSettings` rather than moving
+it, and it never assigns the definition back onto the component — a scene that must share one map
+with another (an instanced twin) is the one case where `WorldSceneSettings.MapDefinition` is
+hand-assigned, and the bake then fills that asset in place instead of creating one.
 
 ## Authoring a scene's map
 
 1. Drop `MapRegionLabel` and `MapPointOfInterest` components into the scene and place them on the
    terrain. Both draw gizmos, and neither exists at runtime — they are harvested into the
    definition.
-2. Run **FishMMO/World Map/Bake Maps**. For every world scene it creates a `WorldMapDefinition`
-   under `Assets/Prefabs/Shared/WorldMaps/` if there is not one already, assigns it to that scene's
-   `WorldSceneSettings`, migrates the loading image off the component, derives the map bounds from
-   the scene's boundaries and terrain, harvests the labels and landmarks, photographs the scene from
-   overhead, and registers the image as an addressable.
-3. Rebuild the world scene details cache so `WorldSceneDetails.MapDefinition` points at it.
+2. To see the result in the editor without a build, run **FishMMO/World Map/Bake Maps** and then
+   rebuild the world scene details cache. **FishMMO/World Map/Remove Baked Maps** undoes it.
 
 The bake needs a graphics device. Under `-nographics` everything except the photograph is still
-written, and the world map falls back to markers over a plain background.
+written, and the world map falls back to markers over a plain background; `xvfb-run` is the way to
+get the photograph headlessly.
 
 Nothing above is required for a scene to work: with no definition at all, bounds come from the
 scene's `SceneBoundary`, the minimap renders normally, and the world map draws markers and fog
 over the background colour.
+
+## Which scene is being mapped
+
+`ClientMapSystem` keys everything — the definition lookup, the fog file, the note file, the
+waypoint list — on `IPlayerCharacter.CurrentSceneName()`, not on `SceneName`. Inside an instance
+those differ: `CurrentSceneName()` is the instance scene, which is also what the server keys
+waypoint unlocks by and validates travel requests against. Drawing `SceneName` from inside a
+dungeon showed the open world and had every fast-travel request refused as `NotInScene`.
 
 ## Putting an object on the map
 

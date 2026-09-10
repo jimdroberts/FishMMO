@@ -22,7 +22,15 @@ Production-ready Unity MonoBehaviour for comprehensive database monitoring in Un
 
 ## Description
 
-`DatabaseHealthService` is a Unity MonoBehaviour wrapper around the `FishMMO.Database.Npgsql.Monitoring` stack. Drop it into a headless server scene, hand it an initialized `Database` instance, and it will periodically poll connectivity, sample the connection pool, log aggregated performance metrics, and raise `UnityEvent`/C# events that can be wired into alerting systems (Slack, PagerDuty, Discord webhook, etc.). All thresholds and intervals are configurable from the Unity Inspector.
+> **Status: reference implementation, not compiled.** `Unity/DatabaseHealthService.cs` is a
+> complete, reviewed MonoBehaviour that is **entirely inside a comment block**. FishMMO-DB targets
+> .NET Standard 2.1 and cannot reference `UnityEngine.dll`, so nothing in this file is built by any
+> configuration today, and no scene contains the component. To use it, copy the file into the Unity
+> project (the header suggests `Assets/Scripts/Server/Implementation/DatabaseHealthService.cs`),
+> remove the enclosing comment block, and reference the FishMMO-Database assembly from the server
+> asmdef. Everything below describes the code as written, not something currently running.
+
+`DatabaseHealthService` is a Unity MonoBehaviour wrapper around the `FishMMO.Database.Npgsql.Monitoring` stack. Once moved into the Unity project it is dropped into a headless server scene and handed an initialized `Database` instance, after which it periodically polls connectivity, samples the connection pool, refreshes aggregated performance metrics, and raises plain C# `event Action<T>` callbacks that can be wired into alerting systems (Slack, PagerDuty, Discord webhook, etc.). All thresholds and intervals are configurable from the Unity Inspector. The health monitoring itself lives in the library and is reachable without Unity via `IDatabase.HealthMonitor` and `IDatabase.MetricsTracker`.
 
 ## Supported Platforms
 
@@ -49,10 +57,10 @@ Unity Scene
         │                 ├── Health/DatabaseHealthMonitor
         │                 ├── Metrics/DatabaseMetricsTracker
         │                 └── Diagnostics/QueryPerformanceTracker
-        └── Inspector-driven coroutines:
-              ├── HealthCheckLoop      (every healthCheckInterval)
-              ├── PoolMonitorLoop      (every poolCheckInterval)
-              └── MetricsLogLoop       (every metricsLogInterval)
+        └── Inspector-driven InvokeRepeating calls (Unity main thread, no coroutines):
+              ├── PerformHealthCheck  (initialHealthCheckDelay, then healthCheckInterval)
+              ├── CheckPoolHealth     (poolCheckInterval / 2, then poolCheckInterval)
+              └── RefreshMetrics      (every metricsRefreshInterval)
 ```
 
 ## Features
@@ -60,7 +68,7 @@ Unity Scene
 ✅ **Automatic Health Checks** - Periodic connectivity and response time monitoring  
 ✅ **Connection Pool Monitoring** - Open-connection utilization and exhaustion tracking  
 ✅ **Query Performance Tracking** - Slow query detection and metrics collection  
-✅ **Configurable Alerts** - Console warnings/errors based on severity  
+✅ **Configurable Thresholds** - Pool warning/critical utilization levels drive the status and events  
 ✅ **Inspector Integration** - Real-time status display in Unity Editor  
 ✅ **Event System** - Subscribe to health/pool/slow query events  
 ✅ **Context Menu Commands** - Manual health checks via Unity Editor  
@@ -110,7 +118,7 @@ public class ServerManager : MonoBehaviour
 Use the Unity Inspector to adjust:
 - **Health Check Interval**: How often to check database connectivity (default: 30s)
 - **Pool Check Interval**: How often to check connection pool (default: 15s)  
-- **Metrics Log Interval**: How often to log performance metrics (default: 60s)
+- **Metrics Refresh Interval**: How often to refresh the metrics summary (default: 60s)
 - **Alert Thresholds**: Warning/critical levels for open-connection utilization (default: 70%/85%)
 
 ## Configuration
@@ -129,15 +137,26 @@ Use the Unity Inspector to adjust:
 - `poolCriticalThreshold`: Utilization % for critical alerts (85% default)
 
 **Metrics Configuration**
-- `enableMetricsLogging`: Toggle automatic metrics logging
-- `metricsLogInterval`: Seconds between metrics logs (60s default)
+- `enableMetricsRefresh`: Toggle the periodic metrics refresh
+- `metricsRefreshInterval`: Seconds between refreshes (60s default)
 
-**Alerting Configuration**
-- `enableAlerts`: Toggle console alerts for critical issues
-- `enableSlowQueryLogging`: Toggle slow query logging
-- `slowQueryThresholdMs`: Milliseconds threshold for slow queries (1000ms default)
+There are no alerting fields on the component. It logs nothing except one warning when a manual
+check is attempted before `Initialize`; alerting is the subscriber's job, and the slow query
+threshold belongs to `QueryPerformanceTracking` in `appsettings.json`.
 
 ## Events
+
+Seven plain C# events, all `Action<T>`:
+
+| Event | Payload |
+|---|---|
+| `OnHealthCheckCompleted` | `HealthCheckResult` — every check |
+| `OnHealthStatusChanged` | `HealthCheckResult` — only when the status changes |
+| `OnPoolHealthChecked` | `PoolHealthResult` — every pool sample |
+| `OnPoolStatusChanged` | `PoolHealthResult` — only when the status changes |
+| `OnSlowQueryDetected` | `SlowQueryEventArgs` |
+| `OnMetricsSummaryUpdated` | `MetricsSummary` |
+| `OnMonitoringError` | `Exception` |
 
 Subscribe to events for external monitoring systems:
 
@@ -177,10 +196,11 @@ healthService.ManualHealthCheck();
 // Check pool health
 healthService.ManualPoolCheck();
 
-// Log current metrics
-healthService.ManualMetricsLog();
+// Refresh the cached metrics summary (and raise OnMetricsSummaryUpdated)
+healthService.ManualMetricsRefresh();
 
-// Get formatted health report
+// Read the current status, or a formatted report
+HealthStatus status = healthService.GetCurrentHealthStatus();
 string report = healthService.GetHealthReport();
 Debug.Log(report);
 
@@ -294,7 +314,7 @@ public class GameServerManager : MonoBehaviour
 
 - **Health checks** perform a lightweight `SELECT 1` query - minimal overhead
 - **Pool checks** are in-memory operations - no database query
-- **Metrics logging** aggregates cached data - no performance impact
+- **Metrics refresh** aggregates cached data - no performance impact
 - Safe for frequent monitoring (15-30 second intervals)
 - All operations run on Unity's main thread (no async/await needed)
 
@@ -307,7 +327,8 @@ public class GameServerManager : MonoBehaviour
 **No Health Checks Running**
 - Verify `enableHealthChecks` is checked in Inspector
 - Check that the GameObject is active
-- Look for "Monitoring started" log message
+- Check `IsMonitoring` — `StartMonitoring` returns silently if `IsInitialized` is false, and the
+  component logs nothing when it starts
 
 **Pool Always Shows "Unknown"**
 - Ensure database is properly initialized
@@ -338,9 +359,9 @@ flowchart TD
     Start[Scene loads] --> Add[AddComponent DatabaseHealthService]
     Add --> Init["Initialize(database)"]
     Init --> Start3[Start coroutines]
-    Start3 --> Health[HealthCheckLoop]
-    Start3 --> Pool[PoolMonitorLoop]
-    Start3 --> Metrics[MetricsLogLoop]
+    Start3 --> Health["InvokeRepeating PerformHealthCheck"]
+    Start3 --> Pool["InvokeRepeating CheckPoolHealth"]
+    Start3 --> Metrics["InvokeRepeating RefreshMetrics"]
 
     Health -->|SELECT 1| DB[(PostgreSQL)]
     DB -->|ok/fail + ms| Result[HealthCheckResult]
@@ -348,13 +369,13 @@ flowchart TD
 
     Pool -->|read counters| CPM[ConnectionPoolMetrics]
     CPM --> Util{Utilization}
-    Util -->|"greater than warn"| Warn[Console warning]
-    Util -->|"greater than critical"| Crit[Console error]
+    Util -->|"greater than poolWarningThreshold"| Warn[Status: Warning]
+    Util -->|"greater than poolCriticalThreshold"| Crit[Status: Critical]
     Util --> Evt2[OnPoolStatusChanged]
 
     Metrics -->|read tracker| QPT[QueryPerformanceTracker]
     QPT -->|slow query| Evt3[OnSlowQueryDetected]
-    QPT -->|summary| Log[Console summary]
+    QPT -->|summary| Sum[OnMetricsSummaryUpdated]
 
     Evt1 --> Ext[External alerting<br/>Slack / PagerDuty / Discord]
     Evt2 --> Ext

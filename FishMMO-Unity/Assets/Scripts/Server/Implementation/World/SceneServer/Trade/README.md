@@ -1,17 +1,18 @@
 # Trade System
 
 Player-to-player trading of items and currency (issue #144). One session between two
-characters: each puts inventory items and currency on the table, both must accept the same
-version of it, and the exchange is applied as one in-memory step and one database commit.
+characters: each puts inventory items and currency on the table, both confirm it, both accept
+the same version of the frozen table, and the exchange is applied as one in-memory step and
+one database commit.
 
 ## Files
 
 | File | What it holds |
 |---|---|
 | `TradeSystem.cs` | Lifecycle, configuration, invitations, the range/state tick, session open/close. |
-| `TradeSystem.Handlers.cs` | The broadcast handlers: request, respond, offer, withdraw, currency, accept, cancel. Every refusal is answered with a `TradeRefusedBroadcast` and the current table. |
+| `TradeSystem.Handlers.cs` | The eight broadcast handlers: `TradeRequestBroadcast`, `TradeRequestResponseBroadcast`, `TradeOfferItemBroadcast`, `TradeWithdrawItemBroadcast`, `TradeSetCurrencyBroadcast`, `TradeConfirmBroadcast` (confirm/revoke), `TradeAcceptBroadcast` (accept/un-accept), `TradeCancelBroadcast`. Every refusal is answered with a `TradeRefusedBroadcast` and the current table. |
 | `TradeSystem.Commit.cs` | Completion: re-validation, currency deduction, in-memory exchange, credit, one persistence unit, client notification. |
-| `TradeSession.cs` | Pure state and the acceptance rules. **Every change clears both acceptances and bumps the version; an accept must quote the current version.** |
+| `TradeSession.cs` | Pure state, the `TradePhase`, and the confirm/accept rules (`TryAddOffer`, `TryRemoveOffer`, `TrySetCurrency`, `TryConfirm`, `TryAccept`, `TryBeginCommit`). **Every change clears both confirmations and both acceptances and bumps the version; a confirm and an accept must each quote the current version.** It also carries the `CommitState` the commit hangs its escrow, its `TradeExchange.Applied` and its failure reason on. |
 | `TradeExchange.cs` | Pure container arithmetic: TAKE every offer out of both bags, GIVE each to the other, or undo everything. Emits the rows each write must carry. |
 | `TradeSystemRuntimeData.cs` / `TradeSystemMainThreadQueueData.cs` | The ingress guard and the main-thread queue. |
 
@@ -97,7 +98,8 @@ There is no interleaving in which one side's half is durable and the other's is 
 there is only one write and it decides. A crash can lose a trade in flight; it cannot
 duplicate one.
 
-Three hops, in this order (`ICharacterInventorySystem.TryRunExchange`):
+Five hops, in this order (`ICharacterInventorySystem.TryRunExchange`, passed the tag
+`"PlayerTrade"`):
 
 1. **Main thread, `TryCommit`** — the session moves to `Committing` (no request from either
    party is honoured), the offered slots stay locked, nothing is mutated.
@@ -129,7 +131,7 @@ Three hops, in this order (`ICharacterInventorySystem.TryRunExchange`):
 A character that disconnects while the commit is in flight is not closed out of the session;
 the outcome closes it. Its despawn flush waits on the same row lock, so it lands after the
 outcome and is ordered — or voided — by the journal. A committing session whose outcome
-never arrives (main thread unreachable for 60 s) is treated as refused.
+never arrives (main thread unreachable for `CommitTimeoutSeconds`, 60 s) is treated as refused.
 
 Room is estimated when an offer is **confirmed** and again when it is **accepted**
 (`TradeRules.HasRoomFor`), so a player short of bag space hears it while the table is still
@@ -138,9 +140,13 @@ refusal remains the decision.
 
 ## Tuning (the `TradeSystem` asset)
 
-`maxTradeDistance`, `rangeCheckIntervalSeconds`, `maxOfferSlots` (1–32; the window grows its
-grid to match), `inviteTtlSeconds`, `perTargetInviteCooldownSeconds`, the ingress guard
-settings, and `currencyTemplate` (the same `Currency` attribute the merchant and mailbox
+`maxTradeDistance` (clamped by `TradeRules.ClampMaxDistance`, floor
+`TradeRules.MinimumMaxDistance` = 2 m, default `DefaultMaxDistance` = 15 m),
+`rangeCheckIntervalSeconds` (floor 0.05 s), `maxOfferSlots` (`TradeRules.ClampMaxOfferSlots`,
+default 8 = the window's 4x2 grid, ceiling `MaximumOfferSlots` = 32; the window grows its grid
+to match), `inviteTtlSeconds`, `perTargetInviteCooldownSeconds`, `maxMainThreadActionsPerFrame`,
+the ingress guard settings (`ingressDebounceMilliseconds`, `ingressSweepIntervalSeconds`,
+`ingressEntryTtlSeconds`, `ingressSweepMaxRemovals`), and `currencyTemplate` (the same `Currency` attribute the merchant and mailbox
 use; unset refuses currency offers with `NoCurrency`).
 
 ## Tests

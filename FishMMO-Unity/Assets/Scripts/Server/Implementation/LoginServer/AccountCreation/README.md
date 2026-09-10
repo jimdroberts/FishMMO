@@ -26,7 +26,7 @@ Main-thread response dispatch is time-sliced by `maxMainThreadResponsesPerFrame`
 The request pipeline follows four stages:
 
 1. **Network Thread (UDP Gate)** — validates connection encryption data, rejects oversized payloads, captures client IP, creates an immutable `AccountCreationRequest<NetworkConnection>`, and enqueues via bounded channel with backpressure. No decryption or DB I/O occurs here.
-2. **Queue + Backpressure** — requests are dispatched through centralized `AsyncWorkerData` with bounded channels and optional entity-key routing (`ClientId`) for consistent worker affinity. Immediate enqueue failure returns `ServerBusy`.
+2. **Queue + Backpressure** — requests are dispatched through centralized `AsyncWorkerData`, keyed on `conn.ClientId` so a connection's requests stay ordered relative to one another. The rolling global hourly budget is checked (not consumed) before the enqueue. A refused enqueue, or an exhausted budget, returns `EnqueueResult.QueueFull`, which reaches the client as `ServerBusy` — deliberately the same answer, so a prober cannot detect the global cap's existence or threshold.
 3. **Worker Threads** — AES-decrypt username/salt/verifier using per-field sequence-derived nonces, convert bytes to strings via `CryptoHelper.StrictUtf8` (throws `DecoderFallbackException` on malformed UTF-8), zero decrypted byte arrays with `CryptographicOperations.ZeroMemory()`, validate username against centralized `Authentication.IsAllowedUsername()` rules, validate salt/verifier length limits, persist via `IAccountService.PersistAsync()`, update runtime metrics and per-IP failure tracking.
 4. **Main Thread Response** — `OnUpdate` drains queued actions through `Drain(maxMainThreadResponsesPerFrame)` and sends FishNet `ClientAuthResultBroadcast` on the main thread. On shutdown, remaining queued responses are fully drained.
 
@@ -49,9 +49,11 @@ The request pipeline follows four stages:
 - **AES-GCM encryption** — per-field sequence-derived nonces for username, salt, and verifier with AAD binding to `AuthMessageType.CreateAccount`
 - **SRP (Secure Remote Password) protocol** — credentials stored as salt + verifier; plaintext passwords never reach the server
 - **Per-IP rate limiting** — configurable `ipRateLimitSeconds` cooldown between attempts from the same IP using atomic `ConcurrentDictionary.AddOrUpdate` (TOCTOU-safe)
-- **Per-IP failure tracking and DoS blocking** — IPs exceeding `maxFailedAttempts` are temporarily blocked and immediately disconnected
-- **Proxy / NAT / load balancer compatibility** — optional `useConnectionIdForRateLimit` mode switches rate-limiting key from IP to connection ID
-- **Bounded async worker backpressure** — drop-on-full channel prevents unbounded queue growth under attack
+- **Per-IP failure tracking and DoS blocking** — IPs exceeding `maxFailedAttempts` are temporarily blocked and immediately disconnected. The tracker is capped at `MaxIpFailureTrackerEntries` (50,000); at the cap `TryTrackIpFailure` returns `false` so the caller fails closed rather than silently skipping the increment, which would let an offender sit just under the block threshold indefinitely
+- **Global hourly creation cap** — `maxGlobalAccountCreationsPerHour` (default 1000) bounds the blast radius of a distributed registration flood that per-IP limits cannot see. The window is UTC hours-since-epoch, held under `globalCreationsCounterLock`; the budget is *checked* at enqueue and *consumed* only after a successful persist, so failed requests do not deplete it. A value of 0 or less disables the cap and logs a loud startup `Warning`
+- **Per-IP verification debounce** — `AccountVerifyBroadcast` is debounced to one attempt per IP per second by an `ExpiringKeyTracker<string>` (`VerifyRateLimitDuration`), independent of the failure counter. Before it, every verify message from an unauthenticated connection bought a decrypt and a database lookup until `maxFailedAttempts` had accumulated
+- **Proxy / NAT / load balancer compatibility** — optional `useConnectionIdForRateLimiting` mode switches the rate-limiting key from IP to `conn.ClientId`; enabling it logs a startup warning that it is only safe behind a trusted reverse proxy
+- **Bounded async worker backpressure** — `AsyncWorkerData` refuses admission once its outstanding-item cap is reached, preventing unbounded queue growth under attack
 - **Main-thread time-slicing** — configurable `maxMainThreadResponsesPerFrame` prevents frame spikes during login waves
 - **Automatic memory hygiene** — `CryptographicOperations.ZeroMemory()` scrubs decrypted byte arrays immediately after use (or on failure)
 - **Strict UTF-8 validation** — `CryptoHelper.StrictUtf8` with `DecoderFallbackException` rejects malformed payloads
@@ -66,7 +68,7 @@ The request pipeline follows four stages:
 - **Stateless behaviour** — all mutable state in `RuntimeDataContainer` instances; system logic is pure and testable
 - **Engine-agnostic core** — interface/implementation split with generic `TConnection` parameter
 - **Account verification** — encrypted verification code flow via `AccountVerifyBroadcast`; validates codes against database before marking accounts as verified
-- **Per-username verification brute-force protection** — failed verification attempts tracked per username (lowercased). After 10 failures within 30 minutes, further attempts are rejected until the lockout expires. Bounded sweep (64 max scan) evicts stale entries. Hard cap of 50,000 tracked entries prevents memory exhaustion.
+- **Per-username verification brute-force protection** — failed verification attempts tracked per username (lowercased). After `MaxVerifyFailuresPerUsername` (5) failures, further attempts are rejected for `VerifyUsernameLockoutDuration` (60 minutes). Bounded sweep (`VerifyUsernameFailureSweepMaxScan`, 64) evicts stale entries. Hard cap of `MaxVerifyUsernameFailureEntries` (50,000) prevents memory exhaustion.
 - **Email verification queue** — verification codes are enqueued to the `email_queue` table and delivered asynchronously via SMTP; a background processor sends one email per sweep (configurable interval)
 - **Grace-period login** — unverified accounts can log in and play immediately; login is only blocked after the verification email has been sent (`VerificationEmailSentAt`), giving the SMTP system time to process new accounts without blocking players
 - **Dev/Release mode gating** — `#if UNITY_EDITOR || DEVELOPMENT_BUILD` skips 2FA setup and email verification entirely in development builds; release builds run the full pipeline
@@ -81,7 +83,7 @@ The request pipeline follows four stages:
 - Database layer with `IAccountService`, `IEmailQueueService`, and `ITwoFactorRecoveryCodeService` registered in the `Database.ServiceRegistry` (Npgsql-backed)
 - `email_queue` table — outbound email queue for SMTP delivery of verification codes
 - SMTP configuration (`Smtp:Host`, `Smtp:Port`, `Smtp:Username`, `Smtp:Password`, `Smtp:FromAddress`, `Smtp:FromName`, `Smtp:UseSsl`) for production email delivery
-- `ISmtpService` — lazily constructed from server configuration; not in the DB service registry in the `Database.ServiceRegistry` (Npgsql-backed)
+- `ISmtpService` — implemented by `FishMMO.Server.Implementation.Smtp.SmtpService` (`Server/Implementation/Smtp/SmtpService.cs`), constructed lazily from `Server.Configuration` on first use. It is not registered in `Database.ServiceRegistry`
 - `CryptoHelper` shared utility for AES decrypt, strict UTF-8 encoding, and AAD construction
 - `Authentication` shared utility providing `IsAllowedUsername()` validation
 
@@ -112,7 +114,8 @@ This is an integrated module within the FishMMO server architecture. No separate
 2. Set `maxFailedAttempts` to limit brute-force attempts (default: `5`).
 3. Set `ipBlockDurationSeconds` for how long blocked IPs remain blocked (default: `300` — 5 minutes).
 4. Set `maxMainThreadResponsesPerFrame` based on server frame budget (default: `100`).
-5. If behind a proxy/NAT/load balancer, enable `useConnectionIdForRateLimit`.
+5. If behind a proxy/NAT/load balancer, enable `useConnectionIdForRateLimiting`.
+6. Set `maxGlobalAccountCreationsPerHour` above expected organic growth; leaving it at 0 or less disables the global DoS cap and is warned about at startup.
 
 ### Monitoring at Runtime
 
@@ -131,10 +134,11 @@ Query the public behaviour properties to monitor system health:
 | `ipRateLimitSeconds` | `float` | `5.0` | Rate Limiting | Minimum seconds between account creation attempts from the same IP address |
 | `maxFailedAttempts` | `int` | `5` | Rate Limiting | Maximum failed attempts allowed before an IP is temporarily blocked |
 | `ipBlockDurationSeconds` | `float` | `300.0` | Rate Limiting | Duration in seconds that an IP remains blocked after exceeding the failed-attempt threshold (5 minutes) |
+| `maxGlobalAccountCreationsPerHour` | `int` | `1000` | Rate Limiting | Rolling one-hour global ceiling on successful account creations. Excess requests are refused as `ServerBusy`. `<= 0` disables the cap and logs a startup warning. |
 | `maxMainThreadResponsesPerFrame` | `int` | `100` | Main Thread Dispatch | Maximum number of queued main-thread response actions processed per frame |
 | `cleanupMaxScanPerMap` | `int` | `256` | Cleanup Bounds | Maximum entries scanned per map during one maintenance sweep |
 | `cleanupMaxRemovalsPerMap` | `int` | `128` | Cleanup Bounds | Maximum entries removed per map during one maintenance sweep |
-| `useConnectionIdForRateLimit` | `bool` | `false` | Proxy Compatibility | Use connection ID instead of IP for rate limiting; enable when behind a proxy/NAT/load balancer where all clients share one IP |
+| `useConnectionIdForRateLimiting` | `bool` | `false` | Proxy Compatibility | Use `conn.ClientId` instead of IP for rate limiting; enable when behind a proxy/NAT/load balancer where all clients share one IP. Safe only behind a trusted reverse proxy — enabling it logs a startup warning. |
 | `emailSendIntervalSeconds` | `float` | `10.0` | Email Queue | Seconds between email queue processing sweeps; set to 0 to disable |
 
 All tunables are clamped to safe minimums during `InitializeOnce()`:
@@ -153,10 +157,12 @@ All tunables are clamped to safe minimums during `InitializeOnce()`:
 | `MaxEncryptedFieldSize` | `2048` bytes | Rejects oversized encrypted payloads on the network thread before any decryption or allocation |
 | `MaxSaltLength` | `256` chars | Maximum allowed length for the decrypted SRP salt string |
 | `MaxVerifierLength` | `1024` chars | Maximum allowed length for the decrypted SRP verifier string |
-| `MaxVerifyFailuresPerUsername` | `5` | Maximum failed verification attempts per username before lockout |
-| `VerifyUsernameLockoutDuration` | `60` min | Lockout window for per-username verification failures |
+| `MaxVerifyFailuresPerUsername` | `5` | Maximum failed verification attempts per username before lockout. Tightened from 10: against a 900,000-value six-digit code space, 10 attempts with IP rotation gave a non-trivial success probability |
+| `VerifyUsernameLockoutDuration` | `60` min | Lockout window for per-username verification failures. Extended from 30 minutes to outlast typical email-delivery windows |
 | `MaxVerifyUsernameFailureEntries` | `50,000` | Hard cap on tracked username entries to prevent memory exhaustion |
 | `VerifyUsernameFailureSweepMaxScan` | `64` | Maximum entries scanned per sweep for expired verification failures |
+| `MaxIpFailureTrackerEntries` | `50,000` | Hard cap on the per-IP failure tracker; at the cap `TryTrackIpFailure` returns `false` and the request fails closed |
+| `VerifyRateLimitDuration` | `1` s | Per-IP debounce for `AccountVerifyBroadcast`, held in an `ExpiringKeyTracker<string>` |
 
 ## Usage Examples
 
@@ -222,7 +228,10 @@ ClientManager.Broadcast(broadcast);
 | Duplicate username | DB returns `UniqueViolation` | `InvalidUsernameOrPassword` response; IP failure count incremented |
 | Stale entry cleanup | 60 seconds elapse | Expired rate-limit and failure entries evicted within scan/removal bounds |
 | Graceful shutdown | Server deinitializes | Remaining queued responses fully drained; broadcasts unregistered; caches cleared |
-| Proxy mode | `useConnectionIdForRateLimit = true` | Rate limiting keyed by `conn.ClientId` instead of IP address |
+| Proxy mode | `useConnectionIdForRateLimiting = true` | Rate limiting keyed by `conn.ClientId` instead of IP address; startup logs a warning that this needs a trusted proxy |
+| Global hourly cap | Exceed `maxGlobalAccountCreationsPerHour` successful creations within one UTC hour | Further requests refused with `ServerBusy` (indistinguishable from queue-full, by design) until the hour rolls over |
+| Global cap disabled | Set `maxGlobalAccountCreationsPerHour` to 0 | Startup `Warning`: "the global account-creation DoS cap is DISABLED" |
+| Verify flood | Same IP sends `AccountVerifyBroadcast` twice within one second | Second message dropped with no reply, no decrypt, and no database lookup |
 
 ## Flow Diagram
 
@@ -253,7 +262,7 @@ flowchart LR
                                                      │
                                           ┌──────────▼─────────────────────┐
                                           │   AsyncWorkerData (Bounded)    │
-                                          │   Channel + Worker Affinity    │
+                                          │   entityKey = conn.ClientId    │
                                           └──────────┬─────────────────────┘
                                                      │
                                           ┌──────────▼─────────────────────┐
@@ -267,12 +276,12 @@ flowchart LR
                                           │  5. IsAllowedUsername() check   │
                                           │  6. Validate salt/verifier len │
                                           │  7. IAccountService.PersistAsync│
-│  8. Generate TOTP + recovery codes│
-│  9. Enqueue verification email   │
-│ 10. Update metrics & IP track    │
-│ 11. Enqueue response action      │
-                                          │  8. Update metrics & IP track  │
-                                          │  9. Enqueue response action    │
+                                          │  8. Generate TOTP + recovery   │
+                                          │     codes (release builds)     │
+                                          │  9. Enqueue verification email │
+                                          │ 10. Consume global hour budget │
+                                          │ 11. Update metrics & IP track  │
+                                          │ 12. Enqueue response action    │
                                           └──────────┬─────────────────────┘
                                                      │
                                           ┌──────────▼─────────────────────┐
@@ -289,6 +298,8 @@ Rejection paths (no worker involvement):
   • Oversized payload      → disconnect on network thread
   • Blocked IP             → disconnect on network thread
   • Rate-limited / full    → ServerBusy (unreliable) on network thread
+  • Global hour cap spent  → ServerBusy (unreliable) on network thread
+  • Verify debounce hit    → dropped silently on network thread
   • Crypto failure         → disconnect via main-thread queue
   • Malformed UTF-8        → disconnect via main-thread queue
 ```
@@ -303,6 +314,7 @@ Server/Implementation/LoginServer/AccountCreation/
 ├── AccountCreationSystemRuntimeData.cs          # Metrics, connection caches, cleanup timer
 ├── AccountCreationSystemMappingData.cs          # Per-IP rate/failure trackers (DoS/rate-limiting)
 ├── AccountCreationSystemMainThreadQueueData.cs  # Per-system main-thread action queue container
+├── IAccountCreationPuzzleProvider.cs            # Proof-of-work scaffold — NOT wired in (see below)
 └── README.md
 
 Server/Core/LoginServer/AccountCreation/
@@ -312,6 +324,10 @@ Server/Core/LoginServer/AccountCreation/
 ├── IAccountCreationSystemMainThreadQueueData.cs # Main-thread queue interface
 └── AccountCreationRequest.cs                    # Immutable request struct (generic over TConnection)
 ```
+
+#### Proof-of-work scaffold (not shipped)
+
+`IAccountCreationPuzzleProvider`, `AccountCreationPuzzle` and `NullAccountCreationPuzzleProvider` describe a client-side proof-of-work challenge intended to make a registration flood cost the attacker CPU. Nothing in `AccountCreationSystem` calls any of it at HEAD — there is no puzzle on the wire and no client implementation. The interface exists so a production implementation can be wired in without touching call sites; `maxGlobalAccountCreationsPerHour` is the mechanism actually protecting the endpoint today.
 
 ### Inheritance Hierarchies
 
@@ -376,6 +392,7 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 | **FishNet** | Receives `CreateAccountBroadcast`, sends `ClientAuthResultBroadcast` |
 | **AccountManager** | Provides per-connection AES key/IV needed to decrypt payloads |
 | **Database Service Registry** | Resolves `IAccountService` for persistence via `PersistAsync(username, salt, verifier)` |
+| **`ExpiringKeyTracker<string>`** (`Server/Core/Collections/`) | Backs the per-IP verification debounce |
 | **IEmailQueueService** | Enqueues verification emails for asynchronous SMTP delivery via `EnqueueAsync` |
 | **ISmtpService** | Sends emails via SMTP using server-configured credentials (lazily constructed from `IServerConfiguration`) |
 | **ITwoFactorRecoveryCodeService** | Stores PBKDF2-SHA256 hashed recovery codes via `PersistManyAsync` during account creation |

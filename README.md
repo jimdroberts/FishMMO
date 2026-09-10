@@ -3,7 +3,7 @@
 
 # FishMMO
 
-A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, **QUIC/WebTransport**, and **PostgreSQL**.
+A modular, open-source MMO framework built on **Unity 6.4**, **FishNet**, **QUIC/WebTransport**, and **PostgreSQL**.
 
 ---
 
@@ -73,9 +73,9 @@ FishMMO is a complete multiplayer online game framework consisting of:
 
 | Component | Description |
 |---|---|
-| **FishMMO-Unity** | Unity project containing client, server, and shared game code (900+ C# files) — a unified client-side prediction pipeline with lag-compensated hit resolution, modular character visuals, tick-driven archetype AI with threat and pet systems, ECA trigger system |
+| **FishMMO-Unity** | Unity project containing client, server, and shared game code (1,247 C# files) — a unified client-side prediction pipeline with lag-compensated hit resolution, modular character visuals, tick-driven archetype AI with threat and pet systems, ECA trigger system |
 | **FishMMO-Auth** | Transport-agnostic .NET authentication library (SRP-6a, X25519 ECDH, token auth, TOTP 2FA) |
-| **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (41 entities/tables, 42 services) |
+| **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (55 entities/tables, 55 services) |
 | **FishMMO-WebTransport** | C++ native library wrapping MsQuic (QUIC/HTTP3) — P/Invoked from C# as a FishNet transport plugin |
 | **FishMMO-Installer** | Cross-platform .NET 8 console tool that automates dependency installation |
 | **FishMMO-Dependencies** | Centralised NuGet dependency aggregator (43 packages, netstandard2.1) — copies DLLs to Unity |
@@ -84,7 +84,7 @@ FishMMO is a complete multiplayer online game framework consisting of:
 | **FishMMO-AppHealthMonitor** | Daemon that monitors, auto-restarts, and health-checks server processes |
 | **FishMMO-WebServers** | ASP.NET Core 8.0 web services — IPFetch (8080), Patcher (8090), and WebGL static server (8000) |
 | **FishMMO-Patcher** | Client-side updater that applies versioned patch files |
-| **FishMMO-Setup** | Configuration templates — nginx.conf, server .cfg files, appsettings.json, deploy hooks, stream config generator |
+| **FishMMO-Setup** | Configuration templates — nginx.conf, server .cfg files, appsettings.json |
 | **FishMMO-DiscordBot** | Discord bot bridging in-game chat with a Discord guild |
 | **FishMMO-CMS** | ASP.NET Core 8.0 account-management web API (registration, password/2FA self-service, admin account actions) — **scaffold only, every handler is a TODO stub** |
 
@@ -136,7 +136,7 @@ For the complete end-to-end connection flow, see [CONNECTION_PIPELINE.md](CONNEC
 
 | Requirement | Version |
 |---|---|
-| Unity | 6.3 LTS (6000.3.2f1) |
+| Unity | 6.4 (6000.4.10f1) |
 | .NET SDK | 8.0+ |
 | PostgreSQL | 14+ |
 | CMake | 3.20+ (for WebTransport C++ library) |
@@ -149,7 +149,7 @@ For the complete end-to-end connection flow, see [CONNECTION_PIPELINE.md](CONNEC
 
 - **Git** for cloning the repository
 - **.NET 8.0 SDK**
-- **Unity Hub** with **Unity 6.3 LTS** (the installer can install these for you)
+- **Unity Hub** with **Unity 6.4** (the installer can install these for you)
 - **CMake 3.20+** and a C++17 compiler (for building the WebTransport native library)
 - **OpenSSL 3+** development headers (libssl-dev / openssl-devel)
 - **PostgreSQL 14+** (the installer can install this for you)
@@ -474,7 +474,9 @@ cd FishMMO-WebTransport
 The `CMakeLists.txt`:
 - Fetches msquic v2.5.9 from GitHub (`FetchContent`) and statically links it
 - Uses `quictls` (OpenSSL fork) as msquic's TLS backend
-- Finds system OpenSSL for the wrapper library's own TLS needs
+- Finds system OpenSSL because msquic's `quictls` build requires it at configure time — the
+  wrapper itself never calls OpenSSL directly, and with `WT_STATIC_MSQUIC=ON` it does not link
+  the system OpenSSL either (TLS comes from the quictls copy inside msquic)
 - Compiles 7 `.cpp` source files (server, client, session, stream_manager, datagram_queue, http3, webtransport_api)
 - Outputs the shared library directly to the Unity project's Plugins directory
 
@@ -492,7 +494,7 @@ After building all C# projects and the WebTransport native library, open the Uni
 
 1. Open **Unity Hub**
 2. Click **ADD** → Select the `FishMMO-Unity` directory
-3. Open the project with **Unity 6.3 LTS**
+3. Open the project with **Unity 6.4**
 4. Wait for the initial asset import and script compilation to complete
 5. Follow the [Unity Project Setup](#unity-project-setup) section below
 
@@ -646,6 +648,21 @@ This caches important game world details (spawn points, teleporters, boundaries,
 
 This generates `WorldSceneDetailsCache` assets that are loaded at runtime by the WorldServer and SceneServer for scene routing and character placement.
 
+**World map bake.** `FishMMO → World Map → Bake Maps` renders a map definition and image for every
+world scene, and `FishMMO → World Map → Remove Baked Maps` deletes them again. A **client**
+Addressables build does both for you: it bakes, rebuilds the world scene details cache so it
+references the baked definitions, builds the bundles, then removes the bake and rebuilds the cache
+once more, leaving the project as it found it. **Server builds skip both** — a server never draws a
+map. A bake that fails is logged as a warning and does not fail the build; the world map simply
+falls back to a plain background without its image.
+
+Everything the bake produces is build output and is gitignored — `Assets/Prefabs/Shared/WorldMaps/`,
+`Assets/AddressableAssetsData/AssetGroups/ClientWorldMaps.asset*` and their
+`Schemas/ClientWorldMaps_*` — so a bake must never be committed. If a manual bake (or an interrupted
+client build) leaves one behind, `WorldMapDefinitionTests.TheCommittedCache_CarriesNoBakeLeftovers`
+fails and names the fix: run `FishMMO → World Map → Remove Baked Maps`, then
+`FishMMO → Rebuild World Scene Details`.
+
 ### Versioning
 
 Manage the project's semantic versioning from the **FishMMO Dashboard**.
@@ -701,6 +718,8 @@ The Dashboard also shows the current build settings, active build target, and ba
 The build process copies the appropriate `.cfg` and `appsettings.json` files from `FishMMO-Setup/Development/` or `FishMMO-Setup/Production/` into the build output.
 
 > **Important:** Build Addressables first, then build the game. The game build depends on the Addressable bundles produced in the first step.
+
+> **Client Addressables builds bake the world maps** before building bundles and remove them afterwards — see [Build World Scene Details](#build-world-scene-details). Server builds do neither.
 
 **Headless builds and the build-target switch.** A CLI build (`-batchmode -executeMethod`) that has to switch build target used to be rejected for running while scripts were compiling, producing no artifact — and re-running the identical command immediately afterwards succeeded, because by then the target already matched and no switch happened. `SwitchActiveBuildTarget` is synchronous and already recompiles for the new target, and the `AssetDatabase.Refresh(ForceUpdate)` that follows settles the define symbols; the extra `ForceEditorScriptRecompile` on top of that queued a *further* compile, and under `-executeMethod` nothing turns the editor loop over until the method returns, so it stayed pending for the rest of the invocation. That recompile is now skipped in batch mode — interactive Dashboard builds keep it, where the editor loop can service it. `RunCliBuild` also fails fast, naming the reason, if scripts somehow are still compiling: nothing on that thread can advance a pending compile in batch mode, so waiting cannot help and sleeping would block the very thread that runs compilation.
 
@@ -845,7 +864,6 @@ Address=127.0.0.1
 Port=7790
 StaleSceneTimeout=5
 StaleInstanceSceneTimeout=2
-MaxInstanceLifetimeMinutes=120
 CertificatePath=/etc/fishmmo/certs/fullchain.pem
 PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 ```
@@ -856,15 +874,15 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 | `MaximumClients` | Maximum concurrent connections | 4000 |
 | `Address` | Bind address — `127.0.0.1` when behind NGINX (default); set to the server's network IP only if NGINX runs on a different machine | `127.0.0.1` |
 | `Port` | Listen port (Login=7770, World=7780, Scene=7790+) | varies |
-| `StaleSceneTimeout` | **Minutes** an empty **open-world** scene instance stays loaded before it is unloaded and its scene row deleted. SceneServer only. The templates ship `5`; the code's fallback when the key is missing is `60` | 5 |
+| `StaleSceneTimeout` | **Minutes** an empty **open-world** scene instance stays loaded before it is unloaded and its scene row deleted. SceneServer only. The templates ship `5`; the code's fallback when the key is missing is also `5` | 5 |
 | `StaleInstanceSceneTimeout` | **Minutes** an empty **Group/PvP (instanced)** scene stays loaded. Deliberately shorter than `StaleSceneTimeout`: a dungeon instance belongs to one character or party, so once it empties it is unlikely to be wanted again, while each one holds a full physics scene. Long enough to survive a wipe-and-run-back or a relog. SceneServer only; the code's fallback is `5` | 2 |
-| `MaxInstanceLifetimeMinutes` | **Minutes** an instanced scene may exist before it is closed regardless of who is inside. SceneServer only. Measured from the scene row's creation, so it includes the time spent queued and loading. `StaleInstanceSceneTimeout` only ever reclaims an **empty** instance, so an occupied one had no upper bound at all — and since a party may hold only one instance at a time, a dungeon nobody finishes locks that party out of every other. Occupants are warned at 10 / 5 / 1 minutes and then returned to the open world through the ordinary leave-instance path. Open-world scenes are exempt. A dungeon difficulty that declares its own `LifetimeMinutes` overrides this for instances opened at it — a timed challenge is one of the few levers that changes how a dungeon plays without touching a number in combat — and this remains the backstop for everything that declares nothing. Code's fallback when the key is missing is `120` | 120 |
+| `MaxInstanceLifetimeMinutes` | **Minutes** an instanced scene may exist before it is closed regardless of who is inside. SceneServer only. Measured from the scene row's creation, so it includes the time spent queued and loading. `StaleInstanceSceneTimeout` only ever reclaims an **empty** instance, so an occupied one had no upper bound at all — and since a party may hold only one instance at a time, a dungeon nobody finishes locks that party out of every other. Occupants are warned at 10 / 5 / 1 minutes and then returned to the open world through the ordinary leave-instance path. Open-world scenes are exempt. A dungeon difficulty that declares its own `LifetimeMinutes` overrides this for instances opened at it — a timed challenge is one of the few levers that changes how a dungeon plays without touching a number in combat — and this remains the backstop for everything that declares nothing. **Not present in either template** — it exists only as a code fallback, so add the key by hand to override it. Code's fallback when the key is missing is `120` | 120 |
 | `CertificatePath` | PEM certificate for QUIC/TLS (game servers terminate their own TLS) | platform-dependent |
 | `PrivateKeyPath` | PEM private key for QUIC/TLS | platform-dependent |
 | `ConnectionTokenHmacKeyBase64` | **Leave empty.** Loaded at runtime from the `connection_token_keys` database table | empty |
 | `AutoVerifyAccounts` | LoginServer only — skip email verification at account creation and at login (Development builds only, never in Production) | `true` (Dev) / `false` (Prod) |
 | `AllowedOrigins` | LoginServer only — comma-separated CORS origins permitted for WebGL clients | `https://play.fishmmo.com` |
-| `Smtp:Host` / `Smtp:Port` / `Smtp:Username` / `Smtp:Password` / `Smtp:FromAddress` / `Smtp:FromName` / `Smtp:UseSsl` | LoginServer only — verification-email relay. Port 465 = implicit TLS (`UseSsl=true`); port 587 = STARTTLS (`UseSsl=false`) | `localhost` / `465` / — / — / `noreply@fishmmo.com` / `FishMMO` / `true` |
+| `Smtp:Host` / `Smtp:Port` / `Smtp:Username` / `Smtp:Password` / `Smtp:FromAddress` / `Smtp:FromName` / `Smtp:UseSsl` | LoginServer only — verification-email relay. Port 465 = implicit TLS (`UseSsl=true`); port 587 = STARTTLS (`UseSsl=false`) | Prod: `localhost` / `465` / — / — / `noreply@fishmmo.com` / `FishMMO` / `true`; Dev ships `587` / `false` |
 | `LoginQueueUpdateRateSeconds` | LoginServer only — how often queued clients receive position updates | `2.0` |
 | `LoginQueueMaxSize` | LoginServer only — queue capacity; excess clients are rejected outright | `500` |
 | `LoginQueueAdmissionRatePerSecond` | LoginServer only — admission rate from the queue | `5.0` |
@@ -893,36 +911,42 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 
 ### Logging Configuration
 
-All projects share a single canonical `logging.json` at [`FishMMO-Setup/logging.json`](FishMMO-Setup/logging.json). Each project's build copies it into the output directory automatically — operators only need to edit the one source file.
+`logging.json` at [`FishMMO-Setup/logging.json`](FishMMO-Setup/logging.json) is the canonical copy. Five .NET projects copy it into their output directory as part of the build — AppHealthMonitor, IpFetchServer, Patcher, WebGLServer and FishMMO-Installer — and the Unity **server** builds copy it alongside the `.cfg` files via `BuildExecutor.CopyConfigurationFiles()`. FishMMO-CMS and FishMMO-DiscordBot do **not** pick it up; configure their logging separately.
 
 ```json
 {
   "LoggingManager": {
-    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"]
+    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical"],
+    "FileSink": {
+      "Description": "...",
+      "_enabled": true,
+      "Path": "/var/log/fishmmo/server.log",
+      "FileSizeLimitMb": 100,
+      "MaxFileCount": 10,
+      "AllowedLevels": ["Warning", "Error", "Critical"]
+    }
   },
   "Loggers": []
 }
 ```
 
-**Log levels:** `Verbose`, `Debug`, `Info`, `Warning`, `Error`, `Critical`.
+The shipped `Description` field is prose — it records the rotation policy (100 MB files, 10 kept) and points at tailing `/var/log/fishmmo/*.log` with a shipper for centralised aggregation. It is abbreviated above.
 
-**Adding file logging** (edit `FishMMO-Setup/logging.json`):
+**Log levels:** `Verbose`, `Debug`, `Info`, `Warning`, `Error`, `Critical`. Note that `Debug` is **not** in the shipped `ConsoleAllowedLevels` — add it when you need it.
+
+**Adding file logging** (edit `FishMMO-Setup/logging.json`): file output is driven by an entry in the
+`Loggers` array, which ships empty. The `LoggingManager.FileSink` block above describes the intended
+production sink but is not read by `FishMMO-Logger` — `LoggingManagerConfig` binds `ConsoleAllowedLevels`
+only — so to actually write files, add a `FileLoggerConfig` to `Loggers`:
 
 ```json
 {
-  "LoggingManager": {
-    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical"]
-  },
-  "Loggers": [
-    {
-      "Type": "FileLoggerConfig",
-      "LoggerType": "FileLogger",
-      "Enabled": true,
-      "AllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"],
-      "LogDirectory": "logs",
-      "FileName": "server.log"
-    }
-  ]
+  "Type": "FileLoggerConfig",
+  "LoggerType": "FileLogger",
+  "Enabled": true,
+  "AllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"],
+  "LogDirectory": "logs",
+  "FileName": "server.log"
 }
 ```
 
@@ -947,7 +971,7 @@ All projects share a single canonical `logging.json` at [`FishMMO-Setup/logging.
 
 > **Security:** Keep SMTP credentials out of source control. Load them via environment variables (e.g., `FISHMMO_SMTP_PASSWORD`). Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database — see [FishMMO-Auth — Signing Keys & KEK](#fishmmo-auth--signing-keys--kek). See [FishMMO-Logger README](FishMMO-Logger/README.md) for full configuration details.
 
-**Runtime override:** Place a modified `logging.json` in the working directory — it takes precedence over the bundled copy. The log level can also be overridden via the `FISHMMO_LOG_LEVEL` environment variable (e.g. `Debug`, `Verbose`).
+**Runtime override:** Place a modified `logging.json` in the working directory — it takes precedence over the bundled copy. The `FISHMMO_LOG_LEVEL` environment variable (e.g. `Debug`, `Verbose`) overrides console verbosity for the **Installer only** — no game server or web server reads it.
 
 **Level policy (why it is a data-handling decision, not just noise control):** `Warning` and
 above are the tiers that get shipped off-host, aggregated and retained longest. Two rules follow
@@ -1096,7 +1120,7 @@ The authentication library has several compile-time security constants (in `Base
 
 2. **Install Required Modules:**
    - Go to the **Installs** tab.
-   - Click the gear icon next to your Unity 6.3 LTS version → **Add Modules**.
+   - Click the gear icon next to your Unity 6.4 version → **Add Modules**.
    - Install:
      - **Linux Build Support (IL2CPP and Mono)**
      - **Linux Dedicated Server Build Support**
@@ -1289,7 +1313,7 @@ server {
 }
 ```
 
-> **Keep `PROXY_TIMEOUT` in step with `StaleSceneTimeout`.** The game servers' idle disconnect threshold is `StaleSceneTimeout` in the `.cfg` files (default `5` seconds). `proxy_timeout` must be `>= StaleSceneTimeout` plus a margin — the 30s default is deliberately generous — but a `proxy_timeout` far larger than the server's threshold leaves NGINX holding session mappings for connections the server has already freed, wasting memory and file descriptors.
+> **Size `PROXY_TIMEOUT` against real sessions, not against `StaleSceneTimeout`.** `StaleSceneTimeout` is a scene-unload timer measured in **minutes** and has nothing to do with connection idleness — it only decides how long an **empty** scene stays loaded. `proxy_timeout` must simply outlive a legitimate gap between datagrams (the 30s default is deliberately generous), but setting it far higher leaves NGINX holding session mappings for connections the server has already freed, wasting memory and file descriptors.
 >
 > **The stream module has no health checking**, not even passive. If a game server crashes, NGINX keeps forwarding datagrams to the dead upstream until the stream config is regenerated and reloaded. See the comment block at the top of `FishMMO-Setup/nginx.conf` for external health-check patterns (systemd timer, cron, or Consul Template).
 
@@ -1953,11 +1977,11 @@ cannot be lost by editing a scene.
 
 | Tab | Contents |
 |---|---|
-| **Display** | Resolution, refresh rate, fullscreen mode, quality level, brightness, frame-rate limit, VSync |
-| **Audio** | Master volume; mute when unfocused. The other five channels are stored and applied but not offered — nothing in the client owns an `AudioSource` yet, and a slider that saves perfectly while changing nothing audible is worse than a missing one |
-| **Gameplay** | Damage numbers, healing numbers, achievement popups, ignore party invites, ignore guild invites |
+| **Display** | Resolution, refresh rate, fullscreen mode, quality level, texture filtering, antialiasing, brightness, look sensitivity, frame-rate limit, VSync |
+| **Audio** | One slider per channel — Master, Music, Sound Effects, Ambient, Interface, Voice — built from `ClientAudioSettings.PlayableChannels`; mute when unfocused |
+| **Gameplay** | Damage numbers, healing numbers, achievement popups, ignore party invites, ignore guild invites. Plus a **Crosshair** section (show, style, size, opacity), a **World Labels** section (label size, opacity, draw distance, maximum on screen, hide behind geometry) and a **Nameplates** section (size, opacity, background opacity, show guild names, show titles, maximum on screen, NPC name range, player name range, show my name) |
 | **Key Bindings** | Every rebindable binding in the Player action map, with conflict detection |
-| **UI** | Interface scale, window snap grid, window layout reset, the ten theme colours, and shareable UI profiles |
+| **UI** | Interface scale, window snap grid, window layout reset, the twelve theme colours, and shareable UI profiles |
 
 **Display settings are staged, not live.** Every other setting can be undone by the control that set
 it; a display mode cannot — pick one the monitor will not show and the player cannot see the control
@@ -1974,20 +1998,43 @@ player waiting out a countdown whose prompt is no longer on screen.
 | `Refresh Rate` | *(unset)* | Hz offered at that resolution | Display refresh rate. Separate from the render cap below — deriving one from the other capped every player at their monitor's rate |
 | `Fullscreen` | `FullScreenWindow` | a `FullScreenMode` value | Stored as the enum value, **not** a dropdown index: the list is built per platform, so an index means a different mode on a build without exclusive fullscreen |
 | `Quality Level` | *(unset)* | a level name | Stored by **name**, not index — quality levels can be reordered between builds and an index would silently select a different one |
+| `Anisotropic Filtering` | `PerTexture` (`1`) | `Off` (0), `PerTexture` (1), `Forced` (2) | Stored as the ordinal of `ClientDisplaySettings.AnisotropicOption` and clamped into range on read — the default honours whatever level each texture was imported with |
+| `Antialiasing` | `Balanced` (`2`) | `Off` (0), `Fast` (1), `Balanced` (2), `Temporal` (3) | Edge smoothing on the live camera, stored as the ordinal of `ClientCameraSettings.AntialiasingOption`. Defaults to SMAA rather than off: the camera itself ships with antialiasing disabled, which is what made silhouettes stair-step |
 | `Brightness` | `1.0` | 0–1 | Scene ambient light — both `ambientLight` (Flat scenes) and `ambientIntensity` (Skybox scenes). Re-applied on every scene load |
+| `Look Sensitivity` | `0.5` | 0.1–1 | Multiplier on camera look input, clamped on both read and write |
 | `Frame Rate Limit` | `60` (the boot-time menu cap) | tick rate – display rate, capped at 500 | Floored at the network tick rate: FishNet derives ticks from the update loop, so a lower frame rate cannot deliver them on schedule. With no preference stored the bootstrap cap stands, rather than jumping to the display's fastest mode — which is what made that cap dead on arrival. A saved value the display no longer offers falls back to the fastest available, since that player *did* express a preference |
 | `VSync` | `false` | — | While on, `Application.targetFrameRate` is ignored entirely and the frame-rate limit above does nothing. The panel says so |
 | `Audio.Volume.Master` | `1.0` | 0–1 | Applied to `AudioListener.volume`. Stored as the slider position; applied as its square, so the middle of the slider lands near the middle of the perceived range |
 | `Audio.Volume.Music` | `0.6` | 0–1 | Below the rest deliberately: it is the only channel that plays continuously, and a score mixed level with combat effects buries the cues a player reacts to |
-| `Audio.Volume.Effects` / `.Ambient` / `.Interface` / `.Voice` | `1.0` / `0.8` / `0.8` / `1.0` | 0–1 | Read through `ClientAudioSettings.EffectiveVolume(channel)` by anything that plays a sound. Stored and applied, but **not currently offered in the panel** — see `ClientAudioSettings.PlayableChannels` |
+| `Audio.Volume.Effects` / `.Ambient` / `.Interface` / `.Voice` | `1.0` / `0.8` / `0.8` / `1.0` | 0–1 | Read through `ClientAudioSettings.EffectiveVolume(channel)` by anything that plays a sound — `ClientUIAudio` plays one-shot interface sounds on `AudioChannel.Interface`, and `ChannelAudioSource` routes a scene's `AudioSource` through its channel. Every channel in `ClientAudioSettings.PlayableChannels` gets a slider |
 | `Audio.MuteWhenUnfocused` | `false` | — | Silences the client while its window has no focus. Applied on top of Master rather than by writing zero into it, so the saved level survives alt-tabbing |
 | `ShowDamage` / `ShowHeals` / `ShowAchievementCompletion` | `true` | — | Floating combat text and achievement popups |
 | `IgnorePartyInvites` / `IgnoreGuildInvites` | `false` | — | Invitations are **declined**, not dropped: an invitation silently discarded leaves the inviter staring at a prompt that never resolves and the server holding an invitation that blocks the next one |
+| `Crosshair.Enabled` | `true` | — | Whether the crosshair is drawn at all |
+| `Crosshair.Style` | `Cross` (`0`) | `Cross` (0), `Dot` (1), `Circle` (2) | Stored as the ordinal of `ClientCrosshairSettings.CrosshairStyle`; an out-of-range value falls back to the default rather than drawing nothing |
+| `Crosshair.Size` | `8` | 4–32 points | Crosshair size |
+| `Crosshair.Opacity` | `1.0` | 0.1–1 | Floored above zero — an invisible crosshair is what the show toggle is for |
+| `WorldLabels.Scale` | `1.0` | 0.5–2 | Size of the floating world labels |
+| `WorldLabels.Opacity` | `1.0` | 0.2–1 | World label opacity |
+| `WorldLabels.Distance` | `80` | 10–200 m | Draw distance beyond which world labels are not shown |
+| `WorldLabels.MaxVisible` | `64` | 16–256 | Cap on labels on screen; past it the nearest are kept and the furthest dropped |
+| `WorldLabels.Occlude` | `false` | — | Hide labels behind geometry. Off by default: it costs a physics ray per visible label, every frame |
+| `WorldLabels.NpcNameRange` / `.PlayerNameRange` | `30` / `30` | 0–200 m | Range within which NPC and player names show. At `0` a name shows only on your target |
+| `WorldLabels.ShowOwnName` | `true` | — | Whether your own character's name is drawn |
+| `Nameplates.Scale` | `1.0` | 0.5–2 | Nameplate size |
+| `Nameplates.Opacity` | `1.0` | 0.2–1 | Nameplate opacity |
+| `Nameplates.BackgroundOpacity` | `1.0` | 0–1 | Opacity of the plate behind the text. At zero the names are drawn straight over the world |
+| `Nameplates.ShowGuild` / `.ShowTitles` | `true` | — | Whether guild names and titles appear on nameplates |
+| `Nameplates.MaxVisible` | `64` | 8–256 | Cap on nameplates on screen; the nearest are kept |
+| `Map.ShowCoordinates` | `true` | — | Numeric coordinates on the map and minimap — subject to the character's Cartography tier, which can withhold them regardless |
+| `Map.MinimapFrameRate` | `30` | 5–60 fps | How often the minimap is re-rendered. Capped: past the draw rate it buys nothing and only spends frame budget |
+| `Map.MinimapRotates` | `false` | — | Minimap turns with the character rather than staying north-up |
+| `Map.MinimapZoom` | `25` | 5–200 | Minimap zoom, written by the minimap itself rather than by the options panel |
 | `UI.Scale` | `1.0` | 0.75–1.5 | Interface scale, applied by dividing the shared `PanelSettings` reference resolution. Restored to the authored value when Editor play mode ends, so a play session cannot dirty the asset — `QualitySettings` (current level and its `vSyncCount`) is protected the same way, for the same reason |
 | `UI.SnapGridSize` | `8` | 0–32 points | Grid that dragged panels snap to. `0` disables snapping |
 | `UI.Panel.<name>.X` / `.Y` | *(unset)* | panel points | Where the player dragged each window. Re-clamped into the viewport on restore, so a position saved on a 21:9 monitor is still reachable on a 16:9 one |
 | `InputBindingOverrides` | *(unset)* | JSON | Key binding overrides for the whole asset. A value that cannot be parsed is discarded with a log and the defaults are used — it used to abort input initialisation entirely, leaving the player in the world with no controls and no way to reach the panel that would reset them |
-| `<Name>ColorR/G/B/A` | *(unset)* | 0–255 | The ten themeable colours. Presence is decided by the `R` channel, so a legitimately black colour is not mistaken for an absent one. Clearing one **removes** the keys rather than emptying them, so a reset does not leave forty dead lines in the file |
+| `<Name>ColorR/G/B/A` | *(unset)* | 0–255 | The twelve themeable colours (`UITKTheme.ColorNames`): Primary, Secondary, Highlight, Background, Text, Health, Mana, Stamina, Crosshair, TooltipLabel, ScrollTrack, ScrollThumb. Presence is decided by the `R` channel, so a legitimately black colour is not mistaken for an absent one. Clearing one **removes** the keys rather than emptying them, so a reset does not leave forty-eight dead lines in the file |
 
 #### UI profiles
 
@@ -2068,8 +2115,10 @@ Escape cannot be captured, so `Escape → Menu → Options` is reachable no matt
 | Achievements | `J` | — |
 | Factions | `U` | — |
 | Minimap | `M` | — |
+| World Map | `N` | — |
 | Lore | `L` | — |
 | Arena scoreboard | `B` | — |
+| Pin Target *(toggles keeping the current target on the HUD)* | `F` | — |
 | Pet | `V` | — |
 | Options | `O` | — |
 
@@ -2353,7 +2402,7 @@ the shape is:
 | **Observers are told, not simulating** | State forwarding is deliberately off. Observers receive position via `NetworkTransform` and everything else via explicit broadcasts, and the spawn payload carries an observer-shaped form of each so a late joiner reconstructs what a continuous observer holds. |
 | **Server-only physics** | A physics query is not reproducible across peers, so every target selector and hit action runs on the server, inside the caster's rewound world, and caps its result only after ranking and per-body dedupe. |
 
-Behaviour is pinned by roughly **1,080 EditMode tests**
+Behaviour is pinned by roughly **2,100 test methods across 221 fixtures**
 ([`Assets/UnitTests/README.md`](FishMMO-Unity/Assets/UnitTests/README.md)), including a
 closed-loop fixture that composes both halves of the lag-compensation derivation across a spread
 of round-trip times and asserts the server resolves to the position the shooter was rendering.

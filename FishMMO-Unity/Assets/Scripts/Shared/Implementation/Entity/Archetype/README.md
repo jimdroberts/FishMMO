@@ -99,14 +99,29 @@ This is an integrated module within the FishMMO project. No separate installatio
 | `OnArchetypeChanged`  | `event Action<ArchetypeTemplate, ArchetypeTemplate>` | Fired when archetype changes (old template, new template)    |
 | `SetArchetype(int)`   | `void`                                              | Sets archetype by cached template ID                         |
 | `SetArchetype(ArchetypeTemplate)` | `void`                                 | Sets archetype by direct template reference                  |
+| `RestoreArchetype(int)` | `void`                                        | Installs an archetype this peer was **told** about, raising nothing |
+| `Version`             | `long`                                              | Persistence version; advanced on change and by the save snapshot |
+| `PersistenceDirty`    | `bool`                                              | Whether the archetype has changed since the database confirmed it |
+| `MarkPersisted(long)` | `void`                                              | Clears the dirty mark only if nothing changed since that snapshot |
+| `Restore(int, long)`  | `void`                                              | Load path: installs a persisted template and version, no events, no requirement check, not dirty |
+
+**`SetArchetype` versus `RestoreArchetype`.** `SetArchetype` ends in
+`Character.Invoke(onArchetypeChangeTriggers)`, and `BaseCharacter.Invoke` has no authority gate —
+only a minority of ECA action types gate themselves with `EcaAuthority`. Both the spawn payload and
+the observer broadcast run on **every** peer for every character that walks into observer range, so
+using `SetArchetype` there ran a stranger's archetype-change triggers on the onlooker's machine.
+Those two paths call `RestoreArchetype`, which installs the value and raises nothing. It is a
+separate method rather than a `skipEvent` argument because `IArchetypeController` declares the
+parameterless signatures, and an implementation with an extra optional parameter does not satisfy an
+interface member.
 
 ### Lifecycle Methods
 
 | Method                                  | Description                                                              |
 |-----------------------------------------|--------------------------------------------------------------------------|
-| `ResetState(bool asServer)`             | Clears the `Template` reference to `null`                                |
-| `ReadPayload(connection, reader)`       | Reads template ID (`int`), calls `SetArchetype(id)` if valid (>= 0)     |
-| `WritePayload(connection, writer)`      | Writes template ID (`int`), or `-1` if no archetype is assigned          |
+| `ResetState(bool asServer)`             | Clears `Template`, `Version` and `PersistenceDirty` for pooling          |
+| `ReadPayload(connection, reader)`       | Reads the template ID (unpacked `int`), calls `RestoreArchetype(id)` if valid (>= 0) |
+| `WritePayload(connection, writer)`      | Writes the template ID (unpacked `int`), or `-1` if no archetype is assigned |
 
 ### Network Synchronization
 
@@ -114,8 +129,12 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 | Direction | Data Written/Read     | Description                                           |
 |-----------|-----------------------|-------------------------------------------------------|
-| Write     | `int` (template ID)   | Writes the template's cached `ID`, or `-1` if null    |
-| Read      | `int` (template ID)   | Reads the ID and calls `SetArchetype(id)` if >= 0     |
+| Write     | `int` unpacked (template ID) | Writes the template's cached `ID`, or `-1` if null |
+| Read      | `int` unpacked (template ID) | Reads the ID and calls `RestoreArchetype(id)` if >= 0 |
+
+Unpacked deliberately: template IDs are deterministic 32-bit hashes from
+`CachedScriptableObject.AddToCache`, so they span the whole range and FishNet's signed-packed form
+spends five bytes where unpacked spends four.
 
 The archetype is synchronized as part of the character's initial payload when a client receives the character's networked state. FishNet calls `WritePayload` on the server and `ReadPayload` on the client automatically for each `NetworkBehaviour` on the character.
 
@@ -126,7 +145,7 @@ At runtime, archetype changes are synchronized with two broadcast paths:
 | Broadcast                                  | Target            | Description |
 |--------------------------------------------|-------------------|-------------|
 | `ArchetypeUpdateBroadcast`                  | Owner connection  | Updates the local owner's archetype controller directly. |
-| `CharacterObserverArchetypeUpdateBroadcast` | Observer clients  | Includes `CharacterID` so observers can route updates through `BaseCharacter.ClientCharacters` to the correct remote character controller. |
+| `CharacterObserverArchetypeUpdateBroadcast` | Observer clients (`ObserverBroadcastScope.BroadcastToObserversExceptOwner`) | Includes `CharacterID` so observers can route updates through `BaseCharacter.ClientCharacters` to the correct remote character controller; applied with `RestoreArchetype`. |
 
 Observer routing avoids per-controller global fan-out by using the client-side character cache keyed by `ICharacter.ID`.
 

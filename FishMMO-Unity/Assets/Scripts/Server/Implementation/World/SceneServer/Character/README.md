@@ -46,11 +46,12 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 ## Features
 
 - Authentication-triggered character load with per-account rate limiting (`AuthCallbackCooldownSeconds = 2.0s`). A refused callback disconnects with `DisconnectNoticeReason.RateLimited` rather than returning silently — this callback is the only thing that starts a character load, so a quiet return left the client authenticated, in no map, and watched by nothing
-- Async database fetch of character and 13 sub-entity data sets within a single Unit of Work for a consistent snapshot
+- Async database fetch of character and 14 sub-entity data sets within a single Unit of Work for a consistent snapshot. Items are **one** fetch now: inventory, bank and equipment are rows in `character_item` distinguished by a container column, not three tables
+- **The load aborts on any sub-entity fetch failure.** A character used to spawn with whatever had loaded, and the next item snapshot then pruned every row a null item list did not vouch for — a transient database fault on login destroyed an inventory. A refused login costs the player a retry
 - Early session claim (`TryClaimAsync`) before sub-entity hydration to fail fast if another server owns the character, with a bounded retry (5 attempts, ~1.5s) that absorbs the hand-off window during a scene transfer instead of kicking
 - Authoritative re-read of the character row **after** the claim succeeds, so a transfer cannot load a snapshot that predates the source server's final save
 - Race-template-based prefab instantiation from the FishNet object pool
-- Full controller hydration from pre-fetched DTOs: attributes, inventory, bank, equipment, abilities, known abilities, achievements, friends, guild, party, hotkeys, buffs, factions
+- Full controller hydration from pre-fetched DTOs: items (inventory, bank, equipment), attributes, abilities, known abilities, achievements, waypoints, friends, guild, party, hotkeys, buffs, factions, archetypes, quests
 - Equipment attribute modifier application during load (`item.Equippable.Equip`)
 - Buff restoration with tick-based expiry/next-tick recalculation from remaining time
 - Scene validation and FishNet scene loading for both world scenes and instances
@@ -72,6 +73,10 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - Death/respawn: player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). A respawn into a different scene follows the same ordering as the teleporter path, so `OnDisconnect` subscribers see the scene being left rather than the one being entered. Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
 - Connection disconnect cleanup: waiting-scene-load character pool return with session release, spawned character mapping removal with save-then-despawn
 - Graceful deinitialize: main-thread DTO snapshot of all characters, async persist all, release all sessions (spawned + waiting-to-load)
+- Sub-entity persistence captured in one `SubEntitySnapshot` — buffs, attributes, abilities, pets, achievements, waypoints, factions, archetypes, known abilities — and handed to the persistence lane by `EnqueueSubEntitySaves`. One type rather than eight parallel lists threaded through five save paths, which is how factions went unsaved for the life of the project: fetched on login, never written back
+- Dirty marks cleared only by a write that actually landed (`MarkAttributesPersisted` and friends), and only when the bulk result reports `Filtered == 0` — a row the service declined to attempt never reached the database, so retiring its value would lose it
+- Item persistence handed off, not duplicated: the logout item flush is captured by `ICharacterInventorySystem.CaptureDespawnFlush` while the character is still resident and **awaited inside save-and-release, before the release**
+- Verified client target reports (`TargetSelectionBroadcast`), which feed the observer-streaming target pin
 - Optimistic concurrency via `character.Version++` on every save
 - Runtime mapping caches for fast lookups: by ID, by lowercase name, by world, by connection, waiting-scene-load, session tokens
 - Lifecycle events for cross-system coordination: `OnBeforeLoadCharacter`, `OnAfterLoadCharacter`, `OnConnect`, `OnDisconnect`, `OnSpawnCharacter`, `OnDespawnCharacter`, `OnPetKilled`
@@ -83,7 +88,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - **Unity 6.3 LTS**
 - **FishNetworking** — networking framework (ServerManager, SceneManager, NetworkObject, NetworkConnection, object pooling)
 - **FishMMO Server Core** — provides `ServerBehaviour`, `ICharacterSystem`, `ICharacterMappingData`, `ICharacterSystemRuntimeData`, `ICharacterSystemMainThreadQueueData`, `ISceneServerSystem`, `ISceneServerRuntimeData`, `IAsyncWorkerData`, `CharacterSessionInfo`, `SceneServerAuthenticator`, broadcast types (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`, `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `PartyAddBroadcast`, `PartyAddMultipleBroadcast`, `FriendAddBroadcast`, `FriendAddMultipleBroadcast`, `KnownAbilityAddBroadcast`, `KnownAbilityAddMultipleBroadcast`, `KnownAbilityEventAddBroadcast`, `KnownAbilityEventAddMultipleBroadcast`, `AchievementUpdateBroadcast`, `AchievementUpdateMultipleBroadcast`, `InventorySetItemBroadcast`, `InventorySetMultipleItemsBroadcast`, `BankSetItemBroadcast`, `BankSetMultipleItemsBroadcast`, `HotkeySetBroadcast`, `HotkeySetMultipleBroadcast`), `WorldSceneDetails`, `SceneTeleporterDetails`, `CharacterRespawnPositionDetails`, and `IPeriodicUpdateSystem`
-- **FishMMO Database** — provides `ICharacterService`, `IUnitOfWorkService`, `ICharacterItemService`, `ICharacterAttributeService`, `ICharacterAbilityService`, `ICharacterKnownAbilityService`, `ICharacterAchievementService`, `ICharacterFriendService`, `ICharacterGuildService`, `ICharacterPartyService`, `ICharacterHotkeyService`, `ICharacterBuffService`, `ICharacterFactionService`, `CharacterData`, and all sub-entity data DTOs
+- **FishMMO Database** — provides `ICharacterService`, `IUnitOfWorkService`, `ICharacterSessionOwnershipService`, `ICharacterItemService`, `ICharacterAttributeService`, `ICharacterAbilityService`, `ICharacterKnownAbilityService`, `ICharacterAchievementService`, `ICharacterWaypointService`, `ICharacterFriendService`, `ICharacterGuildService`, `ICharacterPartyService`, `IPartyService`, `ICharacterHotkeyService`, `ICharacterBuffService`, `ICharacterFactionService`, `ICharacterArchetypeService`, `ICharacterQuestService`, `CharacterData`, `BulkWriteResult`, and all sub-entity data DTOs
 - **FishMMO Shared** — provides `IPlayerCharacter`, `ICharacterDamageController`, `ICharacterAttributeController`, `IAbilityController`, `IAchievementController`, `IInventoryController`, `IBankController`, `IEquipmentController`, `IFriendController`, `IGuildController`, `IPartyController`, `IBuffController`, `IFactionController`, `RaceTemplate`, `CharacterFlags`, `AccessLevel`, `Item`, `Ability`, `Buff`, `Faction`, `Achievement`, `HotkeyData`
 
 ## Installation / Build
@@ -159,7 +164,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | Thread | Responsibilities |
 |---|---|
 | Main thread | Unity/FishNet object lifecycle, prefab instantiation, controller hydration, map mutations, scene validation, broadcasts, out-of-bounds checks, main-thread queue drain |
-| Async worker | DB load/save/session operations (claim, release, lease refresh), social data fetches, character persistence |
+| Async worker | DB load/save/session operations (claim, release, lease refresh), social data fetches, character and sub-entity persistence, and the item flush handed over by `ICharacterInventorySystem.CaptureDespawnFlush` |
 
 ## Usage Examples
 
@@ -171,6 +176,15 @@ This is an integrated module within FishMMO. It is included as part of the serve
 |---|---|---|
 | `ClientValidatedSceneBroadcast` | `OnClientValidatedSceneBroadcastReceived` | Client confirms scene loaded; server spawns character and sends initial payloads |
 | `ClientScenesUnloadedBroadcast` | `OnClientScenesUnloadedBroadcastReceived` | Client confirms scene unloaded; server disconnects if no character is loaded |
+| `RespawnAtBindPointBroadcast` | `OnClientRespawnAtBindPointBroadcastReceived` | Dead player asks to respawn at their bind point |
+| `ResurrectAcceptBroadcast` | `OnClientResurrectAcceptBroadcastReceived` | Dead player accepts a recorded resurrect offer |
+| `RequestLeaveInstanceBroadcast` | `OnClientRequestLeaveInstanceBroadcastReceived` | Leave the current instance |
+| `RequestInstanceDetailsBroadcast` | `OnClientRequestInstanceDetailsBroadcastReceived` | Instance panel readout |
+| `InstanceKickBroadcast` | `OnClientInstanceKickBroadcastReceived` | Party leader removes a member from the run |
+| `InstancePrivacyBroadcast` | `OnClientInstancePrivacyBroadcastReceived` | Party leader changes the run's listing |
+| `TargetSelectionBroadcast` | `OnClientTargetSelectionBroadcastReceived` | Client reports its selected target; verified, then installed on `ITargetController` |
+
+`TargetSelectionBroadcast` is debounced per connection (`TargetSelectionOperation` = 7, `TargetSelectionDebounceMs` = 50). Verification is the whole job: the value feeds the observer-streaming target pin, so a non-zero id must resolve to a spawned **character in the sender's own scene** or an unverified id would let a modified client pin arbitrary objects into its own observer budget. Anything that fails to resolve is stored as no-target rather than dropped, so a bad report cannot leave a stale pin standing. Range is deliberately not checked at receipt — the pin bounds it at use, where the live distance is already in hand, and rejecting on a moving value would flap.
 
 ### Subscribed Events
 
@@ -257,10 +271,10 @@ refusing to let their combat timer lapse.
 **Step 2 — Async DB snapshot + session claim** (`LoadCharacterAsync`):
 
 1. Fetches the selected character for the account via `ICharacterService.FetchByAccountAsync` to resolve its ID.
-2. Claims the session via `ClaimCharacterSessionAsync` → `TryClaimAsync(characterID, serverID)`, before heavy hydration, so contention fails before 13 sub-entity fetches. Contention (`InvalidOperation`) is retried up to 5 times with linear backoff (~1.5s total); any other error fails immediately. This runs **outside** the Unit of Work — retrying inside an open transaction would hold it for the whole backoff.
+2. Claims the session via `ClaimCharacterSessionAsync` → `TryClaimAsync(characterID, serverID)`, before heavy hydration, so contention fails before 14 sub-entity fetches. Contention (`InvalidOperation`) is retried up to 5 times with linear backoff (~1.5s total); any other error fails immediately. This runs **outside** the Unit of Work — retrying inside an open transaction would hold it for the whole backoff.
 3. Re-reads the character row now that the claim is held, and verifies the selected character did not change. The pre-claim read is unsynchronised and on a scene transfer can predate the source server's final save; loading it would put the player back where they started.
 4. Begins `IUnitOfWork` for a consistent sub-entity snapshot. If this fails, the already-committed claim is released explicitly (there is no transaction to roll it back).
-5. Fetches 13 sub-entity datasets sequentially within the UoW: inventory, bank, equipment, attributes, abilities, known abilities, achievements, friends, guild, party, hotkeys, buffs, factions.
+5. Fetches 14 sub-entity datasets sequentially within the UoW: items, attributes, abilities, known abilities, achievements, waypoints, friends, guild, party (plus a party lookup when one is set), hotkeys, buffs, factions, archetypes, quests. **Any one of them failing abandons the load**: `AbandonLoadAfterFetchFailure` logs, releases the held session, and disconnects with `ServerError`. There is no partial load.
 6. Commits the read-only transaction.
 7. Bundles all data into `CharacterLoadContext` and marshals to main thread.
 8. On failure after claim: releases session and kicks connection.
@@ -272,7 +286,7 @@ refusing to let their combat timer lapse.
 3. Fires `OnBeforeLoadCharacter`.
 4. Looks up `RaceTemplate` and instantiates prefab from FishNet object pool.
 5. Populates base character fields from `CharacterData` (ID, name, account, world, scene, bind point, instance, race, flags, etc.).
-6. Hydrates all controllers from pre-fetched DTOs: attributes (resource vs regular), inventory, bank, equipment (with `Equippable.Equip`), abilities, known abilities, achievements, friends, guild, party, hotkeys, buffs (with tick recalculation), factions.
+6. Hydrates all controllers from pre-fetched DTOs: attributes (resource vs regular), items routed to inventory/bank/equipment by their container column (with `Equippable.Equip`), abilities, known abilities, achievements, waypoints, friends, guild, party, hotkeys, buffs (with tick recalculation), factions, archetypes, quests.
 7. Resolves scene (world or instance) and attempts scene load via `ISceneServerSystem.TryLoadSceneForConnection`.
 8. On success: fires `OnAfterLoadCharacter`, stores session token, moves character to `WaitingSceneLoadCharacters`.
 9. On failure: releases session, pools prefab, disconnects.
@@ -317,13 +331,15 @@ Claim, release and lease refresh all verify the full ownership triple (character
 
 A claim handed to `LoadCharacterAsync` by a combat-logout reattach is tracked from the method's first line, alongside the character ID it belongs to, so the abandon paths that run *before* any character row has been read still have something to give back — and so a reattach whose account no longer selects that character is refused rather than installing the token under the wrong ID. The final hand-off to the main thread is checked too: it is the only step that installs the claim in `SessionTokens`, so a rejected enqueue releases instead of stranding it.
 
-All release paths follow **save-then-release** ordering via `SaveAndReleaseCharacterAsync` to ensure data is persisted while the session lock is still held. `TryExtractAndReleaseSession` is used for non-save release paths (waiting-to-load characters, scene validation failures), and every path ultimately routes through `ReleaseSessionSafely`.
+All release paths follow **save-then-release** ordering via `SaveAndReleaseCharacterAsync` to ensure data is persisted while the session lock is still held. The character row, its sub-entity rows and the item flush all travel in that **one** work item. The sub-entity writes used to be enqueued separately, on a different worker lane than the save-and-release, and the item snapshot was enqueued from the despawn event onto the character's ordered lane while the save-and-release ran unkeyed on another — so the release could land, the destination scene server could claim and load, and the item snapshot would then be refused by the ownership assertion or land too late for the load that had already read the rows.
+
+The item half is captured, not enqueued: `ICharacterInventorySystem.CaptureDespawnFlush(character, sessionInfo)` builds the batch while the character is still resident and returns a `Func<Task>` that is **awaited before the release**. The lease is passed explicitly for the same reason the caller takes the token out of `SessionTokens` first. `TryExtractAndReleaseSession` is used for non-save release paths (waiting-to-load characters, scene validation failures), and every path ultimately routes through `ReleaseSessionSafely`.
 
 The release happens **even if the save fails**. Holding the claim back because a write failed strands the character far more visibly than losing one save: the destination scene server cannot claim it and kicks the player. A failed save is retried separately by the pending-flush queue, where the version guard drops it if the next owner has already written something newer.
 
 #### Pending flush retry
 
-`QueuePendingFlush` records any save and/or release that could not be completed on its first attempt — because `EnqueueAsyncWork` returned `false` (bounded worker channel, `DropWrite`) or because the database call failed. `OnPeriodicPendingFlushRetry` drains it every `PendingFlushRetryIntervalSeconds` with linear backoff up to `MaxPendingFlushAttempts`, and `DrainPendingFlushes` flushes whatever remains during `OnDeinitialize`.
+`QueuePendingFlush` records any save, item flush and/or release that could not be completed on its first attempt — because `EnqueueAsyncWork` returned `false` (`AsyncWorkerData` refuses admission once `maxOutstandingItems` accepted-but-unfinished items are in flight; work runs concurrently behind a `SemaphoreSlim` capped at `maxConcurrency`, ordered per entity key by `OrderedLane`) or because the database call failed. `OnPeriodicPendingFlushRetry` drains it every `PendingFlushRetryIntervalSeconds` with linear backoff up to `MaxPendingFlushAttempts`, and `DrainPendingFlushes` flushes whatever remains during `OnDeinitialize`.
 
 Terminal outcomes are not retried: a release that reports `InvalidOperation`/`NotFound` means the session is no longer ours, and a save rejected as `StaleState` means newer state is already persisted.
 
@@ -333,12 +349,16 @@ Note that a character queued for release has already been removed from `SessionT
 
 `OnPeriodicSave(deltaTime)` fires at `saveRate` intervals:
 
-1. Validates initialization and character count.
+1. Validates initialization, and returns only when `CharactersByID` **and** `LingeringCharacterCount` are both zero — a combat-logout body has no connection, so it is absent from the map but still resident and still accumulating state worth writing.
 2. Acquires atomic processing guard via `TryBeginSave`.
-3. Snapshots character DTOs on the main thread via `BuildCharacterData` (increments `character.Version` for optimistic concurrency).
-4. Enqueues `SaveAllCharactersAsync`:
-   - Persists each character via `ICharacterService.PersistAsync`.
-   - Releases processing guard in `finally`.
+3. Snapshots character DTOs on the main thread via `BuildCharacterData` (increments `character.Version` for optimistic concurrency), pairing each with the `CharacterSessionInfo` this server holds so the write can prove ownership, and appends every dirty sub-entity row of that character into one `SubEntitySnapshot` via `AppendSubEntities`.
+4. `AppendLingeringCharacterSnapshots` adds the combat-logout bodies to both lists.
+5. Enqueues `SaveAllCharactersAsync`, which persists each character via `ICharacterService.PersistOwnedAsync` and releases the processing guard in `finally`.
+6. `EnqueueSubEntitySaves` hands every non-empty list of the snapshot to the persistence lane independently: buffs, attributes, abilities, pets, achievements, waypoints, factions, archetypes, known abilities.
+
+`SubEntitySnapshot` is one type rather than eight parallel lists threaded through five save paths. Each new sub-entity had to be added to every one of those paths by hand, and factions were simply missed for the life of the project — fetched on login, never written back. With the capture and the saves in one place there is one list to extend and no path that can forget a table.
+
+**A dirty mark is cleared only by a write that landed.** Each `SaveXAsync` clears its marks (`MarkAttributesPersisted`, `MarkAbilitiesPersisted`, `MarkAchievementsPersisted`, `MarkFactionsPersisted`, `MarkArchetypesPersisted`, `MarkKnowledgePersisted`) back on the main thread, and only when the bulk result reports `Filtered == 0`. A failed write leaves everything marked so the next pass carries it — the periodic path has no other retry. Filtered rows are why the outcome matters rather than the boolean alone: a row the service declined to attempt never reached the database, and clearing it would retire a value that was never stored. Superseded rows are the opposite and safe to clear, because the database already holds something newer.
 
 Saving does not touch session leases. `PersistAsync` previously extended the lease for any row whose session was `Online` without checking which server was writing, which let a stale save from a released character extend the *new* owner's lease.
 
@@ -367,7 +387,7 @@ This is deliberately decoupled from `saveRate`: the save walk is sequential with
 
 1. Validates character exists and `IsTeleporting`.
 2. Resolves current scene from `WorldSceneDetailsCache`.
-3. Validates teleporter exists in scene details.
+3. Validates teleporter exists in scene details. A refusal goes through `CancelTeleport(character, reason, playerText, severity)`, which clears `TeleporterName` and sends the owner a `ToastBroadcast` — the refusal used to be logged server-side only, leaving the player standing on a teleporter with no explanation.
 4. Tells connection to unload current world scene.
 5. Sets character immortal.
 6. Fires `OnDisconnect` early (requires current scene context).
@@ -462,7 +482,8 @@ respawning *into* rather than the one they died in.
 - Scene validation failures after `WaitingSceneLoadCharacters` release session, pool prefab, and kick.
 - A release that cannot be enqueued or that fails at the database is queued for retry rather than dropped; if every attempt fails, the 2-minute database lease is the backstop.
 - Failed `EnqueueAsyncWork` logs a warning; critical paths (load, save-and-despawn) also take fallback action.
-- `SaveAllCharactersAsync` refreshes session leases even when individual saves fail.
+- `SaveAllCharactersAsync` catches per-character failures independently; it does not touch session leases at all.
+- A sub-entity fetch that fails during load abandons the load rather than spawning a partially hydrated character.
 - Deinitialize catches per-character snapshot/save/release failures independently.
 
 ## Operational Checks
@@ -479,14 +500,18 @@ respawning *into* rather than the one they died in.
 | Character load | Authenticate a client with a selected character; confirm character is loaded, hydrated, and placed in `WaitingSceneLoadCharacters` |
 | Session claim | During load, confirm `TryClaimAsync` succeeds and session token is stored in `SessionTokens` |
 | Session claim conflict | Attempt to load a character already claimed by another server; confirm `TryClaimAsync` fails and connection is kicked |
-| Sub-entity hydration | After load, confirm all 13 sub-entity datasets are populated on the character's controllers |
+| Sub-entity hydration | After load, confirm all 14 sub-entity datasets are populated on the character's controllers |
+| Fetch failure aborts the load | Fail one sub-entity fetch (e.g. drop the connection mid-load); confirm the session is released, the client is disconnected with `ServerError`, and nothing is written over the unloaded state |
+| Sub-entity persistence | Change a buff, faction, waypoint, archetype and known ability; wait for `saveRate`; confirm each list is enqueued and its dirty marks cleared only on a write with `Filtered == 0` |
+| Item flush ordering | Disconnect a character; confirm `CaptureDespawnFlush` is awaited inside the save-and-release work item, before the session release |
+| Target selection | Send `TargetSelectionBroadcast` naming an object in another scene; confirm it is stored as no-target rather than pinned |
 | Scene validation | Confirm `SceneManager_OnClientLoadedStartScenes` validates the scene and sends `ClientValidatedSceneBroadcast` |
 | Character spawn | Confirm `OnClientValidatedSceneBroadcastReceived` promotes character into active maps, spawns network object, and fires `OnSpawnCharacter` |
 | Non-DB payload broadcast | After spawn, confirm client receives known abilities, achievements, inventory, bank, and hotkeys broadcasts |
 | Social payload broadcast | After spawn, confirm client receives guild members, party members, and friend online status broadcasts |
 | Periodic save | Wait for `saveRate` interval; confirm `OnPeriodicSave` fires, characters are persisted, and session leases are refreshed |
 | Save processing guard | Trigger overlapping save cycles; confirm only one executes at a time via `TryBeginSave` |
-| Session lease refresh | During periodic save, confirm `RefreshSessionLeaseAsync` is called for each character even on save failure |
+| Session lease refresh | Confirm `OnPeriodicSessionLeaseRefresh` batches every held session into one `RefreshSessionLeasesAsync` call on its own timer, and that the save path never touches a lease |
 | Out-of-bounds check | Move a character outside scene boundaries; confirm `OnPeriodicOutOfBoundsCheck` teleports them to a respawn point |
 | Teleport flow | Trigger a valid teleporter; confirm scene unload, immortality, position update, and save-then-release with reconnect |
 | Invalid teleporter | Trigger a non-existent teleporter name; confirm it is logged and no mutation occurs |
@@ -532,10 +557,12 @@ Authenticator_OnClientAuthenticationResult(conn, authenticated)
        ├─ IUnitOfWorkService.BeginAsync → UoW
        ├─ ICharacterService.FetchByAccountAsync(accountName, selected: true)
        ├─ ICharacterService.TryClaimAsync(characterID, serverID) → sessionToken
-       ├─ Fetch 13 sub-entity datasets within UoW:
-       │    inventory, bank, equipment, attributes, abilities,
-       │    knownAbilities, achievements, friends, guild, party,
-       │    hotkeys, buffs, factions
+       ├─ Re-read the character row now the claim is held
+       ├─ Fetch 14 sub-entity datasets within UoW (any failure →
+       │    AbandonLoadAfterFetchFailure: release + ServerError):
+       │    items, attributes, abilities, knownAbilities,
+       │    achievements, waypoints, friends, guild, party,
+       │    hotkeys, buffs, factions, archetypes, quests
        ├─ UoW.CommitAsync (read-only)
        └─ TryEnqueueMainThread → InstantiateAndLoadCharacter(CharacterLoadContext)
               │
@@ -544,10 +571,11 @@ Authenticator_OnClientAuthenticationResult(conn, authenticated)
               ├─ OnBeforeLoadCharacter(conn, characterID)
               ├─ RaceTemplate.Get → Instantiate prefab from pool
               ├─ Populate base character fields from CharacterData
-              ├─ Hydrate controllers: attributes, inventory, bank,
-              │    equipment (+Equip), abilities, knownAbilities,
-              │    achievements, friends, guild, party, hotkeys,
-              │    buffs (tick recalc), factions
+              ├─ Hydrate controllers: attributes, items routed by
+              │    container (+Equip), abilities, knownAbilities,
+              │    achievements, waypoints, friends, guild, party,
+              │    hotkeys, buffs (tick recalc), factions,
+              │    archetypes, quests
               ├─ TryLoadSceneForConnection(conn, instance)
               ├─ OnAfterLoadCharacter(conn, character)
               ├─ Store SessionTokens[characterID]
@@ -599,9 +627,12 @@ OnRemoteConnectionStopped(conn)
             └─ SaveAndDespawnCharacter(conn, character, sessionInfo)
                    │
                    ├─ DisableFlags(IsLoaded)
-                   ├─ BuildCharacterData (Version++)
+                   ├─ BuildCharacterData (Version++) + AppendSubEntities
+                   ├─ ICharacterInventorySystem.CaptureDespawnFlush(character, lease)
                    ├─ EnqueueAsyncWork → SaveAndReleaseCharacterAsync
                    │    ├─ SaveCharacterAsync (persist while holding lock)
+                   │    ├─ SaveSubEntitiesSequentiallyAsync
+                   │    ├─ await itemFlush()        [same work item, before the release]
                    │    └─ ReleaseCharacterSessionAsync (Online → Offline)
                    ├─ OnDespawnCharacter(conn, character)
                    └─ ServerManager.Despawn(nob, Pool)
@@ -647,16 +678,20 @@ CharacterDamageController_OnKilled(killer, defender)
 ```
 OnPeriodicSave(deltaTime)
 │
-├─ Validate initialized, characters exist
+├─ Validate initialized; CharactersByID or LingeringCharacterCount non-zero
 ├─ TryBeginSave (atomic guard)
-├─ Snapshot all CharacterData DTOs on main thread (Version++)
-├─ Capture all SessionTokens
-└─ EnqueueAsyncWork → SaveAllCharactersAsync
-       │
-       ├─ For each character:
-       │    ├─ ICharacterService.PersistAsync(charData)
-       │    └─ ICharacterService.RefreshSessionLeaseAsync(charID, serverID, token)
-       └─ finally: EndSave (release guard)
+├─ Snapshot all CharacterData DTOs on main thread (Version++),
+│    each paired with the CharacterSessionInfo held for it
+├─ AppendSubEntities → one SubEntitySnapshot
+├─ AppendLingeringCharacterSnapshots (combat-logout bodies)
+├─ EnqueueAsyncWork → SaveAllCharactersAsync
+│      ├─ For each character: ICharacterService.PersistOwnedAsync(charData, ownership)
+│      └─ finally: EndSave (release guard)
+└─ EnqueueSubEntitySaves (one lane per non-empty list)
+       ├─ SaveBuffsAsync        ├─ SaveAttributesAsync   ├─ SaveAbilitiesAsync
+       ├─ SavePetsAsync         ├─ SaveAchievementsAsync ├─ SaveWaypointsAsync
+       ├─ SaveFactionsAsync     ├─ SaveArchetypesAsync   └─ SaveKnownAbilitiesAsync
+       └─ each: written && Filtered == 0 → MarkXPersisted on the main thread
 ```
 
 ## Project Structure
@@ -673,10 +708,14 @@ party is the durable half: it survives its creator leaving, logging out, or hand
   the roster walk. A leader standing outside the instance — they opened it and stepped out, or have
   not arrived yet — must not silently lose control of it, and a member must not silently gain
   control because the leader is momentarily unresolvable.
-- **Naming the leader is a separate, best-effort question.** Character names live on the objects
-  this scene server holds, so a leader elsewhere cannot be named from here. The client is told there
-  is a leader it cannot name rather than that there is none — "no leader" is a state the party
-  system actively repairs, and displaying it for a run that has one would be alarming and wrong.
+- **Identifying the leader is a separate, best-effort question.** The roster walk can only see
+  characters this scene server holds, so a leader elsewhere yields no ID and `LeaderCharacterID` is
+  zero. The client is told there is a leader it cannot name rather than that there is none — "no
+  leader" is a state the party system actively repairs, and displaying it for a run that has one
+  would be alarming and wrong. **The ID is the whole answer the wire carries**: `InstanceAuthority`
+  no longer resolves a `LeaderName`, which was a second lookup that could only succeed where the ID
+  had already been found, and put a name on the wire the client resolves better itself through its
+  own naming system.
 - A run opened by an **ungrouped** character has no party, and there its owner *is* its leader. That
   is the only case where the two differ, and also the one where they cannot disagree.
 
@@ -714,6 +753,7 @@ Character/
 ├── CharacterSystem.Saving.cs             # Partial: periodic save, save-and-despawn, session claim/release, BuildCharacterData
 ├── CharacterSystem.Social.cs             # Partial: async guild/party/friend fetch, non-DB payload broadcast, targeted broadcasts
 ├── CharacterSystem.Instance.cs           # Partial: instance readout, party-leader kick and visibility, difficulty death rules
+├── CharacterSystem.CombatLogout.cs       # Partial: combat-logout linger, reattach, linger sweep and finalisation
 ├── CharacterMappingData.cs               # Runtime mapping caches (connection, ID, name, world, waiting load, session tokens)
 ├── CharacterSystemRuntimeData.cs         # Runtime state: atomic save processing guard (TryBeginSave/EndSave)
 ├── CharacterSystemMainThreadQueueData.cs # Per-system main-thread queue container
@@ -746,7 +786,9 @@ ServerBehaviour
         ├── CharacterSystem.Connection.cs
         ├── CharacterSystem.Loading.cs
         ├── CharacterSystem.Saving.cs
-        └── CharacterSystem.Social.cs
+        ├── CharacterSystem.Social.cs
+        ├── CharacterSystem.Instance.cs
+        └── CharacterSystem.CombatLogout.cs
 ```
 
 **Runtime Data Containers:**

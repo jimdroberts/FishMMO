@@ -39,7 +39,7 @@ The Achievement system is a data-driven, template-based framework for tracking p
 - **Tier-based rewards** — Each tier can grant abilities, ability events, items, buffs, and titles upon completion.
 - **FishNet network synchronization** — Server-authoritative state broadcast to clients via `AchievementUpdateBroadcast` and `AchievementUpdateMultipleBroadcast`.
 - **Fire-and-forget database persistence** — Reward persistence (abilities, items) uses async services marshalled back to the main thread.
-- **Progress persistence** — `Achievement.PersistenceDirty` / `MarkChanged` / `MarkPersisted` track what the database has not confirmed; `CharacterSystem.Saving.AppendAchievementData` writes dirty rows on the periodic save, at despawn (before the session release) and for lingering combat-logout bodies. Before this leg existed, progress was fetched on login and never written back.
+- **Progress persistence** — `Achievement.PersistenceDirty` / `MarkChanged` / `MarkPersisted` track what the database has not confirmed; `CharacterSystem.Saving.AppendAchievementData` writes dirty rows on the periodic save, at despawn (before the session release) and for lingering combat-logout bodies. Before this leg existed, progress was fetched on login and never written back. `Version` is bumped by **every mutation**, not only by the save snapshot — that is what lets `MarkPersisted(persistedVersion)` refuse to clear a row changed while its write was in flight, the trap the attribute and ability tables fell into. The load path passes `skipEvent`, which doubles as "this is a restore" and leaves the restored rows clean, so a login does not rewrite every achievement a character owns.
 - **Static events** — `OnCompleteAchievement` and `OnUpdateAchievement` allow any system to react to achievement progress and completion.
 - **ScriptableObject templates** — `AchievementTemplate` blueprints are configured in the Unity Editor with icon, category, description, and tier definitions.
 - **Inventory/bank fallback** — Item rewards attempt inventory first, falling back to bank if inventory lacks space.
@@ -198,11 +198,11 @@ When a tier is completed, `AchievementSystem.IAchievementController_HandleAchiev
 |-------------|---------|-------------|
 | `AbilityRewards` | `HandleAbilityRewards` — Learns ability, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
 | `AbilityEventRewards` | `HandleAbilityEventRewards` — Learns ability event, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
-| `ItemRewards` | `HandleItemRewards` — Adds to inventory (preferred) or bank (fallback), broadcasts to client | Fire-and-forget async via `ICharacterItemService` or `ICharacterItemService` |
+| `ItemRewards` | `HandleItemRewards` — Grants through `ICharacterInventorySystem.TryGrantItem`, to the inventory when it has enough free slots and otherwise the bank | The grant funnel owns the write; the `ICharacterItemService` parameter is passed but unused |
 | `BuffRewards` | Not yet implemented | — |
 | `TitleRewards` | Not yet implemented | — |
 
-Item rewards attempt inventory first. If the inventory lacks sufficient free slots, the system falls back to the bank. If neither has space, items are silently dropped.
+Item rewards attempt inventory first. If the inventory lacks free slots for the whole tier, the system falls back to the bank. If neither has space, nothing is granted, the loss is logged, and the player is told so in a `ChatChannel.System` message — the rewards are dropped, but never silently.
 
 ### External Integration Points
 

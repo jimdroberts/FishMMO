@@ -13,6 +13,8 @@
 - [Configuration](#configuration)
 - [Usage Examples](#usage-examples)
   - [The attributed-modifier ledger](#the-attributed-modifier-ledger)
+  - [Network Synchronization](#network-synchronization)
+  - [Combat reporting to observers and to the caster](#combat-reporting-to-observers-and-to-the-caster)
 - [Operational Checks](#operational-checks)
 - [Flow Diagram](#flow-diagram)
 - [Project Structure](#project-structure)
@@ -43,6 +45,14 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - Depletable resource attributes (Health, Mana, Stamina) with current/max tracking
 - Damage and resistance calculations with linked damage/resistance template pairs
 - Tick-based regeneration on a **1 second pulse** (`regenTickRate`), delivering a share of the amount authored against a 5 second window (`REGEN_AUTHORING_WINDOW_SECONDS`), so the pulse got finer without getting stronger. A 1 second consumption lockout suppresses regen right after a spend.
+
+> **Known omission — the lockout state is predicted and NOT reconciled.** `lastProcessedRegenTick`,
+> `lastConsumedResourceTicks` and `lastObservedResourceValues` are written from inside the replicate
+> body and none of them travels in `CharacterReconcileData`, so owner and server can disagree about
+> whether a resource is still inside the window a spend opened. It is bounded and deliberate: the
+> resource *value* is reconciled every tick, so a disagreement costs at most one pulse before the
+> server's number overwrites it. Anything that comes to depend on the lockout being exact must
+> reconcile it first.
 - An **attributed-modifier ledger**: every external contribution is keyed by `ModifierSource(Kind, Id, Index)` so it can be restated idempotently and released by contributor, and the server's total is installed as a residual over whatever this peer has attributed
 - Two distinct sync paths, because state forwarding is off: the owner reconciles every tick, observers receive `CharacterAttributesBroadcast` / `CharacterResourcesBroadcast` on a change-driven scheduler
 - Replicate/Reconcile prediction support via `IPredictableController` (Order=95) and `CharacterAttributeResourceState` snapshots
@@ -149,7 +159,7 @@ named contributions, each keyed by a `ModifierSource` — a `(Kind, Id, Index)` 
 |------|----|-------|-----------|
 | `Item` | `Item.ID` | item-attribute template id | `ItemGenerator.ApplyAttributes` |
 | `Buff` | buff template id | position in `BonusAttributes` | `AttributeBuffTemplate` and friends |
-| `Region` | region `NetworkObject.ObjectId` | authored entry index | `ApplyRegionAttributeAction` |
+| `Region` | region instance id | authored entry index | `ApplyRegionAttributeAction` |
 | `DungeonScaling` | scalar template id | — | `NPC` |
 | `NpcBonus` | template id | entry index | `NPC` |
 | `Authoritative` | — | — | the server's total, installed as a residual |
@@ -257,7 +267,7 @@ replicated — it is recomputed locally via the dependency graph in `ApplyChildr
 
 ### Prediction Pipeline
 
-`CharacterAttributeController` implements `IPredictableController` (Order=95), running after `BuffController` (80) and `CooldownController` (90), and before `AbilityController` (100). This ensures regenerated resources are available for same-tick ability activation checks.
+`CharacterAttributeController` implements `IPredictableController` (Order=95), running after `KCCPlayer` (80), `BuffController` (85), `EquipmentController` (93) and `CooldownController` (90), and before `AbilityController` (100). This ensures regenerated resources are available for same-tick ability activation checks, and that every predicted contributor has been applied before the authoritative total is installed as a residual.
 
 | Method              | Behaviour                                                                                |
 |---------------------|------------------------------------------------------------------------------------------|
@@ -285,6 +295,45 @@ Delta serialization uses a 7-bit byte bitmask — only changed fields are transm
 
 > **EditMode / unit-test note:**
 > `CharacterAttributeResourceStateSerializer.RegisterSerializers` is decorated with `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`, which only fires in PlayMode. EditMode tests must invoke the registration method via reflection during fixture setup before exercising `GenericDeltaWriter<CharacterAttributeResourceState>.Write` / `GenericDeltaReader<CharacterAttributeResourceState>.Read`. See `Assets/UnitTests/Prediction/CharacterAttributeResourceStateSerializerTests.cs` for the canonical pattern.
+
+### Combat reporting to observers and to the caster
+
+Three pieces sit between a hit landing and a number appearing on somebody's screen.
+
+**`CombatEventCoalescer`** merges the combat events one character receives within a tick. One
+`CombatEventBroadcast` per hit is fine for a duel and a flood for an area effect — twenty
+projectiles landing on one creature in one tick would be twenty messages to every observer of that
+creature, each spawning its own label. Hits from the same `(source, kind, damage type)` are summed
+into one entry. It is bounded at `MaxEntries` (8) distinct entries per flush; past the bound,
+further hits fold into an anonymous entry (source 0) for their kind and type, so the total stays
+right and the message count does not grow. **Each entry also counts its hits** (`Entry.Occurrences`),
+because merging is right for display and wrong for the caster's predicted numbers, which are drawn
+one per hit and settled one per report.
+
+**`PredictedCombatEvents`** lets the caster's client draw its own number the moment its predicted
+projectile connects, instead of waiting half a round trip for the report. The amounts agree because
+damage variance is drawn from the ability object's `DeterministicRNG`. There is **no server-sent
+rejection** — the server never knew a client predicted anything — so absence is the only signal: a
+prediction unconfirmed for `ConfirmationWindowSeconds` (1.0 s, deliberately erring long) is treated
+as rejected. `TryConfirm` matches on source, target and kind rather than on the amount, so a bounded
+RNG divergence does not orphan a good number. It is pure bookkeeping with no rendering dependency;
+the display layer subscribes to `OnPredicted` / `OnPredictionConfirmed` / `OnPredictionRejected`.
+
+**`ObservedResourcePushScheduler`** decides tick by tick whether a character's resources go out to
+its observers. The observer resource stream is unreliable and change-gated, so one lost packet
+leaves every observer holding a stale bar until the next change — which for a creature that has just
+died or just been topped up may be never. The scheduler queues a single confirmation re-send of the
+last pushed state `ConfirmDelayTicks` (15 ticks, half a second at 30 Hz) later, provided the state
+is still what was pushed; a new change replaces the pending confirmation rather than stacking.
+
+Not every resource earns the same schedule. Health and every maximum are `ChangeKind.Primary` and
+keep the fine cadence; mana and stamina are `ChangeKind.Secondary` and move only when they cross one
+of `SecondaryResourceBuckets` (10) percentage buckets, with empty and full as buckets of their own.
+Gated as one OR across whole units, sprint's 5 stamina a second dirtied the gate on nearly every
+tick and turned a change-gated channel into a 2.5–5 Hz stream of the whole resource sheet. No
+nameplate, target frame or party row reads a peer's mana; the one genuine peer-side consumer is
+`HasResourceCondition` tested against a victim during a predicted hit, and a tenth of a bar is the
+coarsest form anything branches on.
 
 ### Static Events
 
@@ -333,7 +382,9 @@ its negation, which is the failure the ledger exists to end.
 | Damage/resistance calculation | Deal damage with a `DamageAttributeTemplate` | Health reduced by `RawDamage - Resistance.FinalValue` (clamped ≥ 0) |
 | Regeneration tick | Wait `regenTickRate` seconds (default **1.0**) in Play mode with regen attributes set | Resource `CurrentValue` increases by one pulse's share |
 | Network sync (owner)    | Modify any attribute server-side          | Owner receives the change in the next `CharacterReconcileData` (resources via `ResourceState`, others via `Attributes[]`) |
-| Network sync (observer) | Modify another character's attribute      | Observer receives the change via FishNet Prediction V2 state forwarding (no broadcast)                                   |
+| Network sync (observer) | Modify another character's attribute      | Observer receives `CharacterAttributesBroadcast`; resources arrive as `CharacterResourcesBroadcast` on the `ObservedResourcePushScheduler` cadence. State forwarding is off, so the reconcile never reaches an observer |
+| Observer resource confirmation | Push a resource change, then drop the packet | The scheduler re-sends the last pushed state `ConfirmDelayTicks` (15) later, provided the state is still what was pushed |
+| Predicted combat number | Land a predicted hit whose report never arrives | `PredictedCombatEvents.Sweep` fires `OnPredictionRejected` after `ConfirmationWindowSeconds` (1.0 s) |
 | Reconciliation | Simulate prediction mismatch | `ApplyResourceState()` corrects client resource values |
 | Immortality flag | Set `Immortal = true`, apply damage | No health change, no `OnDamaged` event |
 
@@ -417,6 +468,18 @@ flowchart LR
 └──────────────────────────────────────┘
 ```
 
+**Resistance is a 1:1 flat subtraction, and that is intended.** `ApplyModifiers` computes
+`Clamp(amount - resistance.FinalValue, 0, 999999)` — there is no curve, no diminishing return and
+no percentage. Authored damage and resistance values are scaled to that relationship; do not
+"fix" it by introducing a formula. Two absences are deliberately not immunity: a target with no
+`ICharacterAttributeController`, and a `DamageAttributeTemplate` with a null `Resistance` (true
+damage, environmental hazards), both pass the amount through at full value. A null
+`damageAttribute` is untyped damage and skips the lookup entirely.
+
+Block, absorb and deflect are applied **after** resistance and before anything is spent — see the
+Buff system's [Block and Deflect](../Buff/README.md#block-and-deflect). Resistance is a property of
+the character sheet; negation is a property of what the character is currently doing.
+
 The `CharacterDamageController` handles:
 - **Damage**: Applies resistance modifiers, consumes health, fires `OnDamaged`, tracks achievements, triggers `Kill` if health reaches zero.
 - **Kill**: Adjusts faction, fires ECA kill triggers, cancels active ability, triggers death animation, fires `OnKilled`. Buff removal and pet despawning are handled by the server-side `OnKilled` subscriber. Re-entry is guarded by `CharacterFlags.IsDead`, which `Kill` does not set itself — the server's `OnKilled` subscriber does, which is why that subscriber sets the flag *before* it runs anything else (buff removal invokes each buff's removal effects, i.e. game logic).
@@ -459,11 +522,21 @@ character.
 
 ### Regeneration Flow
 
-`CharacterAttributeController.Regenerate()` uses a configurable tick rate (`regenTickRate`, default 5.0 seconds):
+`CharacterAttributeController.Regenerate()` pulses on a configurable tick rate (`regenTickRate`,
+**1.0 second**):
 
-1. Converts `regenTickRate` into an integer `regenTickInterval` (ticks) from `TimeManager.TickDelta`.
-2. Fires when the simulation tick reaches the scheduled `nextRegenTick`, then advances `nextRegenTick` by `regenTickInterval`.
-3. For each resource (Health, Mana, Stamina), looks up the regeneration attribute via dependency and calls `RegenerateResource(...)`.
+1. Converts `regenTickRate` into an integer `regenTickInterval` (ticks) from `TimeManager.TickDelta`
+   (`Max(1, Ceiling(regenTickRate / tickDelta))`).
+2. Fires when the simulation tick reaches the scheduled `nextRegenTick`, then advances
+   `nextRegenTick` by `regenTickInterval`.
+3. For each resource (Health, Mana, Stamina), looks up the regeneration attribute via dependency and
+   calls `RegenerateResource(...)`.
+
+**The pulse got finer without getting stronger.** A regeneration attribute's authored value is an
+amount per `REGEN_AUTHORING_WINDOW_SECONDS` (**5.0 s**), so the amount delivered per pulse is
+`(FinalValue / 5.0) * regenTickRate * intervals`. Changing `regenTickRate` changes only how finely
+regeneration is delivered, never how much. A consumption lockout suppresses regen for one second
+after a spend.
 
 Regeneration attributes (HealthRegeneration, ManaRegeneration, StaminaRegeneration) are **dependencies** of their corresponding resource attribute.
 
@@ -480,6 +553,10 @@ CharacterAttribute/
 ├── CharacterAttributeResourceState.cs     # Snapshot struct for resource reconciliation [UseGlobalCustomSerializer]
 ├── CharacterAttributeResourceStateSerializer.cs # Regular + delta serializer; [RuntimeInitializeOnLoadMethod(BeforeSceneLoad)] registers the delta delegates
 ├── AttributeReconcileEntry.cs             # Snapshot entry for NON-resource attributes (Value + ExternalModifier) with index-delta WriteArrayDelta/ReadArrayDelta
+├── ModifierSource.cs                      # ModifierSourceKind + the (Kind, Id, Index) key of the attributed ledger, with the Item/Buff/Region/DungeonScaling/NpcBonus factories
+├── CombatEventCoalescer.cs                # Merges a tick's combat events per (source, kind, type); MaxEntries = 8, Occurrences counted
+├── PredictedCombatEvents.cs               # The caster's own predicted numbers, confirmed or swept after ConfirmationWindowSeconds
+├── ObservedResourcePushScheduler.cs       # Per-tick decision for the observer resource push: primary vs secondary cadence + one confirmation re-send
 └── Template/
     ├── CharacterAttributeTemplate.cs          # ScriptableObject blueprint (value, bounds, relationships, formulas)
     ├── CharacterAttributeTemplateDatabase.cs  # Master list of all templates

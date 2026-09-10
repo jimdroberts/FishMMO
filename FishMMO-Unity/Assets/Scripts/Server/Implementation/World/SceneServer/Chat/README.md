@@ -1,6 +1,6 @@
 # Chat System
 
-**Short description:** SceneServer authority for player messaging across World, Region, Say, Party, Guild, Tell, Trade, System, and Discord channels, with token-bucket anti-spam, lock-free incoming queue, batch DB persistence, and outbound broadcast batching for 50,000-user scalability.
+**Short description:** SceneServer authority for player messaging across World, Region, Say, Party, Guild, Team, Tell, Trade, System, and Discord channels, with token-bucket anti-spam, lock-free incoming queue, batch DB persistence, and outbound broadcast batching for 50,000-user scalability.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Chat system is the SceneServer authority for player messaging across World, Region, Say, Party, Guild, Tell, Trade, System, and Discord channels. It validates inbound client chat, enforces rate/spam limits, routes channel-specific broadcasts, and persists eligible messages through asynchronous database operations. Every persisted message carries the exact UTC timestamp captured at the network receive boundary for legal audit and subpoena compliance.
+The Chat system is the SceneServer authority for player messaging across World, Region, Say, Party, Guild, Team, Tell, Trade, System, and Discord channels. It validates inbound client chat, enforces rate/spam limits, routes channel-specific broadcasts, and persists eligible messages through asynchronous database operations. Every persisted message carries the exact UTC timestamp captured at the network receive boundary for legal audit and subpoena compliance.
 
 The implementation uses a split execution model:
 - **Main thread:** network callback enqueue, lock-free queue drain, validation, command parsing, channel routing, broadcast dispatch, outbound buffer flush, and main-thread queue drain.
@@ -47,7 +47,7 @@ Four architectural features keep the chat pipeline responsive under extreme load
 
 ## Features
 
-- Nine chat channels: World, Region, Say, Party, Guild, Tell, Trade, System, Discord
+- Ten chat channels: World, Region, Say, Party, Guild, Team, Tell, Trade, System, Discord
 - Lock-free incoming chat queue (`ConcurrentQueue`) decoupling network callbacks from main-thread processing with configurable per-frame drain budget
 - DoS protection via hard cap on incoming queue size; sender kicked when exceeded. Messages from a connection with no spawned character are dropped rather than kicked — that state is a routine scene-transfer race, not an exploit
 - Token bucket anti-spam with configurable burst capacity (`chatTokenBucketCapacity`) and refill rate (`chatTokenRefillRate`)
@@ -58,7 +58,9 @@ Four architectural features keep the chat pipeline responsive under extreme load
 - **Per-command access levels** — commands are registered with a minimum `AccessLevel`, enforced in `ChatHelper.TryParseCommand` against the character's own level as loaded from its database row. A command the sender may not run is *consumed*, not rejected: it is neither executed nor echoed to a channel, and the response is indistinguishable from an unknown command, so command names cannot be probed. Every refusal is reported through `ChatHelper.OnCommandRefused` and logged with the character and account that tried it
 - **Authoritative sender resolution** — the sender is taken from `ICharacterMappingData.ConnectionCharacters` (populated by the character load pipeline from the database) rather than from `conn.FirstObject`, so a command's authorisation can never be decided from a network-deserialised payload
 - Post-prepend length enforcement capped at `maxMessageLength + MaxChannelIdPrefixLength` (22 chars)
-- Synchronous immediate channels: Region (scene-scoped broadcast), Say (observer-scoped broadcast)
+- Synchronous immediate channels: Region (scene-scoped broadcast), Say (observer-scoped broadcast), Team (arena-team-scoped broadcast)
+- Say is scoped by the sender's observer set and nothing else. That set is already range-limited by the player distance condition, so an observer of the speaker is by construction close enough to hear them; re-deriving earshot from positions would be a second copy of a radius the interest system already applies, and the two would drift the moment either was retuned
+- Arena team channel: Team (`/team`, `/tm`) — resolved locally from `ArenaTeamRegistry` by scene handle and character ID, delivered only to characters seated on the same side of the same match, and never persisted
 - Synchronous outbound-batched channels: World and Trade (buffered per-world, flushed periodically)
 - Async membership channels: Party and Guild (async DB member fetch, main-thread marshal, async-path persistence)
 - Async target resolution channel: Tell (async character lookup, self-tell short-circuit, offline detection, relay confirmation)
@@ -95,7 +97,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
    - `AsyncWorkerData` (shared async work queue)
 3. On initialize, `ChatSystem` builds the channel → handler command map, initializes `ChatHelper`, registers the `ChatBroadcast` network handler, and registers three periodic callbacks (message pump, persist flush, outbound broadcast flush).
 4. On deinitialize, it flushes remaining outbound buffers, signals shutdown, flushes the persist queue synchronously, drains the incoming chat queue and main-thread queue, unregisters the broadcast handler, and unregisters all periodic callbacks.
-5. Clients send a `ChatBroadcast` with text prefixed by a channel command (e.g., `/s`, `/w`, `/p`, `/g`, `/t`, `/tr`). The server validates, rate-limits, parses the command, routes to the channel handler, and broadcasts results.
+5. Clients send a `ChatBroadcast` with text prefixed by a channel command (e.g., `/s`, `/w`, `/p`, `/g`, `/t`, `/tr`, `/team`). The server validates, rate-limits, parses the command, routes to the channel handler, and broadcasts results.
 6. Text beginning with a registered **slash command** (`/leaveinstance`, `/gi`, `/pi`, `/admin`, …) is dispatched to that command instead and never reaches a channel. `ChatHelper.GetCommandAndTrim` returns the command *with* its leading slash, which is how every registration is keyed.
 
 ## Configuration
@@ -133,6 +135,7 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 | `ChatChannel.Tell` | `OnTellChat` | Async target resolve, main-thread relay/status |
 | `ChatChannel.Trade` | `OnTradeChat` | Outbound-batched per-world; pump-sourced immediate |
 | `ChatChannel.Say` | `OnSayChat` | Immediate broadcast to sender observers |
+| `ChatChannel.Team` | `OnTeamChat` | Immediate broadcast to the sender's arena teammates in the same scene |
 | `ChatChannel.System` | `OnSendSystemMessage` | Server-to-client only (not in command map) |
 | `ChatChannel.Discord` | `OnSendDiscordMessage` | World-scoped relay via `BroadcastToWorld` |
 
@@ -201,6 +204,16 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 - Broadcasts to all observer connections.
 - Returns `false` (not persisted).
 
+### Team Chat (Arena-Scoped)
+
+`OnTeamChat(sender, msg)` (declared in `ChatSystem.ArenaChat.cs`):
+- Reads the sender's scene handle and asks `ArenaTeamRegistry.GetTeam(sceneHandle, sender.ID)` for its team index.
+- A negative team index means the sender is not seated in an arena match; a `ChatChannel.System` reply ("You are not on an arena team.") goes back to the sender and nothing is relayed. The sender is told, not silently dropped.
+- Otherwise iterates `ICharacterMappingData<NetworkConnection>.ConnectionCharacters`, keeping only characters with an active owner, the same scene handle, and the same registry team index.
+- Sends a `ChatBroadcast` with `Channel = ChatChannel.Team` and `SenderID = sender.ID` reliably to each survivor.
+- Local and synchronous: every seat of a match is connected to the scene server hosting its instance, so there is no other server to reach and no database to go through. The roster comes from what the arena match coordinator (`InteractableSystem.ArenaMatch.cs`) published into `ArenaTeamRegistry`.
+- Returns `false` (never persisted — the channel exists only for the duration of a match, and a chat history query has no team to resolve it against afterwards).
+
 ### Party / Guild Chat (Async Membership)
 
 `OnPartyChat(sender, msg)` / `OnGuildChat(sender, msg)`:
@@ -253,7 +266,7 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 |---|---|
 | Initialization success | Confirm `ChatSystem` logs "Initialized (MessagePumpRate=2s, FetchCount=20)" without errors on server startup |
 | Data containers available | Verify `IChatSystemRuntimeData`, `IChatSystemMainThreadQueueData`, and `AsyncWorkerData` all resolve from `DataContainerRegistry` |
-| Channel command map built | Confirm all seven channel handlers (World, Region, Party, Guild, Tell, Trade, Say) are present in `ChannelCommandMap` |
+| Channel command map built | Confirm all eight channel handlers (World, Region, Party, Guild, Tell, Trade, Say, Team) are present in `ChannelCommandMap` |
 | Broadcast handler registered | Confirm `ChatBroadcast` network handler is registered on initialize |
 | Periodic callbacks registered | Confirm three periodic callbacks (message pump, persist flush, outbound flush) are registered |
 | World chat | Send a `/w` message; confirm all characters in the same world receive the broadcast after the next outbound flush |
@@ -261,6 +274,8 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 | Say chat | Send a `/s` message; confirm all observers of the sender receive the broadcast immediately |
 | Party chat | Send a `/p` message while in a party; confirm all party members receive the broadcast |
 | Guild chat | Send a `/g` message while in a guild; confirm all guild members receive the broadcast |
+| Team chat | Send a `/team` message while seated in an arena match; confirm only same-side teammates in that scene receive it, and that nothing is written to the chat table |
+| Team chat outside an arena | Send `/team` while not in a match; confirm the sender receives the System-channel "You are not on an arena team." reply |
 | Tell chat | Send `/t <name> <message>`; confirm sender receives `TELL_RELAYED` and target receives the message |
 | Tell self-rejection | Send `/t <own_name>`; confirm sender receives `TELL_ERROR_MESSAGE_SELF` |
 | Tell offline target | Send `/t <offline_name>`; confirm sender receives `TARGET_OFFLINE` status |
@@ -429,6 +444,7 @@ OnPeriodicMessagePump(deltaTime)
 ```
 Chat/
 ├── ChatSystem.cs                      # Main chat orchestration, parsing, routing, persistence dispatch, incoming queue drain, batch flush
+├── ChatSystem.ArenaChat.cs             # Partial: Team (arena team) channel handler
 ├── ChatSystem.GroupChat.cs             # Partial: Party and Guild async channel handlers
 ├── ChatSystem.LocalChat.cs             # Partial: Region (scene-scoped) and Say (observer-scoped) broadcast handlers
 ├── ChatSystem.TellChat.cs              # Partial: Tell (private whisper) async target resolution handler
@@ -449,6 +465,7 @@ Chat/
 ```
 ServerBehaviour
 └── ChatSystem : IChatSystem (partial class)
+       ├── ChatSystem.ArenaChat.cs      # OnTeamChat
        ├── ChatSystem.GroupChat.cs      # OnPartyChat, OnGuildChat + async handlers
        ├── ChatSystem.LocalChat.cs      # OnRegionChat, OnSayChat
        ├── ChatSystem.TellChat.cs       # OnTellChat + async handler

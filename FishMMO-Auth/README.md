@@ -31,6 +31,8 @@ The shared core — protocol contracts, cryptographic services, and handshake su
 - **HandshakeService** — X25519 ECDH key agreement, stateless HMAC cookie challenge/verification, protocol version negotiation, IP normalization, and key confirmation MACs.
 - **SrpService** — encrypted SRP field handling, registration encryption, TOTP payload encryption/decryption, fake-salt derivation, and account verification payload encryption.
 - **TokenService** — token build/hash/encrypt/decrypt/verify pipeline.
+- **KeyEnvelope** — AES-256-GCM envelope for wrapping symmetric key material at rest, with a 4-byte magic prefix so a wrapped blob is distinguishable from a legacy raw 32-byte key in the same column. The KEK is supplied per call.
+- **IKmsProvider** — pluggable key-management backend (AWS KMS, Vault, PKCS#11) for the TOTP master KEK; `LocalDeriveKmsProvider` is the shipped HMAC-SHA256 local-derive default.
 - **ClientSrpData** — Client-side SRP-6a session state with sensitive-field cleanup.
 
 ### FishMMO-ClientAuth
@@ -171,6 +173,7 @@ public class MyLoginAuthenticator : SrpAuthenticatorCore<NetworkConnection>
     protected override Task PersistKickRequestAsync(string username) { /* DB write */ }
     protected override Task PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes) { /* DB write */ }
     protected override Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey) { /* DB + TOTP verify */ }
+    protected override Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc) { /* DB + mail */ }
 }
 
 // On startup:
@@ -281,7 +284,13 @@ Core protocol/security knobs exposed in code:
 - `TokenSigningKey` — 32-byte HMAC-SHA256 key for token issuance. Required; if null, token issuance is disabled.
 - `TotpMasterKey` — 32-byte AES key for decrypting TOTP secrets stored in the database. Optional; if null, TOTP is disabled.
 - `LoginServerId` — database ID embedded in issued tokens.
+- `TokenSigningKeyId` — database ID of the signing key, embedded in issued tokens so a World/Scene server's `FetchSigningKeyAsync(loginServerId, signingKeyId)` can find it.
 - `TokenExpirationMinutes` — token validity window (default `10f`).
+- `VerifyWorkerCount` / `ProofWorkerCount` (default `2`) and `VerifyChannelCapacity` / `ProofChannelCapacity` (default `500`) — SRP worker pool and bounded-channel sizes. `TokenAuthenticatorCore` has the equivalent `TokenWorkerCount` / `TokenChannelCapacity`.
+- `MaxConcurrentTotpVerifications` — semaphore bound on concurrent TOTP verifications (default `4`).
+
+`BaseAuthenticatorCore` (both server cores):
+- `ExpectedGameVersion` — when non-empty, a client whose `ClientHandshake.GameVersion` differs is rejected with `ClientAuthenticationResult.VersionMismatch`. Empty (the default) skips the check.
 
 Operational configuration expectations:
 - Provide strong key material for HMAC/token signing/fake-salt derivation.

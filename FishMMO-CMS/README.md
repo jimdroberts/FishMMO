@@ -29,11 +29,13 @@ The CMS exists so that account operations that do not belong in the game client
 an operator banning a cheater — have a home outside the FishNet connection
 lifecycle.
 
-It shares the same primitives as the rest of the stack rather than
-reimplementing them: SRP salt/verifier generation and TOTP helpers come from
-`FishMMO-Auth`, persistence is meant to go through `FishMMO-DB`, and username,
-password, and email validation are delegated to `FishMMO.Shared.Authentication`
-so the rules cannot drift from the ones the LoginServer enforces.
+It is wired to share the same primitives as the rest of the stack rather than
+reimplement them: SRP salt/verifier generation and TOTP helpers are to come from
+`FishMMO-Auth` and persistence from `FishMMO-DB` — both are referenced and
+imported but not yet called — while username, password, and email validation are
+already delegated to `FishMMO.Shared.Authentication`
+so the rules cannot drift from the ones the LoginServer enforces
+(`FishMMO-SharedUtility/FishMMO-SharedUtility/Authentication.cs`).
 
 > **The launcher's news panel does not come from here.** It is fetched from
 > `Constants.Configuration.LauncherHtmlUrl`, which is baked at build time from
@@ -59,22 +61,26 @@ so the rules cannot drift from the ones the LoginServer enforces.
 FishMMO-CMS/
 ├── FishMMO-CMS.slnx
 └── FishMMO-CMS.Server/
-    ├── FishMMO-CMS.Server.csproj   # net8.0 web SDK; copies appsettings from FishMMO-Setup
+    ├── FishMMO-CMS.Server.csproj   # net8.0 web SDK; RootNamespace FishMMO.CMS.Server;
+    │                               # copies appsettings from FishMMO-Setup
     ├── Program.cs                  # Host builder, config layering, Swagger, controller mapping
     └── Controllers/
         ├── AccountController.cs    # api/Account  — player self-service
         └── AdminController.cs      # api/Admin    — operator actions
 ```
 
+There is no client or frontend project — `FishMMO-CMS.slnx` contains exactly one
+project, `FishMMO-CMS.Server`. Callers are the browser, `curl`, or the Swagger UI.
+
 ### Project References
 
 | Reference | Provides |
 |---|---|
-| `FishMMO-Auth/FishMMO-ServerAuth` | `ClientSrpData` (SRP salt/verifier), `CryptoHelper.TwoFactor` (TOTP secret, recovery codes, otpauth URI) |
+| `FishMMO-Auth/FishMMO-ServerAuth` | The server auth cores, and transitively `FishMMO-AuthShared`: `ClientSrpData` (SRP salt/verifier) and `CryptoHelper.TwoFactor` (TOTP secret, recovery codes, otpauth URI). Both controllers `using FishMMO.Auth.Core` / `FishMMO.Auth.Implementation`; neither calls anything from them yet |
 | `FishMMO-Database/FishMMO-DB` | Account, token, and secret services (not yet registered in DI) |
 
-`Swashbuckle.AspNetCore` supplies the Swagger UI, which is served only in the
-Development environment.
+`Swashbuckle.AspNetCore` `6.5.0` is the only NuGet package reference; it supplies
+the Swagger UI, which is served only in the Development environment.
 
 ## Endpoints
 
@@ -87,6 +93,18 @@ Development environment.
 | POST | `change-password` | Re-derive SRP salt/verifier from a new password and revoke existing tokens |
 | POST | `2fa/setup` | Return the otpauth URI and recovery codes for authenticator enrolment |
 
+Request bodies are the DTOs declared alongside each controller: `RegisterRequest`
+(`Username`, `Password`, `Email`, `Age`), `VerifyRequest` (`Username`, `Code`),
+and `ChangePasswordRequest` (`CurrentPassword`, `NewPassword`). `2fa/setup`
+takes no body and reads no route or query parameter — there is nothing yet to
+identify the caller with.
+
+Within this controller `register` is the only route that runs all three
+`Authentication` checks, returning `400` with an `error` member on failure.
+`change-password` validates `NewPassword` only — `CurrentPassword` is never
+read. `verify` checks that both fields are non-blank. Every other outcome is the
+canned `200`.
+
 ### `api/Admin` — operator actions
 
 | Method | Route | Purpose |
@@ -98,6 +116,12 @@ Development environment.
 | POST | `accounts/{username}/revoke-tokens` | Force re-authentication everywhere |
 | POST | `accounts/{username}/reset-2fa` | Clear the TOTP secret and recovery codes |
 | POST | `accounts/{username}/force-password-reset` | Admin-set password, revoking tokens |
+
+`accounts/search` returns an empty array; the `{username}` routes echo the name
+back in a `message` string without touching a database. `force-password-reset`
+validates `NewPassword` via `Authentication.IsAllowedPassword`; `access-level`
+accepts a `SetAccessLevelRequest.AccessLevel` byte and does not yet check it
+against the `AccessLevel` enum.
 
 ## Configuration
 
@@ -113,6 +137,12 @@ retuned without rebuilding:
 
 Edit the templates under `FishMMO-Setup/`, not the copies in `bin/` — the build
 overwrites those.
+
+The Development template sets `AllowedHosts` to `localhost` and ships an empty
+`ConnectionStrings` block; the PostgreSQL connection string is expected from the
+`ConnectionStrings__DefaultConnection` environment variable in both environments,
+never from the committed file. Nothing in `Program.cs` reads either key yet — see
+[Implementation Status](#implementation-status).
 
 ## Build and Run
 
@@ -146,6 +176,11 @@ comments in the source are the authoritative list; this is the summary.
 | Caller authentication on `api/Account` | **Not started** — `change-password` and `2fa/setup` are unauthenticated |
 | Admin authorization on `api/Admin` | **Not started** — every admin route is open |
 | Token revocation and live-session kick | **Not started** |
+
+`Program.cs` calls `app.UseAuthorization()` but registers neither
+`AddAuthentication` nor `AddAuthorization`, and no controller carries an
+`[Authorize]` attribute — so the middleware has no policy to enforce and every
+request is permitted.
 
 > Until the two authorization rows are addressed, this service must not be
 > exposed to a network. Any caller can invoke every administrative route.

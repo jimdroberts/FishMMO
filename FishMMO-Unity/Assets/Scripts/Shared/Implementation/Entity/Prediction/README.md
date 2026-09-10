@@ -161,9 +161,14 @@ Unified per-tick input struct. Contains only input, not state.
 | `ViewOffsetFraction`| `byte`      | Lag comp  | Sub-tick remainder of that offset, in 1/256ths of a tick |
 | `ActivationFlags`  | `int`        | Ability   | Bitmask: IsActualData, Interrupt, IsHeld, IsConsumable, IsMount |
 | `QueuedAbilityID`  | `long`       | Ability   | Ability or consumable template ID to activate    |
+| `EquipmentRequest` | `byte`       | Equipment | One packed equip/unequip request (`EquipmentReplicateInput`), 0 for "nothing asked" |
+| `EquipmentIndex`   | `short`      | Equipment | The source index in the named container for an equip; ignored for an unequip |
 
-Delta serialized with an 8-bit bitmask — only changed fields are transmitted. The axes ride a
-single signed byte each (`MoveAxisCompression`) and the aim direction a packed `uint`
+Delta serialized with an 8-bit bitmask, and **all eight bits are now allocated**
+(`KCCPredictionDeltaSerializers`: forward, right, move flags, equipment, aim direction, activation
+flags, queued ability, view offset). A ninth field means widening the mask to a `ushort`, which
+costs a byte on every replicate. The two equipment fields deliberately share one bit. The axes ride
+a single signed byte each (`MoveAxisCompression`) and the aim direction a packed `uint`
 (`AimDirectionCompression`: 16 bits of yaw, 16 of pitch).
 
 **`AimDirection` replaced a full `Quaternion CameraRotation`.** Nothing ever read the roll —
@@ -181,6 +186,23 @@ the quantisation error. `Encode`/`Decode` is a fixed point: the poles pin yaw to
 
 **The view offset is a client measurement the server cannot derive.** It is the full round trip
 plus the client's interpolation buffer — see [Lag compensation](#lag-compensation).
+
+**Equipment is input, and it rides here.** `EquipmentReplicateInput.TryPack` packs a request into
+one byte — two bits of `EquipmentRequestKind`, two of `InventoryType` (Inventory or Bank only), four
+of `ItemSlot` — and `EquipmentReplicateInput.TryUnpack` refuses anything that does not name a
+defined kind, container and socket. Zero is "no request" by construction, because
+`EquipmentRequestKind.None` is zero and occupies the low bits. `EquipmentController.PopulateInput`
+carries at most **one request per tick**; a second waits for the next.
+
+An equip used to travel as a reliable broadcast the server applied at whatever tick it landed on, so
+the item's attribute bonuses reached the owner only through the following reconcile and the movement
+between the two was replayed at the new speed — a +15% speed item equipped mid-stride was a visible
+snap. Carried on the replicate, both peers apply the change on the same tick, the reconcile confirms
+rather than corrects, and a stale reconcile is undone and re-applied by the replay like any other
+predicted action. The owner records each predicted move (`PredictedMove`: tick, item id, the
+container on the other side and the index in it) so a reconcile that does not yet include the change
+can put the item back exactly where it came from rather than into "the first container with room",
+which the replay could not then undo.
 
 ### CharacterReconcileData
 
@@ -523,7 +545,7 @@ flowchart TB
         BUF_SER["BuffReconcileEntry\nWrite/ReadArrayDelta"]:::serializer
         CD_SER["CooldownReconcileEntry\nWrite/ReadArrayDelta"]:::serializer
         ATT_SER["AttributeReconcileEntry\nWrite/ReadArrayDelta"]:::serializer
-        KCC_SER["KCCPredictionDeltaSerializers\n(MotorState 14-bit bitmask)"]:::serializer
+        KCC_SER["KCCPredictionDeltaSerializers\n(MotorState 13 live bits)"]:::serializer
     end
 
     subgraph Sep["Separate NetworkObjects (own predicted pair)"]
@@ -601,8 +623,8 @@ flowchart LR
 
     RC([CharacterReconcileData])
 
-    RC --> MS["MotorState\n14-bit bitmask"]:::field
-    RC --> RS["ResourceState\n(7-bit bitmask: HP/MP/Stamina + max + RegenTickAccum)"]:::field
+    RC --> MS["MotorState\n13 live bits of a 16-bit mask"]:::field
+    RC --> RS["ResourceState\n(7-bit bitmask: HP/MP/Stamina + max + NextRegenTick)"]:::field
     RC --> AID["AbilityID + RemainingTicks + Seed"]:::field
     RC --> PFS["PackedFlagsAndSlot (int32)\nlow 16 = AbilityActivationFlags\nhigh 16 = consumable slot (signed)"]:::field
     RC --> RNG["RngS0..RngS3 (xoshiro128**)"]:::field
@@ -741,9 +763,9 @@ TimeManager.OnTick()
 ### Delta Serialization
 
 ```
-CharacterReplicateData: 7-bit byte bitmask → only changed fields written
-CharacterReconcileData: ushort bitmask → per-field delta encoding
-├── KinematicCharacterMotorState: 14-bit ushort bitmask
+CharacterReplicateData: 8-bit byte bitmask (fully allocated) → only changed fields written
+CharacterReconcileData: ushort bitmask, 12 of 16 bits in use → per-field delta encoding
+├── KinematicCharacterMotorState: ushort bitmask, 13 live bits (bit 4 retired, left as a gap)
 ├── CharacterAttributeResourceState: 7-bit byte bitmask
 ├── CooldownReconcileEntry[]: index-delta compression (reference-equality shortcut)
 ├── BuffReconcileEntry[]: index-delta compression (reference-equality shortcut)
@@ -782,6 +804,7 @@ Prediction/
 │   ├── PredictedAbilityStateHistory.cs         # Owner-side per-tick (seed, abilityID) record the reconcile compares against
 │   ├── AbilityPrefabColliderCache.cs           # Caches colliders per ability prefab to avoid GetComponent per spawn
 │   ├── AbilityContainerAllocator.cs            # Allocates deterministic container IDs for spawned objects
+│   ├── AbilitySummary.cs                       # AbilityStatBlock + the one composition behind every ability tooltip
 │   ├── AbilityActivationFlags.cs               # 16-bit flags packed into CharacterReconcileData.PackedFlagsAndSlot
 │   ├── Activation/                             # AbilityActivationReplicateData (per-ability input shape)
 │   ├── Cooldown/                               # Cooldown system (see Ability/Cooldown/README.md)
@@ -790,9 +813,15 @@ Prediction/
 ├── Buff/                                       # Buff system (see Buff/README.md)
 │   ├── Buff.cs                                 # Per-buff state holder
 │   ├── BuffController.cs                       # IPredictableController (Order=85)
-│   ├── BuffReconcileEntry.cs                   # (TemplateID, ExpiryTick, NextTickTick, Stacks) + array-delta
+│   ├── BuffReconcileEntry.cs                   # (TemplateID, ExpiryTick, NextTickTick, Stacks, TickCount, CumulativeTickMultiplier, RemainingCharges) + array-delta
+│   ├── ObservedBuffEntry.cs                    # Display-only observer strip entry (7-byte wire) + ObservedBuffStatement provenance
+│   ├── DamageMitigation.cs                     # Block / absorb / deflect resolution consulted when a hit lands
+│   ├── ShieldVolume.cs                         # Authored shield shape, tested in the character's OWN space
 │   └── Template/                               # AttributeBuffTemplate, CompositeBuffTemplate, etc.
-├── Equipment/                                  # Equipment state reconcile (EquipmentController, EquipmentReconcileEntry)
+├── Equipment/                                  # Equipment rides the replicate
+│   ├── EquipmentController.cs                  # IPredictableController (Order=93)
+│   ├── EquipmentReconcileEntry.cs              # Per-slot authoritative snapshot + array-delta
+│   └── EquipmentReplicateInput.cs              # TryPack/TryUnpack for the one-byte equip/unequip request on CharacterReplicateData
 ├── CharacterAttribute/                         # Attribute system (see CharacterAttribute/README.md)
 │   ├── CharacterAttributeController.cs         # IPredictableController (Order=95)
 │   ├── CharacterAttribute.cs                   # Non-resource attribute runtime
@@ -825,7 +854,9 @@ Prediction/
 │   ├── ObserverStreamingRegistry.cs            # Registration and per-observer decisions
 │   ├── ObserverStreamingPolicy.cs              # Density-scaled range and budget policy
 │   ├── ObserverStreamingEntry.cs               # Per-object streaming state
-│   └── ObserverBudgetCondition.cs              # FishNet observer condition implementing the budget
+│   ├── ObserverClassification.cs               # The classification an object is budgeted and ranged under
+│   ├── ClassifiedDistanceCondition.cs          # FishNet observer condition: per-classification runtime range
+│   └── ObserverBudgetCondition.cs              # FishNet observer condition implementing the per-classification budget
 └── Region/                                     # Region trigger system (server-authoritative; NOT part of the predicted character pipeline)
     ├── Region.cs                               # NetworkBehaviour with NetworkTrigger; OnRegionEnter/Stay/Exit Trigger lists
     ├── RegionGeometry.cs                        # Authored region shape
