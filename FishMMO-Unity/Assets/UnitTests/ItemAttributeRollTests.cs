@@ -9,17 +9,20 @@ using FishMMO.Shared;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Item attribute ranges are authored INCLUSIVE, and starting gear must not out-scale the
-	/// basic melee abilities.
+	/// Item attribute ranges are authored INCLUSIVE, and the starting kit still resolves.
 	/// </summary>
 	/// <remarks>
 	/// Resistance is a 1:1 flat reduction by design, so a character's Armor is subtracted whole
-	/// from every physical hit. Two things follow, and both are pinned here. Authored tiers are
-	/// tight ranges at the small end, so an exclusive upper bound would collapse every one of them
-	/// to its minimum; and the starting kit's total Armor has to leave something behind when the
-	/// weakest shipped melee ability lands, or the starting enemy cannot damage a new character at
-	/// all (reported 2026-09-07: orcs attacked and dealt nothing, because five starting armor
-	/// pieces granted 5..10 Armor against a 5 damage Punch).
+	/// from every physical hit, with a floor of zero. Authored tiers are therefore tight ranges at
+	/// the small end, and an exclusive upper bound collapsed every one of them to its minimum —
+	/// that is what most of this fixture pins.
+	/// <para>
+	/// It used to also assert a ceiling: that the starting kit's Armor stayed below the weakest
+	/// shipped melee ability, so the starting enemy could still land damage. That is NOT a rule.
+	/// The starting kit is deliberately overpowered placeholder content, orcs are deliberately low
+	/// tier, and later enemy types are meant to make the kit look weak. The ceiling is gone; what
+	/// remains is that the kit resolves and that Armor is still the resistance melee uses.
+	/// </para>
 	/// </remarks>
 	[TestFixture]
 	public class ItemAttributeRollTests
@@ -81,8 +84,33 @@ namespace FishMMO.UnitTests
 				"int.MaxValue as the authored maximum must not wrap the bound negative.");
 		}
 
+		/// <summary>
+		/// The configured starting equipment resolves, and Armor still resists Punch.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This asserted that the starting kit's Armor stayed BELOW Punch's physical damage, on the
+		/// grounds that resistance is a 1:1 flat reduction with a floor of zero, so a kit at or above
+		/// the damage makes a new character immune to it. The arithmetic is real — five pieces at 3
+		/// Armor against 5 damage is zero through — but the conclusion was not: the starting kit is
+		/// deliberately overpowered, orcs are deliberately low tier, and harder enemies later are meant
+		/// to make this kit look weak. It is placeholder content that will not reach the main game.
+		/// </para>
+		/// <para>
+		/// So the ceiling is gone and the two things that ARE invariants stay. The kit must resolve to
+		/// real templates, which catches a rename or a re-hash breaking character creation silently.
+		/// And Punch must still deal physical damage that Armor resists, which catches the damage type
+		/// being unhooked from its resistance. Neither of those is a balance opinion.
+		/// </para>
+		/// <para>
+		/// It never actually held the line it claimed to. Template IDs are assigned by
+		/// <c>AddToCache</c>, which nothing calls in EditMode, so every asset compared as ID 0, the
+		/// piece list came back empty, and the assertion below it was unreachable. See
+		/// <see cref="TemplateID"/>.
+		/// </para>
+		/// </remarks>
 		[Test]
-		public void StartingEquipment_LeavesTheWeakestMeleeAbilityAbleToDamage()
+		public void StartingEquipment_ResolvesAndIsResistedByArmor()
 		{
 			// Every armor piece a new character is created wearing, and the Armor each can roll.
 			int worstCaseArmor = 0;
@@ -93,7 +121,7 @@ namespace FishMMO.UnitTests
 				{
 					ArmorTemplate armor = AssetDatabase.LoadAssetAtPath<ArmorTemplate>(
 						AssetDatabase.GUIDToAssetPath(guid));
-					if (armor == null || armor.ID != id || armor.ArmorBonus == null)
+					if (armor == null || TemplateID(armor) != id || armor.ArmorBonus == null)
 					{
 						continue;
 					}
@@ -107,12 +135,43 @@ namespace FishMMO.UnitTests
 				"Assets/Templates/Entity/Abilities/Types/Punch.asset");
 			Assert.That(punch, Is.Not.Null);
 			int punchDamage = PhysicalDamageOf(punch);
-			Assert.That(punchDamage, Is.GreaterThan(0), "Punch must deal physical damage.");
+			Assert.That(punchDamage, Is.GreaterThan(0),
+				"Punch must deal physical damage, and it must be the damage type Armor resists — "
+				+ "PhysicalDamageOf only counts damage whose Resistance is Armor, so a zero here means "
+				+ "the two have come unhooked and armor stopped applying to melee entirely.");
 
-			Assert.That(worstCaseArmor, Is.LessThan(punchDamage),
-				$"Starting Armor ({worstCaseArmor} at best rolls from {string.Join(", ", pieces)}) must stay "
-				+ $"below Punch's {punchDamage} physical damage. Resistance is a 1:1 reduction, so armor "
-				+ "at or above the damage makes a new character immune to the starting enemy.");
+			/* Recorded, not asserted against a ceiling. If someone later wants the starting fight to
+			 * land damage again, this is the arithmetic to read: flat reduction, floor of zero. */
+			TestContext.WriteLine(
+				$"MEASURE startingArmorBestRolls = {worstCaseArmor} from {string.Join(", ", pieces)}");
+			TestContext.WriteLine($"MEASURE punchPhysicalDamage = {punchDamage}");
+		}
+
+		/// <summary>
+		/// The cache ID a template will have at runtime, derived the way the cache derives it.
+		/// </summary>
+		/// <remarks>
+		/// <c>CachedScriptableObject.ID</c> is assigned by <c>AddToCache</c>, which only the client
+		/// and server boot paths call as they walk the addressables. Nothing calls it in EditMode, so
+		/// a template loaded through <c>AssetDatabase</c> reports ID 0 — and comparing an authored id
+		/// against 0 matched nothing, which is why this test saw no starting equipment at all rather
+		/// than the wrong starting equipment. <c>RaceRegistry</c> and <c>ModifierRegistry</c> document
+		/// the same trap and derive the id the same way; <c>TemplateReferenceDrawer</c> does it too,
+		/// which is how the editor's own template pickers resolve a reference.
+		/// <para>
+		/// The real ID is preferred when it is present, so this keeps working if a future harness
+		/// does populate the cache.
+		/// </para>
+		/// </remarks>
+		/// <param name="template">The template to identify.</param>
+		/// <returns>The template's runtime cache ID.</returns>
+		private static int TemplateID(ScriptableObject template)
+		{
+			if (template is ICachedObject cached && cached.ID != 0)
+			{
+				return cached.ID;
+			}
+			return (template.GetType().Name + template.name).GetDeterministicHashCode();
 		}
 
 		/// <summary>The equipment ids a new character is created with, from the login server config.</summary>

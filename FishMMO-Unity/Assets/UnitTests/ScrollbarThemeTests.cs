@@ -59,14 +59,45 @@ namespace FishMMO.UnitTests
 			UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
 			if (settingsReplaced)
 			{
-				Configuration.SetGlobalSettings(previousSettings);
-				UITKThemeManager.Reload();
+				/* Cleared BEFORE the restore, not after. Configuration.SetGlobalSettings refuses null
+				 * by design — it is meant to be called once at startup — and in EditMode there is no
+				 * global configuration to have saved, so previousSettings is null and the restore
+				 * threw. That left the flag set and this fixture's temporary config installed
+				 * globally, so every later test in the fixture threw in TearDown as well and the
+				 * next one ran against a stale config. One failure became three. */
 				settingsReplaced = false;
+				RestoreGlobalSettings(previousSettings);
+				UITKThemeManager.Reload();
 			}
 			if (host != null)
 			{
 				UnityEngine.Object.DestroyImmediate(host);
 			}
+		}
+
+		/// <summary>
+		/// Puts back exactly what was there, including nothing.
+		/// </summary>
+		/// <remarks>
+		/// <c>SetGlobalSettings</c> takes the public path when there was a configuration to restore.
+		/// When there was not — the EditMode case — the field is written directly, because the
+		/// public setter rejects null on purpose and a harness that cannot express "there was none"
+		/// would have to leave its own temporary configuration installed for every fixture that runs
+		/// after it.
+		/// </remarks>
+		/// <param name="previous">The configuration that was global before this test replaced it.</param>
+		private static void RestoreGlobalSettings(Configuration previous)
+		{
+			if (previous != null)
+			{
+				Configuration.SetGlobalSettings(previous);
+				return;
+			}
+
+			System.Reflection.FieldInfo field = typeof(Configuration).GetField("globalSettings",
+				System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+			LogAssert.IsNotNull(field, "Configuration.globalSettings must exist for the harness to clear it.");
+			field.SetValue(null, null);
 		}
 
 		/// <summary>Fills the panel's scroll view past its height so a vertical scroller appears.</summary>
@@ -173,10 +204,23 @@ namespace FishMMO.UnitTests
 			Scroller scroller = scroll.verticalScroller;
 			VisualElement thumb = Thumb(scroller);
 			VisualElement track = Track(scroller);
-			LogAssert.IsTrue(thumb.style.backgroundColor.keyword == StyleKeyword.Undefined && thumb.style.backgroundColor.value == thumbColour,
-				"the thumb carries the override inline");
-			LogAssert.IsTrue(track.style.backgroundColor.keyword == StyleKeyword.Undefined && track.style.backgroundColor.value == trackColour,
-				"and so does the track");
+			/* Compared as bytes, not as floats.
+			 *
+			 * A theme colour is STORED as four bytes — UITKTheme.Write casts to Color32 and writes
+			 * the channels — so a colour that goes into configuration as 0.5 comes back out as
+			 * 128/255, which is 0.50196. Unity's Color equality is a squared-distance test with a
+			 * 1e-10 epsilon, far tighter than that, so an exact comparison against the float the
+			 * test wrote can never succeed for any channel that is not already a whole number of
+			 * 255ths. The colour reaching the thumb was right the entire time.
+			 *
+			 * SameColour is the comparison the rest of this fixture already uses against the
+			 * stylesheet's own values, for the same reason. */
+			LogAssert.IsTrue(thumb.style.backgroundColor.keyword == StyleKeyword.Undefined &&
+					SameColour(thumbColour, thumb.style.backgroundColor.value),
+				$"the thumb carries the override inline, got {thumb.style.backgroundColor.value}");
+			LogAssert.IsTrue(track.style.backgroundColor.keyword == StyleKeyword.Undefined &&
+					SameColour(trackColour, track.style.backgroundColor.value),
+				$"and so does the track, got {track.style.backgroundColor.value}");
 
 			VisualElement sliderThumb = optionSlider.Q(className: "unity-base-slider__dragger");
 			LogAssert.IsTrue(sliderThumb.style.backgroundColor.keyword == StyleKeyword.Null,

@@ -641,6 +641,30 @@
     right: 0;
 }
 
+/*
+    The slider must be the rail's thickness, not its own.
+
+    Unity's default theme gives a vertical slider a fixed 24px width, and the
+    rules above never overrode it — they cleared the margins and the minimums
+    and set the offsets, which do nothing to a flex child. So the rail measured
+    8px while the slider inside it measured 24, and since the drag container,
+    tracker and dragger all correctly fill their parent, the thumb and track
+    came out 24px wide: a fat thumb hanging three times outside a slim rail.
+    The colours were right the whole time, which is why this survived the
+    original "scrollbars are the wrong colour" fix.
+
+    A percentage, not width: auto. Auto would depend on the column stretching
+    its children, and 100% of the rail's own resolved width says exactly what is
+    meant whatever the flex container does.
+*/
+.unity-scroller--vertical > .unity-scroller__slider {
+    width: 100%;
+}
+
+.unity-scroller--horizontal > .unity-scroller__slider {
+    height: 100%;
+}
+
 .unity-scroller .unity-base-slider__tracker {
     background-color: var(--abyss-700);
     border-width: 0;
