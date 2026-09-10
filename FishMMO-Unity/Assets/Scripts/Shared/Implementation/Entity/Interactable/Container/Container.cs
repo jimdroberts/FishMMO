@@ -2,10 +2,7 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishMMO.Shared.Core;
-using FishNet.Connection;
-using FishNet.Serializing;
 using UnityEngine;
-using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -33,6 +30,27 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		AchievementTemplate IContainer.AchievementTemplate => AchievementTemplate;
 
+		/// <summary>
+		/// The slots this container holds.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Server state. It is deliberately NOT in the spawn payload, so no override of
+		/// <c>WritePayload</c>/<c>ReadPayload</c> exists here and only <see cref="Interactable"/>'s
+		/// scene-object ID travels.
+		/// </para>
+		/// <para>
+		/// It used to: a presence bit plus a four-byte template ID and a four-byte stack amount per
+		/// filled slot, written into the spawn payload of every chest, crate and wardrobe for EVERY
+		/// connection that began observing it. Nothing on a client ever read it — the chest window is
+		/// driven entirely by <c>ContainerOpenBroadcast</c>, which the server sends to the
+		/// interacting player on open and re-sends to that player after every take — so the cost was
+		/// pure, and it told every client in range what was inside every container in the world
+		/// without anybody opening one. The copy was never refreshed after a take either, so what it
+		/// told them went stale immediately. Corpse loot has always been scoped to registered
+		/// viewers this way; containers now match.
+		/// </para>
+		/// </remarks>
 		private readonly List<Item> items = new List<Item>();
 		private HashSet<int> lockedSlots;
 
@@ -531,115 +549,6 @@ namespace FishMMO.Shared
 			if (Template != null)
 			{
 				AddSlots(null, Template.SlotCount);
-			}
-		}
-
-		/// <summary>
-		/// Width of the byte count that frames this behaviour's spawn payload.
-		/// </summary>
-		private const int CONTAINER_PAYLOAD_LENGTH_BYTES = 4;
-
-		/// <summary>
-		/// Upper bound on slots accepted from a spawn payload. Well above any authored container
-		/// size; exists so a corrupt count cannot drive an unbounded read loop.
-		/// </summary>
-		private const int MAX_PAYLOAD_SLOTS = 4096;
-
-		public override void WritePayload(NetworkConnection connection, Writer writer)
-		{
-			base.WritePayload(connection, writer);
-
-			/* Everything below is framed by a byte count so ReadPayload can resynchronise after
-			 * rejecting an untrustworthy count. See CONTAINER_PAYLOAD_LENGTH_BYTES. */
-			writer.Skip(CONTAINER_PAYLOAD_LENGTH_BYTES);
-			int containerBlockStart = writer.Position;
-
-			writer.WriteInt32(Items.Count);
-			for (int i = 0; i < Items.Count; i++)
-			{
-				Item item = Items[i];
-				if (item != null)
-				{
-					writer.WriteBoolean(true);
-					writer.WriteInt32(item.Template.ID);
-					writer.WriteUInt32(item.IsStackable ? item.Stackable.Amount : 1);
-				}
-				else
-				{
-					writer.WriteBoolean(false);
-				}
-			}
-
-			writer.InsertUInt32Unpacked((uint)(writer.Position - containerBlockStart),
-				containerBlockStart - CONTAINER_PAYLOAD_LENGTH_BYTES);
-		}
-
-		public override void ReadPayload(NetworkConnection connection, Reader reader)
-		{
-			base.ReadPayload(connection, reader);
-
-			/* Where this behaviour's data ends. FishNet packs every NetworkBehaviour's spawn payload
-			 * into one buffer with no per-behaviour framing, so an abort here would leave every
-			 * behaviour after this one reading from the wrong offset. The length is validated against
-			 * what the reader holds first; Reader.Position has no bounds check. */
-			uint declaredLength = reader.ReadUInt32Unpacked();
-			int remainingBytes = reader.Remaining;
-			if (declaredLength > (uint)remainingBytes)
-			{
-				Log.Error("Container",
-					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in " +
-					"the spawn payload. The stream cannot be resynchronised; discarding the remainder.");
-				reader.Position += remainingBytes;
-				return;
-			}
-			int containerBlockLength = (int)declaredLength;
-			int containerBlockEnd = reader.Position + containerBlockLength;
-
-			int slotCount = reader.ReadInt32();
-			if (slotCount < 0 || slotCount > MAX_PAYLOAD_SLOTS)
-			{
-				Log.Error("Container",
-					$"ReadPayload: slot count {slotCount} is outside [0, {MAX_PAYLOAD_SLOTS}]. Aborting payload read.");
-				reader.Position = containerBlockEnd;
-				return;
-			}
-
-			lockedSlots?.Clear();
-			items.Clear();
-			for (int i = 0; i < slotCount; i++)
-			{
-				bool hasItem = reader.ReadBoolean();
-				if (hasItem)
-				{
-					int templateId = reader.ReadInt32();
-					uint amount = reader.ReadUInt32();
-					BaseItemTemplate itemTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateId);
-					if (itemTemplate != null)
-					{
-						Item item = new Item(itemTemplate, amount);
-						item.Slot = i;
-						items.Add(item);
-					}
-					else
-					{
-						items.Add(null);
-					}
-				}
-				else
-				{
-					items.Add(null);
-				}
-			}
-
-			/* Belt and braces on the success path: the frame absorbs any shape disagreement here
-			 * rather than corrupting the behaviour after this one. */
-			if (reader.Position != containerBlockEnd)
-			{
-				Log.Error("Container",
-					$"ReadPayload consumed {reader.Position - (containerBlockEnd - containerBlockLength)} of " +
-					$"{containerBlockLength} framed bytes. Seeking to the end of the block; the container " +
-					"contents read above may be incomplete.");
-				reader.Position = containerBlockEnd;
 			}
 		}
 	}

@@ -242,10 +242,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						Blurb = row.Blurb ?? string.Empty,
 						Tags = row.Tags ?? string.Empty,
 						MemberCount = row.MemberCount,
-						/* Sent rather than assumed. The cap is a server setting the client has no
-						 * copy of, and a directory that rendered "37 members" without saying out
-						 * of how many tells the reader nothing about whether they can get in. */
-						MaxMemberCount = maxGuildSize,
 					};
 				}
 
@@ -504,13 +500,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						ApplicationID = row.ID,
 						CharacterID = row.CharacterID,
 						Message = row.Message ?? string.Empty,
-						TimeUtcTicks = row.TimeCreated.Ticks,
+						TimeUnixSeconds = ToUnixSeconds(row.TimeCreated),
 					};
 				}
 
 				GuildApplicationListBroadcast broadcast = new GuildApplicationListBroadcast()
 				{
-					GuildID = guildID,
 					Entries = entries,
 				};
 

@@ -134,6 +134,19 @@ namespace FishMMO.Shared
 		internal uint serverSpawnedNothingTick = TimeManager.UNSET_TICK;
 
 		/// <summary>
+		/// The server tick the running activation was ANNOUNCED on, or <see cref="TimeManager.UNSET_TICK"/>
+		/// when nothing is running.
+		/// </summary>
+		/// <remarks>
+		/// Written only by <c>BroadcastCastState</c>, which is the single funnel every start and
+		/// every ending passes through, and read by two things: the spawn payload, which carries it
+		/// so an observer arriving mid-cast can start the row partway rather than not at all, and
+		/// <c>SuppressesRedundantCastStop</c>, which uses it to recognise an activation that began
+		/// and ended on one tick. Server-side; a client's copy is whatever its own payload said.
+		/// </remarks>
+		private uint castStartServerTick = TimeManager.UNSET_TICK;
+
+		/// <summary>
 		/// The ID of the next ability to activate after the current one, or NO_ABILITY if none.
 		/// </summary>
 		private long queuedAbilityID;
@@ -461,6 +474,9 @@ namespace FishMMO.Shared
 			wasDenied = false;
 			serverSpawnedNothingTick = TimeManager.UNSET_TICK;
 			Cancel();
+			/* After Cancel, which is what would otherwise leave the tick of the activation this
+			 * reset just ended behind for the next occupant of a pooled object. */
+			castStartServerTick = TimeManager.UNSET_TICK;
 
 			// Ensure no stale slot locks remain after state reset.
 			consumableSlot = -1;
@@ -937,6 +953,14 @@ namespace FishMMO.Shared
 
 			EnsureAbilitySeedGenerator();
 
+			/* The generator travels whole, to whoever this reconcile reaches.
+			 *
+			 * That audience is a project setting, not a choice made here: FishNet writes one
+			 * reconcile buffer per send (Server_SendReconcileRpc) — to the owner alone with state
+			 * forwarding off, and to every observer with it on. There is no per-connection shape to
+			 * write, which is why the gate lives at the CONSUMER instead; see
+			 * InstallsReconciledRngState, which also explains why zeroing these words here would
+			 * blind the owner in one mode and every simulating observer in the other. */
 			abilitySeedGenerator.CaptureState(out uint rngS0, out uint rngS1, out uint rngS2, out uint rngS3);
 
 			reconcileData.AbilityID = currentAbilityID;
@@ -1237,22 +1261,53 @@ namespace FishMMO.Shared
 			 * correction — so left to itself it runs at several times the server's rate and the
 			 * owner cancels its own charge early. See CharacterReconcileData.ChargedHoldTicks. */
 			chargedHoldTicks = rd.ChargedHoldTicks;
-			currentSeed = rd.Seed;
 
-			// Restore the full xoshiro128** generator state so that subsequent
-			// Next() calls during replay produce identical values to the server.
-			// Without this, a single prediction mismatch permanently desynchronizes
-			// the 128-bit generator state, causing a cascade of mismatches on
-			// every subsequent ability activation.
-			// RestoreState reuses the existing instance to avoid a per-reconcile
-			// allocation (30 Hz × N clients = significant GC pressure at scale).
-			if (abilitySeedGenerator == null)
+			/* THE DETERMINISTIC GENERATOR IS NOT RESTORED UNCONDITIONALLY.
+			 *
+			 * Every broadcast site in this project asks ObserverSyncMode whose turn it is; this
+			 * reconcile consumer did not, and it is the one that installs the whole 128-bit
+			 * xoshiro128** state plus the current per-cast seed. WritePayload refuses to hand that
+			 * to a non-owner and says why at length: 128 bits is the entire generator, so a
+			 * modified client holding a peer's state can compute every seed that peer will ever
+			 * cast with, and anything rolled from those seeds becomes predictable for somebody
+			 * else's character.
+			 *
+			 * The rule below is the same question every other consumer asks. In the shipped
+			 * interpolated mode it is exactly `IsOwner`, and no non-owner can reach it anyway —
+			 * FishNet writes the reconcile to the owner alone when forwarding is off — so this
+			 * costs the owner's replay nothing and closes the path if the gate above it is ever
+			 * relaxed. In the forwarded mode the answer is TRUE for a non-owner, because there an
+			 * observer runs the caster's replicate from the relayed input and spawns the objects
+			 * itself: currentSeed is what ResolveTargetAndSpawn hands to AbilityObject.Spawn, the
+			 * generator is what advances it, and BroadcastAbilityActivated is deliberately silent
+			 * in that mode. So the state is not a disclosure there, it is the authority the mode
+			 * runs on.
+			 *
+			 * This is why the words are NOT zeroed at the sender instead. One writer serves the
+			 * whole audience (NetworkBehaviour.Server_SendReconcileRpc writes once, to the owner
+			 * when forwarding is off and to every observer when it is on), so a sender-side zero
+			 * cannot be aimed: with forwarding off it would blind the owner's own replay, and with
+			 * forwarding on it would blind the very peers that simulate from it. Shaping the
+			 * reconcile per connection is not possible without changing FishNet. */
+			if (InstallsReconciledRngState(base.IsOwner, ObserverSyncMode.ObserversConsumeReconcile(base.NetworkObject)))
 			{
-				abilitySeedGenerator = new DeterministicRNG(rd.RngS0, rd.RngS1, rd.RngS2, rd.RngS3);
-			}
-			else
-			{
-				abilitySeedGenerator.RestoreState(rd.RngS0, rd.RngS1, rd.RngS2, rd.RngS3);
+				currentSeed = rd.Seed;
+
+				// Restore the full xoshiro128** generator state so that subsequent
+				// Next() calls during replay produce identical values to the server.
+				// Without this, a single prediction mismatch permanently desynchronizes
+				// the 128-bit generator state, causing a cascade of mismatches on
+				// every subsequent ability activation.
+				// RestoreState reuses the existing instance to avoid a per-reconcile
+				// allocation (30 Hz × N clients = significant GC pressure at scale).
+				if (abilitySeedGenerator == null)
+				{
+					abilitySeedGenerator = new DeterministicRNG(rd.RngS0, rd.RngS1, rd.RngS2, rd.RngS3);
+				}
+				else
+				{
+					abilitySeedGenerator.RestoreState(rd.RngS0, rd.RngS1, rd.RngS2, rd.RngS3);
+				}
 			}
 
 			// Restore only the replicated flags from the server.
@@ -1277,6 +1332,34 @@ namespace FishMMO.Shared
 			}
 			consumableSlot = serverSlot;
 
+		}
+
+		/// <summary>
+		/// Whether this peer may install the deterministic ability generator a reconcile carries.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The rule <see cref="ApplyAuthoritativeReconcileState"/> applies to the four xoshiro128**
+		/// state words and <c>currentSeed</c>, as a pure function so the table can be asserted
+		/// without a NetworkManager — in the style of <c>ServerCancelsDirectly</c> and
+		/// <c>AbilityObject.ResolvesHitsOnThisPeer</c>.
+		/// </para>
+		/// <list type="table">
+		/// <item><description>owner, forwarding off → INSTALL (the shipped path; its replay is load-bearing for deterministic ability RNG)</description></item>
+		/// <item><description>owner, forwarding on → INSTALL</description></item>
+		/// <item><description>non-owner, forwarding off → REFUSE (unreachable — the reconcile goes to the owner alone — so this is the gate, not the behaviour)</description></item>
+		/// <item><description>non-owner, forwarding on → INSTALL (that peer runs the caster's replicate from relayed input and spawns from this generator)</description></item>
+		/// </list>
+		/// </remarks>
+		/// <param name="isOwner">Whether this peer owns the casting character.</param>
+		/// <param name="observersConsumeReconcile">
+		/// <c>ObserverSyncMode.ObserversConsumeReconcile</c> for this object: true only while state
+		/// forwarding is on.
+		/// </param>
+		/// <returns>True when the reconciled generator state is this peer's authority.</returns>
+		internal static bool InstallsReconciledRngState(bool isOwner, bool observersConsumeReconcile)
+		{
+			return isOwner || observersConsumeReconcile;
 		}
 
 		/// <summary>

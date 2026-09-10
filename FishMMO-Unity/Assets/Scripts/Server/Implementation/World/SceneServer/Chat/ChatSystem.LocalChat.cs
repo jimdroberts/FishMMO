@@ -1,6 +1,8 @@
 using FishNet.Connection;
+using FishNet.Object;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
 using FishMMO.Shared;
@@ -67,6 +69,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Handles say (local) chat messages, broadcasting to all observers of the sender.
 		/// </summary>
+		/// <remarks>
+		/// Scoped by the sender's observer set, which is already range-limited: the player distance
+		/// condition admits a viewer at up to 100 m, so an observer of the speaker is by
+		/// construction someone standing near enough to hear them. Re-deriving earshot from
+		/// positions here would be a second copy of a radius the interest system already applies,
+		/// and the two would drift the moment either was retuned.
+		/// </remarks>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
 		/// <returns>False to prevent message from being written to the database.</returns>

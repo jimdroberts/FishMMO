@@ -176,6 +176,10 @@ namespace FishMMO.UnitTests
 			CharacterResourcesBroadcast sent = new CharacterResourcesBroadcast
 			{
 				CharacterObjectID = 1234,
+				/* Every bit: this is the shape of a confirmation, and of the first push of a
+				 * character's life. A push that names fewer fields leaves the rest alone — see
+				 * ObserverResourceChannelTests for the masked cases. */
+				Mask = CharacterResourcesMask.All,
 				Health = 812, MaxHealth = 1200,
 				Mana = 240, MaxMana = 800,
 				Stamina = 310, MaxStamina = 400,
@@ -183,10 +187,10 @@ namespace FishMMO.UnitTests
 
 			CharacterResourcesBroadcast received = RoundTripResources(sent);
 
-			observer.ApplyObservedResourceState(
-				received.Health, received.MaxHealth,
-				received.Mana, received.MaxMana,
-				received.Stamina, received.MaxStamina);
+			LogAssert.AreEqual(CharacterResourcesMask.All, received.Mask,
+				"The mask decides what may be applied, so it has to survive the round trip first.");
+
+			observer.ApplyObservedResourceFields(received);
 
 			LogAssert.IsTrue(observer.TryGetHealthAttribute(out CharacterResourceAttribute health),
 				"The probe controller must expose a health resource.");
@@ -810,25 +814,22 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// Round-trips the resource broadcast through the shape FishNet's codegen emits for it.
+		/// Round-trips the resource broadcast through its real wire format.
 		/// </summary>
+		/// <remarks>
+		/// The project's own serializer, not a hand-rolled copy of what FishNet's codegen used to
+		/// emit. The message is masked now — only the fields the mask names are on the wire — and a
+		/// duplicate of the format here could drift from it without anything noticing, which is
+		/// exactly what this proof is supposed to rule out.
+		/// </remarks>
 		private static CharacterResourcesBroadcast RoundTripResources(CharacterResourcesBroadcast m)
 		{
 			Writer w = new Writer();
-			w.WriteUInt16(m.Sequence);
-			w.WriteInt32(m.CharacterObjectID);
-			w.WriteInt32(m.Health); w.WriteInt32(m.MaxHealth);
-			w.WriteInt32(m.Mana); w.WriteInt32(m.MaxMana);
-			w.WriteInt32(m.Stamina); w.WriteInt32(m.MaxStamina);
+			w.WriteCharacterResourcesBroadcast(m);
 			Reader r = new Reader(w.GetArraySegment(), null);
-			return new CharacterResourcesBroadcast
-			{
-				Sequence = r.ReadUInt16(),
-				CharacterObjectID = r.ReadInt32(),
-				Health = r.ReadInt32(), MaxHealth = r.ReadInt32(),
-				Mana = r.ReadInt32(), MaxMana = r.ReadInt32(),
-				Stamina = r.ReadInt32(), MaxStamina = r.ReadInt32(),
-			};
+			CharacterResourcesBroadcast read = r.ReadCharacterResourcesBroadcast();
+			LogAssert.AreEqual(0, r.Remaining, "The reader must consume exactly what the writer wrote.");
+			return read;
 		}
 
 		private static EquipmentObservedSlotBroadcast RoundTripEquipmentSlot(EquipmentObservedSlotBroadcast m)

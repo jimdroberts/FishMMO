@@ -74,7 +74,15 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// The client colours the label by damage type. The template id is the smallest handle that
 		/// resolves through the existing scriptable-object cache on the client without a second
-		/// table to keep in step; it is packed, so a small id costs one byte.
+		/// table to keep in step.
+		/// <para>
+		/// It travels UNPACKED. Template ids are a deterministic 32-bit hash
+		/// (<c>CachedScriptableObject.AddToCache</c>), so they occupy the whole signed range and
+		/// are never small: FishNet's signed-packed form zigzags them past 2^28 and spends FIVE
+		/// bytes, where unpacked is exactly four. An earlier version of this remark claimed the
+		/// opposite and the packed write it defended was the most frequently paid one in the
+		/// game — this message is sent per damage event, per observer of the target.
+		/// </para>
 		/// </remarks>
 		public int DamageTemplateID;
 
@@ -116,7 +124,7 @@ namespace FishMMO.Shared
 			writer.WriteInt32(value.SourceObjectID);
 			writer.WriteInt32(value.Amount);
 			writer.WriteUInt8Unpacked(value.Kind);
-			writer.WriteInt32(value.DamageTemplateID);
+			writer.WriteInt32Unpacked(value.DamageTemplateID);
 			/* Written last so the field's arrival does not move any existing one. Clamped to at least
 			 * one: a producer that leaves it default must still confirm the single prediction its hit
 			 * produced, or every un-updated call site silently stops confirming anything. */
@@ -132,7 +140,7 @@ namespace FishMMO.Shared
 				SourceObjectID = reader.ReadInt32(),
 				Amount = reader.ReadInt32(),
 				Kind = reader.ReadUInt8Unpacked(),
-				DamageTemplateID = reader.ReadInt32(),
+				DamageTemplateID = reader.ReadInt32Unpacked(),
 				Occurrences = reader.ReadInt32(),
 			};
 		}

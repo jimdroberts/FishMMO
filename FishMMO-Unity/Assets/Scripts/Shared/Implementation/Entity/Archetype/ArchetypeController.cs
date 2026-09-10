@@ -90,10 +90,18 @@ namespace FishMMO.Shared
 		/// <param name="reader">The network reader containing serialized data.</param>
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			int templateID = reader.ReadInt32();
+			int templateID = reader.ReadInt32Unpacked();
 			if (templateID >= 0)
 			{
-				SetArchetype(templateID);
+				/* The restore path: install the value, raise nothing.
+				 *
+				 * This runs on every peer for every character that comes into observer range, and
+				 * the default non-skipping path ends in Character.Invoke(onArchetypeChangeTriggers).
+				 * BaseCharacter.Invoke has no authority gate and only a minority of action types
+				 * gate themselves with EcaAuthority, so a stranger walking past used to run that
+				 * stranger's archetype-change triggers on the onlooker's machine. This is exactly
+				 * the defect FactionController.ReadPayload documents having fixed for factions. */
+				RestoreArchetype(templateID);
 			}
 		}
 
@@ -105,7 +113,10 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to serialize data into.</param>
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
-			writer.WriteInt32(Template != null ? Template.ID : -1);
+			/* Unpacked. Template ids are a deterministic 32-bit hash
+			 * (CachedScriptableObject.AddToCache), so they span the whole range and the
+			 * signed-packed form spends FIVE bytes on one. See ObservedBuffEntry. */
+			writer.WriteInt32Unpacked(Template != null ? Template.ID : -1);
 		}
 
 		/// <summary>
@@ -115,13 +126,47 @@ namespace FishMMO.Shared
 		/// <param name="templateID">The cached ID of the archetype template to assign.</param>
 		public void SetArchetype(int templateID)
 		{
+			ApplyArchetype(templateID, skipEvent: false);
+		}
+
+		/// <summary>
+		/// Installs an archetype this peer was TOLD about — the spawn payload and the observer
+		/// broadcast — raising nothing.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The counterpart of <c>FactionController.ApplyFactionValue</c>, and it exists for the same
+		/// reason: both of those paths run on every peer for every character that comes into
+		/// observer range, and <see cref="SetArchetype(int)"/> ends in
+		/// <c>Character.Invoke(onArchetypeChangeTriggers)</c>. <c>BaseCharacter.Invoke</c> has no
+		/// authority gate and only a minority of action types gate themselves with
+		/// <c>EcaAuthority</c>, so a stranger walking past would run that stranger's
+		/// archetype-change triggers on the onlooker's machine.
+		/// </para>
+		/// <para>
+		/// A separate method rather than a <c>skipEvent</c> parameter on <see cref="SetArchetype(int)"/>
+		/// because <see cref="IArchetypeController"/> declares the two-argument-free signatures, and
+		/// an implementation with an extra optional parameter does not satisfy an interface member.
+		/// Adding the flag to the interface — matching
+		/// <c>IFactionController.SetFaction(int, int, bool)</c> — would be the tidier shape.
+		/// </para>
+		/// </remarks>
+		/// <param name="templateID">The cached ID of the archetype template to install.</param>
+		public void RestoreArchetype(int templateID)
+		{
+			ApplyArchetype(templateID, skipEvent: true);
+		}
+
+		/// <summary>Resolves <paramref name="templateID"/> and hands it to the single apply core.</summary>
+		private void ApplyArchetype(int templateID, bool skipEvent)
+		{
 			ArchetypeTemplate template = ArchetypeTemplate.Get<ArchetypeTemplate>(templateID);
 			if (template == null)
 			{
 				Log.Warning("ArchetypeController", $"Failed to find ArchetypeTemplate with ID {templateID}.");
 				return;
 			}
-			SetArchetype(template);
+			ApplyArchetype(template, skipEvent);
 		}
 
 		/// <summary>
@@ -130,6 +175,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="template">The archetype template to assign.</param>
 		public void SetArchetype(ArchetypeTemplate template)
+		{
+			ApplyArchetype(template, skipEvent: false);
+		}
+
+		/// <summary>
+		/// The single apply core. Validates, assigns, persists and announces — the last of those
+		/// only when <paramref name="skipEvent"/> is false. See <see cref="RestoreArchetype"/> for
+		/// who passes true and why.
+		/// </summary>
+		/// <param name="template">The archetype template to assign.</param>
+		/// <param name="skipEvent">True to install without raising anything.</param>
+		private void ApplyArchetype(ArchetypeTemplate template, bool skipEvent)
 		{
 			if (template == null)
 			{
@@ -172,13 +229,43 @@ namespace FishMMO.Shared
 				SendArchetypeUpdate(template.ID);
 			}
 
+			if (skipEvent)
+			{
+				return;
+			}
+
+			// UI-facing, and stays on every peer that actually changed its own archetype.
 			OnArchetypeChanged?.Invoke(oldTemplate, Template);
-			Character.Invoke(onArchetypeChangeTriggers, new ArchetypeEventData(Character, Template, oldTemplate));
+
+			/* ECA triggers only on the authoritative peer, the same rule BuffController.ApplyResolved
+			 * follows. Actions are free to damage, grant items or move a character and only a
+			 * minority of the action types gate themselves with EcaAuthority, so dispatching on a
+			 * client ran the rest of them a second time, locally. */
+			if (isServer)
+			{
+				Character.Invoke(onArchetypeChangeTriggers, new ArchetypeEventData(Character, Template, oldTemplate));
+			}
 		}
 
 		/// <summary>
 		/// Sends archetype updates to owner and observers.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why the observer half is kept.</b> No client code reads
+		/// <see cref="IArchetypeController"/> today, so both this channel and the non-owner half of
+		/// <see cref="WritePayload"/> look write-only on the receiving side. They are not: a shared
+		/// ECA condition reads it. <c>IsArchetypeCondition</c> evaluates
+		/// <c>eventData.TargetCharacter ?? initiator</c>, so a predicted ability whose condition
+		/// names the TARGET's archetype is evaluated on the caster's client against a peer's
+		/// controller. Strip the archetype from that peer's copy and the condition answers
+		/// differently on the client than on the server — a mispredict, not a blank label. One
+		/// packed id per change is cheap, the value is not private progression data the way a
+		/// reputation integer is (an archetype is legible from a character's gear and abilities),
+		/// and a sentinel in the non-owner payload would buy a few bytes at the cost of that
+		/// agreement.
+		/// </para>
+		/// </remarks>
 		/// <param name="templateID">The archetype template ID to send.</param>
 		private void SendArchetypeUpdate(int templateID)
 		{
@@ -192,7 +279,12 @@ namespace FishMMO.Shared
 				TemplateID = templateID,
 			}, Channel.Reliable);
 
-			BroadcastToObserversOnly(Character, new CharacterObserverArchetypeUpdateBroadcast()
+			/* One serialisation for the whole observer set. The private loop this replaced called
+			 * NetworkConnection.Broadcast per recipient, which writes the struct again for each one;
+			 * ServerManager.Broadcast(HashSet, ...) writes it once and reuses the ArraySegment. The
+			 * scope helper also owns the defensive copy that makes FishNet's set-mutating
+			 * BroadcastExcept safe to use against NetworkObject.Observers. */
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterObserverArchetypeUpdateBroadcast()
 			{
 				CharacterID = Character.ID,
 				TemplateID = templateID,
@@ -208,32 +300,6 @@ namespace FishMMO.Shared
 			if (character?.Owner != null)
 			{
 				character.Owner.Broadcast(broadcast, true, channel);
-			}
-		}
-
-		/// <summary>
-		/// Broadcasts the payload to all current observers of the character, excluding the owner.
-		/// </summary>
-		private static void BroadcastToObserversOnly<T>(ICharacter character, T broadcast, Channel channel)
-			where T : struct, IBroadcast
-		{
-			if (character == null || character.Observers == null)
-			{
-				return;
-			}
-
-			NetworkConnection owner = character.Owner;
-			foreach (NetworkConnection observer in character.Observers)
-			{
-				/* IsActive matches FactionController's otherwise-identical copy of this loop.
-				 * A connection that is disconnecting can still be sitting in Observers, and
-				 * NetworkConnection.Broadcast logs an error rather than dropping it quietly. */
-				if (observer == null || observer == owner || !observer.IsActive)
-				{
-					continue;
-				}
-
-				observer.Broadcast(broadcast, true, channel);
 			}
 		}
 
@@ -308,7 +374,16 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			archetypeController.SetArchetype(msg.TemplateID);
+			/* The restore path for the same reason ReadPayload takes it: this is somebody else's
+			 * archetype being installed on this machine, and the announcing path would run that
+			 * character's ECA triggers here.
+			 *
+			 * Cast because ICharacter.TryGet throws on anything but an interface and
+			 * IArchetypeController does not declare the restore entry point. */
+			if (archetypeController is ArchetypeController concrete)
+			{
+				concrete.RestoreArchetype(msg.TemplateID);
+			}
 		}
 #endif
 	}

@@ -201,7 +201,7 @@ namespace FishMMO.Client
 		/// <param name="broadcast">The add broadcast carrying the member's character ID.</param>
 		private static void Guild_OnAddMember(GuildAddBroadcast broadcast)
 		{
-			guildMembers.Add(broadcast.CharacterID);
+			guildMembers.Add(broadcast.Member.CharacterID);
 		}
 
 		/// <summary>Removes a guild member.</summary>

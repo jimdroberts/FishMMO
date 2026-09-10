@@ -110,14 +110,23 @@ namespace FishMMO.Shared
 		/// The Race Template ID for the character object.
 		/// </summary>
 		public int RaceID { get; set; }
+		/// <inheritdoc />
+		/// <remarks>
+		/// Two dictionary lookups in the template cache, so it is not worth a cached field — and a
+		/// cached field would have to be invalidated whenever <see cref="RaceID"/> moved, which is
+		/// exactly the kind of second copy this property exists to avoid.
+		/// </remarks>
+		public RaceTemplate RaceTemplate
+		{
+			// Fully qualified: inside this accessor the bare name resolves to the property itself.
+			get { return RaceID == 0 ? null : FishMMO.Shared.RaceTemplate.Get<FishMMO.Shared.RaceTemplate>(RaceID); }
+		}
+		/// <inheritdoc />
+		public string RaceName { get { return RaceTemplate?.Name; } }
 		/// <summary>
 		/// The model index for the character's race.
 		/// </summary>
 		public int ModelIndex { get; set; }
-		/// <summary>
-		/// The name of the character's race.
-		/// </summary>
-		public string RaceName { get; set; }
 		/// <summary>
 		/// The name of the bind scene for respawn.
 		/// </summary>
@@ -158,6 +167,19 @@ namespace FishMMO.Shared
 		/// Returns true if the character is in an instance and the instance scene name is set.
 		/// </summary>
 		public bool IsInInstance() { return Flags.IsFlagged(CharacterFlags.IsInInstance) && !string.IsNullOrWhiteSpace(InstanceSceneName); }
+		/// <inheritdoc />
+		/// <remarks>
+		/// The instance name is tested for content as well as the flag, so a character flagged into
+		/// an instance whose name has not arrived yet answers with the world scene rather than with
+		/// an empty string. Every caller uses the answer to look a scene up, and an empty key finds
+		/// nothing — which presents as a refusal rather than as the missing value it is.
+		/// </remarks>
+		public string CurrentSceneName()
+		{
+			return IsInInstance() && !string.IsNullOrEmpty(InstanceSceneName)
+				? InstanceSceneName
+				: SceneName;
+		}
 		/// <summary>
 		/// Returns true if the character is currently loaded in the scene and active.
 		/// </summary>
@@ -247,18 +269,27 @@ namespace FishMMO.Shared
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
 			ID = reader.ReadInt64();
-			RaceID = reader.ReadInt32();
+			/* Unpacked. Template ids are a deterministic 32-bit hash
+			 * (CachedScriptableObject.AddToCache), so they span the whole range and the
+			 * signed-packed form spends FIVE bytes on one. See ObservedBuffEntry. */
+			RaceID = reader.ReadInt32Unpacked();
 			ModelIndex = reader.ReadInt32();
-			RaceName = reader.ReadStringAllocated();
-			SceneName = reader.ReadStringAllocated();
-			/* Written empty when not in an instance. The client map keys everything by the scene
-			 * the character is standing in (CurrentSceneName), which inside an instance is this
-			 * and not SceneName; without it the map drew the open-world scene from inside a dungeon
-			 * and every fast-travel request from there was refused as NotInScene. */
-			string instanceSceneName = reader.ReadStringAllocated();
-			InstanceSceneName = string.IsNullOrEmpty(instanceSceneName) ? null : instanceSceneName;
-			AccessLevel = (AccessLevel)reader.ReadUInt8Unpacked();
 			Flags = reader.ReadInt32();
+
+			/* Which shape follows — see WritePayload. Only the OWNER is told where it is standing
+			 * and what it may do; an observer needs neither and used to receive both. */
+			byte shape = reader.ReadUInt8Unpacked();
+			if ((shape & PAYLOAD_SHAPE_OWNER) != 0)
+			{
+				SceneName = reader.ReadStringAllocated();
+				/* Written empty when not in an instance. The client map keys everything by the scene
+				 * the character is standing in (CurrentSceneName), which inside an instance is this
+				 * and not SceneName; without it the map drew the open-world scene from inside a dungeon
+				 * and every fast-travel request from there was refused as NotInScene. */
+				string instanceSceneName = reader.ReadStringAllocated();
+				InstanceSceneName = string.IsNullOrEmpty(instanceSceneName) ? null : instanceSceneName;
+				AccessLevel = (AccessLevel)reader.ReadUInt8Unpacked();
+			}
 
 #if !UNITY_SERVER
 			ClientCharacters[ID] = this;
@@ -278,17 +309,53 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="connection">The network connection to write to.</param>
 		/// <param name="writer">The writer to serialize data into.</param>
+		/// <remarks>
+		/// <para>
+		/// Two shapes behind a shape byte, chosen by the receiver, in the same style as the ability,
+		/// buff, attribute and waypoint controllers. Everything an observer needs to DRAW a peer is
+		/// unconditional; the three fields that describe where that peer is and what it is allowed
+		/// to do are the owner's alone.
+		/// </para>
+		/// <para>
+		/// <c>SceneName</c> and <c>InstanceSceneName</c> are read only through
+		/// <see cref="CurrentSceneName"/>, and the only client that calls it
+		/// calls it on the LOCAL character (<c>ClientMapSystem</c>). Every observer of every peer
+		/// was being sent two scene-name strings it had no reader for — and an observer is by
+		/// definition already in that scene.
+		/// </para>
+		/// <para>
+		/// <c>AccessLevel</c> has no client reader at all: the only thing that tests it is
+		/// <c>ChatHelper.TryParseCommand</c>, whose sole caller is the server's chat system. Sending
+		/// it told every observer which characters were game masters, for a byte nobody spent.
+		/// </para>
+		/// <para>
+		/// <c>RaceName</c> used to travel here and is gone entirely. It was never assigned anywhere
+		/// in the tree, so the wire value was always null, and a race name is derivable from
+		/// <see cref="RaceID"/> through the template cache — which is exactly what the guild UI
+		/// already does.
+		/// </para>
+		/// </remarks>
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
 			writer.WriteInt64(ID);
-			writer.WriteInt32(RaceID);
+			/* Unpacked — see ReadPayload. */
+			writer.WriteInt32Unpacked(RaceID);
 			writer.WriteInt32(ModelIndex);
-			writer.WriteString(RaceName);
-			writer.WriteString(SceneName);
-			writer.WriteString(InstanceSceneName ?? string.Empty);
-			writer.WriteUInt8Unpacked((byte)AccessLevel);
 			writer.WriteInt32(Flags);
+
+			bool isOwner = PayloadVisibility.IsOwner(this, connection);
+			writer.WriteUInt8Unpacked(isOwner ? PAYLOAD_SHAPE_OWNER : (byte)0);
+
+			if (isOwner)
+			{
+				writer.WriteString(SceneName);
+				writer.WriteString(InstanceSceneName ?? string.Empty);
+				writer.WriteUInt8Unpacked((byte)AccessLevel);
+			}
 		}
+
+		/// <summary>Shape flag: the payload carries the owner-only block.</summary>
+		private const byte PAYLOAD_SHAPE_OWNER = 0x01;
 
 #if !UNITY_SERVER
 

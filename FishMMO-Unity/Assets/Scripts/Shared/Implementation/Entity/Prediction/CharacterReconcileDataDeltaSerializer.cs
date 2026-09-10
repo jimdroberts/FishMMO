@@ -124,7 +124,10 @@ namespace FishMMO.Shared
 			KinematicCharacterMotorStateDeltaSerializer.WriteKinematicCharacterMotorState(writer, value.MotorState);
 			writer.WriteInt64(value.AbilityID);
 			writer.WriteUInt32(value.RemainingTicks);
-			writer.WriteInt32(value.Seed);
+			/* UNPACKED: the ability RNG seed is full entropy, so the zig-zag varint form spends five
+			 * bytes on fifteen of every sixteen values where fixed-width spends four. The tick above
+			 * it is a small absolute number and stays packed. */
+			writer.WriteInt32Unpacked(value.Seed);
 			CharacterAttributeResourceStateSerializer.WriteCharacterAttributeResourceState(writer, value.ResourceState);
 			writer.WriteInt32(value.PackedFlagsAndSlot);
 
@@ -137,11 +140,12 @@ namespace FishMMO.Shared
 			{
 				ushort count = (ushort)Math.Min(value.Cooldowns.Length, MaxArrayEntries);
 				writer.WriteUInt16(count);
+				/* Layout owned by CooldownReconcileEntry.WriteTo. The absolute form and the
+				 * index-delta form must read from ONE field list: a hand-copy here drifted from
+				 * AttributeReconcileEntry's the moment that struct changed a field's width. */
 				for (int i = 0; i < count; i++)
 				{
-					writer.WriteInt64(value.Cooldowns[i].AbilityID);
-					writer.WriteUInt32(value.Cooldowns[i].StartTick);
-					writer.WriteUInt32(value.Cooldowns[i].DurationTicks);
+					value.Cooldowns[i].WriteTo(writer);
 				}
 			}
 
@@ -154,15 +158,10 @@ namespace FishMMO.Shared
 			{
 				ushort count = (ushort)Math.Min(value.Buffs.Length, MaxArrayEntries);
 				writer.WriteUInt16(count);
+				// Layout owned by BuffReconcileEntry.WriteTo — see the cooldown loop above.
 				for (int i = 0; i < count; i++)
 				{
-					writer.WriteInt32(value.Buffs[i].TemplateID);
-					writer.WriteUInt32(value.Buffs[i].ExpiryTick);
-					writer.WriteUInt32(value.Buffs[i].NextTickTick);
-					writer.WriteInt32(value.Buffs[i].Stacks);
-					writer.WriteInt32(value.Buffs[i].TickCount);
-					writer.WriteInt32(value.Buffs[i].CumulativeTickMultiplier);
-					writer.WriteInt32(value.Buffs[i].RemainingCharges);
+					value.Buffs[i].WriteTo(writer);
 				}
 			}
 
@@ -175,12 +174,10 @@ namespace FishMMO.Shared
 			{
 				ushort count = (ushort)Math.Min(value.Equipment.Length, EquipmentReconcileEntry.MaxEntries);
 				writer.WriteUInt16(count);
+				// Layout owned by EquipmentReconcileEntry.WriteTo — see the cooldown loop above.
 				for (int i = 0; i < count; i++)
 				{
-					writer.WriteInt32(value.Equipment[i].TemplateID);
-					writer.WriteUInt8Unpacked(value.Equipment[i].Slot);
-					writer.WriteInt32(value.Equipment[i].Seed);
-					writer.WriteInt64(value.Equipment[i].ItemID);
+					EquipmentReconcileEntry.WriteTo(writer, value.Equipment[i]);
 				}
 			}
 
@@ -193,19 +190,21 @@ namespace FishMMO.Shared
 			{
 				ushort count = (ushort)Math.Min(value.Attributes.Length, MaxArrayEntries);
 				writer.WriteUInt16(count);
+				// Layout owned by AttributeReconcileEntry.WriteTo — see the cooldown loop above.
 				for (int i = 0; i < count; i++)
 				{
-					writer.WriteInt32(value.Attributes[i].TemplateID);
-					writer.WriteInt32(value.Attributes[i].Value);
-					writer.WriteInt32(value.Attributes[i].ExternalModifier);
+					value.Attributes[i].WriteTo(writer);
 				}
 			}
 
-			// RNG state
-			writer.WriteUInt32(value.RngS0);
-			writer.WriteUInt32(value.RngS1);
-			writer.WriteUInt32(value.RngS2);
-			writer.WriteUInt32(value.RngS3);
+			/* RNG state — UNPACKED. The four xoshiro128** words are high-entropy by construction, so
+			 * FishNet's varint form needs five bytes for any word with its top four bits set: fifteen
+			 * of every sixteen. Fixed-width is four apiece and never worse. Same reason the delta path
+			 * does not difference-encode them (see WriteRngStateDelta). */
+			writer.WriteUInt32Unpacked(value.RngS0);
+			writer.WriteUInt32Unpacked(value.RngS1);
+			writer.WriteUInt32Unpacked(value.RngS2);
+			writer.WriteUInt32Unpacked(value.RngS3);
 
 			// Charged hold counter. Appended after the fields that predate it so the frame's
 			// existing layout is untouched; the length prefix is what makes appending safe.
@@ -281,7 +280,7 @@ namespace FishMMO.Shared
 				MotorState = KinematicCharacterMotorStateDeltaSerializer.ReadKinematicCharacterMotorState(reader),
 				AbilityID = reader.ReadInt64(),
 				RemainingTicks = reader.ReadUInt32(),
-				Seed = reader.ReadInt32(),
+				Seed = reader.ReadInt32Unpacked(),
 				ResourceState = CharacterAttributeResourceStateSerializer.ReadCharacterAttributeResourceState(reader),
 				PackedFlagsAndSlot = reader.ReadInt32(),
 			};
@@ -296,14 +295,10 @@ namespace FishMMO.Shared
 			if (cdCount > 0)
 			{
 				result.Cooldowns = new CooldownReconcileEntry[cdCount];
+				// Layout owned by CooldownReconcileEntry.ReadFrom — the mirror of the write loop.
 				for (int i = 0; i < cdCount; i++)
 				{
-					result.Cooldowns[i] = new CooldownReconcileEntry
-					{
-						AbilityID = reader.ReadInt64(),
-						StartTick = reader.ReadUInt32(),
-						DurationTicks = reader.ReadUInt32(),
-					};
+					result.Cooldowns[i] = CooldownReconcileEntry.ReadFrom(reader);
 				}
 			}
 
@@ -317,18 +312,10 @@ namespace FishMMO.Shared
 			if (buffCount > 0)
 			{
 				result.Buffs = new BuffReconcileEntry[buffCount];
+				// Layout owned by BuffReconcileEntry.ReadFrom — the mirror of the write loop.
 				for (int i = 0; i < buffCount; i++)
 				{
-					result.Buffs[i] = new BuffReconcileEntry
-					{
-						TemplateID = reader.ReadInt32(),
-						ExpiryTick = reader.ReadUInt32(),
-						NextTickTick = reader.ReadUInt32(),
-						Stacks = reader.ReadInt32(),
-						TickCount = reader.ReadInt32(),
-						CumulativeTickMultiplier = reader.ReadInt32(),
-						RemainingCharges = reader.ReadInt32(),
-					};
+					result.Buffs[i] = BuffReconcileEntry.ReadFrom(reader);
 				}
 			}
 
@@ -342,15 +329,10 @@ namespace FishMMO.Shared
 			if (equipCount > 0)
 			{
 				result.Equipment = new EquipmentReconcileEntry[equipCount];
+				// Layout owned by EquipmentReconcileEntry.ReadFrom — the mirror of the write loop.
 				for (int i = 0; i < equipCount; i++)
 				{
-					result.Equipment[i] = new EquipmentReconcileEntry
-					{
-						TemplateID = reader.ReadInt32(),
-						Slot = reader.ReadUInt8Unpacked(),
-						Seed = reader.ReadInt32(),
-						ItemID = reader.ReadInt64(),
-					};
+					result.Equipment[i] = EquipmentReconcileEntry.ReadFrom(reader);
 				}
 			}
 
@@ -364,22 +346,18 @@ namespace FishMMO.Shared
 			if (attrCount > 0)
 			{
 				result.Attributes = new AttributeReconcileEntry[attrCount];
+				// Layout owned by AttributeReconcileEntry.ReadFrom — the mirror of the write loop.
 				for (int i = 0; i < attrCount; i++)
 				{
-					result.Attributes[i] = new AttributeReconcileEntry
-					{
-						TemplateID = reader.ReadInt32(),
-						Value = reader.ReadInt32(),
-						ExternalModifier = reader.ReadInt32(),
-					};
+					result.Attributes[i] = AttributeReconcileEntry.ReadFrom(reader);
 				}
 			}
 
-			// RNG state
-			result.RngS0 = reader.ReadUInt32();
-			result.RngS1 = reader.ReadUInt32();
-			result.RngS2 = reader.ReadUInt32();
-			result.RngS3 = reader.ReadUInt32();
+			// RNG state — unpacked, mirroring WriteCharacterReconcileData.
+			result.RngS0 = reader.ReadUInt32Unpacked();
+			result.RngS1 = reader.ReadUInt32Unpacked();
+			result.RngS2 = reader.ReadUInt32Unpacked();
+			result.RngS3 = reader.ReadUInt32Unpacked();
 
 			result.ChargedHoldTicks = reader.ReadUInt32();
 
@@ -551,6 +529,13 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Compares and writes the 4 xoshiro128** state words. All 4 change together so a single bit controls writing.
 		/// Delta encoding is intentionally skipped since pseudo-random state has high entropy.
+		/// <para>
+		/// That same entropy is why the words go out UNPACKED. FishNet's varint form spends a fifth
+		/// byte on any word whose top four bits are set, which for state words is fifteen of every
+		/// sixteen; fixed-width is four apiece and never worse. <see cref="ReadDelta"/> and
+		/// <see cref="DrainDeltaPayload"/> both read them unpacked — all three must agree or every
+		/// predicted behaviour after this one decodes from the wrong offset.
+		/// </para>
 		/// </summary>
 		/// <param name="writer">The network writer.</param>
 		/// <param name="prev">Previous reconcile data snapshot.</param>
@@ -577,10 +562,10 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			writer.WriteUInt32(next.RngS0);
-			writer.WriteUInt32(next.RngS1);
-			writer.WriteUInt32(next.RngS2);
-			writer.WriteUInt32(next.RngS3);
+			writer.WriteUInt32Unpacked(next.RngS0);
+			writer.WriteUInt32Unpacked(next.RngS1);
+			writer.WriteUInt32Unpacked(next.RngS2);
+			writer.WriteUInt32Unpacked(next.RngS3);
 			return true;
 		}
 
@@ -627,7 +612,8 @@ namespace FishMMO.Shared
 			if ((flags & PACKED_FLAGS_BIT) != 0) reader.ReadDeltaInt32(prev.PackedFlagsAndSlot);
 			if ((flags & COOLDOWN_BIT) != 0) CooldownReconcileEntry.ReadArrayDelta(reader, prev.Cooldowns);
 			if ((flags & BUFF_BIT) != 0) BuffReconcileEntry.ReadArrayDelta(reader, prev.Buffs);
-			if ((flags & RNG_STATE_BIT) != 0) { reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32(); }
+			// Unpacked, matching WriteRngStateDelta — four fixed-width words, not four varints.
+			if ((flags & RNG_STATE_BIT) != 0) { reader.ReadUInt32Unpacked(); reader.ReadUInt32Unpacked(); reader.ReadUInt32Unpacked(); reader.ReadUInt32Unpacked(); }
 			if ((flags & ATTRIBUTE_BIT) != 0) AttributeReconcileEntry.ReadArrayDelta(reader, prev.Attributes);
 			if ((flags & EQUIPMENT_BIT) != 0) EquipmentReconcileEntry.ReadArrayDelta(reader, prev.Equipment);
 			if ((flags & CHARGED_HOLD_BIT) != 0) reader.ReadDeltaUInt32(prev.ChargedHoldTicks);
@@ -711,10 +697,11 @@ namespace FishMMO.Shared
 
 			if ((flags & RNG_STATE_BIT) != 0)
 			{
-				result.RngS0 = reader.ReadUInt32();
-				result.RngS1 = reader.ReadUInt32();
-				result.RngS2 = reader.ReadUInt32();
-				result.RngS3 = reader.ReadUInt32();
+				// Unpacked, matching WriteRngStateDelta.
+				result.RngS0 = reader.ReadUInt32Unpacked();
+				result.RngS1 = reader.ReadUInt32Unpacked();
+				result.RngS2 = reader.ReadUInt32Unpacked();
+				result.RngS3 = reader.ReadUInt32Unpacked();
 			}
 
 			if ((flags & ATTRIBUTE_BIT) != 0)

@@ -1372,9 +1372,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Server.NetworkWrapper.Broadcast(conn, new PartyAddBroadcast()
 				{
 					PartyID = partyID,
-					CharacterID = characterID,
-					Rank = rank,
-					HealthPCT = healthPCT,
+					Member = new PartyAddEntry()
+					{
+						CharacterID = characterID,
+						Rank = rank,
+						HealthPCT = PartyVitalsQuantiser.FractionToByte(healthPCT),
+					},
 				}, true, FishNet.Transporting.Channel.Reliable);
 			}
 
@@ -1506,7 +1509,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Kind = entry.Kind,
 				DungeonTemplateID = entry.DungeonTemplateID,
 				ArenaTemplateID = entry.ArenaTemplateID,
-				SceneName = entry.SceneName ?? string.Empty,
 				Difficulty = entry.Difficulty,
 				WaitingCount = waitingCount,
 				GroupSize = entry.GroupSize,

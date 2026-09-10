@@ -271,11 +271,18 @@ namespace FishMMO.Client
 
 		/// <summary>Routes one server-reported combat event to the right floating number.</summary>
 		/// <remarks>
+		/// <b>The number only, deliberately.</b> The same report also moves the victim's health bar,
+		/// and that happens once at the receive seam in
+		/// <c>CharacterDamageController.OnCombatEventBroadcast</c> — before this event is raised, and
+		/// whether or not damage numbers are switched on. Applying it here as well would move the bar
+		/// twice for every hit.
+		/// <para>
 		/// A report the caster already drew as a prediction is consumed rather than drawn again.
 		/// Everyone else — every observer, and the caster for hits it did not predict — draws here
 		/// as before. The SOURCE is part of the match: this report reaches every client observing the
 		/// victim, so without it another player's hit on the same target would consume this client's
 		/// prediction and go undrawn.
+		/// </para>
 		/// <para>
 		/// <paramref name="occurrences"/> is how many hits the server merged into this one report,
 		/// and therefore how many predicted labels it settles. See

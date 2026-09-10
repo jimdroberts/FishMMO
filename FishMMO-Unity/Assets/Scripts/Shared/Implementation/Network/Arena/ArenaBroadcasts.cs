@@ -65,7 +65,13 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// One seat as the client sees it.
 	/// </summary>
+	/// <remarks>
+	/// Serialized by hand (<see cref="ArenaBroadcastSerializers"/>) so the three flags below share
+	/// one byte instead of spending one each. One wire form serves both the state broadcast and
+	/// <see cref="ArenaResultsBroadcast.Placements"/>.
+	/// </remarks>
 	[Serializable]
+	[FishNet.CodeGenerating.UseGlobalCustomSerializer]
 	public struct ArenaMemberEntry
 	{
 		public long CharacterID;
@@ -84,7 +90,12 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// One objective as the client sees it.
 	/// </summary>
+	/// <remarks>
+	/// Serialized by hand (<see cref="ArenaBroadcastSerializers"/>): <see cref="Position"/> is only
+	/// on the wire for the one state that has a position to send.
+	/// </remarks>
 	[Serializable]
+	[FishNet.CodeGenerating.UseGlobalCustomSerializer]
 	public struct ArenaObjectiveEntry
 	{
 		/// <summary>Scene object id of the flag stand or control point.</summary>
@@ -98,6 +109,14 @@ namespace FishMMO.Shared
 		/// <summary>Flag stand: the carrier, or 0 when not carried. Control point: the team whose capture is in progress, or -1, as a long.</summary>
 		public long Holder;
 		/// <summary>Flag stand: where a dropped flag lies. Zero otherwise.</summary>
+		/// <remarks>
+		/// <b>Only sent for a DROPPED flag.</b> A flag at home has no marker to place, and a carried
+		/// flag hangs off the carrier's transform — <c>ArenaFlagVisuals</c> reads this field on the
+		/// dropped branch alone, and the producer only ever fills it there. A control point never has
+		/// one at all. Twelve bytes per objective, on a message every arena occupant receives once a
+		/// second, for a field almost every objective leaves at zero; see
+		/// <see cref="ArenaBroadcastSerializers"/>, which restores <c>Vector3.zero</c> otherwise.
+		/// </remarks>
 		public UnityEngine.Vector3 Position;
 	}
 
@@ -109,10 +128,20 @@ namespace FishMMO.Shared
 	/// second while live for the clock. The roster is what the client publishes to its own
 	/// <see cref="ArenaTeamRegistry"/>, so predicted targeting agrees with the server about who
 	/// may be hit.
+	/// <para>
+	/// <b>No match id.</b> A client is in at most one match, the one it is standing in, and it
+	/// never sends this message back — the only correlation token the protocol needs is the one on
+	/// <see cref="ArenaReadyCheckBroadcast"/>, which <see cref="ArenaReadyResponseBroadcast"/>
+	/// echoes so the server can reject an answer to a match that has moved on. Nothing read the id
+	/// here, and this message is the most frequent one the arena sends.
+	/// </para>
+	/// <para>
+	/// Serialized by hand: see <see cref="ArenaBroadcastSerializers"/> for what that shapes away.
+	/// </para>
 	/// </remarks>
+	[FishNet.CodeGenerating.UseGlobalCustomSerializer]
 	public struct ArenaMatchStateBroadcast : IBroadcast
 	{
-		public long MatchID;
 		public int ArenaTemplateID;
 		public int Format;
 		public ArenaMatchPhase Phase;
@@ -133,9 +162,26 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Server → Client broadcast with the final result, sent to everyone who was in the match.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The recipient's own team is not sent.</b> It is in <see cref="Placements"/> already:
+	/// every seat that receives this message is a seat that finished the match, and a finished
+	/// seat has a row there carrying its character id and team. <c>UITKArenaResults</c> matches
+	/// its own character id against those rows.
+	/// </para>
+	/// <para>
+	/// <b>Neither is the return countdown.</b> The server times it as
+	/// <c>Math.Max(3, ArenaTemplate.ResultsSeconds)</c> — authored content the recipient already
+	/// holds, reached through <see cref="ArenaTemplateID"/> in this same message — so the results
+	/// screen reproduces the clamp rather than being told the answer. A template it cannot resolve
+	/// falls back to the same 15 seconds the server uses when a match has no template.
+	/// </para>
+	/// <para>
+	/// No match id: nothing read it, and nothing sends this message back.
+	/// </para>
+	/// </remarks>
 	public struct ArenaResultsBroadcast : IBroadcast
 	{
-		public long MatchID;
 		public int ArenaTemplateID;
 		public int Format;
 
@@ -147,9 +193,6 @@ namespace FishMMO.Shared
 
 		/// <summary>Every seat, already ordered by score for the pedestal.</summary>
 		public ArenaMemberEntry[] Placements;
-
-		/// <summary>The recipient's team.</summary>
-		public int YourTeam;
 
 		/// <summary>The recipient's PvP rank change.</summary>
 		public int RankDelta;
@@ -165,9 +208,6 @@ namespace FishMMO.Shared
 
 		/// <summary>Placement games the recipient still has to play before their rating shows. 0 once placed or unranked.</summary>
 		public int PlacementGamesRemaining;
-
-		/// <summary>Seconds until everyone is returned to the world.</summary>
-		public int SecondsUntilReturn;
 	}
 
 	/// <summary>
@@ -264,11 +304,11 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// Feeds the kill feed and the announcer. Names travel with the event because the actor or
-	/// target may be culled from the recipient's view, or already gone.
+	/// target may be culled from the recipient's view, or already gone. No match id: the recipient
+	/// is standing in the only match this can be about, and nothing sends the message back.
 	/// </remarks>
 	public struct ArenaEventBroadcast : IBroadcast
 	{
-		public long MatchID;
 		public ArenaEventKind Kind;
 		public long ActorID;
 		public string ActorName;
@@ -320,10 +360,13 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>One finished match as the history shows it.</summary>
+	/// <remarks>
+	/// No match id: the board draws a row from the fields below and has nothing to ask the server
+	/// about a past match, so the database key stayed on the server side of the wire.
+	/// </remarks>
 	[Serializable]
 	public struct ArenaHistoryEntry
 	{
-		public long MatchID;
 		public int ArenaTemplateID;
 		public int Format;
 		public bool Ranked;

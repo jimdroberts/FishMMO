@@ -416,8 +416,19 @@ namespace FishMMO.Shared
 			SceneObject.Register(this, true);
 
 			// Read the attribute seed for deterministic attribute generation.
-			npcSeed = reader.ReadInt32();
-			npcGender = (CharacterGender)reader.ReadUInt8Unpacked();
+			npcSeed = reader.ReadInt32Unpacked();
+
+			/* Gender comes from the namer when there is one, and is on the wire only when there is
+			 * not. SceneObjectNamer serialises its own selectedGender in its own block, so writing a
+			 * second copy here made two behaviours owners of one fact inside a single unframed
+			 * payload buffer — the shape of thing that becomes a desync the first time somebody
+			 * reorders components. The namer precedes this behaviour on every prefab that has one,
+			 * and component order IS payload order (FishNet iterates nob.NetworkBehaviours), so its
+			 * block has already been read by the time we ask it. */
+			SceneObjectNamer payloadNamer = GetComponent<SceneObjectNamer>();
+			npcGender = payloadNamer != null
+				? payloadNamer.SelectedGender
+				: (CharacterGender)reader.ReadUInt8Unpacked();
 
 			/* Read and apply flags before anything below builds the model. The animation
 			 * controller poses an already-dead character when it acquires its animator, and that
@@ -466,11 +477,26 @@ namespace FishMMO.Shared
 		{
 			writer.WriteInt64(ID);
 
-			// Write the seed for clients to use for determinism.
-			writer.WriteInt32(npcSeed);
+			/* Write the seed for clients to use for determinism.
+			 *
+			 * Unpacked: a seed is full entropy by construction, so the signed-packed form spends
+			 * FIVE bytes on one where unpacked spends exactly four. NPCs are the highest object
+			 * count in the game and this is paid per spawn per observer. See ObservedBuffEntry. */
+			writer.WriteInt32Unpacked(npcSeed);
+
+			/* The gender is still RESOLVED here — the model index drawn in ReadPayload needs it and
+			 * the namer is what rolls it — but it is only WRITTEN when there is no namer to have
+			 * written it already. See ReadPayload. */
 			SceneObjectNamer sceneObjectNamer = GetComponent<SceneObjectNamer>();
-			npcGender = sceneObjectNamer == null ? CharacterGender.Unspecified : sceneObjectNamer.EnsureGeneratedGender();
-			writer.WriteUInt8Unpacked((byte)npcGender);
+			if (sceneObjectNamer != null)
+			{
+				npcGender = sceneObjectNamer.EnsureGeneratedGender();
+			}
+			else
+			{
+				npcGender = CharacterGender.Unspecified;
+				writer.WriteUInt8Unpacked((byte)npcGender);
+			}
 
 			/* Flags, so a client that starts observing an NPC that is ALREADY a corpse poses it
 			 * correctly. The observers RPC covers only clients who were watching at the moment of

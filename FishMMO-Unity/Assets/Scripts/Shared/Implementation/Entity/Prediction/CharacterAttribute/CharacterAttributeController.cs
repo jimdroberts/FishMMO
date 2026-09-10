@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishNet.Connection;
@@ -674,7 +674,7 @@ namespace FishMMO.Shared
 			{
 				for (int i = 0; i < attributeCount; ++i)
 				{
-					int templateID = reader.ReadInt32();
+					int templateID = reader.ReadInt32Unpacked();
 					int value = reader.ReadInt32();
 					if (ownerShape)
 					{
@@ -709,7 +709,7 @@ namespace FishMMO.Shared
 			{
 				for (int i = 0; i < resourceAttributeCount; ++i)
 				{
-					int templateID = reader.ReadInt32();
+					int templateID = reader.ReadInt32Unpacked();
 					int value = reader.ReadInt32();
 					float currentValue = reader.ReadSingle();
 					if (ownerShape)
@@ -836,7 +836,13 @@ namespace FishMMO.Shared
 			for (int i = 0; i < sortedAttrIDs.Count; i++)
 			{
 				CharacterAttribute attribute = Attributes[sortedAttrIDs[i]];
-				writer.WriteInt32(attribute.Template.ID);
+				/* Unpacked. Template ids are a deterministic 32-bit hash
+				 * (CachedScriptableObject.AddToCache), so they span the whole range and the
+				 * signed-packed form spends FIVE bytes on one — a byte per attribute, and an
+				 * authored sheet runs to dozens. AttributeReconcileEntry.WriteTo already writes
+				 * this id unpacked; only the spawn path had been missed. The VALUES stay packed:
+				 * those are small. See ObservedBuffEntry. */
+				writer.WriteInt32Unpacked(attribute.Template.ID);
 				writer.WriteInt32(attribute.Value);
 				if (!ownerShape)
 				{
@@ -851,7 +857,8 @@ namespace FishMMO.Shared
 			for (int i = 0; i < sortedResIDs.Count; i++)
 			{
 				CharacterResourceAttribute resourceAttribute = ResourceAttributes[sortedResIDs[i]];
-				writer.WriteInt32(resourceAttribute.Template.ID);
+				// Unpacked for the same reason as the attribute block above.
+				writer.WriteInt32Unpacked(resourceAttribute.Template.ID);
 				writer.WriteInt32(resourceAttribute.Value);
 				writer.WriteSingle(resourceAttribute.CurrentValue);
 				if (!ownerShape)
@@ -880,6 +887,27 @@ namespace FishMMO.Shared
 			 * changed value can be suppressed as "unchanged". ObservedResourcePushScheduler.Reset
 			 * existed for exactly this and was called from nowhere. */
 			resourcePushScheduler.Reset();
+			/* The edge detector the scheduler's interval is chosen by. Left behind, a pooled object's
+			 * next occupant inherits the previous character's combat state as the baseline for the
+			 * out-of-combat-to-in-combat transition: a character that died in combat and whose shell
+			 * is reused by one that spawns out of combat never sees the edge, so the first hit of its
+			 * first fight waits out an interval sized for an idle character. Benign only by accident
+			 * until now, because Reset above forces an unconditional first push — which is exactly
+			 * the kind of accident the rest of this block exists to not rely on. */
+			lastObservedResourceCombatState = null;
+			/* And the damage controller the combat state is read THROUGH. The component set of a
+			 * pooled object does not change, so re-resolving is nearly free — but the "resolved"
+			 * flag latches even when the probe found nothing, and a probe that ran before Character
+			 * was wired would otherwise leave this shell permanently classified as out of combat. */
+			observedResourceDamageController = null;
+			observedResourceDamageControllerResolved = false;
+			/* The field mask's baseline and the maxima repeat counter. The mask says "this field is
+			 * unchanged since the last message", so a baseline belonging to the previous occupant
+			 * would omit a field that genuinely differs. Reset above makes the next push a first
+			 * push, which sends every field — these keep that true rather than assumed. */
+			lastSentObservedResources = default;
+			hasSentObservedResources = false;
+			observedResourceMaximaResends = 0;
 			/* The sequence window belongs to the character, not to the pooled object. Left behind,
 			 * the next occupant's first pushes would be compared against a stranger's counter and
 			 * silently discarded until it caught up. */
@@ -1926,6 +1954,162 @@ namespace FishMMO.Shared
 			EndPropagation();
 		}
 
+		/// <summary>
+		/// The health an observer should hold after a combat report of <paramref name="amount"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Pure, so the reconstruction can be asserted without a spawned character. It IS a
+		/// reconstruction: the server reports the post-mitigation delta and clamps a heal to the same
+		/// maximum the observer holds, so <c>min(max, old + amount)</c> reproduces the number the
+		/// authoritative resource push will carry a few ticks later rather than approximating it.
+		/// </para>
+		/// <para>
+		/// Both ends are clamped. Damage cannot take health below zero — the server's own
+		/// <c>Consume</c> does not — and a heal cannot exceed the maximum, so an observer that has
+		/// missed a maximum change is wrong by that change and not by an unbounded amount.
+		/// </para>
+		/// </remarks>
+		/// <param name="current">The health this client currently holds for the character.</param>
+		/// <param name="max">The maximum this client currently holds.</param>
+		/// <param name="amount">The reported amount, never negative.</param>
+		/// <param name="restoresHealth">True for a heal; false for damage.</param>
+		/// <returns>The health to hold, clamped to zero and <paramref name="max"/>.</returns>
+		public static float ResolveObservedHealthAfterDelta(float current, int max, int amount, bool restoresHealth)
+		{
+			if (amount <= 0)
+			{
+				return current;
+			}
+			return restoresHealth
+				? Mathf.Min(max, current + amount)
+				: Mathf.Max(0.0f, current - amount);
+		}
+
+		/// <summary>
+		/// Applies the fields of an observer resource push that the message actually carried.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="CharacterResourcesBroadcast.Mask"/> names which of the six values are present;
+		/// a field whose bit is clear is absent from the wire and arrives as zero, so applying it
+		/// unconditionally would empty a bar or — worse, for a maximum — stamp the resource's final
+		/// value to zero and collapse every bar drawn against it. Everything omitted is left exactly
+		/// as this client holds it, which is what the sender's omission means.
+		/// </para>
+		/// <para>
+		/// The maxima travel only when they changed, and a new observer never depends on this stream
+		/// for them: the spawn payload (<c>WritePayload</c>) sends every resource attribute's value
+		/// and current value to every non-owner from live state at the moment the observer is added,
+		/// so it is by construction at least as fresh as the last push.
+		/// </para>
+		/// </remarks>
+		/// <param name="msg">The message as received, masked.</param>
+		public void ApplyObservedResourceFields(in CharacterResourcesBroadcast msg)
+		{
+			BeginPropagation();
+			ApplyObservedResourceField(HealthResourceTemplateID, msg.Mask,
+				CharacterResourcesMask.Health, msg.Health, CharacterResourcesMask.MaxHealth, msg.MaxHealth);
+			ApplyObservedResourceField(ManaResourceTemplateID, msg.Mask,
+				CharacterResourcesMask.Mana, msg.Mana, CharacterResourcesMask.MaxMana, msg.MaxMana);
+			ApplyObservedResourceField(StaminaResourceTemplateID, msg.Mask,
+				CharacterResourcesMask.Stamina, msg.Stamina, CharacterResourcesMask.MaxStamina, msg.MaxStamina);
+			EndPropagation();
+		}
+
+		/// <summary>
+		/// Moves an observed character's health by the amount a combat report just named.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The same fact used to arrive twice and one copy was thrown away.</b> A hit produces a
+		/// <c>CombatEventBroadcast</c> to every observer carrying the exact post-mitigation health
+		/// delta, and then, independently, a <see cref="CharacterResourcesBroadcast"/> carrying the
+		/// resulting absolute. The first drove a floating number and nothing else; the bar waited for
+		/// the second, which is up to a whole push interval behind. The reported amount IS the health
+		/// delta — <c>CharacterDamageController.Damage</c> reports the number it passed to
+		/// <c>ResourceInstance.Consume</c> — so an observer holding health and its maximum can move
+		/// the bar the moment the report lands.
+		/// </para>
+		/// <para>
+		/// <b>The resource push stays authoritative and this cannot fight it.</b> The push carries an
+		/// ABSOLUTE value, so applying it after any number of deltas overwrites rather than compounds:
+		/// the two can disagree for at most one push interval and the push always wins. That is what
+		/// makes this safe against a duplicated or double-counted report, which would otherwise be
+		/// unrecoverable on an unreliable channel.
+		/// </para>
+		/// <para>
+		/// Clamped to the maximum this client holds, because a heal clamps server-side to the same
+		/// number, and to zero, because health cannot go below it. Never called for the owner — its
+		/// own reconcile is authoritative and arrives every tick.
+		/// </para>
+		/// </remarks>
+		/// <param name="amount">The amount reported, never negative.</param>
+		/// <param name="restoresHealth">True for a heal; false for damage.</param>
+		public void ApplyObservedHealthDelta(int amount, bool restoresHealth)
+		{
+			if (amount <= 0 || HealthResourceTemplateID == 0)
+			{
+				return;
+			}
+			if (!resourceAttributes.TryGetValue(HealthResourceTemplateID, out CharacterResourceAttribute health))
+			{
+				return;
+			}
+
+			float previous = health.CurrentValue;
+			float updated = ResolveObservedHealthAfterDelta(previous, health.FinalValue, amount, restoresHealth);
+
+			if (updated == previous)
+			{
+				return;
+			}
+
+			BeginPropagation();
+			health.SetCurrentValue(updated, false);
+			EnqueueNotification(health);
+			EndPropagation();
+		}
+
+		/// <summary>
+		/// Writes whichever of one resource's current value and maximum the mask names.
+		/// </summary>
+		/// <remarks>
+		/// The maximum is installed with <see cref="CharacterAttribute.SetFinalDerivingModifier"/>
+		/// and propagated to parents for exactly the reasons
+		/// <see cref="ApplyIndividualResourceState"/> documents — this is that method with each half
+		/// made optional. Silently skips a resource this entity does not have.
+		/// Callers must bracket calls with <see cref="BeginPropagation"/>/<see cref="EndPropagation"/>.
+		/// </remarks>
+		private void ApplyObservedResourceField(int templateID, byte mask, byte currentBit, int currentValue, byte maxBit, int maxValue)
+		{
+			if (templateID == 0) return;
+
+			bool hasCurrent = (mask & currentBit) != 0;
+			bool hasMax = (mask & maxBit) != 0;
+			if (!hasCurrent && !hasMax) return;
+
+			if (!resourceAttributes.TryGetValue(templateID, out CharacterResourceAttribute resource)) return;
+
+			float previousCurrent = resource.CurrentValue;
+			int previousMax = resource.FinalValue;
+
+			if (hasMax)
+			{
+				resource.SetFinalDerivingModifier(maxValue);
+				PropagateToParents(resource);
+			}
+			if (hasCurrent)
+			{
+				resource.SetCurrentValue(currentValue, false);
+			}
+
+			if (previousMax != resource.FinalValue || previousCurrent != resource.CurrentValue)
+			{
+				EnqueueNotification(resource);
+			}
+		}
+
 		public void ApplyResourceState(CharacterAttributeResourceState resourceState)
 		{
 			// Restore the absolute next-regen tick from server state so the client fires
@@ -2179,6 +2363,37 @@ namespace FishMMO.Shared
 		private byte observedResourceOutOfCombatPushInterval = 12;
 
 		/// <summary>
+		/// Ticks between pushes driven by mana or stamina ALONE.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Nothing on any client draws a peer's mana or stamina. The target frame draws health only,
+		/// nameplates carry no resource at all, and a party row's percentages come from
+		/// <c>PartyMemberVitalsUpdateBroadcast</c> rather than from this channel. The one genuine
+		/// peer-side reader is <c>HasResourceCondition</c> evaluated against a victim during a
+		/// caster's predicted hit, and that asks "does it have at least N", not "draw me a bar".
+		/// </para>
+		/// <para>
+		/// So these two get a ceiling of their own. Gated as one OR across all six values at whole
+		/// units, sprint's five stamina a second dirtied the gate on essentially every tick and the
+		/// channel degenerated into a 2.5-5&#160;Hz stream of the entire resource sheet for every
+		/// character that was moving or recovering — for two values nobody renders. The bucket gate
+		/// in <see cref="ObservedResourcePushScheduler.ClassifyChange"/> does most of the work; this
+		/// bounds the remainder, including a value oscillating across a bucket boundary.
+		/// </para>
+		/// <para>
+		/// It does not make a victim's resources stale for the condition. A secondary value still
+		/// rides along, at whole-unit precision, on every push the HEALTH schedule produces — which
+		/// in combat is five a second — because the field mask is computed per field rather than per
+		/// kind. This interval only bounds how often mana or stamina may cause a push by itself.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Ticks between resource pushes caused by mana or stamina alone. 30 at tick rate 30 is once a second.")]
+		[Range(1, 120)]
+		[SerializeField]
+		private byte observedResourceSecondaryPushInterval = 30;
+
+		/// <summary>
 		/// Combat state as of the last observer resource evaluation, so the transition INTO combat
 		/// can be detected. <c>null</c> until the first evaluation.
 		/// </summary>
@@ -2220,6 +2435,44 @@ namespace FishMMO.Shared
 		/// is unit-testable without a live character — see ObservedResourcePushScheduler.
 		/// </remarks>
 		private ObservedResourcePushScheduler resourcePushScheduler;
+
+		/// <summary>
+		/// The last resource message sent for this character, as the field mask's baseline.
+		/// </summary>
+		/// <remarks>
+		/// The MESSAGE, not the float state, so the mask is computed against exactly the whole-unit
+		/// numbers the observers are holding. Comparing against the float state instead would set a
+		/// bit for a sub-unit difference that rounds to the same wire value, which is both a wasted
+		/// field and a lie about what changed.
+		/// </remarks>
+		private CharacterResourcesBroadcast lastSentObservedResources;
+
+		/// <summary>False until the first resource push, when every field is sent.</summary>
+		private bool hasSentObservedResources;
+
+		/// <summary>
+		/// Pushes still owing a repeat of the three maxima after one of them changed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A maximum is the field a packet loss strands for longest: it changes on an equip, a buff
+		/// or a level and then not again for minutes, so an omitted-because-unchanged maximum whose
+		/// baseline packet was lost leaves the bar drawn against the wrong denominator until the
+		/// next confirmation. The push that CHANGES a maximum therefore goes reliable, and the next
+		/// few pushes repeat it unreliably — which also closes the one reorder the sequence window
+		/// cannot: a reliable packet being retransmitted while an unreliable one with a higher
+		/// sequence overtakes it, so the retransmission arrives and is correctly discarded as stale.
+		/// </para>
+		/// <para>
+		/// Costs nothing in the steady state, because in the steady state it is zero.
+		/// </para>
+		/// </remarks>
+		private int observedResourceMaximaResends;
+
+		/// <summary>
+		/// How many pushes after a maximum changes repeat it. Three at 5&#160;Hz is about 0.6&#160;s.
+		/// </summary>
+		private const int ObservedResourceMaximaResendPushes = 3;
 
 		/// <summary>Sequence number stamped on the next resource push this character sends.</summary>
 		private ushort observedResourceSequence;
@@ -2454,7 +2707,20 @@ namespace FishMMO.Shared
 
 			byte pushInterval = inCombat ? observedResourcePushInterval : observedResourceOutOfCombatPushInterval;
 
-			ObservedResourcePushScheduler.Decision decision = resourcePushScheduler.Evaluate(tick, state, pushInterval);
+			/* The regeneration forecast, translated out of the replicate tick domain.
+			 *
+			 * nextRegenTick is stamped from a replicate's tick, which on the server is the OWNING
+			 * CLIENT's unsynchronised counter — comparing it against TimeManager.LocalTick is
+			 * meaningless. The DISTANCE between two ticks of that domain is a number of ticks and
+			 * transfers to any other, so the forecast travels as a duration measured from the last
+			 * replicate this controller processed. See ObservedResourcePushScheduler.TicksUntil. */
+			ObservedResourcePushScheduler.Schedule schedule = new ObservedResourcePushScheduler.Schedule(
+				pushInterval,
+				observedResourceSecondaryPushInterval,
+				tick + ObservedResourcePushScheduler.TicksUntil(lastProcessedRegenTick, nextRegenTick),
+				regenTickInterval != 0u && hasNextRegenTick && hasLastProcessedRegenTick);
+
+			ObservedResourcePushScheduler.Decision decision = resourcePushScheduler.Evaluate(tick, state, schedule);
 			if (decision == ObservedResourcePushScheduler.Decision.None)
 			{
 				return;
@@ -2470,7 +2736,15 @@ namespace FishMMO.Shared
 			 * whatever the victim had before the killing blow, and a corpse standing at half
 			 * health is what a double loss looked like — permanently, because the scheduler had
 			 * already cleared the pending confirmation. One reliable packet per burst is a price
-			 * worth paying for the packet that ends it. */
+			 * worth paying for the packet that ends it.
+			 *
+			 * "A burst that stops" is what regeneration made untrue. It pulses once a second against
+			 * a fifteen-tick confirmation delay, so every character below full on any resource sat in
+			 * a permanent two-message steady state: an unreliable push on the pulse and a reliable
+			 * confirmation halfway to the next one, repairing a value that was already scheduled to
+			 * be replaced. The confirmation is now DEFERRED behind a pending pulse rather than
+			 * cancelled by it — see ObservedResourcePushScheduler.ResolveConfirmTick for why
+			 * cancelling on a forecast is not safe. */
 			BroadcastObservedResources(resourcePushScheduler.LastPushed,
 				decision == ObservedResourcePushScheduler.Decision.Confirm);
 		}
@@ -2491,8 +2765,8 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		/// <param name="state">The resource values to send.</param>
-		/// <param name="reliable">True for the settling confirmation, which has no repeat behind it.</param>
-		private void BroadcastObservedResources(CharacterAttributeResourceState state, bool reliable)
+		/// <param name="isConfirm">True for the settling confirmation, which has no repeat behind it.</param>
+		private void BroadcastObservedResources(CharacterAttributeResourceState state, bool isConfirm)
 		{
 			if (base.NetworkManager == null || base.NetworkObject == null)
 			{
@@ -2504,9 +2778,7 @@ namespace FishMMO.Shared
 				++observedResourceSequence;
 			}
 
-			/* Observers only. The owner holds these values authoritatively through the reconcile,
-			 * at full precision and every tick, and its client discarded this message on arrival. */
-			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterResourcesBroadcast
+			CharacterResourcesBroadcast message = new CharacterResourcesBroadcast
 			{
 				Sequence = observedResourceSequence,
 				CharacterObjectID = base.NetworkObject.ObjectId,
@@ -2517,7 +2789,71 @@ namespace FishMMO.Shared
 				MaxMana = state.MaxMana,
 				Stamina = Mathf.RoundToInt(state.Stamina),
 				MaxStamina = state.MaxStamina,
-			}, reliable ? Channel.Reliable : Channel.Unreliable);
+			};
+
+			/* Which fields actually differ from what the observers were last GIVEN. The comparison is
+			 * against the previous MESSAGE, so it is against exactly the whole-unit numbers a
+			 * receiver is holding and an omitted field can never drift. */
+			byte changed = hasSentObservedResources
+				? CharacterResourcesMask.ChangedFields(lastSentObservedResources, message)
+				: CharacterResourcesMask.All;
+
+			bool maximumChanged = !hasSentObservedResources || CharacterResourcesMask.IncludesMaximum(changed);
+			if (maximumChanged)
+			{
+				/* All three maxima together, and again on the next few pushes.
+				 *
+				 * A maximum is the field a loss strands for longest — it moves on an equip, a buff or
+				 * a level and then not again for minutes — so unlike a current value it has no
+				 * successor a few ticks behind to repair it. The push that changes one therefore goes
+				 * RELIABLE (below), and the following pushes repeat it unreliably. The repeats are
+				 * not belt and braces: they close the one reorder the sequence window cannot, which
+				 * is a reliable packet being retransmitted after loss while an unreliable push with a
+				 * higher sequence overtakes it — the retransmission then arrives and is correctly
+				 * discarded as stale, and without a repeat the maximum would be missed until the next
+				 * confirmation. */
+				changed |= CharacterResourcesMask.Maxima;
+				observedResourceMaximaResends = ObservedResourceMaximaResendPushes;
+			}
+			else if (observedResourceMaximaResends > 0)
+			{
+				changed |= CharacterResourcesMask.Maxima;
+				--observedResourceMaximaResends;
+			}
+
+			/* A confirmation is self-sufficient by definition: it exists to repair an unknown loss,
+			 * so it can assume nothing about what the receiver holds and sends every field. It is
+			 * also reliable and has nothing behind it, so nothing can overtake it — which makes it
+			 * the point at which the maxima repeat has certainly landed. */
+			if (isConfirm)
+			{
+				changed = CharacterResourcesMask.All;
+				observedResourceMaximaResends = 0;
+			}
+
+			message.Mask = changed;
+
+			/* Nothing moved and this is not a confirmation. The scheduler's change gate is coarser
+			 * than the field mask — a mana bucket crossing that rounds to the same whole unit is a
+			 * real example — so an empty mask is reachable, and a message that names no fields is a
+			 * header for nothing. */
+			if (message.Mask == 0)
+			{
+				return;
+			}
+
+			bool reliable = isConfirm || maximumChanged;
+
+			/* Observers only. The owner holds these values authoritatively through the reconcile,
+			 * at full precision and every tick, and its client discarded this message on arrival. */
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, message,
+				reliable ? Channel.Reliable : Channel.Unreliable);
+
+			/* The baseline is the message as SENT, including fields the mask left out — those were
+			 * left out precisely because they equal what the receiver already holds, so recording
+			 * them keeps the next comparison honest without a second copy of the omission rule. */
+			lastSentObservedResources = message;
+			hasSentObservedResources = true;
 		}
 
 		/// <summary>True once this client has registered the shared broadcast handler.</summary>
@@ -2684,7 +3020,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			controller.ApplyObservedResourceState(msg.Health, msg.MaxHealth, msg.Mana, msg.MaxMana, msg.Stamina, msg.MaxStamina);
+			/* Only the fields the mask names. Everything else is absent from the wire and arrives as
+			 * zero; applying those would empty a bar, or — for a maximum — stamp the resource's final
+			 * value to zero and collapse every bar drawn against it. */
+			controller.ApplyObservedResourceFields(msg);
 		}
 
 		#endregion

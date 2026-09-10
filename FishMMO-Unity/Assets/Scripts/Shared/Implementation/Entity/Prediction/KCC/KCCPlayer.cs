@@ -98,9 +98,6 @@ namespace FishMMO.Shared
 		{
 			currentPlatform = platform;
 			pendingPlatformID = platform != null ? platform.ID : 0;
-			if (currentPlatform != null)
-			{
-			}
 		}
 
 		/// <summary>
@@ -436,25 +433,22 @@ namespace FishMMO.Shared
 					platformVelocity = currentPlatform.LastCompletedTickVelocity;
 				}
 			}
+			/* The motor conveys this velocity only when the platform is moving UP into the
+			 * character (dot > 0.5) or the character is stably grounded on it -- a platform
+			 * travelling horizontally has a dot near zero, so a rider who is not stably grounded is
+			 * not carried at all and stands still while the deck slides away. The velocity also has
+			 * to SURVIVE to the move, which it did not for every build before issue #228: it was
+			 * added to BaseVelocity and overwritten by UpdateVelocity on the same tick. The carry
+			 * now rides KCC's attached-rigidbody seam; see the FISHMMO EDIT in
+			 * KinematicCharacterMotor.UpdatePhase1.
+			 *
+			 * Nothing is logged here. This is the replicate body: it runs on the live tick AND on
+			 * every tick of every reconcile replay, for every rider, and Log.Debug is an async
+			 * method with no call-site level gate, so the interpolated string, the vector
+			 * formatting, the Unity object-name marshal and a Task allocation were all paid per
+			 * replayed tick. The pending-platform diagnostic in OnReconcile covers the failure this
+			 * was added to chase, once per reconcile burst instead. */
 			Motor.SetPlatformVelocity(platformVelocity);
-
-			/* The two numbers that decide whether a rider is actually carried. The motor conveys
-			 * the platform velocity only when the platform is moving UP into the character
-			 * (dot > 0.5) or the character is stably grounded on it -- and a platform travelling
-			 * horizontally has a dot near zero, so a rider who is not stably grounded is not
-			 * carried at all and stands still while the deck slides away. Zero velocity produces
-			 * the same symptom for a different reason, so both are named. (What this cannot tell
-			 * you is whether the velocity SURVIVES to the move -- it did not, for every build before
-			 * issue #228: it was added to BaseVelocity and overwritten by UpdateVelocity on the same
-			 * tick. The carry now rides KCC's attached-rigidbody seam; see the FISHMMO EDIT in
-			 * KinematicCharacterMotor.UpdatePhase1.) */
-			if (currentPlatform != null)
-			{
-				Log.Debug("KCCPlayer",
-					$"Riding '{currentPlatform.name}': platformVelocity={platformVelocity} " +
-					$"(magnitude {platformVelocity.magnitude:0.###}), " +
-					$"stableOnGround={Motor.GroundingStatus.IsStableOnGround}.");
-			}
 
 			// Stamina consumed by sprint/jump inside the motor update (KCCController.UpdateVelocity)
 			// must still re-simulate during reconcile replay to keep the predicted stamina value

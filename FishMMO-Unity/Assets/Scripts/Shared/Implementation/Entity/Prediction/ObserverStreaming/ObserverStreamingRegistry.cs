@@ -255,13 +255,57 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			entriesByObject.Remove(networkObject);
-			entries.Remove(entry);
-			entry.ClearIntervals();
-			entry.ApplyRange(entry.BaseRange);
-			if (ReferenceEquals(networkObject.ObserverSendFilter, entry))
+			Detach(entry, -1);
+		}
+
+		/// <summary>
+		/// Removes one entry and undoes everything <see cref="Adopt"/> did to its object.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The single teardown, called from every removal path. It was not: the prune in
+		/// <see cref="RunPass"/> dropped the entry from both collections and stopped there, so an
+		/// object came back out of the pool with its <c>ObserverSendFilter</c> still pointing at a
+		/// dead entry whose interval map was frozen at the last pass's values, with the density
+		/// scaled range still applied, and with the scheduler still subscribed to
+		/// <c>OnPostTick</c> after the last entry went. Latent rather than live only because the two
+		/// static classifications ship without a <c>NetworkTransform</c> — nothing consults the
+		/// stale filter — but the asymmetry is a trap for the first classified object that moves.
+		/// </para>
+		/// <para>
+		/// A destroyed object gets the collection removals and nothing else: its cloned distance
+		/// condition is gone with it, so there is no range to restore and no filter slot to clear.
+		/// The dictionary key is still the same reference, so the removal finds it.
+		/// </para>
+		/// </remarks>
+		/// <param name="entry">Entry to detach.</param>
+		/// <param name="index">Its index in <see cref="entries"/>, or -1 to search for it.</param>
+		private static void Detach(ObserverStreamingEntry entry, int index)
+		{
+			if (entry == null)
 			{
-				networkObject.ObserverSendFilter = null;
+				return;
+			}
+
+			NetworkObject networkObject = entry.NetworkObject;
+			if (index < 0)
+			{
+				index = entries.IndexOf(entry);
+			}
+			if (index >= 0)
+			{
+				entries.RemoveAt(index);
+			}
+			entriesByObject.Remove(networkObject);
+
+			entry.ClearIntervals();
+			if (networkObject != null)
+			{
+				entry.ApplyRange(entry.BaseRange);
+				if (ReferenceEquals(networkObject.ObserverSendFilter, entry))
+				{
+					networkObject.ObserverSendFilter = null;
+				}
 			}
 
 			if (entries.Count == 0 && timeManager != null)
@@ -277,7 +321,37 @@ namespace FishMMO.Shared
 			return networkObject != null && entriesByObject.TryGetValue(networkObject, out ObserverStreamingEntry entry) ? entry : null;
 		}
 
-		/// <summary>Drops every registration. For tests and server shutdown.</summary>
+		/// <summary>
+		/// Distance from <paramref name="networkObject"/> to the nearest player in its scene, as
+		/// measured by the last scheduling pass.
+		/// </summary>
+		/// <remarks>
+		/// The proximity primitive server-side simulation should ask, in place of
+		/// <c>NetworkObject.Observers</c>. Observer membership answers "who is this object being
+		/// streamed to", which the visibility budget bounds — a monster outside every viewer's budget
+		/// has no observers and is still standing in a crowd. This answers "how close is the nearest
+		/// player", which is what a leash, a wake-up or an aggro sweep actually wants to know.
+		/// <para>
+		/// False when the object is not registered, or when no pass has measured it yet. Callers must
+		/// not read that as "nobody is near": it is an unanswered question, and the answer arrives
+		/// within one <c>RescheduleIntervalTicks</c>.
+		/// </para>
+		/// </remarks>
+		/// <param name="networkObject">The object to measure from.</param>
+		/// <param name="distance">Distance to the nearest player, or <c>PositiveInfinity</c> when the scene holds none.</param>
+		/// <returns>True when a pass has measured this object.</returns>
+		public static bool TryGetNearestViewerDistance(NetworkObject networkObject, out float distance)
+		{
+			ObserverStreamingEntry entry = Get(networkObject);
+			if (entry == null || !entry.HasViewerMeasurement)
+			{
+				distance = ObserverStreamingEntry.NoViewerDistance;
+				return false;
+			}
+			distance = entry.NearestViewerDistance;
+			return true;
+		}
+
 		/// <summary>Reusable rank map for one viewer, cleared rather than reallocated.</summary>
 		private static Dictionary<int, int> RanksFor(int clientId)
 		{
@@ -302,11 +376,17 @@ namespace FishMMO.Shared
 			return pins;
 		}
 
+		/// <summary>Drops every registration. For tests and server shutdown.</summary>
+		/// <remarks>
+		/// Through <see cref="Detach"/> rather than <see cref="Unregister"/>, which takes the object
+		/// and so cannot remove an entry whose object has already been destroyed — exactly the entries
+		/// a shutdown is most likely to be holding.
+		/// </remarks>
 		public static void Clear()
 		{
 			for (int i = entries.Count - 1; i >= 0; --i)
 			{
-				Unregister(entries[i].NetworkObject);
+				Detach(entries[i], i);
 			}
 			ranksByClientId.Clear();
 			rankedClientIds.Clear();
@@ -349,8 +429,7 @@ namespace FishMMO.Shared
 				ObserverStreamingEntry entry = entries[i];
 				if (entry.NetworkObject == null || !entry.NetworkObject.IsSpawned)
 				{
-					entriesByObject.Remove(entry.NetworkObject);
-					entries.RemoveAt(i);
+					Detach(entry, i);
 					continue;
 				}
 				entry.RefreshForPass();
@@ -505,6 +584,15 @@ namespace FishMMO.Shared
 					 * unconditionally on the premise that "unranked" means "out of range" — so those
 					 * characters bypassed both the visibility budget and the full-rate cap. */
 					float distance = Vector3.Distance(viewer.Position, observed.Position);
+
+					/* Recorded BEFORE the range filter, and so a true proximity measurement rather
+					 * than a restatement of who can see whom. AIController reads it to answer "is any
+					 * player near", a question it used to answer from NetworkObject.Observers — a
+					 * BANDWIDTH set, emptied by the visibility budget, which made a budget-evicted
+					 * monster full-heal, drop its threat table and reset its boss phases with players
+					 * standing next to it. */
+					observed.NoteViewerDistance(distance);
+
 					float admittingRange = observed.HasDistanceCondition && observed.AppliedRange > 0f
 						? observed.AppliedRange
 						: viewerRange;
@@ -612,7 +700,15 @@ namespace FishMMO.Shared
 						}
 						if (engagedOverflow > 1)
 						{
-							candidate.Entry.SetInterval(viewerConnection, engagedOverflow);
+							/* Tagged as engaged overflow, not as a relevance cap. The two are
+							 * distinguished at the send: an engaged observer is exempt from the
+							 * relevance cap but NOT from this, because this interval is the bound on
+							 * that very exemption. While both were assigned as the same kind of
+							 * interval, GetEffectiveInterval discarded this one on the same
+							 * engagement test that had just been used to assign it — so
+							 * EngagedFullRateBudget and EngagedOverflowInterval had no runtime effect
+							 * whatsoever and the count below was of throttles that never happened. */
+							candidate.Entry.SetInterval(viewerConnection, engagedOverflow, ObserverStreamingEntry.IntervalOrigin.EngagedOverflow);
 							LastPassLimitedPairs++;
 						}
 						continue;
@@ -623,7 +719,7 @@ namespace FishMMO.Shared
 						byte interval = ObserverStreamingPolicy.LodInterval(candidate.Distance);
 						if (interval > 1)
 						{
-							candidate.Entry.SetInterval(viewerConnection, interval);
+							candidate.Entry.SetInterval(viewerConnection, interval, ObserverStreamingEntry.IntervalOrigin.RelevanceCap);
 							LastPassLimitedPairs++;
 						}
 					}

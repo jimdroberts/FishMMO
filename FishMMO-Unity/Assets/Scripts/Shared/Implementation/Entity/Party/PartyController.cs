@@ -12,9 +12,9 @@ namespace FishMMO.Shared
 	public class PartyController : CharacterBehaviour, IPartyController
 	{
 		/// <summary>
-		/// Event triggered when a party is created. Provides the party name/location.
+		/// Event triggered when a party is created.
 		/// </summary>
-		public event Action<string> OnPartyCreated;
+		public event Action OnPartyCreated;
 
 		/// <summary>
 		/// Event triggered when a party invite is received. Provides the inviter's ID.
@@ -152,7 +152,7 @@ namespace FishMMO.Shared
 			ID = msg.PartyID;
 			Rank = PartyRank.Leader;
 
-			OnPartyCreated?.Invoke(msg.Location);
+			OnPartyCreated?.Invoke();
 			Character.Invoke(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
 		}
 
@@ -175,7 +175,7 @@ namespace FishMMO.Shared
 		public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg, Channel channel)
 		{
 			// If this is our own character, update party ID and rank.
-			if (PlayerCharacter != null && msg.CharacterID == Character.ID)
+			if (PlayerCharacter != null && msg.Member.CharacterID == Character.ID)
 			{
 				/* The JOIN triggers fire on an actual join, not on every refresh.
 				 *
@@ -191,7 +191,7 @@ namespace FishMMO.Shared
 				bool joined = ID != msg.PartyID;
 
 				ID = msg.PartyID;
-				Rank = msg.Rank;
+				Rank = msg.Member.Rank;
 
 				if (joined)
 				{
@@ -199,7 +199,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			OnAddPartyMember?.Invoke(msg.CharacterID, msg.Rank, msg.HealthPCT);
+			OnAddPartyMember?.Invoke(msg.Member.CharacterID, msg.Member.Rank, PartyVitalsQuantiser.ByteToFraction(msg.Member.HealthPCT));
 		}
 
 		/// <summary>
@@ -223,9 +223,16 @@ namespace FishMMO.Shared
 
 			OnValidatePartyMembers?.Invoke(newIds);
 
-			foreach (PartyAddBroadcast subMsg in msg.Members)
+			/* The party id is carried once by the payload, not once per row. Re-attaching it here
+			 * is what lets the per-row handler stay identical for a roster refresh and for a
+			 * single-member add. */
+			foreach (PartyAddEntry entry in msg.Members)
 			{
-				OnClientPartyAddBroadcastReceived(subMsg, channel);
+				OnClientPartyAddBroadcastReceived(new PartyAddBroadcast()
+				{
+					PartyID = msg.PartyID,
+					Member = entry,
+				}, channel);
 			}
 		}
 

@@ -399,20 +399,23 @@ namespace FishMMO.UnitTests
 				TestContext.WriteLine($"MEASURE spawn payload: observer {observerBytes} B, owner {ownerBytes} B");
 
 				/* The difference must be exactly the generator: abilitySeed, currentSeed and the
-				 * four xoshiro words, all in FishNet's variable-width packing (so the expected
-				 * size is measured rather than assumed). An observer never runs the seed forward —
-				 * it is handed the per-cast Seed in each activation broadcast — and 128 bits of
-				 * xoshiro state is the entire generator, so anyone holding it can compute every
-				 * seed that character will ever cast with. */
+				 * four xoshiro words. All six are written UNPACKED by WritePayload, so the probe
+				 * writes them the same way and the expected size is a fixed twenty-four bytes
+				 * rather than something that moves with the values. That is the point of the
+				 * unpacked form here: a seed and a generator word are full entropy by
+				 * construction, so FishNet's packed encoding would spend five bytes on each.
+				 * An observer never runs the seed forward — it is handed the per-cast Seed in each
+				 * activation broadcast — and 128 bits of xoshiro state is the entire generator, so
+				 * anyone holding it can compute every seed that character will ever cast with. */
 				DeterministicRNG probeRng = new DeterministicRNG(1);
 				probeRng.CaptureState(out uint s0, out uint s1, out uint s2, out uint s3);
 				Writer generatorProbe = new Writer();
-				generatorProbe.WriteInt32(424242);
-				generatorProbe.WriteInt32(777);
-				generatorProbe.WriteUInt32(s0);
-				generatorProbe.WriteUInt32(s1);
-				generatorProbe.WriteUInt32(s2);
-				generatorProbe.WriteUInt32(s3);
+				generatorProbe.WriteInt32Unpacked(424242);
+				generatorProbe.WriteInt32Unpacked(777);
+				generatorProbe.WriteUInt32Unpacked(s0);
+				generatorProbe.WriteUInt32Unpacked(s1);
+				generatorProbe.WriteUInt32Unpacked(s2);
+				generatorProbe.WriteUInt32Unpacked(s3);
 
 				LogAssert.AreEqual(observerBytes + generatorProbe.Position, ownerBytes,
 					"The owner shape must carry exactly the generator the observer shape omits, and nothing else.");

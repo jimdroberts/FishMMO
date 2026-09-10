@@ -82,15 +82,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			try
 			{
-
-				// validate template exists
-				MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.ID);
-				if (merchantTemplate == null)
-				{
-					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InvalidEntry);
-					return;
-				}
-
 				// Validate the scene the character is actually in — see CurrentSceneName.
 				string currentScene = character.CurrentSceneName();
 				if (worldSceneDetailsCache == null ||
@@ -125,12 +116,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				IMerchant merchant = interactable as IMerchant;
 				if (merchant == null ||
 					merchant.Template == null ||
-					!interactable.CanInteract(character) ||
-					merchantTemplate.ID != merchant.Template.ID)
+					!interactable.CanInteract(character))
 				{
 					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 					return;
 				}
+
+				/* The merchant's own template, not one the client named.
+				 *
+				 * The request used to carry a template id, which this method resolved and then
+				 * compared against the template on the merchant it had just resolved for itself.
+				 * The comparison could only ever refuse a client that named the WRONG merchant —
+				 * one that named the right one was still held to this object — so it guarded
+				 * nothing that the resolve above does not already guard, and it put a second,
+				 * client-supplied identity for the same shop on the wire. The guards are the two
+				 * lines above: InteractableResolver.Resolve, which picks the merchant out of an
+				 * object that may carry several interactables, and CanInteract, which is where the
+				 * range and corpse gates live. */
+				MerchantTemplate merchantTemplate = merchant.Template;
 
 				switch (msg.Type)
 				{

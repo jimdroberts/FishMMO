@@ -334,6 +334,113 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Whether an accepted hit is certainly this object's last, as a pure function.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The answer has to be given BEFORE the OnHit chain runs, because that is when the hit
+		/// message is written and the message is where the end is stated (see
+		/// <c>AbilityObjectHitBroadcast.Ended</c>). Writing it after the chain is not an option: a
+		/// chain is allowed to end the object, and <see cref="DestroyAbilityObjectInternal"/> nulls
+		/// <see cref="Ability"/> and <see cref="Caster"/>, so a destroyed object cannot publish
+		/// anything at all.
+		/// </para>
+		/// <para>
+		/// So the rule must be CERTAIN rather than likely. <c>AbilityHitCountAction</c> is the one
+		/// action that moves <see cref="HitCount"/>, and an amount of +1 exactly cancels the
+		/// decrement this impact applies — so a chain carrying one can survive a hit that the count
+		/// alone says ends it, and for those the end is reported by the standalone destroy instead.
+		/// Every other case is decided by the count going in.
+		/// </para>
+		/// <para>
+		/// A peer that does not resolve hits answers false whatever the count says: it spends none
+		/// (see <see cref="ApplyHit"/>) and publishes nothing.
+		/// </para>
+		/// </remarks>
+		/// <param name="resolvesHitsLocally">Whether this peer decides the hit set for itself.</param>
+		/// <param name="hitCountBeforeThisHit">The object's remaining hit budget going into this hit.</param>
+		/// <param name="chainCanExtendHitCount">Whether the OnHit chain carries an <c>AbilityHitCountAction</c>.</param>
+		/// <returns>True when this hit certainly ends the object.</returns>
+		internal static bool HitEndsObject(bool resolvesHitsLocally, int hitCountBeforeThisHit, bool chainCanExtendHitCount)
+		{
+			if (!resolvesHitsLocally)
+			{
+				return false;
+			}
+			if (chainCanExtendHitCount)
+			{
+				return false;
+			}
+			return hitCountBeforeThisHit <= 1;
+		}
+
+		/// <summary>
+		/// Memoised answer for <see cref="HitChainCanExtendHitCount"/>. Null until first asked.
+		/// </summary>
+		private bool? hitChainCanExtendHitCount;
+
+		/// <summary>
+		/// Whether this object's OnHit chain carries an action that can ADD to its hit count.
+		/// </summary>
+		/// <remarks>
+		/// A property of the authored ability, identical on every peer, so it is resolved once per
+		/// object rather than per hit. The walk is two action lists per OnHit event because that is
+		/// the whole of a <c>Trigger</c>'s shape — no serialized action in the project nests another
+		/// list of actions — so a shallow scan is exact rather than approximate. An object with no
+		/// chain, or one detached from its ability before it was asked, answers false: nothing can
+		/// move the count.
+		/// </remarks>
+		private bool HitChainCanExtendHitCount
+		{
+			get
+			{
+				hitChainCanExtendHitCount ??= ChainCanExtendHitCount(OnHitEvents);
+				return hitChainCanExtendHitCount.Value;
+			}
+		}
+
+		/// <summary>Whether any OnHit event in the chain carries an <c>AbilityHitCountAction</c>.</summary>
+		/// <param name="hitEvents">The OnHit chain, or null.</param>
+		private static bool ChainCanExtendHitCount(IReadOnlyDictionary<int, AbilityOnHitEvent> hitEvents)
+		{
+			if (hitEvents == null)
+			{
+				return false;
+			}
+
+			foreach (AbilityOnHitEvent hitEvent in hitEvents.Values)
+			{
+				if (hitEvent == null)
+				{
+					continue;
+				}
+				if (ContainsHitCountAction(hitEvent.OnConditionsMetActions) ||
+					ContainsHitCountAction(hitEvent.OnConditionsNotMetActions))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>Whether one authored action list carries an <c>AbilityHitCountAction</c>.</summary>
+		private static bool ContainsHitCountAction(List<BaseAction> actions)
+		{
+			if (actions == null)
+			{
+				return false;
+			}
+			for (int i = 0; i < actions.Count; ++i)
+			{
+				if (actions[i] is AbilityHitCountAction)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Pulls the ability object out of whichever event shape an action was wired to.
 		/// </summary>
 		/// <remarks>
@@ -474,6 +581,9 @@ namespace FishMMO.Shared
 			cachedTickEventData = null;
 			destroyed = false;
 			initialized = false;
+			/* The OnHit chain belongs to whichever ability this clone is about to serve, so the
+			 * memoised answer from its previous life must not carry over. */
+			hitChainCanExtendHitCount = null;
 			// A reused clone must not linger in the phantom registry under its previous identity.
 			UnregisterDetached();
 			ElapsedTicks = 0;
@@ -896,16 +1006,27 @@ namespace FishMMO.Shared
 				{
 					if (isServer)
 					{
-						/* Told as an ordinary hit rather than a deflection: the object ENDED here,
-						 * and the destroy broadcast below is what an observer acts on. The point and
-						 * normal are the shield's, so the impact plays on the shield face. */
-						BroadcastHitToObservers(hitCharacter, point, normal);
+						/* Told as a BLOCK, and that bit is the whole point of it.
+						 *
+						 * This used to travel as an ordinary impact, and an observer cannot tell the
+						 * two apart: the mitigation block above is skipped for an authoritative echo
+						 * — correctly, since the peer that resolved the hit already asked whether a
+						 * shield stopped it — so the echo fell straight through to RunHitEvents and
+						 * every observer ran the ability's entire OnHit chain for a shot the server
+						 * had rejected. Impact effects played on a shot that never landed, including
+						 * on the blocker's own screen, AbilityForkHitAction redirected the copy off a
+						 * hit the server never accepted, and the copy drew RNG the server never did.
+						 *
+						 * Ended rides the same message, so the destroy that follows here does not
+						 * need its own. The point and normal are the shield's, so the destroy chain
+						 * draws the impact on the shield face. */
+						BroadcastHitToObservers(hitCharacter, point, normal, blocked: true, ended: true);
 					}
-					/* Destroyed, not merely stopped: a blocked projectile is gone. Observers are told
-					 * through the same reliable message that ends any collision, so nothing new has
-					 * to travel for a block. Destroy events fire — an impact on a shield is exactly
-					 * the moment an authored effect wants to play. */
-					DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: isServer);
+					/* Destroyed, not merely stopped: a blocked projectile is gone. Destroy events fire
+					 * — an impact on a shield is exactly the moment an authored effect wants to play.
+					 * notifyObservers is false because the hit message above already said Ended; see
+					 * AbilityObjectHitBroadcast.Ended. */
+					DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: false);
 					return false;
 				}
 			}
@@ -919,10 +1040,21 @@ namespace FishMMO.Shared
 			 * reliable channel, against a per-peer budget of roughly 400 B/s.
 			 *
 			 * Still before the OnHit events and before anything can end this object, so an observer
-			 * is told about a hit even if an authored action destroys the object while handling it. */
+			 * is told about a hit even if an authored action destroys the object while handling it.
+			 * That ordering is not a preference: destruction nulls Ability and Caster, so a
+			 * destroyed object cannot publish at all.
+			 *
+			 * Which is why whether this hit is the object's LAST has to be decided here too. The end
+			 * is stated inline on this message rather than by a second one (see
+			 * AbilityObjectHitBroadcast.Ended), so the claim is made before the chain runs — and
+			 * therefore has to be exact rather than likely. The only thing in an OnHit chain that can
+			 * move the count is AbilityHitCountAction, and HitEndsObject refuses to claim an end for
+			 * a chain that carries one. */
+			bool endsOnThisHit = HitEndsObject(ResolvesHitsLocally, HitCount, HitChainCanExtendHitCount);
+
 			if (isServer)
 			{
-				BroadcastHitToObservers(hitCharacter, point, normal);
+				BroadcastHitToObservers(hitCharacter, point, normal, ended: endsOnThisHit);
 			}
 
 			/* Captured before the events so a redirect they apply is detectable after. The hit
@@ -969,8 +1101,12 @@ namespace FishMMO.Shared
 			{
 				/* A hit is the one end-of-life that is NOT deterministic across peers: it is
 				 * resolved against the caster's world, which no observer holds, so the server tells
-				 * them. Lifetime expiry is identical everywhere and needs no message. */
-				DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: true);
+				 * them. Lifetime expiry is identical everywhere and needs no message.
+				 *
+				 * It is told INLINE whenever the hit message could already state it — which is every
+				 * shipped ability, all of which carry HitCount 1 — and the standalone destroy is sent
+				 * only for the remainder: a pierce chain, whose count this hit could not predict. */
+				DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: !endsOnThisHit);
 				return false;
 			}
 
@@ -1093,6 +1229,45 @@ namespace FishMMO.Shared
 			 * landed, and a receiver second-guessing that with its own copy of the defender's buffs
 			 * is exactly the observer-resolves-its-own-hits failure the echo exists to remove. */
 			ApplyHit(hitCharacter, key, point, normal, Vector3.zero, isAuthoritativeEcho: true);
+		}
+
+		/// <summary>
+		/// Records a hit the server BLOCKED, on a peer that does not resolve its own.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The counterpart to <see cref="ApplyObservedHit"/> for the other kind of rejected hit.
+		/// <see cref="ApplyObservedDeflection"/> gives the object a new heading and runs nothing;
+		/// this runs nothing at all. A block is not an impact: the server executed no OnHit chain
+		/// for it, spent no hit count and dealt no damage — it destroyed the object and played its
+		/// destroy events, which is where the shield impact lives. The destroy reaches this peer on
+		/// the same message, through <c>AbilityObjectHitBroadcast.Ended</c>.
+		/// </para>
+		/// <para>
+		/// The victim still goes into the hit set, for the same reason a deflected one does: this
+		/// object has had its answer about that body and must not be offered another one on every
+		/// tick the two of them remain overlapping. It also absorbs the echo on the caster's own
+		/// client, which resolved the same block locally and receives this message anyway.
+		/// </para>
+		/// </remarks>
+		/// <param name="hitCharacter">The character whose shield ate this object, or null for scenery.</param>
+		internal void ApplyObservedBlock(ICharacter hitCharacter)
+		{
+			if (destroyed)
+			{
+				return;
+			}
+
+			GameObject key = hitCharacter != null
+				? hitCharacter.GameObject
+				: (GameObject != null ? GameObject : gameObject);
+			if (key == null)
+			{
+				return;
+			}
+
+			hitTargets ??= new HashSet<GameObject>();
+			hitTargets.Add(key);
 		}
 
 		/// <summary>
@@ -1242,8 +1417,14 @@ namespace FishMMO.Shared
 		/// <param name="normal">Surface normal at the impact.</param>
 		/// <param name="deflected">True when the victim turned this object away instead of being struck.</param>
 		/// <param name="deflectHeading">The heading the object left on. Read only when <paramref name="deflected"/>.</param>
+		/// <param name="blocked">True when the victim's shield ate this object instead of being struck.</param>
+		/// <param name="ended">
+		/// True when this hit ended the object, so no standalone destroy follows it. See
+		/// <see cref="HitEndsObject"/> for why the answer has to be certain at this point.
+		/// </param>
 		private void BroadcastHitToObservers(ICharacter hitCharacter, Vector3 point, Vector3 normal,
-			bool deflected = false, Vector3 deflectHeading = default)
+			bool deflected = false, Vector3 deflectHeading = default,
+			bool blocked = false, bool ended = false)
 		{
 			PublishedHitCount++;
 
@@ -1271,6 +1452,8 @@ namespace FishMMO.Shared
 				Normal = normal,
 				Deflected = deflected,
 				PackedDeflectHeading = deflected ? AimDirectionCompression.Encode(deflectHeading) : 0u,
+				Blocked = blocked,
+				Ended = ended,
 			}, true, Channel.Reliable);
 		}
 

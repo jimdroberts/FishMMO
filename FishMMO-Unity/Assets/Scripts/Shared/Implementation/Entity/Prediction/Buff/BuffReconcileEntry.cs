@@ -91,9 +91,18 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Writes a single entry's fields to the network writer.
 		/// </summary>
+		/// <remarks>
+		/// <see cref="TemplateID"/> goes UNPACKED while everything else stays packed. FishNet's packed
+		/// forms are variable-length with a zig-zag sign bit, so they only pay off for small
+		/// magnitudes: ticks, stacks and counters are one or two bytes, but a template id is a
+		/// deterministic 32-bit hash spread over the whole range, and fifteen of every sixteen land in
+		/// the FIFTH varint byte. Unpacked is exactly four. Same reason
+		/// <see cref="AttributeReconcileEntry"/> and <see cref="ObservedBuffEntry"/> write theirs
+		/// unpacked.
+		/// </remarks>
 		public void WriteTo(Writer writer)
 		{
-			writer.WriteInt32(TemplateID);
+			writer.WriteInt32Unpacked(TemplateID);
 			writer.WriteUInt32(ExpiryTick);
 			writer.WriteUInt32(NextTickTick);
 			writer.WriteInt32(Stacks);
@@ -109,7 +118,7 @@ namespace FishMMO.Shared
 		{
 			return new BuffReconcileEntry
 			{
-				TemplateID = reader.ReadInt32(),
+				TemplateID = reader.ReadInt32Unpacked(),
 				ExpiryTick = reader.ReadUInt32(),
 				NextTickTick = reader.ReadUInt32(),
 				Stacks = reader.ReadInt32(),

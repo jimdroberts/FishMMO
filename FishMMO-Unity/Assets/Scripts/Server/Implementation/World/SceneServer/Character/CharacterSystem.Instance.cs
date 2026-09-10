@@ -62,11 +62,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private struct InstanceAuthority
 		{
-			/// <summary>Character ID of the leader, or 0 when nobody can be named.</summary>
+			/// <summary>Character ID of the leader, or 0 when the leader could not be identified.</summary>
+			/// <remarks>
+			/// The ID is the whole answer this struct owes the wire. It used to carry the leader's
+			/// name alongside it, looked up from <c>CharactersByID</c> — a second lookup that could
+			/// only ever succeed in the cases where the ID had already been found, and that put a
+			/// name on the wire the client is better placed to resolve itself.
+			/// </remarks>
 			public long LeaderCharacterID;
-
-			/// <summary>Leader's name, or null when they are not on this scene server.</summary>
-			public string LeaderName;
 
 			/// <summary>Whether the viewer may remove others and change the listing.</summary>
 			public bool ViewerIsLeader;
@@ -85,11 +88,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// momentarily unresolvable.
 		/// </para>
 		/// <para>
-		/// <b>Naming the leader is a separate, best-effort question.</b> Character names live on
-		/// the character objects this scene server holds, so a leader elsewhere cannot be named
-		/// from here. The panel is told there is a leader it cannot name rather than being told
-		/// there is none — the difference matters, because "no leader" is a state this system
-		/// actively repairs and would be alarming to display for a run that has one.
+		/// <b>Identifying the leader is a separate, best-effort question.</b> The roster walk can
+		/// only see characters this scene server holds, so a leader elsewhere yields no ID and the
+		/// panel is told there is a leader it cannot name rather than being told there is none —
+		/// the difference matters, because "no leader" is a state this system actively repairs and
+		/// would be alarming to display for a run that has one. Turning an ID that was found into
+		/// a name is the client's job, through its own naming system; nothing here resolves names.
 		/// </para>
 		/// </remarks>
 		/// <param name="viewer">The character asking.</param>
@@ -141,13 +145,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 					}
 				}
-			}
-
-			if (authority.LeaderCharacterID != 0 &&
-				data != null &&
-				data.CharactersByID.TryGetValue(authority.LeaderCharacterID, out IPlayerCharacter leader))
-			{
-				authority.LeaderName = leader.CharacterName;
 			}
 
 			return authority;
@@ -267,11 +264,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				InInstance = true,
 				SceneName = viewer.InstanceSceneName,
 				RemainingSeconds = remainingSeconds,
+				/* Zero when the leader could not be identified from this scene server — they lead
+				 * from outside the instance, or from another one. There is still a leader, so the
+				 * client is told there is one it cannot name rather than being told there is none.
+				 * Any other value is an ID the client resolves through its own naming system. */
 				LeaderCharacterID = authority.LeaderCharacterID,
-				/* Null when the leader is not on this scene server — they lead from outside the
-				 * instance, or from another one. There is still a leader, so the client is told
-				 * there is one it cannot name rather than being told there is none. */
-				LeaderName = authority.LeaderName,
 				ViewerIsLeader = authority.ViewerIsLeader,
 				Members = members.ToArray(),
 				DifficultyName = difficultyName,

@@ -1,4 +1,6 @@
 using FishNet.Broadcast;
+using FishNet.Serializing;
+using FishNet.CodeGenerating;
 
 namespace FishMMO.Shared
 {
@@ -6,6 +8,7 @@ namespace FishMMO.Shared
 	/// Broadcast for setting a single item in the bank inventory.
 	/// Contains all data needed to place or update an item in a bank slot.
 	/// </summary>
+	[UseGlobalCustomSerializer]
 	public struct BankSetItemBroadcast : IBroadcast
 	{
 		/// <summary>Unique instance ID of the item.</summary>
@@ -18,6 +21,43 @@ namespace FishMMO.Shared
 		public int Seed;
 		/// <summary>Stack size of the item.</summary>
 		public uint StackSize;
+	}
+
+	/// <summary>Wire format for <see cref="BankSetItemBroadcast"/>.</summary>
+	/// <remarks>
+	/// Hand written for the same two fields as
+	/// <c>InventorySetItemBroadcastSerializer</c>, and for the same reason.
+	/// <c>TemplateID</c> is a deterministic 32-bit hash (<c>CachedScriptableObject.AddToCache</c>)
+	/// and <c>Seed</c> is full entropy by construction, so both span the whole range and FishNet's
+	/// signed-packed form spends FIVE bytes on each where unpacked spends four. The login sync
+	/// ships the ENTIRE bank in one <see cref="BankSetMultipleItemsBroadcast"/>, and a bank is the
+	/// largest container a character owns. <c>InstanceID</c> stays packed — a database sequence
+	/// value is small — as do the slot index and stack size. See <c>ObservedBuffEntry</c>.
+	/// </remarks>
+	public static class BankSetItemBroadcastSerializer
+	{
+		/// <summary>Writes a <see cref="BankSetItemBroadcast"/>.</summary>
+		public static void WriteBankSetItemBroadcast(this Writer writer, BankSetItemBroadcast value)
+		{
+			writer.WriteInt64(value.InstanceID);
+			writer.WriteInt32Unpacked(value.TemplateID);
+			writer.WriteInt32(value.Slot);
+			writer.WriteInt32Unpacked(value.Seed);
+			writer.WriteUInt32(value.StackSize);
+		}
+
+		/// <summary>Reads a <see cref="BankSetItemBroadcast"/>.</summary>
+		public static BankSetItemBroadcast ReadBankSetItemBroadcast(this Reader reader)
+		{
+			return new BankSetItemBroadcast()
+			{
+				InstanceID = reader.ReadInt64(),
+				TemplateID = reader.ReadInt32Unpacked(),
+				Slot = reader.ReadInt32(),
+				Seed = reader.ReadInt32Unpacked(),
+				StackSize = reader.ReadUInt32(),
+			};
+		}
 	}
 
 	/// <summary>

@@ -89,14 +89,15 @@ namespace FishMMO.Client
 
 			results = msg;
 			hasResults = true;
-			returnAt = Time.unscaledTime + Mathf.Max(1, msg.SecondsUntilReturn);
+
+			ArenaTemplate template = msg.ArenaTemplateID != 0 ? ArenaTemplate.Get<ArenaTemplate>(msg.ArenaTemplateID) : null;
+			returnAt = Time.unscaledTime + ResultsSeconds(template);
 
 			ArenaClientEvents.RaiseMatchEnded(msg);
 
-			ArenaTemplate template = msg.ArenaTemplateID != 0 ? ArenaTemplate.Get<ArenaTemplate>(msg.ArenaTemplateID) : null;
 			if (template?.MatchEndTriggers != null && template.MatchEndTriggers.Count > 0)
 			{
-				Character.Invoke(template.MatchEndTriggers, new ArenaEventData(Character, ArenaCuePhase.Ended, 0, msg.YourTeam, msg.WinnerTeam));
+				Character.Invoke(template.MatchEndTriggers, new ArenaEventData(Character, ArenaCuePhase.Ended, 0, MyTeam(), msg.WinnerTeam));
 			}
 
 			if (!Visible)
@@ -136,7 +137,7 @@ namespace FishMMO.Client
 				{
 					bannerLabel.text = "DRAW";
 				}
-				else if (results.WinnerTeam == results.YourTeam)
+				else if (results.WinnerTeam == MyTeam())
 				{
 					bannerLabel.text = "VICTORY";
 					bannerLabel.AddToClassList(BANNER_WIN_CLASS);
@@ -290,6 +291,41 @@ namespace FishMMO.Client
 
 				list.Add(row);
 			}
+		}
+
+		/// <summary>Seconds the server keeps this screen up before it returns everyone to the world.</summary>
+		/// <remarks>
+		/// <b>Not sent.</b> The server times the return as
+		/// <c>Math.Max(3, ArenaTemplate.ResultsSeconds)</c>, and falls back to fifteen seconds for a
+		/// match with no template — both authored, both reproduced here, so the countdown drawn is
+		/// the one the server is actually running rather than a number repeated on the wire.
+		/// </remarks>
+		private static int ResultsSeconds(ArenaTemplate template)
+		{
+			return template != null ? Mathf.Max(3, template.ResultsSeconds) : 15;
+		}
+
+		/// <summary>The local character's team, read out of the placement rows.</summary>
+		/// <remarks>
+		/// <b>Not sent.</b> Every seat that receives a result is a seat that finished the match, and
+		/// a finished seat has a row in <see cref="ArenaResultsBroadcast.Placements"/> carrying its
+		/// character id and its team — so the recipient's own team is already in the message. -1
+		/// when there is no row, which draws the same DEFEAT banner a losing team does.
+		/// </remarks>
+		private int MyTeam()
+		{
+			if (Character == null || results.Placements == null)
+			{
+				return -1;
+			}
+			foreach (ArenaMemberEntry entry in results.Placements)
+			{
+				if (entry.CharacterID == Character.ID)
+				{
+					return entry.Team;
+				}
+			}
+			return -1;
 		}
 
 		private void RequestName(long characterID, Label label)

@@ -44,10 +44,20 @@ namespace FishMMO.Client
 		/// Extra time past a cast's own duration before it is dropped without a stop message.
 		/// </summary>
 		/// <remarks>
-		/// The stop is unreliable, so it can be lost. Without this a lost stop would leave a plate
-		/// reading "Casting" until that character left view. The grace covers a slow finish — a
-		/// speed debuff applied mid-cast lengthens the real one — without leaving the row up long
-		/// enough to be believed.
+		/// <para>
+		/// <b>Not a loss allowance.</b> The stop rides <c>Channel.Reliable</c>, and that is a
+		/// correctness requirement rather than a comfort: the receiver keys a stop on the caster, so
+		/// an unreliable stop from cast N reordering behind the start of cast N+1 clears the wrong
+		/// row — reachable at instant-attack cadence, and pinned by
+		/// <c>CastVisibilityTests.TheCastMessageIsReliableAndAStopNamesWhatItEnds</c>. (This used to
+		/// say the stop was unreliable and could be lost; it cannot.)
+		/// </para>
+		/// <para>
+		/// What the grace is for is a stop that never EXISTS: a caster that disconnects or is
+		/// despawned mid-cast, and a cast that finishes slower than this peer computed because a
+		/// speed debuff landed on the caster after the row was opened. Without it such a plate would
+		/// read "Casting" until that character left view.
+		/// </para>
 		/// </remarks>
 		public const float ExpiryGraceSeconds = 1.5f;
 
@@ -98,11 +108,22 @@ namespace FishMMO.Client
 			Shutdown();
 			this.networkManager = networkManager;
 			networkManager.ClientManager.RegisterBroadcast<CharacterCastBroadcast>(OnCastBroadcast);
+			/* Casts that were ALREADY RUNNING when this client started observing the caster.
+			 *
+			 * The live message is sent once, on the tick a cast begins, to whoever was observing at
+			 * that instant — so walking into range (or being un-culled, which the streaming budget
+			 * treats as routine) part-way through a five second cast produced a nameplate that said
+			 * nothing, followed by a stop for a cast this display had never heard of. The spawn
+			 * payload now carries the running activation and the controller replays it here in the
+			 * same shape, so both arrive down one code path and get the same catch-up arithmetic. */
+			AbilityController.OnObservedActivationCatchUp += OnCastCatchUp;
 		}
 
 		/// <summary>Unregisters and clears every row this display wrote.</summary>
 		public void Shutdown()
 		{
+			AbilityController.OnObservedActivationCatchUp -= OnCastCatchUp;
+
 			if (networkManager != null)
 			{
 				networkManager.ClientManager.UnregisterBroadcast<CharacterCastBroadcast>(OnCastBroadcast);
@@ -169,6 +190,32 @@ namespace FishMMO.Client
 				return;
 			}
 
+			Start(msg);
+		}
+
+		/// <summary>
+		/// Applies a cast that was already running when this client began observing its caster.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately the same path a live start takes, rather than a second implementation of it:
+		/// the message the controller hands over carries the server tick the activation STARTED on,
+		/// which is exactly what <see cref="ElapsedSince"/> needs to open the row part-way through
+		/// instead of restarting a cast that may be nearly over. Ignored unless this display is
+		/// registered, so a controller spawning before <see cref="Initialize"/> cannot write a row
+		/// that nothing would ever sweep.
+		/// </remarks>
+		private void OnCastCatchUp(CharacterCastBroadcast msg)
+		{
+			if (networkManager == null || !msg.Started)
+			{
+				return;
+			}
+			Start(msg);
+		}
+
+		/// <summary>Opens or replaces the row for one starting cast.</summary>
+		private void Start(CharacterCastBroadcast msg)
+		{
 			if (!TryResolveObserved(msg.CasterObjectID, out NetworkObject caster, out Nameplate plate, out AbilityController controller))
 			{
 				return;
@@ -182,7 +229,7 @@ namespace FishMMO.Client
 			 * the real one and this does not know that. Which is fine for what it is used for: how
 			 * long to hold the row when no stop message arrives. The stop is what normally ends it,
 			 * and the grace below already absorbs a longer or shorter real cast. */
-			float duration = ResolveDuration(msg, controller);
+			float duration = ResolveDuration(msg, controller, out bool durationKnown);
 
 			/* The message spent a network delay in flight and the cast has been running for all of
 			 * it. Elapsed is measured from the tick the server stamped, less the interpolation this
@@ -194,8 +241,14 @@ namespace FishMMO.Client
 			if (duration > 0.0f && remaining <= 0.0f)
 			{
 				/* Too late to draw, but not too late to matter: this start supersedes whatever the
-				 * row said before it, so the previous cast's text must not be left standing. */
-				Stop(msg.CasterObjectID, referenceID: 0);
+				 * row said before it, so the previous cast's text must not be left standing — and
+				 * NOT through the dwell, which is what used to make that sentence untrue. Stop
+				 * honours MinimumDwellSeconds by default, so a row younger than 0.6s was merely
+				 * marked StopPending and the previous cast's text stayed on the plate for the rest
+				 * of the dwell: the exact outcome this branch exists to prevent. A superseding start
+				 * is not a cast ending, it is the row being reassigned, and the dwell protects a row
+				 * from vanishing before it can be read rather than from newer truth. */
+				Stop(msg.CasterObjectID, referenceID: 0, respectDwell: false);
 				return;
 			}
 
@@ -208,18 +261,24 @@ namespace FishMMO.Client
 				Caster = caster,
 				ReferenceID = msg.ReferenceID,
 				EarliestClear = now + MinimumDwellSeconds,
-				Expiry = now + Mathf.Max(remaining, 0.0f) + HeldAllowance(msg, controller) + ExpiryGraceSeconds,
+				Expiry = ResolveExpiry(now, duration, durationKnown, remaining, HeldAllowance(msg, controller)),
 				StopPending = false,
 			};
 		}
 
-		/// <summary>Marks a cast finished, honouring the minimum dwell.</summary>
+		/// <summary>Marks a cast finished, honouring the minimum dwell by default.</summary>
 		/// <param name="casterObjectID">The caster.</param>
 		/// <param name="referenceID">
 		/// What ended, or zero to end whatever is running. A stop naming a different cast than
 		/// the row shows is refused: it belongs to an earlier activation and the row has moved on.
 		/// </param>
-		private void Stop(int casterObjectID, long referenceID)
+		/// <param name="respectDwell">
+		/// True for an activation that ENDED, where the dwell keeps a row up long enough to be read.
+		/// False when the row is being reassigned rather than ended — a start so late that its whole
+		/// cast has already elapsed — where deferring the clear leaves the previous cast's text
+		/// standing and nothing replaces it.
+		/// </param>
+		private void Stop(int casterObjectID, long referenceID, bool respectDwell = true)
 		{
 			if (!active.TryGetValue(casterObjectID, out ActiveCast cast))
 			{
@@ -231,7 +290,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (Time.unscaledTime >= cast.EarliestClear)
+			if (!respectDwell || Time.unscaledTime >= cast.EarliestClear)
 			{
 				ClearStatus(cast.Plate);
 				active.Remove(casterObjectID);
@@ -241,6 +300,48 @@ namespace FishMMO.Client
 			// Too soon to be seen. Tick clears it once the dwell has elapsed.
 			cast.StopPending = true;
 			active[casterObjectID] = cast;
+		}
+
+		/// <summary>
+		/// When a row is dropped if no stop message ever arrives for it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>A zero-duration cast expires on the DWELL, not on the grace.</b> The server no longer
+		/// sends a stop for an activation that began and ended on one server tick (see
+		/// <c>AbilityController.SuppressesRedundantCastStop</c>) — 17 of the 37 authored abilities
+		/// are instant, the default attack among them — so for those this is the only thing that ever
+		/// clears the row. Sizing it from <see cref="ExpiryGraceSeconds"/> would leave "Casting
+		/// Punch" on a plate for 1.5&#160;s per swing, which at auto-attack cadence never comes off
+		/// at all. <see cref="MinimumDwellSeconds"/> is the row's whole intended life: long enough to
+		/// read an instant cast as an event, short enough not to be believed as an ongoing one.
+		/// </para>
+		/// <para>
+		/// <b>Only when the duration is actually KNOWN to be zero.</b> An ability this peer cannot
+		/// resolve — one learned after it started observing, or an NPC's set it never received —
+		/// also reports zero, and that one may well be a five second cast whose stop is coming. Those
+		/// keep the grace, which is why <see cref="ResolveDuration"/> reports whether it resolved
+		/// anything rather than leaving the caller to read zero two ways.
+		/// </para>
+		/// <para>
+		/// A HELD ability keeps the grace too, zero-duration or not: it has a hold allowance, it runs
+		/// past its window for as long as the player holds it, and the server always sends its stop.
+		/// </para>
+		/// </remarks>
+		/// <param name="now">Unscaled time the row is being opened at.</param>
+		/// <param name="duration">The activation's computed duration in seconds.</param>
+		/// <param name="durationKnown">False when the ability could not be resolved at all.</param>
+		/// <param name="remaining">Seconds of the activation still to run, which may be negative.</param>
+		/// <param name="heldAllowance">Extra seconds a held activation may legitimately run for.</param>
+		/// <returns>The unscaled time to drop the row at.</returns>
+		public static float ResolveExpiry(float now, float duration, bool durationKnown,
+			float remaining, float heldAllowance)
+		{
+			if (durationKnown && duration <= 0.0f && heldAllowance <= 0.0f)
+			{
+				return now + MinimumDwellSeconds;
+			}
+			return now + Mathf.Max(remaining, 0.0f) + heldAllowance + ExpiryGraceSeconds;
 		}
 
 		/// <summary>
@@ -325,25 +426,33 @@ namespace FishMMO.Client
 		/// peer's health bar current.
 		/// </para>
 		/// <para>
-		/// An ability this peer cannot resolve reports zero, which the caller treats as "no duration
-		/// to expire on" and falls back to the grace alone.
+		/// An ability this peer cannot resolve reports zero AND <paramref name="resolved"/> false.
+		/// The two have to be told apart: a genuine zero is an instant cast that will never be
+		/// stopped, while an unresolvable one may be a long cast whose stop is still coming. See
+		/// <see cref="ResolveExpiry"/>.
 		/// </para>
 		/// </remarks>
-		private static float ResolveDuration(CharacterCastBroadcast msg, AbilityController controller)
+		/// <param name="msg">The activation being drawn.</param>
+		/// <param name="controller">The caster's ability controller, or null.</param>
+		/// <param name="resolved">True when a template was found and the duration means something.</param>
+		private static float ResolveDuration(CharacterCastBroadcast msg, AbilityController controller, out bool resolved)
 		{
 			if (msg.IsConsumable)
 			{
 				/* No haste on an item: ConsumableTemplate.ActivationTime is used raw by
 				 * TryStartConsumable, with no speed attribute applied. */
 				ConsumableTemplate consumable = BaseItemTemplate.Get<ConsumableTemplate>((int)msg.ReferenceID);
-				return consumable != null ? consumable.ActivationTime : 0.0f;
+				resolved = consumable != null;
+				return resolved ? consumable.ActivationTime : 0.0f;
 			}
 
 			if (controller == null || !controller.TryGetAbilityForVisuals(msg.ReferenceID, out Ability ability))
 			{
+				resolved = false;
 				return 0.0f;
 			}
 
+			resolved = true;
 			return ability.ActivationTime *
 				controller.CalculateSpeedReduction(controller.GetActivationAttributeTemplate(ability));
 		}

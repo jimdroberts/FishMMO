@@ -169,7 +169,7 @@ namespace FishMMO.RenderScratch
 
 			g.GuildController_OnReceiveGuildRanks(new GuildRankListBroadcast
 			{
-				GuildID = Seed.GuildID, LeaderRankOrder = 0, ViewerRankOrder = 1,
+				LeaderRankOrder = 0, ViewerRankOrder = 1,
 				ViewerPermissions = long.MaxValue,
 				Ranks = new[]
 				{
@@ -193,8 +193,8 @@ namespace FishMMO.RenderScratch
 			g.GuildController_OnAddMember(GMember(1007, 3, "", 21, "New — needs a mentor"));
 			g.GuildController_OnAddMember(GMember(1008, 3, "Tidewatch Keep", 17, ""));
 
-			long now = DateTime.UtcNow.Ticks, hour = TimeSpan.TicksPerHour;
-			g.GuildController_OnReceiveGuildLog(Seed.GuildID, new[]
+			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), hour = 3600L;
+			g.GuildController_OnReceiveGuildLog(new[]
 			{
 				Log(GuildLogEvent.Joined, 1002, 1008, "", now - hour / 4),
 				Log(GuildLogEvent.Promoted, 1001, 1003, "Warden", now - hour * 2),
@@ -213,17 +213,21 @@ namespace FishMMO.RenderScratch
 		{
 			return new GuildAddBroadcast
 			{
-				GuildID = Seed.GuildID, CharacterID = id, RankOrder = rank,
-				Location = loc, RaceID = 1, Level = level, PublicNote = note,
+				GuildID = Seed.GuildID,
+				Member = new GuildAddEntry
+				{
+					CharacterID = id, RankOrder = rank,
+					Location = loc, RaceID = 1, Level = level, PublicNote = note,
+				},
 			};
 		}
 
-		private static GuildLogEntry Log(GuildLogEvent e, long actor, long target, string detail, long ticks)
+		private static GuildLogEntry Log(GuildLogEvent e, long actor, long target, string detail, long unixSeconds)
 		{
 			return new GuildLogEntry
 			{
 				Event = e, ActorCharacterID = actor, TargetCharacterID = target,
-				Detail = detail, TimeUtcTicks = ticks,
+				Detail = detail, TimeUnixSeconds = unixSeconds,
 			};
 		}
 
@@ -561,8 +565,11 @@ namespace FishMMO.RenderScratch
 				SceneName = "Sunken Cathedral",
 				DifficultyName = "Heroic",
 				RemainingSeconds = 1820,
+				/* An ID now; the panel resolves the name through ClientNamingSystem. This harness
+				 * has no client for it to ask, so the name stays unresolved — which is fine for the
+				 * capture, because ViewerIsLeader puts "You lead this party." in that label. 1001 is
+				 * Thalorin below, so the two still agree about who leads. */
 				LeaderCharacterID = 1001,
-				LeaderName = "Thalorin",
 				ViewerIsLeader = true,
 				IsPrivate = false,
 				Members = new[]

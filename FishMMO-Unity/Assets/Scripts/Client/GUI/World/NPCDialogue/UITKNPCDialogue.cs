@@ -159,7 +159,10 @@ namespace FishMMO.Client
 			nodeMap = template.GetNodeMap();
 			cachedChoices = msg.CachedChoices;
 
-			if (!nodeMap.TryGetValue(msg.StartNodeId, out DialogueNode startNode))
+			/* The start node is the template's own authored StartNodeId — the same value the server
+			 * opened the session on — so it is read from the template here rather than repeated on
+			 * the wire. */
+			if (!nodeMap.TryGetValue(template.StartNodeId, out DialogueNode startNode))
 			{
 				return;
 			}

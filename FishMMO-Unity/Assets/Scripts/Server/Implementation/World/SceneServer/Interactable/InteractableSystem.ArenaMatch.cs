@@ -1477,19 +1477,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new ArenaResultsBroadcast
 					{
-						MatchID = state.MatchID,
 						ArenaTemplateID = state.Template != null ? state.Template.ID : 0,
 						Format = state.Format,
 						WinnerTeam = winnerTeam,
 						TeamScores = (int[])state.TeamScores.Clone(),
 						Placements = placementEntries,
-						YourTeam = seat.Team,
 						RankDelta = rankDelta,
 						Ranked = state.Ranked,
 						RatingDelta = state.Ranked ? seat.RatingDelta : 0,
 						NewRating = state.Ranked ? seat.NewRating : 0,
 						PlacementGamesRemaining = state.Ranked ? ArenaRating.PlacementGamesRemaining(seat.GamesBefore + 1, placementGamesTotal) : 0,
-						SecondsUntilReturn = resultsSeconds,
 					}, true, FishNet.Transporting.Channel.Reliable);
 				}
 			}
@@ -1939,7 +1936,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			var msg = new ArenaEventBroadcast
 			{
-				MatchID = state.MatchID,
 				Kind = kind,
 				ActorID = actor?.CharacterID ?? 0,
 				ActorName = actor?.Name ?? string.Empty,
@@ -2290,7 +2286,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			var msg = new ArenaMatchStateBroadcast
 			{
-				MatchID = state.MatchID,
 				ArenaTemplateID = state.Template != null ? state.Template.ID : 0,
 				Format = state.Format,
 				Phase = state.Phase,

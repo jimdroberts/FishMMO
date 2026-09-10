@@ -9,9 +9,9 @@ namespace FishMMO.Shared.Core
 	public interface IPartyController : ICharacterBehaviour
 	{
 		/// <summary>
-		/// Event triggered when a party is created. Provides the party name.
+		/// Event triggered when a party is created.
 		/// </summary>
-		event Action<string> OnPartyCreated;
+		event Action OnPartyCreated;
 
 		/// <summary>
 		/// Event triggered when a party invite is received. Provides the inviter's ID.

@@ -53,6 +53,38 @@ namespace FishMMO.Shared.Core
 		public bool StopChainOnFailure;
 
 		/// <summary>
+		/// True when this action's ENTIRE effect is something rendered — particles, sound, floating
+		/// text, camera shake — and it changes no state that any other peer can observe.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>What reads it.</b> <see cref="TriggerExecution"/>'s selector fan-out. A spatial selector
+		/// correctly declines to resolve on a third-party OBSERVER
+		/// (<c>TargetSelector.ResolvesTargetsLocally</c>), and the fan-out runs an action once per
+		/// selected target — so an empty selection ran the whole action list zero times and an authored
+		/// OnHit event with a Chain, Area, Line or Cone selector produced NOTHING on any screen but the
+		/// caster's. Observers saw damage numbers pop over three characters with no arc, impact or sound
+		/// linking them. This flag is how the fan-out knows which of those actions it may still run
+		/// once, against the event's own scope, on a peer that is not allowed to select for itself.
+		/// </para>
+		/// <para>
+		/// <b>The bar is deliberately high, and it is not "harmless".</b> Say true only when the action
+		/// would be correct to run on a peer that has resolved no targets and has no authority for the
+		/// event. Anything that moves a resource, installs a buff, draws a PREDICTED number, spends a
+		/// hit count, grants an item or touches persistence must stay false — those belong to the peer
+		/// that resolved the hit, and an observer running them is the failure the selector gate exists
+		/// to prevent. A type list in the fan-out was the alternative and is worse: it puts the
+		/// classification somewhere the action's author never looks.
+		/// </para>
+		/// <para>
+		/// Exactly one action answers true today (<c>PlayFXAction</c>), which is also the only action in
+		/// the project that gates on <see cref="IsClientPeer"/> — the two questions are close relatives:
+		/// this one says "I am only a picture", that one says "and only a screen needs it".
+		/// </para>
+		/// </remarks>
+		public virtual bool IsPresentation => false;
+
+		/// <summary>
 		/// Executes the action. Must be implemented by derived classes.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
@@ -96,6 +128,20 @@ namespace FishMMO.Shared.Core
 		/// once per replayed tick unless it is suppressed here. That is the visual spam
 		/// <c>PlayFXAction</c> already guards against; this is the same test with one definition
 		/// instead of an open-coded copy per action.
+		/// </para>
+		/// <para>
+		/// <b>It is the SECOND line, and today it is the one holding nothing.</b> Every production
+		/// dispatch refuses to build an ECA payload at all on a replayed tick — <c>ResolveTargetAndSpawn</c>
+		/// returns before it spawns, <c>BuffController</c> tests its own <c>isReplayingTick</c>, the
+		/// activation triggers test <c>state.ContainsReplayed()</c>, and the hit, tick and destroy
+		/// dispatches run off <c>TimeManager.OnTick</c>, which is not replayed — so
+		/// <see cref="TickEventData.IsReplay"/> is false at every one of them and this returns false in
+		/// production. That is the correct end state rather than a hole: skipping the whole dispatch is
+		/// strictly better than skipping one action inside it, because ECA actions are not idempotent
+		/// and a replayed dispatch would also re-roll RNG and re-enter selectors. This guard is for the
+		/// dispatch that CANNOT gate itself, and such a site declares itself by handing
+		/// <see cref="TickEventData"/> the <c>ReplicateState</c> it is running under rather than by
+		/// remembering a bare bool — see <see cref="TickEventData.IsReplay"/>.
 		/// </para>
 		/// <para>
 		/// <b>Never use this as an authority gate.</b> The server's own ability dispatches carry

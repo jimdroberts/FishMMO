@@ -394,10 +394,15 @@ namespace FishMMO.Shared
 		public int DungeonTemplateID;
 
 		/// <summary>Template ID of the arena queued for, when <see cref="Kind"/> is PvP.</summary>
+		/// <remarks>
+		/// <b>The scene name is not sent.</b> It is
+		/// <c>DungeonTemplate.DungeonSceneName</c> / <c>ArenaTemplate.ArenaSceneName</c> — authored
+		/// content the recipient already holds behind the two ids above — and both panels resolved
+		/// the template first anyway, using the string only when that missed. A template a client
+		/// cannot resolve is one whose name would mean nothing to it either, so the miss path says
+		/// "this dungeon" / "this arena" instead.
+		/// </remarks>
 		public int ArenaTemplateID;
-
-		/// <summary>Scene name of the dungeon, so the panel can name it even without a template.</summary>
-		public string SceneName;
 
 		/// <summary>Difficulty index queued for.</summary>
 		public int Difficulty;
@@ -431,9 +436,17 @@ namespace FishMMO.Shared
 	public struct MerchantPurchaseBroadcast : IBroadcast
 	{
 		/// <summary>ID of the merchant object.</summary>
+		/// <remarks>
+		/// <b>The merchant template id is not sent.</b> The server resolves the interactable from
+		/// this id and reads the template off the merchant it finds — which it did already, only to
+		/// compare the answer against a number the client had supplied. That comparison guarded
+		/// nothing: a client that named a different template was refused by the comparison, and a
+		/// client that named the right one was still held to the resolved merchant. What actually
+		/// guards a purchase is <c>InteractableResolver.Resolve</c> picking the merchant out of an
+		/// object that may carry several interactables, and <c>CanInteract</c> — which is where the
+		/// range and corpse gates live. Both are untouched.
+		/// </remarks>
 		public long InteractableID;
-		/// <summary>ID of the item to purchase.</summary>
-		public int ID;
 		/// <summary>Index of the item in the merchant's inventory.</summary>
 		public int Index;
 		/// <summary>Type of merchant tab (e.g., buy, sell).</summary>
@@ -554,9 +567,12 @@ namespace FishMMO.Shared
 		/// <summary>ID of the dialogue interactable scene object. 0 when triggered via ECA without an interactable.</summary>
 		public long InteractableID;
 		/// <summary>CachedScriptableObject ID of the DialogueTemplate.</summary>
+		/// <remarks>
+		/// <b>The start node is not sent.</b> It is <c>DialogueTemplate.StartNodeId</c>, authored on
+		/// the same template the client resolves from this id — and the server opens the session on
+		/// that same authored value, so a second copy on the wire could only ever agree with it.
+		/// </remarks>
 		public int TemplateID;
-		/// <summary>The node ID the client should display first.</summary>
-		public int StartNodeId;
 		/// <summary>Bitmask of choices the character has previously made in this template.</summary>
 		public short CachedChoices;
 	}

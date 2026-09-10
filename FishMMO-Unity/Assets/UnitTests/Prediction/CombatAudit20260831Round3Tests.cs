@@ -475,8 +475,15 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(readAnchor >= 0 && readLife > readAnchor,
 				"The reader must consume it in the same wire position.");
 
-			LogAssert.IsTrue(networking.Contains("spawned.ConsumeLifetime(entry.LifeElapsedBeforeStartTicks);"),
-				"And the receiver must charge the earlier legs against the reproduced object's lifetime.");
+			/* The charge moved from the returned ROOT to the whole container. Spawn's OnSpawn chain
+			 * can create siblings (AbilitySpawnMultiplyAction), and each child is handed the source's
+			 * un-charged remaining lifetime with zero elapsed ticks — so charging the root alone left
+			 * every pellet of a multi-shot ability at the launch point with a full life while the
+			 * root was correctly placed. The pre-redirect life is still what is charged, and it is
+			 * still charged before the trajectory clock is advanced. */
+			LogAssert.IsTrue(networking.Contains("CatchUpSpawnedContainer(ability, spawned,\n\t\t\t\t\tentry.LifeElapsedBeforeStartTicks,"),
+				"And the receiver must charge the earlier legs against the reproduced object's lifetime — " +
+				"against every live member of the spawn, not only the root Spawn returned.");
 		}
 
 		// ── Culling F1/F2: the streaming ranges hold what the pins promise ───────────

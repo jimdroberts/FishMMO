@@ -95,14 +95,19 @@ namespace FishMMO.Shared
 		{
 			base.WritePayload(connection, writer);
 
-			// Write the Template ID so clients know which data to look up
-			writer.WriteInt32(templateID != 0 ? templateID : -1);
+			/* Write the Template ID so clients know which data to look up.
+			 *
+			 * Unpacked, like the seed below. Template ids are a deterministic 32-bit hash
+			 * (CachedScriptableObject.AddToCache) and a roll seed is full entropy by
+			 * construction, so both span the whole range and FishNet's signed-packed form
+			 * spends FIVE bytes where unpacked spends exactly four. See ObservedBuffEntry. */
+			writer.WriteInt32Unpacked(templateID != 0 ? templateID : -1);
 			writer.WriteUInt32(Amount);
 			/* The seed rides along so an observer's copy names the same eventual item. NetworkBehaviour
 			 * payloads share one unframed buffer across behaviours, so ReadPayload below must consume
 			 * exactly this — adding or reordering a field on one side desynchronizes every behaviour
 			 * that reads after this one. */
-			writer.WriteInt32(Seed);
+			writer.WriteInt32Unpacked(Seed);
 		}
 
 		/// <inheritdoc />
@@ -110,9 +115,9 @@ namespace FishMMO.Shared
 		{
 			base.ReadPayload(connection, reader);
 
-			int readTemplateId = reader.ReadInt32();
+			int readTemplateId = reader.ReadInt32Unpacked();
 			Amount = reader.ReadUInt32();
-			Seed = reader.ReadInt32();
+			Seed = reader.ReadInt32Unpacked();
 
 			// Use your existing Cache system to find the ScriptableObject by ID
 			if (readTemplateId != -1)

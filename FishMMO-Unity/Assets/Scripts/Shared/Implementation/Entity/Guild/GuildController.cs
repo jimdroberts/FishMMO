@@ -50,9 +50,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Event triggered when the guild's recent activity log arrives.
-		/// Parameters: guild ID, entries (newest first).
+		/// Parameters: entries (newest first).
 		/// </summary>
-		public event Action<long, GuildLogEntry[]> OnReceiveGuildLog;
+		public event Action<GuildLogEntry[]> OnReceiveGuildLog;
 
 		/// <summary>
 		/// Event triggered when the guild's rank ladder arrives.
@@ -332,7 +332,7 @@ namespace FishMMO.Shared
 		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg, Channel channel)
 		{
 			// if this is our own id
-			if (PlayerCharacter != null && msg.CharacterID == Character.ID)
+			if (PlayerCharacter != null && msg.Member.CharacterID == Character.ID)
 			{
 				ID = msg.GuildID;
 
@@ -341,7 +341,7 @@ namespace FishMMO.Shared
 				 * permission mask that decides what this player may do arrives separately, in
 				 * GuildRankListBroadcast, because the server computes it rather than letting the
 				 * client infer it from a number. */
-				RankOrder = msg.RankOrder;
+				RankOrder = msg.Member.RankOrder;
 
 				IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
 				Character.Invoke(onGuildJoinTriggers, new GuildEventData(Character, ID, RankOrder, Permissions));
@@ -364,9 +364,16 @@ namespace FishMMO.Shared
 
 			OnValidateGuildMembers?.Invoke(newIds);
 
-			foreach (GuildAddBroadcast subMsg in msg.Members)
+			/* The guild id is carried once by the payload, not once per row. Re-attaching it here
+			 * is what lets the per-row handler stay identical for a roster refresh and for a
+			 * single-member add. */
+			foreach (GuildAddEntry entry in msg.Members)
 			{
-				OnClientGuildAddBroadcastReceived(subMsg, channel);
+				OnClientGuildAddBroadcastReceived(new GuildAddBroadcast()
+				{
+					GuildID = msg.GuildID,
+					Member = entry,
+				}, channel);
 			}
 		}
 
@@ -443,7 +450,7 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel the broadcast was received on.</param>
 		public void OnClientGuildLogBroadcastReceived(GuildLogBroadcast msg, Channel channel)
 		{
-			OnReceiveGuildLog?.Invoke(msg.GuildID, msg.Entries ?? Array.Empty<GuildLogEntry>());
+			OnReceiveGuildLog?.Invoke(msg.Entries ?? Array.Empty<GuildLogEntry>());
 		}
 		/// <summary>
 		/// Handles the guild rank ladder broadcast.

@@ -1040,10 +1040,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Members = vitalsEntryBuffer.ToArray(),
 			};
 
-			/* Sent to every member of the group INCLUDING the one it describes. A player's own row
-			 * is drawn from the same payload as everyone else's, so there is one code path on the
-			 * client rather than two that can drift; the panel refines its own bars from local
-			 * state between pushes, which is an addition to this rather than a replacement. */
+			/* Sent to every member of the group INCLUDING the one it describes, because ABSENCE is
+			 * the signal: the client greys a member out by counting the pumps they were missing
+			 * from, so dropping the recipient's own row would read as "you went away".
+			 *
+			 * It is presence that is needed here, not values. The rationale this comment used to
+			 * give — one code path on the client rather than two that can drift — had not been true
+			 * since UITKParty.RefreshLocalMemberVitals was added: the panel derives its own three
+			 * fractions EXACTLY from the local reconciled controller every tick, precisely because
+			 * a one-second pump is far too slow for your own bar. The row's quantised copy of the
+			 * same fact could only overwrite an exact value with a coarser one until the next tick
+			 * redid the work, so the client now ignores the values on its own row. They are still
+			 * written: the entry's three fraction bytes are unconditional in the wire format
+			 * (PartyVitalsSerializer), and a presence-without-values row would need a flag bit
+			 * there that no other reader wants. */
 			for (int i = 0; i < members.Count; ++i)
 			{
 				Server.NetworkWrapper.Broadcast(members[i].Owner, broadcast, true, Channel.Reliable);
@@ -1746,21 +1756,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							mapData.PartyMemberTracker.Remove(partyID);
 						}
 
-						var addBroadcasts = new List<PartyAddBroadcast>(dbMembers.Count);
+						var addBroadcasts = new List<PartyAddEntry>(dbMembers.Count);
 						for (int i = 0; i < dbMembers.Count; i++)
 						{
 							var x = dbMembers[i];
-							addBroadcasts.Add(new PartyAddBroadcast()
+							addBroadcasts.Add(new PartyAddEntry()
 							{
-								PartyID = x.PartyID,
 								CharacterID = x.CharacterID,
 								Rank = (PartyRank)x.Rank,
-								HealthPCT = x.HealthPCT,
+								HealthPCT = PartyVitalsQuantiser.FractionToByte(x.HealthPCT),
 							});
 						}
 
 						PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
 						{
+							PartyID = partyID,
 							Members = addBroadcasts.ToArray(),
 						};
 
@@ -2198,7 +2208,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Capture immutable data for the async path
 				long characterID = partyController.Character.ID;
-				string sceneName = conn.FirstObject.gameObject.scene.name;
 				float healthPCT = partyController.Character.TryGet(out ICharacterAttributeController attributeController)
 					? attributeController.GetHealthResourceAttributeCurrentPercentage()
 					: 0.0f;
@@ -2207,7 +2216,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * one is dropped from it rather than carrying it across. */
 				long worldServerID = player.WorldServerID;
 
-				deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT, worldServerID), guardKey, characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, healthPCT, worldServerID), guardKey, characterID);
 				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
@@ -2224,10 +2233,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="conn">Requesting connection.</param>
 		/// <param name="characterID">Requesting character identifier.</param>
-		/// <param name="sceneName">Current scene name for broadcast context.</param>
 		/// <param name="healthPCT">Current requester health percentage.</param>
+		/// <param name="worldServerID">World server the party will belong to.</param>
 		/// <returns>Asynchronous party-creation task.</returns>
-		private async Task CreatePartyAsync(NetworkConnection conn, long characterID, string sceneName, float healthPCT, long worldServerID)
+		private async Task CreatePartyAsync(NetworkConnection conn, long characterID, float healthPCT, long worldServerID)
 		{
 			try
 			{
@@ -2292,7 +2301,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.NetworkWrapper.Broadcast(conn, new PartyCreateBroadcast()
 					{
 						PartyID = newPartyID,
-						Location = sceneName,
 					}, true, Channel.Reliable);
 
 					// Increment achievement for creating a party
@@ -2705,9 +2713,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.NetworkWrapper.Broadcast(conn, new PartyAddBroadcast()
 					{
 						PartyID = partyID,
-						CharacterID = characterID,
-						Rank = PartyRank.Member,
-						HealthPCT = healthPCT,
+						Member = new PartyAddEntry()
+						{
+							CharacterID = characterID,
+							Rank = PartyRank.Member,
+							HealthPCT = PartyVitalsQuantiser.FractionToByte(healthPCT),
+						},
 					}, true, Channel.Reliable);
 
 					// Increment achievement for joining a party
@@ -2920,9 +2931,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					PartyAddBroadcast addBroadcast = new PartyAddBroadcast()
 					{
 						PartyID = partyID,
-						CharacterID = characterID,
-						Rank = joinedRank,
-						HealthPCT = healthPCT,
+						Member = new PartyAddEntry()
+						{
+							CharacterID = characterID,
+							Rank = joinedRank,
+							HealthPCT = PartyVitalsQuantiser.FractionToByte(healthPCT),
+						},
 					};
 
 					// The joiner's own view.
@@ -2998,10 +3012,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="conn">The character's connection.</param>
 		/// <param name="characterID">The character forming the party.</param>
 		/// <param name="worldServerID">World server the party will belong to.</param>
-		/// <param name="sceneName">Scene name, for the create broadcast's location field.</param>
 		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
 		/// <returns>The new party ID, or 0 when it could not be created.</returns>
-		public async Task<long> TryCreatePartyForInstanceAsync(NetworkConnection conn, long characterID, long worldServerID, string sceneName, float healthPCT)
+		public async Task<long> TryCreatePartyForInstanceAsync(NetworkConnection conn, long characterID, long worldServerID, float healthPCT)
 		{
 			if (conn == null || characterID <= 0)
 			{
@@ -3063,7 +3076,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.NetworkWrapper.Broadcast(conn, new PartyCreateBroadcast()
 					{
 						PartyID = newPartyID,
-						Location = sceneName,
 					}, true, Channel.Reliable);
 				});
 

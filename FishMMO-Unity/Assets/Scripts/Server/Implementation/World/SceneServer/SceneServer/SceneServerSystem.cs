@@ -1027,7 +1027,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				BroadcastToInstance(details.SceneID,
+				BroadcastToInstance(details,
 					$"This dungeon closes in {DescribeDuration(mark)}.");
 				return;
 			}
@@ -1061,36 +1061,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Sends a system-channel message to everyone standing in one instance.
 		/// </summary>
-		private void BroadcastToInstance(long sceneID, string text)
+		/// <remarks>
+		/// Addressed by the instance's Unity scene, not by filtering every character the scene
+		/// server knows. <c>SceneConnections</c> already holds the exact connection set per loaded
+		/// scene — the primitive region chat uses — so this is one dictionary probe instead of a
+		/// walk over every connection on the whole server, per instance, per pulse. Handing that set
+		/// to the set overload also serialises the message once and reuses the ArraySegment, where
+		/// the per-connection overload rebuilt the same bytes for every recipient.
+		/// <para>
+		/// <see cref="ISceneInstanceDetails.Handle"/> is this process's local scene handle; the
+		/// SceneID the rest of the system addresses instances by is a database row and means nothing
+		/// to the scene manager. Taking the details rather than the row id keeps that translation out
+		/// of this method, which the caller already has in hand.
+		/// </para>
+		/// </remarks>
+		private void BroadcastToInstance(ISceneInstanceDetails details, string text)
 		{
-			if (Server?.NetworkWrapper == null ||
-				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
+			FishNet.Managing.NetworkManager networkManager = Server?.NetworkWrapper?.NetworkManager;
+			if (details == null || networkManager == null || networkManager.SceneManager == null)
 			{
 				return;
 			}
 
-			foreach (var kvp in charMapping.ConnectionCharacters)
+			Scene scene = SceneManager.GetScene(details.Handle);
+			if (!scene.IsValid() ||
+				!networkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections) ||
+				connections.Count < 1)
 			{
-				IPlayerCharacter character = kvp.Value;
-				if (character == null ||
-					!character.IsInInstance() ||
-					character.InstanceSceneHandle != sceneID)
-				{
-					continue;
-				}
-
-				NetworkConnection conn = kvp.Key;
-				if (conn == null || !conn.IsActive)
-				{
-					continue;
-				}
-
-				Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
-				{
-					Channel = ChatChannel.System,
-					Text = text,
-				}, true, FishNet.Transporting.Channel.Reliable);
+				return;
 			}
+
+			networkManager.ServerManager.Broadcast(connections, new ChatBroadcast()
+			{
+				Channel = ChatChannel.System,
+				Text = text,
+			}, true, FishNet.Transporting.Channel.Reliable);
 		}
 
 		#endregion

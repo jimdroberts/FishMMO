@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Serialization;
-using FishNet.Connection;
 using FishNet.Object;
 using FishMMO.Shared.Core;
 using FishMMO.Logging;
@@ -1316,37 +1315,49 @@ namespace FishMMO.Shared
 		/// Transitioning to <see cref="AILodTier.Far"/> or <see cref="AILodTier.Dormant"/>:
 		/// interrupts abilities, heals to full, clears aggression, and transitions to idle.
 		/// This acts as a soft-leash reset — if no players are nearby, the NPC shouldn't
-		/// remain in a damaged/combat state.
+		/// remain in a damaged/combat state. Whether any player IS nearby is decided by
+		/// <see cref="AllowsLeashReset"/> from a measured distance, never from observer membership.
 		/// </para>
 		/// </summary>
 		private void OnLodTierChanged(AILodTier previousTier, AILodTier newTier)
 		{
-			// Transitioning to Far or Dormant — full combat disengage.
-			if (newTier >= AILodTier.Far && CurrentState is BaseAttackingState)
+			/* Gated on measured proximity, not on tier membership alone. The reset restores health,
+			 * drops the threat table and rewinds boss phases — authoritative simulation, on the
+			 * premise that no player is close enough to notice — so it consults the distance
+			 * directly. The tier decides how much work to do; this decides whether the fight is
+			 * over, and only the second one may be wrong in the player's favour. */
+			bool measured = TryGetNearestPlayerSqrDistance(out float nearestSqrDistance);
+			if (!AllowsLeashReset(newTier,
+					CurrentState is BaseAttackingState,
+					measured,
+					nearestSqrDistance,
+					LodSettings != null ? LodSettings.NearbyDistanceSqr : float.PositiveInfinity))
 			{
-				// Interrupt any active ability.
-				if (Character.TryGet(out IAbilityController abilityController))
-				{
-					abilityController.Interrupt(null);
-				}
-
-				// Heal to full — no players are close enough to notice.
-				if (Character.TryGet(out ICharacterDamageController damageController))
-				{
-					damageController.CompleteHeal();
-				}
-
-				// Clear threat table.
-				AggressionState?.Clear();
-
-				// Reset boss script phases.
-				if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
-				{
-					ResetBossScript();
-				}
-
-				TransitionToIdleState();
+				return;
 			}
+
+			// Interrupt any active ability.
+			if (Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.Interrupt(null);
+			}
+
+			// Heal to full — no player is close enough to notice.
+			if (Character.TryGet(out ICharacterDamageController damageController))
+			{
+				damageController.CompleteHeal();
+			}
+
+			// Clear threat table.
+			AggressionState?.Clear();
+
+			// Reset boss script phases.
+			if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
+			{
+				ResetBossScript();
+			}
+
+			TransitionToIdleState();
 		}
 
 		/// <summary>
@@ -1690,56 +1701,138 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Evaluates the AI LOD tier based on the nearest observer's distance.
-		/// Uses the FishNet <c>NetworkObject.Observers</c> collection to find player connections,
-		/// then checks the squared distance to each observer's character.
-		/// Returns <see cref="AILodTier.Dormant"/> when no observers exist.
+		/// Squared distance from this NPC to the nearest player in its scene.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// From <see cref="ObserverStreamingRegistry"/>, which measures viewer-to-object distance for
+		/// every pair it considers anyway, before it applies any range or budget filter. That is a
+		/// PROXIMITY question and this is the only place the server answers it honestly.
+		/// </para>
+		/// <para>
+		/// It used to be answered from <c>NetworkObject.Observers</c>. Observer membership is a
+		/// BANDWIDTH decision — <c>ObserverBudgetCondition</c> admits the top thirty monsters per
+		/// viewer and no more — so a monster evicted from every viewer's budget reported "no player
+		/// is anywhere near me" while standing in the middle of a raid, and the tier machinery below
+		/// full-healed it, cleared its threat table and reset its boss phases on the strength of it.
+		/// </para>
+		/// <para>
+		/// Returns false when no pass has measured this NPC yet (it registered between two passes, or
+		/// the registry is not running at all, as in the simulation harness scenes). Callers must not
+		/// read false as "nobody is near" — see <see cref="ResolveLodTier"/> and
+		/// <see cref="AllowsLeashReset"/>, both of which treat it as an unanswered question.
+		/// </para>
+		/// </remarks>
+		/// <param name="sqrDistance">Squared distance to the nearest player; infinity when the scene holds none.</param>
+		/// <returns>True when the measurement is valid.</returns>
+		public bool TryGetNearestPlayerSqrDistance(out float sqrDistance)
+		{
+			if (base.NetworkObject != null &&
+				ObserverStreamingRegistry.TryGetNearestViewerDistance(base.NetworkObject, out float distance))
+			{
+				sqrDistance = distance * distance;
+				return true;
+			}
+			sqrDistance = float.PositiveInfinity;
+			return false;
+		}
+
+		/// <summary>
+		/// True when a player is close enough for this NPC's expensive per-tick polling — the enemy
+		/// sweep above all — to be worth doing.
+		/// </summary>
+		/// <remarks>
+		/// Inside the Nearby band, or unmeasured. Never false merely because nothing is streaming
+		/// this NPC: an <c>Observers.Count &lt; 1</c> test here meant a budget-evicted monster could
+		/// not aggro anybody, including the player who had just pulled it.
+		/// </remarks>
+		public bool HasNearbyPlayer
+		{
+			get
+			{
+				if (!TryGetNearestPlayerSqrDistance(out float sqrDistance))
+				{
+					return true;
+				}
+				return LodSettings == null || sqrDistance <= LodSettings.NearbyDistanceSqr;
+			}
+		}
+
+		/// <summary>
+		/// Evaluates the AI LOD tier from how far away the nearest player actually is.
 		/// </summary>
 		private AILodTier EvaluateLodTier()
 		{
-			if (LodSettings == null)
-				return AILodTier.Active;
+			bool measured = TryGetNearestPlayerSqrDistance(out float nearestSqrDistance);
+			return ResolveLodTier(LodSettings, measured, nearestSqrDistance);
+		}
 
-			// No observers → dormant.
-			if (Observers.Count < 1)
-				return AILodTier.Dormant;
-
-			// Find the nearest observer's squared distance.
-			float nearestSqrDist = float.MaxValue;
-			Vector3 npcPos = Character.Transform.position;
-
-			foreach (NetworkConnection conn in Observers)
+		/// <summary>
+		/// The tier rule, as a pure function so it is testable without a NetworkManager.
+		/// </summary>
+		/// <remarks>
+		/// Truth table, first matching row wins:
+		/// <list type="table">
+		/// <item><description>no LOD settings → <see cref="AILodTier.Active"/>. Nothing has authored a
+		/// throttle for this NPC.</description></item>
+		/// <item><description>no proximity measurement → <see cref="AILodTier.Active"/>. An
+		/// unanswered question is not permission to suspend a brain; the answer arrives within one
+		/// scheduling pass, and running one extra tier for half a second costs far less than a monster
+		/// that stops thinking with a player in front of it.</description></item>
+		/// <item><description>measured → the authored distance bands, infinity (an empty scene)
+		/// landing in <see cref="AILodTier.Dormant"/>.</description></item>
+		/// </list>
+		/// </remarks>
+		/// <param name="settings">Authored LOD bands, or null.</param>
+		/// <param name="hasProximityMeasurement">False when nothing has measured the nearest player yet.</param>
+		/// <param name="nearestPlayerSqrDistance">Squared distance to the nearest player.</param>
+		/// <returns>The tier to run at.</returns>
+		public static AILodTier ResolveLodTier(AILodSettings settings, bool hasProximityMeasurement, float nearestPlayerSqrDistance)
+		{
+			if (settings == null || !hasProximityMeasurement)
 			{
-				/* FirstObject — the connection's player character — rather than walking every
-				 * object the connection owns.
-				 *
-				 * The inner loop over conn.Objects was the expensive half of this method: it is
-				 * O(observers x owned objects) per NPC per re-evaluation, and a connection owns
-				 * more than its character (its pet, anything else it has been given authority
-				 * over). Those are all within metres of the player anyway, so they never changed
-				 * the answer — they just multiplied the work. At a thousand NPCs and a hundred
-				 * players that inner loop was six figures of distance checks every couple of
-				 * seconds, to compute a number the character alone already gives. */
-				NetworkObject observerObject = conn?.FirstObject;
-				if (observerObject == null)
-				{
-					continue;
-				}
-
-				float sqrDist = (observerObject.transform.position - npcPos).sqrMagnitude;
-				if (sqrDist < nearestSqrDist)
-				{
-					nearestSqrDist = sqrDist;
-
-					// Cannot do better than the closest tier; stop looking.
-					if (nearestSqrDist <= LodSettings.ActiveDistanceSqr)
-					{
-						break;
-					}
-				}
+				return AILodTier.Active;
 			}
+			return settings.GetTier(nearestPlayerSqrDistance);
+		}
 
-			return LodSettings.GetTier(nearestSqrDist);
+		/// <summary>
+		/// Whether a tier change may run the leash reset — interrupt, full heal, threat clear, boss
+		/// phase reset — as a pure function so it is testable without a NetworkManager.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The reset is authoritative simulation state, so it asks proximity directly rather than
+		/// trusting the tier that triggered it. The tier says how much WORK to do; only distance says
+		/// whether a fight is really over.
+		/// </para>
+		/// <para>
+		/// Truth table, first matching row wins:
+		/// <list type="table">
+		/// <item><description>not in an attacking state → false. There is no fight to end.</description></item>
+		/// <item><description>tier below <see cref="AILodTier.Far"/> → false. The NPC is still being
+		/// simulated in full.</description></item>
+		/// <item><description>no proximity measurement → false. Never hand a monster its health back
+		/// on an unanswered question.</description></item>
+		/// <item><description>nearest player inside <paramref name="leashResetSqrDistance"/> → false.
+		/// Somebody is right there, whatever the network is streaming them.</description></item>
+		/// <item><description>otherwise → true.</description></item>
+		/// </list>
+		/// </para>
+		/// </remarks>
+		/// <param name="newTier">Tier being transitioned to.</param>
+		/// <param name="inAttackingState">True when the NPC is currently in a <see cref="BaseAttackingState"/>.</param>
+		/// <param name="hasProximityMeasurement">False when nothing has measured the nearest player yet.</param>
+		/// <param name="nearestPlayerSqrDistance">Squared distance to the nearest player.</param>
+		/// <param name="leashResetSqrDistance">Squared distance a player must be beyond for the reset to be allowed.</param>
+		/// <returns>True when the reset may run.</returns>
+		public static bool AllowsLeashReset(AILodTier newTier, bool inAttackingState, bool hasProximityMeasurement, float nearestPlayerSqrDistance, float leashResetSqrDistance)
+		{
+			if (!inAttackingState || newTier < AILodTier.Far || !hasProximityMeasurement)
+			{
+				return false;
+			}
+			return nearestPlayerSqrDistance > leashResetSqrDistance;
 		}
 
 		/// <summary>

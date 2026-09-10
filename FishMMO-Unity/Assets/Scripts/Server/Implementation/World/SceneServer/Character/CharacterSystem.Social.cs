@@ -106,9 +106,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 						bool mayReadOfficerNotes = (viewerPermissions & GuildPermissions.ViewOfficerNotes) == GuildPermissions.ViewOfficerNotes;
 
-						var addBroadcasts = members.Select(x => new GuildAddBroadcast()
+						var addBroadcasts = members.Select(x => new GuildAddEntry()
 						{
-							GuildID = x.GuildID,
 							CharacterID = x.CharacterID,
 							RankOrder = x.Rank,
 							Location = x.Location ?? string.Empty,
@@ -116,7 +115,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							Level = x.Level,
 							PublicNote = x.PublicNote ?? string.Empty,
 							OfficerNote = mayReadOfficerNotes ? (x.OfficerNote ?? string.Empty) : string.Empty,
-							LastOnlineUtcTicks = x.LastOnlineUtc.Ticks,
+							LastOnlineUnixSeconds = x.LastOnlineUtc > DateTime.UnixEpoch
+								? new DateTimeOffset(DateTime.SpecifyKind(x.LastOnlineUtc, DateTimeKind.Utc)).ToUnixTimeSeconds()
+								: 0L,
 						}).ToList();
 
 						GuildPermissions capturedPermissions = viewerPermissions;
@@ -129,6 +130,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								Server.NetworkWrapper.Broadcast(owner, new GuildAddMultipleBroadcast()
 								{
+									GuildID = guildID,
 									Members = addBroadcasts.ToArray(),
 								}, true, Channel.Reliable);
 
@@ -139,7 +141,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								 * happened to the guild. */
 								Server.NetworkWrapper.Broadcast(owner, new GuildRankListBroadcast()
 								{
-									GuildID = guildID,
 									Ranks = rankEntries,
 									ViewerRankOrder = capturedRankOrder,
 									ViewerPermissions = (long)capturedPermissions,
@@ -171,12 +172,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					DatabaseResult<IReadOnlyList<CharacterPartyData>> partyResult = await partyService.FetchManyAsync(partyID);
 					if (partyResult.IsSuccess && partyResult.Data != null && partyResult.Data.Count > 0)
 					{
-						var addBroadcasts = partyResult.Data.Select(x => new PartyAddBroadcast()
+						var addBroadcasts = partyResult.Data.Select(x => new PartyAddEntry()
 						{
-							PartyID = x.PartyID,
 							CharacterID = x.CharacterID,
 							Rank = (PartyRank)x.Rank,
-							HealthPCT = x.HealthPCT,
+							HealthPCT = PartyVitalsQuantiser.FractionToByte(x.HealthPCT),
 						}).ToList();
 
 						TryEnqueueMainThread(() =>
@@ -185,6 +185,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								Server.NetworkWrapper.Broadcast(owner, new PartyAddMultipleBroadcast()
 								{
+									PartyID = partyID,
 									Members = addBroadcasts.ToArray(),
 								}, true, Channel.Reliable);
 							}

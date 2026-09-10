@@ -4,14 +4,12 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Broadcast for creating a new party.
-	/// Contains the party ID and location.
+	/// Contains the party ID.
 	/// </summary>
 	public struct PartyCreateBroadcast : IBroadcast
 	{
 		/// <summary>ID of the newly created party.</summary>
 		public long PartyID;
-		/// <summary>Location of the party (may be used for region or instance).</summary>
-		public string Location;
 	}
 
 	/// <summary>
@@ -56,19 +54,44 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Broadcast for adding a member to a party.
-	/// Contains party ID, character ID, rank, and health percentage.
+	/// One party roster row on the wire: everything about a member EXCEPT which party they are in.
+	/// </summary>
+	/// <remarks>
+	/// The party identity lives on the message, not on the row. A roster payload describes exactly
+	/// one party, so repeating its id against every member spent eight or nine bytes per row to
+	/// restate a value the reader already had. Carrying it once on
+	/// <see cref="PartyAddMultipleBroadcast"/> — and once on the single-member
+	/// <see cref="PartyAddBroadcast"/> — says the same thing without paying per member.
+	/// </remarks>
+	public struct PartyAddEntry
+	{
+		/// <summary>Character ID of the member being added.</summary>
+		public long CharacterID;
+		/// <summary>Rank of the member within the party.</summary>
+		public PartyRank Rank;
+		/// <summary>
+		/// The member's health fraction, quantised to 0..255.
+		/// </summary>
+		/// <remarks>
+		/// The same quantisation, and for the same reason, as
+		/// <see cref="PartyMemberVitalsEntry.HealthPCT"/>: a party bar is a few dozen pixels wide,
+		/// so a four-byte float carried three bytes of precision nothing rendered — and the live
+		/// updates that overwrite this value seconds later were already sending one byte. Convert
+		/// with <see cref="PartyVitalsQuantiser.FractionToByte"/> and
+		/// <see cref="PartyVitalsQuantiser.ByteToFraction"/>.
+		/// </remarks>
+		public byte HealthPCT;
+	}
+
+	/// <summary>
+	/// Broadcast for adding a single member to a party.
 	/// </summary>
 	public struct PartyAddBroadcast : IBroadcast
 	{
 		/// <summary>ID of the party the member is being added to.</summary>
 		public long PartyID;
-		/// <summary>Character ID of the member being added.</summary>
-		public long CharacterID;
-		/// <summary>Rank of the member within the party.</summary>
-		public PartyRank Rank;
-		/// <summary>Current health percentage of the member.</summary>
-		public float HealthPCT;
+		/// <summary>The member's roster row.</summary>
+		public PartyAddEntry Member;
 	}
 
 	/// <summary>
@@ -77,8 +100,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct PartyAddMultipleBroadcast : IBroadcast
 	{
+		/// <summary>ID of the party every row below belongs to.</summary>
+		public long PartyID;
 		/// <summary>List of members to add to the party.</summary>
-		public PartyAddBroadcast[] Members;
+		public PartyAddEntry[] Members;
 	}
 
 	/// <summary>

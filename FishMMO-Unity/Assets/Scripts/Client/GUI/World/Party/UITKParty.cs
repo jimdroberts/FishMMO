@@ -139,6 +139,16 @@ namespace FishMMO.Client
 			/// with and then be corrected again, forever.
 			/// </remarks>
 			public bool HasVitals;
+			/// <summary>
+			/// True once this member's vitals have been read from the local authoritative controller.
+			/// </summary>
+			/// <remarks>
+			/// Only ever set for the local player — nobody else has a controller here to read. It is
+			/// what <see cref="ShouldApplyBroadcastVitals"/> tests: while it is false the wire copy is
+			/// the only source there is, and once it is true the wire copy is a coarser duplicate of
+			/// a number this client already derived exactly.
+			/// </remarks>
+			public bool HasLocalVitals;
 		}
 
 		/// <summary>
@@ -486,6 +496,39 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Whether a vitals payload's quantised fractions may be written into a member's row.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The whole truth table:
+		/// </para>
+		/// <list type="bullet">
+		/// <item>another member — apply; the payload is the only source of their values.</item>
+		/// <item>the local player, no controller read yet — apply; a coarse value beats no value,
+		/// and this covers the frames between joining a party and the character being resolvable.</item>
+		/// <item>the local player, controller read — ignore; the row already holds the exact
+		/// fraction derived from the authoritative local state, at frame rate rather than at the
+		/// server's one-second pump.</item>
+		/// </list>
+		/// <para>
+		/// A method rather than an inline condition because it is a rule, and this is the only place
+		/// the two sources of one member's bars are allowed to disagree.
+		/// </para>
+		/// </remarks>
+		/// <param name="hasLocalVitals">True when the row has been filled from the local controller.</param>
+		/// <returns>True when the payload's values should be applied.</returns>
+		public static bool ShouldApplyBroadcastVitals(bool hasLocalVitals)
+		{
+			return !hasLocalVitals;
+		}
+
+		/// <summary>Overload for a live model; see <see cref="ShouldApplyBroadcastVitals(bool)"/>.</summary>
+		private static bool ShouldApplyBroadcastVitals(MemberModel model)
+		{
+			return ShouldApplyBroadcastVitals(model != null && model.HasLocalVitals);
+		}
+
+		/// <summary>
 		/// Re-reads the local character's own resources into its roster row.
 		/// </summary>
 		private void RefreshLocalMemberVitals()
@@ -496,6 +539,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+			/* Set before the no-change exit below, not after it. This says "an exact source exists
+			 * for this row", which is true the moment the controller resolves — deferring it to the
+			 * first frame a value actually MOVES would let the vitals payload keep overwriting a
+			 * standing-still player's exact row with the quantised copy. */
+			model.HasLocalVitals = true;
 
 			float health = attributeController.GetHealthResourceAttributeCurrentPercentage();
 			float mana = attributeController.GetManaResourceAttributeCurrentPercentage();
@@ -628,8 +677,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Adds the local player as a member row when a party is created.
 		/// </summary>
-		/// <param name="location">Location string (unused).</param>
-		public void OnPartyCreated(string location)
+		public void OnPartyCreated()
 		{
 			if (Character == null ||
 				!Character.TryGet(out IPartyController partyController))
@@ -799,10 +847,22 @@ namespace FishMMO.Client
 				model.VitalsMisses = 0;
 				/* Back from the wire's quantised form. The payload carries each fraction as one
 				 * byte and each meter as a whole-number rate; the model works in fractions, which
-				 * is what the bars and the percentage readout expect. */
-				model.HealthPCT = PartyVitalsQuantiser.ByteToFraction(entry.HealthPCT);
-				model.ManaPCT = PartyVitalsQuantiser.ByteToFraction(entry.ManaPCT);
-				model.StaminaPCT = PartyVitalsQuantiser.ByteToFraction(entry.StaminaPCT);
+				 * is what the bars and the percentage readout expect.
+				 *
+				 * Skipped for your own row once RefreshLocalMemberVitals has a controller to read.
+				 * The server includes the recipient in its own payload so the miss counter above
+				 * stays intact — absence is what greys a member out — but the three fractions on
+				 * that row are a byte-quantised copy of a number this client has just derived
+				 * exactly from its own reconciled controller, and writing it back replaced the
+				 * exact value with a coarser one until the next tick undid it. The METERS are not
+				 * skipped: damage and healing per second are measured server-side and this is the
+				 * only place they come from. */
+				if (ShouldApplyBroadcastVitals(model))
+				{
+					model.HealthPCT = PartyVitalsQuantiser.ByteToFraction(entry.HealthPCT);
+					model.ManaPCT = PartyVitalsQuantiser.ByteToFraction(entry.ManaPCT);
+					model.StaminaPCT = PartyVitalsQuantiser.ByteToFraction(entry.StaminaPCT);
+				}
 				model.DamagePerSecond = entry.DamagePerSecond;
 				model.HealPerSecond = entry.HealPerSecond;
 

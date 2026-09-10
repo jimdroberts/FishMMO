@@ -1,4 +1,5 @@
 using FishNet.Serializing;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -35,8 +36,11 @@ namespace FishMMO.Shared
 	/// </item>
 	/// </list>
 	/// <para>
-	/// The mode and the two shape flags share one byte. Everything else uses FishNet's packed
-	/// encoding, which is already variable width for the ids.
+	/// The mode and the two shape flags share one byte. Object ids and ticks travel through
+	/// FishNet's packed encoding, which is genuinely variable width for them. The FULL-ENTROPY
+	/// fields do not: the packed 32-bit form is a seven-bit-per-byte varint, so a value that uses
+	/// the whole range costs FIVE bytes where unpacked costs four. The seed and the packed aim
+	/// word are therefore written unpacked, each noted at the point it happens.
 	/// </para>
 	/// <para>
 	/// Discovered by FishNet's codegen through the <c>Write*</c>/<c>Read*</c> naming convention and
@@ -93,7 +97,11 @@ namespace FishMMO.Shared
 			writer.WriteUInt8Unpacked(header);
 			writer.WriteInt32(value.CasterObjectID);
 			writer.WriteInt64(value.AbilityID);
-			writer.WriteInt32(value.Seed);
+			/* Unpacked: the seed is a full-range 32-bit RNG value, so every one of its bits is
+			 * routinely set and FishNet's signed-packed form would spend five bytes on it. Four,
+			 * always, is the cheaper of the two — the same trade ObservedBuffEntry makes for a
+			 * template id. Object ids and ticks below stay packed: those really are small. */
+			writer.WriteInt32Unpacked(value.Seed);
 			writer.WriteUInt32(value.ServerTick);
 
 			if (tickFits)
@@ -113,7 +121,11 @@ namespace FishMMO.Shared
 			if (DerivesPoseFromAim(value.SpawnMode))
 			{
 				writer.WriteVector3(value.AimOrigin);
-				writer.WriteUInt32(value.PackedAimDirection);
+				/* Unpacked, for the same reason the seed is. AimDirectionCompression packs a 16-bit
+				 * yaw into the low half and a 16-bit pitch into the high half, so the top bits are set
+				 * for any aim above the horizon — which is most of them. Packed would cost five bytes
+				 * on every such cast to save one on the handful aimed at the ground. */
+				writer.WriteUInt32Unpacked(value.PackedAimDirection);
 			}
 			else
 			{
@@ -152,7 +164,7 @@ namespace FishMMO.Shared
 
 			value.CasterObjectID = reader.ReadInt32();
 			value.AbilityID = reader.ReadInt64();
-			value.Seed = reader.ReadInt32();
+			value.Seed = reader.ReadInt32Unpacked();
 			value.ServerTick = reader.ReadUInt32();
 
 			if ((header & FLAG_TICK_OFFSET) != 0)
@@ -173,7 +185,7 @@ namespace FishMMO.Shared
 			if (DerivesPoseFromAim(spawnMode))
 			{
 				value.AimOrigin = reader.ReadVector3();
-				value.PackedAimDirection = reader.ReadUInt32();
+				value.PackedAimDirection = reader.ReadUInt32Unpacked();
 			}
 			else
 			{
@@ -198,51 +210,182 @@ namespace FishMMO.Shared
 
 		/// <summary>Writes an <see cref="AbilityLearnedObserverBroadcast"/>.</summary>
 		/// <remarks>
-		/// Hand written for the event-id count: FishNet's generated array serializer writes a
-		/// four-byte length and a null sentinel, where this message's count never exceeds
-		/// <see cref="MAX_LEARNED_EVENTS"/> and a null list is simply an empty one.
+		/// <para>
+		/// Hand written for two things the generated array serializer cannot do: bound the count
+		/// against a malformed message before an array is allocated for it, and treat a null list
+		/// as an empty one rather than spending a sentinel on it.
+		/// </para>
+		/// <para>
+		/// It is <b>not</b> written for the length prefix, and a remark here used to claim it was —
+		/// that FishNet's generated array serializer "writes a four-byte length". It does not:
+		/// <c>Writer.WriteArray</c> writes the count with <c>WriteSignedPackedWhole</c>, which is one
+		/// byte for any count this message can carry. The single byte below matches that; the reasons
+		/// above are what earn the hand-written form.
+		/// </para>
+		/// <para>
+		/// The template id and every event id are unpacked. Both are
+		/// <c>(typeName + assetName).GetDeterministicHashCode()</c> values that occupy the whole
+		/// 32-bit range, so FishNet's signed-packed form spends five bytes where four suffice — the
+		/// same trade <see cref="ObservedBuffEntry.WriteTo"/> makes.
+		/// </para>
 		/// </remarks>
 		public static void WriteAbilityLearnedObserverBroadcast(this Writer writer, AbilityLearnedObserverBroadcast value)
 		{
 			writer.WriteInt32(value.CasterObjectID);
 			writer.WriteInt64(value.AbilityID);
-			writer.WriteInt32(value.TemplateID);
+			writer.WriteInt32Unpacked(value.TemplateID);
 
 			int count = value.Events == null ? 0 : value.Events.Length;
 			if (count > MAX_LEARNED_EVENTS)
 			{
+				Log.Warning("AbilityLearnedObserverBroadcast",
+					$"Write event count {count} exceeds limit {MAX_LEARNED_EVENTS}. Truncating to preserve stream integrity.");
 				count = MAX_LEARNED_EVENTS;
 			}
 
 			writer.WriteUInt8Unpacked((byte)count);
 			for (int i = 0; i < count; ++i)
 			{
-				writer.WriteInt32(value.Events[i]);
+				writer.WriteInt32Unpacked(value.Events[i]);
 			}
 		}
 
 		/// <summary>Reads an <see cref="AbilityLearnedObserverBroadcast"/> written by the method above.</summary>
+		/// <remarks>
+		/// An over-large count is DISCARDED, not clamped. Clamping used to read
+		/// <see cref="MAX_LEARNED_EVENTS"/> ids and leave the rest of the declared ones in the
+		/// stream — and FishNet does not reposition the reader after a broadcast handler runs
+		/// (<c>ClientManager.ParseBroadcast</c> uses the length prefix only to SKIP a key it has no
+		/// handler for), so every byte left behind misaligned whatever shared the datagram. See
+		/// <c>CharacterBuffsBroadcastSerializer.ReadCharacterBuffsBroadcast</c>, which spells the
+		/// same trap out at length. The discard is returned with an unresolvable caster id so the
+		/// handler drops it outright rather than filing an events-less ability.
+		/// </remarks>
 		public static AbilityLearnedObserverBroadcast ReadAbilityLearnedObserverBroadcast(this Reader reader)
 		{
 			AbilityLearnedObserverBroadcast value = new AbilityLearnedObserverBroadcast()
 			{
 				CasterObjectID = reader.ReadInt32(),
 				AbilityID = reader.ReadInt64(),
-				TemplateID = reader.ReadInt32(),
+				TemplateID = reader.ReadInt32Unpacked(),
+				Events = System.Array.Empty<int>(),
 			};
 
 			int count = reader.ReadUInt8Unpacked();
 			if (count > MAX_LEARNED_EVENTS)
 			{
-				count = MAX_LEARNED_EVENTS;
+				/* Unreachable through the writer above, which caps the count at MAX_LEARNED_EVENTS
+				 * before it writes it — so arriving here means the stream is already corrupt. Reading
+				 * a clamped subset would compound that by leaving the remaining ids unread. */
+				Log.Warning("AbilityLearnedObserverBroadcast",
+					$"Read event count {count} exceeds limit {MAX_LEARNED_EVENTS}. Discarding this update.");
+				return new AbilityLearnedObserverBroadcast()
+				{
+					CasterObjectID = -1,
+					Events = System.Array.Empty<int>(),
+				};
 			}
 
-			int[] events = count > 0 ? new int[count] : System.Array.Empty<int>();
-			for (int i = 0; i < count; ++i)
+			if (count > 0)
 			{
-				events[i] = reader.ReadInt32();
+				int[] events = new int[count];
+				for (int i = 0; i < count; ++i)
+				{
+					events[i] = reader.ReadInt32Unpacked();
+				}
+				value.Events = events;
 			}
-			value.Events = events;
+
+			return value;
+		}
+	}
+
+	/// <summary>Wire format for <see cref="CharacterCastBroadcast"/>.</summary>
+	/// <remarks>
+	/// <para>
+	/// Hand written because a stop carries two fields the receiver never looks at.
+	/// <c>ClientCastNameplateDisplay.OnCastBroadcast</c> branches on
+	/// <see cref="CharacterCastBroadcast.Started"/> first and returns having read only the caster id
+	/// and the reference id — so <see cref="CharacterCastBroadcast.ServerTick"/> and
+	/// <see cref="CharacterCastBroadcast.IsConsumable"/> are dead weight on every cast end, and the
+	/// generated serializer wrote all five fields unconditionally. That is four to five bytes per
+	/// cast per observer on the reliable channel, paid by NPC auto-attacks at one per second each.
+	/// </para>
+	/// <para>
+	/// <see cref="CharacterCastBroadcast.Started"/> therefore goes FIRST, as a header bit: it is the
+	/// field that says which shape follows, in the style of
+	/// <see cref="AbilityObserverBroadcastSerializers"/> and
+	/// <c>AbilityObjectObserverBroadcastSerializers</c>. The consumable bit shares that byte rather
+	/// than costing one of its own.
+	/// </para>
+	/// <para>
+	/// <see cref="CharacterCastBroadcast.ReferenceID"/> travels packed and in ONE form on both
+	/// shapes. It is an ability instance id — a database sequence value, and small — except on a
+	/// consumable, where it is a full-range template hash; splitting the two would need the
+	/// consumable bit on a stop, which is the byte this format exists to save, and the receiver
+	/// compares a stop's reference against the start's, so the two must encode identically.
+	/// </para>
+	/// </remarks>
+	public static class CharacterCastBroadcastSerializer
+	{
+		/// <summary>Set when this message starts an activation; clear when it ends one.</summary>
+		private const byte FLAG_STARTED = 0x01;
+
+		/// <summary>Set when a STARTING activation is an item rather than an ability.</summary>
+		/// <remarks>
+		/// Masked off on a stop, where the receiver does not read it — so the bit is a true
+		/// statement about what follows rather than a field that happens to be ignored.
+		/// </remarks>
+		private const byte FLAG_CONSUMABLE = 0x02;
+
+		/// <summary>Writes a <see cref="CharacterCastBroadcast"/> in its shape-dependent form.</summary>
+		public static void WriteCharacterCastBroadcast(this Writer writer, CharacterCastBroadcast value)
+		{
+			byte header = 0;
+			if (value.Started)
+			{
+				header |= FLAG_STARTED;
+				if (value.IsConsumable)
+				{
+					header |= FLAG_CONSUMABLE;
+				}
+			}
+
+			writer.WriteUInt8Unpacked(header);
+			writer.WriteInt32(value.CasterObjectID);
+			writer.WriteInt64(value.ReferenceID);
+
+			if (value.Started)
+			{
+				/* Packed: an absolute server tick is a small number for a long while, and the
+				 * receiver only ever differences it against its own estimate. */
+				writer.WriteUInt32(value.ServerTick);
+			}
+		}
+
+		/// <summary>Reads a <see cref="CharacterCastBroadcast"/> written by the method above.</summary>
+		/// <remarks>
+		/// A stop comes back with <c>ServerTick</c> 0 and <c>IsConsumable</c> false, which is exactly
+		/// what its handler expects: it reads neither.
+		/// </remarks>
+		public static CharacterCastBroadcast ReadCharacterCastBroadcast(this Reader reader)
+		{
+			byte header = reader.ReadUInt8Unpacked();
+
+			CharacterCastBroadcast value = new CharacterCastBroadcast()
+			{
+				Started = (header & FLAG_STARTED) != 0,
+				IsConsumable = (header & FLAG_CONSUMABLE) != 0,
+				ServerTick = 0u,
+			};
+
+			value.CasterObjectID = reader.ReadInt32();
+			value.ReferenceID = reader.ReadInt64();
+
+			if (value.Started)
+			{
+				value.ServerTick = reader.ReadUInt32();
+			}
 
 			return value;
 		}

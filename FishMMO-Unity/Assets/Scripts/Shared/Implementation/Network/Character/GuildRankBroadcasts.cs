@@ -34,8 +34,6 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public struct GuildRankListBroadcast : IBroadcast
 	{
-		/// <summary>The guild the ladder belongs to.</summary>
-		public long GuildID;
 		/// <summary>The ladder, ordered by rank order ascending.</summary>
 		public GuildRankEntry[] Ranks;
 		/// <summary>The recipient's own rank order.</summary>
@@ -154,8 +152,6 @@ namespace FishMMO.Shared
 		public string Tags;
 		/// <summary>Current member count.</summary>
 		public int MemberCount;
-		/// <summary>Maximum member count, so the client can render "37 / 100" without a constant.</summary>
-		public int MaxMemberCount;
 	}
 
 	/// <summary>
@@ -204,8 +200,17 @@ namespace FishMMO.Shared
 		public long CharacterID;
 		/// <summary>The applicant's message.</summary>
 		public string Message;
-		/// <summary>UTC ticks of submission.</summary>
-		public long TimeUtcTicks;
+		/// <summary>
+		/// Unix time in SECONDS (UTC) of submission. Zero or less means unknown.
+		/// </summary>
+		/// <remarks>
+		/// Seconds, not ticks. An application's age is shown in whole minutes at its finest, so
+		/// sub-second precision is deliberately not carried: a tick count packs to nine bytes and
+		/// a Unix second to five, per pending application. Use
+		/// <c>DateTimeOffset.ToUnixTimeSeconds</c> and <c>DateTimeOffset.FromUnixTimeSeconds</c>
+		/// to convert.
+		/// </remarks>
+		public long TimeUnixSeconds;
 	}
 
 	/// <summary>
@@ -220,8 +225,6 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct GuildApplicationListBroadcast : IBroadcast
 	{
-		/// <summary>The guild the queue belongs to.</summary>
-		public long GuildID;
 		/// <summary>The pending applications.</summary>
 		public GuildApplicationEntry[] Entries;
 	}

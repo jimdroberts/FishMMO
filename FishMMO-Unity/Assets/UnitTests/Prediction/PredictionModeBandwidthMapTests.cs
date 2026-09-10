@@ -544,28 +544,25 @@ namespace FishMMO.UnitTests
 		 * packed, WriteSingle is 4 B, WriteBoolean and a byte are 1 B, and an array is a signed
 		 * packed count followed by its elements (Writer.WriteArray). */
 
+		/* Calls the production writer rather than modelling it. This message gained a hand-written,
+		 * mask-shaped wire format, so a model of FishNet's generated output stopped being what it
+		 * costs: it wrote all six values unconditionally where the real one writes a mask byte and
+		 * then only the fields that byte names. Modelling it by hand was how it drifted twice
+		 * already — once on float-versus-int, once on the missing sequence. */
 		private static void WriteResourcesBroadcast(Writer w, CharacterResourcesBroadcast m)
-		{
-			w.WriteUInt16(m.Sequence);
-			w.WriteInt32(m.CharacterObjectID);
-			w.WriteInt32(m.Health); w.WriteInt32(m.MaxHealth);
-			w.WriteInt32(m.Mana); w.WriteInt32(m.MaxMana);
-			w.WriteInt32(m.Stamina); w.WriteInt32(m.MaxStamina);
-		}
+		{ w.WriteCharacterResourcesBroadcast(m); }
 
+		/* Calls the production writer rather than modelling it.
+		 *
+		 * This message HAS a hand-written wire format, so a model of FishNet's generated output was
+		 * never what it costs. The model had also drifted the expensive way: it wrote a packed
+		 * template id and two raw floats per entry -- fourteen bytes -- where ObservedBuffEntry
+		 * spends seven, resolving TotalSeconds from the template instead of sending it. This map
+		 * therefore over-reported the buff stream by 2x. Everything else in this file models codegen
+		 * because those structs genuinely have no custom serializer. */
 		private static void WriteBuffsBroadcast(Writer w, CharacterBuffsBroadcast m)
 		{
-			w.WriteInt32(m.CharacterObjectID);
-			int count = m.Buffs?.Length ?? 0;
-			w.WriteSignedPackedWhole(count);
-			for (int i = 0; i < count; i++)
-			{
-				ObservedBuffEntry e = m.Buffs[i];
-				w.WriteInt32(e.TemplateID);
-				w.WriteInt32(e.Stacks);
-				w.WriteSingle(e.RemainingSeconds);
-				w.WriteSingle(e.TotalSeconds);
-			}
+			w.WriteCharacterBuffsBroadcast(m);
 		}
 
 		private static void WriteEquipmentObservedSlot(Writer w, EquipmentObservedSlotBroadcast m)
@@ -607,12 +604,19 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Broadcasts_ObserverChannel()
 		{
-			// CharacterAttributeController → resources.
-			Record("bc.resources", Bytes(w => WriteResourcesBroadcast(w, new CharacterResourcesBroadcast
+			/* CharacterAttributeController → resources. Two shapes now, because the mask made them
+			 * different sizes and the cheap one is the common one: a hit moves health and nothing
+			 * else, while every bit is set only for a confirmation or a changed maximum. Recording
+			 * only the full send would price this channel at its ceiling. */
+			CharacterResourcesBroadcast resources = new CharacterResourcesBroadcast
 			{
-				CharacterObjectID = 40, Health = 812, MaxHealth = 1200,
+				Sequence = 7, CharacterObjectID = 40, Health = 812, MaxHealth = 1200,
 				Mana = 240, MaxMana = 800, Stamina = 310, MaxStamina = 400,
-			})));
+			};
+			resources.Mask = CharacterResourcesMask.Health;
+			Record("bc.resourcesHealthOnly", Bytes(w => WriteResourcesBroadcast(w, resources)));
+			resources.Mask = CharacterResourcesMask.All;
+			Record("bc.resources", Bytes(w => WriteResourcesBroadcast(w, resources)));
 			Record("bc.resourcesHzMax", TickRate / 6.0); // observedResourcePushInterval = 6
 			Record("bc.resourceConfirmDelayTicks", (int)ObservedResourcePushScheduler.ConfirmDelayTicks);
 
@@ -681,6 +685,35 @@ namespace FishMMO.UnitTests
 				Kind = (byte)CombatEventKind.Heal, DamageTemplateID = 0,
 			})));
 			Record("bc.combatEventCoalesceCap", CombatEventCoalescer.MaxEntries);
+
+			/* AbilityController → cast bar. Two shapes: the start carries the tick an observer
+			 * catches up from, the stop is a bare "this reference ended". Both were absent from
+			 * this map, which mattered because the stop goes out for EVERY cast — including the
+			 * instant ones that are half the authored abilities — and a map that cannot see it
+			 * cannot see the channel's real per-observer cost in a fight. */
+			Record("bc.castStart", Bytes(w => w.WriteCharacterCastBroadcast(new CharacterCastBroadcast
+			{
+				CasterObjectID = 40, ReferenceID = 8_842_001_337L, Started = true,
+				IsConsumable = false, ServerTick = 123_456,
+			})));
+			Record("bc.castStop", Bytes(w => w.WriteCharacterCastBroadcast(new CharacterCastBroadcast
+			{
+				CasterObjectID = 40, ReferenceID = 8_842_001_337L, Started = false,
+			})));
+
+			/* AbilityObject → per-impact reports. The hit message is the only observer message with
+			 * no dedupe: a lingering area effect wired to OnTick publishes one per victim per pulse,
+			 * so this is the worst case the composition total has to be able to express. */
+			Record("bc.abilityObjectHit", Bytes(w => w.WriteAbilityObjectHitBroadcast(new AbilityObjectHitBroadcast
+			{
+				CasterObjectID = 40, AbilityID = 8_842_001_337L, ContainerID = -1_713_468_379,
+				ObjectID = 3, VictimObjectID = 77,
+			})));
+			Record("bc.abilityObjectHitDeflected", Bytes(w => w.WriteAbilityObjectHitBroadcast(new AbilityObjectHitBroadcast
+			{
+				CasterObjectID = 40, AbilityID = 8_842_001_337L, ContainerID = -1_713_468_379,
+				ObjectID = 3, VictimObjectID = 77, Deflected = true, PackedDeflectHeading = 0x1234_5678u,
+			})));
 
 			// CharacterDamageController → death state.
 			Record("bc.deathState", Bytes(w => WriteDeathState(w, new CharacterDeathStateBroadcast { CharacterObjectID = 40, Dead = true })));

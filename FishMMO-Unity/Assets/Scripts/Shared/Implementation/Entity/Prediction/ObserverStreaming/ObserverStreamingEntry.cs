@@ -26,6 +26,8 @@ namespace FishMMO.Shared
 	/// from the object (<see cref="NetworkTransformDistanceLod"/> on the same GameObject). They
 	/// are combined by taking the <b>larger</b> interval, never by gating one behind the other:
 	/// two independent modulo gates only coincide once in N×M ticks and would starve the observer.
+	/// An engaged observer is exempt from both — except from the engaged-overflow interval, which is
+	/// the bound on that exemption; see <see cref="ResolveEffectiveInterval"/>.
 	/// </para>
 	/// </remarks>
 	public sealed class ObserverStreamingEntry : IObserverSendFilter
@@ -137,13 +139,101 @@ namespace FishMMO.Shared
 		/// <summary>World position cached for the current scheduling pass.</summary>
 		public Vector3 Position { get; private set; }
 
+		/// <summary>
+		/// Distance to the nearest PLAYER in this object's scene as of the last scheduling pass, or
+		/// <see cref="NoViewerDistance"/> when there is none.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A real proximity number, not an observer-membership one: the registry measures it before
+		/// the range filter, so a character the visibility budget has evicted from every viewer still
+		/// reports how far away the nearest player actually is. That distinction is what
+		/// <c>AIController</c> needs — observer membership is a bandwidth decision, and using it as
+		/// "is anybody near" let a budget eviction full-heal a monster with a player standing next
+		/// to it.
+		/// </para>
+		/// <para>
+		/// Only valid when <see cref="HasViewerMeasurement"/> is true. An object registered between
+		/// two passes has never been measured, and "no measurement" must never be read as "nobody
+		/// is near".
+		/// </para>
+		/// </remarks>
+		public float NearestViewerDistance { get; private set; } = NoViewerDistance;
+
+		/// <summary>Value of <see cref="NearestViewerDistance"/> when no player was in the scene.</summary>
+		public const float NoViewerDistance = float.PositiveInfinity;
+
+		/// <summary>True once a scheduling pass has measured <see cref="NearestViewerDistance"/>.</summary>
+		public bool HasViewerMeasurement { get; private set; }
+
+		/// <summary>
+		/// Offers one viewer's distance to this object; the smallest offered in a pass is kept.
+		/// </summary>
+		/// <remarks>
+		/// Called for every (viewer, object) pair the registry considers, BEFORE the range filter,
+		/// which is what makes the result a proximity measurement rather than a restatement of who
+		/// can currently see whom.
+		/// </remarks>
+		/// <param name="distance">Distance from a player viewer to this object.</param>
+		internal void NoteViewerDistance(float distance)
+		{
+			if (distance < NearestViewerDistance)
+			{
+				NearestViewerDistance = distance;
+			}
+		}
+
 		/// <summary>Number of viewers this entry is currently rate limited for.</summary>
 		public int LimitedObserverCount => intervalsByClientId.Count;
+
+		/// <summary>
+		/// Why a per-observer interval was assigned. The engagement exemption honours one of these
+		/// and not the other, which is the whole reason the origin is recorded.
+		/// </summary>
+		public enum IntervalOrigin : byte
+		{
+			/// <summary>No interval assigned; the observer is at full rate as far as the cap is concerned.</summary>
+			None = 0,
+
+			/// <summary>
+			/// Assigned by the viewer's relevance cap. Scored by combat, party, guild and proximity,
+			/// knowing nothing about whether the observer can reach the object, so an engaged observer
+			/// is exempt from it.
+			/// </summary>
+			RelevanceCap = 1,
+
+			/// <summary>
+			/// Assigned because the viewer is already streaming
+			/// <c>ObserverStreamingPolicy.EngagedFullRateBudget</c> engaged characters at full rate.
+			/// This IS the bound on the engagement exemption, so the exemption must not cancel it.
+			/// </summary>
+			EngagedOverflow = 2,
+		}
+
+		/// <summary>One observer's assigned interval and which policy assigned it.</summary>
+		private struct CapInterval
+		{
+			public byte Interval;
+			public IntervalOrigin Origin;
+		}
 
 		private readonly DistanceCondition distanceCondition;
 		private readonly ClassifiedDistanceCondition classifiedCondition;
 		private readonly NetworkTransformDistanceLod distanceLod;
-		private readonly Dictionary<int, byte> intervalsByClientId = new Dictionary<int, byte>();
+		private readonly Dictionary<int, CapInterval> intervalsByClientId = new Dictionary<int, CapInterval>();
+
+		/// <summary>
+		/// Observers this entry has already sent to since they became observers. See
+		/// <see cref="ShouldSend"/> for what the first send is exempt from, and
+		/// <see cref="ForgetDepartedObservers"/> for how a re-admitted observer gets the exemption back.
+		/// </summary>
+		private readonly HashSet<int> servedClientIds = new HashSet<int>();
+
+		/// <summary>Pass-scoped scratch, shared across entries: the client ids currently observing one object.</summary>
+		private static readonly HashSet<int> observingScratch = new HashSet<int>();
+
+		/// <summary>Pass-scoped scratch, shared across entries: served ids whose observer has left.</summary>
+		private static readonly List<int> departedScratch = new List<int>();
 		private IPartyController partyController;
 		private IGuildController guildController;
 		private ICharacterDamageController damageController;
@@ -286,6 +376,58 @@ namespace FishMMO.Shared
 			}
 
 			Position = NetworkObject.transform.position;
+
+			/* Reset before the pass ranks anything, and mark the measurement valid here rather than
+			 * after ranking: a scene with no players in it produces no viewer loop at all, and that
+			 * is a measurement — "nobody is near" — not a missing one. */
+			NearestViewerDistance = NoViewerDistance;
+			HasViewerMeasurement = true;
+
+			ForgetDepartedObservers();
+		}
+
+		/// <summary>
+		/// Drops first-send bookkeeping for connections that are no longer observers, so a connection
+		/// re-admitted later — a range re-entry, a budget re-admit, a scene load boundary — is exempt
+		/// again on its first packet.
+		/// </summary>
+		/// <remarks>
+		/// Once per scheduling pass, the cadence the rest of this entry is refreshed on. Shared static
+		/// scratch collections rather than per-entry ones: this runs for every entry in the pass and
+		/// must not allocate. Same idiom as <c>NetworkTransformDistanceLod.departed</c>.
+		/// </remarks>
+		private void ForgetDepartedObservers()
+		{
+			if (servedClientIds.Count < 1)
+			{
+				return;
+			}
+
+			HashSet<NetworkConnection> observers = NetworkObject.Observers;
+			observingScratch.Clear();
+			if (observers != null)
+			{
+				foreach (NetworkConnection observer in observers)
+				{
+					if (observer != null)
+					{
+						observingScratch.Add(observer.ClientId);
+					}
+				}
+			}
+
+			departedScratch.Clear();
+			foreach (int clientId in servedClientIds)
+			{
+				if (!observingScratch.Contains(clientId))
+				{
+					departedScratch.Add(clientId);
+				}
+			}
+			for (int i = 0; i < departedScratch.Count; ++i)
+			{
+				servedClientIds.Remove(departedScratch[i]);
+			}
 		}
 
 		/// <summary>
@@ -315,73 +457,142 @@ namespace FishMMO.Shared
 			intervalsByClientId.Clear();
 		}
 
-		/// <summary>Sets the send interval for one observer. An interval of 1 removes the limit.</summary>
+		/// <summary>
+		/// Sets the send interval for one observer as a RELEVANCE CAP interval. An interval of 1
+		/// removes the limit.
+		/// </summary>
 		public void SetInterval(NetworkConnection connection, byte interval)
+		{
+			SetInterval(connection, interval, IntervalOrigin.RelevanceCap);
+		}
+
+		/// <summary>
+		/// Sets the send interval for one observer and records which policy assigned it. An interval
+		/// of 1, or an origin of <see cref="IntervalOrigin.None"/>, removes the limit.
+		/// </summary>
+		public void SetInterval(NetworkConnection connection, byte interval, IntervalOrigin origin)
 		{
 			if (connection == null)
 			{
 				return;
 			}
-			if (interval <= 1)
+			if (interval <= 1 || origin == IntervalOrigin.None)
 			{
 				intervalsByClientId.Remove(connection.ClientId);
 			}
 			else
 			{
-				intervalsByClientId[connection.ClientId] = interval;
+				intervalsByClientId[connection.ClientId] = new CapInterval { Interval = interval, Origin = origin };
 			}
 		}
 
 		/// <summary>Send interval assigned to an observer by the viewer cap; 1 when unlimited.</summary>
 		public byte GetInterval(NetworkConnection connection)
 		{
-			return connection != null && intervalsByClientId.TryGetValue(connection.ClientId, out byte interval) ? interval : (byte)1;
+			return connection != null && intervalsByClientId.TryGetValue(connection.ClientId, out CapInterval assigned) ? assigned.Interval : (byte)1;
+		}
+
+		/// <summary>Which policy assigned this observer's interval; <see cref="IntervalOrigin.None"/> when none did.</summary>
+		public IntervalOrigin GetIntervalOrigin(NetworkConnection connection)
+		{
+			return connection != null && intervalsByClientId.TryGetValue(connection.ClientId, out CapInterval assigned) ? assigned.Origin : IntervalOrigin.None;
 		}
 
 		/// <summary>
-		/// Send interval an observer actually receives: the larger of the cap interval and the
-		/// distance LOD interval, so the two policies compose instead of multiplying.
+		/// Send interval an observer actually receives, composing the cap interval, the distance LOD
+		/// interval and the engagement exemption.
 		/// </summary>
 		public byte GetEffectiveInterval(NetworkConnection connection)
 		{
-			/* An engaged observer is exempt from BOTH throttles. The cap is scored by relevance and
-			 * knows nothing about distance, so taking the max below would have happily throttled a
-			 * character standing next to its attacker back to every 2nd tick and left lag
-			 * compensation rewinding to a pose that was never rendered. */
-			if (distanceLod != null && distanceLod.IsEngaged(connection))
-			{
-				return 1;
-			}
+			return ResolveEffectiveInterval(
+				GetInterval(connection),
+				GetIntervalOrigin(connection),
+				distanceLod != null ? distanceLod.GetInterval(connection) : (byte)1,
+				distanceLod != null && distanceLod.IsEngaged(connection));
+		}
 
-			byte cap = GetInterval(connection);
-			byte lod = distanceLod != null ? distanceLod.GetInterval(connection) : (byte)1;
-			return cap > lod ? cap : lod;
+		/// <summary>
+		/// The composition rule, as a pure function so it is testable without a NetworkManager.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Truth table:
+		/// <list type="table">
+		/// <item><description>not engaged, any origin → <c>max(cap, lod)</c>. The two policies
+		/// compose by taking the LARGER interval, never by gating one behind the other: two
+		/// independent modulo gates coincide once in N×M ticks and would starve the
+		/// observer.</description></item>
+		/// <item><description>engaged, origin <see cref="IntervalOrigin.None"/> or
+		/// <see cref="IntervalOrigin.RelevanceCap"/> → 1. This is the exemption: the cap is scored by
+		/// relevance and knows nothing about distance, so without it a character standing next to its
+		/// attacker could be throttled to every 2nd tick and lag compensation would rewind to a pose
+		/// that was never rendered.</description></item>
+		/// <item><description>engaged, origin <see cref="IntervalOrigin.EngagedOverflow"/> → the cap
+		/// interval. That interval IS the bound on the exemption — assigned precisely because the
+		/// viewer already has <c>EngagedFullRateBudget</c> engaged characters at full rate — so
+		/// exempting it cancelled the budget that assigned it. While the origin was not recorded,
+		/// <c>EngagedFullRateBudget</c> and <c>EngagedOverflowInterval</c> had no runtime effect at
+		/// all: the registry assigned the overflow interval and this method discarded it on the same
+		/// engagement test the registry had just used, so thirty players inside 40 m were still thirty
+		/// full-rate streams and <c>LastPassLimitedPairs</c> counted throttles that never
+		/// happened.</description></item>
+		/// </list>
+		/// </para>
+		/// <para>
+		/// The LOD interval is not composed into the engaged rows because the LOD exempts engaged
+		/// observers itself (<c>NetworkTransformDistanceLod.BandObserver</c> writes an interval of 1
+		/// for them), so it is already 1 in both of them.
+		/// </para>
+		/// </remarks>
+		/// <param name="capInterval">Interval the viewer cap assigned; 1 for none.</param>
+		/// <param name="capOrigin">Which policy assigned <paramref name="capInterval"/>.</param>
+		/// <param name="lodInterval">Interval the distance LOD assigned; 1 for none.</param>
+		/// <param name="engaged">True when the observer is inside its own engagement radius of this object.</param>
+		public static byte ResolveEffectiveInterval(byte capInterval, IntervalOrigin capOrigin, byte lodInterval, bool engaged)
+		{
+			if (engaged)
+			{
+				return capOrigin == IntervalOrigin.EngagedOverflow && capInterval > 1 ? capInterval : (byte)1;
+			}
+			return capInterval > lodInterval ? capInterval : lodInterval;
 		}
 
 		/// <inheritdoc/>
 		public bool ShouldSend(NetworkObject networkObject, NetworkConnection connection, Channel channel)
 		{
-			/* Reliable sends are never shaped: the settle after a stop must reach everyone. FishNet
-			 * only consults the filter for unreliable RPCs, but the contract is enforced here too
-			 * so a caller invoking it directly gets the same answer. */
-			if (channel != Channel.Unreliable || connection == null)
+			if (connection == null)
 			{
 				return true;
 			}
-			/* The owner always hears about its own character; only spectators are shaped. (A
+
+			/* The first send to a new observer is never shaped.
+			 *
+			 * The receiver's previous goal is the reliable spawn baseline, whose tick is 0, and
+			 * NetworkTransform.GetTickDifference reads a zero predecessor as exactly ONE tick of
+			 * motion. Skip the first packet and the next one carries N ticks of motion to be played
+			 * in one — the same lurch the _observersRpcSettled latch was added to remove, except that
+			 * latch is per BEHAVIOUR and is re-armed only by a reliable send or ResetState, never by
+			 * an observer being ADDED. Claimed on unreliable sends only: the reliable baseline is what
+			 * the exemption is measured FROM, so counting it would spend the exemption before the
+			 * first unreliable packet needed it. Released again when the observer leaves — see
+			 * ForgetDepartedObservers. */
+			bool isOwner = connection == networkObject.Owner;
+			bool firstSend = !isOwner && channel == Channel.Unreliable && servedClientIds.Add(connection.ClientId);
+
+			/* Reliable sends are never shaped: the settle after a stop must reach everyone. FishNet
+			 * only consults the filter for unreliable RPCs, but the contract is enforced inside
+			 * ShouldSendToObserver too so a caller invoking this directly gets the same answer.
+			 *
+			 * The owner always hears about its own character; only spectators are shaped. (A
 			 * NetworkTransform that its owner would discard is already excluded before the filter
 			 * runs — see NetworkBehaviour.ExcludeOwnerFromUnbufferedObserversRpcs.) */
-			if (connection == networkObject.Owner)
-			{
-				return true;
-			}
-			byte interval = GetEffectiveInterval(connection);
-			if (interval <= 1)
-			{
-				return true;
-			}
-			uint tick = networkObject.TimeManager != null ? networkObject.TimeManager.LocalTick : 0u;
-			return ObserverStreamingPolicy.ShouldSendThisTick(tick, interval, connection.ClientId);
+			return ObserverStreamingPolicy.ShouldSendToObserver(
+				channel,
+				isOwner,
+				firstSend,
+				GetEffectiveInterval(connection),
+				networkObject.TimeManager != null ? networkObject.TimeManager.LocalTick : 0u,
+				connection.ClientId);
 		}
 	}
 }

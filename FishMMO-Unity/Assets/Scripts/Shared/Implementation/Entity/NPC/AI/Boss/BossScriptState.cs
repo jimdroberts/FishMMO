@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Logging;
-using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Shared.Core;
@@ -190,16 +189,15 @@ namespace FishMMO.Shared
 			{
 				Log.Info("BossScriptState", $"[BOSS] {controller.gameObject.name}: {phase.PhaseAnnouncement}");
 
-				// Broadcast to all players observing this boss.
-				ChatBroadcast chatMsg = new ChatBroadcast()
+				/* One write for the whole observer set, not one per observer. The set overload
+				 * serialises the message once and reuses the ArraySegment for every recipient;
+				 * the per-connection overload it replaced rebuilt the same bytes for each of a
+				 * raid's worth of observers, on the tick a phase change already costs the most. */
+				controller.ServerManager.Broadcast(controller.NetworkObject, new ChatBroadcast()
 				{
 					Channel = ChatChannel.System,
 					Text = phase.PhaseAnnouncement,
-				};
-				foreach (NetworkConnection conn in controller.NetworkObject.Observers)
-				{
-					controller.ServerManager.Broadcast(conn, chatMsg, true, Channel.Reliable);
-				}
+				}, true, Channel.Reliable);
 			}
 		}
 

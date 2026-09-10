@@ -510,7 +510,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					VaultID = entries[i].ID,
 					TemplateID = entries[i].TemplateID,
 					Amount = entries[i].Amount,
-					OriginalPlotID = entries[i].OriginalPlotID,
 					Fee = fees[i],
 				};
 			}

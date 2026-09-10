@@ -101,7 +101,18 @@ namespace FishMMO.Client
 		/// <summary>Instance scene name, as last reported.</summary>
 		private string instanceName;
 
-		/// <summary>Name of the party leader, or null when they are not on this scene server.</summary>
+		/// <summary>Character ID of the party leader, or 0 when they are not on this scene server.</summary>
+		private long leaderCharacterID;
+
+		/// <summary>
+		/// The leader's name once the naming system has answered, or null while it has not.
+		/// </summary>
+		/// <remarks>
+		/// Two states share "null" here and the readout distinguishes them by
+		/// <see cref="leaderCharacterID"/>: a zero ID means there is a leader nobody on this scene
+		/// server can identify, while a non-zero ID with no name yet means the answer is simply in
+		/// flight.
+		/// </remarks>
 		private string leaderName;
 
 		/// <summary>Whether this character may remove others, as last reported by the server.</summary>
@@ -282,6 +293,7 @@ namespace FishMMO.Client
 		{
 			this.members.Clear();
 			this.instanceName = null;
+			this.leaderCharacterID = 0;
 			this.leaderName = null;
 			this.viewerIsLeader = false;
 			this.difficultyName = null;
@@ -322,7 +334,7 @@ namespace FishMMO.Client
 			}
 
 			this.instanceName = msg.SceneName;
-			this.leaderName = msg.LeaderName;
+			this.leaderCharacterID = msg.LeaderCharacterID;
 			this.viewerIsLeader = msg.ViewerIsLeader;
 			this.difficultyName = msg.DifficultyName;
 			this.isPrivate = msg.IsPrivate;
@@ -336,6 +348,43 @@ namespace FishMMO.Client
 
 			this.state = RequestState.InInstance;
 			Render();
+
+			/* After the first Render, not before it: the name may already be cached, in which case
+			 * the callback runs inline and renders a second time with it. Rendering once without
+			 * the name first is what keeps the rest of the readout from waiting on a round trip. */
+			ResolveLeaderName(this.leaderCharacterID);
+		}
+
+		/// <summary>
+		/// Turns the leader's character ID into a name for the readout.
+		/// </summary>
+		/// <remarks>
+		/// Asynchronous when the naming system has not seen the ID before, and the panel refreshes
+		/// on a timer, so the answer can arrive after a later readout has already replaced the
+		/// model. The captured ID is compared against the current one before anything is written —
+		/// without that, a slow answer for a leader who has since been replaced would relabel the
+		/// run under the wrong name, and a stale answer arriving after the player left the instance
+		/// would repopulate a cleared model.
+		/// </remarks>
+		/// <param name="characterID">Leader's character ID, or 0 when there is none to resolve.</param>
+		private void ResolveLeaderName(long characterID)
+		{
+			if (characterID == 0)
+			{
+				// Nothing to ask for. The readout reads the zero ID and says so itself.
+				return;
+			}
+
+			long requested = characterID;
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, requested, name =>
+			{
+				if (this.leaderCharacterID != requested)
+				{
+					return;
+				}
+				this.leaderName = name;
+				Render();
+			});
 		}
 
 		/// <summary>Rebuilds the panel from the model.</summary>
@@ -372,17 +421,22 @@ namespace FishMMO.Client
 				this.leaderLabel.style.display = inInstance ? DisplayStyle.Flex : DisplayStyle.None;
 				if (inInstance)
 				{
-					/* The leader can be absent — they opened the instance and left, or have not
-					 * arrived yet. The instance keeps its owner either way, so this says the name
-					 * is unknown rather than claiming there is no leader. */
-					/* The leader can be unnameable here — they lead the party from outside the
-					 * instance, or from another scene server entirely. There is still a leader, so
-					 * this says the name is unknown rather than claiming the run has none. */
+					/* The leader can be unidentifiable here — they lead the party from outside the
+					 * instance, or from another scene server entirely, and the roster walk that
+					 * produces the ID only sees the answering server's own characters. There is
+					 * still a leader, so this says the name is unknown rather than claiming the run
+					 * has none.
+					 *
+					 * A zero ID is that case. A non-zero ID with no name yet is a different one —
+					 * the naming system is mid-round-trip — and saying "not here" for it would be
+					 * wrong about a leader standing in the room. */
 					this.leaderLabel.text = this.viewerIsLeader
 						? "You lead this party."
-						: string.IsNullOrEmpty(this.leaderName)
+						: this.leaderCharacterID == 0
 							? "Led by a party member who is not here."
-							: $"Led by {this.leaderName}.";
+							: string.IsNullOrEmpty(this.leaderName)
+								? "Led by …"
+								: $"Led by {this.leaderName}.";
 				}
 			}
 

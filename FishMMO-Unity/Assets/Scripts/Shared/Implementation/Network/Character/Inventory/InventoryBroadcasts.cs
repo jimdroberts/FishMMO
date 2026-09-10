@@ -1,4 +1,6 @@
 using FishNet.Broadcast;
+using FishNet.Serializing;
+using FishNet.CodeGenerating;
 
 namespace FishMMO.Shared
 {
@@ -6,6 +8,7 @@ namespace FishMMO.Shared
 	/// Broadcast for setting a single item in the character's inventory.
 	/// Contains all data needed to place or update an item in an inventory slot.
 	/// </summary>
+	[UseGlobalCustomSerializer]
 	public struct InventorySetItemBroadcast : IBroadcast
 	{
 		/// <summary>Unique instance ID of the item.</summary>
@@ -18,6 +21,42 @@ namespace FishMMO.Shared
 		public int Seed;
 		/// <summary>Stack size of the item.</summary>
 		public uint StackSize;
+	}
+
+	/// <summary>Wire format for <see cref="InventorySetItemBroadcast"/>.</summary>
+	/// <remarks>
+	/// Hand written for two fields. <c>TemplateID</c> is a deterministic 32-bit hash
+	/// (<c>CachedScriptableObject.AddToCache</c>) and <c>Seed</c> is full entropy by construction,
+	/// so both span the whole range and FishNet's signed-packed form spends FIVE bytes on each
+	/// where unpacked spends exactly four. The login sync ships the ENTIRE inventory in one
+	/// <see cref="InventorySetMultipleItemsBroadcast"/>, so those two bytes are paid per occupied
+	/// slot on every login. <c>InstanceID</c> stays packed — it is a database sequence value and
+	/// small — as do the slot index and stack size. See <c>ObservedBuffEntry</c>.
+	/// </remarks>
+	public static class InventorySetItemBroadcastSerializer
+	{
+		/// <summary>Writes an <see cref="InventorySetItemBroadcast"/>.</summary>
+		public static void WriteInventorySetItemBroadcast(this Writer writer, InventorySetItemBroadcast value)
+		{
+			writer.WriteInt64(value.InstanceID);
+			writer.WriteInt32Unpacked(value.TemplateID);
+			writer.WriteInt32(value.Slot);
+			writer.WriteInt32Unpacked(value.Seed);
+			writer.WriteUInt32(value.StackSize);
+		}
+
+		/// <summary>Reads an <see cref="InventorySetItemBroadcast"/>.</summary>
+		public static InventorySetItemBroadcast ReadInventorySetItemBroadcast(this Reader reader)
+		{
+			return new InventorySetItemBroadcast()
+			{
+				InstanceID = reader.ReadInt64(),
+				TemplateID = reader.ReadInt32Unpacked(),
+				Slot = reader.ReadInt32(),
+				Seed = reader.ReadInt32Unpacked(),
+				StackSize = reader.ReadUInt32(),
+			};
+		}
 	}
 
 	/// <summary>

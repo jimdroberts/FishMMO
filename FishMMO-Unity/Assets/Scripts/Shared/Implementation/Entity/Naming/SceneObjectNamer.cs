@@ -177,11 +177,11 @@ namespace FishMMO.Shared
 		/// <param name="reader">Network reader for payload.</param>
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			nameSeed = reader.ReadInt32();
+			nameSeed = reader.ReadInt32Unpacked();
 			selectedGender = (CharacterGender)reader.ReadUInt8Unpacked();
 			if (settings.UsesBiome)
 			{
-				biomeID = reader.ReadInt32();
+				biomeID = reader.ReadInt32Unpacked();
 				variantIndex = reader.ReadUInt8Unpacked();
 			}
 			nameGenerated = true;
@@ -191,6 +191,13 @@ namespace FishMMO.Shared
 		/// Writes the seed and gender (five bytes), plus the biome ID and variant (five more) when the
 		/// mode names from a biome — so a client never has to agree with the server about a biome map
 		/// or the weather to reproduce the name.
+		/// <para>
+		/// Both 32-bit values are written UNPACKED, which is what makes those counts true. A seed is
+		/// full entropy by construction and <c>BiomeRegistry.IDOf</c> returns the same deterministic
+		/// hash every other template id uses, so neither is ever small: FishNet's signed-packed form
+		/// zigzags them past 2^28 and spends five bytes on each, making the block six and six. This
+		/// is paid per NPC spawn per observer, the highest object count in the game.
+		/// </para>
 		/// </summary>
 		/// <param name="connection">Network connection.</param>
 		/// <param name="writer">Network writer for payload.</param>
@@ -198,11 +205,11 @@ namespace FishMMO.Shared
 		{
 			GenerateNameIfNeeded();
 
-			writer.WriteInt32(nameSeed);
+			writer.WriteInt32Unpacked(nameSeed);
 			writer.WriteUInt8Unpacked((byte)selectedGender);
 			if (settings.UsesBiome)
 			{
-				writer.WriteInt32(biomeID);
+				writer.WriteInt32Unpacked(biomeID);
 				writer.WriteUInt8Unpacked(variantIndex);
 			}
 		}

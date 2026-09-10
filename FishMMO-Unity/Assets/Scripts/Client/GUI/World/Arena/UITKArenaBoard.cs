@@ -679,9 +679,10 @@ namespace FishMMO.Client
 			queueBox.RemoveFromClassList(QUEUE_MATCHED_CLASS);
 
 			ArenaTemplate queued = queueStatus.ArenaTemplateID != 0 ? ArenaTemplate.Get<ArenaTemplate>(queueStatus.ArenaTemplateID) : null;
+			// Same trade as the dungeon finder: no template, no name to fall back on worth sending.
 			string what = queued != null
 				? $"{queued.ResolvedDisplayName} {queued.GetFormatName(queueStatus.Difficulty)}"
-				: (string.IsNullOrEmpty(queueStatus.SceneName) ? "this arena" : queueStatus.SceneName);
+				: "this arena";
 			string progress = queueStatus.GroupSize > 0
 				? $" — {Mathf.Clamp(queueStatus.WaitingCount, 0, queueStatus.GroupSize)}/{queueStatus.GroupSize} ready"
 				: string.Empty;

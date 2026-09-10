@@ -178,6 +178,11 @@ namespace FishMMO.Shared
 			/// sent every tick and lag compensation can rewind to a real tick sample.
 			/// </summary>
 			public bool Engaged;
+			/// <summary>
+			/// True once this object has sent to this observer since it became one. See
+			/// <see cref="ClaimFirstSend"/>.
+			/// </summary>
+			public bool Served;
 		}
 
 		private readonly Dictionary<int, ObserverLod> lodByClientId = new Dictionary<int, ObserverLod>();
@@ -349,7 +354,9 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Forget observers that left, so a reconnecting client starts fresh.
+			/* Forget observers that left, so a reconnecting client starts fresh — both its band and
+			 * its first-send exemption (see ClaimFirstSend), which is what makes the exemption apply
+			 * again on a range re-entry rather than only once per object lifetime. */
 			departed.Clear();
 			foreach (KeyValuePair<int, ObserverLod> pair in lodByClientId)
 			{
@@ -423,29 +430,62 @@ namespace FishMMO.Shared
 			return lod.Interval < 1 ? (byte)1 : lod.Interval;
 		}
 
+		/// <summary>
+		/// Claims the one unshaped send an observer is entitled to when it becomes an observer.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A fresh observer's previous goal is the reliable spawn baseline, whose tick is 0, and
+		/// <c>NetworkTransform.GetTickDifference</c> reads a zero predecessor as exactly ONE tick of
+		/// motion. Shape that observer's first packet and its next one carries N ticks of motion to be
+		/// played in one — the same lurch FishNet's <c>_observersRpcSettled</c> latch removes for the
+		/// reliable→unreliable transition, except that latch is per BEHAVIOUR and is re-armed only by
+		/// a reliable send or <c>ResetState</c>, never by an observer being ADDED.
+		/// </para>
+		/// <para>
+		/// Kept in the per-observer record rather than in a set of its own, so the departure prune in
+		/// <see cref="Evaluate"/> re-arms it for free. A record created here carries pass 0 and is
+		/// either re-banded by the next evaluation or pruned by it, which is exactly the lifetime the
+		/// flag wants.
+		/// </para>
+		/// </remarks>
+		/// <param name="clientId">Observer's client id.</param>
+		/// <returns>True when this is the first send to that observer.</returns>
+		private bool ClaimFirstSend(int clientId)
+		{
+			lodByClientId.TryGetValue(clientId, out ObserverLod lod);
+			if (lod.Served)
+			{
+				return false;
+			}
+			lod.Served = true;
+			lodByClientId[clientId] = lod;
+			return true;
+		}
+
 		/// <inheritdoc/>
 		/// <remarks>
 		/// Used directly only when the object has no <see cref="ObserverStreamingEntry"/>; the entry
-		/// otherwise folds <see cref="GetInterval"/> into its own decision. Reliable sends are never
-		/// declined — the reliable settle after a stop must reach every observer.
+		/// otherwise folds <see cref="GetInterval"/> into its own decision — including the first-send
+		/// exemption, which both filters have to honour because either one can be the installed
+		/// filter. Reliable sends are never declined: the settle after a stop must reach every
+		/// observer.
 		/// </remarks>
 		public bool ShouldSend(NetworkObject networkObject, NetworkConnection connection, Channel channel)
 		{
-			if (channel != Channel.Unreliable || connection == null || networkObject == null)
+			if (connection == null || networkObject == null)
 			{
 				return true;
 			}
-			if (connection == networkObject.Owner)
-			{
-				return true;
-			}
-			byte interval = GetInterval(connection);
-			if (interval <= 1)
-			{
-				return true;
-			}
-			uint tick = networkObject.TimeManager != null ? networkObject.TimeManager.LocalTick : 0u;
-			return ObserverStreamingPolicy.ShouldSendThisTick(tick, interval, connection.ClientId);
+			bool isOwner = connection == networkObject.Owner;
+			bool firstSend = !isOwner && channel == Channel.Unreliable && ClaimFirstSend(connection.ClientId);
+			return ObserverStreamingPolicy.ShouldSendToObserver(
+				channel,
+				isOwner,
+				firstSend,
+				GetInterval(connection),
+				networkObject.TimeManager != null ? networkObject.TimeManager.LocalTick : 0u,
+				connection.ClientId);
 		}
 
 		/// <summary>

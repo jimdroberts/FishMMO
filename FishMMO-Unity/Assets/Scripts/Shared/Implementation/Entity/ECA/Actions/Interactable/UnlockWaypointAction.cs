@@ -67,7 +67,6 @@ namespace FishMMO.Shared
 			{
 				SendToOwner(player, new WaypointOpenMapBroadcast()
 				{
-					SceneName = waypoint.SceneName,
 					WaypointIndex = waypoint.WaypointIndex,
 				});
 			}

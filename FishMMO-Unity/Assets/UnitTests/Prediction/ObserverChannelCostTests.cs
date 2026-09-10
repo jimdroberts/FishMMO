@@ -140,15 +140,42 @@ namespace FishMMO.UnitTests
 			int deltaBytes = Bytes(w => w.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize));
 			int framedReconcile = deltaBytes + RpcHeaderBytes;
 
-			// The replacement channel: resources on change, rate limited to 5Hz by
-			// CharacterAttributeController.observedResourcePushInterval.
-			int resourceBroadcast = Bytes(w =>
+			/* The replacement channel: resources on change, rate limited to 5Hz by
+			 * CharacterAttributeController.observedResourcePushInterval.
+			 *
+			 * Measured through the REAL serializer, not a hand-rolled imitation of it. This used to
+			 * model the three current values as WriteSingle and omit both the sequence and the mask,
+			 * so it over-stated the message by six bytes and under-stated it by three at the same
+			 * time — and then the ratio below was asserted against that. A cost model that spells
+			 * the wire out by hand stops describing the wire the first time the wire moves.
+			 *
+			 * A steady-state combat push carries health only; the maxima have not moved since spawn
+			 * and the mask says so. That is the message this channel actually spends its budget on,
+			 * so it is the one worth pricing. */
+			CharacterResourcesBroadcast push = new CharacterResourcesBroadcast
 			{
-				w.WriteInt32(1234);                       // CharacterObjectID
-				w.WriteSingle(780f); w.WriteInt32(1200);  // health
-				w.WriteSingle(240f); w.WriteInt32(800);   // mana
-				w.WriteSingle(310f); w.WriteInt32(400);   // stamina
-			}) + RpcHeaderBytes;
+				Sequence = 7,
+				CharacterObjectID = 1234,
+				Mask = CharacterResourcesMask.Health,
+				Health = 780,
+				MaxHealth = 1200,
+				Mana = 240,
+				MaxMana = 800,
+				Stamina = 310,
+				MaxStamina = 400,
+			};
+			int resourceBroadcast = Bytes(w => w.WriteCharacterResourcesBroadcast(push)) + RpcHeaderBytes;
+
+			/* The full send, for contrast: a confirmation or a maximum change sets every bit. It is
+			 * the ceiling, not the common case, and it is the only shape the old hand-rolled model
+			 * could express. */
+			CharacterResourcesBroadcast full = push;
+			full.Mask = CharacterResourcesMask.All;
+			int resourceBroadcastFull = Bytes(w => w.WriteCharacterResourcesBroadcast(full)) + RpcHeaderBytes;
+			TestContext.WriteLine(
+				$"MEASURE resource broadcast, all six fields {resourceBroadcastFull}B (confirmation or a changed maximum)");
+			LogAssert.IsTrue(resourceBroadcast < resourceBroadcastFull,
+				"A masked push must be smaller than the full send, or the mask is buying nothing.");
 
 			const double ResourceHz = 5.0;
 

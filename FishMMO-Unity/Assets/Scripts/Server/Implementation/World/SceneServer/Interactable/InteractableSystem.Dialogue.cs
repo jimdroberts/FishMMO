@@ -433,7 +433,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				InteractableID = interactableID,
 				TemplateID = template.ID,
-				StartNodeId = template.StartNodeId,
 				CachedChoices = cachedChoices,
 			}, true, Channel.Reliable);
 		}

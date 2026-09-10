@@ -60,9 +60,9 @@ namespace FishMMO.Shared.Core
 
 		/// <summary>
 		/// Event triggered when the guild's recent activity log arrives.
-		/// Parameters: guild ID, entries (newest first).
+		/// Parameters: entries (newest first).
 		/// </summary>
-		event Action<long, GuildLogEntry[]> OnReceiveGuildLog;
+		event Action<GuildLogEntry[]> OnReceiveGuildLog;
 
 		/// <summary>
 		/// Event triggered when the guild's rank ladder arrives.

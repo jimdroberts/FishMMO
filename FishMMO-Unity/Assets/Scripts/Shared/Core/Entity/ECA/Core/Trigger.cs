@@ -106,6 +106,67 @@ namespace FishMMO.Shared.Core
 		}
 
 		/// <summary>
+		/// Whether an action whose selector produced nothing should still run once, for presentation.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The rule this encodes.</b> A spatial selector answers false to
+		/// <see cref="TargetSelector.ResolvesSelectionsLocally"/> on a third-party OBSERVER and
+		/// yields an empty set — correct, and an observer must never resolve somebody else's
+		/// targets. But a fan-out runs its action once per selected target, so an empty set ran the
+		/// action list ZERO times and took every purely presentational action down with the
+		/// authoritative ones. A chain-damage OnHit event therefore drew its arcs and impacts on the
+		/// caster's screen alone: every observer saw floating numbers pop over three characters,
+		/// delivered by <c>CombatEventBroadcast</c>, with no visual link between them. This is the
+		/// same observer-invisibility class <c>AbilityObject.PublishActionHit</c> was introduced to
+		/// close for the area and hitscan apply-actions, left unclosed for selector fan-out.
+		/// </para>
+		/// <para>
+		/// <b>Why it is three booleans and not an inline condition.</b> Two of the three rows that
+		/// must stay false are easy to lose. "Nobody was standing there" — an empty selection on the
+		/// peer that DID resolve — must run nothing, or a blast that hit no one still plays an impact
+		/// on the caster's screen; that is the <paramref name="peerResolvesSelections"/> row. And an
+		/// action that is not presentation must never run here however empty the selection was, or an
+		/// observer applies damage it has no authority for and draws a number nobody asked it for;
+		/// that is the <paramref name="actionIsPresentation"/> row, answered by the action itself
+		/// through <see cref="BaseAction.IsPresentation"/> rather than by a type list kept here.
+		/// </para>
+		/// <para>
+		/// <b>What the fallback runs against.</b> The event's own scope, unforked — for an ability hit
+		/// that is the victim the server named, which is where the authored effect belongs. The
+		/// observer selects nothing, applies nothing and predicts nothing; it plays the picture it was
+		/// told about, once.
+		/// </para>
+		/// </remarks>
+		/// <param name="anySelected">True when the selector yielded at least one target.</param>
+		/// <param name="peerResolvesSelections">True when this peer may resolve selections for this event.</param>
+		/// <param name="actionIsPresentation">True when the action's whole effect is rendered.</param>
+		/// <returns>True when the action should run once against the unforked event.</returns>
+		public static bool PresentationFallbackApplies(bool anySelected, bool peerResolvesSelections, bool actionIsPresentation)
+		{
+			return SelectionWasDeclined(anySelected, peerResolvesSelections) && actionIsPresentation;
+		}
+
+		/// <summary>
+		/// True when an empty selection means "this peer was not allowed to look" rather than
+		/// "nobody was there".
+		/// </summary>
+		/// <remarks>
+		/// The two rows of <see cref="PresentationFallbackApplies"/> that do not depend on any one
+		/// action, split out because the list-level callers — <see cref="Trigger.Execute"/> and
+		/// <see cref="RunInline"/> — decide the third row per action inside
+		/// <see cref="ExecuteActions"/> and would otherwise have to assert it here on behalf of a
+		/// list they have not walked yet.
+		/// </remarks>
+		/// <param name="anySelected">True when the selector yielded at least one target.</param>
+		/// <param name="peerResolvesSelections">True when this peer may resolve selections for this event.</param>
+		/// <returns>True when the selection was declined for authority rather than genuinely empty.</returns>
+		public static bool SelectionWasDeclined(bool anySelected, bool peerResolvesSelections)
+		{
+			return !anySelected && !peerResolvesSelections;
+		}
+
+		/// <summary>
 		/// Executes an action list against the supplied event data, fanning out across
 		/// per-action <see cref="BaseAction.TargetSelector"/> when set. Actions implementing
 		/// <see cref="IAbortableAction"/> with <see cref="BaseAction.StopChainOnFailure"/> set
@@ -114,7 +175,12 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="actions">The actions to execute.</param>
 		/// <param name="eventData">The event data passed to each action.</param>
-		public static void ExecuteActions(List<BaseAction> actions, EventData eventData)
+		/// <param name="presentationOnly">
+		/// When true, only actions reporting <see cref="BaseAction.IsPresentation"/> run. Set by the
+		/// trigger-level fallback in <see cref="Trigger.Execute"/> for a peer that declined to select;
+		/// see <see cref="PresentationFallbackApplies"/>.
+		/// </param>
+		public static void ExecuteActions(List<BaseAction> actions, EventData eventData, bool presentationOnly = false)
 		{
 			if (actions == null || eventData == null)
 			{
@@ -129,6 +195,11 @@ namespace FishMMO.Shared.Core
 					continue;
 				}
 
+				if (presentationOnly && !action.IsPresentation)
+				{
+					continue;
+				}
+
 				if (action.TargetSelector == null)
 				{
 					if (!RunOne(action, eventData.Initiator, eventData))
@@ -138,17 +209,34 @@ namespace FishMMO.Shared.Core
 					continue;
 				}
 
+				bool any = false;
 				foreach (GameObject target in action.TargetSelector.SelectTargets(eventData))
 				{
 					if (target == null)
 					{
 						continue;
 					}
+					any = true;
 					EventData scoped = eventData.Fork(target);
 					if (!RunOne(action, scoped.Initiator, scoped))
 					{
 						return;
 					}
+				}
+
+				/* The per-action half of the selector fallback. The selector declined because this
+				 * peer may not resolve targets, so the picture still plays once against the event's
+				 * own scope — see PresentationFallbackApplies for why the other two rows stay false.
+				 *
+				 * The two cheap rows are tested first on purpose: the peer question walks the event's
+				 * payloads looking for an ability object, and this runs once per fanned-out action on
+				 * every hit. PresentationFallbackApplies is still the rule; this is the same three
+				 * rows, short-circuited. */
+				if (!any && action.IsPresentation &&
+					PresentationFallbackApplies(any, TargetSelector.ResolvesSelectionsLocally(eventData), action.IsPresentation) &&
+					!RunOne(action, eventData.Initiator, eventData))
+				{
+					return;
 				}
 			}
 		}
@@ -213,13 +301,22 @@ namespace FishMMO.Shared.Core
 				return;
 			}
 
+			bool any = false;
 			foreach (GameObject target in selector.SelectTargets(eventData))
 			{
 				if (target == null)
 				{
 					continue;
 				}
+				any = true;
 				RunBranch(conditions, onConditionsMetActions, onConditionsNotMetActions, eventData.Fork(target));
+			}
+
+			/* Same fallback the asset-based Trigger takes, for the same reason — inline triggers are
+			 * kept in lock-step with it deliberately. See PresentationFallbackApplies. */
+			if (SelectionWasDeclined(any, TargetSelector.ResolvesSelectionsLocally(eventData)))
+			{
+				RunBranch(conditions, onConditionsMetActions, onConditionsNotMetActions, eventData, presentationOnly: true);
 			}
 		}
 
@@ -230,15 +327,16 @@ namespace FishMMO.Shared.Core
 			List<BaseCondition> conditions,
 			List<BaseAction> onConditionsMetActions,
 			List<BaseAction> onConditionsNotMetActions,
-			EventData eventData)
+			EventData eventData,
+			bool presentationOnly = false)
 		{
 			if (AreConditionsMet(conditions, eventData))
 			{
-				ExecuteActions(onConditionsMetActions, eventData);
+				ExecuteActions(onConditionsMetActions, eventData, presentationOnly);
 			}
 			else
 			{
-				ExecuteActions(onConditionsNotMetActions, eventData);
+				ExecuteActions(onConditionsNotMetActions, eventData, presentationOnly);
 			}
 		}
 	}
@@ -359,6 +457,19 @@ namespace FishMMO.Shared.Core
 
 			if (!any)
 			{
+				/* A peer that is not allowed to SELECT still gets the authored presentation.
+				 *
+				 * Every shipped spatial-selector OnHit event sits here on a third-party observer:
+				 * the selector answers false to ResolvesSelectionsLocally and yields nothing, and
+				 * before this the whole action list — arcs, impacts, sounds — ran zero times, so an
+				 * observer saw damage numbers over three characters and nothing connecting them.
+				 * Presentation only, against the event's own scope: no selection, no damage, no
+				 * predicted number. See TriggerExecution.PresentationFallbackApplies. */
+				if (TriggerExecution.SelectionWasDeclined(false, TargetSelector.ResolvesSelectionsLocally(eventData)))
+				{
+					ExecuteForTarget(eventData, presentationOnly: true);
+				}
+
 				LogLifecycle($"Trigger '{name}' produced no targets for {eventData.Initiator?.Name}.");
 			}
 
@@ -410,7 +521,11 @@ namespace FishMMO.Shared.Core
 		/// Evaluates conditions and runs the matching action branch for a single (already-scoped) event.
 		/// </summary>
 		/// <param name="eventData">The event data scoped to one target.</param>
-		private void ExecuteForTarget(EventData eventData)
+		/// <param name="presentationOnly">
+		/// When true, only actions reporting <see cref="BaseAction.IsPresentation"/> run. Used by the
+		/// empty-selection fallback above for a peer that may not resolve targets.
+		/// </param>
+		private void ExecuteForTarget(EventData eventData, bool presentationOnly = false)
 		{
 			// Publish the per-fire condition filter on EventData so it propagates into
 			// nested CompositeCondition.Evaluate and selector-scoped AreConditionsMet
@@ -420,12 +535,12 @@ namespace FishMMO.Shared.Core
 			if (TriggerExecution.AreConditionsMet(Conditions, eventData))
 			{
 				LogLifecycle($"Trigger '{name}' conditions met for {eventData.Initiator?.Name}, target {eventData.Target?.name}.");
-				TriggerExecution.ExecuteActions(OnConditionsMetActions, eventData);
+				TriggerExecution.ExecuteActions(OnConditionsMetActions, eventData, presentationOnly);
 			}
 			else
 			{
 				LogLifecycle($"Trigger '{name}' conditions not met for {eventData.Initiator?.Name}, target {eventData.Target?.name}.");
-				TriggerExecution.ExecuteActions(OnConditionsNotMetActions, eventData);
+				TriggerExecution.ExecuteActions(OnConditionsNotMetActions, eventData, presentationOnly);
 			}
 		}
 

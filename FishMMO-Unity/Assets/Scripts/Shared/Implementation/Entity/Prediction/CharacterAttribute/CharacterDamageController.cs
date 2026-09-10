@@ -403,6 +403,17 @@ namespace FishMMO.Shared
 		/// health bar has its own delivery path either way.
 		/// </para>
 		/// <para>
+		/// <b>Two sends per entry, not one per observer.</b> The channel is the only thing that
+		/// differs between recipients, so the observers are partitioned into the source's owner and
+		/// everybody else and each half goes out through the set overload — which serialises the
+		/// message ONCE and hands the same buffer to every connection in the set. The per-connection
+		/// loop this replaced re-serialised the whole message for each observer, on what is the
+		/// hottest path in combat: an area hit on a creature watched by sixty players wrote sixty
+		/// copies of an identical payload. The two scratch sets are static and reused for the same
+		/// reason <c>ObserverBroadcastScope</c>'s is — FishNet's server work is single threaded and
+		/// they are fully consumed inside the call.
+		/// </para>
+		/// <para>
 		/// An attacker standing outside the target's observer set — sniping from beyond the
 		/// streaming range — is not covered here and would need its own send. That case does not
 		/// arise while ability range is inside observer range (and the streaming pass now floors
@@ -427,8 +438,7 @@ namespace FishMMO.Shared
 			combatEvents.Flush(combatEventFlushBuffer);
 
 			/* Copied before sending — the same discipline ObserverBroadcastScope documents. The
-			 * per-connection sends below must not iterate the live observer set while FishNet is
-			 * free to mutate it. */
+			 * sends below must not iterate the live observer set while FishNet is free to mutate it. */
 			combatEventObserverBuffer.Clear();
 			foreach (FishNet.Connection.NetworkConnection observer in nob.Observers)
 			{
@@ -459,6 +469,10 @@ namespace FishMMO.Shared
 					sourceOwner = sourceNob.Owner;
 				}
 
+				/* Partitioned by channel, then one set broadcast per channel. The reliable half holds
+				 * at most the source's own connection. */
+				combatEventReliableRecipients.Clear();
+				combatEventUnreliableRecipients.Clear();
 				for (int o = 0; o < combatEventObserverBuffer.Count; ++o)
 				{
 					FishNet.Connection.NetworkConnection conn = combatEventObserverBuffer[o];
@@ -466,19 +480,45 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
-					Channel channel = sourceOwner != null && conn == sourceOwner
-						? Channel.Reliable
-						: Channel.Unreliable;
-					nob.NetworkManager.ServerManager.Broadcast(conn, message, true, channel);
+					if (sourceOwner != null && conn == sourceOwner)
+					{
+						combatEventReliableRecipients.Add(conn);
+					}
+					else
+					{
+						combatEventUnreliableRecipients.Add(conn);
+					}
+				}
+
+				if (combatEventReliableRecipients.Count > 0)
+				{
+					nob.NetworkManager.ServerManager.Broadcast(combatEventReliableRecipients, message, true, Channel.Reliable);
+				}
+				if (combatEventUnreliableRecipients.Count > 0)
+				{
+					nob.NetworkManager.ServerManager.Broadcast(combatEventUnreliableRecipients, message, true, Channel.Unreliable);
 				}
 			}
 
+			combatEventReliableRecipients.Clear();
+			combatEventUnreliableRecipients.Clear();
 			combatEventObserverBuffer.Clear();
 			combatEventFlushBuffer.Clear();
 		}
 
 		/// <summary>Scratch copy of the observer set for <see cref="FlushCombatEvents"/>. Server work is single threaded.</summary>
 		private static readonly List<FishNet.Connection.NetworkConnection> combatEventObserverBuffer = new List<FishNet.Connection.NetworkConnection>();
+
+		/// <summary>Scratch recipient set for the reliable half of one combat entry: the source's owner.</summary>
+		/// <remarks>
+		/// A set rather than a single connection because that is what the serialise-once broadcast
+		/// overload takes. Reused rather than allocated per entry — this runs once per damaged
+		/// character per tick, which in an area fight is every creature in the pull.
+		/// </remarks>
+		private static readonly HashSet<FishNet.Connection.NetworkConnection> combatEventReliableRecipients = new HashSet<FishNet.Connection.NetworkConnection>();
+
+		/// <summary>Scratch recipient set for the unreliable half of one combat entry: every other observer.</summary>
+		private static readonly HashSet<FishNet.Connection.NetworkConnection> combatEventUnreliableRecipients = new HashSet<FishNet.Connection.NetworkConnection>();
 
 		/// <summary>
 		/// Registers the process-wide client handler for <see cref="CombatEventBroadcast"/>.
@@ -498,23 +538,51 @@ namespace FishMMO.Shared
 			networkManager.ClientManager.RegisterBroadcast<CombatEventBroadcast>(OnCombatEventBroadcast);
 		}
 
-		/// <summary>Turns a server combat report into the client-side event the UI listens to.</summary>
+		/// <summary>
+		/// Applies a server combat report: the victim's health first, then the client-side event the
+		/// UI listens to.
+		/// </summary>
 		/// <remarks>
 		/// A target that is not spawned here is dropped: the character left this client's view
-		/// between the hit and the message, so there is nowhere to draw the number. An unresolved
-		/// SOURCE is not a reason to drop — environmental damage has none, and an attacker outside
-		/// this client's view still produces a number over the victim it can see.
+		/// between the hit and the message, so there is nowhere to draw the number and nothing to
+		/// move. An unresolved SOURCE is not a reason to drop — environmental damage has none, and an
+		/// attacker outside this client's view still produces a number over the victim it can see.
+		/// <para>
+		/// The health application is deliberately ahead of the display's subscription test. A client
+		/// with combat numbers switched off still has to draw correct health bars.
+		/// </para>
 		/// </remarks>
 		private static void OnCombatEventBroadcast(CombatEventBroadcast msg, Channel channel)
 		{
-			if (OnCombatEventReceived == null)
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || !nm.ClientManager.Objects.Spawned.TryGetValue(msg.TargetObjectID, out FishNet.Object.NetworkObject targetNob) ||
+				targetNob == null)
 			{
 				return;
 			}
 
-			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
-			if (nm == null || !nm.ClientManager.Objects.Spawned.TryGetValue(msg.TargetObjectID, out FishNet.Object.NetworkObject targetNob) ||
-				targetNob == null)
+			CombatEventKind eventKind = (CombatEventKind)msg.Kind;
+
+			/* Ahead of the display, and ahead of the has-anyone-subscribed test below, because this
+			 * is state rather than presentation. The report carries the exact post-mitigation health
+			 * delta the server applied, so an observer can move the bar on the tick the report lands
+			 * instead of waiting up to a full push interval for the next absolute. The resource push
+			 * remains authoritative and overwrites this when it arrives — it carries an absolute, so
+			 * the two cannot compound. See CharacterAttributeController.ApplyObservedHealthDelta.
+			 *
+			 * The owner is skipped: its own reconcile is authoritative and arrives every tick, and a
+			 * second writer on the same value could only fight it. */
+			if (!targetNob.IsOwner)
+			{
+				CharacterAttributeController attributeController = targetNob.GetComponent<CharacterAttributeController>();
+				if (attributeController != null)
+				{
+					attributeController.ApplyObservedHealthDelta(msg.Amount,
+						eventKind == CombatEventKind.Heal || eventKind == CombatEventKind.PeriodicHeal);
+				}
+			}
+
+			if (OnCombatEventReceived == null)
 			{
 				return;
 			}
@@ -533,7 +601,7 @@ namespace FishMMO.Shared
 				source = sourceNob.GetComponent<ICharacter>();
 			}
 
-			CombatEventKind kind = (CombatEventKind)msg.Kind;
+			CombatEventKind kind = eventKind;
 			DamageAttributeTemplate damageAttribute =
 				(kind == CombatEventKind.Damage || kind == CombatEventKind.PeriodicDamage) && msg.DamageTemplateID != 0
 				? DamageAttributeTemplate.Get<DamageAttributeTemplate>(msg.DamageTemplateID)

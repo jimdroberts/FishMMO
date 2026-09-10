@@ -836,9 +836,18 @@ namespace FishMMO.UnitTests
 				LogAssert.IsTrue(clientFactions.Hostile.ContainsKey(hostile.ID),
 					"...grouped as its owner had them.");
 
+				/* A non-owner receives the SIGN of each standing, not the standing itself — the
+				 * payload is shaped per receiver, and the only thing any observer does with a peer's
+				 * factions is ask GetAllianceLevel which side they are on. A pet is spawned with no
+				 * owning connection, so every recipient reads the observer shape, including the
+				 * summoner. What must survive arrival is the alliance stance, and it does: the two
+				 * entries above are present and grouped exactly as the owner had them. */
+				LogAssert.AreEqual(-1, clientFactions.Factions[hostile.ID].Value,
+					"A hostile standing arrives as its sign, not as its magnitude.");
+
 				// And the guard the restore path bypasses is still in force for gameplay adjustments.
 				clientFactions.SetFaction(hostile.ID, FactionTemplate.Maximum);
-				LogAssert.AreEqual(FactionTemplate.Minimum, clientFactions.Factions[hostile.ID].Value,
+				LogAssert.AreEqual(-1, clientFactions.Factions[hostile.ID].Value,
 					"An NPC still refuses a gameplay faction adjustment.");
 			}
 			finally
@@ -1446,10 +1455,16 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(body.Contains("ContainsKey"),
 				"A repeated template roll must be skipped rather than thrown on — Dictionary.Add throws on a duplicate key, from inside a payload read.");
-			int roll = body.IndexOf("int rolledValue = random.Next", StringComparison.Ordinal);
+			/* Matched on the assignment rather than on the draw expression. The roll moved behind a
+			 * RollValue helper when the inclusive-maximum fix landed, which left this assertion
+			 * pinning a spelling instead of the ordering it cares about. */
+			int roll = body.IndexOf("int rolledValue =", StringComparison.Ordinal);
 			int guard = body.IndexOf("ContainsKey", StringComparison.Ordinal);
-			LogAssert.IsTrue(roll >= 0 && roll < guard,
+			LogAssert.IsTrue(roll >= 0, "The rolled value must still be assigned in this method.");
+			LogAssert.IsTrue(roll < guard,
 				"The value must still be drawn before the duplicate is skipped, or the RNG stream advances differently on peers that skip.");
+			LogAssert.IsTrue(body.Substring(roll, guard - roll).Contains("random"),
+				"And the draw must consume the shared stream, or skipping costs no RNG and the peers diverge anyway.");
 		}
 
 		// ── Permanent buffs and their FX across a respawn ──
@@ -1801,20 +1816,45 @@ namespace FishMMO.UnitTests
 		/// The relevance cap throttles independently of distance, so it has to honour the exemption
 		/// too — otherwise a character standing next to its attacker is throttled by the cap alone.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Rewritten 2026-09-09. This used to assert, at source level, that the engagement exemption
+		/// was checked BEFORE any cap interval was read — i.e. that it was a blanket override of every
+		/// cap interval. It was, and that was the defect: the engaged full-rate budget's own overflow
+		/// interval is a cap interval, so the exemption cancelled the budget that bounds it, and
+		/// <c>EngagedFullRateBudget_BoundsTheExemption</c> below was measuring constants that reached
+		/// no send.
+		/// </para>
+		/// <para>
+		/// What is pinned now is the genuine exemption — the RELEVANCE cap, which scores by combat,
+		/// party, guild and proximity and knows nothing about whether the observer can reach the
+		/// object — against the pure composition rule, plus the fact that the engaged overflow is not
+		/// covered by it. <c>ObserverInterestBoundaryTests</c> composes that with a real ranking pass.
+		/// </para>
+		/// </remarks>
 		[Test]
 		public void EngagementExemption_OverridesTheRelevanceCapToo()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
-				"Scripts/Shared/Implementation/Entity/Prediction/ObserverStreaming/ObserverStreamingEntry.cs"));
-			int start = source.IndexOf("public byte GetEffectiveInterval", StringComparison.Ordinal);
-			LogAssert.IsTrue(start >= 0, "GetEffectiveInterval must be locatable.");
-			string body = source.Substring(start, 900);
+			// A relevance cap heavy enough to matter, and a distance band throttling as well.
+			const byte capInterval = 3;
+			const byte lodInterval = 2;
 
-			int exemption = body.IndexOf("IsEngaged", StringComparison.Ordinal);
-			int capRead = body.IndexOf("GetInterval(connection)", StringComparison.Ordinal);
-			LogAssert.IsTrue(exemption >= 0, "The cap path must consult the engagement exemption.");
-			LogAssert.IsTrue(exemption < capRead,
-				"The exemption must be checked BEFORE the cap is composed, or the cap can still throttle an engaged target.");
+			LogAssert.AreEqual(capInterval, ObserverStreamingEntry.ResolveEffectiveInterval(
+					capInterval, ObserverStreamingEntry.IntervalOrigin.RelevanceCap, lodInterval, engaged: false),
+				"Sanity: with no exemption the larger of the two intervals applies.");
+
+			LogAssert.AreEqual(1, (int)ObserverStreamingEntry.ResolveEffectiveInterval(
+					capInterval, ObserverStreamingEntry.IntervalOrigin.RelevanceCap, lodInterval, engaged: true),
+				"An engaged observer must be exempt from the relevance cap, or a character standing next to " +
+				"its attacker is throttled to every 3rd tick and lag compensation rewinds to a pose that was " +
+				"never rendered.");
+
+			byte overflow = ObserverStreamingPolicy.EngagedOverflowInterval;
+			LogAssert.IsTrue(overflow > 1, "The engaged budget needs an overflow interval that throttles.");
+			LogAssert.AreEqual(overflow, ObserverStreamingEntry.ResolveEffectiveInterval(
+					overflow, ObserverStreamingEntry.IntervalOrigin.EngagedOverflow, 1, engaged: true),
+				"...but NOT from the engaged-overflow interval, which is the bound on the exemption itself. " +
+				"Exempting that made EngagedFullRateBudget inert.");
 		}
 
 		/// <summary>
@@ -1947,6 +1987,12 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>The engaged full-rate budget bounds what the lag-compensation exemption can cost.</summary>
+		/// <remarks>
+		/// Arithmetic on the constants only. That the scheduler's overflow interval actually reaches the
+		/// send path is pinned by
+		/// <c>ObserverInterestBoundaryTests.RankForViewers_ThrottlesEngagedCharactersBeyondTheBudget_AtTheSendPath</c>,
+		/// which is the half this test cannot see — and the half that was broken while this one passed.
+		/// </remarks>
 		[Test]
 		public void EngagedFullRateBudget_BoundsTheExemption()
 		{

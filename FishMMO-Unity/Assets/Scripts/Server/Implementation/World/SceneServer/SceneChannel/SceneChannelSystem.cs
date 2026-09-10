@@ -601,15 +601,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					addresses.Add(new ChannelAddress
 					{
-						/* Deliberately not sent.
+						/* The hosting scene server's port is deliberately absent from this message.
 						 *
 						 * A channel switch is never a direct dial: the client is released here and
 						 * comes back through the world server, which picks the destination from the
 						 * character row and issues its own WorldSceneConnectBroadcast. The port is
 						 * therefore of no use to a legitimate client — and putting it in the list
-						 * handed every connected player a map of which scene servers are hosting
-						 * which instances, for instances they are not being routed to. */
-						Port = 0,
+						 * would hand every connected player a map of which scene servers are hosting
+						 * which instances, for instances they are not being routed to. The lookup
+						 * above still runs, because failing it is what proves the hosting process
+						 * is alive; only the answer stays server-side. */
 						// The channel's identity is its scene row, not the hosting process's
 						// local handle for it — see ChannelAddress.SceneHandle.
 						SceneHandle = sceneData.ID,

@@ -107,13 +107,10 @@ namespace FishMMO.Shared
 		TryRefreshState();
 
 		// Re-apply race proportions now that skeleton is available
-		if (PlayerCharacter != null)
+		RaceTemplate race = PlayerCharacter?.RaceTemplate;
+		if (race != null)
 		{
-			RaceTemplate race = RaceTemplate.Get<RaceTemplate>(PlayerCharacter.RaceID);
-			if (race != null)
-			{
-				ApplyRaceProportions(race.DefaultProportions);
-			}
+			ApplyRaceProportions(race.DefaultProportions);
 		}
 #endif
 	}

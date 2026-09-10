@@ -281,8 +281,8 @@ namespace FishMMO.Client
 			public string Location = string.Empty;
 			/// <summary>The member's race identifier, resolved to a name for display.</summary>
 			public int RaceID;
-			/// <summary>UTC ticks of the member's last character save.</summary>
-			public long LastOnlineUtcTicks;
+			/// <summary>Unix seconds (UTC) of the member's last character save, or 0 when unknown.</summary>
+			public long LastOnlineUnixSeconds;
 			/// <summary>
 			/// Last resolved character name, or empty while the name lookup is still in flight.
 			/// </summary>
@@ -932,7 +932,8 @@ namespace FishMMO.Client
 		/// <param name="msg">The roster row as the server sent it.</param>
 		public void GuildController_OnAddMember(GuildAddBroadcast msg)
 		{
-			long characterID = msg.CharacterID;
+			GuildAddEntry member = msg.Member;
+			long characterID = member.CharacterID;
 
 			if (!roster.TryGetValue(characterID, out MemberModel model))
 			{
@@ -943,16 +944,16 @@ namespace FishMMO.Client
 				roster.Add(characterID, model);
 			}
 
-			model.RankOrder = msg.RankOrder;
-			model.Location = msg.Location ?? string.Empty;
-			model.RaceID = msg.RaceID;
-			model.Level = msg.Level;
-			model.PublicNote = msg.PublicNote ?? string.Empty;
+			model.RankOrder = member.RankOrder;
+			model.Location = member.Location ?? string.Empty;
+			model.RaceID = member.RaceID;
+			model.Level = member.Level;
+			model.PublicNote = member.PublicNote ?? string.Empty;
 			/* Stored exactly as received. An empty officer note means the SERVER did not send one
 			 * — either because there is none or because this client's rank may not read it — and
 			 * the panel cannot and should not tell those apart. */
-			model.OfficerNote = msg.OfficerNote ?? string.Empty;
-			model.LastOnlineUtcTicks = msg.LastOnlineUtcTicks;
+			model.OfficerNote = member.OfficerNote ?? string.Empty;
+			model.LastOnlineUnixSeconds = member.LastOnlineUnixSeconds;
 
 			/* The name lookup may complete on a later frame, and the tree may have been replaced
 			 * by then. The callback writes into the MODEL and re-reads the view afterwards, so a
@@ -1543,9 +1544,8 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Stores and renders the guild's activity log.
 		/// </summary>
-		/// <param name="guildID">The guild the log belongs to.</param>
 		/// <param name="entries">The entries, newest first.</param>
-		public void GuildController_OnReceiveGuildLog(long guildID, GuildLogEntry[] entries)
+		public void GuildController_OnReceiveGuildLog(GuildLogEntry[] entries)
 		{
 			logEntries = entries ?? Array.Empty<GuildLogEntry>();
 
@@ -1623,7 +1623,7 @@ namespace FishMMO.Client
 				text.AddToClassList(LOG_ENTRY_TEXT_CLASS);
 				row.Add(text);
 
-				Label time = new Label(DescribeLastSeen(entry.TimeUtcTicks));
+				Label time = new Label(DescribeLastSeen(entry.TimeUnixSeconds));
 				time.AddToClassList(LOG_ENTRY_TIME_CLASS);
 				row.Add(time);
 
@@ -2090,7 +2090,7 @@ namespace FishMMO.Client
 			row.Level.text = model.Level > 0 ? model.Level.ToString() : "—";
 			row.Rank.text = ResolveRankName(model.RankOrder);
 			row.Race.text = ResolveRaceName(model.RaceID);
-			row.Location.text = online ? model.Location : DescribeLastSeen(model.LastOnlineUtcTicks);
+			row.Location.text = online ? model.Location : DescribeLastSeen(model.LastOnlineUnixSeconds);
 
 			if (row.Dot != null)
 			{
@@ -2124,23 +2124,24 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Renders a last-seen tick count as a short relative string.
+		/// Renders a last-seen timestamp as a short relative string.
 		/// </summary>
-		/// <param name="ticks">UTC ticks of the member's last character save.</param>
+		/// <param name="unixSeconds">Unix seconds (UTC), or 0 or less when the time is unknown.</param>
 		/// <returns>A short relative description, or "Offline" when the time is unknown.</returns>
 		/// <remarks>
 		/// Coarse on purpose. "3d" answers the question a guild leader is asking — has this
 		/// person stopped playing — and a precise timestamp would take more of the column than the
-		/// extra precision is worth.
+		/// extra precision is worth. This is also why the wire carries SECONDS rather than ticks:
+		/// nothing below a whole minute reaches the screen.
 		/// </remarks>
-		private string DescribeLastSeen(long ticks)
+		private string DescribeLastSeen(long unixSeconds)
 		{
-			if (ticks <= 0)
+			if (unixSeconds <= 0)
 			{
 				return OFFLINE_LOCATION;
 			}
 
-			TimeSpan elapsed = DateTime.UtcNow - new DateTime(ticks, DateTimeKind.Utc);
+			TimeSpan elapsed = DateTime.UtcNow - DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime;
 
 			if (elapsed.TotalMinutes < 1.0)
 			{
@@ -2202,7 +2203,7 @@ namespace FishMMO.Client
 			}
 			if (hoverSeen != null)
 			{
-				hoverSeen.text = model.IsOnline ? "Online now" : $"Last seen: {DescribeLastSeen(model.LastOnlineUtcTicks)}";
+				hoverSeen.text = model.IsOnline ? "Online now" : $"Last seen: {DescribeLastSeen(model.LastOnlineUnixSeconds)}";
 			}
 			/* Both note lines collapse when empty rather than rendering a bare caption. For the
 			 * officer note, empty also covers "the server did not send it to this client", which

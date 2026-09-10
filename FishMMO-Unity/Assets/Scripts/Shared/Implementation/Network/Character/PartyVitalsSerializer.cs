@@ -55,8 +55,16 @@ namespace FishMMO.Shared
 	/// Hand written so the buff array is written only when <see cref="PartyMemberVitalsEntry.BuffsChanged"/>
 	/// is set — a generated writer would put a length prefix on the wire for every member every
 	/// time — and so the EditMode tests can round-trip the payload without the IL weaver.
-	/// <see cref="ObservedBuffEntry"/> is written field by field here for the same reason; its
-	/// layout is four fields and is not expected to change without this file changing with it.
+	/// <para>
+	/// Buff entries delegate to <see cref="ObservedBuffEntry.WriteTo"/> and
+	/// <see cref="ObservedBuffEntry.ReadFrom"/> rather than being written field by field. They
+	/// used to be copied out here, and the copy had already drifted: it spent fourteen bytes an
+	/// entry against that method's seven, because it packed a full-range template id, sent the
+	/// stack count as an int, sent the remaining time as a float rather than deciseconds, and put
+	/// <see cref="ObservedBuffEntry.TotalSeconds"/> on the wire — authored template data that
+	/// <see cref="ObservedBuffEntry.ReadFrom"/> resolves from <c>BaseBuffTemplate.Duration</c> on
+	/// the receiver. One buff entry has one wire format; this file no longer owns a second.
+	/// </para>
 	/// </remarks>
 	public static class PartyVitalsSerializer
 	{
@@ -94,11 +102,7 @@ namespace FishMMO.Shared
 			writer.WriteInt32(value.Buffs.Length);
 			for (int i = 0; i < value.Buffs.Length; ++i)
 			{
-				ObservedBuffEntry buff = value.Buffs[i];
-				writer.WriteInt32(buff.TemplateID);
-				writer.WriteInt32(buff.Stacks);
-				writer.WriteSingle(buff.RemainingSeconds);
-				writer.WriteSingle(buff.TotalSeconds);
+				value.Buffs[i].WriteTo(writer);
 			}
 		}
 
@@ -135,13 +139,7 @@ namespace FishMMO.Shared
 			ObservedBuffEntry[] buffs = new ObservedBuffEntry[count];
 			for (int i = 0; i < count; ++i)
 			{
-				buffs[i] = new ObservedBuffEntry()
-				{
-					TemplateID = reader.ReadInt32(),
-					Stacks = reader.ReadInt32(),
-					RemainingSeconds = reader.ReadSingle(),
-					TotalSeconds = reader.ReadSingle(),
-				};
+				buffs[i] = ObservedBuffEntry.ReadFrom(reader);
 			}
 			value.Buffs = buffs;
 			return value;

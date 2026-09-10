@@ -130,6 +130,14 @@ namespace FishMMO.UnitTests
 		/// played in one. The hook must hand that first packet to everyone and re-arm on every
 		/// unbuffered reliable send, including after a pooled respawn.
 		/// </summary>
+		/// <remarks>
+		/// This latch covers the reliable→unreliable TRANSITION and nothing else: it is per behaviour,
+		/// and an observer being ADDED re-arms nothing, so a character that has been moving
+		/// continuously has the latch down when a new observer's very first packet goes out — the same
+		/// N× lurch, on every spawn into observation. That half is answered by the send filters
+		/// themselves rather than by another vendored edit; see
+		/// <c>ObserverInterestBoundaryTests.Entry_NeverShapesAnObserversFirstSend_AndArmsAgainWhenThatObserverLeaves</c>.
+		/// </remarks>
 		[Test]
 		public void SendObserversRpc_NeverFiltersTheFirstUnreliableSendAfterAReliableOne()
 		{

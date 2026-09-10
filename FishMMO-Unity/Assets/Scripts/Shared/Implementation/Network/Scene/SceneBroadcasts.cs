@@ -295,11 +295,20 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public int RemainingSeconds;
 
-		/// <summary>Character ID of the leader of the party that owns the instance.</summary>
+		/// <summary>Character ID of the leader, or 0 when the leader could not be identified.</summary>
+		/// <remarks>
+		/// An ID, not a name. The client resolves it through <c>ClientNamingSystem</c>, which
+		/// answers from a disk-backed cache and asks the server only for an ID it has never seen —
+		/// so a leader the viewer has grouped with before costs nothing to name, and the name it
+		/// shows is the same one every other panel shows for that character.
+		/// <para>
+		/// This does not widen who can be named: the ID is found by a walk over the answering
+		/// scene server's own characters, so a leader running the party from another scene server
+		/// is still unidentifiable and still arrives here as 0. What changed is that the name is
+		/// no longer resolved twice, once per system, from two different sources.
+		/// </para>
+		/// </remarks>
 		public long LeaderCharacterID;
-
-		/// <summary>Name of that leader, for display.</summary>
-		public string LeaderName;
 
 		/// <summary>
 		/// Whether the character being answered is the leader, and so may remove others.

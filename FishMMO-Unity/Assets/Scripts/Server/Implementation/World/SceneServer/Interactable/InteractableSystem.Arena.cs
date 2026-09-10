@@ -1034,7 +1034,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					DateTime ended = line.Match.TimeEnded ?? line.Match.TimeCreated;
 					entries[i] = new ArenaHistoryEntry
 					{
-						MatchID = line.Match.ID,
 						ArenaTemplateID = line.Match.TemplateID,
 						Format = line.Match.Format,
 						Ranked = line.Match.Ranked,

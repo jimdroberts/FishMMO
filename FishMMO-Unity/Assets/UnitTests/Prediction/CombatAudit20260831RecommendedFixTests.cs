@@ -370,17 +370,37 @@ namespace FishMMO.UnitTests
 		/// the prediction system's only rejection signal and a lost packet greyed out a landed hit.
 		/// Observers stay unreliable; a lost cosmetic number is still not worth a resend.
 		/// </summary>
+		/// <remarks>
+		/// Rewritten when the per-connection send loop became a two-set partition. The invariant
+		/// this pins did not change — the source's owner gets reliable delivery and nobody else
+		/// does — but the shape carrying it did: the channel used to be a ternary evaluated once
+		/// per observer inside a loop that re-serialised the message for each of them, and is now
+		/// two set broadcasts that serialise once each. Pinning the ternary would pin the shape
+		/// rather than the rule, so the assertions below name the partition and the two sends.
+		/// </remarks>
 		[Test]
 		public void CombatReports_AreReliableToTheSourceOwner()
 		{
 			string damage = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs");
-			LogAssert.IsTrue(damage.Contains("Channel channel = sourceOwner != null && conn == sourceOwner"),
-				"The per-connection channel split must key on owning the entry's source.");
-			LogAssert.IsTrue(damage.Contains("? Channel.Reliable"),
+			LogAssert.IsTrue(damage.Contains("if (sourceOwner != null && conn == sourceOwner)"),
+				"The channel partition must key on owning the entry's source.");
+			LogAssert.IsTrue(damage.Contains("combatEventReliableRecipients, message, true, Channel.Reliable"),
 				"Reliable for the caster whose predictions this report settles.");
-			LogAssert.IsTrue(damage.Contains(": Channel.Unreliable"),
+			LogAssert.IsTrue(damage.Contains("combatEventUnreliableRecipients, message, true, Channel.Unreliable"),
 				"Unreliable for everyone else, as before.");
+
+			/* The source owner is resolved per entry, not per flush: one flush can carry entries
+			 * from different casters, and settling the wrong one is the bug this whole test exists
+			 * to keep closed. */
+			LogAssert.IsTrue(damage.Contains("sourceOwner = sourceNob.Owner;"),
+				"The owning connection must be resolved from the entry's own source object.");
+
+			/* The reliable half holds at most one connection, so a set broadcast there is not the
+			 * saving — the unreliable half is. Both must go through the set overload anyway, or the
+			 * per-observer re-serialisation this replaced creeps back in one branch at a time. */
+			LogAssert.IsFalse(damage.Contains("ServerManager.Broadcast(conn, message"),
+				"No per-connection send may remain on the hottest path in combat.");
 		}
 
 		/// <summary>

@@ -68,15 +68,21 @@ namespace FishMMO.Shared
 		/// How willing this pet is to start a fight on its own.
 		/// </summary>
 		/// <remarks>
-		/// Server-authoritative. Clients learn it from the spawn payload and from
-		/// <see cref="PetStanceBroadcast"/>; they never set it locally, so a modified client
-		/// cannot put its pet into a stance the server disagrees with.
+		/// Server-authoritative, and owner-scoped: the owning client learns it from
+		/// <c>PetAddBroadcast</c> and from <see cref="PetStanceBroadcast"/>, never from the spawn
+		/// payload, and never sets it locally — so a modified client cannot put its pet into a
+		/// stance the server disagrees with, and an onlooker is not told what orders somebody
+		/// else's pet is under.
 		/// </remarks>
 		public PetStance Stance { get; set; } = PetStance.Defensive;
 
 		/// <summary>
 		/// Whether the pet is heeling or holding position.
 		/// </summary>
+		/// <remarks>
+		/// Owner-scoped for the same reason as <see cref="Stance"/>; see
+		/// <see cref="WritePayload"/>.
+		/// </remarks>
 		public PetMovementOrder MovementOrder { get; set; } = PetMovementOrder.Follow;
 
 		/// <summary>
@@ -258,8 +264,11 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Reads the pet's payload from the network, including owner ID and current orders.
+		/// Reads the pet's payload from the network: the owner's character ID and nothing else.
 		/// </summary>
+		/// <remarks>
+		/// See <see cref="WritePayload"/> for why the orders are not here.
+		/// </remarks>
 		/// <param name="connection">The network connection.</param>
 		/// <param name="reader">The network reader.</param>
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
@@ -267,16 +276,30 @@ namespace FishMMO.Shared
 			base.ReadPayload(connection, reader);
 
 			long ownerID = reader.ReadInt64();
-			Stance = (PetStance)reader.ReadUInt8Unpacked();
-			MovementOrder = (PetMovementOrder)reader.ReadUInt8Unpacked();
 
 			// Notify listeners that the owner ID has been read for this pet.
 			OnReadID?.Invoke(ownerID, this);
 		}
 
 		/// <summary>
-		/// Writes the pet's payload to the network, including owner ID and current orders.
+		/// Writes the pet's payload to the network: the owner's character ID.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The owner ID genuinely belongs to every observer — <c>Client.OnPetReadId</c> resolves it
+		/// to a name for the possessive line on the pet's nameplate, which everyone sees.
+		/// </para>
+		/// <para>
+		/// <see cref="Stance"/> and <see cref="MovementOrder"/> are NOT written. They are the
+		/// owner's private command state and no non-owner path reads them; the owner receives both
+		/// — plus <see cref="AttackPriority"/>, which was never in the payload at all — in
+		/// <c>PetAddBroadcast</c>, which the pet system sends immediately after
+		/// <c>ServerManager.Spawn</c> on both spawn paths (a fresh summon and the database load a
+		/// relog goes through). That broadcast is also what assigns <c>PetController.Pet</c>, so it
+		/// is already load-bearing: without it the pet UI never binds, and with it the two bytes
+		/// here were only ever overwritten by the same values a moment later.
+		/// </para>
+		/// </remarks>
 		/// <param name="connection">The network connection.</param>
 		/// <param name="writer">The network writer.</param>
 		public override void WritePayload(NetworkConnection connection, Writer writer)
@@ -287,8 +310,6 @@ namespace FishMMO.Shared
 			// and payload write; writing 0 lets the client resolve "no owner" instead of throwing
 			// inside FishNet's serializer and dropping the whole spawn message.
 			writer.WriteInt64(PetOwner != null ? PetOwner.ID : 0);
-			writer.WriteUInt8Unpacked((byte)Stance);
-			writer.WriteUInt8Unpacked((byte)MovementOrder);
 		}
 
 		/// <summary>

@@ -1235,7 +1235,6 @@ namespace FishMMO.Client
 			Client.Broadcast(new MerchantPurchaseBroadcast()
 			{
 				InteractableID = lastMerchantID,
-				ID = currentTemplateID,
 				Index = selectedIndex,
 				Type = selectedTab,
 				Quantity = quantity,

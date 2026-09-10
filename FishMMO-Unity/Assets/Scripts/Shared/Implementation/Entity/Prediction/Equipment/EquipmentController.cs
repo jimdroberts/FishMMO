@@ -1113,9 +1113,9 @@ namespace FishMMO.Shared
 				{
 					id = reader.ReadInt64();
 				}
-				int templateID = reader.ReadInt32();
+				int templateID = reader.ReadInt32Unpacked();
 				int slot = reader.ReadUInt8Unpacked();
-				int seed = reader.ReadInt32();
+				int seed = reader.ReadInt32Unpacked();
 				if (ownerShape)
 				{
 					stackSize = reader.ReadUInt32();
@@ -1234,14 +1234,34 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			writer.WriteInt32(FilledSlots());
+			/* Counted with the SAME predicate the loop below writes with, not FilledSlots().
+			 *
+			 * FilledSlots() answers "is the slot occupied" (Items[i] != null), which was one
+			 * condition short of what actually gets written: an Item whose template id did not
+			 * resolve carries a null Template — Item's (long, int, int, uint) constructor leaves
+			 * it null when the cache misses — and dereferencing Template.ID below threw inside
+			 * WritePayload. A throw here is not contained: FishNet packs every NetworkBehaviour's
+			 * payload into one buffer, so it takes out the spawn message for every behaviour that
+			 * had already written and every one still to write. FactionController guards the same
+			 * hazard by keying off the dictionary key instead of faction.Template.ID. */
+			int writableSlots = 0;
+			for (int i = 0; i < Items.Count; ++i)
+			{
+				Item item = Items[i];
+				if (item != null && item.Template != null)
+				{
+					++writableSlots;
+				}
+			}
+
+			writer.WriteInt32(writableSlots);
 			/* The list position, not item.Slot — the same distrust the persistence snapshot
 			 * applies (CharacterInventorySystem.BuildContainerSnapshot). The two are meant to
 			 * agree; when they do not, the position is where the item actually is. */
 			for (int i = 0; i < Items.Count; ++i)
 			{
 				Item item = Items[i];
-				if (item == null)
+				if (item == null || item.Template == null)
 				{
 					continue;
 				}
@@ -1249,9 +1269,13 @@ namespace FishMMO.Shared
 				{
 					writer.WriteInt64(item.ID);
 				}
-				writer.WriteInt32(item.Template.ID);
+				/* Unpacked. Template ids are a deterministic 32-bit hash
+				 * (CachedScriptableObject.AddToCache), so they occupy the whole range and
+				 * FishNet's signed-packed form spends FIVE bytes on one. See ObservedBuffEntry. */
+				writer.WriteInt32Unpacked(item.Template.ID);
 				writer.WriteUInt8Unpacked((byte)i);
-				writer.WriteInt32(item.IsGenerated ? item.Generator.Seed : 0);
+				// Unpacked for the same reason: an item seed is full-entropy by construction.
+				writer.WriteInt32Unpacked(item.IsGenerated ? item.Generator.Seed : 0);
 				if (ownerShape)
 				{
 					writer.WriteUInt32(item.IsStackable ? item.Stackable.Amount : 0);

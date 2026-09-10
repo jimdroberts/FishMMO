@@ -314,22 +314,40 @@ namespace FishMMO.UnitTests
 		 * under EditMode those do not exist, so each message is written here field by field with
 		 * the same default writers codegen emits (packed ints/longs/uints, 4-byte floats, 12-byte
 		 * Vector3, 1-byte bool/byte, length-prefixed arrays), in declaration order. */
+		/* The resource broadcast now has a hand-written, mask-shaped wire format too, for the same
+		 * reason the activation one does. This modelled seven packed ints in declaration order, which
+		 * omitted the sequence and the mask and then wrote every field whether the mask named it or
+		 * not — so it priced a message the server no longer sends. Call the production writer. */
 		private static void WriteResources(Writer w, CharacterResourcesBroadcast m)
-		{ w.WriteInt32(m.CharacterObjectID); w.WriteInt32(m.Health); w.WriteInt32(m.MaxHealth); w.WriteInt32(m.Mana); w.WriteInt32(m.MaxMana); w.WriteInt32(m.Stamina); w.WriteInt32(m.MaxStamina); }
+		{ w.WriteCharacterResourcesBroadcast(m); }
 		/* The activation broadcast has a hand-written, mode-shaped wire format
 		 * (AbilityObserverBroadcastSerializers). This used to model it field by field and
 		 * serialised seven of eleven fields -- no header byte, no ServerTick, and never the spawn
 		 * pose -- so it under-reported the real message. Call the production writer instead. */
 		private static void WriteActivation(Writer w, AbilityActivatedBroadcast m)
 		{ w.WriteAbilityActivatedBroadcast(m); }
+		/* Same lesson as the activation broadcast above, and it had gone the other way. This used to
+		 * model the entry as a packed id plus two raw floats -- fourteen bytes -- where the shipped
+		 * format is ObservedBuffEntry.WriteTo: an unpacked id, a stack byte, and the remaining time
+		 * as deciseconds in a ushort, with TotalSeconds resolved from the template rather than sent.
+		 * Seven bytes. The model therefore OVER-reported this message by exactly 2x. Call the
+		 * production writer instead so it cannot drift again in either direction. */
 		private static void WriteBuffs(Writer w, CharacterBuffsBroadcast m)
-		{ w.WriteInt32(m.CharacterObjectID); w.WriteInt32(m.Buffs.Length); foreach (ObservedBuffEntry e in m.Buffs) { w.WriteInt32(e.TemplateID); w.WriteInt32(e.Stacks); w.WriteSingle(e.RemainingSeconds); w.WriteSingle(e.TotalSeconds); } }
+		{ w.WriteCharacterBuffsBroadcast(m); }
 
 		[Test]
 		public void Broadcasts_ServerToObservers()
 		{
-			int resources = Bytes(w => WriteResources(w, new CharacterResourcesBroadcast { CharacterObjectID = 40, Health = 812, MaxHealth = 1200, Mana = 240, MaxMana = 800, Stamina = 310, MaxStamina = 400 }));
-			int resourcesFloatForm = Bytes(w => { w.WriteInt32(40); w.WriteSingle(812f); w.WriteInt32(1200); w.WriteSingle(240f); w.WriteInt32(800); w.WriteSingle(310f); w.WriteInt32(400); });
+			/* Mask.All: the full send, which is what the float-form comparison below is about — it
+			 * asks whether whole units beat floats for the same six values, and a masked push
+			 * carrying one field would not answer that question. The common in-combat push is
+			 * smaller than this and is priced in ObserverChannelCostTests. */
+			int resources = Bytes(w => WriteResources(w, new CharacterResourcesBroadcast { Sequence = 7, CharacterObjectID = 40, Mask = CharacterResourcesMask.All, Health = 812, MaxHealth = 1200, Mana = 240, MaxMana = 800, Stamina = 310, MaxStamina = 400 }));
+			/* The same message with the three CURRENT values as floats, carrying the same sequence,
+			 * id and mask header so the comparison isolates the one variable it is about. Without
+			 * the header the float form would be measured three bytes light and the assertion below
+			 * would be crediting whole units with a saving that was really a missing header. */
+			int resourcesFloatForm = Bytes(w => { w.WriteUInt16(7); w.WriteInt32(40); w.WriteUInt8Unpacked((byte)CharacterResourcesMask.All); w.WriteSingle(812f); w.WriteInt32(1200); w.WriteSingle(240f); w.WriteInt32(800); w.WriteSingle(310f); w.WriteInt32(400); });
 			AbilityActivatedBroadcast activationMessage = new AbilityActivatedBroadcast
 			{
 				CasterObjectID = 40, AbilityID = 8_842_001_337L, Seed = -1_713_468_379,
@@ -424,7 +442,10 @@ namespace FishMMO.UnitTests
 				equipment.InitializeOnce(character);
 				int equipmentPayload = Bytes(w => equipment.WritePayload(null, w));
 				Record("spawn.equipmentEmpty", equipmentPayload);
-				Record("spawn.equipmentPerItem", 8 + 4 + 4 + 4 + 4); // id, template, slot, seed, stack — packed ints; upper bound
+				// id (packed long, upper bound), template (unpacked), slot (byte), seed (unpacked),
+				// stack (packed uint, upper bound). Template and seed are full-range values and so
+				// are written unpacked at exactly four; packing them cost five.
+				Record("spawn.equipmentPerItem", 8 + 4 + 1 + 4 + 4);
 			}
 			finally
 			{

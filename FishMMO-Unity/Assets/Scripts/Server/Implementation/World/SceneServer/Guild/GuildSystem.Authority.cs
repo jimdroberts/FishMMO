@@ -219,7 +219,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			GuildRankListBroadcast broadcast = new GuildRankListBroadcast()
 			{
-				GuildID = authority.GuildID,
 				Ranks = BuildRankEntries(authority.Ladder),
 				ViewerRankOrder = authority.RankOrder,
 				ViewerPermissions = (long)authority.Permissions,
@@ -419,11 +418,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// the column is simply not written into the message, so it is not in the packet to be
 		/// recovered by anybody inspecting the stream.
 		/// </remarks>
-		private static GuildAddBroadcast BuildRosterEntry(CharacterGuildData member, bool includeOfficerNote)
+		private static GuildAddEntry BuildRosterEntry(CharacterGuildData member, bool includeOfficerNote)
 		{
-			return new GuildAddBroadcast()
+			return new GuildAddEntry()
 			{
-				GuildID = member.GuildID,
 				CharacterID = member.CharacterID,
 				RankOrder = member.Rank,
 				Location = member.Location ?? string.Empty,
@@ -431,13 +429,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Level = member.Level,
 				PublicNote = member.PublicNote ?? string.Empty,
 				OfficerNote = includeOfficerNote ? (member.OfficerNote ?? string.Empty) : string.Empty,
-				LastOnlineUtcTicks = member.LastOnlineUtc.Ticks,
+				LastOnlineUnixSeconds = ToUnixSeconds(member.LastOnlineUtc),
 			};
+		}
+
+		/// <summary>
+		/// Projects a UTC timestamp onto the wire's last-seen unit.
+		/// </summary>
+		/// <param name="value">The timestamp, which may be <c>default</c> when never recorded.</param>
+		/// <returns>Unix seconds, or 0 when the timestamp is unset or predates the epoch.</returns>
+		/// <remarks>
+		/// Zero is the "unknown" sentinel the client's last-seen column tests for, so a default
+		/// <c>DateTime</c> — which is 1/1/0001 and a large NEGATIVE Unix second — has to collapse
+		/// to it rather than being sent as a date in antiquity.
+		/// </remarks>
+		internal static long ToUnixSeconds(DateTime value)
+		{
+			if (value <= DateTime.UnixEpoch)
+			{
+				return 0;
+			}
+
+			return new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)).ToUnixTimeSeconds();
 		}
 
 		/// <summary>
 		/// Projects a whole roster onto the wire for one class of recipient.
 		/// </summary>
+		/// <param name="guildID">The guild every row belongs to, carried once on the payload.</param>
 		/// <param name="members">The guild's membership rows.</param>
 		/// <param name="includeOfficerNotes">Whether the recipients may read officer notes.</param>
 		/// <returns>The roster broadcast.</returns>
@@ -446,9 +465,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// this message — with officer notes and without — so a guild of a hundred needs two
 		/// arrays, not a hundred.
 		/// </remarks>
-		private static GuildAddMultipleBroadcast BuildRoster(IReadOnlyList<CharacterGuildData> members, bool includeOfficerNotes)
+		private static GuildAddMultipleBroadcast BuildRoster(long guildID, IReadOnlyList<CharacterGuildData> members, bool includeOfficerNotes)
 		{
-			GuildAddBroadcast[] entries = new GuildAddBroadcast[members?.Count ?? 0];
+			GuildAddEntry[] entries = new GuildAddEntry[members?.Count ?? 0];
 			for (int i = 0; i < entries.Length; ++i)
 			{
 				entries[i] = BuildRosterEntry(members[i], includeOfficerNotes);
@@ -456,6 +475,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			return new GuildAddMultipleBroadcast()
 			{
+				GuildID = guildID,
 				Members = entries,
 			};
 		}

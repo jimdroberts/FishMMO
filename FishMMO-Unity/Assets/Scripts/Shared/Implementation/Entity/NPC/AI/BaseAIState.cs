@@ -195,10 +195,15 @@ namespace FishMMO.Shared
 		{
 			detectedEnemies.Clear();
 
+			/* HasNearbyPlayer, not Observers.Count. The observer set is a bandwidth budget — the
+			 * top thirty monsters per viewer — so a monster evicted from every viewer's budget had
+			 * no observers and stopped sweeping entirely, which meant it could not aggro the player
+			 * standing next to it. HasNearbyPlayer asks the registry how far the nearest player
+			 * actually is, and answers true while that question is unanswered. */
 			if (controller.Character == null ||
 				controller.AttackingState == null ||
 				!controller.Character.TryGet(out IFactionController ourFactionController) ||
-				controller.Observers.Count < 1)
+				!controller.HasNearbyPlayer)
 			{
 				return false;
 			}

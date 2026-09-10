@@ -80,7 +80,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * by the interaction the player just made with the waypoint object itself. */
 			if (!TryBeginIngressGuard(conn.ClientId, WaypointTravelOperation, waypointTravelDebounceMilliseconds, out long guardKey))
 			{
-				SendWaypointTravelRefused(character, msg.SceneName, msg.WaypointIndex, WaypointTravelRefusalReason.TooSoon);
+				SendWaypointTravelRefused(character, msg.WaypointIndex, WaypointTravelRefusalReason.TooSoon);
 				return;
 			}
 
@@ -94,7 +94,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					!string.Equals(msg.SceneName, currentScene, StringComparison.Ordinal))
 				{
 					Log.Debug("InteractableSystem", $"Waypoint travel refused for {character.ID}: requested scene '{msg.SceneName}' but character is in '{currentScene}'.");
-					SendWaypointTravelRefused(character, msg.SceneName, msg.WaypointIndex, WaypointTravelRefusalReason.NotInScene);
+					SendWaypointTravelRefused(character, msg.WaypointIndex, WaypointTravelRefusalReason.NotInScene);
 					return;
 				}
 
@@ -102,14 +102,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					!WaypointRegistry.TryGet(character.GameObject.scene.handle, msg.WaypointIndex, out IWaypoint waypoint))
 				{
 					Log.Debug("InteractableSystem", $"Waypoint travel refused for {character.ID}: no waypoint {msg.WaypointIndex} in scene '{currentScene}'.");
-					SendWaypointTravelRefused(character, msg.SceneName, msg.WaypointIndex, WaypointTravelRefusalReason.UnknownWaypoint);
+					SendWaypointTravelRefused(character, msg.WaypointIndex, WaypointTravelRefusalReason.UnknownWaypoint);
 					return;
 				}
 
 				// On success TryTravel raises OnWaypointTravelled, which tells the owner below.
 				if (!WaypointTravel.TryTravel(character, waypoint, WaypointTravelOptions.Default, out WaypointTravelRefusalReason reason))
 				{
-					SendWaypointTravelRefused(character, msg.SceneName, msg.WaypointIndex, reason);
+					SendWaypointTravelRefused(character, msg.WaypointIndex, reason);
 				}
 			}
 			finally
@@ -118,7 +118,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
-		private void SendWaypointTravelRefused(IPlayerCharacter character, string sceneName, int waypointIndex, WaypointTravelRefusalReason reason)
+		/// <summary>Tells the owner its travel request was declined, and why.</summary>
+		/// <remarks>
+		/// No scene name travels with the refusal: cross-scene travel is not expressible, so the
+		/// owner's controller substitutes the scene it is standing in. That includes the
+		/// <see cref="WaypointTravelRefusalReason.NotInScene"/> case, where the scene worth naming
+		/// is the one the character is actually in rather than the stale one its map asked about —
+		/// and the requested scene is still logged at each call site.
+		/// </remarks>
+		private void SendWaypointTravelRefused(IPlayerCharacter character, int waypointIndex, WaypointTravelRefusalReason reason)
 		{
 			if (character?.Owner == null)
 			{
@@ -127,7 +135,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			Server.NetworkWrapper.Broadcast(character.Owner, new WaypointTravelRefusedBroadcast()
 			{
-				SceneName = sceneName,
 				WaypointIndex = waypointIndex,
 				Reason = reason,
 			}, true, Channel.Reliable);
@@ -190,7 +197,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			Server.NetworkWrapper.Broadcast(player.Owner, new WaypointTravelledBroadcast()
 			{
-				SceneName = sceneName,
 				WaypointIndex = waypointIndex,
 			}, true, Channel.Reliable);
 		}

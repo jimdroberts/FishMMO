@@ -194,8 +194,15 @@ namespace FishMMO.UnitTests
 				Removed = System.Array.Empty<int>(),
 			});
 
-			LogAssert.AreEqual(delta.Length - 2, full.Length,
-				"A full set must omit the two-byte removal count that a delta always writes.");
+			/* The removal count's width is MEASURED, not assumed. It is written with FishNet's
+			 * packed form, so an empty list costs one byte rather than the fixed two the
+			 * hand-written WriteUInt16 used to spend — that hand-written width was actually a byte
+			 * WORSE than the generated array serializer it replaced, which packs its length too. */
+			Writer removalCountProbe = new Writer();
+			removalCountProbe.WriteInt32(0);
+
+			LogAssert.AreEqual(delta.Length - removalCountProbe.Length, full.Length,
+				"A full set must omit the removal count that a delta always writes.");
 
 			Reader reader = new Reader(full.GetArraySegment(), null);
 			CharacterBuffsBroadcast read = reader.ReadCharacterBuffsBroadcast();

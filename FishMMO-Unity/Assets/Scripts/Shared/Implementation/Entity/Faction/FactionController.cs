@@ -25,9 +25,32 @@ namespace FishMMO.Shared
 		private readonly HashSet<int> dirtyFactionTemplateIDs = new HashSet<int>();
 
 		/// <summary>
-		/// Last faction values sent to interested connections.
+		/// Last exact faction values the OWNER has been given, by template ID.
 		/// </summary>
+		/// <remarks>
+		/// Seeded by <see cref="WritePayload"/> with what the owner's spawn payload carried, so the
+		/// first tick after a spawn does not re-send a roster the owner is already holding. See
+		/// <see cref="FlushDirtyFactionUpdates"/>.
+		/// </remarks>
 		private readonly Dictionary<int, int> lastSentFactionValues = new Dictionary<int, int>();
+
+		/// <summary>
+		/// Last standing SIGN observers have been given, by template ID. See
+		/// <see cref="SendObserverFactionUpdates"/> for why observers get a sign and not a value.
+		/// </summary>
+		private readonly Dictionary<int, int> lastSentObserverSigns = new Dictionary<int, int>();
+
+		/// <summary>
+		/// Whether this controller currently holds a <c>TimeManager.OnTick</c> subscription.
+		/// </summary>
+		/// <remarks>
+		/// The subscription belongs to the dirty set, not to the lifetime: it is taken when
+		/// something is marked dirty and dropped as soon as the set drains. A settled character —
+		/// which is nearly every character, nearly all of the time — then costs no per-tick
+		/// delegate at all, where before every server-side character invoked an
+		/// immediately-returning flush thirty times a second.
+		/// </remarks>
+		private bool flushTickSubscribed;
 #endif
 
 		/// <summary>
@@ -242,18 +265,19 @@ namespace FishMMO.Shared
 
 #if UNITY_SERVER
 		/// <summary>
-		/// Subscribes to network tick updates used to batch and flush dirty faction state.
+		/// Marks the roster dirty so any genuine pre-spawn mutation is still flushed.
 		/// </summary>
+		/// <remarks>
+		/// No tick subscription is taken here. <see cref="MarkAllFactionsDirty"/> takes one if it
+		/// actually marks anything, and in the ordinary case it marks nothing that survives the
+		/// first flush: the values were written into the spawn payload moments later and
+		/// <see cref="WritePayload"/> records them as sent. See <see cref="flushTickSubscribed"/>.
+		/// </remarks>
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
 
 			MarkAllFactionsDirty();
-
-			if (base.TimeManager != null)
-			{
-				base.TimeManager.OnTick += TimeManager_OnTick;
-			}
 		}
 
 		/// <summary>
@@ -263,18 +287,64 @@ namespace FishMMO.Shared
 		{
 			base.OnStopNetwork();
 
-			if (base.TimeManager != null)
+			UnsubscribeFromFlushTick();
+		}
+
+		/// <summary>
+		/// Takes the flush tick subscription if it is not already held.
+		/// </summary>
+		private void SubscribeToFlushTick()
+		{
+			if (flushTickSubscribed)
+			{
+				return;
+			}
+
+			/* Through the null-safe NetworkObject accessor: base.TimeManager dereferences
+			 * _networkObjectCache, which is null on a controller that has never been spawned — a
+			 * pooled instance before its first spawn, or a test. */
+			if (base.NetworkObject == null || base.TimeManager == null)
+			{
+				return;
+			}
+
+			base.TimeManager.OnTick += TimeManager_OnTick;
+			flushTickSubscribed = true;
+		}
+
+		/// <summary>
+		/// Drops the flush tick subscription if it is held. Idempotent.
+		/// </summary>
+		private void UnsubscribeFromFlushTick()
+		{
+			if (!flushTickSubscribed)
+			{
+				return;
+			}
+
+			flushTickSubscribed = false;
+
+			if (base.NetworkObject != null && base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
 		}
 
 		/// <summary>
-		/// Called on network tick to flush dirty faction updates.
+		/// Called on network tick to flush dirty faction updates, then hands the subscription back
+		/// once there is nothing left to flush.
 		/// </summary>
 		private void TimeManager_OnTick()
 		{
 			FlushDirtyFactionUpdates();
+
+			/* Only when the set is genuinely empty. FlushDirtyFactionUpdates leaves it populated
+			 * when it bails out on not being spawned yet, and dropping the subscription there would
+			 * strand those entries until the next mutation. */
+			if (dirtyFactionTemplateIDs.Count == 0)
+			{
+				UnsubscribeFromFlushTick();
+			}
 		}
 
 		/// <summary>
@@ -297,6 +367,11 @@ namespace FishMMO.Shared
 					dirtyFactionTemplateIDs.Add(faction.Template.ID);
 				}
 			}
+
+			if (dirtyFactionTemplateIDs.Count > 0)
+			{
+				SubscribeToFlushTick();
+			}
 		}
 
 		/// <summary>
@@ -312,12 +387,20 @@ namespace FishMMO.Shared
 			if (templateID > 0)
 			{
 				dirtyFactionTemplateIDs.Add(templateID);
+				SubscribeToFlushTick();
 			}
 		}
 
 		/// <summary>
-		/// Flushes dirty faction updates to owner and observers.
+		/// Flushes dirty faction state to the owner and to observers, on the two different terms the
+		/// two audiences actually consume.
 		/// </summary>
+		/// <remarks>
+		/// The owner is sent the EXACT value whenever the exact value moved; observers are sent the
+		/// SIGN, and only when the sign crossed. The two therefore have their own baselines — a kill
+		/// that nudges a standing from 4000 to 4100 is an owner message and no observer message at
+		/// all. See <see cref="SendObserverFactionUpdates"/>.
+		/// </remarks>
 		private void FlushDirtyFactionUpdates()
 		{
 			if (!base.IsServerStarted || !base.IsSpawned || dirtyFactionTemplateIDs.Count == 0)
@@ -325,7 +408,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			List<FactionUpdateBroadcast> updates = new List<FactionUpdateBroadcast>(dirtyFactionTemplateIDs.Count);
+			List<FactionUpdateBroadcast> ownerUpdates = null;
+			List<FactionUpdateBroadcast> observerUpdates = null;
+
 			foreach (int templateID in dirtyFactionTemplateIDs)
 			{
 				if (!factions.TryGetValue(templateID, out Faction faction) || faction?.Template == null)
@@ -334,36 +419,40 @@ namespace FishMMO.Shared
 				}
 
 				int current = faction.Value;
-				if (lastSentFactionValues.TryGetValue(templateID, out int last) && last == current)
+
+				// The owner's channel: full precision, on any movement.
+				if (!lastSentFactionValues.TryGetValue(templateID, out int lastValue) || lastValue != current)
 				{
-					continue;
+					ownerUpdates ??= new List<FactionUpdateBroadcast>(dirtyFactionTemplateIDs.Count);
+					ownerUpdates.Add(new FactionUpdateBroadcast()
+					{
+						TemplateID = templateID,
+						NewValue = current,
+					});
+
+					lastSentFactionValues[templateID] = current;
 				}
 
-				updates.Add(new FactionUpdateBroadcast()
+				// The observers' channel: the sign, on a crossing.
+				int sign = StandingSign(current);
+				if (ObserverNeedsSignUpdate(lastSentObserverSigns.TryGetValue(templateID, out int lastSign), lastSign, current))
 				{
-					TemplateID = templateID,
-					NewValue = current,
-				});
+					observerUpdates ??= new List<FactionUpdateBroadcast>(dirtyFactionTemplateIDs.Count);
+					observerUpdates.Add(new FactionUpdateBroadcast()
+					{
+						TemplateID = templateID,
+						// A SIGN, not a standing. See SendObserverFactionUpdates.
+						NewValue = sign,
+					});
 
-				lastSentFactionValues[templateID] = current;
+					lastSentObserverSigns[templateID] = sign;
+				}
 			}
 
 			dirtyFactionTemplateIDs.Clear();
-			SendFactionUpdates(updates);
-		}
 
-		/// <summary>
-		/// Sends faction updates to owner and observers using separate payload types.
-		/// </summary>
-		private void SendFactionUpdates(List<FactionUpdateBroadcast> updates)
-		{
-			if (updates == null || updates.Count == 0)
-			{
-				return;
-			}
-
-			SendOwnerFactionUpdates(updates);
-			SendObserverFactionUpdates(updates);
+			SendOwnerFactionUpdates(ownerUpdates);
+			SendObserverFactionUpdates(observerUpdates);
 		}
 
 		/// <summary>
@@ -371,6 +460,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void SendOwnerFactionUpdates(List<FactionUpdateBroadcast> updates)
 		{
+			if (updates == null || updates.Count == 0)
+			{
+				return;
+			}
+
 			if (updates.Count == 1)
 			{
 				BroadcastToOwnerOnly(Character, updates[0], Channel.Reliable);
@@ -385,11 +479,37 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sends faction updates to observers with character routing context.
+		/// Sends observers the sign transitions of this character's standings.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>A sign, not a value.</b> <c>NewValue</c> on this channel carries -1, 0 or +1 — the
+		/// three-state standing and nothing more. That is the whole of what an observer consumes: the
+		/// only observer-side reader of a peer's factions is <see cref="GetAllianceLevel"/>, which
+		/// walks the VIEWER's own hostile set and asks whether the peer's standing with that faction
+		/// is greater than zero. <c>UITKFactions</c> renders only the local character's rows, and
+		/// refuses any other character's by identity.
+		/// </para>
+		/// <para>
+		/// <b>Why that matters.</b> Every mob kill credits standing (<c>CharacterDamageController</c>
+		/// → <c>AdjustFaction</c>), so the exact integer used to go out reliably to every observer on
+		/// every reputation tick to be reduced to a boolean on arrival — and it handed a
+		/// packet-inspecting client a peer's precise progression. Sending the sign means a message
+		/// goes out only when a standing actually crosses zero, which is when the relationship it
+		/// describes changes. Full precision stays on the owner-only
+		/// <c>FactionUpdate</c>/<c>FactionUpdateMultipleBroadcast</c>.
+		/// </para>
+		/// <para>
+		/// One serialisation for the whole set: the private per-connection loop this replaced wrote
+		/// the struct again for every recipient, where <c>ServerManager.Broadcast(HashSet, ...)</c>
+		/// writes it once and reuses the <c>ArraySegment</c>. <see cref="ObserverBroadcastScope"/>
+		/// also owns the defensive copy that makes FishNet's set-mutating <c>BroadcastExcept</c> safe
+		/// against <c>NetworkObject.Observers</c>.
+		/// </para>
+		/// </remarks>
 		private void SendObserverFactionUpdates(List<FactionUpdateBroadcast> updates)
 		{
-			if (Character == null)
+			if (Character == null || updates == null || updates.Count == 0)
 			{
 				return;
 			}
@@ -399,7 +519,7 @@ namespace FishMMO.Shared
 				CharacterID = Character.ID,
 				Factions = updates.ToArray(),
 			};
-			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, observerBroadcast, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -417,29 +537,6 @@ namespace FishMMO.Shared
 			if (owner != null && owner.IsActive)
 			{
 				owner.Broadcast(broadcast, true, channel);
-			}
-		}
-
-		/// <summary>
-		/// Broadcasts payload to observers only (excluding owner).
-		/// </summary>
-		private static void BroadcastToObserversOnly<T>(ICharacter character, T broadcast, Channel channel)
-			where T : struct, IBroadcast
-		{
-			if (character == null || character.Observers == null)
-			{
-				return;
-			}
-
-			NetworkConnection owner = character.Owner;
-			foreach (NetworkConnection observer in character.Observers)
-			{
-				if (observer == null || observer == owner || !observer.IsActive)
-				{
-					continue;
-				}
-
-				observer.Broadcast(broadcast, true, channel);
 			}
 		}
 #endif
@@ -538,7 +635,11 @@ namespace FishMMO.Shared
 
 			foreach (FactionUpdateBroadcast subMsg in msg.Factions)
 			{
-				factionController.SetFaction(subMsg.TemplateID, subMsg.NewValue, true);
+				/* NewValue on the OBSERVER channel is a SIGN, not a standing — see
+				 * SendObserverFactionUpdates. Passed through StandingSign rather than trusted: it is
+				 * idempotent on a well-formed message and normalises a malformed one, so this peer
+				 * can never end up holding a number that reads as somebody's real reputation. */
+				factionController.SetFaction(subMsg.TemplateID, StandingSign(subMsg.NewValue), true);
 			}
 		}
 #endif
@@ -558,8 +659,13 @@ namespace FishMMO.Shared
 			FactionsAreTemplateDerived = false;
 
 #if UNITY_SERVER
+			/* The subscription first: it is keyed off the dirty set, and clearing the set without
+			 * dropping it would leave a pooled instance ticking a flush that can never do anything. */
+			UnsubscribeFromFlushTick();
+
 			dirtyFactionTemplateIDs.Clear();
 			lastSentFactionValues.Clear();
+			lastSentObserverSigns.Clear();
 #endif
 		}
 
@@ -578,6 +684,96 @@ namespace FishMMO.Shared
 		/// faction roster; exists so a corrupt count cannot drive an unbounded read loop.
 		/// </summary>
 		private const int MAX_PAYLOAD_FACTIONS = 4096;
+
+		/// <summary>Non-derived roster shape: exact standings. Written for the owner only.</summary>
+		private const byte FACTION_PAYLOAD_SHAPE_VALUES = 0;
+
+		/// <summary>Non-derived roster shape: one sign byte per entry. Written for everyone else.</summary>
+		private const byte FACTION_PAYLOAD_SHAPE_SIGNS = 1;
+
+		/// <summary>
+		/// The three-state standing an observer acts on: +1 allied, 0 neutral, -1 hostile.
+		/// </summary>
+		/// <remarks>
+		/// The whole of what a non-owner consumes. <see cref="GetAllianceLevel"/> asks only whether a
+		/// peer's standing with one of the viewer's enemies is greater than zero, and the alliance
+		/// tables (<see cref="Allied"/>, <see cref="Neutral"/>, <see cref="Hostile"/>) are partitioned
+		/// on the same three cases — so a copy holding nothing but the sign answers every
+		/// observer-side question identically to one holding the real integer.
+		/// </remarks>
+		/// <param name="value">A standing.</param>
+		/// <returns>-1, 0 or +1.</returns>
+		public static int StandingSign(int value)
+		{
+			return value > 0 ? 1 : (value < 0 ? -1 : 0);
+		}
+
+		/// <summary>
+		/// Encodes a standing's sign as the single unsigned byte the observer payload carries:
+		/// 0 hostile, 1 neutral, 2 allied.
+		/// </summary>
+		/// <param name="value">A standing.</param>
+		public static byte EncodeStandingSign(int value)
+		{
+			return (byte)(StandingSign(value) + 1);
+		}
+
+		/// <summary>
+		/// Decodes an observer sign byte back to a stand-in standing of -1, 0 or +1.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Truth table: 0 → -1, 1 → 0, 2 → +1, anything else → 0.
+		/// </para>
+		/// <para>
+		/// An out-of-range byte reads as NEUTRAL deliberately. The permissive-looking answer is the
+		/// hostile one — <see cref="GetAllianceLevel"/> turns "allied with my enemy" into
+		/// <c>Enemy</c> — and an unknown relationship must not flash a red marker on a stranger, the
+		/// same rule <c>MapRelationshipTracker</c> documents for a character whose faction state has
+		/// not arrived.
+		/// </para>
+		/// <para>
+		/// The installed value is ±1 rather than ±<see cref="FactionTemplate.Maximum"/> on purpose: an
+		/// observer holds a SIGN, and a number that looks like a real standing would invite somebody
+		/// to read one out of it.
+		/// </para>
+		/// </remarks>
+		/// <param name="encoded">The byte from the wire.</param>
+		public static int DecodeStandingSign(byte encoded)
+		{
+			switch (encoded)
+			{
+				case 0: return -1;
+				case 2: return 1;
+				default: return 0;
+			}
+		}
+
+		/// <summary>
+		/// Whether observers have to be told about a standing that has moved to
+		/// <paramref name="currentValue"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Truth table:
+		/// <list type="bullet">
+		/// <item><description>never sent → true (observers hold nothing for this faction)</description></item>
+		/// <item><description>sent, sign unchanged → false (a reputation tick inside one band)</description></item>
+		/// <item><description>sent, sign crossed → true</description></item>
+		/// </list>
+		/// </para>
+		/// <para>
+		/// Pure so the rule can be tested without a NetworkManager. See
+		/// <see cref="SendObserverFactionUpdates"/> for why the sign is the whole message.
+		/// </para>
+		/// </remarks>
+		/// <param name="previouslySent">True when observers have already been given a sign for this faction.</param>
+		/// <param name="previousSign">The sign they were given; meaningless when <paramref name="previouslySent"/> is false.</param>
+		/// <param name="currentValue">The standing now.</param>
+		public static bool ObserverNeedsSignUpdate(bool previouslySent, int previousSign, int currentValue)
+		{
+			return !previouslySent || previousSign != StandingSign(currentValue);
+		}
 
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
@@ -605,10 +801,15 @@ namespace FishMMO.Shared
 			int factionBlockLength = (int)declaredLength;
 			int factionBlockEnd = reader.Position + factionBlockLength;
 
-			/* Race id (packed int, at least 1 byte), derived flag (1 byte) and count (at least 1
-			 * byte) are read unconditionally below; a frame shorter than that would have them read
-			 * from the next behaviour's bytes. Same guard as CharacterAttributeController. */
-			if (factionBlockLength < 3)
+			/* Race id (unpacked int, 4 bytes) and the derived flag (1 byte) are the only fields read
+			 * unconditionally; a frame shorter than that would read them from the next behaviour's
+			 * bytes. Same guard as CharacterAttributeController.
+			 *
+			 * Exactly five, not more: a DERIVED roster — every ordinary NPC in the world, which is
+			 * most of the objects that carry this block — writes nothing after the flag, so its whole
+			 * frame IS five bytes. The shape byte and the count are read only in the non-derived
+			 * branch and are bounded there against the end of the frame. */
+			if (factionBlockLength < 5)
 			{
 				Log.Error("FactionController",
 					$"ReadPayload: framed block of {factionBlockLength} bytes is too short to hold a faction payload. Skipping the block.");
@@ -623,7 +824,7 @@ namespace FishMMO.Shared
 			 * hostile at one spawn point and neutral at another. That override lives on the server
 			 * only, so a client that trusted its prefab judged those NPCs by the wrong race — the
 			 * one field of "default configuration" that genuinely has to travel. */
-			int payloadRaceTemplateID = reader.ReadInt32();
+			int payloadRaceTemplateID = reader.ReadInt32Unpacked();
 			if (payloadRaceTemplateID != 0 && payloadRaceTemplateID != raceTemplateID)
 			{
 				raceTemplateID = payloadRaceTemplateID;
@@ -641,6 +842,32 @@ namespace FishMMO.Shared
 			{
 				FactionsAreTemplateDerived = false;
 
+				/* Shape byte (1) and count (at least 1) come next. Bounded against the end of the
+				 * frame rather than assumed, for the same reason the prefix above is. */
+				if (reader.Position + 2 > factionBlockEnd)
+				{
+					Log.Error("FactionController",
+						$"ReadPayload: framed block of {factionBlockLength} bytes has no room for an owned roster's " +
+						"shape and count. Skipping the block.");
+					reader.Position = factionBlockEnd;
+					return;
+				}
+
+				/* The shape is on the wire so the reader never has to guess which one it is holding,
+				 * the way BuffController's payload does it. See WritePayload for the two shapes. */
+				byte rosterShape = reader.ReadUInt8Unpacked();
+				if (rosterShape != FACTION_PAYLOAD_SHAPE_VALUES &&
+					rosterShape != FACTION_PAYLOAD_SHAPE_SIGNS)
+				{
+					/* The entry width follows from the shape, so an unrecognised shape means the rest
+					 * of this block cannot be walked at all. Seek to the frame instead of guessing. */
+					Log.Error("FactionController",
+						$"ReadPayload: unrecognised roster shape {rosterShape}. Skipping the block.");
+					reader.Position = factionBlockEnd;
+					return;
+				}
+				bool exactValues = rosterShape == FACTION_PAYLOAD_SHAPE_VALUES;
+
 				int factionCount = reader.ReadInt32();
 				if (factionCount > MAX_PAYLOAD_FACTIONS || factionCount < 0)
 				{
@@ -652,8 +879,13 @@ namespace FishMMO.Shared
 
 				for (int i = 0; i < factionCount; ++i)
 				{
-					int factionID = reader.ReadInt32();
-					int value = reader.ReadInt32();
+					int factionID = reader.ReadInt32Unpacked();
+
+					/* The owner is handed its own standings; everyone else is handed the sign and
+					 * installs ±1. See WritePayload and DecodeStandingSign. */
+					int value = exactValues
+						? reader.ReadInt32()
+						: DecodeStandingSign(reader.ReadUInt8Unpacked());
 
 					/* The restore path, not SetFaction.
 					 *
@@ -667,7 +899,8 @@ namespace FishMMO.Shared
 					 * STATIC OnUpdateFaction once per faction per stranger walking past, and invoked
 					 * that character's onFactionChangeTriggers on the observer's machine. The owner's
 					 * own panel is unaffected: UITKFactions.OnPostSetCharacter rebuilds every row by
-					 * walking this dictionary after the payload has been read. */
+					 * walking this dictionary after the payload has been read — and the owner is the
+					 * receiver that was handed exact standings above, so those rows are real. */
 					ApplyFactionValue(factionID, value);
 				}
 			}
@@ -698,7 +931,11 @@ namespace FishMMO.Shared
 
 			// The race this character's standings are judged against, which a spawner may have
 			// overridden server-side. See ReadPayload.
-			writer.WriteInt32(raceTemplateID);
+			/* Unpacked. Template ids are a deterministic 32-bit hash
+			 * (CachedScriptableObject.AddToCache), so they span the whole range and the
+			 * signed-packed form spends FIVE bytes on one. Every NPC in the world carries this
+			 * block, so it is the most-multiplied single id in the game. See ObservedBuffEntry. */
+			writer.WriteInt32Unpacked(raceTemplateID);
 
 			/* Two shapes, chosen by where the roster came from rather than by what the reader is,
 			 * so the reader never has to guess. A derived roster (every ordinary NPC) is rebuilt
@@ -709,13 +946,61 @@ namespace FishMMO.Shared
 
 			if (!derivedRoster)
 			{
+				/* Shaped per RECEIVER, and the shape is written so the reader never has to guess —
+				 * the same arrangement BuffController's payload uses.
+				 *
+				 * The OWNER gets its exact standings: they are its own persisted progression and its
+				 * faction panel renders the numbers. EVERYONE ELSE gets one sign byte per entry,
+				 * because the sign is the entirety of what a non-owner consumes (see
+				 * SendObserverFactionUpdates) — and a peer's precise reputation is not a fact any
+				 * bystander is entitled to, which is the same leak the buff and equipment payload
+				 * splits were introduced to close.
+				 *
+				 * Safe to vary by connection: FishNet builds the spawn message per receiving
+				 * connection (ServerObjects.Observers calls WriteSpawn(nob, writer, conn) in the
+				 * per-connection rebuild), so no two receivers share this buffer. */
+				bool ownerShape = PayloadVisibility.IsOwner(this, conn);
+				writer.WriteUInt8Unpacked(ownerShape ? FACTION_PAYLOAD_SHAPE_VALUES : FACTION_PAYLOAD_SHAPE_SIGNS);
+
 				writer.WriteInt32(Factions.Count);
 				// Keyed by the dictionary key: an entry whose template failed to resolve would NRE
 				// on faction.Template.ID, and the key is the same value.
 				foreach (KeyValuePair<int, Faction> faction in Factions)
 				{
-					writer.WriteInt32(faction.Key);
-					writer.WriteInt32(faction.Value.Value);
+					// Unpacked for the same reason; the standing VALUE stays packed, it is small.
+					writer.WriteInt32Unpacked(faction.Key);
+
+					int standing = faction.Value.Value;
+					if (ownerShape)
+					{
+						writer.WriteInt32(standing);
+					}
+					else
+					{
+						writer.WriteUInt8Unpacked(EncodeStandingSign(standing));
+					}
+
+#if UNITY_SERVER
+					/* Record what this receiver now holds, per channel.
+					 *
+					 * Faction rows are installed on a character BEFORE ServerManager.Spawn (see
+					 * CharacterSystem.Loading), so the complete roster is already in this payload by
+					 * the time OnStartNetwork marks everything dirty. With no baseline the next tick
+					 * flushed the whole table again — a reliable FactionUpdateMultipleBroadcast to the
+					 * owner and a CharacterObserverFactionUpdateBroadcast to every observer, all of
+					 * them carrying values the receiver had just been handed and applying them as
+					 * no-op writes. Seeding here rather than deleting the MarkAllFactionsDirty call
+					 * keeps the baseline HONEST: a genuine pre-spawn mutation that this payload does
+					 * not carry would still be flushed. */
+					if (ownerShape)
+					{
+						lastSentFactionValues[faction.Key] = standing;
+					}
+					else
+					{
+						lastSentObserverSigns[faction.Key] = StandingSign(standing);
+					}
+#endif
 				}
 			}
 

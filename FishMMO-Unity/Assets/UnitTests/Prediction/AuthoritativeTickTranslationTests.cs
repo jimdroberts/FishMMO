@@ -847,7 +847,9 @@ namespace FishMMO.UnitTests
 				Writer writer = WriteFramedBuffPayload(serverReferenceTick, w =>
 				{
 					w.WriteInt32(1);
-					w.WriteInt32(template.ID);
+					// Unpacked, matching BuffController's owner shape: a template id is a
+					// full-range deterministic hash and is never written packed.
+					w.WriteInt32Unpacked(template.ID);
 					w.WriteUInt32(serverReferenceTick + durationTicks);
 					w.WriteUInt32(TimeManager.UNSET_TICK);
 					w.WriteInt32(0);

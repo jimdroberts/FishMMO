@@ -80,10 +80,9 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="conn">The character's connection.</param>
 		/// <param name="characterID">The character forming the party.</param>
 		/// <param name="worldServerID">World server the party will belong to.</param>
-		/// <param name="sceneName">Scene name, for the create broadcast's location field.</param>
 		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
 		/// <returns>The new party ID, or 0 when it could not be created.</returns>
-		Task<long> TryCreatePartyForInstanceAsync(TConnection conn, long characterID, long worldServerID, string sceneName, float healthPCT);
+		Task<long> TryCreatePartyForInstanceAsync(TConnection conn, long characterID, long worldServerID, float healthPCT);
 
 		/// <summary>
 		/// Drops a character out of a party it cannot belong to, with no connection involved.

@@ -183,7 +183,7 @@ namespace FishMMO.Shared
 				if (base.IsServerStarted && !state.ContainsReplayed())
 				{
 					AbilityEventData aed = new AbilityEventData(Character, currentAbilityID);
-					aed.Add(new TickEventData(Character, activationData.GetPredictionTick()));
+					aed.Add(new TickEventData(Character, activationData.GetPredictionTick(), state));
 					Character.Invoke(onAbilityActivateTriggers, aed);
 				}
 
@@ -802,6 +802,7 @@ namespace FishMMO.Shared
 			}
 
 			ICharacter hitCharacter = null;
+			bool victimResolved = true;
 			if (msg.VictimObjectID != 0)
 			{
 				if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.VictimObjectID, out NetworkObject victimNob) ||
@@ -818,24 +819,57 @@ namespace FishMMO.Shared
 					 * after this message) and is applied whether or not the victim resolved. The
 					 * skipped RNG draw still walks this copy's generator out of step, but nothing
 					 * peer-visible is derived from it any more — headings come from the wire, and
-					 * damage rolls are server-authoritative. */
-					return;
+					 * damage rolls are server-authoritative.
+					 *
+					 * The END is not lost with it either — see the tail of this method. */
+					victimResolved = false;
 				}
 			}
 
-			/* An impact a hitscan or area ACTION resolved takes the undeduped path.
-			 *
-			 * It has no hit-set entry and spends no hit count on any peer, so putting it through
-			 * the swept path would silence every pulse of a repeating area effect after the first —
-			 * see AbilityObjectHitBroadcast.DirectImpact, which also explains why these reach
-			 * observers only. */
-			if (msg.DirectImpact)
+			if (victimResolved)
 			{
-				abilityObject.ApplyObservedActionHit(hitCharacter, msg.Point, msg.Normal);
-				return;
+				/* A BLOCK is not an impact, and telling them apart is what this bit is for.
+				 *
+				 * The mitigation gate inside ApplyHit is deliberately skipped for an authoritative
+				 * echo — the peer that RESOLVED the hit already asked whether a shield stopped it —
+				 * so a blocked shot arriving as an ordinary impact fell straight through to the
+				 * OnHit chain and every observer ran the whole thing for a hit the server had
+				 * rejected. The dedupe entry is still recorded, so a later report of the same body
+				 * is absorbed; the shield impact rides the destroy chain the Ended bit triggers
+				 * below. */
+				if (msg.Blocked)
+				{
+					abilityObject.ApplyObservedBlock(hitCharacter);
+				}
+				/* An impact a hitscan or area ACTION resolved takes the undeduped path.
+				 *
+				 * It has no hit-set entry and spends no hit count on any peer, so putting it through
+				 * the swept path would silence every pulse of a repeating area effect after the first —
+				 * see AbilityObjectHitBroadcast.DirectImpact, which also explains why these reach
+				 * observers only. */
+				else if (msg.DirectImpact)
+				{
+					abilityObject.ApplyObservedActionHit(hitCharacter, msg.Point, msg.Normal);
+					return;
+				}
+				else
+				{
+					abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal);
+				}
 			}
 
-			abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal);
+			/* The server said this hit ENDED the object, so no destroy message is coming.
+			 *
+			 * Applied even when the victim could not be resolved: dropping the hit is right, but
+			 * dropping the END would leave this client flying a copy the server no longer has for
+			 * the rest of its lifetime — the exact ghost the destroy broadcast was added to
+			 * prevent, and the reason that message still exists for every end no hit precedes.
+			 * Idempotent, because the object may have ended here already (the owner predicted it,
+			 * or the local lifetime got there first). */
+			if (msg.Ended)
+			{
+				abilityObject.DestroyAbilityObjectInternal();
+			}
 		}
 
 		/// <summary>
@@ -1061,8 +1095,105 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// See ComputeObserverFastForwardTicks: zero for a fresh message, positive only for a late one.
-			spawned?.FastForward(fastForward);
+			/* See ComputeObserverFastForwardTicks: zero for a fresh message, positive only for a
+			 * late one. Applied to the whole container rather than the returned root — see
+			 * CatchUpSpawnedContainer. */
+			CatchUpSpawnedContainer(ability, spawned, consumeTicks: 0u, fastForwardTicks: fastForward);
+		}
+
+		/// <summary>
+		/// Charges a catch-up against every live member of a just-reproduced spawn, not only its root.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>AbilityObject.Spawn</c> returns the ROOT, and the OnSpawn chain that ran inside it may
+		/// have created siblings: <c>AbilitySpawnMultiplyAction</c> builds each child through
+		/// <c>AbilityObject.InitializeSpawnedChildObject</c>, which gives it zero elapsed ticks and
+		/// the source's UN-charged remaining lifetime. Charging the root alone therefore left every
+		/// pellet of a multi-shot ability sitting at the launch point with a full life while the root
+		/// was correctly placed — on the in-flight replay path the catch-up can be seconds, so the
+		/// children flew a transit delay behind the server's for the rest of their lives and then
+		/// outlived them, running their OnDestroy chain where nothing had happened. That is exactly
+		/// the failure <c>AbilityObject.PreRedirectElapsedTicks</c> was added to remove for the root,
+		/// and per-object hit broadcasts correct none of it: they name objects, not positions.
+		/// </para>
+		/// <para>
+		/// The container is COPIED before it is walked. Both operations can destroy a member whose
+		/// own remaining life is shorter than the catch-up — which is the right outcome, it no longer
+		/// exists on the server — and destruction removes that member from the very dictionary being
+		/// enumerated. A member's OnDestroy chain is authored content and may end others.
+		/// </para>
+		/// <para>
+		/// Lifetime is charged before the trajectory clock is advanced, and the destroyed check sits
+		/// between them, so a member that dies to the first never runs the second.
+		/// </para>
+		/// </remarks>
+		/// <param name="ability">The ability the spawn belongs to, or null.</param>
+		/// <param name="root">The object <c>Spawn</c> returned, or null when nothing spawned.</param>
+		/// <param name="consumeTicks">Lifetime ticks flown on legs this client is not reproducing.</param>
+		/// <param name="fastForwardTicks">Ticks the server has already simulated for this spawn.</param>
+		private static void CatchUpSpawnedContainer(Ability ability, AbilityObject root,
+			uint consumeTicks, uint fastForwardTicks)
+		{
+			if (root == null)
+			{
+				return;
+			}
+
+			Dictionary<int, AbilityObject> container = null;
+			ability?.Objects?.TryGetValue(root.ContainerID, out container);
+			CatchUpSpawnedMembers(container, root, consumeTicks, fastForwardTicks);
+		}
+
+		/// <summary>
+		/// The container walk itself, separated from the lookup so it can be asserted directly.
+		/// </summary>
+		/// <remarks>
+		/// See <see cref="CatchUpSpawnedContainer"/> for why the whole container is charged. Taking
+		/// the dictionary rather than the <c>Ability</c> is what lets a test build a root and a child
+		/// without a spawned network object behind them.
+		/// </remarks>
+		/// <param name="container">The spawn's container, or null when it cannot be resolved.</param>
+		/// <param name="root">The object <c>Spawn</c> returned; the fallback when the container is null.</param>
+		/// <param name="consumeTicks">Lifetime ticks flown on legs this client is not reproducing.</param>
+		/// <param name="fastForwardTicks">Ticks the server has already simulated for this spawn.</param>
+		internal static void CatchUpSpawnedMembers(Dictionary<int, AbilityObject> container, AbilityObject root,
+			uint consumeTicks, uint fastForwardTicks)
+		{
+			if (consumeTicks == 0u && fastForwardTicks == 0u)
+			{
+				return;
+			}
+
+			/* The overwhelmingly common shape: one root and no children. Walked directly, so an
+			 * ordinary cast pays neither a copy nor an allocation. */
+			if (container == null || container.Count <= 1)
+			{
+				CatchUpSpawnedObject(root, consumeTicks, fastForwardTicks);
+				return;
+			}
+
+			AbilityObject[] members = new AbilityObject[container.Count];
+			container.Values.CopyTo(members, 0);
+			for (int i = 0; i < members.Length; ++i)
+			{
+				CatchUpSpawnedObject(members[i], consumeTicks, fastForwardTicks);
+			}
+		}
+
+		/// <summary>Charges one member's share of a catch-up. See <see cref="CatchUpSpawnedContainer"/>.</summary>
+		private static void CatchUpSpawnedObject(AbilityObject abilityObject, uint consumeTicks, uint fastForwardTicks)
+		{
+			if (abilityObject == null || abilityObject.IsDestroyed)
+			{
+				return;
+			}
+
+			abilityObject.ConsumeLifetime(consumeTicks);
+			if (!abilityObject.IsDestroyed)
+			{
+				abilityObject.FastForward(fastForwardTicks);
+			}
 		}
 
 		/// <summary>
@@ -1087,6 +1218,10 @@ namespace FishMMO.Shared
 		/// per cast is nothing against a reorder that a player can see; the receiver's expiry
 		/// remains as a safety net for a disconnect mid-cast, not for loss.
 		/// </para>
+		/// <para>
+		/// <b>An instant cast pays for one message, not two.</b> See
+		/// <see cref="SuppressesRedundantCastStop"/>.
+		/// </para>
 		/// </remarks>
 		/// <param name="state">The replicate state, used to skip replayed ticks.</param>
 		/// <param name="started">True for the start of an activation, false for its end.</param>
@@ -1096,8 +1231,28 @@ namespace FishMMO.Shared
 		{
 			if (!base.IsServerStarted ||
 				state.ContainsReplayed() ||
-				base.NetworkObject == null ||
-				!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+				base.NetworkObject == null)
+			{
+				return;
+			}
+
+			uint tick = base.TimeManager != null ? base.TimeManager.Tick : 0u;
+
+			/* The tick the running activation began on, recorded whichever observer mode is active:
+			 * the spawn payload carries it so an observer that arrives mid-cast learns the cast it
+			 * missed (see WritePayload), and the suppression rule below reads it. Captured before it
+			 * is overwritten, because a stop is judged against the START's tick. */
+			uint startTick = castStartServerTick;
+			castStartServerTick = started ? tick : FishNet.Managing.Timing.TimeManager.UNSET_TICK;
+
+			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+			{
+				return;
+			}
+
+			if (!started &&
+				SuppressesRedundantCastStop(startTick, tick,
+					replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld)))
 			{
 				return;
 			}
@@ -1107,9 +1262,70 @@ namespace FishMMO.Shared
 				CasterObjectID = base.NetworkObject.ObjectId,
 				ReferenceID = referenceID,
 				IsConsumable = isConsumable,
-				ServerTick = base.TimeManager != null ? base.TimeManager.Tick : 0u,
+				ServerTick = tick,
 				Started = started,
 			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Whether the stop for an activation that began and ended on the same server tick may be
+		/// left unsent.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The case this exists for.</b> <see cref="TryStartAbility"/> computes
+		/// <c>remainingTicks = ceil(ActivationTime / TickDelta)</c>, which is ZERO for an ability
+		/// authored at <c>ActivationTime 0</c> — 17 of the 37 authored abilities, the default attack
+		/// among them, and every NPC casts through this same controller. The activation then
+		/// completes inside the replicate call that started it, so the start and the stop are
+		/// written back to back on one tick and every observer pays for both.
+		/// </para>
+		/// <para>
+		/// <b>Why the stop says nothing the receiver does not already have.</b> The duration is not
+		/// sent and never was: <c>ClientCastNameplateDisplay.ResolveDuration</c> reads it off the
+		/// template against the caster's own speed attribute, and for a zero-activation ability that
+		/// is zero on every peer. The row's whole life is
+		/// <c>ClientCastNameplateDisplay.MinimumDwellSeconds</c>, which the receiver applies to a
+		/// stop anyway — so all the stop changed was which of two timers dropped a row that was
+		/// going to be dropped either way. The receiver sizes a zero-duration row from the dwell
+		/// rather than the grace, which is the other half of this fix.
+		/// </para>
+		/// <para>
+		/// <b>Why a HELD activation always keeps its stop.</b> A charged or channelled ability runs
+		/// past its activation window for as long as the player holds it, bounded only by
+		/// <see cref="ComputeMaxHoldTicks"/>; the receiver's <c>HeldAllowance</c> can size an expiry
+		/// from that cap but cannot say when the player actually let go. Only the stop can. An
+		/// instant ability with a Charged event reaches this method on the same tick it started —
+		/// <see cref="ApplyChannelActivationFloor"/> raises a channel to one tick but a charge is
+		/// not floored — so the hold flag, not the tick equality, is what has to decide it.
+		/// </para>
+		/// <para>
+		/// Pure, so the table can be asserted without a NetworkManager, in the style of
+		/// <c>ServerCancelsDirectly</c> and <c>ResolveInterruptDisposition</c>:
+		/// </para>
+		/// <list type="table">
+		/// <item><description>unset start, any stop, not held → SEND (no start was announced to match)</description></item>
+		/// <item><description>start 100, stop 100, not held → SUPPRESS (the instant case)</description></item>
+		/// <item><description>start 100, stop 101, not held → SEND (a real cast ended)</description></item>
+		/// <item><description>start 100, stop 100, held → SEND (a charge released on its first tick)</description></item>
+		/// <item><description>start 100, stop 130, held → SEND</description></item>
+		/// </list>
+		/// </remarks>
+		/// <param name="startTick">The server tick the start was announced on, or <c>TimeManager.UNSET_TICK</c>.</param>
+		/// <param name="stopTick">The server tick the stop would be announced on.</param>
+		/// <param name="isHeld">Whether the activation carried the held flag.</param>
+		/// <returns>True when the stop may be omitted.</returns>
+		internal static bool SuppressesRedundantCastStop(uint startTick, uint stopTick, bool isHeld)
+		{
+			if (isHeld)
+			{
+				return false;
+			}
+			if (startTick == FishNet.Managing.Timing.TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
+			return startTick == stopTick;
 		}
 
 		/// <summary>
@@ -1154,7 +1370,7 @@ namespace FishMMO.Shared
 			if (!state.ContainsReplayed() && base.IsServerStarted)
 			{
 				AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
-				aed.Add(new TickEventData(Character, activationData.GetPredictionTick()));
+				aed.Add(new TickEventData(Character, activationData.GetPredictionTick(), state));
 				Character.Invoke(onAbilityCompleteTriggers, aed);
 			}
 

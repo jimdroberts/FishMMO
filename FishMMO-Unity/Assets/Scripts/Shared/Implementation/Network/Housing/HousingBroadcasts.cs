@@ -226,9 +226,6 @@ namespace FishMMO.Shared
 		/// <summary>How many are held.</summary>
 		public int Amount;
 
-		/// <summary>The plot it came off.</summary>
-		public long OriginalPlotID;
-
 		/// <summary>
 		/// What retrieving it costs right now.
 		/// </summary>

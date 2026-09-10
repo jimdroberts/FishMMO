@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using FishNet.Transporting;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -422,6 +423,49 @@ namespace FishMMO.Shared
 				return true;
 			}
 			return ((tick + (uint)(phase & 0xFFFF)) % interval) == 0u;
+		}
+
+		/// <summary>
+		/// The whole per-observer send decision, as a pure function of its inputs. Both send
+		/// filters — <c>ObserverStreamingEntry</c> and <c>NetworkTransformDistanceLod</c> — answer
+		/// <c>IObserverSendFilter.ShouldSend</c> with this, so there is one rule rather than two
+		/// copies of it that can drift.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Truth table, first matching row wins:
+		/// <list type="table">
+		/// <item><description>reliable channel → send. The settle after a stop, a teleport, and the
+		/// spawn baseline must reach every observer.</description></item>
+		/// <item><description>owner → send. A transform its owner would discard is excluded before
+		/// the filter runs; anything else the owner is entitled to.</description></item>
+		/// <item><description>first send since this connection became an observer → send. The
+		/// receiver's previous goal is the reliable spawn baseline, whose tick is 0, and
+		/// <c>NetworkTransform.GetTickDifference</c> reads a zero predecessor as exactly ONE tick of
+		/// motion — so a skipped first packet makes the next one carry N ticks of motion and play
+		/// them in one, an N× lurch on every spawn into observation, every range entry and every
+		/// budget re-admit. (FishNet's own latch, <c>_observersRpcSettled</c>, covers the
+		/// reliable→unreliable transition but is per behaviour and knows nothing about an observer
+		/// being ADDED.)</description></item>
+		/// <item><description>interval of 1 or 0 → send. Nothing is throttling this observer.</description></item>
+		/// <item><description>otherwise → every <paramref name="interval"/>th tick, phase-shifted by
+		/// <paramref name="clientId"/>.</description></item>
+		/// </list>
+		/// </para>
+		/// </remarks>
+		/// <param name="channel">Channel the send is going out on.</param>
+		/// <param name="isOwner">True when the recipient owns the object.</param>
+		/// <param name="firstSendToObserver">True when nothing has been sent to this connection since it became an observer.</param>
+		/// <param name="interval">Composed send interval for this observer; 1 is every tick.</param>
+		/// <param name="tick">Server tick the send is happening on.</param>
+		/// <param name="clientId">Recipient's client id, used as the modulo phase.</param>
+		public static bool ShouldSendToObserver(Channel channel, bool isOwner, bool firstSendToObserver, byte interval, uint tick, int clientId)
+		{
+			if (channel != Channel.Unreliable || isOwner || firstSendToObserver)
+			{
+				return true;
+			}
+			return ShouldSendThisTick(tick, interval, clientId);
 		}
 
 		/// <summary>

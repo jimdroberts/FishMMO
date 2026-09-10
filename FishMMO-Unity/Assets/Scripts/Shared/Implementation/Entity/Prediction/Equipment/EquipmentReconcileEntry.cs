@@ -73,13 +73,23 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Writes a single entry to a FishNet Writer.</summary>
+		/// <remarks>
+		/// <see cref="TemplateID"/> and <see cref="Seed"/> go UNPACKED, <see cref="ItemID"/> stays
+		/// packed. FishNet's packed forms are variable-length with a zig-zag sign bit, so they are a
+		/// saving only for small magnitudes. A template id is a deterministic 32-bit hash and a
+		/// generation seed is full entropy — both occupy the whole range, and fifteen of every sixteen
+		/// values spill into the FIFTH varint byte where unpacked costs exactly four. An
+		/// <c>character_item</c> row id is a database sequence starting at 1, which packs to one or
+		/// two bytes and would COST bytes unpacked. Same split as
+		/// <see cref="AttributeReconcileEntry"/>.
+		/// </remarks>
 		/// <param name="writer">The Writer to write to.</param>
 		/// <param name="entry">The entry to serialize.</param>
 		public static void WriteTo(Writer writer, EquipmentReconcileEntry entry)
 		{
-			writer.WriteInt32(entry.TemplateID);
+			writer.WriteInt32Unpacked(entry.TemplateID);
 			writer.WriteUInt8Unpacked(entry.Slot);
-			writer.WriteInt32(entry.Seed);
+			writer.WriteInt32Unpacked(entry.Seed);
 			writer.WriteInt64(entry.ItemID);
 		}
 
@@ -90,9 +100,9 @@ namespace FishMMO.Shared
 		{
 			return new EquipmentReconcileEntry
 			{
-				TemplateID = reader.ReadInt32(),
+				TemplateID = reader.ReadInt32Unpacked(),
 				Slot = reader.ReadUInt8Unpacked(),
-				Seed = reader.ReadInt32(),
+				Seed = reader.ReadInt32Unpacked(),
 				ItemID = reader.ReadInt64(),
 			};
 		}

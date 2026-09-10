@@ -304,19 +304,38 @@ namespace FishMMO.Shared
 			Unlock(msg.SceneName, msg.WaypointIndex);
 		}
 
+		/// <summary>
+		/// The scene the owner is standing in, which the three travel broadcasts no longer name.
+		/// </summary>
+		/// <remarks>
+		/// Travel, refusal and open-map are all about a waypoint in the character's own scene —
+		/// cross-scene travel is deliberately not expressible — so the scene name was the same
+		/// string on every one of them, sent to a client that already knows where it is.
+		/// <c>CurrentSceneName</c> is instance-aware, which is what the map keys its pages by.
+		/// <para>
+		/// <see cref="WaypointUnlockedBroadcast"/> is the exception and still carries its own:
+		/// <c>GrantWaypointAction</c> can reveal a waypoint in a scene the character has never
+		/// been to.
+		/// </para>
+		/// </remarks>
+		private string OwnerSceneName()
+		{
+			return Character is IPlayerCharacter player ? player.CurrentSceneName() : null;
+		}
+
 		private void OnClientWaypointTravelledBroadcastReceived(WaypointTravelledBroadcast msg, Channel channel)
 		{
-			IWaypointController.OnWaypointTravelled?.Invoke(Character, msg.SceneName, msg.WaypointIndex);
+			IWaypointController.OnWaypointTravelled?.Invoke(Character, OwnerSceneName(), msg.WaypointIndex);
 		}
 
 		private void OnClientWaypointTravelRefusedBroadcastReceived(WaypointTravelRefusedBroadcast msg, Channel channel)
 		{
-			IWaypointController.OnWaypointTravelRefused?.Invoke(Character, msg.SceneName, msg.WaypointIndex, msg.Reason);
+			IWaypointController.OnWaypointTravelRefused?.Invoke(Character, OwnerSceneName(), msg.WaypointIndex, msg.Reason);
 		}
 
 		private void OnClientWaypointOpenMapBroadcastReceived(WaypointOpenMapBroadcast msg, Channel channel)
 		{
-			IWaypointController.OnWaypointMapRequested?.Invoke(Character, msg.SceneName, msg.WaypointIndex);
+			IWaypointController.OnWaypointMapRequested?.Invoke(Character, OwnerSceneName(), msg.WaypointIndex);
 		}
 #endif
 	}

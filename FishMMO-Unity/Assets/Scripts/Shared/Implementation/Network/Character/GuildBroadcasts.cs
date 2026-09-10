@@ -55,13 +55,17 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Broadcast for adding a member to a guild.
-	/// Contains guild ID, character ID, rank, and location.
+	/// One guild roster row on the wire: everything about a member EXCEPT which guild they are in.
 	/// </summary>
-	public struct GuildAddBroadcast : IBroadcast
+	/// <remarks>
+	/// The guild identity lives on the message, not on the row. A roster payload describes exactly
+	/// one guild, so repeating its id against every member spent eight or nine bytes per row to
+	/// restate a value the reader already had. Carrying it once on
+	/// <see cref="GuildAddMultipleBroadcast"/> — and once on the single-member
+	/// <see cref="GuildAddBroadcast"/> — says the same thing without paying per member.
+	/// </remarks>
+	public struct GuildAddEntry
 	{
-		/// <summary>ID of the guild the member is being added to.</summary>
-		public long GuildID;
 		/// <summary>Character ID of the member being added.</summary>
 		public long CharacterID;
 		/// <summary>
@@ -94,14 +98,30 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public string OfficerNote;
 		/// <summary>
-		/// UTC ticks of the member's last character save, used as a last-seen figure for members
-		/// who are not connected.
+		/// Unix time in SECONDS (UTC) of the member's last character save, used as a last-seen
+		/// figure for members who are not connected. Zero or less means unknown.
 		/// </summary>
 		/// <remarks>
-		/// Sent as ticks rather than a <c>DateTime</c> so the wire format is a plain 64-bit
-		/// integer with no dependence on how the serializer treats <c>DateTimeKind</c>.
+		/// Seconds, not ticks. The only consumer is the roster's last-seen column, which renders
+		/// "Just now / 12m ago / 3h ago / 5d ago" — whole minutes at its finest — so sub-second
+		/// precision is deliberately not carried. A tick count is around 6.4e17 and costs nine
+		/// bytes as a packed varint; a Unix second is around 1.8e9 and costs five, per member, on
+		/// every roster refresh. Use <c>DateTimeOffset.ToUnixTimeSeconds</c> and
+		/// <c>DateTimeOffset.FromUnixTimeSeconds</c> to convert; the value stays a plain 64-bit
+		/// integer so the serializer has nothing to infer about <c>DateTimeKind</c>.
 		/// </remarks>
-		public long LastOnlineUtcTicks;
+		public long LastOnlineUnixSeconds;
+	}
+
+	/// <summary>
+	/// Broadcast for adding a single member to a guild.
+	/// </summary>
+	public struct GuildAddBroadcast : IBroadcast
+	{
+		/// <summary>ID of the guild the member is being added to.</summary>
+		public long GuildID;
+		/// <summary>The member's roster row.</summary>
+		public GuildAddEntry Member;
 	}
 
 	/// <summary>
@@ -110,8 +130,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct GuildAddMultipleBroadcast : IBroadcast
 	{
+		/// <summary>ID of the guild every row below belongs to.</summary>
+		public long GuildID;
 		/// <summary>List of members to add to the guild.</summary>
-		public GuildAddBroadcast[] Members;
+		public GuildAddEntry[] Members;
 	}
 
 	/// <summary>
@@ -417,8 +439,17 @@ namespace FishMMO.Shared
 		public long TargetCharacterID;
 		/// <summary>Optional short detail, such as a rank name. May be empty.</summary>
 		public string Detail;
-		/// <summary>UTC ticks of the event.</summary>
-		public long TimeUtcTicks;
+		/// <summary>
+		/// Unix time in SECONDS (UTC) of the event. Zero or less means unknown.
+		/// </summary>
+		/// <remarks>
+		/// Seconds, not ticks. The log column renders a relative age in whole minutes at its
+		/// finest ("14m ago", "3h ago"), so sub-second precision is deliberately not carried: a
+		/// tick count packs to nine bytes and a Unix second to five, per row, on a payload that is
+		/// a whole page of rows. Use <c>DateTimeOffset.ToUnixTimeSeconds</c> and
+		/// <c>DateTimeOffset.FromUnixTimeSeconds</c> to convert.
+		/// </remarks>
+		public long TimeUnixSeconds;
 	}
 
 	/// <summary>
@@ -438,8 +469,6 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct GuildLogBroadcast : IBroadcast
 	{
-		/// <summary>The guild the log belongs to.</summary>
-		public long GuildID;
 		/// <summary>The most recent entries, newest first.</summary>
 		public GuildLogEntry[] Entries;
 	}

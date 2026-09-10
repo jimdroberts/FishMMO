@@ -1,3 +1,4 @@
+using FishNet.Object.Prediction;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -35,9 +36,22 @@ namespace FishMMO.Shared
 		/// a self-heal.
 		/// </para>
 		/// <para>
-		/// Set it only where a dispatch genuinely re-runs during a reconcile. Every current
-		/// dispatch site gates replays before it builds this payload, so nothing sets it today —
-		/// it exists so that a site which does not can say so.
+		/// Set it only where a dispatch genuinely re-runs during a reconcile. Every current dispatch
+		/// site gates replays before it builds this payload — <c>ResolveTargetAndSpawn</c> returns
+		/// before it spawns, <c>BuffController</c> tests its own <c>isReplayingTick</c>, the
+		/// activation triggers test <c>state.ContainsReplayed()</c>, and the hit, tick and destroy
+		/// dispatches run off <c>TimeManager.OnTick</c>, which is not replayed — so nothing sets it
+		/// today. That is the right place for the gate, not a gap to be plugged here: skipping the
+		/// whole dispatch also skips the RNG draws and the selector fan-out inside it, which a flag
+		/// read by four actions cannot.
+		/// </para>
+		/// <para>
+		/// <b>How a site that CANNOT gate says so.</b> By handing over the <see cref="ReplicateState"/>
+		/// it is running under, not a hand-written bool. The bool overload exists for the sites that
+		/// have no replicate state to offer and can therefore prove they are not replays; a
+		/// prediction dispatch that has one has no excuse to answer the question from memory, and
+		/// the state overload is what makes the answer follow the dispatch instead of being
+		/// remembered. <c>BaseAction.IsReplayTick</c> is the consumer.
 		/// </para>
 		/// </remarks>
 		public bool IsReplay { get; }
@@ -53,6 +67,24 @@ namespace FishMMO.Shared
 			Tick = tick;
 			IsReplicateTick = true;
 			IsReplay = isReplay;
+		}
+
+		/// <summary>
+		/// Creates tick event data from a replicate input tick, taking its replay answer from the
+		/// <see cref="ReplicateState"/> the dispatch is running under.
+		/// </summary>
+		/// <remarks>
+		/// The preferred form for any dispatch reached from a replicate. <see cref="IsReplay"/> is
+		/// then a fact about the execution rather than a claim the caller had to remember to make,
+		/// which is the whole difference between a guard that protects something and one that reads
+		/// as though it does. See <see cref="IsReplay"/>.
+		/// </remarks>
+		/// <param name="character">The event initiator.</param>
+		/// <param name="tick">The replicate-domain tick.</param>
+		/// <param name="state">The replicate state this dispatch is executing under.</param>
+		public TickEventData(ICharacter character, PredictionTick tick, ReplicateState state)
+			: this(character, tick, state.ContainsReplayed())
+		{
 		}
 
 		/// <summary>

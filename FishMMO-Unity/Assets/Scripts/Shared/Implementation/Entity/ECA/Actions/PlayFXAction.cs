@@ -18,14 +18,147 @@ namespace FishMMO.Shared
 		public GameObject FXPrefab;
 
 		/// <summary>
+		/// Purely presentational: particles and nothing else.
+		/// </summary>
+		/// <remarks>
+		/// This is the one action in the project whose whole effect is a rendered object, so it is
+		/// the one action that may still run on a peer whose selector declined to resolve — see
+		/// <see cref="BaseAction.IsPresentation"/>.
+		/// </remarks>
+		public override bool IsPresentation => true;
+
+		/// <summary>
+		/// Which of the event's several position sources an FX instance should be placed at.
+		/// </summary>
+		/// <remarks>
+		/// Named rather than resolved inline so the precedence can be asserted as a truth table
+		/// without a scene, a NetworkManager or a spawned ability object. Every branch below was a
+		/// real authored wiring that placed an effect somewhere wrong (or nowhere at all).
+		/// </remarks>
+		internal enum FXOrigin
+		{
+			/// <summary>Nothing the event carries knows where to put it. Play nothing.</summary>
+			None = 0,
+			/// <summary>The resolved impact point of a swept or traced hit.</summary>
+			CollisionPoint = 1,
+			/// <summary>Whatever the event is scoped to — the victim of an area hit, the dying object, a fan-out candidate.</summary>
+			EventTarget = 2,
+			/// <summary>The ability object itself: a spawn, a lingering tick, a detonation with no target.</summary>
+			AbilityObject = 3,
+			/// <summary>The caster. Last resort for an event with no spatial content at all.</summary>
+			Initiator = 4,
+		}
+
+		/// <summary>
+		/// The placement rule, as a pure function of what the event was able to offer.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The impact point wins.</b> It is the only source that knows where on a body the hit
+		/// landed; everything else is an origin. A fan-out of this action over a selector therefore
+		/// places every instance at the one impact point the parent hit resolved, which is the
+		/// behaviour it has always had.
+		/// </para>
+		/// <para>
+		/// <b>The event target beats the ability object</b>, so a designer who fans this out over an
+		/// area selector on an OnDestroy trigger gets one effect per victim rather than four copies
+		/// stacked on the corpse of the projectile. The two agree for an unforked destroy event,
+		/// whose payload sets <see cref="EventData.Target"/> to the dying object on purpose.
+		/// </para>
+		/// <para>
+		/// <b>The ability object is what closes the original defect.</b> This action used to require
+		/// a <see cref="CollisionEventData"/> and give up otherwise, and <c>AbilityCollisionEventData</c>
+		/// is the only ability payload that is one — so a <c>PlayFXAction</c> on an OnDestroy, OnSpawn
+		/// or OnTick trigger resolved nothing, instantiated nothing and logged a warning, on every
+		/// peer, every time. Three shipped abilities (Lesser Fireball, Orc Firebolt, Scroll of Flame
+		/// Impact) had a dead impact effect because of it, and the warning was the hottest log line
+		/// in combat. Resolving through <see cref="AbilityObject.TryResolveFrom"/> is what every
+		/// other object-scoped action already does.
+		/// </para>
+		/// <para>
+		/// <b>There is no world-origin fallback.</b> It used to end at <see cref="Vector3.zero"/>,
+		/// which is not a place an authored effect ever belongs; an event that can name no position
+		/// plays nothing and says so at Debug.
+		/// </para>
+		/// </remarks>
+		/// <param name="hasCollisionPoint">True when a <see cref="CollisionEventData"/> carries a resolved impact point.</param>
+		/// <param name="hasEventTarget">True when the event is scoped to a GameObject.</param>
+		/// <param name="hasAbilityObject">True when an ability object is reachable from the event.</param>
+		/// <param name="hasInitiator">True when the initiator has a transform.</param>
+		/// <returns>The source to read the spawn position from.</returns>
+		internal static FXOrigin ChooseOrigin(bool hasCollisionPoint, bool hasEventTarget, bool hasAbilityObject, bool hasInitiator)
+		{
+			if (hasCollisionPoint)
+			{
+				return FXOrigin.CollisionPoint;
+			}
+			if (hasEventTarget)
+			{
+				return FXOrigin.EventTarget;
+			}
+			if (hasAbilityObject)
+			{
+				return FXOrigin.AbilityObject;
+			}
+			if (hasInitiator)
+			{
+				return FXOrigin.Initiator;
+			}
+			return FXOrigin.None;
+		}
+
+		/// <summary>
+		/// Resolves where this event wants an effect played, applying <see cref="ChooseOrigin"/>.
+		/// </summary>
+		/// <param name="initiator">The character the action is running for, or null.</param>
+		/// <param name="eventData">The event being executed, or null.</param>
+		/// <param name="position">The resolved world position. Only meaningful when this returns true.</param>
+		/// <returns>True when a position was resolved.</returns>
+		internal static bool TryResolveSpawnPosition(ICharacter initiator, EventData eventData, out Vector3 position)
+		{
+			position = Vector3.zero;
+
+			CollisionEventData collision = null;
+			if (eventData != null && eventData.TryGet(out CollisionEventData found))
+			{
+				collision = found;
+			}
+			GameObject targetObject = eventData?.Target;
+			bool hasAbilityObject = AbilityObject.TryResolveFrom(eventData, out AbilityObject abilityObject) &&
+									abilityObject.Transform != null;
+			bool hasInitiator = initiator != null && initiator.Transform != null;
+
+			/* HasHitPoint, not merely "a collision payload is present". An area effect resolves a
+			 * whole overlap at once and carries no single contact, which is why the flag exists. */
+			switch (ChooseOrigin(collision != null && collision.HasHitPoint, targetObject != null, hasAbilityObject, hasInitiator))
+			{
+				case FXOrigin.CollisionPoint:
+					position = collision.HitPoint;
+					return true;
+				case FXOrigin.EventTarget:
+					position = targetObject.transform.position;
+					return true;
+				case FXOrigin.AbilityObject:
+					position = abilityObject.Transform.position;
+					return true;
+				case FXOrigin.Initiator:
+					position = initiator.Transform.position;
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		/// <summary>
 		/// Plays the FX prefab at the collision or interaction location.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing collision or interaction information.</param>
 		/// <remarks>
 		/// <para>
-		/// The FX is spawned at the hit point a <see cref="CollisionEventData"/> carries, falling back
-		/// to the target's position, then the initiator's, then the world origin.
+		/// The FX is spawned wherever <see cref="TryResolveSpawnPosition"/> lands — the impact point
+		/// a <see cref="CollisionEventData"/> carries, then the event's own target, then the ability
+		/// object the event belongs to, then the initiator.
 		/// </para>
 		/// <para>
 		/// It used to read <c>Collision.contacts[0]</c>. That threw as soon as anything dispatched a
@@ -51,42 +184,22 @@ namespace FishMMO.Shared
 			// Suppress VFX during prediction replay to prevent visual spam
 			if (IsReplayTick(eventData)) return;
 
-			// Try to get the collision event data. If not present, log a warning and exit.
-			if (eventData.TryGet(out CollisionEventData collisionEventData))
+			if (FXPrefab == null)
 			{
-				Vector3 spawnPosition;
-				// Prefer the resolved impact point.
-				if (collisionEventData.HasHitPoint)
-				{
-					spawnPosition = collisionEventData.HitPoint;
-				}
-				// Otherwise, use whatever was hit — an area effect resolves a whole overlap at once
-				// and has no single contact to report.
-				else if (collisionEventData.Target != null)
-				{
-					spawnPosition = collisionEventData.Target.transform.position;
-				}
-				// Otherwise, use the initiator's position if available.
-				else if (initiator != null)
-				{
-					spawnPosition = initiator.Transform.position;
-				}
-				// Fallback to the world origin if all else fails.
-				else
-				{
-					spawnPosition = Vector3.zero;
-				}
+				return;
+			}
 
-				// Instantiate the FX prefab at the determined position if it is set.
-				if (FXPrefab != null)
-				{
-					UnityEngine.Object.Instantiate(FXPrefab, spawnPosition, Quaternion.identity);
-				}
-			}
-			else
+			if (!TryResolveSpawnPosition(initiator, eventData, out Vector3 spawnPosition))
 			{
-				Log.Warning("PlayFXAction", "Expected CollisionEventData.");
+				/* Debug, not Warning. The only way to get here is an event with no collision point,
+				 * no target, no ability object and no initiator transform — a malformed authoring
+				 * case, not the normal path. The Warning this replaced fired on the NORMAL path for
+				 * every destroy, spawn and tick trigger, once per object per peer. */
+				Log.Debug("PlayFXAction", "No position could be resolved from the event; nothing played.");
+				return;
 			}
+
+			UnityEngine.Object.Instantiate(FXPrefab, spawnPosition, Quaternion.identity);
 		}
 	}
 }

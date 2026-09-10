@@ -576,10 +576,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				int requestedDifficulty = msg.Difficulty;
 				int minimumPartySize = difficulty.MinimumPartySize;
 				bool isPrivate = msg.IsPrivate;
-				string sceneName = conn.FirstObject.gameObject.scene.name;
 
 				if (TryEnqueueAsyncWork(
-					() => ProcessDungeonCreateAsync(conn, captured, requestedDifficulty, minimumPartySize, isPrivate, capacity, respawnDetails, healthPCT, sceneName, guardKey),
+					() => ProcessDungeonCreateAsync(conn, captured, requestedDifficulty, minimumPartySize, isPrivate, capacity, respawnDetails, healthPCT, guardKey),
 					conn,
 					context.CharacterID))
 				{
@@ -610,7 +609,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="capacity">Capacity at this difficulty.</param>
 		/// <param name="respawnDetails">Where to place the character on arrival.</param>
 		/// <param name="healthPCT">Health fraction, if a party has to be formed.</param>
-		/// <param name="sceneName">Current scene name, for a party create broadcast.</param>
 		/// <param name="guardKey">Ingress guard key released when this task completes.</param>
 		private async Task ProcessDungeonCreateAsync(
 			NetworkConnection conn,
@@ -621,7 +619,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			int capacity,
 			CharacterRespawnPositionDetails respawnDetails,
 			float healthPCT,
-			string sceneName,
 			long guardKey)
 		{
 			long characterID = context.CharacterID;
@@ -784,7 +781,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					if (!isPrivate && partyID <= 0 &&
 						Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
 					{
-						formedPartyID = await partySystem.TryCreatePartyForInstanceAsync(conn, characterID, worldServerID, sceneName, healthPCT);
+						formedPartyID = await partySystem.TryCreatePartyForInstanceAsync(conn, characterID, worldServerID, healthPCT);
 						if (formedPartyID > 0)
 						{
 							partyID = formedPartyID;

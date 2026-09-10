@@ -718,8 +718,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						 * client either may read or may never receive — hiding it in the panel
 						 * would leave it in the packet — so the message is built twice and the
 						 * recipient's own rank decides which copy they get. */
-						GuildAddMultipleBroadcast publicRoster = BuildRoster(dbMembers, includeOfficerNotes: false);
-						GuildAddMultipleBroadcast officerRoster = BuildRoster(dbMembers, includeOfficerNotes: true);
+						GuildAddMultipleBroadcast publicRoster = BuildRoster(guildID, dbMembers, includeOfficerNotes: false);
+						GuildAddMultipleBroadcast officerRoster = BuildRoster(guildID, dbMembers, includeOfficerNotes: true);
 
 						byte guildLeaderRankOrder = 0;
 						if (ladder != null)
@@ -763,7 +763,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 									Server.NetworkWrapper.Broadcast(character.Owner, new GuildRankListBroadcast()
 									{
-										GuildID = guildID,
 										Ranks = BuildRankEntries(ladder),
 										ViewerRankOrder = member.Rank,
 										ViewerPermissions = (long)memberPermissions,
@@ -1402,9 +1401,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.NetworkWrapper.Broadcast(conn, new GuildAddBroadcast()
 					{
 						GuildID = gc.ID,
-						CharacterID = characterID,
-						RankOrder = gc.RankOrder,
-						Location = sceneName,
+						Member = new GuildAddEntry()
+						{
+							CharacterID = characterID,
+							RankOrder = gc.RankOrder,
+							Location = sceneName,
+						},
 					}, true, Channel.Reliable);
 
 					// Hand the founder the (empty) notice and message of the day so the panel's
@@ -1918,9 +1920,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.NetworkWrapper.Broadcast(conn, new GuildAddBroadcast()
 					{
 						GuildID = gc.ID,
-						CharacterID = characterID,
-						RankOrder = joinRankOrder,
-						Location = sceneName,
+						Member = new GuildAddEntry()
+						{
+							CharacterID = characterID,
+							RankOrder = joinRankOrder,
+							Location = sceneName,
+						},
 					}, true, Channel.Reliable);
 
 					// The new member has no guild text yet; send it alongside the join rather than
@@ -3388,13 +3393,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						ActorCharacterID = row.ActorCharacterID,
 						TargetCharacterID = row.TargetCharacterID,
 						Detail = row.Detail ?? string.Empty,
-						TimeUtcTicks = row.TimeCreated.Ticks,
+						TimeUnixSeconds = ToUnixSeconds(row.TimeCreated),
 					};
 				}
 
 				GuildLogBroadcast broadcast = new GuildLogBroadcast()
 				{
-					GuildID = guildID,
 					Entries = entries,
 				};
 

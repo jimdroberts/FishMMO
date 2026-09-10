@@ -395,9 +395,11 @@ namespace FishMMO.Client
 				? DungeonTemplate.Get<DungeonTemplate>(queueStatus.DungeonTemplateID)
 				: null;
 
-			string name = template != null
-				? template.ResolvedDisplayName
-				: (string.IsNullOrEmpty(queueStatus.SceneName) ? "this dungeon" : queueStatus.SceneName);
+			/* The scene name used to travel beside the template id as a fallback name. It was the
+			 * template's own authored DungeonSceneName, so a client that cannot resolve the
+			 * template cannot have been shipped the scene either — the generic word is the honest
+			 * answer, and the string is off the wire. */
+			string name = template != null ? template.ResolvedDisplayName : "this dungeon";
 
 			if (template != null && template.DifficultyCount > 1)
 			{

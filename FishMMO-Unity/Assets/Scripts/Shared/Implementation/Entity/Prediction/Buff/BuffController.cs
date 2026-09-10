@@ -209,8 +209,8 @@ namespace FishMMO.Shared
 		private readonly List<ObservedBuffEntry> observedBuffBuffer = new List<ObservedBuffEntry>();
 
 		/// <summary>
-		/// The full visible strip as of the last push, keyed by template id — what this character's
-		/// existing observers are currently holding, and the baseline the delta is measured against.
+		/// What this character's existing observers were TOLD, keyed by template id — the baseline the
+		/// delta is measured against.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -219,28 +219,69 @@ namespace FishMMO.Shared
 		/// see the remarks on <see cref="CharacterBuffsBroadcast"/>.
 		/// </para>
 		/// <para>
+		/// <b>It models the MESSAGES, not this peer's own state.</b> Each push applies its own
+		/// outgoing message here — a full set replaces the lot, a delta overwrites what it carried and
+		/// drops what it removed — so an entry no message mentioned keeps the duration it was last
+		/// sent with. Copying the current strip in wholesale was silent data loss: a buff REFRESHED
+		/// since the last push is structurally identical, so it is absent from the delta and observers
+		/// are never told its new duration, yet the baseline recorded that new duration anyway.
+		/// <see cref="ObservedBuffWillLapse"/> then compared the server's expiry with itself, could
+		/// never fire again for that buff, and every observer deleted a buff the character was still
+		/// carrying — the exact failure that guard exists to prevent.
+		/// </para>
+		/// <para>
 		/// Empty means "no usable baseline", which forces the next push to be a full set. That is
 		/// the state after a spawn and after <see cref="ResetObservedBuffBaseline"/>, and it is why
 		/// a pooled NPC cannot inherit the previous occupant's strip as a baseline and send a delta
 		/// against buffs its observers never saw.
 		/// </para>
 		/// </remarks>
-		private readonly Dictionary<int, ObservedBuffEntry> lastPushedObservedBuffs = new Dictionary<int, ObservedBuffEntry>();
+		private readonly Dictionary<int, PushedObservedBuff> lastPushedObservedBuffs = new Dictionary<int, PushedObservedBuff>();
 
 		/// <summary>True once <see cref="lastPushedObservedBuffs"/> reflects a push that went out.</summary>
 		private bool hasObservedBuffBaseline;
 
 		/// <summary>
-		/// Domain tick at which <see cref="lastPushedObservedBuffs"/> was adopted, so the server can
-		/// work out when each observer's own countdown will run that entry out.
+		/// One entry of that baseline: what observers were told about a template, and the ABSOLUTE
+		/// tick their own countdown of it empties at.
 		/// </summary>
 		/// <remarks>
-		/// The baseline records the remaining seconds observers were TOLD. They count down from
-		/// there against their own clock, so the tick those seconds were measured at is the other
-		/// half of the number — without it the server cannot tell a bar with eight seconds left from
-		/// one that ran out six seconds ago. See <see cref="ObservedBuffWillLapse"/>.
+		/// The expiry is stored per entry rather than as "remaining seconds, measured at one baseline
+		/// tick shared by the strip". A shared tick can only describe a strip stated all at once; a
+		/// delta states part of one, and every entry it did not mention is still counting down from
+		/// whenever IT was last sent. Pinning the two halves of that number together at adopt time is
+		/// what removes the ambiguity. The template id is the dictionary key, so it is not repeated
+		/// here.
 		/// </remarks>
-		private uint observedBuffBaselineTick = TimeManager.UNSET_TICK;
+		private readonly struct PushedObservedBuff
+		{
+			/// <summary>Stack count observers were told, in <see cref="ObservedBuffEntry.Stacks"/> terms.</summary>
+			public readonly int Stacks;
+
+			/// <summary>
+			/// Domain tick the observers' own countdown empties at, or
+			/// <see cref="TimeManager.UNSET_TICK"/> when they were told the buff is permanent — or when
+			/// there was no clock to measure against, which reads the same way here: nothing to lapse.
+			/// </summary>
+			public readonly uint ObserverExpiryTick;
+
+			public PushedObservedBuff(int stacks, uint observerExpiryTick)
+			{
+				Stacks = stacks;
+				ObserverExpiryTick = observerExpiryTick;
+			}
+
+			/// <summary>
+			/// True when <paramref name="entry"/> is the same buff this records rather than a different
+			/// one. Only the stack count is compared: the caller has already matched the template id,
+			/// and remaining duration is excluded for the reason
+			/// <see cref="ObservedBuffEntry.StructurallyEquals"/> gives.
+			/// </summary>
+			public bool StructurallyEquals(ObservedBuffEntry entry)
+			{
+				return entry.Stacks == Stacks;
+			}
+		}
 
 		/// <summary>
 		/// Ticks of slack allowed before a renewal is re-sent.
@@ -282,7 +323,6 @@ namespace FishMMO.Shared
 		{
 			lastPushedObservedBuffs.Clear();
 			hasObservedBuffBaseline = false;
-			observedBuffBaselineTick = TimeManager.UNSET_TICK;
 		}
 
 		/// <summary>
@@ -341,9 +381,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private bool ObservedBuffWillLapse()
 		{
-			if (!hasObservedBuffBaseline ||
-				observedBuffBaselineTick == TimeManager.UNSET_TICK ||
-				buffs.Count == 0)
+			if (!hasObservedBuffBaseline || buffs.Count == 0)
 			{
 				return false;
 			}
@@ -354,54 +392,103 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
-
 			foreach (Buff buff in buffs.Values)
 			{
 				BaseBuffTemplate template = buff?.Template;
-				if (template == null || template.IsPermanent || buff.ExpiryTick == TimeManager.UNSET_TICK)
-				{
-					// A permanent buff is sent with zero remaining, which observers read as "never
-					// expires" — there is nothing for it to lapse into.
-					continue;
-				}
-
-				// Already expired here: this tick's Tick() removes it, which is a structural change
-				// and travels on its own.
-				if ((int)(currentTick - buff.ExpiryTick) >= 0)
+				if (template == null)
 				{
 					continue;
 				}
 
-				if (!lastPushedObservedBuffs.TryGetValue(template.ID, out ObservedBuffEntry sent))
+				if (!lastPushedObservedBuffs.TryGetValue(template.ID, out PushedObservedBuff sent))
 				{
 					// Never sent, so the strip is already structurally dirty for another reason.
 					continue;
 				}
 
-				/* Where the observer's own countdown reaches zero: the tick the baseline was taken,
-				 * plus the seconds it carried. Compared with the same wrap-safe tick arithmetic
-				 * everything else in this file uses. */
-				uint observerExpiryTick = observedBuffBaselineTick +
-					(uint)Mathf.Max(0, Mathf.CeilToInt(sent.RemainingSeconds / delta));
-
-				/* Only a RENEWAL is worth a message. If the server's own expiry is not meaningfully
-				 * later than the one observers are counting towards, the two run out together and
-				 * the removal travels on its own as a structural change — firing here as well would
-				 * add a redundant full set shortly before every buff in the game expired. */
-				if ((int)(buff.ExpiryTick - observerExpiryTick) <= (int)OBSERVED_BUFF_RENEWAL_MARGIN_TICKS)
-				{
-					continue;
-				}
-
-				// Renewed, and the observers are about to delete it. Say so before they do.
-				if ((int)(currentTick + OBSERVED_BUFF_RENEWAL_MARGIN_TICKS - observerExpiryTick) >= 0)
+				/* Both sides of the comparison are absolute ticks: this peer's own expiry, and the one
+				 * observers are counting towards, pinned when the message that STATED this entry went
+				 * out. A permanent buff is sent with zero remaining, which observers read as "never
+				 * expires", so its baseline expiry is UNSET and the rule below answers "no lapse"
+				 * without a special case here. */
+				if (ObservedRenewalNeedsPush(currentTick, buff.ExpiryTick, sent.ObserverExpiryTick,
+					OBSERVED_BUFF_RENEWAL_MARGIN_TICKS))
 				{
 					return true;
 				}
 			}
 
 			return false;
+		}
+
+		/// <summary>
+		/// Whether one buff's renewal has to be restated before its observers delete it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Pure, so the rule is testable without a NetworkManager. The truth table, in order:
+		/// </para>
+		/// <list type="table">
+		/// <item>
+		///   <term>No clock, or observers were told "permanent"</term>
+		///   <description>No push: their countdown never reaches zero.</description>
+		/// </item>
+		/// <item>
+		///   <term>Their countdown is not about to empty</term>
+		///   <description>No push: there is nothing to get ahead of yet.</description>
+		/// </item>
+		/// <item>
+		///   <term>Permanent here, finite there</term>
+		///   <description>Push: they are about to delete something this peer holds forever.</description>
+		/// </item>
+		/// <item>
+		///   <term>Already expired here</term>
+		///   <description>No push: this tick's <see cref="Tick"/> removes it, and that removal is
+		///   structural and travels on its own.</description>
+		/// </item>
+		/// <item>
+		///   <term>Expires here no more than the margin later</term>
+		///   <description>No push: the two run out together, and a full set shortly before every buff
+		///   in the game expired is pure cost.</description>
+		/// </item>
+		/// <item>
+		///   <term>Expires here meaningfully later</term>
+		///   <description>Push: it was RENEWED after they were last told, and they are about to
+		///   delete it.</description>
+		/// </item>
+		/// </list>
+		/// </remarks>
+		/// <param name="currentTick">Current domain tick.</param>
+		/// <param name="serverExpiryTick">Where this peer's own simulation expires the buff.</param>
+		/// <param name="observerExpiryTick">Where the observers' countdown of what they were TOLD empties.</param>
+		/// <param name="marginTicks">Slack for the wire's quantisation and the message's transit.</param>
+		internal static bool ObservedRenewalNeedsPush(uint currentTick, uint serverExpiryTick,
+			uint observerExpiryTick, uint marginTicks)
+		{
+			if (currentTick == TimeManager.UNSET_TICK || observerExpiryTick == TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
+
+			// Wrap-safe throughout, like every other tick comparison in this file.
+			if ((int)(currentTick + marginTicks - observerExpiryTick) < 0)
+			{
+				return false;
+			}
+
+			if (serverExpiryTick == TimeManager.UNSET_TICK)
+			{
+				/* Permanent here, finite there. Unreachable while IsPermanent is a template-level
+				 * property, and still the honest answer if it ever stops being one. */
+				return true;
+			}
+
+			if ((int)(currentTick - serverExpiryTick) >= 0)
+			{
+				return false;
+			}
+
+			return (int)(serverExpiryTick - observerExpiryTick) > (int)marginTicks;
 		}
 
 
@@ -423,6 +510,31 @@ namespace FishMMO.Shared
 
 			int remainingTicks = (int)(buff.ExpiryTick - currentTick);
 			return remainingTicks > 0 ? remainingTicks * delta : 0f;
+		}
+
+		/// <summary>
+		/// The absolute tick an observer's own countdown of <paramref name="remainingSeconds"/> empties
+		/// at, given the tick that number was measured at.
+		/// </summary>
+		/// <remarks>
+		/// Pure, and deliberately the same arithmetic <see cref="MaterializeObservedBuffs"/> runs on
+		/// arrival, so the baseline predicts the receiver's own answer rather than approximating it.
+		/// Zero remaining is PERMANENT on this wire (see
+		/// <see cref="ObservedBuffEntry.RemainingSeconds"/>) and maps to
+		/// <see cref="TimeManager.UNSET_TICK"/> — "never", not "now". So does a missing clock: a
+		/// number that could not be measured cannot be counted down from.
+		/// </remarks>
+		/// <param name="stateTick">Domain tick the remaining seconds were measured at.</param>
+		/// <param name="remainingSeconds">Seconds remaining, as they go on the wire.</param>
+		/// <param name="delta">Seconds per tick.</param>
+		internal static uint ComputeObserverExpiryTick(uint stateTick, float remainingSeconds, float delta)
+		{
+			if (stateTick == TimeManager.UNSET_TICK || remainingSeconds <= 0f || delta <= 0f)
+			{
+				return TimeManager.UNSET_TICK;
+			}
+
+			return stateTick + (uint)Mathf.Max(1, Mathf.CeilToInt(remainingSeconds / delta));
 		}
 
 		/// <summary>
@@ -462,7 +574,7 @@ namespace FishMMO.Shared
 			if (fullSet)
 			{
 				ObservedBuffEntry[] entries = observedBuffBuffer.ToArray();
-				AdoptObservedBuffBaseline();
+				AdoptObservedBuffBaseline(ObservedBuffStatement.WholeStrip(entries));
 				BroadcastObservedBuffs(entries, System.Array.Empty<int>(), true);
 				return;
 			}
@@ -470,17 +582,20 @@ namespace FishMMO.Shared
 			BuildObservedBuffDelta();
 
 			/* Structurally dirty but nothing structural actually differs — a buff added and removed
-			 * inside one tick, or a stack that went up and back down. The strip observers hold is
-			 * still correct, so adopt the rebuilt baseline and send nothing. */
+			 * inside one tick, or a stack that went up and back down. Nothing goes out, so there is
+			 * nothing to re-state: the baseline already describes what observers hold. It is
+			 * deliberately NOT re-adopted from the current strip here. Doing that overwrote the
+			 * durations observers were told with the server's own, and a buff refreshed since the
+			 * last push — which is invisible to the delta, being structurally identical — lost its
+			 * lapse check for the rest of its life, for free. */
 			if (observedBuffDeltaBuffer.Count == 0 && observedBuffRemovedBuffer.Count == 0)
 			{
-				AdoptObservedBuffBaseline();
 				return;
 			}
 
 			ObservedBuffEntry[] changed = observedBuffDeltaBuffer.ToArray();
 			int[] removed = observedBuffRemovedBuffer.ToArray();
-			AdoptObservedBuffBaseline();
+			AdoptObservedBuffBaseline(ObservedBuffStatement.Delta(changed, removed));
 			BroadcastObservedBuffs(changed, removed, false);
 		}
 
@@ -492,7 +607,8 @@ namespace FishMMO.Shared
 		/// Structural comparison only — see <see cref="ObservedBuffEntry.StructurallyEquals"/> for
 		/// why remaining duration is excluded. An entry that is structurally unchanged is left out
 		/// even though its remaining duration has moved; the receiver counts that down itself, and
-		/// the timing gate sends a full set when its belief drifts too far.
+		/// a RENEWAL the receiver would otherwise run out is answered with a full set instead — see
+		/// <see cref="ObservedBuffWillLapse"/>.
 		/// </remarks>
 		private void BuildObservedBuffDelta()
 		{
@@ -502,14 +618,14 @@ namespace FishMMO.Shared
 			for (int i = 0; i < observedBuffBuffer.Count; ++i)
 			{
 				ObservedBuffEntry entry = observedBuffBuffer[i];
-				if (!lastPushedObservedBuffs.TryGetValue(entry.TemplateID, out ObservedBuffEntry previous) ||
-					!entry.StructurallyEquals(previous))
+				if (!lastPushedObservedBuffs.TryGetValue(entry.TemplateID, out PushedObservedBuff previous) ||
+					!previous.StructurallyEquals(entry))
 				{
 					observedBuffDeltaBuffer.Add(entry);
 				}
 			}
 
-			foreach (KeyValuePair<int, ObservedBuffEntry> kvp in lastPushedObservedBuffs)
+			foreach (KeyValuePair<int, PushedObservedBuff> kvp in lastPushedObservedBuffs)
 			{
 				bool stillPresent = false;
 				for (int i = 0; i < observedBuffBuffer.Count; ++i)
@@ -528,27 +644,57 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Adopts the full strip in <see cref="observedBuffBuffer"/> as the delta baseline.
+		/// Applies a push's own outgoing message to the delta baseline.
 		/// </summary>
 		/// <remarks>
-		/// Called on every push, including the ones that send nothing: after a push the observers'
-		/// strip and this baseline agree, and a baseline left behind would re-send changes that
-		/// were already delivered.
+		/// <para>
+		/// Called on every push that sends something: afterwards the observers' strip and this
+		/// baseline agree, and a baseline left behind would re-send changes already delivered.
+		/// </para>
+		/// <para>
+		/// <b>Only what the message STATED is overwritten.</b> The baseline models what observers
+		/// hold (see the remarks on <see cref="lastPushedObservedBuffs"/>), so it is updated the way
+		/// an observer updates: a full set replaces it outright, a delta overwrites the entries it
+		/// carried and drops the ids it removed, and every other entry keeps the duration it was last
+		/// TOLD. Adopting the current strip instead re-baselined RENEWALS that were never sent —
+		/// a refresh is structurally identical, so it is absent from the delta — and
+		/// <see cref="ObservedBuffWillLapse"/> then measured the server's expiry against itself and
+		/// could never fire again for that buff.
+		/// </para>
+		/// <para>
+		/// Entries are stamped with an ABSOLUTE observer expiry tick, computed once here from the
+		/// seconds actually going on the wire, because a single baseline tick can only describe a
+		/// strip that was stated all at once. With no clock yet they stamp
+		/// <see cref="TimeManager.UNSET_TICK"/>, which reads as "cannot lapse" — the same
+		/// conservative answer the unset baseline tick used to give.
+		/// </para>
 		/// </remarks>
-		private void AdoptObservedBuffBaseline()
+		/// <param name="statement">The message going out, and what it states.</param>
+		private void AdoptObservedBuffBaseline(ObservedBuffStatement statement)
 		{
-			lastPushedObservedBuffs.Clear();
-			for (int i = 0; i < observedBuffBuffer.Count; ++i)
-			{
-				ObservedBuffEntry entry = observedBuffBuffer[i];
-				lastPushedObservedBuffs[entry.TemplateID] = entry;
-			}
-			hasObservedBuffBaseline = true;
+			uint currentTick = GetCurrentDomainTick();
+			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
 
-			/* Stamped with the tick the entries were measured at, because their RemainingSeconds is
-			 * only meaningful relative to it. This is what lets ObservedBuffWillLapse tell a renewal
-			 * that observers have not been told about from one they have. */
-			observedBuffBaselineTick = GetCurrentDomainTick();
+			if (statement.StatesWholeStrip)
+			{
+				lastPushedObservedBuffs.Clear();
+			}
+			else
+			{
+				for (int i = 0; i < statement.Removed.Length; ++i)
+				{
+					lastPushedObservedBuffs.Remove(statement.Removed[i]);
+				}
+			}
+
+			for (int i = 0; i < statement.Entries.Length; ++i)
+			{
+				ObservedBuffEntry entry = statement.Entries[i];
+				lastPushedObservedBuffs[entry.TemplateID] = new PushedObservedBuff(entry.Stacks,
+					ComputeObserverExpiryTick(currentTick, entry.RemainingSeconds, delta));
+			}
+
+			hasObservedBuffBaseline = true;
 		}
 
 		/// <summary>
@@ -657,8 +803,12 @@ namespace FishMMO.Shared
 			 *
 			 * It is given the FULL strip, never the delta. PartySystem and the target frame read
 			 * ObservedBuffs as a complete list, and the server is not a receiver of its own
-			 * broadcast, so there is no merge on this side to reconstruct it from. */
-			ApplyObservedBuffs(observedBuffBuffer.ToArray());
+			 * broadcast, so there is no merge on this side to reconstruct it from. The STATEMENT
+			 * still describes the message rather than the strip: what may be treated as
+			 * server-stated cannot depend on which side of the wire is reading it. */
+			ApplyObservedStrip(observedBuffBuffer.ToArray(), fullSet
+				? ObservedBuffStatement.WholeStrip(entries)
+				: ObservedBuffStatement.Delta(entries, removed));
 
 			/* Forwarded objects deliver buffs through the reconcile instead, and their observers
 			 * build FX from the simulation dictionary. Sending this as well would give every
@@ -677,12 +827,102 @@ namespace FishMMO.Shared
 			}, Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Which templates in a strip the SERVER actually stated, as opposed to the ones the peer
+		/// applying it carried over from what it already held.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A full set states the whole strip: every entry in it is the server's word, and any template
+		/// it does NOT name the server has stated the absence of. A delta states only its own changed
+		/// entries and removed ids — every other entry of the merged strip came out of the receiver's
+		/// own container (see <see cref="MergeObservedBuffs"/>), and may be something the server has
+		/// never acknowledged at all.
+		/// </para>
+		/// <para>
+		/// Conflating those cost a defect on each side of the wire.
+		/// <see cref="MaterializeObservedBuffs"/> lifted the confirmation deadline off every template
+		/// in the merged array, so the first UNRELATED delta for that character — which in combat
+		/// arrives well inside the three-second window — confirmed a cross-character buff the server
+		/// had refused, and a permanent one then never went away (see
+		/// <see cref="predictedUnconfirmedBuffs"/>). <see cref="AdoptObservedBuffBaseline"/> restated
+		/// baseline entries no message had carried, which disarmed
+		/// <see cref="ObservedBuffWillLapse"/> for the rest of that buff's life. Both were guesses at
+		/// provenance; this carries it instead.
+		/// </para>
+		/// </remarks>
+		internal readonly struct ObservedBuffStatement
+		{
+			/// <summary>What the server stated: the whole strip, or a delta's changed set.</summary>
+			public readonly ObservedBuffEntry[] Entries;
+
+			/// <summary>Template ids the server stated have LEFT the strip. Empty for a full set.</summary>
+			public readonly int[] Removed;
+
+			/// <summary>True when <see cref="Entries"/> is the server's entire belief about the strip.</summary>
+			public readonly bool StatesWholeStrip;
+
+			private ObservedBuffStatement(ObservedBuffEntry[] entries, int[] removed, bool statesWholeStrip)
+			{
+				Entries = entries ?? System.Array.Empty<ObservedBuffEntry>();
+				Removed = removed ?? System.Array.Empty<int>();
+				StatesWholeStrip = statesWholeStrip;
+			}
+
+			/// <summary>A full set, a spawn payload, or a peer restating its own simulation.</summary>
+			public static ObservedBuffStatement WholeStrip(ObservedBuffEntry[] entries)
+			{
+				return new ObservedBuffStatement(entries, null, true);
+			}
+
+			/// <summary>A delta: these entries changed, these ids left, the rest went unmentioned.</summary>
+			public static ObservedBuffStatement Delta(ObservedBuffEntry[] changed, int[] removed)
+			{
+				return new ObservedBuffStatement(changed, removed, false);
+			}
+
+			/// <summary>True when the server said something about this template in this message.</summary>
+			public bool Names(int templateID)
+			{
+				return ContainsTemplate(Entries, templateID) ||
+					   System.Array.IndexOf(Removed, templateID) >= 0;
+			}
+
+			/// <summary>True when the server said this template is NOT on the strip.</summary>
+			public bool NamesAbsence(int templateID)
+			{
+				if (StatesWholeStrip)
+				{
+					return !ContainsTemplate(Entries, templateID);
+				}
+				return System.Array.IndexOf(Removed, templateID) >= 0;
+			}
+		}
+
+		/// <summary>
+		/// Stores a strip the server stated in FULL: a full-set broadcast, a spawn payload, or a
+		/// simulating peer restating its own list.
+		/// </summary>
+		/// <remarks>
+		/// The one-argument shape is the unambiguous case, and the common one: everything in
+		/// <paramref name="entries"/> is the server's word, and so is everything absent from it. A
+		/// delta is neither, and goes through <see cref="ApplyObservedStrip"/> with the statement that
+		/// says which half is which.
+		/// </remarks>
+		private void ApplyObservedBuffs(ObservedBuffEntry[] entries)
+		{
+			ObservedBuffEntry[] next = entries ?? System.Array.Empty<ObservedBuffEntry>();
+			ApplyObservedStrip(next, ObservedBuffStatement.WholeStrip(next));
+		}
+
 		/// <summary>Stores a received buff list, drives observer FX, and notifies listeners.</summary>
 		/// <remarks>
 		/// The FX diff runs BEFORE the field is replaced, because the previous list is what says
 		/// which templates left.
 		/// </remarks>
-		private void ApplyObservedBuffs(ObservedBuffEntry[] entries)
+		/// <param name="entries">The whole strip as this peer should now hold it.</param>
+		/// <param name="statement">Which of those entries the server actually stated.</param>
+		private void ApplyObservedStrip(ObservedBuffEntry[] entries, ObservedBuffStatement statement)
 		{
 			ObservedBuffEntry[] next = entries ?? System.Array.Empty<ObservedBuffEntry>();
 
@@ -692,7 +932,7 @@ namespace FishMMO.Shared
 			 * client is required to hold an observed character's actual state — Inspect and
 			 * faction/aggro read it, not just the renderer — so what arrives here is materialised
 			 * into `buffs` rather than kept only as a display list. */
-			MaterializeObservedBuffs(next);
+			MaterializeObservedBuffs(next, statement);
 
 			IBuffController.OnObservedBuffsChanged?.Invoke(this);
 		}
@@ -720,8 +960,9 @@ namespace FishMMO.Shared
 		/// message is a projection of what they already hold.
 		/// </para>
 		/// </remarks>
-		/// <param name="entries">The visible buff set as the server described it.</param>
-		private void MaterializeObservedBuffs(ObservedBuffEntry[] entries)
+		/// <param name="entries">The visible buff set as this peer should now hold it.</param>
+		/// <param name="statement">Which of those entries the server actually stated.</param>
+		private void MaterializeObservedBuffs(ObservedBuffEntry[] entries, ObservedBuffStatement statement)
 		{
 			if (SimulatesBuffEffects)
 			{
@@ -745,8 +986,15 @@ namespace FishMMO.Shared
 
 				materializeSeenBuffer.Add(entry.TemplateID);
 
-				// The server named it: a predicted entry for this template is confirmed.
-				predictedUnconfirmedBuffs?.Remove(entry.TemplateID);
+				/* Only a template the SERVER named confirms a prediction. Most of a merged delta's
+				 * array is this peer's own container read back out (see MergeObservedBuffs), so
+				 * confirming everything in it let an unrelated delta — one that arrives constantly in
+				 * combat — confirm a cross-character buff the server had refused. See
+				 * ObservedBuffStatement and predictedUnconfirmedBuffs. */
+				if (statement.Names(entry.TemplateID))
+				{
+					predictedUnconfirmedBuffs?.Remove(entry.TemplateID);
+				}
 
 				uint expiryTick = TimeManager.UNSET_TICK;
 				if (entry.RemainingSeconds > 0f && currentTick != TimeManager.UNSET_TICK)
@@ -771,9 +1019,10 @@ namespace FishMMO.Shared
 				}
 			}
 
-			/* Anything the server did not name is gone. Removed directly for the same reason the
-			 * additions are added directly, and only ever on a tracking-only peer — this can never
-			 * drop a buff the owner is simulating. */
+			/* Anything the applied strip does not contain is gone — for a full set that is the
+			 * server's own omission, and for a delta it is what MergeObservedBuffs concluded from the
+			 * removed ids. Removed directly for the same reason the additions are added directly, and
+			 * only ever on a tracking-only peer — this can never drop a buff the owner is simulating. */
 			materializeRemoveBuffer.Clear();
 			foreach (int templateID in buffs.Keys)
 			{
@@ -785,8 +1034,14 @@ namespace FishMMO.Shared
 			for (int i = 0; i < materializeRemoveBuffer.Count; ++i)
 			{
 				buffs.Remove(materializeRemoveBuffer[i]);
-				// A predicted entry the server's strip does not name is settled either way now.
-				predictedUnconfirmedBuffs?.Remove(materializeRemoveBuffer[i]);
+
+				/* A predicted entry whose ABSENCE the server stated is settled either way now. A full
+				 * set states absence by omission; a delta has to say so in its removed ids, because
+				 * everything it leaves out is merely unmentioned. */
+				if (statement.NamesAbsence(materializeRemoveBuffer[i]))
+				{
+					predictedUnconfirmedBuffs?.Remove(materializeRemoveBuffer[i]);
+				}
 			}
 
 			materializeSeenBuffer.Clear();
@@ -900,9 +1155,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Hands the merged FULL strip to <see cref="ApplyObservedBuffs"/> rather than duplicating
+		/// Hands the merged FULL strip to <see cref="ApplyObservedStrip"/> rather than duplicating
 		/// its work, so the FX diff and the change event see exactly what they saw when every
-		/// message was a full set.
+		/// message was a full set. It goes with the statement that says which of those entries the
+		/// server actually stated, because most of them are this peer's own container read back out —
+		/// see <see cref="ObservedBuffStatement"/>.
 		/// </para>
 		/// <para>
 		/// <b>Retained entries need no ageing any more.</b> They are read back out of
@@ -919,6 +1176,7 @@ namespace FishMMO.Shared
 			observedBuffMergeBuffer.Clear();
 
 			uint currentTick = GetCurrentDomainTick();
+			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
 
 			foreach (Buff buff in buffs.Values)
 			{
@@ -939,11 +1197,16 @@ namespace FishMMO.Shared
 					continue;
 				}
 
+				/* Described the way the SENDER describes it — zero remaining means PERMANENT on this
+				 * wire, and Buff.RemainingSeconds answers a permanent buff with its authored Duration
+				 * instead. Carrying that number through gave a permanent buff a finite expiry on the
+				 * first delta that mentioned anything else, and the observer then deleted a buff the
+				 * character still holds. ComputeObservedRemaining is the one place that mapping lives. */
 				observedBuffMergeBuffer.Add(new ObservedBuffEntry()
 				{
 					TemplateID = template.ID,
 					Stacks = buff.Stacks,
-					RemainingSeconds = buff.RemainingSeconds(currentTick),
+					RemainingSeconds = ComputeObservedRemaining(buff, template, currentTick, delta),
 					TotalSeconds = template.Duration,
 				});
 			}
@@ -956,7 +1219,8 @@ namespace FishMMO.Shared
 				}
 			}
 
-			ApplyObservedBuffs(observedBuffMergeBuffer.ToArray());
+			ApplyObservedStrip(observedBuffMergeBuffer.ToArray(),
+				ObservedBuffStatement.Delta(changed, removed));
 			observedBuffMergeBuffer.Clear();
 		}
 
@@ -1861,7 +2125,7 @@ namespace FishMMO.Shared
 				: TimeManager.UNSET_TICK;
 			for (int i = 0; i < buffCount; ++i)
 			{
-				int templateID = reader.ReadInt32();
+				int templateID = reader.ReadInt32Unpacked();
 				uint expiryTick = reader.ReadUInt32();
 				uint nextTickTick = reader.ReadUInt32();
 				if (expiryTick != TimeManager.UNSET_TICK)
@@ -1941,7 +2205,12 @@ namespace FishMMO.Shared
 				writer.WriteInt32(buffs.Count);
 				foreach (Buff buff in buffs.Values)
 				{
-					writer.WriteInt32(buff.Template.ID);
+					/* Unpacked, exactly as ObservedBuffEntry.WriteTo writes the same id in the
+					 * observer shape below. Template ids are a deterministic 32-bit hash
+					 * (CachedScriptableObject.AddToCache) and so span the whole range; the
+					 * signed-packed form spends FIVE bytes on one. The ticks and counters that
+					 * follow stay packed — those are genuinely small. */
+					writer.WriteInt32Unpacked(buff.Template.ID);
 					writer.WriteUInt32(buff.ExpiryTick);
 					writer.WriteUInt32(buff.NextTickTick);
 					writer.WriteInt32(buff.Stacks);

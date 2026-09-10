@@ -63,6 +63,7 @@ namespace FishMMO.Shared
 			 * owner included. A fresh connection has predicted nothing, so it needs the catch-up
 			 * exactly as much as an observer does. */
 			MaterializePendingInFlightObjects();
+			AnnouncePayloadActivation();
 		}
 
 		/// <summary>
@@ -180,18 +181,15 @@ namespace FishMMO.Shared
 					entry.Seed, new PredictionTick(entry.SpawnTick),
 					new AbilitySpawnPose(entry.Position, entry.Rotation));
 
-				if (spawned != null)
-				{
-					/* Legs flown before a redirect: lifetime only, never pose — the pose is fully
-					 * described by the current leg the fast-forward below reproduces. Charged first
-					 * so an object with almost nothing left dies here instead of running its spawn
-					 * chain and then expiring one tick later. */
-					spawned.ConsumeLifetime(entry.LifeElapsedBeforeStartTicks);
-					if (!spawned.IsDestroyed)
-					{
-						spawned.FastForward(ComputeObserverCatchUpTicks(timeManager, entry.ServerStartTick));
-					}
-				}
+				/* Legs flown before a redirect: lifetime only, never pose — the pose is fully
+				 * described by the current leg the fast-forward reproduces. Charged first so an
+				 * object with almost nothing left dies inside the catch-up instead of running its
+				 * spawn chain and then expiring one tick later.
+				 *
+				 * The whole CONTAINER, not the returned root — see CatchUpSpawnedContainer. */
+				CatchUpSpawnedContainer(ability, spawned,
+					entry.LifeElapsedBeforeStartTicks,
+					ComputeObserverCatchUpTicks(timeManager, entry.ServerStartTick));
 			}
 
 			pendingInFlightObjects.Clear();
@@ -292,6 +290,60 @@ namespace FishMMO.Shared
 #endif
 
 		/// <summary>
+		/// Raised on a client for an activation a spawn payload said was ALREADY RUNNING.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The same <c>CharacterCastBroadcast</c> shape the live message uses, so the receiver runs
+		/// one code path for both — including the catch-up arithmetic that starts the row partway
+		/// through a cast rather than restarting it. An event rather than a direct call because the
+		/// consumer (<c>ClientCastNameplateDisplay</c>) lives in the client assembly, which this one
+		/// cannot reference; it subscribes alongside the broadcast handler it already registers.
+		/// </para>
+		/// <para>
+		/// Static, for the same reason the activation broadcast handler is static: one subscriber
+		/// per client rather than one per character in the scene.
+		/// </para>
+		/// </remarks>
+		public static event System.Action<CharacterCastBroadcast> OnObservedActivationCatchUp;
+
+		/// <summary>
+		/// Tells this client about the activation that was running when its spawn payload was written.
+		/// </summary>
+		/// <remarks>
+		/// Fires once per spawn and then forgets, so a later reconnect or pool reuse cannot replay
+		/// it. Skipped on the owner, which predicted its own cast and draws it from that — the same
+		/// exclusion the live message makes at the sender.
+		/// </remarks>
+		private void AnnouncePayloadActivation()
+		{
+			long referenceID = pendingActivationReferenceID;
+			bool isConsumable = pendingActivationIsConsumable;
+			uint startTick = pendingActivationStartTick;
+
+			pendingActivationReferenceID = NO_ABILITY;
+			pendingActivationIsConsumable = false;
+			pendingActivationStartTick = 0u;
+
+			if (referenceID == NO_ABILITY ||
+				base.IsOwner ||
+				base.NetworkObject == null ||
+				OnObservedActivationCatchUp == null)
+			{
+				return;
+			}
+
+			OnObservedActivationCatchUp.Invoke(new CharacterCastBroadcast
+			{
+				CasterObjectID = base.NetworkObject.ObjectId,
+				ReferenceID = referenceID,
+				IsConsumable = isConsumable,
+				ServerTick = startTick,
+				Started = true,
+			});
+		}
+
+		/// <summary>
 		/// Width of the byte count that frames this behaviour's spawn payload.
 		/// </summary>
 		/// <remarks>
@@ -331,6 +383,34 @@ namespace FishMMO.Shared
 		/// anyway.
 		/// </remarks>
 		private const float MIN_STREAMED_REMAINING_LIFE = 0.25f;
+
+		/// <summary>
+		/// Activation-block shape byte: an activation is running and its fields follow.
+		/// </summary>
+		/// <remarks>
+		/// A byte rather than a bare bool so the idle case is one byte and a future field does not
+		/// need a new frame, in the style of <see cref="ABILITY_PAYLOAD_SHAPE_OWNER"/>.
+		/// </remarks>
+		private const byte ABILITY_PAYLOAD_ACTIVATION_PRESENT = 0x01;
+
+		/// <summary>Activation-block shape byte: the running activation is an item, not an ability.</summary>
+		private const byte ABILITY_PAYLOAD_ACTIVATION_CONSUMABLE = 0x02;
+
+		/// <summary>
+		/// The activation the spawn payload said was already running, waiting to be announced.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="AbilityController.NO_ABILITY"/> when the payload described none. Recorded
+		/// rather than acted on for the same reason the in-flight objects are: <c>ReadPayload</c>
+		/// runs while the character is still being assembled.
+		/// </remarks>
+		private long pendingActivationReferenceID = NO_ABILITY;
+
+		/// <summary>True when <see cref="pendingActivationReferenceID"/> names an item.</summary>
+		private bool pendingActivationIsConsumable;
+
+		/// <summary>The server tick the pending activation started on, or 0 when it is unknown.</summary>
+		private uint pendingActivationStartTick;
 
 		/// <summary>
 		/// One ability object that was already flying when this client started observing the caster.
@@ -409,6 +489,9 @@ namespace FishMMO.Shared
 			 * and returns, and anything left here from an earlier read would then be materialised
 			 * as if this payload had asked for it. */
 			pendingInFlightObjects.Clear();
+			pendingActivationReferenceID = NO_ABILITY;
+			pendingActivationIsConsumable = false;
+			pendingActivationStartTick = 0u;
 
 			/* Which shape follows. Only the owner's payload carries the deterministic RNG — see
 			 * WritePayload for why an observer must not be handed a peer's generator state. */
@@ -416,18 +499,18 @@ namespace FishMMO.Shared
 			if ((shape & ABILITY_PAYLOAD_SHAPE_OWNER) != 0)
 			{
 				// Read the AbilitySeedGenerator seed
-				abilitySeed = reader.ReadInt32();
+				abilitySeed = reader.ReadInt32Unpacked();
 
 				/* The generator's CURRENT state, not a fresh one from abilitySeed. The server's
 				 * generator has advanced once per cast since it was created; a client that connects
 				 * (or reconnects) later and re-derives it from the seed starts at the server's
 				 * INITIAL currentSeed, and the first reconcile then reports a mismatch that was
 				 * never a misprediction. */
-				int payloadCurrentSeed = reader.ReadInt32();
-				uint rngS0 = reader.ReadUInt32();
-				uint rngS1 = reader.ReadUInt32();
-				uint rngS2 = reader.ReadUInt32();
-				uint rngS3 = reader.ReadUInt32();
+				int payloadCurrentSeed = reader.ReadInt32Unpacked();
+				uint rngS0 = reader.ReadUInt32Unpacked();
+				uint rngS1 = reader.ReadUInt32Unpacked();
+				uint rngS2 = reader.ReadUInt32Unpacked();
+				uint rngS3 = reader.ReadUInt32Unpacked();
 				if (abilitySeedGenerator == null)
 				{
 					abilitySeedGenerator = new DeterministicRNG(rngS0, rngS1, rngS2, rngS3);
@@ -468,7 +551,7 @@ namespace FishMMO.Shared
 			for (int i = 0; i < abilityCount; ++i)
 			{
 				long abilityID = reader.ReadInt64();
-				int abilityTemplateID = reader.ReadInt32();
+				int abilityTemplateID = reader.ReadInt32Unpacked();
 
 				abilityEvents.Clear();
 				int abilityEventsCount = reader.ReadInt32();
@@ -491,7 +574,7 @@ namespace FishMMO.Shared
 
 				for (int j = 0; j < abilityEventsCount; ++j)
 				{
-					abilityEvents.Add(reader.ReadInt32());
+					abilityEvents.Add(reader.ReadInt32Unpacked());
 				}
 
 				// Validate the template exists before constructing the Ability.
@@ -534,7 +617,7 @@ namespace FishMMO.Shared
 				// Read into locals: the field order below is the wire order, and nothing about it
 				// should depend on how an object initialiser happens to be evaluated.
 				long inFlightAbilityID = reader.ReadInt64();
-				int inFlightSeed = reader.ReadInt32();
+				int inFlightSeed = reader.ReadInt32Unpacked();
 				uint inFlightSpawnTick = reader.ReadUInt32();
 				uint inFlightServerStartTick = reader.ReadUInt32();
 				uint inFlightLifeElapsedBeforeStart = reader.ReadUInt32();
@@ -551,6 +634,17 @@ namespace FishMMO.Shared
 					Position = inFlightPosition,
 					Rotation = inFlightRotation,
 				});
+			}
+
+			/* The activation that was already running when this payload was written. Recorded
+			 * only; OnStartClient announces it once the character exists — see WritePayload. */
+			byte activationShape = reader.ReadUInt8Unpacked();
+			if ((activationShape & ABILITY_PAYLOAD_ACTIVATION_PRESENT) != 0)
+			{
+				pendingActivationReferenceID = reader.ReadInt64();
+				pendingActivationStartTick = reader.ReadUInt32();
+				pendingActivationIsConsumable =
+					(activationShape & ABILITY_PAYLOAD_ACTIVATION_CONSUMABLE) != 0;
 			}
 
 			/* Belt and braces on the success path too. If the two sides ever disagree about the
@@ -621,14 +715,18 @@ namespace FishMMO.Shared
 
 			if (isOwner)
 			{
-				// Current seed and full generator state — see ReadPayload for why not just the seed.
-				writer.WriteInt32(abilitySeed);
-				writer.WriteInt32(currentSeed);
+				/* Current seed and full generator state — see ReadPayload for why not just the seed.
+				 *
+				 * All six are UNPACKED. A seed and xoshiro128** state words are full entropy by
+				 * construction, so FishNet's packed form zigzags every one of them past 2^28 and
+				 * spends five bytes where unpacked spends four: thirty against twenty-four. */
+				writer.WriteInt32Unpacked(abilitySeed);
+				writer.WriteInt32Unpacked(currentSeed);
 				abilitySeedGenerator.CaptureState(out uint rngS0, out uint rngS1, out uint rngS2, out uint rngS3);
-				writer.WriteUInt32(rngS0);
-				writer.WriteUInt32(rngS1);
-				writer.WriteUInt32(rngS2);
-				writer.WriteUInt32(rngS3);
+				writer.WriteUInt32Unpacked(rngS0);
+				writer.WriteUInt32Unpacked(rngS1);
+				writer.WriteUInt32Unpacked(rngS2);
+				writer.WriteUInt32Unpacked(rngS3);
 			}
 
 			/* The ability LIST goes to everyone, unlike the generator above and the cooldowns below.
@@ -652,7 +750,13 @@ namespace FishMMO.Shared
 			foreach (Ability ability in KnownAbilities.Values)
 			{
 				writer.WriteInt64(ability.ID);
-				writer.WriteInt32(ability.Template.ID);
+				/* Unpacked, here and for the event ids below. Template ids are a deterministic
+				 * 32-bit hash (CachedScriptableObject.AddToCache) and span the whole range, so the
+				 * signed-packed form spends FIVE bytes on each. This block goes to every observer
+				 * and carries one id per known ability plus one per crafted event, so the byte is
+				 * multiplied by the whole spellbook. The instance ID above stays packed — it is a
+				 * database sequence value and small. See ObservedBuffEntry. */
+				writer.WriteInt32Unpacked(ability.Template.ID);
 
 				// Count includes the TypeOverride if present (serialized as an extra event ID).
 				int eventCount = ability.AbilityEvents.Count;
@@ -665,11 +769,11 @@ namespace FishMMO.Shared
 				writer.WriteInt32(eventCount);
 				foreach (int abilityEvent in ability.AbilityEvents.Keys)
 				{
-					writer.WriteInt32(abilityEvent);
+					writer.WriteInt32Unpacked(abilityEvent);
 				}
 				if (hasTypeOverride)
 				{
-					writer.WriteInt32(ability.TypeOverride.ID);
+					writer.WriteInt32Unpacked(ability.TypeOverride.ID);
 				}
 			}
 
@@ -704,7 +808,8 @@ namespace FishMMO.Shared
 			{
 				InFlightAbilityObject entry = inFlightWriteBuffer[i];
 				writer.WriteInt64(entry.AbilityID);
-				writer.WriteInt32(entry.Seed);
+				// Unpacked: a per-cast seed is full entropy by construction.
+				writer.WriteInt32Unpacked(entry.Seed);
 				writer.WriteUInt32(entry.SpawnTick);
 				writer.WriteUInt32(entry.ServerStartTick);
 				writer.WriteUInt32(entry.LifeElapsedBeforeStartTicks);
@@ -717,6 +822,50 @@ namespace FishMMO.Shared
 				writer.WriteQuaternion64(entry.Rotation);
 			}
 			inFlightWriteBuffer.Clear();
+
+			/* The activation that is running RIGHT NOW.
+			 *
+			 * CharacterCastBroadcast is sent once, on the tick a cast begins, to whoever was
+			 * observing at that instant — so an observer who walked into range (or was un-culled,
+			 * which the streaming budget treats as routine: see MaterializePendingInFlightObjects,
+			 * which reclaims phantoms from exactly that cycle) three seconds into a five second
+			 * cast saw a nameplate that said nothing, and then received the STOP for a cast it had
+			 * never been told about. That stop's handler finds no row and returns: bytes spent on a
+			 * fact the receiver cannot use. This is the same window the in-flight object list above
+			 * closes, left open for the message whose whole purpose is letting a player look at
+			 * another character and see that it is doing something.
+			 *
+			 * Three values, and no more: the reference id (an ability INSTANCE id, or the item
+			 * template id for a consumable — the same field the live message carries, resolved
+			 * through the ability list written above), the consumable bit, and the server tick the
+			 * activation started on. Duration is not sent here for the same reason it is not sent
+			 * there: it is on the template, which every peer holds. The start tick is what lets the
+			 * receiver open the row PARTWAY through, using the same ComputeObserverCatchUpTicks
+			 * arithmetic the live message uses, rather than restarting a cast that is nearly over.
+			 *
+			 * Written for every receiver, the owner included, so the block has one shape; the owner
+			 * discards it (it predicted its own cast and draws it from that). */
+			byte activationShape = 0;
+			if (currentAbilityID != NO_ABILITY)
+			{
+				activationShape |= ABILITY_PAYLOAD_ACTIVATION_PRESENT;
+				if (replicatedFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
+				{
+					activationShape |= ABILITY_PAYLOAD_ACTIVATION_CONSUMABLE;
+				}
+			}
+			writer.WriteUInt8Unpacked(activationShape);
+			if ((activationShape & ABILITY_PAYLOAD_ACTIVATION_PRESENT) != 0)
+			{
+				writer.WriteInt64(currentAbilityID);
+				/* UNSET means the start was never announced — the activation began while this
+				 * object was in the forwarded mode, or before it had a TimeManager. Zero is the
+				 * value ElapsedSince already reads as "no correction to apply", so the row opens
+				 * from the beginning rather than from a tick that means nothing. */
+				writer.WriteUInt32(castStartServerTick == FishNet.Managing.Timing.TimeManager.UNSET_TICK
+					? 0u
+					: castStartServerTick);
+			}
 
 			writer.InsertUInt32Unpacked((uint)(writer.Position - abilityBlockStart),
 				abilityBlockStart - ABILITY_PAYLOAD_LENGTH_BYTES);

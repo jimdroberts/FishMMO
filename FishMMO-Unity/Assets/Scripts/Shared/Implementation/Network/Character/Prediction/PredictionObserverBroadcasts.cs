@@ -19,9 +19,21 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// Rate limited and change gated by the sender, so an idle character at full health costs
-	/// nothing and a fight costs a handful of updates a second rather than thirty.
+	/// nothing and a fight costs a handful of updates a second rather than thirty. The gate is
+	/// split: health and the maxima on one schedule, mana and stamina on a far coarser one, because
+	/// no observer-facing readout draws a peer's mana or stamina at all. See
+	/// <see cref="ObservedResourcePushScheduler"/>.
+	/// </para>
+	/// <para>
+	/// <b>Field gated as well as change gated.</b> <see cref="Mask"/> names which of the six values
+	/// this message actually carries; the rest are absent from the wire and the receiver leaves its
+	/// own copy alone. The three maxima move on an equip, a buff or a level and at no other time, so
+	/// before the mask existed roughly forty per cent of every push was a number the observer had
+	/// held since the spawn payload. This is the same redundancy the reconcile path solved for the
+	/// same struct in <c>CharacterAttributeResourceStateSerializer.WriteDelta</c>.
 	/// </para>
 	/// </remarks>
+	[UseGlobalCustomSerializer]
 	public struct CharacterResourcesBroadcast : IBroadcast
 	{
 		/// <summary>
@@ -49,24 +61,175 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public int CharacterObjectID;
 
-		/// <summary>Current health, in whole units.</summary>
+		/// <summary>
+		/// Which of the six values below are present on the wire; see <see cref="CharacterResourcesMask"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A field whose bit is clear is absent from the message entirely and its value in this
+		/// struct is meaningless — the receiver must leave its own copy untouched rather than
+		/// applying a default. Zero is a legal mask (a confirmation of nothing is never sent, but a
+		/// corrupt or future-shaped stream can produce one) and means "apply nothing".
+		/// </para>
+		/// <para>
+		/// <b>Every present field is an ABSOLUTE value, never a difference.</b> That is the whole
+		/// reason a mask is safe on an unreliable channel: the message is self-describing for what
+		/// it carries, so a receiver that missed the previous push still applies these fields
+		/// exactly right. What a loss can cost is an omitted field staying at its old value, and
+		/// <see cref="ObservedResourcePushScheduler.Decision.Confirm"/> — which sets every bit and
+		/// rides the reliable channel — is what bounds that.
+		/// </para>
+		/// </remarks>
+		public byte Mask;
+
+		/// <summary>Current health, in whole units. Present when <see cref="CharacterResourcesMask.Health"/> is set.</summary>
 		/// <remarks>
 		/// Integers rather than floats, for all three current values. An observer renders a bar
 		/// at whole-unit precision — the sender's change gate already compares at whole units, so
 		/// nothing finer was ever visible — and FishNet packs an int to one or two bytes where a
 		/// float is always four.
+		/// <para>
+		/// The whole-unit form is also what makes the mask exact. The sender sets a bit when the
+		/// ROUNDED value differs from the rounded value it last sent, which is precisely what the
+		/// receiver is holding, so an omitted field can never drift.
+		/// </para>
 		/// </remarks>
 		public int Health;
-		/// <summary>Maximum health.</summary>
+		/// <summary>Maximum health. Present when <see cref="CharacterResourcesMask.MaxHealth"/> is set.</summary>
 		public int MaxHealth;
-		/// <summary>Current mana, in whole units.</summary>
+		/// <summary>Current mana, in whole units. Present when <see cref="CharacterResourcesMask.Mana"/> is set.</summary>
 		public int Mana;
-		/// <summary>Maximum mana.</summary>
+		/// <summary>Maximum mana. Present when <see cref="CharacterResourcesMask.MaxMana"/> is set.</summary>
 		public int MaxMana;
-		/// <summary>Current stamina, in whole units.</summary>
+		/// <summary>Current stamina, in whole units. Present when <see cref="CharacterResourcesMask.Stamina"/> is set.</summary>
 		public int Stamina;
-		/// <summary>Maximum stamina.</summary>
+		/// <summary>Maximum stamina. Present when <see cref="CharacterResourcesMask.MaxStamina"/> is set.</summary>
 		public int MaxStamina;
+	}
+
+	/// <summary>
+	/// The bits of <see cref="CharacterResourcesBroadcast.Mask"/>, and the rules that produce one.
+	/// </summary>
+	/// <remarks>
+	/// Pure and static so the mask rules can be asserted directly — the interesting cases are a
+	/// maximum changing, a confirmation, and the first push of a character's life, none of which is
+	/// reachable from a test that has to spawn one first.
+	/// </remarks>
+	public static class CharacterResourcesMask
+	{
+		/// <summary><see cref="CharacterResourcesBroadcast.Health"/> is present.</summary>
+		public const byte Health = 1 << 0;
+		/// <summary><see cref="CharacterResourcesBroadcast.MaxHealth"/> is present.</summary>
+		public const byte MaxHealth = 1 << 1;
+		/// <summary><see cref="CharacterResourcesBroadcast.Mana"/> is present.</summary>
+		public const byte Mana = 1 << 2;
+		/// <summary><see cref="CharacterResourcesBroadcast.MaxMana"/> is present.</summary>
+		public const byte MaxMana = 1 << 3;
+		/// <summary><see cref="CharacterResourcesBroadcast.Stamina"/> is present.</summary>
+		public const byte Stamina = 1 << 4;
+		/// <summary><see cref="CharacterResourcesBroadcast.MaxStamina"/> is present.</summary>
+		public const byte MaxStamina = 1 << 5;
+
+		/// <summary>The three maxima together.</summary>
+		/// <remarks>
+		/// They travel as a group. Only one of them changes at a time in practice, but they are the
+		/// fields a loss strands for longest, and two spare bytes on the handful of pushes that
+		/// follow an equip is a better trade than three separate sticky counters.
+		/// </remarks>
+		public const byte Maxima = MaxHealth | MaxMana | MaxStamina;
+
+		/// <summary>Every field. What a confirmation sends, and what the first push of a life sends.</summary>
+		public const byte All = Health | MaxHealth | Mana | MaxMana | Stamina | MaxStamina;
+
+		/// <summary>True when <paramref name="mask"/> names at least one maximum.</summary>
+		public static bool IncludesMaximum(byte mask)
+		{
+			return (mask & Maxima) != 0;
+		}
+
+		/// <summary>
+		/// Which fields of <paramref name="next"/> differ from what was last sent.
+		/// </summary>
+		/// <remarks>
+		/// Compared against the message the observers were last GIVEN rather than against the
+		/// sender's float state, so the comparison is against exactly the numbers the receiver
+		/// holds. <see cref="CharacterResourcesBroadcast.Sequence"/> and
+		/// <see cref="CharacterResourcesBroadcast.CharacterObjectID"/> are not fields of the
+		/// resource sheet and take no part in it.
+		/// </remarks>
+		/// <param name="previous">The last message sent for this character.</param>
+		/// <param name="next">The message about to be sent.</param>
+		/// <returns>The mask of changed fields; zero when nothing moved.</returns>
+		public static byte ChangedFields(in CharacterResourcesBroadcast previous, in CharacterResourcesBroadcast next)
+		{
+			byte mask = 0;
+			if (previous.Health != next.Health) mask |= Health;
+			if (previous.MaxHealth != next.MaxHealth) mask |= MaxHealth;
+			if (previous.Mana != next.Mana) mask |= Mana;
+			if (previous.MaxMana != next.MaxMana) mask |= MaxMana;
+			if (previous.Stamina != next.Stamina) mask |= Stamina;
+			if (previous.MaxStamina != next.MaxStamina) mask |= MaxStamina;
+			return mask;
+		}
+	}
+
+	/// <summary>
+	/// Wire format for <see cref="CharacterResourcesBroadcast"/>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Sequence, object id and the mask byte, then only the fields the mask names. Hand written
+	/// because FishNet's generated serializer writes every field of a struct unconditionally, and
+	/// the three maxima are unchanged for almost the whole of a character's life.
+	/// </para>
+	/// <para>
+	/// The mask is written BEFORE the values rather than backfilled, because the sender knows it
+	/// before it writes anything — there is no equivalent here of the reconcile serializer's
+	/// placeholder-and-insert, which exists only because that writer discovers its flags as it
+	/// goes.
+	/// </para>
+	/// </remarks>
+	public static class CharacterResourcesBroadcastSerializer
+	{
+		/// <summary>Writes a <see cref="CharacterResourcesBroadcast"/>. Discovered by FishNet's codegen by name.</summary>
+		public static void WriteCharacterResourcesBroadcast(this Writer writer, CharacterResourcesBroadcast value)
+		{
+			writer.WriteUInt16(value.Sequence);
+			writer.WriteInt32(value.CharacterObjectID);
+			writer.WriteUInt8Unpacked(value.Mask);
+
+			if ((value.Mask & CharacterResourcesMask.Health) != 0) writer.WriteInt32(value.Health);
+			if ((value.Mask & CharacterResourcesMask.MaxHealth) != 0) writer.WriteInt32(value.MaxHealth);
+			if ((value.Mask & CharacterResourcesMask.Mana) != 0) writer.WriteInt32(value.Mana);
+			if ((value.Mask & CharacterResourcesMask.MaxMana) != 0) writer.WriteInt32(value.MaxMana);
+			if ((value.Mask & CharacterResourcesMask.Stamina) != 0) writer.WriteInt32(value.Stamina);
+			if ((value.Mask & CharacterResourcesMask.MaxStamina) != 0) writer.WriteInt32(value.MaxStamina);
+		}
+
+		/// <summary>Reads a <see cref="CharacterResourcesBroadcast"/> in the order <see cref="WriteCharacterResourcesBroadcast"/> wrote it.</summary>
+		/// <remarks>
+		/// Fields the mask does not name are left at zero in the returned struct. They must never be
+		/// applied — see <see cref="CharacterResourcesBroadcast.Mask"/> — and zero is deliberately
+		/// not a usable value so a receiver that forgets the mask fails loudly rather than quietly
+		/// emptying somebody's bar.
+		/// </remarks>
+		public static CharacterResourcesBroadcast ReadCharacterResourcesBroadcast(this Reader reader)
+		{
+			CharacterResourcesBroadcast value = new CharacterResourcesBroadcast()
+			{
+				Sequence = reader.ReadUInt16(),
+				CharacterObjectID = reader.ReadInt32(),
+			};
+			value.Mask = reader.ReadUInt8Unpacked();
+
+			if ((value.Mask & CharacterResourcesMask.Health) != 0) value.Health = reader.ReadInt32();
+			if ((value.Mask & CharacterResourcesMask.MaxHealth) != 0) value.MaxHealth = reader.ReadInt32();
+			if ((value.Mask & CharacterResourcesMask.Mana) != 0) value.Mana = reader.ReadInt32();
+			if ((value.Mask & CharacterResourcesMask.MaxMana) != 0) value.MaxMana = reader.ReadInt32();
+			if ((value.Mask & CharacterResourcesMask.Stamina) != 0) value.Stamina = reader.ReadInt32();
+			if ((value.Mask & CharacterResourcesMask.MaxStamina) != 0) value.MaxStamina = reader.ReadInt32();
+			return value;
+		}
 	}
 
 	/// <summary>
@@ -175,13 +338,21 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// Lifetime expiry is deterministic and needs no message; a collision is not. Only the server
 	/// and the caster's own client resolve hits — see <c>AbilityObject.ResolvesHitsLocally</c> — so
-	/// for a third-party observer this is the ONLY thing that ends a collided object, and for the
-	/// caster it corrects a predicted miss. Sent reliably: it is one small message per
-	/// collision-ended object, and a lost one is a ghost that flies on for the rest of its life.
-	/// The container id is a pure function of (seed, spawn tick) on every peer, so the pair below
-	/// names the same object everywhere. Paired with <see cref="AbilityObjectHitBroadcast"/>, which
-	/// carries the impact itself — this message says the object ended, not what it struck.
+	/// an observer cannot work out that a collided object ended, and for the caster the statement
+	/// corrects a predicted miss. Sent reliably: it is one small message per collision-ended
+	/// object, and a lost one is a ghost that flies on for the rest of its life. The container id
+	/// is a pure function of (seed, spawn tick) on every peer, so the pair below names the same
+	/// object everywhere.
+	/// <para>
+	/// <b>Only for an end no hit message precedes.</b> A collision that published a hit states the
+	/// end inline through <see cref="AbilityObjectHitBroadcast.Ended"/>, because sending both was
+	/// two reliable messages for one event. What is left for this message is every OTHER end a
+	/// client cannot reproduce: a shield sweeping nearby projectiles
+	/// (<c>ShieldInterceptAction</c>), which destroys with observer notification and publishes no
+	/// hit, and a pierce chain whose hit message could not yet know the count would run out.
+	/// </para>
 	/// </remarks>
+	[UseGlobalCustomSerializer]
 	public struct AbilityObjectDestroyedBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the casting character.</summary>
@@ -233,6 +404,7 @@ namespace FishMMO.Shared
 	/// message is an impact nobody outside the server ever sees.
 	/// </para>
 	/// </remarks>
+	[UseGlobalCustomSerializer]
 	public struct AbilityObjectHitBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the casting character.</summary>
@@ -260,7 +432,16 @@ namespace FishMMO.Shared
 		/// <summary>World point of impact, measured on the server inside the rewind scope.</summary>
 		public Vector3 Point;
 
-		/// <summary>Surface normal at <see cref="Point"/>.</summary>
+		/// <summary>Surface normal at <see cref="Point"/>. <b>Not carried on a deflection.</b></summary>
+		/// <remarks>
+		/// Travels through <see cref="AimDirectionCompression"/> — four bytes rather than twelve. It
+		/// is a unit vector and the only thing a receiver does with it is orient an impact effect;
+		/// the packer's 0.0055&#176; of yaw and 0.0027&#176; of pitch are three orders of magnitude
+		/// finer than that needs. The one caller that reasoned FROM a normal rather than drawing with
+		/// it — the deflection — does not read this field at all: the heading it produced is carried
+		/// absolute in <see cref="PackedDeflectHeading"/>, resolved on the server before the message
+		/// was built. See <see cref="AbilityObjectObserverBroadcastSerializers"/>.
+		/// </remarks>
 		public Vector3 Normal;
 
 		/// <summary>
@@ -292,9 +473,13 @@ namespace FishMMO.Shared
 		/// A deflect is a rejected hit: the server ran no OnHit events, spent no hit count and dealt
 		/// no damage, but the projectile changed direction — and a trajectory change is the one
 		/// thing an observer cannot reproduce on its own, because the buff that caused it is the
-		/// DEFENDER's and the observer never resolves hits. One bit is all it takes, because the new
-		/// heading is a pure function of the incoming one and <see cref="Normal"/>, which this
-		/// message already carries. See <c>DeflectBuffTemplate.ResolveDeflectedHeading</c>.
+		/// DEFENDER's and the observer never resolves hits. One bit is all this flag needs to be:
+		/// it says a deflection happened, and nothing more. The new heading does NOT ride on it —
+		/// re-deriving the reflection from <see cref="Normal"/> is not safe, because reflecting
+		/// twice about the same normal returns the original vector and the caster's own client
+		/// receives this message after predicting the deflection itself. The absolute heading
+		/// therefore travels separately in <see cref="PackedDeflectHeading"/>, whose remarks carry
+		/// the full argument. See <c>DeflectBuffTemplate.ResolveDeflectedHeading</c>.
 		/// </para>
 		/// <para>
 		/// It is also what lets a receiver act on a hit whose VICTIM it cannot resolve. A character
@@ -305,6 +490,63 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		public bool Deflected;
+
+		/// <summary>
+		/// True when the victim's raised shield ATE this object rather than being struck by it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The third outcome of a collision, and until it travelled the receiver could not tell it
+		/// from the first. A block is decided by the peer that resolves hits
+		/// (<c>AbilityObject.ResolvesHitsLocally</c>), so the server ran NO OnHit chain for it — it
+		/// destroyed the object and played its destroy events and nothing else. The message it sent
+		/// was an ordinary impact, and every observer, the blocker's own client included, ran the
+		/// ability's entire OnHit chain off the back of it: impact effects for a shot that never
+		/// landed, <c>AbilityForkHitAction</c> redirecting a copy off a hit the server rejected, and
+		/// RNG draws the server never made (<c>AbilityObject</c>'s parity contract).
+		/// </para>
+		/// <para>
+		/// It is the block counterpart of <see cref="Deflected"/>, and the two are exclusive: a
+		/// deflect gives the projectile BACK on a new heading, a block consumes it. So this carries
+		/// no heading — the object ended — and rides the ordinary impact shape, because the point
+		/// and the normal are the shield's and the destroy chain draws the shield impact from them.
+		/// </para>
+		/// </remarks>
+		public bool Blocked;
+
+		/// <summary>
+		/// True when this hit ENDED the object on the server, so no separate destroy follows.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// One collision used to produce two reliable messages describing it: this one, and an
+		/// <see cref="AbilityObjectDestroyedBroadcast"/> naming the same caster, ability, container
+		/// and object. Every shipped ability carries <c>HitCount 1</c>, so the second was in
+		/// practice always implied by the first — ~15-20 bytes and a second reliable slot per
+		/// collision-ended object per observer, for one bit of information.
+		/// </para>
+		/// <para>
+		/// <b>Stated, never inferred.</b> An observer must not spend <c>HitCount</c> itself — its
+		/// copy is told about the hits the server resolved and never about the ones the server
+		/// declined, so counting locally ends the copy early. That argument is against INFERRING
+		/// the end, not against the server saying so inline, which is what this is.
+		/// </para>
+		/// <para>
+		/// Set only where the end is certain at the moment the message is WRITTEN, which is before
+		/// the OnHit chain runs (see <c>AbilityObject.ApplyHit</c>: a destroyed object cannot
+		/// publish, because destruction nulls its ability and caster). A chain that can PIERCE —
+		/// one carrying an <c>AbilityHitCountAction</c> — may cancel the decrement this hit would
+		/// otherwise apply, so for those the standalone destroy still travels. See
+		/// <c>AbilityObject.HitEndsObject</c>.
+		/// </para>
+		/// <para>
+		/// The standalone <see cref="AbilityObjectDestroyedBroadcast"/> remains for every end that
+		/// no hit message precedes: a shield sweeping nearby projectiles
+		/// (<c>ShieldInterceptAction</c>) destroys with observer notification and publishes no hit
+		/// at all.
+		/// </para>
+		/// </remarks>
+		public bool Ended;
 
 		/// <summary>
 		/// The heading the object left on after a deflection, packed by
@@ -353,6 +595,7 @@ namespace FishMMO.Shared
 	/// the draw.
 	/// </para>
 	/// </remarks>
+	[UseGlobalCustomSerializer]
 	public struct AbilityObjectRedirectBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the casting character.</summary>
@@ -380,6 +623,252 @@ namespace FishMMO.Shared
 		/// <c>AbilityController.ComputeObserverFastForwardTicks</c>.
 		/// </remarks>
 		public uint ServerTick;
+	}
+
+	/// <summary>
+	/// Hand written wire formats for the three per-object ability broadcasts:
+	/// <see cref="AbilityObjectDestroyedBroadcast"/>, <see cref="AbilityObjectHitBroadcast"/> and
+	/// <see cref="AbilityObjectRedirectBroadcast"/>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// These are per-hit and per-object messages paid once per observer, and the generated
+	/// serializer wrote every field of every one of them packed and unconditionally. Two things
+	/// were wrong with that.
+	/// </para>
+	/// <list type="bullet">
+	/// <item>
+	/// <b>Packing a full-entropy word costs a byte rather than saving four.</b> FishNet's packed
+	/// 32-bit form is a seven-bit-per-byte varint, so a value that uses the whole range takes FIVE
+	/// bytes where the unpacked form takes four. <c>ContainerID</c> is
+	/// <c>seed ^ (tick * 1000003)</c> (<c>AbilityContainerAllocator.ComputeContainerId</c>) and
+	/// <see cref="AbilityObjectRedirectBroadcast.PackedHeading"/> is an
+	/// <see cref="AimDirectionCompression"/> word; both are unpacked here. Object ids, the ability
+	/// id and the absolute tick stay packed, because those genuinely are small.
+	/// </item>
+	/// <item>
+	/// <b>A hit message has two shapes and was written as one.</b> A deflected hit is answered by
+	/// <c>AbilityController.OnAbilityObjectHitBroadcast</c> reading the heading and returning, so
+	/// the point, the normal, the victim and the direct-impact flag were written and never read —
+	/// twenty-five bytes per deflected hit per observer. A header byte now names the shape, in the
+	/// style of <see cref="AbilityObserverBroadcastSerializers.WriteAbilityActivatedBroadcast"/>.
+	/// </item>
+	/// </list>
+	/// <para>
+	/// Discovered by FishNet's codegen through the <c>Write*</c>/<c>Read*</c> naming convention and
+	/// applied across assemblies because each struct carries <c>[UseGlobalCustomSerializer]</c>.
+	/// </para>
+	/// </remarks>
+	public static class AbilityObjectObserverBroadcastSerializers
+	{
+		/// <summary>Set when the hit was a deflection: a heading follows and nothing else does.</summary>
+		private const byte FLAG_DEFLECTED = 0x01;
+
+		/// <summary>Set when an ECA action resolved the impact rather than the object's own sweep.</summary>
+		private const byte FLAG_DIRECT_IMPACT = 0x02;
+
+		/// <summary>Set when a victim object id follows the point and the normal.</summary>
+		/// <remarks>
+		/// Absent means <c>VictimObjectID == 0</c>, which is the documented "hit scenery" outcome —
+		/// NOT the <c>-1</c> that <see cref="AbilityActivatedBroadcast.TargetObjectID"/> uses for an
+		/// absent target. Reading back <c>-1</c> here would turn every wall impact into a victim the
+		/// receiver cannot resolve, and the handler drops those.
+		/// </remarks>
+		private const byte FLAG_HAS_VICTIM = 0x04;
+
+		/// <summary>Set when the victim's shield ate the object instead of being struck by it.</summary>
+		/// <remarks>
+		/// An impact-shape flag, like <see cref="FLAG_DIRECT_IMPACT"/>: a block carries the shield's
+		/// point and normal so the destroy chain can draw the impact on the shield face, and carries
+		/// no heading because nothing was given back.
+		/// </remarks>
+		private const byte FLAG_BLOCKED = 0x08;
+
+		/// <summary>Set when this hit ended the object, so no destroy message follows it.</summary>
+		private const byte FLAG_ENDED = 0x10;
+
+		/// <summary>Writes an <see cref="AbilityObjectDestroyedBroadcast"/>.</summary>
+		public static void WriteAbilityObjectDestroyedBroadcast(this Writer writer, AbilityObjectDestroyedBroadcast value)
+		{
+			writer.WriteInt32(value.CasterObjectID);
+			writer.WriteInt64(value.AbilityID);
+			/* Unpacked: the container id is seed ^ (tick * 1000003), which is full entropy by
+			 * construction, so the packed form would spend five bytes on it. */
+			writer.WriteInt32Unpacked(value.ContainerID);
+			writer.WriteInt32(value.ObjectID);
+		}
+
+		/// <summary>Reads an <see cref="AbilityObjectDestroyedBroadcast"/> written by the method above.</summary>
+		public static AbilityObjectDestroyedBroadcast ReadAbilityObjectDestroyedBroadcast(this Reader reader)
+		{
+			return new AbilityObjectDestroyedBroadcast()
+			{
+				CasterObjectID = reader.ReadInt32(),
+				AbilityID = reader.ReadInt64(),
+				ContainerID = reader.ReadInt32Unpacked(),
+				ObjectID = reader.ReadInt32(),
+			};
+		}
+
+		/// <summary>Writes an <see cref="AbilityObjectHitBroadcast"/> in its shape-dependent form.</summary>
+		/// <remarks>
+		/// <para>
+		/// Two shapes, named by the header byte. A <b>deflection</b> carries the heading and nothing
+		/// else: the receiver applies it and returns before it looks at the point, the normal, the
+		/// victim or any of the impact flags, so writing them was pure waste on the one hit shape
+		/// that occurs in bursts. An ordinary <b>impact</b> carries the point, the normal and — only
+		/// when it is not a scenery hit — the victim id, and carries no heading at all. The block
+		/// and the end are bits in the header rather than fields, so neither costs the impact shape
+		/// anything at all.
+		/// </para>
+		/// <para>
+		/// <see cref="AbilityObjectHitBroadcast.PackedDeflectHeading"/> is <b>unpacked</b>, like the
+		/// container id above it, and the shaping is what makes that the right call. The field used
+		/// to be written on every hit and was <c>0</c> on almost all of them, which is the one case
+		/// the packed form is good at — a single byte. Now it is written only when a deflection
+		/// actually happened, so every value that reaches the wire is a full-entropy
+		/// <c>AimDirectionCompression</c> word, which the packed form spends five bytes on.
+		/// </para>
+		/// </remarks>
+		public static void WriteAbilityObjectHitBroadcast(this Writer writer, AbilityObjectHitBroadcast value)
+		{
+			byte header = 0;
+			if (value.Deflected)
+			{
+				header |= FLAG_DEFLECTED;
+			}
+
+			/* Both of these describe the impact shape only. A deflection is not an impact — the
+			 * server ran no OnHit events for it — and the two producers agree: BroadcastHitToObservers
+			 * never sets DirectImpact, PublishActionHit never sets Deflected. Masking them off here
+			 * rather than trusting that is what keeps the header a true statement of what follows. */
+			bool hasVictim = !value.Deflected && value.VictimObjectID != 0;
+			if (!value.Deflected && value.DirectImpact)
+			{
+				header |= FLAG_DIRECT_IMPACT;
+			}
+			if (hasVictim)
+			{
+				header |= FLAG_HAS_VICTIM;
+			}
+			/* The block and the end are impact-shape statements too. A deflection ends nothing and
+			 * strikes nobody, so neither can accompany it; masking them off here rather than trusting
+			 * the producers is what keeps the header a true statement of what follows. */
+			if (!value.Deflected && value.Blocked)
+			{
+				header |= FLAG_BLOCKED;
+			}
+			if (!value.Deflected && value.Ended)
+			{
+				header |= FLAG_ENDED;
+			}
+
+			writer.WriteUInt8Unpacked(header);
+			writer.WriteInt32(value.CasterObjectID);
+			writer.WriteInt64(value.AbilityID);
+			// Full entropy; see WriteAbilityObjectDestroyedBroadcast.
+			writer.WriteInt32Unpacked(value.ContainerID);
+			writer.WriteInt32(value.ObjectID);
+
+			if (value.Deflected)
+			{
+				writer.WriteUInt32Unpacked(value.PackedDeflectHeading);
+				return;
+			}
+
+			writer.WriteVector3(value.Point);
+
+			/* The normal through the aim packer: four bytes instead of twelve, on a unit vector whose
+			 * only consumer orients an impact effect with it. AimDirectionCompression resolves to
+			 * 0.0055 degrees of yaw and 0.0027 of pitch, which is far finer than an FX transform can
+			 * show, and it is already the encoding this same struct uses for its deflect heading. A
+			 * degenerate normal — which a cast that begins already overlapping can report as zero —
+			 * comes back as the packer's deterministic forward rather than as zero; both are arbitrary
+			 * for orienting an effect, and every peer now agrees on which arbitrary vector it is.
+			 * Unpacked, because an encoded direction fills all 32 bits. */
+			writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.Normal));
+
+			if (hasVictim)
+			{
+				writer.WriteInt32(value.VictimObjectID);
+			}
+		}
+
+		/// <summary>Reads an <see cref="AbilityObjectHitBroadcast"/> written by the method above.</summary>
+		/// <remarks>
+		/// Fields a shape does not carry come back at their defaults — <c>Vector3.zero</c> for the
+		/// point and the normal, <c>0</c> for the deflect heading, <c>false</c> for the impact flags,
+		/// and <c>0</c> for the victim, which is this message's "hit scenery" value rather than
+		/// the <c>-1</c> an activation uses for an absent target. That is exactly what the receiving
+		/// side expects: <c>AbilityController.OnAbilityObjectHitBroadcast</c> branches on
+		/// <see cref="AbilityObjectHitBroadcast.Deflected"/> first and only reads the fields the
+		/// remaining shape carries.
+		/// </remarks>
+		public static AbilityObjectHitBroadcast ReadAbilityObjectHitBroadcast(this Reader reader)
+		{
+			byte header = reader.ReadUInt8Unpacked();
+
+			AbilityObjectHitBroadcast value = new AbilityObjectHitBroadcast()
+			{
+				Deflected = (header & FLAG_DEFLECTED) != 0,
+				DirectImpact = (header & FLAG_DIRECT_IMPACT) != 0,
+				Blocked = (header & FLAG_BLOCKED) != 0,
+				Ended = (header & FLAG_ENDED) != 0,
+				VictimObjectID = 0,
+				Point = Vector3.zero,
+				Normal = Vector3.zero,
+			};
+
+			value.CasterObjectID = reader.ReadInt32();
+			value.AbilityID = reader.ReadInt64();
+			value.ContainerID = reader.ReadInt32Unpacked();
+			value.ObjectID = reader.ReadInt32();
+
+			if (value.Deflected)
+			{
+				value.PackedDeflectHeading = reader.ReadUInt32Unpacked();
+				return value;
+			}
+
+			value.Point = reader.ReadVector3();
+			value.Normal = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked());
+
+			if ((header & FLAG_HAS_VICTIM) != 0)
+			{
+				value.VictimObjectID = reader.ReadInt32();
+			}
+
+			return value;
+		}
+
+		/// <summary>Writes an <see cref="AbilityObjectRedirectBroadcast"/>.</summary>
+		public static void WriteAbilityObjectRedirectBroadcast(this Writer writer, AbilityObjectRedirectBroadcast value)
+		{
+			writer.WriteInt32(value.CasterObjectID);
+			writer.WriteInt64(value.AbilityID);
+			// Full entropy; see WriteAbilityObjectDestroyedBroadcast.
+			writer.WriteInt32Unpacked(value.ContainerID);
+			writer.WriteInt32(value.ObjectID);
+			/* Unpacked: unlike the hit message's deflect heading, this one is only ever sent when a
+			 * fork actually turned the object, so it is always a real AimDirectionCompression word
+			 * with its high bits set — five bytes packed against four unpacked. */
+			writer.WriteUInt32Unpacked(value.PackedHeading);
+			writer.WriteUInt32(value.ServerTick);
+		}
+
+		/// <summary>Reads an <see cref="AbilityObjectRedirectBroadcast"/> written by the method above.</summary>
+		public static AbilityObjectRedirectBroadcast ReadAbilityObjectRedirectBroadcast(this Reader reader)
+		{
+			return new AbilityObjectRedirectBroadcast()
+			{
+				CasterObjectID = reader.ReadInt32(),
+				AbilityID = reader.ReadInt64(),
+				ContainerID = reader.ReadInt32Unpacked(),
+				ObjectID = reader.ReadInt32(),
+				PackedHeading = reader.ReadUInt32Unpacked(),
+				ServerTick = reader.ReadUInt32(),
+			};
+		}
 	}
 
 	/// <summary>
@@ -495,18 +984,29 @@ namespace FishMMO.Shared
 
 	/// <summary>Wire format for <see cref="CharacterBuffsBroadcast"/>.</summary>
 	/// <remarks>
-	/// Hand written for the same reason <c>CharacterAttributesBroadcast</c> is: the generated array
-	/// serializer spends four bytes on each length and a sentinel on each null, where both counts
-	/// here are bounded by a character's buff strip and a null array is simply an empty one. The
-	/// caps also stop a malformed message allocating an arbitrarily large array before the stream
-	/// runs out.
+	/// <para>
+	/// Hand written for the same reason <c>CharacterAttributesBroadcast</c> is: a null array is
+	/// simply an empty one here rather than a sentinel, the removals are omitted entirely on a full
+	/// set, and the caps stop a malformed message allocating an arbitrarily large array before the
+	/// stream runs out.
+	/// </para>
+	/// <para>
+	/// It is <b>not</b> written for the length prefix, and this remark used to claim it was — that
+	/// the generated array serializer "spends four bytes on each length". It does not:
+	/// <c>Writer.WriteArray</c> writes the count with <c>WriteSignedPackedWhole</c>, one byte for
+	/// any count seen here. Worse, the counts below used to be written with
+	/// <c>WriteUInt16</c>, which is <b>always</b> two unpacked bytes (<c>Writer.WriteUInt16</c>
+	/// forwards straight to <c>WriteUInt16Unpacked</c>) — so the hand-written form was costing one
+	/// byte MORE per count than the generated one it was justified against. They are packed
+	/// <c>WriteInt32</c>/<c>ReadInt32</c> now, which is one byte for a strip of up to 63 buffs.
+	/// </para>
 	/// </remarks>
 	public static class CharacterBuffsBroadcastSerializer
 	{
 		/// <summary>Hard cap on entries, and separately on removals, in one message.</summary>
 		/// <remarks>
-		/// Far above any real character's visible strip; small enough that either count fits a
-		/// <c>ushort</c>.
+		/// Far above any real character's visible strip; small enough that either count still costs
+		/// two packed bytes at the very worst, and one for anything a character actually carries.
 		/// </remarks>
 		public const int MAX_BUFFS = 4096;
 
@@ -523,7 +1023,8 @@ namespace FishMMO.Shared
 					$"Write buff count {count} exceeds limit {MAX_BUFFS}. Truncating to preserve stream integrity.");
 				count = MAX_BUFFS;
 			}
-			writer.WriteUInt16((ushort)count);
+			// Packed, not WriteUInt16: see the class remark. One byte for any real strip.
+			writer.WriteInt32(count);
 			for (int i = 0; i < count; ++i)
 			{
 				value.Buffs[i].WriteTo(writer);
@@ -544,7 +1045,7 @@ namespace FishMMO.Shared
 					$"Write removed count {removedCount} exceeds limit {MAX_BUFFS}. Truncating to preserve stream integrity.");
 				removedCount = MAX_BUFFS;
 			}
-			writer.WriteUInt16((ushort)removedCount);
+			writer.WriteInt32(removedCount);
 			for (int i = 0; i < removedCount; ++i)
 			{
 				// Unpacked for the same reason ObservedBuffEntry writes its id unpacked.
@@ -563,8 +1064,10 @@ namespace FishMMO.Shared
 				Removed = System.Array.Empty<int>(),
 			};
 
-			int count = reader.ReadUInt16();
-			if (count > MAX_BUFFS)
+			/* Packed and SIGNED, so a corrupt stream can hand back a negative here where the ushort
+			 * form could not. Rejected by the same branch, for the same reason. */
+			int count = reader.ReadInt32();
+			if (count < 0 || count > MAX_BUFFS)
 			{
 				/* Discarded rather than partially applied. Returning a FULL empty set would tell the
 				 * receiver to clear the strip, so the discard is reported as a delta and the strip
@@ -577,7 +1080,7 @@ namespace FishMMO.Shared
 				 * shares the datagram. The cap below is what keeps this handler from being that
 				 * handler; it is not a frame to recover behind. */
 				Log.Warning("CharacterBuffsBroadcast",
-					$"Read buff count {count} exceeds limit {MAX_BUFFS}. Discarding this update.");
+					$"Read buff count {count} is outside 0-{MAX_BUFFS}. Discarding this update.");
 				value.IsFullSet = false;
 				return value;
 			}
@@ -597,11 +1100,11 @@ namespace FishMMO.Shared
 				return value;
 			}
 
-			int removedCount = reader.ReadUInt16();
-			if (removedCount > MAX_BUFFS)
+			int removedCount = reader.ReadInt32();
+			if (removedCount < 0 || removedCount > MAX_BUFFS)
 			{
 				Log.Warning("CharacterBuffsBroadcast",
-					$"Read removed count {removedCount} exceeds limit {MAX_BUFFS}. Discarding this update.");
+					$"Read removed count {removedCount} is outside 0-{MAX_BUFFS}. Discarding this update.");
 				value.Buffs = System.Array.Empty<ObservedBuffEntry>();
 				return value;
 			}

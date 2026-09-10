@@ -156,7 +156,30 @@ namespace FishMMO.Shared
 		/// event (a buff tick, a region trigger) keep the plain <c>MayPredict</c> answer.
 		/// </para>
 		/// </remarks>
-		protected static bool ResolvesTargetsLocally(EventData eventData)
+		protected static bool ResolvesTargetsLocally(EventData eventData) => ResolvesSelectionsLocally(eventData);
+
+		/// <summary>
+		/// <see cref="ResolvesTargetsLocally"/>, reachable from outside the selector hierarchy.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The fan-out in <see cref="TriggerExecution"/> has to ask the same question the selectors
+		/// ask, for the opposite reason: a selector asks it to decide whether to resolve, and the
+		/// fan-out asks it to tell an EMPTY SELECTION apart from a DECLINED one. Those two had the
+		/// same shape and very different meanings — "nobody was standing there" must run nothing,
+		/// while "this peer is not allowed to look" must still let the authored presentation play,
+		/// or a chain, area, cone or line ability is silent on every screen but the caster's. One
+		/// implementation, because two copies of this predicate drifting apart is how an observer
+		/// starts resolving somebody else's hits.
+		/// </para>
+		/// <para>
+		/// Public rather than internal: the answer is a peer fact, not a selector implementation
+		/// detail, and the fan-out lives in a different namespace.
+		/// </para>
+		/// </remarks>
+		/// <param name="eventData">The event driving the selection.</param>
+		/// <returns>True when this peer may resolve a spatial selection for itself.</returns>
+		public static bool ResolvesSelectionsLocally(EventData eventData)
 		{
 			/* An ability-driven selection is judged by the OBJECT, not by the event's initiator —
 			 * see the detached-object note above. */

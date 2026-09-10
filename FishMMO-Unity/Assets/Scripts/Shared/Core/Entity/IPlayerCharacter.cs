@@ -86,13 +86,46 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		int RaceID { get; set; }
 		/// <summary>
+		/// The character's race, resolved from <see cref="RaceID"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A character stores its race as an ID, not as a template reference, and that is the right
+		/// way round: the ID is what persists, what the spawn payload carries, and what survives a
+		/// template being reimported. The template is a cache entry that ID names, so this resolves
+		/// rather than holds — there is no second copy to fall out of step with <see cref="RaceID"/>.
+		/// </para>
+		/// <para>
+		/// Not to be confused with <c>IFactionController.RaceTemplate</c>. That is a SEPARATE
+		/// holding with its own id, deliberately overridable per spawn
+		/// (<c>NPCSpawnableSettings.FactionOverride</c> → <c>SetRaceTemplateOnSpawn</c>) so one NPC
+		/// prefab can answer for several factions. For a player the two agree, but the faction
+		/// controller's copy answers a different question and must not be read as "what race is
+		/// this character".
+		/// </para>
+		/// <para>
+		/// Null when <see cref="RaceID"/> is 0 (a character whose race was never assigned) or when
+		/// no template with that ID is cached on this peer. Callers that display the answer decide
+		/// what an unknown race reads as; this invents no placeholder.
+		/// </para>
+		/// </remarks>
+		RaceTemplate RaceTemplate { get; }
+		/// <summary>
+		/// The character's race name, for display.
+		/// </summary>
+		/// <remarks>
+		/// Derived from <see cref="RaceTemplate"/>, and null when that cannot be resolved. This was
+		/// once a string field of its own, assigned in <c>ReadPayload</c> — except nothing in the
+		/// tree ever assigned it on the way out, so the wire value was always null and every reader
+		/// got an empty race. It is derived rather than stored because a name is not identity:
+		/// <see cref="RaceID"/> is, and a name travelling separately from the id it describes is a
+		/// name that can disagree with it.
+		/// </remarks>
+		string RaceName { get; }
+		/// <summary>
 		/// The model index for the character's race appearance.
 		/// </summary>
 		int ModelIndex { get; set; }
-		/// <summary>
-		/// The name of the character's race.
-		/// </summary>
-		string RaceName { get; set; }
 		/// <summary>
 		/// The name of the scene where the character is bound (e.g., respawn location).
 		/// </summary>
@@ -161,6 +194,25 @@ namespace FishMMO.Shared.Core
 		/// Returns true if the character is currently inside an instance.
 		/// </summary>
 		bool IsInInstance();
+		/// <summary>
+		/// The name of the scene the character is physically standing in.
+		/// </summary>
+		/// <remarks>
+		/// Not the same thing as <see cref="SceneName"/>. While a character is inside an instance,
+		/// <c>SceneName</c> keeps naming the open-world scene it will return to — that is what makes
+		/// the return trip possible — and the scene it is actually in is
+		/// <see cref="InstanceSceneName"/>. Reading <c>SceneName</c> where this was meant has been
+		/// the same bug several times over: teleporters inside a dungeon could never fire because
+		/// the wrong scene's teleporter list was consulted, and every interactable handler's "is
+		/// this a known scene?" check was answered about a scene the character had left.
+		/// <para>
+		/// This names a scene, so it still cannot distinguish one instance of a scene from another —
+		/// scene stacking means several share a name. Anything that needs instance identity within
+		/// this process must compare <c>GameObject.scene.handle</c>, and anything that needs it
+		/// across processes must use the scene row id. See <see cref="SceneHandle"/>.
+		/// </para>
+		/// </remarks>
+		string CurrentSceneName();
 		/// <summary>
 		/// Returns true if the character is currently loaded in the scene and active.
 		/// </summary>
