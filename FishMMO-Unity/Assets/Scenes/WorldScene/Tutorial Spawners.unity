@@ -824,7 +824,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: 79f661e5-9832-4446-8801-42b88b6d02b9
+  destinationID: 79f661e5-9832-4446-8801-42b88b6d02b9
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!4 &438034344
 Transform:
@@ -1696,20 +1696,42 @@ MonoBehaviour:
   InitialRespawnTime: 0
   InitialSpawnCount: 0
   MaxSpawnCount: 5
+  UniqueSpawnables: 0
   SpawnType: 0
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 50, y: 15, z: 50}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: -2
+  - rid: 4707557105995087872
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 4707557105995087872
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
 --- !u!1 &700258836
 GameObject:
   m_ObjectHideFlags: 0
@@ -1736,7 +1758,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 700258836}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 1
   m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
   m_Intensity: 1
@@ -1788,7 +1810,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -2442,8 +2464,13 @@ MonoBehaviour:
   InitialRespawnTime: 0
   InitialSpawnCount: 0
   MaxSpawnCount: 5
+  UniqueSpawnables: 0
   SpawnType: 0
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 50, y: 15, z: 50}
@@ -2724,20 +2751,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   MaxClients: 200
+  MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 0}
-  DefaultSceneFog: {fileID: 0}
-  DayNightCycle: 1
-  DayCycleDuration: 10800
-  NightCycleDuration: 10800
-  DaySkyboxMaterial: {fileID: 0}
-  NightSkyBoxMaterial: {fileID: 0}
-  RotateObjects: []
-  DayObjects: []
-  NightObjects: []
-  FadeThreshold: 1
-  DayFadeObjects: []
-  NightFadeObjects: []
-  isDaytime: 1
+  Climate: {fileID: 0}
+  BiomeMap: {fileID: 0}
+  RuntimeTemperatureOffset: 0
+  RuntimeHumidityOffset: 0
 --- !u!4 &1458363163
 Transform:
   m_ObjectHideFlags: 0
@@ -2976,20 +2995,37 @@ MonoBehaviour:
   InitialRespawnTime: 0
   InitialSpawnCount: 0
   MaxSpawnCount: 10
+  UniqueSpawnables: 0
   SpawnType: 0
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 50, y: 15, z: 50}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: -2
+  - rid: 4707557105995087874
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 4707557105995087874
+      type: {class: ItemSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 1
+        YOffset: 0
+        ItemTemplate: {fileID: 11400000, guid: 0446fdf72ba15d6d08c86d5e4a2c87c6, type: 2}
+        MinimumAmount: 1
+        MaximumAmount: 1
+        RollTable: []
+        AchievementTemplateID: 0
 --- !u!1 &1757139382
 GameObject:
   m_ObjectHideFlags: 0
@@ -3136,7 +3172,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1757139387}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1757139387}
   MaximumSimultaneousHits: 16
   AdditionalSize: 0.1
   Layers:
@@ -3511,21 +3547,42 @@ MonoBehaviour:
   InitialRespawnTime: 0
   InitialSpawnCount: 0
   MaxSpawnCount: 5
+  UniqueSpawnables: 0
   SpawnType: 0
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 50, y: 15, z: 50}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: -2
-  - rid: -2
+  - rid: 4707557105995087873
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 4707557105995087873
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
 --- !u!1 &1915681912
 GameObject:
   m_ObjectHideFlags: 0
@@ -3708,7 +3765,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1948200661}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -3760,7 +3817,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
