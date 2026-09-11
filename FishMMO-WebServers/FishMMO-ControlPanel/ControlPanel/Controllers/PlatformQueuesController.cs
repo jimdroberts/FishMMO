@@ -156,6 +156,12 @@ namespace FishMMO.ControlPanel.Controllers
 					recipientEmail = e.RecipientEmail,
 					recipientUsername = e.RecipientUsername,
 					subject = e.Subject,
+					/* What the mail is, taken from the row's own kind column rather than read
+					 * out of the subject text. The page used to infer it from the subject, which
+					 * meant rewording a subject line changed what an operator was told a message
+					 * was — and the drain decides a real lockout from this same value, so the two
+					 * had better not be able to disagree. */
+					kind = KindName(e.Kind),
 					state = StateName(e.State),
 					attempts = e.Attempts,
 					claimedBy = e.ClaimedBy,
@@ -339,6 +345,19 @@ namespace FishMMO.ControlPanel.Controllers
 		}
 
 		/// <summary>The wire name of a state: lower case, matching what the filter accepts.</summary>
+		/// <summary>Names an <see cref="EmailKind"/> for the browser.</summary>
+		/// <remarks>
+		/// An unrecognised value is reported as such rather than guessed at: a panel running
+		/// against a database a newer process writes to should say it does not know what a
+		/// message is, not quietly call it a verification mail.
+		/// </remarks>
+		private static string KindName(EmailKind kind) => kind switch
+		{
+			EmailKind.Verification => "verification",
+			EmailKind.PasswordReset => "password-reset",
+			_ => "unknown",
+		};
+
 		private static string StateName(EmailQueueState state) => state switch
 		{
 			EmailQueueState.Pending => "pending",

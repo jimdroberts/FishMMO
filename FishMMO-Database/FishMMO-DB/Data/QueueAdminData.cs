@@ -53,9 +53,10 @@ namespace FishMMO.Database.Data
 	/// verification link, and that link is a credential: anybody who can read it can verify the
 	/// account it belongs to without ever holding the mailbox. The projection that fills this
 	/// type does not name the <c>body</c> column, so the text never enters the panel process at
-	/// all rather than being fetched and then carefully not serialized. The subject is enough to
-	/// tell a verification mail from a password reset, which is the only question the page asks
-	/// of it.
+	/// all rather than being fetched and then carefully not serialized. What kind of mail it is
+	/// — the only question the page asks of a message it cannot read — comes from
+	/// <see cref="Kind"/>, which is the column the sender itself acts on, rather than from
+	/// pattern-matching the subject line.
 	/// </remarks>
 	public sealed class EmailQueueAdminData
 	{
@@ -68,8 +69,19 @@ namespace FishMMO.Database.Data
 		/// <summary>The account it belongs to.</summary>
 		public string RecipientUsername { get; set; }
 
-		/// <summary>The subject line, which is what says what kind of mail this is.</summary>
+		/// <summary>The subject line.</summary>
 		public string Subject { get; set; }
+
+		/// <summary>
+		/// What the mail is for, as stored on the row.
+		/// </summary>
+		/// <remarks>
+		/// The page used to infer this from the subject text. It no longer has to: this is the
+		/// same value the drain reads to decide whether delivering the message ends the
+		/// account's unverified grace period, so what an operator sees and what the sender does
+		/// cannot disagree.
+		/// </remarks>
+		public EmailKind Kind { get; set; }
 
 		/// <summary>When it was enqueued (UTC).</summary>
 		public DateTime CreatedAt { get; set; }

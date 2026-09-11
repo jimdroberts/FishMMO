@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using FishMMO.Auth.Implementation;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.ControlPanel.Services
@@ -119,7 +120,8 @@ namespace FishMMO.ControlPanel.Services
 			}
 
 			var enqueue = await emailQueue.EnqueueAsync(
-				email, username, "FishMMO - Verify Your Email", BuildVerificationEmailBody(username, verifyCode), cancellationToken);
+				email, username, "FishMMO - Verify Your Email", BuildVerificationEmailBody(username, verifyCode),
+				EmailKind.Verification, cancellationToken);
 			if (!enqueue.IsSuccess)
 			{
 				log.LogWarning("Failed to enqueue the verification email for '{User}': [{Code}] {Message}",

@@ -25,6 +25,7 @@ namespace FishMMO.ControlPanel.Controllers
 	{
 		private readonly AccountRegistrationService registration;
 		private readonly SelfServiceService selfService;
+		private readonly PasswordResetService passwordReset;
 		private readonly SrpLoginService srp;
 		private readonly TwoFactorService twoFactor;
 		private readonly PanelRegistrationOptions options;
@@ -37,6 +38,7 @@ namespace FishMMO.ControlPanel.Controllers
 		public AccountController(
 			AccountRegistrationService registration,
 			SelfServiceService selfService,
+			PasswordResetService passwordReset,
 			SrpLoginService srp,
 			TwoFactorService twoFactor,
 			PanelRegistrationOptions options,
@@ -48,6 +50,7 @@ namespace FishMMO.ControlPanel.Controllers
 		{
 			this.registration = registration;
 			this.selfService = selfService;
+			this.passwordReset = passwordReset;
 			this.srp = srp;
 			this.twoFactor = twoFactor;
 			this.options = options;
@@ -127,6 +130,117 @@ namespace FishMMO.ControlPanel.Controllers
 			}
 			return Ok(new { message = "Account verified." });
 		}
+
+		// ── Password recovery ───────────────────────────────────────────────────
+		/* Three anonymous endpoints for an account holder who cannot sign in at all, and so
+		 * cannot be authenticated before being helped. They are [AllowAnonymous], which
+		 * AuditCoverage already excludes from the audit requirement, and they deliberately
+		 * write no admin_audit_log row: this is the account holder acting on their own
+		 * account, not an operator acting on somebody else's.
+		 *
+		 * None of them touches two-factor. A reset replaces the SRP credentials and nothing
+		 * else, so a mailbox alone is never enough to get into an account. */
+
+		/// <summary>
+		/// Starts password recovery for the account at an email address.
+		/// </summary>
+		/// <remarks>
+		/// Always 200, always the same body. It says nothing about whether the address is
+		/// registered, whether the account is banned, or whether the per-account resend cooldown
+		/// suppressed the mail — a reset form that answered differently for a registered address
+		/// would be an account enumeration oracle, and that is exactly what they are probed for.
+		/// </remarks>
+		[HttpPost("password-reset/request")]
+		[AllowAnonymous]
+		[EnableRateLimiting("Register")]
+		public async Task<IActionResult> RequestPasswordReset([FromBody] PasswordResetRequest request)
+		{
+			var outcome = await passwordReset.RequestAsync(
+				request?.Email,
+				HttpContext.Connection.RemoteIpAddress?.ToString(),
+				HttpContext.RequestAborted);
+
+			/* Outside Production only, and only when the affordance is configured on, the code
+			 * comes back in the body so the flow can be exercised with no mail sender running.
+			 * In Production the field is absent rather than empty — the two branches below are
+			 * two different response shapes on purpose. */
+			if (outcome.DevelopmentCode != null)
+			{
+				// "devCode", not "code": the name says what it is, and the browser's own
+				// recovery page already reads it under that name.
+				return Ok(new { message = ResetRequestedMessage, devCode = outcome.DevelopmentCode });
+			}
+			return Ok(new { message = ResetRequestedMessage });
+		}
+
+		/// <summary>
+		/// Returns the account name a reset code belongs to.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The browser cannot derive an SRP verifier without the username, because the username is
+		/// an input to the key derivation. Holding the code already proves control of the mailbox
+		/// the code was sent to, and the mail names the account, so answering this adds nothing an
+		/// attacker did not already have.
+		/// </para>
+		/// <para>
+		/// The code travels in the BODY, never in the path or the query string: URLs end up in
+		/// access logs, proxy logs, Referer headers and browser history, and a reset code in any
+		/// of those is a reset code somebody else can use.
+		/// </para>
+		/// </remarks>
+		[HttpPost("password-reset/lookup")]
+		[AllowAnonymous]
+		[EnableRateLimiting("Register")]
+		public async Task<IActionResult> LookupPasswordReset([FromBody] PasswordResetCodeRequest request)
+		{
+			string username = await passwordReset.LookupUsernameAsync(request?.Code, HttpContext.RequestAborted);
+			if (username == null)
+			{
+				// Unknown, malformed, expired and already-used share one message. Telling them
+				// apart would tell an attacker which guess was structurally right.
+				return BadRequest(new { error = PasswordResetService.InvalidCodeError });
+			}
+			return Ok(new { username });
+		}
+
+		/// <summary>
+		/// Completes a reset with a browser-derived salt and verifier.
+		/// </summary>
+		/// <remarks>
+		/// There is no password parameter here either. The browser generates a fresh salt and
+		/// derives the verifier locally from the username this code resolved to, so the shard
+		/// never holds anything a password could be recovered from.
+		/// </remarks>
+		[HttpPost("password-reset/complete")]
+		[AllowAnonymous]
+		[EnableRateLimiting("Register")]
+		public async Task<IActionResult> CompletePasswordReset([FromBody] PasswordResetCompleteRequest request)
+		{
+			if (request == null)
+			{
+				return BadRequest(new { error = "A reset code and new credentials are required." });
+			}
+
+			var result = await passwordReset.CompleteAsync(
+				request.Code, request.Salt, request.Verifier, HttpContext.RequestAborted);
+			if (!result.Ok)
+			{
+				return BadRequest(new { error = result.Error });
+			}
+
+			return Ok(new
+			{
+				message = "Password reset. Every browser and game client signed in to this account has been signed out.",
+				twoFactorUnchanged = true,
+			});
+		}
+
+		/// <summary>
+		/// The one answer a reset request ever gives, registered address or not.
+		/// </summary>
+		private const string ResetRequestedMessage =
+			"If that address has an account, a reset code is on its way to it. The code expires in 60 minutes.";
 
 		/// <summary>
 		/// Returns the account rules, so the browser can apply exactly the server's validation.
@@ -552,6 +666,37 @@ namespace FishMMO.ControlPanel.Controllers
 
 			/// <summary>Account holder age, for compliance.</summary>
 			public int Age { get; set; }
+		}
+
+		/// <summary>Password reset request. Carries an address and nothing else.</summary>
+		public sealed class PasswordResetRequest
+		{
+			/// <summary>The address to send a reset code to, if it has an account.</summary>
+			public string Email { get; set; } = "";
+		}
+
+		/// <summary>
+		/// A reset code on its way to a lookup. In the body, never the URL.
+		/// </summary>
+		public sealed class PasswordResetCodeRequest
+		{
+			/// <summary>The code from the reset email.</summary>
+			public string Code { get; set; } = "";
+		}
+
+		/// <summary>
+		/// Reset completion. Carries a code and new credentials, never a password.
+		/// </summary>
+		public sealed class PasswordResetCompleteRequest
+		{
+			/// <summary>The code from the reset email.</summary>
+			public string Code { get; set; } = "";
+
+			/// <summary>The new SRP salt, generated in the browser.</summary>
+			public string Salt { get; set; } = "";
+
+			/// <summary>The new SRP verifier, derived in the browser.</summary>
+			public string Verifier { get; set; } = "";
 		}
 
 		/// <summary>Verification request.</summary>

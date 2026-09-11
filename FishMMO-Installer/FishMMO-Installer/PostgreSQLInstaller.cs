@@ -392,9 +392,9 @@ namespace FishMMO.Installer
 			{
 				// Resolve database credentials from DatabaseSecrets (env vars or secrets file)
 				string dbUsername = DatabaseSecrets.TryResolveUsername()
-					?? throw new InvalidOperationException("Database username not configured. Run 'Configure Database Secrets' first.");
+					?? throw new InvalidOperationException("Database username not configured. Run 'Configure Secrets & Environment' first.");
 				string dbPassword = DatabaseSecrets.TryResolvePassword()
-					?? throw new InvalidOperationException("Database password not configured. Run 'Configure Database Secrets' first.");
+					?? throw new InvalidOperationException("Database password not configured. Run 'Configure Secrets & Environment' first.");
 				ValidateIdentifier(appSettings.Npgsql.Database, nameof(appSettings.Npgsql.Database), "database name");
 				ValidateIdentifier(dbUsername, nameof(dbUsername), "username");
 
@@ -444,7 +444,7 @@ namespace FishMMO.Installer
 								await Log.Info("FishMMOInstaller", $"User role '{dbUsername}' created successfully.");
 							}
 						}
-						// Credentials are NOT written here — use 'Configure Database Secrets'
+						// Credentials are NOT written here — use 'Configure Secrets & Environment'
 						// (Step 1) to write /etc/fishmmo/db-secrets.env.
 					}
 
@@ -709,7 +709,7 @@ namespace FishMMO.Installer
 				await Log.Warning("FishMMOInstaller",
 					"No database username is configured in /etc/fishmmo/db-secrets.env or the environment. " +
 					$"Falling back to '{defaultUsername}', which is probably NOT the role your servers use. " +
-					"Run 'Configure Database Secrets' first, or type the correct role below.");
+					"Run 'Configure Secrets & Environment' first, or type the correct role below.");
 			}
 			else
 			{

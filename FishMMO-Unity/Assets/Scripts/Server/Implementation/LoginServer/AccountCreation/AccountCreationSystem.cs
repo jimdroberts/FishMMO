@@ -16,6 +16,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Auth.Core;
@@ -115,6 +116,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Accumulator for the email send interval timer.
 		/// </summary>
 		private float emailSendTimer;
+		/// <summary>
+		/// Whether this LoginServer drains the outbound email queue. Resolved once, lazily.
+		/// </summary>
+		/// <remarks>
+		/// <b>Off by default.</b> The Control Panel drains the queue now: it is an ASP.NET Core
+		/// host with a real background service, so sending is not paced by a game server's frame
+		/// time and blocking network I/O stays off this tick entirely. Accounts are still created
+		/// here and mail is still ENQUEUED here — only the sending moved, and the queue row is
+		/// the seam between the two.
+		/// <para>
+		/// Set <c>Smtp:DrainQueue=true</c> to put it back, for a deployment that runs no panel.
+		/// Both draining at once is safe as far as the database goes — the claim is a
+		/// <c>FOR UPDATE SKIP LOCKED</c> so no row is sent twice — but it puts the I/O back on
+		/// the tick, which is the thing this change exists to remove.
+		/// </para>
+		/// </remarks>
+		private bool? drainEmailQueue;
 		/// <summary>
 		/// Lazily-constructed SMTP sender. Null until first email queue sweep.
 		/// </summary>
@@ -941,7 +959,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 							if (Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
 							{
 								// Prevent duplicate emails: skip if a pending email already exists for this user.
-								var dupCheck = await emailQueueService.HasPendingForUserAsync(username);
+								var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
 								if (dupCheck.IsSuccess && dupCheck.Data)
 								{
 									await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification email for '{username}' — a pending email already exists.");
@@ -1163,6 +1181,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			emailSendTimer = 0f;
 
 			if (Server?.Database?.ServiceRegistry == null) return;
+
+			/* Resolved on the first sweep rather than at startup, because Server.Configuration
+			 * is not guaranteed to be present before then — the same reason smtpService is
+			 * built lazily below. */
+			if (drainEmailQueue == null)
+			{
+				// IServerConfiguration exposes no bool accessor, so this parses a string the way
+				// SmtpService parses Smtp:UseSsl. Anything but "true" leaves the drain off.
+				string configured = Server.Configuration?.GetString("Smtp:DrainQueue", "false");
+				drainEmailQueue = string.Equals(configured, "true", System.StringComparison.OrdinalIgnoreCase);
+			}
+			if (drainEmailQueue == false) return;
+
 			if (!Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService)) return;
 
 			// Thread-safe lazy construction of the SMTP service from server configuration.

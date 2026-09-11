@@ -101,6 +101,13 @@ namespace FishMMO.Database.Npgsql
 
 		/// <summary>Two-factor recovery codes.</summary>
 		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
+
+		/// <summary>
+		/// Outstanding password reset tokens. Stores hashes only, and resetting a password never
+		/// touches the two-factor columns — see <see cref="PasswordResetTokenEntity"/>.
+		/// </summary>
+		public DbSet<PasswordResetTokenEntity> PasswordResetTokens { get; set; }
+
 		/// <summary>Email queue.</summary>
 		public DbSet<EmailQueueEntity> EmailQueue { get; set; }
 		/// <summary>Connection token verification keys (per-region HMAC keys).</summary>

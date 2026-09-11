@@ -26,6 +26,7 @@ namespace FishMMO.Database.Npgsql.Services
 			string recipientUsername,
 			string subject,
 			string body,
+			EmailKind kind = EmailKind.Verification,
 			CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(recipientEmail) ||
@@ -40,12 +41,15 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"INSERT INTO {TableName} (recipient_email, recipient_username, subject, body)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}})";
+				/* kind is written explicitly rather than left to the column default, so the
+				 * row says what it is even when the default is what it would have been. The
+				 * enum's integer is bound, matching the column's storage. */
+				var sql = $@"INSERT INTO {TableName} (recipient_email, recipient_username, subject, body, kind)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { recipientEmail, recipientUsername, subject, body },
+					new object[] { recipientEmail, recipientUsername, subject, body, (int)kind },
 					cancellationToken)
 					.ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -55,6 +59,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<bool>> HasPendingForUserAsync(
 			string recipientUsername,
+			EmailKind? kind = null,
 			CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(recipientUsername))
@@ -62,10 +67,16 @@ namespace FishMMO.Database.Npgsql.Services
 					DatabaseErrorCodes.ValidationError, "recipientUsername must not be empty.");
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var sql = $"SELECT COUNT(*) FROM {TableName} WHERE recipient_username = {0} AND sent_at IS NULL";
-				// ExecuteScalarAsync not directly available; use LINQ Any() via EF
+				/* Callers ask about ONE kind. This check exists to stop a second verification
+				 * mail piling up behind the first, and once the queue carries more than one kind
+				 * a blind check answers the wrong question: a pending password reset would
+				 * suppress the verification mail an unverified player is waiting for, which is
+				 * exactly the sequence "forgot my password before I ever verified" produces.
+				 * Null still means any kind, so a caller that genuinely wants that can say so. */
 				var exists = await dbContext.EmailQueue
-					.AnyAsync(e => e.RecipientUsername == recipientUsername && e.SentAt == null,
+					.AnyAsync(e => e.RecipientUsername == recipientUsername &&
+								   e.SentAt == null &&
+								   (kind == null || e.Kind == kind),
 						cancellationToken).ConfigureAwait(false);
 				return exists;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -95,9 +106,16 @@ namespace FishMMO.Database.Npgsql.Services
 				FROM next WHERE {TableName}.id = next.id
 				RETURNING {TableName}.id, {TableName}.recipient_email, {TableName}.recipient_username,
 				          {TableName}.subject, {TableName}.body, {TableName}.created_at,
-				          {TableName}.attempts, {TableName}.claimed_by, {TableName}.claimed_at";
+				          {TableName}.attempts, {TableName}.claimed_by, {TableName}.claimed_at,
+				          {TableName}.kind";
 
-				var entity = await ExecuteReturningAsync(
+				/* OrDefault, not the throwing variant: an empty queue is the NORMAL case here, and
+				 * ExecuteReturningAsync turns "no row" into a DATABASE_ERROR — which made the
+				 * null check below unreachable and reported a quiet queue as a fault. The
+				 * LoginServer's drain hid that by discarding every failure silently; a caller
+				 * that actually reports them backs off to a minute on an idle shard and then
+				 * makes the next real message wait that long. */
+				var entity = await ExecuteReturningOrDefaultAsync(
 					dbContext, sql, new object[] { claimedBy },
 					reader => new EmailQueueEntity
 					{
@@ -110,6 +128,11 @@ namespace FishMMO.Database.Npgsql.Services
 						Attempts = reader.GetInt32(6),
 						ClaimedBy = reader.IsDBNull(7) ? null : reader.GetString(7),
 						ClaimedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8),
+						/* An unrecognised integer reads as verification rather than throwing:
+						 * a row written by a newer process with a kind this build has never
+						 * heard of should still be delivered, and the conservative reading of
+						 * an unknown kind is the one every row had before kinds existed. */
+						Kind = ToEmailKind(reader.GetInt32(9)),
 					},
 					cancellationToken).ConfigureAwait(false);
 
@@ -125,9 +148,19 @@ namespace FishMMO.Database.Npgsql.Services
 					createdAt: entity.CreatedAt,
 					attempts: entity.Attempts,
 					claimedBy: entity.ClaimedBy,
-					claimedAt: entity.ClaimedAt
+					claimedAt: entity.ClaimedAt,
+					kind: entity.Kind
 				);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Maps a stored integer to <see cref="EmailKind"/>, treating anything unrecognised as
+		/// <see cref="EmailKind.Verification"/>.
+		/// </summary>
+		private static EmailKind ToEmailKind(int value)
+		{
+			return Enum.IsDefined(typeof(EmailKind), value) ? (EmailKind)value : EmailKind.Verification;
 		}
 
 		/// <inheritdoc/>

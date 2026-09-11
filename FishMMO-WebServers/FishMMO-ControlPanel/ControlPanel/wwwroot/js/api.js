@@ -95,6 +95,23 @@ export const api = {
 	// Takes nothing: the browser applies the rules locally so the password it is
 	// checking never has to be transmitted.
 	getAccountPolicy: () => request('GET', '/account/policy'),
+	/* Account recovery.
+	 *
+	 * Three calls because the browser cannot derive an SRP verifier without the account name,
+	 * and the name is an input to the key derivation — so the code is exchanged for it first.
+	 * Holding a valid code already proves control of the mailbox, which is a stronger claim
+	 * than knowing the name.
+	 *
+	 * The code goes in the BODY of every one of these, never in a URL. A one-time credential
+	 * in a path or query string ends up in access logs, proxy logs and browser history.
+	 *
+	 * The request call always succeeds, whether or not the address is registered. There is
+	 * nothing to branch on and nothing to report: an endpoint that said "no such account"
+	 * would be a membership oracle for every address anyone cared to try. */
+	requestPasswordReset: (email) => request('POST', '/account/password-reset/request', { email }),
+	lookupPasswordReset: (code) => request('POST', '/account/password-reset/lookup', { code }),
+	completePasswordReset: (code, salt, verifier) =>
+		request('POST', '/account/password-reset/complete', { code, salt, verifier }),
 
 	// own account
 	getMyAccount: () => request('GET', '/account'),

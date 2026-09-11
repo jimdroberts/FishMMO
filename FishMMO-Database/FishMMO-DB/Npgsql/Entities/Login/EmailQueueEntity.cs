@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using FishMMO.Database.Data;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
@@ -31,6 +32,17 @@ namespace FishMMO.Database.Npgsql.Entities
 
 		/// <summary>Plain-text or HTML email body.</summary>
 		public string Body { get; set; }
+
+		/// <summary>
+		/// What this mail is for. Decides whether delivering it ends the account's unverified
+		/// grace period; see <see cref="EmailKind"/>.
+		/// </summary>
+		/// <remarks>
+		/// Defaults to <see cref="EmailKind.Verification"/> (0) in the database as well as here,
+		/// so rows written before the column existed, and callers that do not name a kind, keep
+		/// the meaning they already had.
+		/// </remarks>
+		public EmailKind Kind { get; set; } = EmailKind.Verification;
 
 		/// <summary>UTC timestamp when the email was enqueued.</summary>
 		public DateTime CreatedAt { get; set; }

@@ -80,10 +80,19 @@ builder.Services.AddScoped<IServerBoardService, ServerBoardService>();
 builder.Services.AddScoped<IQueueBoardService, QueueBoardService>();
 builder.Services.AddScoped<ISocialBoardService, SocialBoardService>();
 builder.Services.AddScoped<IMaintenanceService, MaintenanceService>();
+builder.Services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
+builder.Services.AddScoped<PasswordResetService>();
 /* Advances maintenance windows without a viewer. A window's actuation is finished the moment
  * it starts — the deadline is on each server's own row — but the retry of any write the start
  * did not manage, and every status after it, happen only when something reads. */
 builder.Services.AddHostedService<MaintenanceAdvanceService>();
+
+/* Outbound mail. Account creation still happens on the LoginServer too, and both it and this
+ * panel ENQUEUE — but only this process drains the queue and sends. Doing it here keeps
+ * blocking network I/O off a game server's tick, and the LoginServer's own drain is off by
+ * default (Smtp:DrainQueue) so there is exactly one sender. */
+builder.Services.AddSingleton<ISmtpSender, SmtpSender>();
+builder.Services.AddHostedService<EmailQueueDrainService>();
 builder.Services.AddScoped<IDaemonService, DaemonService>();
 builder.Services.AddScoped<IWorldServerService, WorldServerService>();
 builder.Services.AddScoped<ISceneServerService, SceneServerService>();
@@ -97,6 +106,13 @@ var registrationOptions = new PanelRegistrationOptions
 	AutoVerifyAccounts = !builder.Environment.IsProduction() &&
 						 builder.Configuration.GetValue("Panel:AutoVerifyAccounts", true),
 	RegistrationEnabled = builder.Configuration.GetValue("Panel:RegistrationEnabled", true),
+	/* Handing the reset code straight back to the caller is what makes recovery testable on a
+	 * machine with no mail sender. It is gated the same way auto-verification is, and for the
+	 * same reason: the environment check is the hard gate, so a development configuration that
+	 * reaches a production host cannot switch it back on. PasswordResetService checks the
+	 * environment itself too, so this flag can only ever narrow. */
+	ExposeResetCodes = !builder.Environment.IsProduction() &&
+					   builder.Configuration.GetValue("Panel:ExposeResetCodes", true),
 };
 builder.Services.AddSingleton(registrationOptions);
 

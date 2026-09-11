@@ -426,6 +426,7 @@ namespace FishMMO.Installer
                 Console.WriteLine("3 : Web Server");
                 Console.WriteLine("4 : Unity & Build");
                 Console.WriteLine("5 : Configuration");
+                Console.WriteLine("6 : Uninstall");
                 Console.WriteLine("0 : Quit");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -446,6 +447,9 @@ namespace FishMMO.Installer
                         break;
                     case ConsoleKey.D5:
                         await ConfigurationMenu();
+                        break;
+                    case ConsoleKey.D6:
+                        await UninstallMenu();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:
@@ -506,7 +510,7 @@ namespace FishMMO.Installer
                 Console.Clear();
                 Console.WriteLine("=== Database ===");
                 Console.WriteLine();
-                Console.WriteLine("1 : Configure Database Secrets (env vars / secrets file)");
+                Console.WriteLine("1 : Configure Secrets & Environment (database, mail, service — one file)");
                 Console.WriteLine("2 : Install PostgreSQL");
                 Console.WriteLine("3 : Install PgBouncer (Connection Pooler)");
                 Console.WriteLine("4 : Install FishMMO Database (User/Schema/Initial Migration)");
@@ -523,7 +527,9 @@ namespace FishMMO.Installer
                 switch (key.Key)
                 {
                     case ConsoleKey.D1:
-                        await DatabaseSecretsInstaller.ConfigureDatabaseSecrets();
+                        // The same screen as Configuration > 3. One file, one editor: a second
+                        // wizard over the same file is what used to delete the other's keys.
+                        await SecretsEnvironmentInstaller.Configure();
                         break;
                     case ConsoleKey.D2:
                         await HandleWithSettings(
@@ -683,6 +689,7 @@ namespace FishMMO.Installer
                 Console.WriteLine();
                 Console.WriteLine("1 : Configure Web Server Settings (IPFetch, Patcher, WebGL, Control Panel)");
                 Console.WriteLine("2 : Configure Discord Bot Settings");
+                Console.WriteLine("3 : Configure Secrets & Environment (database, mail, service — one file)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -695,6 +702,56 @@ namespace FishMMO.Installer
                         break;
                     case ConsoleKey.D2:
                         await AppSettingsInstaller.ConfigureDiscordBotComponent();
+                        break;
+                    case ConsoleKey.D3:
+                        await SecretsEnvironmentInstaller.Configure();
+                        break;
+                    case ConsoleKey.D0:
+                    case ConsoleKey.NumPad0:
+                        return;
+                    default:
+                        if (key.KeyChar == '0') return;
+                        Console.WriteLine("Invalid option.");
+                        break;
+                }
+
+                Console.WriteLine("Press any key to continue...");
+                Console.ReadKey(true);
+            }
+        }
+
+        /// <summary>
+        /// Uninstall sub-menu: removals that cannot be undone.
+        /// </summary>
+        /// <remarks>
+        /// Everything on this screen destroys something permanently, so each entry says so in its
+        /// own label and each one takes its own typed confirmation inside
+        /// <see cref="UninstallInstaller"/> — the menu itself never asks the dangerous question.
+        /// New entries go in the same shape: one line here, one handler there.
+        /// </remarks>
+        private static async Task UninstallMenu()
+        {
+            while (true)
+            {
+                Console.Clear();
+                Console.WriteLine("=== Uninstall ===");
+                Console.WriteLine();
+                Console.WriteLine("Everything on this screen is permanent. Nothing runs without a typed confirmation.");
+                Console.WriteLine();
+                Console.WriteLine("1 : Uninstall PostgreSQL completely (DELETES EVERY ACCOUNT AND CHARACTER!)");
+                Console.WriteLine("2 : Delete Secrets & Environment File (every FishMMO process loses its credentials)");
+                Console.WriteLine("0 : Back");
+
+                ConsoleKeyInfo key = Console.ReadKey(true);
+                Console.WriteLine();
+
+                switch (key.Key)
+                {
+                    case ConsoleKey.D1:
+                        await UninstallInstaller.UninstallPostgreSQL();
+                        break;
+                    case ConsoleKey.D2:
+                        await UninstallInstaller.DeleteSecretsFile();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:

@@ -238,6 +238,11 @@ export async function render(host, ctx) {
 							<div class="cell-primary">${ui.esc(e.recipientEmail)}</div>
 							<div class="cell-sub"><a href="#/support/accounts/${encodeURIComponent(e.recipientUsername ?? '')}">${ui.esc(e.recipientUsername)}</a></div>`,
 					},
+					/* The kind comes from its own column now, not from reading the subject. A
+					 * stalled queue means something different for each: held-up verification
+					 * mail stops people finishing registration, held-up resets stop people
+					 * getting back in. */
+					{ label: 'Kind', cell: (e) => emailKindLabel(ui, e) },
 					{ label: 'Subject', cell: (e) => `<span class="small">${ui.esc(e.subject)}</span>` },
 					{ label: 'State', cell: (e) => emailStateBadge(ui, e) },
 					{
@@ -420,6 +425,16 @@ export async function render(host, ctx) {
  * been pending for ten minutes, or claimed for an hour, is the symptom this page is for,
  * and the moving dot is what makes an operator look at the age beside it.
  */
+/** The server's word for what this message is. */
+function emailKindLabel(ui, email) {
+	const kind = String(email.kind ?? '');
+	if (kind === 'verification') return '<span class="small">Verification</span>';
+	if (kind === 'password-reset') return '<span class="small">Password reset</span>';
+	/* A row written by a newer process, carrying a kind this build has never heard of. Saying
+	 * so is better than guessing, and better than leaving the cell blank. */
+	return ui.badge('warn', 'Unknown');
+}
+
 function emailStateBadge(ui, e) {
 	const known = EMAIL_STATES.find((s) => s.value === e.state);
 	if (!known) return ui.badge(String(e.state ?? 'unknown'));

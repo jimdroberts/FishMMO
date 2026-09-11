@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using FishMMO.Auth.Implementation;
 using FishMMO.Database;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Shared;
 
@@ -167,7 +168,7 @@ namespace FishMMO.ControlPanel.Services
 						username, codeResult.ErrorCode, codeResult.ErrorMessage);
 				}
 
-				var duplicate = await emailQueue.HasPendingForUserAsync(username, cancellationToken);
+				var duplicate = await emailQueue.HasPendingForUserAsync(username, EmailKind.Verification, cancellationToken);
 				if (duplicate.IsSuccess && duplicate.Data)
 				{
 					log.LogDebug("Skipping duplicate verification email for '{User}'.", username);
@@ -175,7 +176,8 @@ namespace FishMMO.ControlPanel.Services
 				else
 				{
 					var enqueue = await emailQueue.EnqueueAsync(
-						email, username, "FishMMO - Verify Your Account", BuildVerificationEmailBody(username, verifyCode), cancellationToken);
+						email, username, "FishMMO - Verify Your Account", BuildVerificationEmailBody(username, verifyCode),
+						EmailKind.Verification, cancellationToken);
 					if (!enqueue.IsSuccess)
 					{
 						log.LogWarning("Failed to enqueue verification email for '{User}': [{Code}] {Message}",
@@ -321,5 +323,23 @@ namespace FishMMO.ControlPanel.Services
 
 		/// <summary>Whether self-service registration is open at all.</summary>
 		public bool RegistrationEnabled { get; init; } = true;
+
+		/// <summary>
+		/// Whether a password reset returns the emailed code in the response body.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A development affordance, and the same shape as <see cref="AutoVerifyAccounts"/>: with
+		/// no mail sender running there is no way to exercise the recovery flow locally at all.
+		/// </para>
+		/// <para>
+		/// It is honoured only outside the Production environment, and
+		/// <see cref="PasswordResetService"/> checks the environment itself rather than trusting
+		/// this flag alone — so a development configuration that reaches a production host cannot
+		/// re-enable it. The default is on because the environment check, not this switch, is
+		/// what keeps it out of production.
+		/// </para>
+		/// </remarks>
+		public bool ExposeResetCodes { get; init; } = true;
 	}
 }

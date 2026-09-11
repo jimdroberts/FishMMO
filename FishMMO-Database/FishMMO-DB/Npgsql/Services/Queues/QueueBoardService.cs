@@ -155,6 +155,7 @@ namespace FishMMO.Database.Npgsql.Services
 						RecipientEmail = e.RecipientEmail,
 						RecipientUsername = e.RecipientUsername,
 						Subject = e.Subject,
+						Kind = e.Kind,
 						CreatedAt = e.CreatedAt,
 						SentAt = e.SentAt,
 						Attempts = e.Attempts,

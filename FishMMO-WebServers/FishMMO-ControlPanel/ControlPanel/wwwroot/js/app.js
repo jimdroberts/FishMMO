@@ -11,6 +11,7 @@ import * as srp from './srp.js';
 import * as ui from './ui.js';
 import { ROUTES, NAV_ROUTES, GROUPS, resolve, defaultRouteFor } from './routes.js';
 import { renderRegister, renderRegistered } from './register.js';
+import { renderResetPassword } from './reset-password.js';
 
 const VIEWS = {
 	'dashboard': () => import('./views/dashboard.js'),
@@ -226,6 +227,7 @@ function renderSignIn(stage = 'credentials', context = {}) {
 				${stage === 'credentials' ? `
 					<div class="center small" style="margin-top:var(--sp-4)">
 						<button class="btn btn-ghost btn-sm" type="button" id="go-register">Create an account</button>
+						<button class="btn btn-ghost btn-sm" type="button" id="go-reset">Forgot password?</button>
 					</div>` : ''}
 
 				<div class="signin-footer">
@@ -284,6 +286,7 @@ function renderSignIn(stage = 'credentials', context = {}) {
 	});
 
 	root.querySelector('#go-register')?.addEventListener('click', () => renderRegisterScreen());
+	root.querySelector('#go-reset')?.addEventListener('click', () => renderResetScreen());
 
 	document.querySelector('#username, #code')?.focus();
 }
@@ -302,6 +305,26 @@ function renderRegisterScreen() {
 			 * screen without saving them means re-enrolling. */
 			renderRegistered(host, result, { onDone: () => renderSignIn() });
 		},
+	});
+}
+
+/**
+ * Shows the password recovery flow.
+ *
+ * Reached from the sign-in card, not from a route: somebody who needs it has no session,
+ * and a hash route would put a one-time code in the browser's history.
+ */
+function renderResetScreen() {
+	const root = document.getElementById('root');
+	root.innerHTML = '<div class="signin"><div id="reset-host" style="width:100%;display:flex;justify-content:center"></div></div>';
+	const host = root.querySelector('#reset-host');
+
+	renderResetPassword(host, {
+		onCancel: () => renderSignIn(),
+		/* Back to the ordinary sign-in, two-factor step included. A reset changes the password
+		 * and nothing else, so the authenticator is still required — landing anywhere else
+		 * would imply the account was already open. */
+		onDone: () => renderSignIn(),
 	});
 }
 

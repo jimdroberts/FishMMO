@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using FishMMO.Database.Data;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
@@ -32,6 +33,14 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.Body)
 				.IsRequired();
+
+			/* Stored as the enum's integer, NOT NULL DEFAULT 0. The default is the whole point:
+			 * every row that already exists, and every INSERT that does not name the column,
+			 * means "verification" — which is what every row meant before there was a choice. */
+			builder.Property(e => e.Kind)
+				.IsRequired()
+				.HasConversion<int>()
+				.HasDefaultValue(EmailKind.Verification);
 
 			builder.Property(e => e.CreatedAt)
 				.IsRequired()

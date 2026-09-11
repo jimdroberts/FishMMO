@@ -618,7 +618,7 @@ namespace FishMMO.Server.Implementation
 
 				if (outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
 				{
-					var dupCheck = await emailQueueService.HasPendingForUserAsync(username);
+					var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
 					if (!dupCheck.IsSuccess || !dupCheck.Data)
 					{
 						var accountResult = await accountService.FetchForLoginAsync(username, false);
