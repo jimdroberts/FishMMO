@@ -14,8 +14,8 @@ namespace FishMMO.Installer
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>One screen, one writer.</b> Every <c>FISHMMO_*</c> variable the servers actually read
-	/// lands in a single file — <c>/etc/fishmmo/db-secrets.env</c> on Linux,
+	/// <b>One screen, one writer, one copy.</b> Every <c>FISHMMO_*</c> variable the servers actually
+	/// read lands in a single file — <c>/etc/fishmmo/db-secrets.env</c> on Linux,
 	/// <c>%ProgramData%\FishMMO\db-secrets.env</c> on Windows — which every systemd unit loads with
 	/// <c>EnvironmentFile=-/etc/fishmmo/db-secrets.env</c>. Splitting that file between several
 	/// wizards is how it used to lose data: each one rewrote the whole file and emitted only the
@@ -24,9 +24,34 @@ namespace FishMMO.Installer
 	/// is therefore safe.
 	/// </para>
 	/// <para>
+	/// <b>The file is the only thing this screen reads.</b> It never seeds itself from the process
+	/// environment. A shell that still exports an old <c>FISHMMO_DB_PASSWORD</c> from some earlier
+	/// session would otherwise show that stale value as "current", and saving would copy it back
+	/// over the real one — which is how a secrets file and an exported snippet ended up holding two
+	/// different passwords written half a minute apart. What the environment does get is a
+	/// <i>comparison</i>: <see cref="DescribeEnvironmentMismatches"/> names every variable whose
+	/// value in this shell differs from the file's, without printing either one.
+	/// </para>
+	/// <para>
+	/// <b>That warning matters because the runtime precedence is the opposite.</b>
+	/// <see cref="DatabaseSecrets"/> resolves the environment first and the file second, so a
+	/// process started by hand from a polluted shell uses the shell's value no matter what this
+	/// screen writes. That order is deliberate — an operator must be able to override a deployment
+	/// for one run — so the fix is to say so plainly, not to reorder the runtime.
+	/// </para>
+	/// <para>
 	/// <b>Keys it does not know are still preserved.</b> An operator will have added something —
 	/// a proxy variable, a feature flag, a note to themselves. Unrecognised assignments, comments,
 	/// blank lines and anything this parser cannot make sense of are carried through verbatim.
+	/// </para>
+	/// <para>
+	/// <b>There is no export.</b> This screen used to be able to write the same values out again as
+	/// a fish/PowerShell/CMD snippet or a stray <c>.env</c>. Every one of those was a second copy of
+	/// a live credential, and the fish one landed in <c>conf.d</c>, where every new shell sourced it
+	/// and re-exported the database password into itself and into every process it launched. The
+	/// services never needed it: systemd hands them the secrets file. Only the <i>creation</i> is
+	/// gone — <see cref="ExportedSnippetPaths"/> still lists those paths so the uninstall can offer
+	/// to delete the copies an earlier version already made.
 	/// </para>
 	/// <para>
 	/// <b>What is deliberately not here:</b>
@@ -68,6 +93,13 @@ namespace FishMMO.Installer
 		private const string GroupService = "Service";
 		private const string GroupSecrets = "Other secrets";
 
+		private const string DbHostKey = "FISHMMO_DB_HOST";
+		private const string DbPortKey = "FISHMMO_DB_PORT";
+		private const string DbNameKey = "FISHMMO_DB_NAME";
+		private const string DbUsernameKey = "FISHMMO_DB_USERNAME";
+		private const string DbPasswordKey = "FISHMMO_DB_PASSWORD";
+		private const string DbSchemaKey = "FISHMMO_DB_SCHEMA";
+
 		private const string SmtpHostKey = "FISHMMO_SMTP_HOST";
 		private const string SmtpPortKey = "FISHMMO_SMTP_PORT";
 		private const string SmtpUsernameKey = "FISHMMO_SMTP_USERNAME";
@@ -75,61 +107,48 @@ namespace FishMMO.Installer
 		private const string SmtpFromAddressKey = "FISHMMO_SMTP_FROM_ADDRESS";
 		private const string SmtpFromNameKey = "FISHMMO_SMTP_FROM_NAME";
 		private const string SmtpUseSslKey = "FISHMMO_SMTP_USE_SSL";
+
 		private const string EnvironmentKey = "FISHMMO_ENVIRONMENT";
+		private const string LogLevelKey = "FISHMMO_LOG_LEVEL";
 
-		/// <summary>How a value is prompted for and displayed.</summary>
-		private enum SettingKind
-		{
-			/// <summary>Free text, echoed back on screen.</summary>
-			Text,
-
-			/// <summary>A positive integer.</summary>
-			Number,
-
-			/// <summary>true/false.</summary>
-			Bool,
-
-			/// <summary>Never echoed, never logged, never written to JSON.</summary>
-			Secret,
-		}
+		private const string DiscordTokenKey = "FISHMMO_DISCORD_TOKEN";
+		private const string ManifestSigningKey = "FISHMMO_VERSION_MANIFEST_SIGNING_KEY";
 
 		/// <summary>One environment variable this screen owns.</summary>
 		/// <param name="Key">The variable name, exactly as the servers read it.</param>
-		/// <param name="Group">Heading it appears under.</param>
-		/// <param name="Label">Short name shown in the menu.</param>
-		/// <param name="Kind">How it is prompted for.</param>
-		/// <param name="Hint">What the server does when it is unset, or what it must agree with.</param>
-		private sealed record Setting(string Key, string Group, string Label, SettingKind Kind, string Hint);
+		/// <param name="Group">Which guided step edits it, and which block it is written under.</param>
+		private sealed record Setting(string Key, string Group);
 
 		/// <summary>
 		/// Every variable this screen writes, in the order it is written to the file.
 		/// </summary>
 		/// <remarks>
-		/// This list is the screen, the file layout and the export snippets. Adding a variable here
-		/// adds it to all three; there is no second list to keep in step.
+		/// This list is the file layout, the set of keys each guided step covers, and the set the
+		/// environment is compared against. Adding a variable here adds it to all three; there is no
+		/// second list to keep in step.
 		/// </remarks>
 		private static readonly Setting[] Settings =
 		{
-			new("FISHMMO_DB_HOST", GroupDatabase, "Host", SettingKind.Text, "default 127.0.0.1"),
-			new("FISHMMO_DB_PORT", GroupDatabase, "Port", SettingKind.Number, "default 5432"),
-			new("FISHMMO_DB_NAME", GroupDatabase, "Database name", SettingKind.Text, "default fishmmo"),
-			new("FISHMMO_DB_USERNAME", GroupDatabase, "Username", SettingKind.Text, ""),
-			new("FISHMMO_DB_PASSWORD", GroupDatabase, "Password", SettingKind.Secret, "secret"),
-			new("FISHMMO_DB_SCHEMA", GroupDatabase, "Schema", SettingKind.Text, "must match Npgsql:Schema in appsettings"),
+			new(DbHostKey, GroupDatabase),
+			new(DbPortKey, GroupDatabase),
+			new(DbNameKey, GroupDatabase),
+			new(DbUsernameKey, GroupDatabase),
+			new(DbPasswordKey, GroupDatabase),
+			new(DbSchemaKey, GroupDatabase),
 
-			new(SmtpHostKey, GroupMail, "SMTP host", SettingKind.Text, "default localhost = no relay"),
-			new(SmtpPortKey, GroupMail, "SMTP port", SettingKind.Number, "587; 465 is not supported"),
-			new(SmtpUsernameKey, GroupMail, "SMTP username", SettingKind.Text, "'resend' for Resend"),
-			new(SmtpPasswordKey, GroupMail, "SMTP password / API key", SettingKind.Secret, "secret; never written to JSON"),
-			new(SmtpFromAddressKey, GroupMail, "From address", SettingKind.Text, "required to send"),
-			new(SmtpFromNameKey, GroupMail, "From name", SettingKind.Text, "default FishMMO"),
-			new(SmtpUseSslKey, GroupMail, "TLS (STARTTLS)", SettingKind.Bool, "default true"),
+			new(SmtpHostKey, GroupMail),
+			new(SmtpPortKey, GroupMail),
+			new(SmtpUsernameKey, GroupMail),
+			new(SmtpPasswordKey, GroupMail),
+			new(SmtpFromAddressKey, GroupMail),
+			new(SmtpFromNameKey, GroupMail),
+			new(SmtpUseSslKey, GroupMail),
 
-			new(EnvironmentKey, GroupService, "Environment", SettingKind.Text, "Development or Production"),
-			new("FISHMMO_LOG_LEVEL", GroupService, "Log level", SettingKind.Text, "Verbose / Debug / Info / Warning / Error"),
+			new(EnvironmentKey, GroupService),
+			new(LogLevelKey, GroupService),
 
-			new("FISHMMO_DISCORD_TOKEN", GroupSecrets, "Discord bot token", SettingKind.Secret, "secret; read by FishMMO-DiscordBot"),
-			new("FISHMMO_VERSION_MANIFEST_SIGNING_KEY", GroupSecrets, "Manifest signing key", SettingKind.Secret, "secret; read by the Patcher"),
+			new(DiscordTokenKey, GroupSecrets),
+			new(ManifestSigningKey, GroupSecrets),
 		};
 
 		/// <summary>Header written when the secrets file is created from nothing.</summary>
@@ -154,6 +173,16 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Runs the interactive editor until the operator goes back.
 		/// </summary>
+		/// <remarks>
+		/// Four guided steps rather than seventeen numbered settings and five letter actions. The
+		/// flat list showed every variable at once and made the operator assemble a database
+		/// connection out of six separate menu entries; each step now prompts its fields in the
+		/// order they belong together, with the current value as the default so Enter keeps it.
+		/// <para>
+		/// <c>B</c> goes back, not <c>0</c>: a lone zero in a column of letters reads as the letter
+		/// O, and was asked about as one. <c>0</c> and Escape are still accepted, silently.
+		/// </para>
+		/// </remarks>
 		public static async Task Configure()
 		{
 			string secretsPath = DatabaseSecrets.DefaultSecretsFilePath;
@@ -177,76 +206,65 @@ namespace FishMMO.Installer
 				return;
 			}
 
+			/* The file, and nothing else. Never Environment.GetEnvironmentVariable here: a stale
+			 * export in this shell would be shown as the current value and then saved back over the
+			 * real one. The environment is compared against this, never merged into it. */
 			Dictionary<string, string> values = ParseKeyValues(existingContent);
+			var saved = new Dictionary<string, string>(values, StringComparer.Ordinal);
+
+			/* Program takes this snapshot at startup, before it normalises FISHMMO_ENVIRONMENT.
+			 * Repeating it here costs nothing (the first capture is the only one) and keeps the
+			 * screen correct if it is ever reached by an entry point that did not. */
+			CaptureInheritedEnvironment();
 
 			while (true)
 			{
 				Console.Clear();
-				Console.WriteLine("=== Configure Secrets & Environment ===");
-				Console.WriteLine($"Secrets file: {secretsPath}");
-				Console.WriteLine($"Control Panel settings: {ControlPanelSettingsPath(values) ?? "(FishMMO-Setup not found — mail settings go to the secrets file only)"}");
+				RenderScreen(secretsPath, values, HasUnsavedChanges(saved, values));
+
+				ConsoleKeyInfo pressed = Console.ReadKey(true);
 				Console.WriteLine();
 
-				string? group = null;
-				for (int i = 0; i < Settings.Length; i++)
+				char choice = char.ToUpperInvariant(pressed.KeyChar);
+				if (pressed.Key == ConsoleKey.Escape || choice is 'B' or '0')
 				{
-					Setting setting = Settings[i];
-					if (setting.Group != group)
+					if (!HasUnsavedChanges(saved, values))
 					{
-						group = setting.Group;
-						Console.WriteLine($"-- {group} --");
+						return;
 					}
 
-					string shown = Display(setting, values);
-					string hint = string.IsNullOrEmpty(setting.Hint) ? "" : $"   {setting.Hint}";
-					Console.WriteLine($"{i + 1,3} : {setting.Label,-24} [{shown}]{hint}");
-				}
-
-				Console.WriteLine();
-				Console.WriteLine($"Mail status: {DescribeMail(values)}");
-				Console.WriteLine();
-				Console.WriteLine("  R : Resend preset (mail)      T : Send a test message");
-				Console.WriteLine("  W : Write configuration       X : Export as environment variables");
-				Console.WriteLine("  0 : Back");
-				Console.WriteLine();
-				Console.WriteLine("Not written here: the PostgreSQL superuser password (prompted per run), the signing-key");
-				Console.WriteLine("KEK and client gate secret (Database ▸ Configure Server Keys — they live in the");
-				Console.WriteLine("deployment_secrets table), and FISHMMO_CONNECTION_STRING (superseded by FISHMMO_DB_*).");
-				Console.WriteLine();
-				Console.Write("Select: ");
-
-				string choice = (Console.ReadLine() ?? string.Empty).Trim();
-				Console.WriteLine();
-
-				if (choice.Length == 0)
-				{
+					Console.WriteLine("There are unsaved changes. Nothing has been written to the secrets file.");
+					if (InstallerProcessHelper.PromptForYesNo("Leave without saving?"))
+					{
+						return;
+					}
 					continue;
 				}
 
-				if (choice == "0")
+				switch (choice)
 				{
-					return;
-				}
-
-				if (int.TryParse(choice, out int index) && index >= 1 && index <= Settings.Length)
-				{
-					EditSetting(Settings[index - 1], values);
-					continue;
-				}
-
-				switch (choice.ToUpperInvariant())
-				{
-					case "R":
-						ApplyResendPreset(values);
+					case '1':
+						ConfigureDatabase(values);
 						break;
-					case "T":
-						await SendTestMessage(values);
+					case '2':
+						await ConfigureMail(values);
 						break;
-					case "W":
-						await WriteConfiguration(secretsPath, values);
+					case '3':
+						ConfigureService(values);
 						break;
-					case "X":
-						await ExportEnvironmentVariables(values);
+					case '4':
+						ConfigureOtherSecrets(values);
+						break;
+					case 'S':
+					// W is what this action used to be, and somebody has it in their fingers.
+					case 'W':
+						if (await WriteConfiguration(secretsPath, values))
+						{
+							saved = new Dictionary<string, string>(values, StringComparer.Ordinal);
+						}
+						break;
+					case '?':
+						ShowWhatIsNotSetHere();
 						break;
 					default:
 						Console.WriteLine("Invalid option.");
@@ -259,121 +277,586 @@ namespace FishMMO.Installer
 			}
 		}
 
-		/// <summary>What a setting's current value looks like on screen — secrets are masked.</summary>
-		private static string Display(Setting setting, IReadOnlyDictionary<string, string> values)
+		/// <summary>Draws the top-level screen: four groups, three actions, and any warnings.</summary>
+		private static void RenderScreen(
+			string secretsPath,
+			IReadOnlyDictionary<string, string> values,
+			bool unsaved)
 		{
-			if (!values.TryGetValue(setting.Key, out string? value) || value.Length == 0)
+			Console.WriteLine("=== Configure Secrets & Environment ===");
+			Console.WriteLine($"Secrets file: {secretsPath}");
+			Console.WriteLine();
+
+			foreach (string line in GroupMenuLines(values))
+			{
+				Console.WriteLine(line);
+			}
+
+			Console.WriteLine();
+			Console.WriteLine("  S : Save        ? : What is not set here        B : Back");
+
+			if (unsaved)
+			{
+				Console.WriteLine();
+				Console.WriteLine("* Unsaved changes — nothing reaches the secrets file until you choose S.");
+			}
+
+			IReadOnlyList<string> mismatches = DescribeEnvironmentMismatches(values, ReadInherited);
+			if (mismatches.Count > 0)
+			{
+				Console.WriteLine();
+				Console.WriteLine("! This shell's environment disagrees with the file. Neither value is shown:");
+				foreach (string line in mismatches)
+				{
+					Console.WriteLine($"    {line}");
+				}
+				Console.WriteLine("  A server you start BY HAND from this shell reads environment variables before the");
+				Console.WriteLine("  file, so it would use the shell's value, not the file's. Services started by");
+				Console.WriteLine("  systemd read the file and are unaffected. Open a clean shell to be rid of it.");
+			}
+
+			Console.WriteLine();
+			Console.Write("Select: ");
+		}
+
+		/// <summary>
+		/// The four menu rows, built from the file's values.
+		/// </summary>
+		/// <remarks>Public so the rows can be asserted without a terminal.</remarks>
+		public static IReadOnlyList<string> GroupMenuLines(IReadOnlyDictionary<string, string> values)
+		{
+			return new[]
+			{
+				$"  1 : {"Database connection",-20} [{DescribeDatabase(values)}]",
+				$"  2 : {"Mail (SMTP)",-20} [{DescribeMailSummary(values)}]",
+				$"  3 : {"Service",-20} [{DescribeService(values)}]",
+				$"  4 : {"Other secrets",-20} [{DescribeOtherSecrets(values)}]",
+			};
+		}
+
+		/// <summary>The database connection in one line. Never includes the password.</summary>
+		public static string DescribeDatabase(IReadOnlyDictionary<string, string> values)
+		{
+			if (!DatabaseKeys.Any(key => Value(values, key).Length > 0))
+			{
+				return "not configured";
+			}
+
+			string username = Value(values, DbUsernameKey);
+			string summary =
+				$"{(username.Length == 0 ? "(no username)" : username)}@" +
+				$"{Value(values, DbHostKey, "127.0.0.1")}:{Value(values, DbPortKey, "5432")}/" +
+				$"{Value(values, DbNameKey, "fishmmo")}";
+
+			return Value(values, DbPasswordKey).Length == 0 ? $"{summary} — no password" : summary;
+		}
+
+		/// <summary>Mail in one line for the menu; the mail step shows the full sentence.</summary>
+		public static string DescribeMailSummary(IReadOnlyDictionary<string, string> values)
+		{
+			string? problem = DescribeMailProblem(values, out bool idle);
+			if (idle)
+			{
+				return "not configured — no mail will be sent";
+			}
+			if (problem != null)
+			{
+				return Value(values, SmtpFromAddressKey).Length == 0
+					? "will not send — no From address"
+					: "will not send — the From address is not valid";
+			}
+
+			string username = Value(values, SmtpUsernameKey);
+			return $"{Value(values, SmtpHostKey, "localhost")}:{Value(values, SmtpPortKey, "587")} as " +
+				   $"{(username.Length == 0 ? "an unauthenticated sender" : username)}";
+		}
+
+		/// <summary>Environment, and the log level when one is pinned.</summary>
+		public static string DescribeService(IReadOnlyDictionary<string, string> values)
+		{
+			string environmentName = Value(values, EnvironmentKey);
+			string logLevel = Value(values, LogLevelKey);
+
+			if (environmentName.Length == 0 && logLevel.Length == 0)
 			{
 				return "not set";
 			}
-			return setting.Kind == SettingKind.Secret ? MaskSecret(value) : value;
+
+			string shown = environmentName.Length == 0 ? "environment not set" : environmentName;
+			return logLevel.Length == 0 ? shown : $"{shown}, log {logLevel}";
+		}
+
+		/// <summary>Whether each standalone secret exists — never anything about its value.</summary>
+		public static string DescribeOtherSecrets(IReadOnlyDictionary<string, string> values)
+		{
+			string discord = Value(values, DiscordTokenKey).Length == 0 ? "not set" : "set";
+			string patcher = Value(values, ManifestSigningKey).Length == 0 ? "not set" : "set";
+			return $"Discord: {discord}   Patcher: {patcher}";
+		}
+
+		/// <summary>
+		/// The launching shell's values, captured once before anything can overwrite them.
+		/// </summary>
+		/// <remarks>
+		/// Read through <see cref="ReadInherited"/> rather than directly, so that every comparison
+		/// asks the same question: "what did the SHELL give us?", not "what does this process hold
+		/// right now?" — which <see cref="ApplyToThisProcess"/> deliberately changes.
+		/// </remarks>
+		private static Dictionary<string, string?> inheritedEnvironment = new(StringComparer.Ordinal);
+
+		/// <summary>Whether the snapshot has been taken, so the first capture is the only one.</summary>
+		private static bool inheritedEnvironmentCaptured;
+
+		/// <summary>
+		/// Records what the launching shell exported, before this process changes any of it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Must run before the process edits its own environment, and only the first call counts.
+		/// Two separate things would otherwise poison the snapshot and turn the mismatch warning
+		/// into a liar:
+		/// </para>
+		/// <list type="bullet">
+		///   <item><c>Program</c> normalises <c>FISHMMO_ENVIRONMENT</c> at startup, setting it from
+		///   <see cref="DatabaseConfigurationHelper.ResolveEnvironmentName"/> — which falls back to
+		///   "Production" in a release build when the shell set nothing at all. Captured after that,
+		///   a secrets file saying <c>Development</c> would be reported as a shell disagreement that
+		///   no shell ever caused.</item>
+		///   <item><see cref="ApplyToThisProcess"/> copies saved values into this process. Captured
+		///   after a save, the snapshot would equal the file by construction and the warning would
+		///   go quiet while the operator's shell was still stale — silence meaning the opposite of
+		///   what it means everywhere else on this screen.</item>
+		/// </list>
+		/// </remarks>
+		internal static void CaptureInheritedEnvironment()
+		{
+			if (inheritedEnvironmentCaptured)
+			{
+				return;
+			}
+
+			inheritedEnvironment = Settings.ToDictionary(
+				setting => setting.Key,
+				setting => Environment.GetEnvironmentVariable(setting.Key),
+				StringComparer.Ordinal);
+			inheritedEnvironmentCaptured = true;
+		}
+
+		/// <summary>The launching shell's value for one key, or null if it set none.</summary>
+		private static string? ReadInherited(string key) => inheritedEnvironment.GetValueOrDefault(key);
+
+		/// <summary>
+		/// Copies the saved values into THIS process's environment, returning how many were set.
+		/// </summary>
+		/// <remarks>
+		/// Writing the file is not enough to continue a setup. <see cref="DatabaseSecrets"/> reads
+		/// the environment before the file, so the installer — and every tool it launches, such as
+		/// <c>dotnet ef</c> and <c>psql</c>, which inherit this environment — would otherwise keep
+		/// using whatever the launching shell held: nothing at all, or a stale password from a
+		/// previous run. Saving and then immediately being unable to install the database is how
+		/// that presents, and the cause is invisible from the outside.
+		/// <para>
+		/// Children inherit this. The PARENT shell cannot be reached — no process can change its
+		/// parent's environment — which is why the screen states that limit instead of working
+		/// around it. The usual workaround is to write a snippet for the shell to source, and that
+		/// second copy of the secret is exactly what was removed from this installer.
+		/// </para>
+		/// <para>
+		/// A key with no value is actively UNSET rather than skipped, so clearing a field takes
+		/// effect here too instead of leaving the previous value live in the process.
+		/// </para>
+		/// </remarks>
+		private static int ApplyToThisProcess(IReadOnlyDictionary<string, string> values)
+		{
+			int applied = 0;
+			foreach (Setting setting in Settings)
+			{
+				string value = Value(values, setting.Key);
+				Environment.SetEnvironmentVariable(setting.Key, value.Length == 0 ? null : value);
+				if (value.Length > 0)
+				{
+					applied++;
+				}
+			}
+			return applied;
+		}
+
+		/// <summary>
+		/// Names every variable whose value in the launching shell differs from the file's.
+		/// </summary>
+		/// <param name="fileValues">What the secrets file holds — the values this screen edits.</param>
+		/// <param name="readEnvironment">
+		/// How to read a variable; defaults to this process's environment. Injectable so the
+		/// comparison can be tested without touching the real environment, and so the screen can
+		/// ask <see cref="ReadInherited"/> instead of the live process.
+		/// </param>
+		/// <remarks>
+		/// <para>
+		/// This is the diagnostic the screen could not previously give. An operator whose shell still
+		/// exported an old password had no way to see that the shell and the file disagreed, and the
+		/// disagreement is what decides which password a hand-started server actually uses:
+		/// <see cref="DatabaseSecrets"/> takes the environment first and the file second.
+		/// </para>
+		/// <para>
+		/// Neither value is returned, formatted or logged — only the key name and the fact that the
+		/// two differ. An empty variable is not a disagreement, because the runtime treats an empty
+		/// variable as unset and falls through to the file; the shell's value is compared trimmed,
+		/// because trimming is what the runtime does to it before use, so trailing whitespace is not
+		/// reported as a difference that would not exist in practice.
+		/// </para>
+		/// </remarks>
+		public static IReadOnlyList<string> DescribeEnvironmentMismatches(
+			IReadOnlyDictionary<string, string> fileValues,
+			Func<string, string?>? readEnvironment = null)
+		{
+			Func<string, string?> read = readEnvironment ?? Environment.GetEnvironmentVariable;
+			var lines = new List<string>();
+
+			foreach (Setting setting in Settings)
+			{
+				string? raw = read(setting.Key);
+				if (string.IsNullOrEmpty(raw))
+				{
+					continue;
+				}
+
+				string inShell = raw.Trim();
+				string inFile = Value(fileValues, setting.Key);
+
+				if (inFile.Length == 0)
+				{
+					lines.Add($"{setting.Key}: this shell sets a value the file does not have " +
+							  "(the file is what services use)");
+				}
+				else if (!string.Equals(inShell, inFile, StringComparison.Ordinal))
+				{
+					lines.Add($"{setting.Key}: this shell has a different value than the file " +
+							  "(the file is what services use)");
+				}
+			}
+
+			return lines;
+		}
+
+		/// <summary>
+		/// Whether the screen holds edits that are not on disk.
+		/// </summary>
+		/// <remarks>
+		/// Compared on non-empty values only, because that is what a save round-trips: an empty value
+		/// means "unset", <see cref="ComposeSecretsFile"/> emits no line for it, and reloading the
+		/// file would not produce the key at all. Without that, a file containing a bare <c>KEY=</c>
+		/// would report unsaved changes for ever.
+		/// </remarks>
+		public static bool HasUnsavedChanges(
+			IReadOnlyDictionary<string, string> saved,
+			IReadOnlyDictionary<string, string> current)
+		{
+			static Dictionary<string, string> Set(IReadOnlyDictionary<string, string> source)
+				=> source.Where(pair => pair.Value.Length > 0)
+						 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+
+			Dictionary<string, string> a = Set(saved);
+			Dictionary<string, string> b = Set(current);
+
+			if (a.Count != b.Count)
+			{
+				return true;
+			}
+
+			foreach (KeyValuePair<string, string> pair in a)
+			{
+				if (!b.TryGetValue(pair.Key, out string? other) ||
+					!string.Equals(other, pair.Value, StringComparison.Ordinal))
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/// <summary>The keys of one group, in file order.</summary>
+		private static string[] KeysIn(string group)
+			=> Settings.Where(setting => setting.Group == group).Select(setting => setting.Key).ToArray();
+
+		private static readonly string[] DatabaseKeys = KeysIn(GroupDatabase);
+
+		/// <summary>A value from the file, or the fallback when it is absent or empty.</summary>
+		private static string Value(IReadOnlyDictionary<string, string> values, string key, string fallback = "")
+		{
+			string value = values.GetValueOrDefault(key, "");
+			return value.Length == 0 ? fallback : value;
+		}
+
+		/// <summary>The things an operator will look for here and not find, and where they are.</summary>
+		/// <remarks>
+		/// Behind a key rather than printed under the menu. It is four paragraphs of "not this
+		/// screen", and it used to take more vertical space than the settings did.
+		/// </remarks>
+		private static void ShowWhatIsNotSetHere()
+		{
+			Console.WriteLine("=== What is not set here ===");
+			Console.WriteLine();
+			Console.WriteLine("  PostgreSQL superuser password");
+			Console.WriteLine("    Prompted per run, never stored. It is the credential that can drop the cluster.");
+			Console.WriteLine();
+			Console.WriteLine("  Signing-key KEK and client gate secret");
+			Console.WriteLine("    Database ▸ Configure Server Keys. They live in the deployment_secrets table, and");
+			Console.WriteLine("    a second copy here would give the deployment two sources of truth for one key.");
+			Console.WriteLine();
+			Console.WriteLine("  FISHMMO_CONNECTION_STRING");
+			Console.WriteLine("    Another spelling of the FISHMMO_DB_* values above. Offering both invites a");
+			Console.WriteLine("    deployment where the two disagree.");
+			Console.WriteLine();
+			Console.WriteLine("  Tooling variables (FISHMMO_UNITY_EXE, FISHMMO_INSTALL_ROOT and friends)");
+			Console.WriteLine("    They steer a developer's machine, not a server.");
+		}
+
+		// ──────────────────────────────────────────────────────────────────────
+		//  The four guided steps
+		// ──────────────────────────────────────────────────────────────────────
+
+		private static void ConfigureDatabase(Dictionary<string, string> values)
+		{
+			Console.WriteLine("=== Database connection ===");
+			Console.WriteLine();
+			Console.WriteLine("Every FishMMO process resolves its connection from these. Enter keeps the current");
+			Console.WriteLine("value, '-' clears it.");
+			Console.WriteLine();
+
+			PromptText(values, DbHostKey, "Host", "127.0.0.1");
+			PromptNumber(values, DbPortKey, "Port", "5432");
+			PromptText(values, DbNameKey, "Database name", "fishmmo");
+			PromptText(values, DbUsernameKey, "Username");
+			PromptSecret(values, DbPasswordKey, "Password");
+			PromptText(values, DbSchemaKey, "Schema", "must match Npgsql:Schema in appsettings");
+
+			Console.WriteLine();
+			Console.WriteLine($"Now: {DescribeDatabase(values)}");
+		}
+
+		/// <summary>
+		/// Mail, preset first and test send last.
+		/// </summary>
+		/// <remarks>
+		/// The Resend preset and the test send used to be top-level letter actions sitting beside
+		/// seventeen numbers, which is the wrong shape for both: the preset is how you begin
+		/// configuring mail and the test is how you find out whether you succeeded. They are the
+		/// first and last steps of this flow now.
+		/// </remarks>
+		private static async Task ConfigureMail(Dictionary<string, string> values)
+		{
+			Console.WriteLine("=== Mail (SMTP) ===");
+			Console.WriteLine();
+			Console.WriteLine("The Control Panel drains the queue and sends; the LoginServer only enqueues.");
+			Console.WriteLine($"Currently: {DescribeMail(values)}");
+			Console.WriteLine();
+
+			if (InstallerProcessHelper.PromptForYesNo(
+					"Use the Resend preset (smtp.resend.com:587, username 'resend', TLS on)?"))
+			{
+				ApplyResendPreset(values);
+			}
+			else
+			{
+				Console.WriteLine();
+				Console.WriteLine("Enter keeps the current value, '-' clears it.");
+				Console.WriteLine();
+
+				PromptText(values, SmtpHostKey, "SMTP host", "localhost = no relay");
+				PromptNumber(values, SmtpPortKey, "SMTP port", "587");
+				PromptText(values, SmtpUsernameKey, "Username", "blank = unauthenticated");
+				PromptSecret(values, SmtpPasswordKey, "Password / API key");
+				PromptText(values, SmtpFromAddressKey, "From address", "required to send");
+				PromptText(values, SmtpFromNameKey, "From name", "FishMMO");
+				PromptBool(values, SmtpUseSslKey, "TLS (STARTTLS)", "true");
+			}
+
+			Console.WriteLine();
+			Console.WriteLine($"Mail status: {DescribeMail(values)}");
+
+			if (DescribeMailProblem(values, out _) != null)
+			{
+				return;
+			}
+
+			Console.WriteLine();
+			Console.WriteLine("A test send uses the values on this screen, saved or not, and writes nothing.");
+			if (InstallerProcessHelper.PromptForYesNo("Send a test message now?"))
+			{
+				Console.WriteLine();
+				await SendTestMessage(values);
+			}
+		}
+
+		private static void ConfigureService(Dictionary<string, string> values)
+		{
+			Console.WriteLine("=== Service ===");
+			Console.WriteLine();
+			Console.WriteLine("Enter keeps the current value, '-' clears it.");
+			Console.WriteLine();
+
+			PromptText(values, EnvironmentKey, "Environment", "Development or Production");
+			PromptText(values, LogLevelKey, "Log level", "Verbose / Debug / Info / Warning / Error");
+
+			Console.WriteLine();
+			Console.WriteLine($"Now: {DescribeService(values)}");
+			Console.WriteLine("Mail settings are mirrored into: " +
+							  $"{ControlPanelSettingsPath(values) ?? "(FishMMO-Setup not found — the secrets file only)"}");
+		}
+
+		private static void ConfigureOtherSecrets(Dictionary<string, string> values)
+		{
+			Console.WriteLine("=== Other secrets ===");
+			Console.WriteLine();
+			Console.WriteLine("Both are hidden. Enter keeps the current value, '-' clears it.");
+			Console.WriteLine();
+
+			PromptSecret(values, DiscordTokenKey, "Discord bot token  (read by FishMMO-DiscordBot)");
+			PromptSecret(values, ManifestSigningKey, "Manifest signing key  (read by the Patcher)");
+
+			Console.WriteLine();
+			Console.WriteLine($"Now: {DescribeOtherSecrets(values)}");
+		}
+
+		// ──────────────────────────────────────────────────────────────────────
+		//  Prompts
+		// ──────────────────────────────────────────────────────────────────────
+
+		private static void PromptText(
+			Dictionary<string, string> values,
+			string key,
+			string label,
+			string? placeholder = null)
+		{
+			string current = Value(values, key);
+			Console.Write($"  {label,-16} [{(current.Length > 0 ? current : placeholder ?? "not set")}]: ");
+
+			string input = (Console.ReadLine() ?? string.Empty).Trim();
+			if (input.Length == 0)
+			{
+				return;
+			}
+			if (input == "-")
+			{
+				values.Remove(key);
+				return;
+			}
+			values[key] = input;
+		}
+
+		private static void PromptNumber(
+			Dictionary<string, string> values,
+			string key,
+			string label,
+			string? placeholder = null)
+		{
+			while (true)
+			{
+				string current = Value(values, key);
+				Console.Write($"  {label,-16} [{(current.Length > 0 ? current : placeholder ?? "not set")}]: ");
+
+				string input = (Console.ReadLine() ?? string.Empty).Trim();
+				if (input.Length == 0)
+				{
+					return;
+				}
+				if (input == "-")
+				{
+					values.Remove(key);
+					return;
+				}
+				if (!int.TryParse(input, out int number) || number <= 0)
+				{
+					Console.WriteLine("    Enter a positive integer.");
+					continue;
+				}
+
+				values[key] = number.ToString();
+				if (key == SmtpPortKey && number == 465)
+				{
+					WarnAboutImplicitTls();
+				}
+				return;
+			}
+		}
+
+		private static void PromptBool(
+			Dictionary<string, string> values,
+			string key,
+			string label,
+			string? placeholder = null)
+		{
+			while (true)
+			{
+				string current = Value(values, key);
+				Console.Write($"  {label,-16} (true/false) [{(current.Length > 0 ? current : placeholder ?? "not set")}]: ");
+
+				string input = (Console.ReadLine() ?? string.Empty).Trim();
+				if (input.Length == 0)
+				{
+					return;
+				}
+				if (input == "-")
+				{
+					values.Remove(key);
+					return;
+				}
+				if (!bool.TryParse(input, out bool parsed))
+				{
+					Console.WriteLine("    Enter true or false.");
+					continue;
+				}
+
+				values[key] = parsed ? "true" : "false";
+				return;
+			}
+		}
+
+		/// <summary>
+		/// Prompts for a value that is never echoed.
+		/// </summary>
+		/// <remarks>
+		/// Enter keeps what is already there — which is why this uses
+		/// <see cref="InstallerProcessHelper.PromptForPassword"/> and not the "required" variant,
+		/// which loops until something is typed and would turn every guided step into a forced
+		/// retype of every secret in it.
+		/// </remarks>
+		private static void PromptSecret(Dictionary<string, string> values, string key, string label)
+		{
+			string current = Value(values, key);
+			Console.WriteLine($"  {label} [{MaskSecret(current)}]  (hidden; Enter keeps, '-' clears)");
+
+			string entered = InstallerProcessHelper.PromptForPassword("    Value: ");
+			if (entered.Length == 0)
+			{
+				return;
+			}
+			if (entered == "-")
+			{
+				values.Remove(key);
+				Console.WriteLine("    Cleared.");
+				return;
+			}
+
+			/* An environment file is one line per value, and a control character in one is either a
+			 * stray key that the masked prompt turned into a '\0' or a paste that brought a newline
+			 * with it. Either way the server would read back a credential that is not the one
+			 * typed, and it would be invisible on screen. */
+			if (entered.Any(char.IsControl))
+			{
+				Console.WriteLine("    Refused: the value contains a line break or control character.");
+				return;
+			}
+
+			values[key] = entered;
+			Console.WriteLine("    Set.");
 		}
 
 		/// <summary>Shows that a secret exists without showing any part of it.</summary>
 		/// <remarks>Fixed width on purpose: the length of a credential is information too.</remarks>
 		private static string MaskSecret(string? value)
 			=> string.IsNullOrEmpty(value) ? "not set" : "********";
-
-		private static void EditSetting(Setting setting, Dictionary<string, string> values)
-		{
-			values.TryGetValue(setting.Key, out string? current);
-
-			switch (setting.Kind)
-			{
-				case SettingKind.Secret:
-				{
-					Console.WriteLine($"{setting.Label} ({setting.Key})");
-					Console.WriteLine("  Input is hidden. Type '-' to clear it.");
-					string entered = InstallerProcessHelper.PromptForRequiredPassword("  Value: ");
-					if (entered == "-")
-					{
-						values.Remove(setting.Key);
-						Console.WriteLine("  Cleared.");
-					}
-					else if (entered.Contains('\n') || entered.Contains('\r'))
-					{
-						// An environment file cannot represent a line break, so refuse rather than
-						// write something the server would read back as a truncated credential.
-						Console.WriteLine("  Refused: the value contains a line break.");
-					}
-					else
-					{
-						values[setting.Key] = entered;
-						Console.WriteLine("  Set.");
-					}
-					break;
-				}
-
-				case SettingKind.Bool:
-				{
-					Console.Write($"{setting.Label} (true/false) [{current ?? "not set"}]: ");
-					string input = (Console.ReadLine() ?? string.Empty).Trim();
-					if (input.Length == 0)
-					{
-						break;
-					}
-					if (input == "-")
-					{
-						values.Remove(setting.Key);
-						break;
-					}
-					if (bool.TryParse(input, out bool parsed))
-					{
-						values[setting.Key] = parsed ? "true" : "false";
-					}
-					else
-					{
-						Console.WriteLine("  Enter true or false.");
-					}
-					break;
-				}
-
-				case SettingKind.Number:
-				{
-					Console.Write($"{setting.Label} [{current ?? "not set"}]: ");
-					string input = (Console.ReadLine() ?? string.Empty).Trim();
-					if (input.Length == 0)
-					{
-						break;
-					}
-					if (input == "-")
-					{
-						values.Remove(setting.Key);
-						break;
-					}
-					if (int.TryParse(input, out int number) && number > 0)
-					{
-						values[setting.Key] = number.ToString();
-						if (setting.Key == SmtpPortKey && number == 465)
-						{
-							WarnAboutImplicitTls();
-						}
-					}
-					else
-					{
-						Console.WriteLine("  Enter a positive integer.");
-					}
-					break;
-				}
-
-				default:
-				{
-					Console.Write($"{setting.Label} [{current ?? "not set"}]  (Enter keeps, '-' clears): ");
-					string input = (Console.ReadLine() ?? string.Empty).Trim();
-					if (input.Length == 0)
-					{
-						break;
-					}
-					if (input == "-")
-					{
-						values.Remove(setting.Key);
-						break;
-					}
-					values[setting.Key] = input;
-					break;
-				}
-			}
-		}
 
 		/// <summary>
 		/// Says plainly that this sender cannot do implicit TLS, rather than letting a send sit on
@@ -382,9 +865,10 @@ namespace FishMMO.Installer
 		private static void WarnAboutImplicitTls()
 		{
 			Console.WriteLine();
-			Console.WriteLine("  Port 465 is implicit TLS, which System.Net.Mail does not support.");
-			Console.WriteLine("  A send on 465 will hang until it times out and then fail with nothing useful.");
-			Console.WriteLine("  Use 587 (STARTTLS, TLS on) — that is what the relays this project targets expect.");
+			Console.WriteLine("    Port 465 is implicit TLS, which System.Net.Mail does not support.");
+			Console.WriteLine("    A send on 465 will hang until it times out and then fail with nothing useful.");
+			Console.WriteLine("    Use 587 (STARTTLS, TLS on) — that is what the relays this project targets expect.");
+			Console.WriteLine();
 		}
 
 		// ──────────────────────────────────────────────────────────────────────
@@ -401,9 +885,8 @@ namespace FishMMO.Installer
 		/// </remarks>
 		private static void ApplyResendPreset(Dictionary<string, string> values)
 		{
-			Console.WriteLine("=== Resend preset ===");
 			Console.WriteLine();
-			Console.WriteLine("Sets host smtp.resend.com, port 587, username 'resend' and TLS on.");
+			Console.WriteLine("Setting host smtp.resend.com, port 587, username 'resend' and TLS on.");
 			Console.WriteLine("Confirm the host and port against your Resend dashboard before relying on them.");
 			Console.WriteLine();
 
@@ -412,23 +895,13 @@ namespace FishMMO.Installer
 			values[SmtpUsernameKey] = "resend";
 			values[SmtpUseSslKey] = "true";
 
-			Console.WriteLine("API key (hidden; this is the password — it is written only to the secrets file).");
-			string apiKey = InstallerProcessHelper.PromptForRequiredPassword("  API key: ");
-			if (apiKey != "-")
-			{
-				values[SmtpPasswordKey] = apiKey;
-			}
-
-			Console.Write($"From address [{values.GetValueOrDefault(SmtpFromAddressKey, "not set")}]: ");
-			string from = (Console.ReadLine() ?? string.Empty).Trim();
-			if (from.Length > 0)
-			{
-				values[SmtpFromAddressKey] = from;
-			}
+			PromptSecret(values, SmtpPasswordKey, "API key  (this is the password; secrets file only)");
+			PromptText(values, SmtpFromAddressKey, "From address", "required to send");
+			PromptText(values, SmtpFromNameKey, "From name", "FishMMO");
 
 			Console.WriteLine();
 			Console.WriteLine("The From address must be on a domain you have verified with Resend, or it will");
-			Console.WriteLine("reject the message. Nothing has been written yet — choose W to write.");
+			Console.WriteLine("reject the message.");
 		}
 
 		/// <summary>
@@ -541,7 +1014,6 @@ namespace FishMMO.Installer
 			if (port == 465)
 			{
 				WarnAboutImplicitTls();
-				Console.WriteLine();
 				Console.WriteLine("Not sending: this client cannot talk to 465 at all.");
 				return;
 			}
@@ -648,9 +1120,13 @@ namespace FishMMO.Installer
 		/// Writes the secrets file, and mirrors the non-secret mail settings into the Control
 		/// Panel's configuration.
 		/// </summary>
-		private static async Task WriteConfiguration(string secretsPath, Dictionary<string, string> values)
+		/// <returns>
+		/// True when the secrets file was rewritten, so the caller can treat the screen as saved.
+		/// False when the write was refused, which must leave the unsaved-changes marker up.
+		/// </returns>
+		private static async Task<bool> WriteConfiguration(string secretsPath, Dictionary<string, string> values)
 		{
-			Console.WriteLine("=== Write configuration ===");
+			Console.WriteLine("=== Save ===");
 			Console.WriteLine();
 
 			(bool readable, string? existingContent) = await TryReadExistingAsync(secretsPath);
@@ -659,18 +1135,42 @@ namespace FishMMO.Installer
 				Console.WriteLine($"Refusing to write: {secretsPath} exists but could not be read, and writing");
 				Console.WriteLine("it now would destroy the keys that could not be read.");
 				await Log.Error("FishMMOInstaller", $"Refused to write unreadable secrets file {secretsPath}.");
-				return;
+				return false;
 			}
 
 			string content = ComposeSecretsFile(existingContent, values);
 			await DatabaseSecretsInstaller.WriteWithSudoIfNeeded(secretsPath, content);
 
 			Console.WriteLine();
-			Console.WriteLine("Secrets and environment written. Every FISHMMO_* value above, including the");
-			Console.WriteLine("passwords, is in that file and nowhere else. Restart the services to pick it up:");
+			Console.WriteLine("Secrets and environment written. Every FISHMMO_* value, including the passwords, is");
+			Console.WriteLine("in that file and nowhere else. Restart the services to pick it up:");
 			Console.WriteLine("  sudo systemctl restart 'fishmmo-*'");
 
+			int applied = ApplyToThisProcess(values);
+			Console.WriteLine();
+			Console.WriteLine($"The installer is now using these values itself ({applied} variable(s)), so you can");
+			Console.WriteLine("carry straight on to installing the database without restarting it.");
+
 			await WriteControlPanelMailSettings(values);
+
+			/* Saying it again here, because this is the moment an operator believes they are done.
+			 * The file is now right and this shell is still wrong, and the shell wins for anything
+			 * launched from it. */
+			IReadOnlyList<string> mismatches = DescribeEnvironmentMismatches(values, ReadInherited);
+			if (mismatches.Count > 0)
+			{
+				Console.WriteLine();
+				Console.WriteLine("Note: this shell still holds a different value for:");
+				foreach (string line in mismatches)
+				{
+					Console.WriteLine($"  {line}");
+				}
+				Console.WriteLine("systemd services read the file, and so does anything this installer launches from");
+				Console.WriteLine("here on. A command you type in this terminal yourself still gets the shell's old");
+				Console.WriteLine("value — open a new shell before starting a server by hand.");
+			}
+
+			return true;
 		}
 
 		/// <summary>
@@ -950,6 +1450,43 @@ namespace FishMMO.Installer
 			return result;
 		}
 
+		// ──────────────────────────────────────────────────────────────────────
+		//  Support for the uninstall path
+		// ──────────────────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Every file an earlier installer could have written that DEFINES these environment
+		/// variables, besides the secrets file itself.
+		/// </summary>
+		/// <remarks>
+		/// Nothing creates these any more — the export that did is gone, because a second copy of a
+		/// live credential in a shell profile is worse than the inconvenience it saved. They are
+		/// still listed because they exist on machines configured before that: deleting the secrets
+		/// file unsets nothing, and the fish one is sourced by every new shell, so an operator who
+		/// has just "removed the secrets" can still have a live database password in the environment
+		/// of every terminal they open, in a file that now outlives the database it belonged to.
+		/// <para>
+		/// The current directory is deliberately not searched: the old <c>.env</c> export landed
+		/// wherever the installer happened to be run, which is not knowable from here, so that one
+		/// is reported as a caveat rather than guessed at.
+		/// </para>
+		/// </remarks>
+		internal static IReadOnlyList<string> ExportedSnippetPaths()
+		{
+			string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+			if (string.IsNullOrWhiteSpace(home))
+			{
+				return Array.Empty<string>();
+			}
+
+			return new[]
+			{
+				Path.Combine(home, ".config", "fish", "conf.d", "fishmmo-secrets.fish"),
+				Path.Combine(home, "Documents", "WindowsPowerShell", "fishmmo-secrets.ps1"),
+				Path.Combine(home, "fishmmo-secrets.cmd"),
+			};
+		}
+
 		/// <summary>
 		/// The same read for callers outside this screen — the uninstall path, which must list the
 		/// keys it is about to destroy and must distinguish "no file" from "cannot read it".
@@ -959,18 +1496,11 @@ namespace FishMMO.Installer
 		/// about the sudo fallback and about the parent directory this user cannot traverse, and the
 		/// one that forgot would report a file full of credentials as absent.
 		/// </remarks>
-		/// <summary>
-		/// Every file this installer can write that DEFINES the environment variables, besides the
-		/// secrets file itself.
-		/// </summary>
-		/// <remarks>
-		/// Deleting the secrets file does not unset anything. These exported copies keep setting the
-		/// variables — the fish one is sourced by every new shell — so an operator who "removed the
-		/// secrets" can still have a live database password in their environment, and in a file that
-		/// outlives the database it belonged to. The current directory is deliberately not searched:
-		/// the .env export lands wherever the installer happened to be run, which is not knowable
-		/// from here, so that one is reported as a caveat rather than guessed at.
-		/// </remarks>
+		internal static Task<(bool Readable, string? Content)> TryReadSecretsFileAsync(string path)
+		{
+			return TryReadExistingAsync(path);
+		}
+
 		/// <summary>
 		/// Blanks the SMTP credential in every configuration file that has a field for one,
 		/// returning the files actually changed.
@@ -1085,26 +1615,9 @@ namespace FishMMO.Installer
 		/// </remarks>
 		private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-		internal static IReadOnlyList<string> ExportedSnippetPaths()
-		{
-			string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-			if (string.IsNullOrWhiteSpace(home))
-			{
-				return Array.Empty<string>();
-			}
-
-			return new[]
-			{
-				Path.Combine(home, ".config", "fish", "conf.d", "fishmmo-secrets.fish"),
-				Path.Combine(home, "Documents", "WindowsPowerShell", "fishmmo-secrets.ps1"),
-				Path.Combine(home, "fishmmo-secrets.cmd"),
-			};
-		}
-
-		internal static Task<(bool Readable, string? Content)> TryReadSecretsFileAsync(string path)
-		{
-			return TryReadExistingAsync(path);
-		}
+		// ──────────────────────────────────────────────────────────────────────
+		//  Reading and parsing
+		// ──────────────────────────────────────────────────────────────────────
 
 		/// <summary>
 		/// Reads the secrets file, asking sudo only if the direct read is refused.
@@ -1256,60 +1769,6 @@ namespace FishMMO.Installer
 				}
 			}
 			return true;
-		}
-
-		// ──────────────────────────────────────────────────────────────────────
-		//  Export
-		// ──────────────────────────────────────────────────────────────────────
-
-		/// <summary>
-		/// Writes the same values as a shell snippet, for a machine that does not use the secrets
-		/// file (a developer workstation, or a Windows host).
-		/// </summary>
-		private static async Task ExportEnvironmentVariables(IReadOnlyDictionary<string, string> values)
-		{
-			Console.WriteLine("=== Export as environment variables ===");
-			Console.WriteLine();
-			Console.WriteLine("These files contain the secrets in plain text. They are written chmod 600 where");
-			Console.WriteLine("the platform supports it.");
-			Console.WriteLine();
-			Console.WriteLine("1 : fish shell  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
-			Console.WriteLine("2 : systemd / .env (fishmmo-secrets.env in the current directory)");
-			Console.WriteLine("3 : Windows PowerShell / CMD");
-			Console.WriteLine("0 : Back");
-
-			ConsoleKeyInfo key = Console.ReadKey(true);
-			Console.WriteLine();
-			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0')
-			{
-				return;
-			}
-
-			var exported = new Dictionary<string, string>(StringComparer.Ordinal);
-			foreach (Setting setting in Settings)
-			{
-				string value = values.GetValueOrDefault(setting.Key, "");
-				if (value.Length > 0)
-				{
-					exported[setting.Key] = value;
-				}
-			}
-
-			switch (key.Key)
-			{
-				case ConsoleKey.D1:
-					await DatabaseSecretsInstaller.WriteFishSnippet(exported);
-					break;
-				case ConsoleKey.D2:
-					await DatabaseSecretsInstaller.WriteEnvFile(exported);
-					break;
-				case ConsoleKey.D3:
-					await DatabaseSecretsInstaller.WriteWindowsSnippets(exported);
-					break;
-				default:
-					Console.WriteLine("Invalid option.");
-					break;
-			}
 		}
 	}
 }

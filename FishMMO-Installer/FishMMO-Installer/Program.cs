@@ -99,6 +99,12 @@ namespace FishMMO.Installer
             // Set the working directory to the EXE location
             string applicationBaseDirectory = AppContext.BaseDirectory;
 
+            // Record what the shell exported BEFORE the normalisation below changes it. The
+            // secrets screen warns when this process's environment disagrees with the secrets
+            // file, and FISHMMO_ENVIRONMENT set from a release-build default two lines down is
+            // not a disagreement the operator's shell caused.
+            SecretsEnvironmentInstaller.CaptureInheritedEnvironment();
+
             // Normalize environment selection once and propagate to standard variables.
             string environmentName = DatabaseConfigurationHelper.ResolveEnvironmentName();
             Environment.SetEnvironmentVariable("FISHMMO_ENVIRONMENT", environmentName);

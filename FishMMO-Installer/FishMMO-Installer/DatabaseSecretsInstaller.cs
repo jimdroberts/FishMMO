@@ -1,6 +1,5 @@
 using FishMMO.Logging;
 using System.Diagnostics;
-using System.Text;
 
 namespace FishMMO.Installer
 {
@@ -114,49 +113,15 @@ namespace FishMMO.Installer
 			try { Process.Start("chmod", $"600 {path}")?.WaitForExit(1000); } catch { }
 		}
 
-		/// <summary>Writes the given variables as a fish shell profile snippet.</summary>
-		internal static async Task WriteFishSnippet(Dictionary<string, string> s)
-		{
-			string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "fish", "conf.d", "fishmmo-secrets.fish");
-			Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-			var sb = new StringBuilder("# FishMMO secrets and environment\n");
-			foreach (var kv in s) if (!string.IsNullOrEmpty(kv.Value)) sb.AppendLine($"set -gx {kv.Key} \"{Esc(kv.Value)}\"");
-			await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
-			Chmod600(path);
-			Console.WriteLine($"Written: {path}");
-		}
-
-		/// <summary>Writes the given variables as a systemd-style environment file.</summary>
-		internal static async Task WriteEnvFile(Dictionary<string, string> s)
-		{
-			string path = Path.Combine(Environment.CurrentDirectory, "fishmmo-secrets.env");
-			var sb = new StringBuilder($"# FishMMO secrets and environment\n# systemd: EnvironmentFile={path}\n");
-			foreach (var kv in s) if (!string.IsNullOrEmpty(kv.Value)) sb.AppendLine($"{kv.Key}={EscEnv(kv.Value)}");
-			await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
-			Chmod600(path);
-			Console.WriteLine($"Written: {path}");
-		}
-
-		/// <summary>Writes the given variables as PowerShell and CMD snippets.</summary>
-		internal static async Task WriteWindowsSnippets(Dictionary<string, string> s)
-		{
-			string p = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-			string pp = Path.Combine(p, "Documents", "WindowsPowerShell", "fishmmo-secrets.ps1");
-			Directory.CreateDirectory(Path.GetDirectoryName(pp)!);
-			var ps = new StringBuilder("# FishMMO secrets and environment\n");
-			foreach (var kv in s) if (!string.IsNullOrEmpty(kv.Value)) ps.AppendLine($"$env:{kv.Key} = \"{EscPS(kv.Value)}\"");
-			await File.WriteAllTextAsync(pp, ps.ToString(), Encoding.UTF8);
-			string cp = Path.Combine(p, "fishmmo-secrets.cmd");
-			var cmd = new StringBuilder("@echo off\nREM FishMMO secrets and environment\n");
-			foreach (var kv in s) if (!string.IsNullOrEmpty(kv.Value)) cmd.AppendLine($"set {kv.Key}={EscCmd(kv.Value)}");
-			await File.WriteAllTextAsync(cp, cmd.ToString(), Encoding.UTF8);
-			Console.WriteLine($"PowerShell: {pp}");
-			Console.WriteLine($"CMD:        {cp}");
-		}
-
-		private static string Esc(string v) => v.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("$", "\\$");
-		private static string EscPS(string v) => v.Replace("\"", "`\"").Replace("$", "`$");
-		private static string EscCmd(string v) => v.Replace("%", "%%").Replace("^", "^^").Replace("&", "^&").Replace("<", "^<").Replace(">", "^>").Replace("|", "^|");
-		private static string EscEnv(string v) { if (v.Any(c => char.IsWhiteSpace(c) || c == '#' || c == '\'')) return "\"" + v.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""; return v; }
+		/* No shell-snippet exporters here any more.
+		 *
+		 * They wrote the same secrets a second time into ~/.config/fish/conf.d and friends, and a
+		 * file in conf.d is sourced by every new shell — so the database password was exported
+		 * into every terminal and into every process those terminals launched. It also became a
+		 * second source of truth: a stale snippet and the secrets file drifted to two different
+		 * passwords, and the stale one won because the runtime reads the environment first.
+		 *
+		 * Nothing needed them. Services read the secrets file through systemd EnvironmentFile=.
+		 * UninstallInstaller still DELETES pre-existing snippets, because people have them. */
 	}
 }
