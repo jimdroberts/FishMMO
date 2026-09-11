@@ -247,6 +247,10 @@ function poolCard(ui, pool) {
 	const max = Number(pool.maxSize) || 0;
 	const active = Number(pool.active) || 0;
 	const leaked = Number(pool.openContexts) || 0;
+	/* Checkouts minus returns. In flight work makes this briefly positive, so it is only
+	 * meaningful against "in use" — above that and connections are being taken and not
+	 * given back. */
+	const outstanding = Math.max(0, (Number(pool.opened) || 0) - (Number(pool.closed) || 0));
 
 	return ui.card({
 		title: 'Connection pool',
@@ -257,8 +261,9 @@ function poolCard(ui, pool) {
 				<dt>In use</dt><dd class="tnum">${ui.num(active)}</dd>
 				<dt>Maximum</dt><dd class="tnum">${ui.num(max)}</dd>
 				<dt>Peak since start</dt><dd class="tnum">${ui.num(pool.peakActive)}</dd>
-				<dt>Opened</dt><dd class="tnum">${ui.num(pool.opened)}</dd>
-				<dt>Closed</dt><dd class="tnum">${ui.num(pool.closed)}</dd>
+				<dt>Checkouts since start</dt><dd class="tnum">${ui.num(pool.opened)}</dd>
+				<dt>Returns since start</dt><dd class="tnum">${ui.num(pool.closed)}</dd>
+				<dt>Not yet returned</dt><dd class="tnum${outstanding > active ? ' is-alert' : ''}">${ui.num(outstanding)}</dd>
 				<dt>Open contexts</dt><dd class="tnum">${ui.num(leaked)}</dd>
 				<dt>Connection errors</dt><dd class="tnum${Number(pool.connectionErrors) > 0 ? ' is-alert' : ''}">${ui.num(pool.connectionErrors)}</dd>
 				<dt>Exhaustion events</dt><dd class="tnum${Number(pool.exhaustionEvents) > 0 ? ' is-alert' : ''}">${ui.num(pool.exhaustionEvents)}</dd>
@@ -267,9 +272,18 @@ function poolCard(ui, pool) {
 				${ui.esc(pool.message ?? '')}
 			</p>
 			<p class="small muted" style="margin-top:var(--sp-3)">
-				“Open contexts” is what this factory has handed out and not seen disposed. It moves with
-				requests in flight, not with connections, so a figure well above “in use” on an idle panel
-				is the shape a leak makes — and a leak is what eventually exhausts the pool.
+				“Checkouts since start” counts every time this process borrowed a connection from the
+				pool, for the life of the process. <strong>It only ever goes up, and a large number is
+				not a fault</strong> — borrowing is what the pool is for, and the same few sockets are
+				handed out over and over. Idle, this panel still borrows a handful every half minute to
+				advance maintenance windows.
+			</p>
+			<p class="small muted" style="margin-top:var(--sp-3)">
+				The figures that would show a problem are “in use” and “not yet returned”. Healthy, the
+				two counters track each other and both of those sit near zero between requests. A gap
+				that grows and never closes is a leak, and a leak is what eventually exhausts the pool.
+				“Open contexts” is the same question asked of the factory rather than the connection:
+				what it handed out and never saw disposed.
 			</p>`,
 		foot: `Warning at ${ui.num(pool.warnAtPercent ?? FALLBACK_WARN_PERCENT)}%, critical at ${ui.num(pool.criticalAtPercent ?? FALLBACK_CRITICAL_PERCENT)}%. ${ui.esc(pool.scope ?? '')}`,
 	});
