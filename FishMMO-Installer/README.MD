@@ -115,7 +115,7 @@ The web server service registration (menu 3-5) is **cross-platform** — systemd
 
 **Default modules installed:** `linux-il2cpp`, `linux-dedicated-server`, `webgl`, `windows-mono`, `windows-il2cpp`, `windows-dedicated-server`
 
-**Project build** scans the chosen directory recursively for `.csproj` files, builds dependency-order projects synchronously first (FishMMO-Dependencies → FishMMO-Logger → FishMMO-Database → FishMMO-SharedUtility → FishMMO-Auth → FishMMO-CMS), then runs the remaining builds in parallel.
+**Project build** scans the chosen directory recursively for `.csproj` files, builds dependency-order projects synchronously first (FishMMO-Dependencies → FishMMO-Logger → FishMMO-Database → FishMMO-SharedUtility → FishMMO-Auth), then runs the remaining builds in parallel.
 
 **Unity build** locates the Unity Editor executable via multiple resolution strategies (env var, default install path, Unity Hub CLI, filesystem probe, interactive prompt), then invokes `-batchmode -nographics` with the appropriate `-executeMethod` target from `FishMMO.Shared.CustomBuildTool`.
 
@@ -123,9 +123,8 @@ The web server service registration (menu 3-5) is **cross-platform** — systemd
 
 | Option | Description |
 |---|---|
-| 1 | Configure Web Server Settings (IPFetch, Patcher, WebGL) |
+| 1 | Configure Web Server Settings (IPFetch, Patcher, WebGL, Control Panel) |
 | 2 | Configure Discord Bot Settings |
-| 3 | Configure CMS Server Settings |
 
 The wizard (`AppSettingsInstaller`) supports configuration for 5 components:
 
@@ -134,8 +133,8 @@ The wizard (`AppSettingsInstaller`) supports configuration for 5 components:
 | IPFetch Web Server | 5-1 | `appsettings.json` | HttpPort, Npgsql connection string |
 | Patcher Web Server | 5-1 | `appsettings.json` | HttpPort, Patches directory |
 | WebGL Web Server | 5-1 | `appsettings.json` | HttpPort |
+| Control Panel Web Server | 5-1 | `appsettings.json` | HttpPort, Npgsql connection string |
 | Discord Bot | 5-2 | `appsettings.json` | Token, Guild ID, Npgsql DSN, chat bridge, rate limiting |
-| CMS Server | 5-3 | `appsettings.json` | DefaultConnection string |
 
 The installer's **own** database connection (Host, Port, Database, Username, Password) is
 not part of this wizard — it is menu 2-1, `DatabaseSecretsInstaller`, which writes the
@@ -273,7 +272,7 @@ The installer runs pre-flight checks at startup in all modes. In non-interactive
 | `UnityInstaller.cs` | Unity Hub and Unity Editor install via Unity Hub CLI with module selection |
 | `UnityBuildInstaller.cs` | Unity headless builds (Client/Server/Addressables) via `-batchmode -nographics` with multi-strategy editor resolution |
 | `ProjectBuildInstaller.cs` | Staged/parallel `dotnet build` across all discovered `.csproj` files with priority-based ordering |
-| `AppSettingsInstaller.cs` | Interactive wizard to write `appsettings.json`, env overlays, and secrets env-var files for FishMMO web servers (`ConfigureAppSettings`), the Discord Bot (`ConfigureDiscordBotComponent`), and the CMS (`ConfigureCmsComponent`). Client security files are not generated here — use SecurityKeyInstaller (DB) + the Unity dashboard (client `.generated.cs`). |
+| `AppSettingsInstaller.cs` | Interactive wizard to write `appsettings.json`, env overlays, and secrets env-var files for FishMMO web servers including the Control Panel (`ConfigureAppSettings`) and the Discord Bot (`ConfigureDiscordBotComponent`). Client security files are not generated here — use SecurityKeyInstaller (DB) + the Unity dashboard (client `.generated.cs`). |
 | `LinuxConfigHardeningHelper.cs` | Atomic privileged file writes via `sudo install`, one-time `.pre-fishmmo.bak` backups, idempotent managed-marker detection |
 
 ### Components (cross-cutting concerns)
@@ -486,7 +485,7 @@ Database operations require `appsettings.json` in the working directory. Non-sen
 }
 ```
 
-### Npgsql connection string format (for web servers, Discord bot, CMS)
+### Npgsql connection string format (for web servers and the Discord bot)
 
 Components that use `ConnectionStrings` format use semicolon-delimited Npgsql DSNs:
 

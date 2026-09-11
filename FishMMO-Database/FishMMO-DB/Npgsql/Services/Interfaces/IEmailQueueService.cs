@@ -53,9 +53,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 
 		/// <summary>
 		/// Marks an email delivery attempt as failed and increments the attempt counter.
-		/// Emails exceeding <paramref name="maxAttempts"/> are left in the queue
-		/// with the error recorded so operators can investigate.
 		/// </summary>
+		/// <remarks>
+		/// While attempts remain the claim is released, which is what puts the message back in
+		/// line for another login server to pick up. Once <paramref name="maxAttempts"/> is
+		/// reached the claim is kept, which takes the message out of circulation and leaves it
+		/// in the queue with its error for an operator to investigate or retry by hand.
+		/// </remarks>
 		Task<DatabaseResult> MarkFailedAsync(
 			long id,
 			string error,

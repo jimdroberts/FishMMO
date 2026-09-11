@@ -95,10 +95,9 @@ FishMMO-WebTransport/openssl_cache.cmake
 
 # Runtime appsettings.json copied into each web server's output directory from the
 # FishMMO-Setup/ templates. These hold real database credentials at runtime and must never
-# be committed. Scoped to these two trees on purpose: the tracked templates live at
+# be committed. Scoped to this tree on purpose: the tracked templates live at
 # FishMMO-Setup/Development|Production/appsettings.json and are deliberately not matched.
 FishMMO-WebServers/**/appsettings.json
-FishMMO-CMS/**/appsettings.json
 
 # Client/server build output produced by the FishMMO Dashboard build panel.
 /Builds/

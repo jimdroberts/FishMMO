@@ -325,6 +325,44 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistSrpCredentialsAsync(
+			string accountName,
+			string salt,
+			string verifier,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			// Same bounds the account creation path enforces, so a password change cannot
+			// store credentials that registration would have refused.
+			if (string.IsNullOrWhiteSpace(salt) || salt.Length > 256)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid salt.");
+			}
+			if (string.IsNullOrWhiteSpace(verifier) || verifier.Length > 1024)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid verifier.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET salt = {{0}}, verifier = {{1}} WHERE name_lowercase = {{2}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { salt, verifier, accountName.ToLowerInvariant() }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> PersistEmailAsync(
 			string accountName,
 			string? email,
@@ -348,7 +386,11 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				// When email is changed, reset the verified flag and verification code.
 				// The new email must be verified independently.
-				var sql = $@"UPDATE {TableName} SET email = {{0}}, verified = FALSE, verify_code = NULL WHERE name_lowercase = {{1}}";
+				/* verify_code is NOT NULL DEFAULT 0, so clearing it means writing 0, not NULL.
+				 * Writing NULL violated the constraint and made every email change throw.
+				 * The expiry is cleared alongside it, or an old deadline would outlive the
+				 * code it belonged to. */
+				var sql = $@"UPDATE {TableName} SET email = {{0}}, verified = FALSE, verify_code = 0, verify_code_expires_utc = NULL WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { (object?)email ?? DBNull.Value, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
@@ -633,6 +675,47 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistAccessLevelAsync(
+			string accountName,
+			byte accessLevel,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			/* Bounded against the enum rather than trusted. A byte reaches here from a chat
+			 * command and from an HTTP body; 200 is not an access level, and a column that
+			 * accepts it would grant more than Admin to anything comparing with >=. */
+			// The byte, not an int: AccessLevel's underlying type is byte, and Enum.IsDefined
+			// THROWS when handed a value of a different underlying type rather than returning
+			// false. An int here would turn a bad level into an unhandled exception.
+			if (!Enum.IsDefined(typeof(AccessLevel), accessLevel))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					$"'{accessLevel}' is not a valid access level.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET access_level = {{1}}
+					WHERE name_lowercase = {{0}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized, (short)accessLevel }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
 		public async Task<DatabaseResult> PersistAutoVerifiedAsync(
 			string accountName,
 			CancellationToken cancellationToken = default)
@@ -706,6 +789,329 @@ namespace FishMMO.Database.Npgsql.Services
 				var affected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant() }, cancellationToken).ConfigureAwait(false);
 				if (affected == 0)
 					throw new DatabaseEntityNotFoundException("Account", accountName);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>The most rows one operator search will read, whatever it asks for.</summary>
+		private const int MaxAdminPageSize = 100;
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<AccountAdminPage>> SearchAdminAsync(
+			AccountAdminQuery query,
+			CancellationToken cancellationToken = default)
+		{
+			// A null filter is an operator opening the list with nothing typed, not an error.
+			query ??= new AccountAdminQuery();
+
+			// A caller that asks for page 0 or ten thousand rows is a bug or a probe; neither
+			// gets to choose how much of the table this reads.
+			int page = query.Page < 1 ? 1 : query.Page;
+			int pageSize = query.PageSize < 1 ? 25 : query.PageSize;
+			if (pageSize > MaxAdminPageSize)
+			{
+				pageSize = MaxAdminPageSize;
+			}
+
+			// Normalized exactly as every other lookup in this service normalizes, so a search
+			// for "Bob" finds the row the registration path stored as "bob". Returns the empty
+			// string for null, which is the "no text filter" case.
+			string prefix = Authentication.NormalizeAccountLookup(query.Query ?? string.Empty);
+			byte? accessLevelFilter = query.AccessLevel;
+			bool includeBanned = query.IncludeBanned;
+			byte bannedLevel = (byte)AccessLevel.Banned;
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				IQueryable<AccountEntity> q = dbContext.Accounts.AsNoTracking();
+
+				if (!includeBanned)
+				{
+					q = q.Where(a => a.AccessLevel != bannedLevel);
+				}
+				if (accessLevelFilter.HasValue)
+				{
+					byte level = accessLevelFilter.Value;
+					q = q.Where(a => a.AccessLevel == level);
+				}
+				if (prefix.Length > 0)
+				{
+					/* StartsWith, never Contains, on both arms. name_lowercase carries the
+					 * UNIQUE index and email carries a partial unique one, and an anchored
+					 * pattern (LIKE 'x%') is the only shape a btree can ever serve; a leading
+					 * wildcard forecloses it unconditionally and leaves a sequential scan of
+					 * every account row as the only plan. A search box reachable by anyone who
+					 * reaches the panel does not get to guarantee that on every keystroke.
+					 *
+					 * Honest caveat: it is not an index seek today either. The database collates
+					 * en_US.UTF-8, and PostgreSQL will only use a btree for LIKE 'x%' when the
+					 * index is built with text_pattern_ops (or the C collation), which these are
+					 * not. The anchored form is what keeps that a one-migration fix instead of a
+					 * rewrite — and it still bounds the match, which Contains does not.
+					 *
+					 * StartsWith rather than a hand-written EF.Functions.Like: the provider
+					 * emits an extra left(col, length(p)) = p alongside the LIKE, which is what
+					 * makes a prefix containing _ or % — both legal in a username — match
+					 * literally instead of as a wildcard. */
+					q = q.Where(a => a.NameLowercase.StartsWith(prefix) ||
+									 (a.Email != null && a.Email.ToLower().StartsWith(prefix)));
+				}
+
+				int total = await q.CountAsync(cancellationToken).ConfigureAwait(false);
+
+				/* Grouped once and joined once, rather than counted per row. A page of 25
+				 * accounts must cost one statement, not 26 — the N+1 shape is invisible in C#
+				 * and shows up only as a page that gets slower the more of it you ask for.
+				 * The join is on the exact name because characters.account is a foreign key to
+				 * accounts.name, so the two are the same string by construction; no case
+				 * folding is needed and any would defeat the index. */
+				var characterCounts = dbContext.Characters
+					.AsNoTracking()
+					.Where(c => !c.Deleted)
+					.GroupBy(c => c.Account)
+					.Select(g => new { Account = g.Key, Count = g.Count() });
+
+				/* Projected in SQL rather than mapped from a materialized AccountEntity. That
+				 * is the strongest available form of the guarantee AccountAdminData's remarks
+				 * make: the salt, the verifier and the TOTP secret are never named in the
+				 * SELECT, so they never cross the wire, never enter the change tracker and
+				 * cannot be leaked by a later edit to a shared mapper. The cost is that the
+				 * column list is written out here and again in FetchAdminAsync; a shared mapper
+				 * would have to take a whole entity, which is precisely what is being avoided. */
+				var rows = await q
+					.OrderBy(a => a.NameLowercase)
+					.Skip((page - 1) * pageSize)
+					.Take(pageSize)
+					.Select(a => new AccountAdminData
+					{
+						Name = a.Name,
+						Email = a.Email,
+						AccessLevel = a.AccessLevel,
+						Age = a.Age,
+						Verified = a.Verified,
+						TotpEnabled = a.TotpEnabled,
+						TotpVerifiedAt = a.TotpVerifiedAt,
+						Created = a.TimeCreated,
+						LastLogin = a.LastLogin,
+						// FirstOrDefault, not Single: an account with no characters has no group
+						// at all, and the default zero is the right answer for it.
+						CharacterCount = characterCounts
+							.Where(cc => cc.Account == a.Name)
+							.Select(cc => cc.Count)
+							.FirstOrDefault(),
+					})
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				return new AccountAdminPage
+				{
+					Items = rows,
+					Page = page,
+					PageSize = pageSize,
+					TotalCount = total,
+				};
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<AccountAdminData>> FetchAdminAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<AccountAdminData>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				/* Deliberately not routed through FetchForLoginAsync. That method refuses a
+				 * banned account and reports "no such account" and "banned" with the same
+				 * message, because a login path that distinguished them would be an
+				 * enumeration oracle for anyone who can reach the login endpoint. Both
+				 * behaviours are wrong here: the operator opening an account page is usually
+				 * looking at the ban, and one who cannot tell a missing account from a banned
+				 * one cannot answer the ticket in front of them. The enumeration risk is
+				 * carried by the caller's access-level check instead, which is where it
+				 * belongs — this is not an anonymous surface. */
+				string normalized = Authentication.NormalizeAccountLookup(accountName);
+
+				var data = await dbContext.Accounts
+					.AsNoTracking()
+					.Where(a => a.NameLowercase == normalized)
+					.Select(a => new AccountAdminData
+					{
+						Name = a.Name,
+						Email = a.Email,
+						AccessLevel = a.AccessLevel,
+						Age = a.Age,
+						Verified = a.Verified,
+						TotpEnabled = a.TotpEnabled,
+						TotpVerifiedAt = a.TotpVerifiedAt,
+						Created = a.TimeCreated,
+						LastLogin = a.LastLogin,
+						// One row, so a correlated count is one indexed lookup and the grouped
+						// form the search needs would buy nothing here.
+						CharacterCount = dbContext.Characters.Count(c => c.Account == a.Name && !c.Deleted),
+					})
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				if (data == null)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+				return data;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> BanAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			/* ExecuteTransactionAsync, not four ExecuteWriteAsync calls. Each of those takes its
+			 * own context, its own connection and its own implicit transaction, so four of them
+			 * are four commits with three windows in between where the process can die, the
+			 * connection can drop, or the cancellation token can fire — and every one of those
+			 * windows leaves a ban half-applied.
+			 *
+			 * Half-applied means the account is still playing. The access level is the login
+			 * gate and nothing more: lowering it alone stops the next sign-in and does not touch
+			 * the session already connected. Revoking the tokens alone lets the player sign
+			 * straight back in. Queuing the kick alone disconnects someone who reconnects a
+			 * second later. Only all four together end the session and keep it ended — and only
+			 * a transaction makes "all four" something the operator's success message can mean.
+			 *
+			 * This is also why the service-level RevokeAllForAccountAsync methods are not called
+			 * here: each opens its own connection and commits on its own, which is exactly the
+			 * property being eliminated. The equivalent statements are issued on this
+			 * transaction's context instead. */
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				string normalized = Authentication.NormalizeAccountLookup(accountName);
+
+				/* Read the row's own spelling of the name first. auth_tokens.account_name and
+				 * web_sessions.account_name are both foreign keys to accounts.name, so they hold
+				 * that exact string and an exact predicate on it is both correct and indexed;
+				 * matching on LOWER() would be neither. It doubles as the existence check. */
+				// FirstOrDefaultAsync over a non-nullable string column is typed string, but it
+				// still yields null when there is no row; the declaration says so.
+				string? storedName = await dbContext.Accounts
+					.AsNoTracking()
+					.Where(a => a.NameLowercase == normalized)
+					.Select(a => a.Name)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				if (storedName == null)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+
+				// 1. The login gate. access_level is a byte in the model and smallint in
+				// PostgreSQL, so the parameter is a short — the same cast PersistAccessLevelAsync
+				// makes.
+				var accountSql = $@"UPDATE {TableName}
+					SET access_level = {{1}}
+					WHERE name_lowercase = {{0}}";
+				var accountRows = await dbContext.Database
+					.ExecuteSqlRawAsync(accountSql, new object[] { normalized, (short)(byte)AccessLevel.Banned }, cancellationToken)
+					.ConfigureAwait(false);
+				if (accountRows == 0)
+				{
+					// The row existed a statement ago, so this is a concurrent delete. Throwing
+					// rolls back everything written above it.
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+
+				/* GetTableName for the other three tables, not a bare "auth_tokens". Raw SQL is
+				 * resolved against the connection's search_path, while the model is bound to a
+				 * configured schema; on a deployment where those differ, an unqualified
+				 * statement silently updates nothing, and a revoke that silently does nothing is
+				 * the whole failure this method exists to prevent. TableName above is already
+				 * qualified for the same reason. */
+
+				// 2. Every auth token. No rows-affected check: an account with no live tokens is
+				// the normal case, not a failure.
+				var authTokenSql = $@"UPDATE {dbContext.GetTableName<AuthTokenEntity>()}
+					SET revoked = TRUE
+					WHERE account_name = {{0}} AND revoked = FALSE";
+				await dbContext.Database
+					.ExecuteSqlRawAsync(authTokenSql, new object[] { storedName }, cancellationToken)
+					.ConfigureAwait(false);
+
+				// 3. Every Control Panel session, for the same reason and with the same
+				// tolerance for zero rows.
+				var webSessionSql = $@"UPDATE {dbContext.GetTableName<WebSessionEntity>()}
+					SET revoked = TRUE
+					WHERE account_name = {{0}} AND revoked = FALSE";
+				await dbContext.Database
+					.ExecuteSqlRawAsync(webSessionSql, new object[] { storedName }, cancellationToken)
+					.ConfigureAwait(false);
+
+				// 4. The kick the game servers poll for. Upserted rather than inserted:
+				// account_name is unique, a ban re-issued over an unconsumed request must not
+				// fail on the constraint, and refreshing the timestamp keeps the row inside the
+				// TTL that KickRequestService treats as still pending.
+				var kickSql = $@"INSERT INTO {dbContext.GetTableName<KickRequestEntity>()}
+					(account_name, time_created)
+					VALUES ({{0}}, timezone('UTC', CURRENT_TIMESTAMP))
+					ON CONFLICT (account_name)
+					DO UPDATE SET time_created = timezone('UTC', CURRENT_TIMESTAMP)";
+				await dbContext.Database
+					.ExecuteSqlRawAsync(kickSql, new object[] { storedName }, cancellationToken)
+					.ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> UnbanAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			/* One statement, and no transaction, because an unban is deliberately not the
+			 * inverse of a ban. The tokens and panel sessions the ban revoked stay revoked: they
+			 * may be the reason for the ban, they have had the whole ban to be shared or stolen,
+			 * and reviving them would be this layer silently re-issuing credentials it is not
+			 * the job of this layer to mint. The player signs in again and the login path issues
+			 * fresh ones under whatever checks it applies today. The kick request is likewise
+			 * left alone; it is consumed or expires on its own, and by the time an unban happens
+			 * there is no session left for it to end.
+			 *
+			 * Player specifically, not the level the account held before. Nothing here records
+			 * that, and a wrong guess in the upward direction hands back operator access. An
+			 * operator who needs the old level back sets it explicitly through
+			 * PersistAccessLevelAsync, where the change is deliberate and audited as its own
+			 * action. */
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET access_level = {{1}}
+					WHERE name_lowercase = {{0}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized, (short)(byte)AccessLevel.Player }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}

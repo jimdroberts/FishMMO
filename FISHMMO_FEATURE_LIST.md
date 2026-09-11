@@ -12,7 +12,7 @@
 - [FishMMO-AppHealthMonitor](#fishmmo-apphealthmonitor)
 - [FishMMO-Art](#fishmmo-art)
 - [FishMMO-Auth](#fishmmo-auth)
-- [FishMMO-CMS](#fishmmo-cms)
+- [FishMMO-ControlPanel](#fishmmo-controlpanel)
 - [FishMMO-Database](#fishmmo-database)
 - [FishMMO-Dependencies](#fishmmo-dependencies)
 - [FishMMO-DiscordBot](#fishmmo-discordbot)
@@ -95,15 +95,23 @@
 
 ---
 
-## FishMMO-CMS
+## FishMMO-ControlPanel
 
-**ASP.NET Core (net8.0) account-management web API** — *not* a news/content CMS. Registers Swashbuckle and references FishMMO-ServerAuth and FishMMO-DB, and copies `appsettings.CMS.json` from FishMMO-Setup at build time.
+**ASP.NET Core (net8.0) Game Control Panel / Admin Dashboard** — *not* a news/content CMS. Lives at `FishMMO-WebServers/FishMMO-ControlPanel/`, registers Swashbuckle, references FishMMO-ServerAuth and FishMMO-DB, and copies `appsettings.ControlPanel.json` from FishMMO-Setup at build time. Renamed and relocated from the former `FishMMO-CMS`.
 
-> **Status: scaffolded, not implemented.** Every controller action in this project is a stub — each one returns a placeholder and carries `// TODO` comments for the work it does not do. There is no database wiring, no authentication registration for the account endpoints, and no admin authorization on the admin endpoints. Nothing in this section is shipped functionality.
+> **Status: the surfaces it offers are real; the ones it does not are hidden.** Sign-in, registration, two-factor enrolment, self-service, the operator character surface, account search and moderation, and the audit log all run against PostgreSQL. There is **no fake login and no way to opt into one**, and no operator surface serves fabricated data in any build. The server board, per-server control, the daemon control plane, scene instances, and the chat and social views are not built: they are marked `built: false`, kept out of the sidebar, and say so plainly if reached directly rather than erroring or inventing numbers.
 
-1. **AccountController (`api/Account`)** — Route stubs for `POST register`, `POST verify`, `POST change-password`, `POST 2fa/setup`. TODOs cover SRP salt/verifier generation, `IAccountService` persistence, TOTP secret generation/encryption, recovery codes, and verification email delivery.  
-2. **AdminController (`api/Admin`)** — Route stubs for `GET accounts/search`, `POST accounts/{username}/ban`, `unban`, `access-level`, `revoke-tokens`, `reset-2fa`, `force-password-reset`. Every action's first TODO is "Require admin authentication" — the endpoints are currently unauthenticated stubs.  
-3. **appsettings.json Configuration** — `CopyFishMMOConfig` MSBuild target copies `FishMMO-Setup/Development/appsettings.CMS.json` (and the Production variant when present) into the build output.
+1. **Authentication** — SRP-6a against the same salt and verifier the game client uses, computed in the browser so the password is never transmitted. Mandatory two-factor above Player, recovery codes, a step-up window for destructive actions, and sessions in `web_sessions` that are revoked the moment an account is banned or its level changes.
+2. **Registration** — Mirrors the in-game flow step for step, including the one-time handover of the authenticator secret and recovery codes behind a real QR encoder written for the purpose, with a mandatory acknowledgement before the screen can be left.
+3. **Player self-service** — Password, email, two-factor enrolment and reset, recovery-code regeneration, session listing and revocation, and a read-only view of one's own characters.
+4. **Operator character surface** — Search, detail, the session-lease edit lock, field edits, restore and rename. Creating and deleting a character stay in the game, where one transaction owns fourteen sub-entity tables.
+5. **Account moderation** — Search by name or email, account detail, kick, ban, unban, token revocation and two-factor reset, plus access-level changes for administrators. A ban is one transaction setting the level, revoking every game token, revoking every panel session and writing a kick request; each alone leaves the account playing. No password reset, deliberately: an operator who can set a password can sign in as the player, which is what SRP exists to prevent.
+6. **The operator audit log** — One append-only `admin_audit_log` table recording every Game Master and Admin action, successes and refusals alike, from the panel **and** from the in-game `/admin` and `/gm` chat commands. No update and no delete path exists on the service, and the actor carries no foreign key so the record survives the account. Coverage is structural: an action filter records every privileged write whether or not its author added anything, and the panel refuses to start outside production if a privileged endpoint does not declare what it records.
+7. **Chat log search** — What a game master reads when handling a harassment report. An unbounded text search is refused rather than silently narrowed to a recent window, because a silent narrowing turns "I searched and found nothing" into a false negative that closes a real report.
+8. **Support tickets** — Filed in-game with `/report`, `/bug` and `/helpme`, or from the panel, and worked from a staff queue with assignment, replies, priority, status and a required resolution. Staff notes are separated from player-visible replies in the query, not in the view, and a player asking for someone else's ticket gets 404 rather than a 403 that would confirm it exists.
+9. **The server board and per-server control** — Every login, world and scene server with pulse age, population, lock state and any pending shutdown, plus live scene instances. Lock, unlock, schedule and cancel shutdown. Every control writes a database row the servers adopt on their next pulse, so every acknowledgement says what was *written* rather than claiming the server has acted. There is deliberately no start, stop or restart: a stopped process polls nothing, and those need the host daemon.
+10. **appsettings.json Configuration** — `CopyFishMMOConfig` MSBuild target copies `FishMMO-Setup/Development/appsettings.ControlPanel.json` (and the Production variant when present) into the build output.
+11. **Design document** — `CONTROL_PANEL_DESIGN.md` at the repository root carries the full architecture, the API inventory, the schema additions, and the phase plan.
 
 ---
 
@@ -278,7 +286,7 @@
 32. **PostgreSQL Hardening** — Rewrites `pg_hba.conf` to require `scram-sha-256` on all TCP connections, sets `password_encryption` and `listen_addresses` in `postgresql.conf`, reloads via `pg_reload_conf()`. Idempotent via managed markers.  
 33. **PgBouncer Configuration Generation** — Generates `pgbouncer.ini` (transaction pooling, scram-sha-256) and `userlist.txt` (with SCRAM hash from `pg_shadow`) with secure file permissions.  
 34. **Database Credentials File** — Generates `/etc/fishmmo/db-secrets.env` (systemd `EnvironmentFile`) and `~/.config/fish/conf.d/fishmmo-secrets.fish` (fish shell snippet) so database passwords never live in plain-text JSON. Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database, not in env files.  
-35. **AppSettings Secure Wizard** — Interactive configuration wizard for all FishMMO components (Database, IPFetch, Patcher, WebGL, Discord Bot, CMS). Preserves unmanaged JSON keys across writes. Applies `chmod 600` on all output files.  
+35. **AppSettings Secure Wizard** — Interactive configuration wizard for all FishMMO components (Database, IPFetch, Patcher, WebGL, Control Panel, Discord Bot). Preserves unmanaged JSON keys across writes. Applies `chmod 600` on all output files.  
 36. **SecurityKeyInstaller** — Generates CSPRNG keys (`RandomNumberGenerator.Fill`, base64, round-trip validated) and writes them **directly to the database** over a superuser `NpgsqlConnection`, so no env file has to be copied between machines: the ClientGate secret and signing-key KEK into `deployment_secrets` (`client_gate_secret`, `signing_key_kek`) and the connection token HMAC key into `connection_token_keys` (`key_id='shared'`). Superuser credentials come from the interactive prompt or `FISHMMO_PG_SUPERUSER_PASSWORD`. The matching client-side build constants (`ClientApiSecret.generated.cs`, `CertificatePins.generated.cs`, `HostConfig.generated.cs`) are generated separately from **FishMMO Dashboard > Game Settings** in the Unity Editor.
 
 ### Build Automation
@@ -362,7 +370,7 @@
 15. **gen-fishmmo-stream-config.sh** — Documented generator contract for `stream.d/*.conf` across the game UDP port ranges, validated with `nginx -t` before atomic replacement. `nginx.conf` includes `/etc/nginx/stream.d/*.conf` and expects this generator at `/usr/local/bin/`.  
 
 ### Config Templates
-16. **Per-Environment appsettings** — `Development/` and `Production/` each hold `appsettings.json` plus per-component variants: `appsettings.Database.json`, `appsettings.IpFetchServer.json`, `appsettings.Patcher.json`, `appsettings.WebGLServer.json`, `appsettings.DiscordBot.json`, `appsettings.AppHealthMonitor.json`, `appsettings.CMS.json`. Component projects copy-and-rename these into their build output at build time.  
+16. **Per-Environment appsettings** — `Development/` and `Production/` each hold `appsettings.json` plus per-component variants: `appsettings.Database.json`, `appsettings.IpFetchServer.json`, `appsettings.Patcher.json`, `appsettings.WebGLServer.json`, `appsettings.DiscordBot.json`, `appsettings.AppHealthMonitor.json`, `appsettings.ControlPanel.json`. Component projects copy-and-rename these into their build output at build time.  
 17. **Installer Manifests** — `install-config.full.json`, `install-config.quickstart.json`, and `install-config.web.json` (Development only) drive FishMMO-Installer’s non-interactive pipeline.  
 18. **logging.json** — Single shared FishMMO-Logger sink configuration.
 

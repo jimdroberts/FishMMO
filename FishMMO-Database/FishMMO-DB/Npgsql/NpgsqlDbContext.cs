@@ -61,6 +61,44 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<LoginServerSigningKeyEntity> LoginServerSigningKeys { get; set; }
 		/// <summary>Authentication tokens.</summary>
 		public DbSet<AuthTokenEntity> AuthTokens { get; set; }
+
+		/// <summary>
+		/// Control Panel browser sessions. Separate from <see cref="AuthTokens"/>, which holds
+		/// game tokens issued by a LoginServer.
+		/// </summary>
+		public DbSet<WebSessionEntity> WebSessions { get; set; }
+
+		/// <summary>
+		/// The operator audit log. Append-only; see <see cref="AdminAuditEntity"/>.
+		/// </summary>
+		public DbSet<AdminAuditEntity> AdminAuditLog { get; set; }
+
+		/// <summary>Support tickets filed by players and worked by staff.</summary>
+		public DbSet<SupportTicketEntity> SupportTickets { get; set; }
+
+		/// <summary>The messages on those tickets, replies and internal notes alike.</summary>
+		public DbSet<SupportTicketMessageEntity> SupportTicketMessages { get; set; }
+
+		/// <summary>Machines running an AppHealthMonitor daemon.</summary>
+		public DbSet<DaemonHostEntity> DaemonHosts { get; set; }
+
+		/// <summary>Applications those daemons supervise, as last reported.</summary>
+		public DbSet<DaemonAppEntity> DaemonApps { get; set; }
+
+		/// <summary>The daemon command queue. See <see cref="DaemonCommandEntity"/>.</summary>
+		public DbSet<DaemonCommandEntity> DaemonCommands { get; set; }
+
+		/// <summary>
+		/// The supervision history: every change a daemon's heartbeat reported in something it
+		/// supervises. Append-only; see <see cref="DaemonAppEventEntity"/>.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="DaemonApps"/> is overwritten on every beat and therefore says only what is
+		/// true now. This is the only place a restart that has already been recovered from is
+		/// recorded at all.
+		/// </remarks>
+		public DbSet<DaemonAppEventEntity> DaemonAppEvents { get; set; }
+
 		/// <summary>Two-factor recovery codes.</summary>
 		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
 		/// <summary>Email queue.</summary>

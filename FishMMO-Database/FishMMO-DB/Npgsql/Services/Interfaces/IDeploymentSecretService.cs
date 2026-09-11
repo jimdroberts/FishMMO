@@ -1,3 +1,4 @@
+using FishMMO.Database.Data;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,6 +17,19 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="key">The logical key identifying the secret.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A <see cref="DatabaseResult{T}"/> containing the secret value if found; otherwise a failure with ENTITY_NOT_FOUND.</returns>
+		/// <summary>
+		/// Lists the secrets a deployment holds, <b>without their values</b>.
+		/// </summary>
+		/// <remarks>
+		/// The operator-facing read. <see cref="FetchAsync"/> returns the material itself and is
+		/// for the servers that must decrypt with it; this returns only what an operator needs
+		/// to answer "is it there, and how old is it". Keeping them as two methods means a
+		/// caller has to ask for the value on purpose.
+		/// </remarks>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult<System.Collections.Generic.IReadOnlyList<DeploymentSecretInfo>>> FetchInventoryAsync(
+			CancellationToken cancellationToken = default);
+
 		Task<DatabaseResult<string>> FetchAsync(
 			string key,
 			CancellationToken cancellationToken = default);

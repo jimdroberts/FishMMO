@@ -128,6 +128,113 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 
+		/// <summary>
+		/// Restores a soft-deleted character.
+		/// </summary>
+		/// <remarks>
+		/// Restoring is not the inverse of deleting. A hard delete (the default, when
+		/// <c>KeepDeleteData</c> is off) has already removed the sub-entity rows, so only a
+		/// character deleted with that switch on can be brought back meaningfully; this method
+		/// clears the flag either way and the caller is responsible for knowing which it has.
+		/// It fails when the name has been taken in the meantime, because
+		/// <c>ix_characters_name_lowercase</c> is unique and the row cannot come back under a
+		/// name somebody else now holds.
+		/// </remarks>
+		/// <param name="characterId">The character to restore.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> RestoreAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches one character in the operator projection, deleted rows included.
+		/// </summary>
+		/// <remarks>
+		/// Unlike every game-facing fetch this does not filter deleted rows out: the whole
+		/// point of an operator view is to see the row that a player can no longer see.
+		/// </remarks>
+		/// <param name="characterId">The character to fetch.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult<CharacterAdminData>> FetchAdminAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Searches characters for an operator, by character name or account name.
+		/// </summary>
+		/// <remarks>
+		/// The match is a case-insensitive prefix on <c>name_lowercase</c> or on the account
+		/// name. A prefix, not a contains: <c>name_lowercase</c> carries a unique index that a
+		/// prefix can use and a leading wildcard cannot, so a shard with a million characters
+		/// still answers from the index.
+		/// </remarks>
+		/// <param name="query">Name prefix, or null for everything.</param>
+		/// <param name="includeDeleted">Whether soft-deleted rows are included.</param>
+		/// <param name="online">Filter by lease state, or null for either.</param>
+		/// <param name="page">1-based page number.</param>
+		/// <param name="pageSize">Rows per page. Clamped to a sane maximum.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <summary>
+		/// Applies an operator's edit to a character's stored row.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Refuses any character holding a live session lease, re-checked inside the write so
+		/// that a server claiming the character between the operator's read and this call
+		/// loses rather than interleaves. A leased character's row is not authoritative: the
+		/// persistence pass writes the owning server's memory over it.
+		/// </para>
+		/// <para>
+		/// Only the fields set on <paramref name="edit"/> are written, and the row version is
+		/// bumped so that a racing save fails its own <c>version &lt;</c> guard.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterId">The character to edit.</param>
+		/// <param name="edit">The fields to change. Nulls are left alone.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> UpdateAdminAsync(long characterId, CharacterAdminEdit edit, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Every character on one account, in the operator projection.
+		/// </summary>
+		/// <remarks>
+		/// An exact match on the account, not a prefix search filtered afterwards. Reusing the
+		/// search for this looked equivalent and is not: its match is a prefix, so another
+		/// account whose name merely starts the same way shares the result set, and on a page
+		/// boundary that pushes the account's own characters out of the page entirely. An
+		/// account detail page that quietly omits characters is worse than one that fails.
+		/// </remarks>
+		/// <param name="accountName">The owning account.</param>
+		/// <param name="includeDeleted">Whether soft-deleted characters are included.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult<IReadOnlyList<CharacterAdminData>>> FetchAdminByAccountAsync(
+			string accountName,
+			bool includeDeleted,
+			CancellationToken cancellationToken = default);
+
+		Task<DatabaseResult<CharacterAdminPage>> SearchAdminAsync(
+			string query,
+			bool includeDeleted,
+			bool? online,
+			int page,
+			int pageSize,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Renames a character.
+		/// </summary>
+		/// <remarks>
+		/// Only <c>name</c> is written: <c>name_lowercase</c> is a generated column
+		/// (<c>lower(name)</c>) and carries the unique index, so the database enforces
+		/// case-insensitive uniqueness without this method having to check for it first. A
+		/// collision surfaces as a unique violation rather than a lost update.
+		/// </remarks>
+		/// <remarks>
+		/// A deleted character can be renamed. Its row still occupies the name in the unique
+		/// index, so renaming it is both how an operator frees that name and the only way to
+		/// restore a character whose name was taken while it was gone.
+		/// </remarks>
+		/// <param name="characterId">The character to rename.</param>
+		/// <param name="newName">The new name. Validated against the shared character-name rules.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> RenameAsync(long characterId, string newName, CancellationToken cancellationToken = default);
+
 		Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>

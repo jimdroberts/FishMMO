@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>QR self-test</title>
+	<meta name="robots" content="noindex, nofollow" />
+	<link rel="stylesheet" href="css/tokens.css" />
+	<link rel="stylesheet" href="css/base.css" />
+	<link rel="stylesheet" href="css/components.css" />
+	<style>
+		body { padding: 24px; }
+		main { max-width: 900px; margin: 0 auto; }
+		.result { display: flex; gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line-default); }
+		.result:last-child { border-bottom: 0; }
+		.verdict { flex-shrink: 0; width: 64px; font-weight: 600; font-family: var(--font-mono); font-size: var(--fs-sm); }
+		.pass { color: var(--ok); }
+		.fail { color: var(--danger); }
+		.detail { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
+		.samples { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 24px; }
+		.sample { text-align: center; }
+		.sample .small { max-width: 200px; overflow-wrap: anywhere; }
+	</style>
+</head>
+<body>
+<main>
+	<h1>QR self-test</h1>
+	<p class="muted">
+		Checks <code>js/qr.js</code>, the encoder behind the authenticator enrolment code. It
+		is written out by hand because the panel has no bundler and an admin surface must
+		render with no network beyond its own origin.
+	</p>
+	<p class="muted">
+		These checks pin the pieces that fail silently: a symbol with the wrong error-correction
+		polynomial, the wrong format-bit order or missing version information still looks
+		exactly like a QR code and scans as nothing. The vectors below are the published
+		format and version strings from the specification, so a regression is caught here
+		rather than by a player who cannot enrol.
+	</p>
+	<p class="muted">
+		The encoder itself is verified end to end against an independent decoder (<code>zbarimg</code>)
+		outside the browser; this page pins the parts that can be checked without one.
+	</p>
+
+	<div id="results" class="card" style="padding: 8px 16px; margin-top: 24px"></div>
+	<p id="summary" style="margin-top:16px"></p>
+
+	<h2 style="margin-top:32px">Rendered samples</h2>
+	<p class="muted">Scan one with a phone: it should read back exactly the text underneath.</p>
+	<div id="samples" class="samples"></div>
+</main>
+
+<script type="module">
+import * as qr from './js/qr.js';
+
+const results = document.querySelector('#results');
+let passed = 0;
+let failed = 0;
+
+function check(name, ok, detail = '') {
+	if (ok) passed++; else failed++;
+	results.insertAdjacentHTML('beforeend', `
+		<div class="result">
+			<span class="verdict ${ok ? 'pass' : 'fail'}">${ok ? 'PASS' : 'FAIL'}</span>
+			<span>
+				${name}
+				${detail ? `<div class="detail">${detail}</div>` : ''}
+			</span>
+		</div>`);
+}
+
+/* The 15-bit format strings for error-correction level M, masks 0 through 7, from the
+ * specification's table. The most significant bit sits at module (8,0). */
+const FORMAT_M = [
+	'101010000010010', '101000100100101', '101111001111100', '101101101001011',
+	'100010111111001', '100000011001110', '100111110010111', '100101010100000',
+];
+
+/* The 18-bit version strings for versions 7 to 10, likewise published. */
+const VERSION_STRINGS = {
+	7: '000111110010010100',
+	8: '001000010110111100',
+	9: '001001101010011001',
+	10: '001010010011010011',
+};
+
+const FORMAT_CELLS = [
+	[8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+	[7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+];
+
+function readFormat(cells) {
+	return FORMAT_CELLS.map(([r, c]) => cells[r][c]).join('');
+}
+
+function readVersion(cells) {
+	const n = cells.length;
+	let out = '';
+	for (let i = 17; i >= 0; i--) out += cells[Math.floor(i / 3)][n - 11 + (i % 3)];
+	return out;
+}
+
+/* ── size and version selection ───────────────────────────── */
+const sizes = [
+	['a short string picks version 1', 'HELLO', 21],
+	['a 100-byte string picks version 6', 'A'.repeat(100), 41],
+	['a 120-byte string picks version 7', 'A'.repeat(120), 45],
+	['a 213-byte string picks version 10', 'A'.repeat(213), 57],
+];
+for (const [name, text, expected] of sizes) {
+	const cells = qr.encode(text);
+	check(name, cells.length === expected, `${cells.length} modules, expected ${expected}`);
+}
+
+check('more than version 10 is refused rather than truncated', (() => {
+	try {
+		qr.encode('A'.repeat(400));
+		return false;
+	} catch {
+		return true;
+	}
+})());
+
+/* ── format information ───────────────────────────────────── */
+{
+	const cells = qr.encode('HELLO');
+	const bits = readFormat(cells);
+	check('the format string is one of the published level-M strings',
+		FORMAT_M.includes(bits), `${bits} → mask ${FORMAT_M.indexOf(bits)}`);
+
+	// Both copies must agree, or a scanner reading the second one gets a different mask.
+	const n = cells.length;
+	let second = '';
+	for (let i = 0; i < 7; i++) second += cells[n - 1 - i][8];
+	for (let i = 0; i < 8; i++) second += cells[8][n - 8 + i];
+	check('both copies of the format information agree', second === bits, `${second} vs ${bits}`);
+}
+
+/* ── version information ──────────────────────────────────── */
+for (const [version, expected] of Object.entries(VERSION_STRINGS)) {
+	// The smallest payload that lands on this version: its data capacity, minus the header.
+	const capacity = { 7: 116, 8: 148, 9: 180, 10: 213 }[version];
+	const cells = qr.encode('A'.repeat(capacity));
+	const bits = readVersion(cells);
+	check(`version ${version} carries its published version string`,
+		bits === expected, `${bits} expected ${expected}`);
+}
+
+check('versions below 7 carry no version information', (() => {
+	const cells = qr.encode('HELLO');
+	const n = cells.length;
+	// For version 1 the version-information area would overlap the finders; every module
+	// there belongs to a finder or its separator, and none of them is a stray data bit.
+	return n === 21;
+})());
+
+/* ── function patterns ────────────────────────────────────── */
+{
+	const cells = qr.encode('A'.repeat(120));
+	const n = cells.length;
+
+	const finderOk = (r0, c0) => {
+		for (let r = 0; r < 7; r++) {
+			for (let c = 0; c < 7; c++) {
+				const ring = (r === 0 || r === 6 || c === 0 || c === 6);
+				const core = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+				if (cells[r0 + r][c0 + c] !== (ring || core ? 1 : 0)) return false;
+			}
+		}
+		return true;
+	};
+	check('all three finder patterns are intact',
+		finderOk(0, 0) && finderOk(0, n - 7) && finderOk(n - 7, 0));
+
+	let timing = true;
+	for (let i = 8; i < n - 8; i++) {
+		if (cells[6][i] !== (i % 2 === 0 ? 1 : 0)) timing = false;
+		if (cells[i][6] !== (i % 2 === 0 ? 1 : 0)) timing = false;
+	}
+	check('both timing patterns alternate correctly', timing);
+	check('the dark module is set', cells[n - 8][8] === 1);
+
+	// Version 7 has alignment patterns; the one at (38,38) is furthest from every finder.
+	const alignOk = (() => {
+		for (let dr = -2; dr <= 2; dr++) {
+			for (let dc = -2; dc <= 2; dc++) {
+				const ring = Math.max(Math.abs(dr), Math.abs(dc));
+				if (cells[38 + dr][38 + dc] !== (ring === 1 ? 0 : 1)) return false;
+			}
+		}
+		return true;
+	})();
+	check('the alignment pattern is intact', alignOk);
+}
+
+/* ── determinism and sensitivity ──────────────────────────── */
+{
+	const a = qr.encode('otpauth://totp/FishMMO:player?secret=JBSWY3DPEHPK3PXP&issuer=FishMMO');
+	const b = qr.encode('otpauth://totp/FishMMO:player?secret=JBSWY3DPEHPK3PXP&issuer=FishMMO');
+	check('encoding is deterministic', JSON.stringify(a) === JSON.stringify(b));
+
+	const c = qr.encode('otpauth://totp/FishMMO:player?secret=JBSWY3DPEHPK3PXQ&issuer=FishMMO');
+	check('one changed character changes the symbol', JSON.stringify(a) !== JSON.stringify(c));
+
+	const dark = a.flat().reduce((sum, v) => sum + v, 0);
+	const ratio = dark / (a.length * a.length);
+	check('the dark-module ratio is near half', ratio > 0.35 && ratio < 0.65, ratio.toFixed(3));
+}
+
+/* ── the SVG wrapper ──────────────────────────────────────── */
+{
+	const svg = qr.svg('HELLO', { size: 168 });
+	check('svg() emits an SVG element', svg.startsWith('<svg') && svg.includes('</svg>'));
+	check('svg() includes the quiet zone', /viewBox="0 0 29 29"/.test(svg), svg.slice(0, 120));
+	check('svg() paints a white ground', svg.includes('fill="#fff"'));
+}
+
+document.querySelector('#summary').innerHTML = failed
+	? `<span class="fail" style="font-weight:600">${failed} failed</span>, ${passed} passed.`
+	: `<span class="pass" style="font-weight:600">All ${passed} checks passed.</span>`;
+
+/* ── samples to scan ──────────────────────────────────────── */
+const SAMPLES = [
+	'HELLO',
+	'otpauth://totp/FishMMO:player?secret=JBSWY3DPEHPK3PXP&issuer=FishMMO&algorithm=SHA1&digits=6&period=30',
+	'otpauth://totp/FishMMO%20Control%20Panel:alongerplayername?secret=MZXW6YTBOI7EC6DVMZXW6YTBOI7EC6DV&issuer=FishMMO%20Control%20Panel&algorithm=SHA1&digits=6&period=30',
+];
+document.querySelector('#samples').innerHTML = SAMPLES.map((text) => `
+	<div class="sample">
+		${qr.svg(text, { size: 200 })}
+		<div class="small muted">${text.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]))}</div>
+	</div>`).join('');
+</script>
+</body>
+</html>

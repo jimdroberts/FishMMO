@@ -5,7 +5,7 @@ namespace FishMMO.Installer
 {
     /// <summary>
     /// Generates and installs systemd unit files for FishMMO ASP.NET web servers
-    /// (IPFetch, Patcher, WebGL). On Windows, logs a reminder and skips.
+    /// (IPFetch, Patcher, WebGL, Control Panel). On Windows, logs a reminder and skips.
     /// </summary>
     public static class SystemdServiceInstaller
     {
@@ -15,13 +15,14 @@ namespace FishMMO.Installer
             ("fishmmo-ipfetch", "IPFetchASP.NET/IpFetchServer", "FishMMO IP Fetch Web Server"),
             ("fishmmo-patcher", "PatcherASP.NET/Patcher", "FishMMO Patcher Web Server"),
             ("fishmmo-webgl", "WebGLServerASP.NET/WebGLServer", "FishMMO WebGL Web Server"),
+            ("fishmmo-controlpanel", "FishMMO-ControlPanel/ControlPanel", "FishMMO Control Panel Web Server"),
         };
 
         /// <summary>
         /// Installs systemd units for all FishMMO web servers found under the monorepo root.
         /// </summary>
         /// <param name="fishmmoRoot">FishMMO monorepo root path.</param>
-        /// <param name="onlyServers">Optional list of server names to restrict registration to. When null or empty, all three are registered.</param>
+        /// <param name="onlyServers">Optional list of server names to restrict registration to. When null or empty, all four are registered.</param>
         /// <returns>InstallResult indicating success or failure.</returns>
         public static async Task<InstallResult> InstallAllAsync(string fishmmoRoot, IReadOnlyList<string>? onlyServers = null)
         {

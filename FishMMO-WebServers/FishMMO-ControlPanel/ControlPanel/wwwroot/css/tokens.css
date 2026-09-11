@@ -1,0 +1,211 @@
+/*
+ * FishMMO Control Panel — design tokens.
+ *
+ * Every colour, radius, shadow and spacing step in the panel resolves through a
+ * token declared here. Nothing else in the stylesheet writes a literal colour,
+ * so retheming is editing this file and nothing else.
+ *
+ * The light palette is the base declaration on bare :root. Dark redefines only
+ * the tokens whose ROLE changes, under both the system preference and an
+ * explicit data-theme, so the in-app toggle wins in both directions.
+ */
+
+:root {
+	color-scheme: light;
+
+	/* ── Surfaces ─────────────────────────────────────────────── */
+	--surface-page: #f4f6f9;
+	--surface-raised: #ffffff;
+	--surface-sunken: #eef1f6;
+	--surface-inset: #e6eaf1;
+	--surface-overlay: #ffffff;
+	--surface-nav: #10151f;
+	--surface-nav-hover: #1b2333;
+	--surface-nav-active: #232e44;
+
+	/* ── Text ─────────────────────────────────────────────────── */
+	--text-strong: #0d1220;
+	--text-default: #303a4d;
+	--text-muted: #5f6b80;
+	--text-faint: #8a94a6;
+	--text-on-accent: #ffffff;
+	--text-nav: #b9c2d4;
+	--text-nav-strong: #ffffff;
+	--text-nav-muted: #6d7891;
+
+	/* ── Lines ────────────────────────────────────────────────── */
+	--line-default: #dae0ea;
+	--line-strong: #c3ccda;
+	--line-nav: #1e2637;
+
+	/* ── Accent ───────────────────────────────────────────────── */
+	--accent: #2563eb;
+	--accent-hover: #1d4ed8;
+	--accent-soft: #dbe6fe;
+	--accent-soft-text: #1b46b4;
+
+	/* ── Status ───────────────────────────────────────────────── */
+	--ok: #12805c;
+	--ok-soft: #d3f2e5;
+	--warn: #9a6207;
+	--warn-soft: #fdefd0;
+	--danger: #bf2b3d;
+	--danger-hover: #a11f30;
+	--danger-soft: #fbdde1;
+	--info: #1c6fa8;
+	--info-soft: #d6ecfa;
+	--neutral: #5f6b80;
+	--neutral-soft: #e6eaf1;
+
+	/* ── Charts ───────────────────────────────────────────────── */
+	--chart-1: #2563eb;
+	--chart-2: #12805c;
+	--chart-3: #9a6207;
+	--chart-4: #7c4bc0;
+	--chart-5: #bf2b3d;
+
+	/* ── Shape and depth ──────────────────────────────────────── */
+	--radius-sm: 4px;
+	--radius: 8px;
+	--radius-lg: 12px;
+	--radius-pill: 999px;
+
+	--shadow-sm: 0 1px 2px rgba(13, 18, 32, 0.06), 0 1px 1px rgba(13, 18, 32, 0.04);
+	--shadow: 0 2px 8px rgba(13, 18, 32, 0.08), 0 1px 2px rgba(13, 18, 32, 0.04);
+	--shadow-lg: 0 12px 32px rgba(13, 18, 32, 0.16), 0 2px 8px rgba(13, 18, 32, 0.08);
+
+	/* ── Spacing ──────────────────────────────────────────────── */
+	--sp-1: 4px;
+	--sp-2: 8px;
+	--sp-3: 12px;
+	--sp-4: 16px;
+	--sp-5: 24px;
+	--sp-6: 32px;
+	--sp-7: 48px;
+
+	/* ── Layout ───────────────────────────────────────────────── */
+	--nav-width: 248px;
+	--topbar-height: 56px;
+
+	/* ── Type ─────────────────────────────────────────────────── */
+	--font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+	--fs-xs: 11px;
+	--fs-sm: 12px;
+	--fs-base: 13px;
+	--fs-md: 15px;
+	--fs-lg: 18px;
+	--fs-xl: 24px;
+	--fs-2xl: 32px;
+}
+
+/* System dark, unless the viewer explicitly chose light. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		color-scheme: dark;
+
+		--surface-page: #0d1117;
+		--surface-raised: #151b24;
+		--surface-sunken: #10161e;
+		--surface-inset: #1c232e;
+		--surface-overlay: #1a212c;
+		--surface-nav: #090d13;
+		--surface-nav-hover: #151d29;
+		--surface-nav-active: #1e2a3d;
+
+		--text-strong: #f0f3f8;
+		--text-default: #c8d0dd;
+		--text-muted: #8b95a7;
+		--text-faint: #6a7484;
+		--text-on-accent: #ffffff;
+		--text-nav: #a4aec2;
+		--text-nav-strong: #ffffff;
+		--text-nav-muted: #5c6679;
+
+		--line-default: #232b38;
+		--line-strong: #313b4c;
+		--line-nav: #161d29;
+
+		--accent: #5b8cf5;
+		--accent-hover: #7aa2f7;
+		--accent-soft: #17253f;
+		--accent-soft-text: #9dbcfb;
+
+		--ok: #3fcf9a;
+		--ok-soft: #102b23;
+		--warn: #e0a44a;
+		--warn-soft: #2e2314;
+		--danger: #f27183;
+		--danger-hover: #f58c9b;
+		--danger-soft: #331920;
+		--info: #58b0e8;
+		--info-soft: #102634;
+		--neutral: #8b95a7;
+		--neutral-soft: #1c232e;
+
+		--chart-1: #5b8cf5;
+		--chart-2: #3fcf9a;
+		--chart-3: #e0a44a;
+		--chart-4: #b18cf0;
+		--chart-5: #f27183;
+
+		--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+		--shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+		--shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+	}
+}
+
+/* Explicit dark choice wins over a light system preference. */
+:root[data-theme="dark"] {
+	color-scheme: dark;
+
+	--surface-page: #0d1117;
+	--surface-raised: #151b24;
+	--surface-sunken: #10161e;
+	--surface-inset: #1c232e;
+	--surface-overlay: #1a212c;
+	--surface-nav: #090d13;
+	--surface-nav-hover: #151d29;
+	--surface-nav-active: #1e2a3d;
+
+	--text-strong: #f0f3f8;
+	--text-default: #c8d0dd;
+	--text-muted: #8b95a7;
+	--text-faint: #6a7484;
+	--text-on-accent: #ffffff;
+	--text-nav: #a4aec2;
+	--text-nav-strong: #ffffff;
+	--text-nav-muted: #5c6679;
+
+	--line-default: #232b38;
+	--line-strong: #313b4c;
+	--line-nav: #161d29;
+
+	--accent: #5b8cf5;
+	--accent-hover: #7aa2f7;
+	--accent-soft: #17253f;
+	--accent-soft-text: #9dbcfb;
+
+	--ok: #3fcf9a;
+	--ok-soft: #102b23;
+	--warn: #e0a44a;
+	--warn-soft: #2e2314;
+	--danger: #f27183;
+	--danger-hover: #f58c9b;
+	--danger-soft: #331920;
+	--info: #58b0e8;
+	--info-soft: #102634;
+	--neutral: #8b95a7;
+	--neutral-soft: #1c232e;
+
+	--chart-1: #5b8cf5;
+	--chart-2: #3fcf9a;
+	--chart-3: #e0a44a;
+	--chart-4: #b18cf0;
+	--chart-5: #f27183;
+
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+	--shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+}

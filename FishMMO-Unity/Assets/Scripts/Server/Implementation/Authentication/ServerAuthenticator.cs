@@ -386,22 +386,11 @@ namespace FishMMO.Server.Implementation
 			if (!accountResult.IsSuccess || string.IsNullOrEmpty(accountResult.Data.TotpSecret))
 				return false;
 
-			// Detect recovery code format (XXXXX-XXXXX = 11-char hex with hyphen at position 5).
-			bool isRecoveryCode = false;
-			if (totpCode.Length == 11 && totpCode[5] == '-')
-			{
-				isRecoveryCode = true;
-				for (int i = 0; i < 11; i++)
-				{
-					if (i == 5) continue;
-					char c = char.ToUpperInvariant(totpCode[i]);
-					if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F')))
-					{
-						isRecoveryCode = false;
-						break;
-					}
-				}
-			}
+			/* Shape test lives next to the generator now. This used to be a local copy looking
+			 * for "eleven characters with a hyphen at index five", which GenerateRecoveryCodes
+			 * has never produced — it emits XXXX-XXXX-XXXX-XXXX. Nothing matched, so every
+			 * recovery code fell through to the TOTP verifier and was rejected. */
+			bool isRecoveryCode = CryptoHelper.TwoFactor.LooksLikeRecoveryCode(totpCode);
 
 			if (isRecoveryCode)
 			{
@@ -675,7 +664,7 @@ namespace FishMMO.Server.Implementation
 			</body></html>";
 		}
 
-		/// <summary>Lock for atomic signing-key rotation. Guards swap of TokenSigningKey, TokenSigningKeyId, and TotpMasterKey.</summary>
+		/// <summary>Lock for atomic signing-key rotation. Guards swap of TokenSigningKey, TokenSigningKeyId, and (when supplied) TotpMasterKey.</summary>
 		private readonly object signingKeySwapLock = new object();
 
 		/// <summary>
@@ -710,12 +699,20 @@ namespace FishMMO.Server.Implementation
 					// a subsequent ZeroMemory on one reference zeroes data the other needs.
 					byte[] signingKeyCopy = newKey != null ? new byte[newKey.Length] : null;
 					if (signingKeyCopy != null) Buffer.BlockCopy(newKey, 0, signingKeyCopy, 0, signingKeyCopy.Length);
-					byte[] totpCopy = newTotpMasterKey != null ? new byte[newTotpMasterKey.Length] : null;
-					if (totpCopy != null) Buffer.BlockCopy(newTotpMasterKey, 0, totpCopy, 0, totpCopy.Length);
-
 					core.TokenSigningKey = signingKeyCopy;
 					core.TokenSigningKeyId = newKeyId;
-					core.TotpMasterKey = totpCopy;
+
+					/* A null TOTP key means LEAVE IT ALONE, not clear it. The KEK is a deployment
+					 * secret that wraps every account's stored TOTP secret; it does not rotate with
+					 * the token-signing key, and clearing it here would disable 2FA for the whole
+					 * shard on the next rotation. Callers that genuinely want to replace it pass a
+					 * 32-byte key. */
+					if (newTotpMasterKey != null)
+					{
+						byte[] totpCopy = new byte[newTotpMasterKey.Length];
+						Buffer.BlockCopy(newTotpMasterKey, 0, totpCopy, 0, totpCopy.Length);
+						core.TotpMasterKey = totpCopy;
+					}
 				}
 				tokenSigningKeyId = newKeyId;
 			}

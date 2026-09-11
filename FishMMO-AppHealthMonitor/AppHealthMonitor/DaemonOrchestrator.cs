@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using FishMMO.Logging;
 
 namespace AppHealthMonitor
@@ -7,7 +8,7 @@ namespace AppHealthMonitor
 	/// Owns daemon-wide state (cancellation, start signal, active monitors)
 	/// and pre-validates configurations at construction time.
 	/// </summary>
-	public sealed class DaemonOrchestrator : IAsyncDisposable
+	public sealed class DaemonOrchestrator : IAsyncDisposable, ISupervisionHost
 	{
 		/// <summary>
 		/// Semaphore used to signal the start of a new monitoring cycle. Released by <see cref="TrySignalStart"/>.
@@ -33,6 +34,76 @@ namespace AppHealthMonitor
 		/// The validated application configurations and their associated health checkers.
 		/// </summary>
 		private readonly IReadOnlyList<(AppConfig Config, IReadOnlyList<IHealthChecker> HealthCheckers)> validatedApps;
+
+		/// <summary>
+		/// The daemon's configuration, used to construct the optional control plane. Null when the
+		/// daemon was constructed without one, which simply means no control plane.
+		/// </summary>
+		private readonly IConfiguration? configuration;
+
+		/// <summary>
+		/// The database-backed control plane, or null when this deployment has no database.
+		/// </summary>
+		private DaemonControlPlane? controlPlane;
+
+		/// <summary>
+		/// The read service behind pulse health checks, or null when there is no database.
+		/// </summary>
+		/// <remarks>
+		/// Resolved once, at construction, because the health checkers are built when the
+		/// monitors are — before the control plane starts — and a checker needs it in hand. It
+		/// is independent of the control plane: a deployment can want pulse checks without the
+		/// command queue.
+		/// </remarks>
+		private readonly FishMMO.Database.Npgsql.Services.Interfaces.IServerBoardService? boardService;
+
+		/// <summary>
+		/// The running control plane loop, or null when there is no control plane.
+		/// </summary>
+		private Task? controlPlaneTask;
+
+		/// <summary>
+		/// Maximum time to wait for the control plane loop to finish during shutdown.
+		/// </summary>
+		private static readonly TimeSpan controlPlaneStopTimeout = TimeSpan.FromSeconds(15);
+
+		/// <summary>
+		/// Lock protecting <see cref="cycleTasks"/>, <see cref="cycleAcceptsRevivals"/> and
+		/// <see cref="cycleToken"/>.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately separate from <see cref="activeMonitorsLock"/>. Both are taken during a
+		/// revival and during cycle teardown, and a single lock covering both would have to be held
+		/// across the wait loop's decision to conclude — which is exactly the window a revival races.
+		/// They are never taken nested, so there is no ordering to get wrong.
+		/// </remarks>
+		private readonly object cycleLock = new();
+
+		/// <summary>
+		/// The tasks the current monitoring cycle is waiting on: one per live monitor, plus a
+		/// placeholder for each outstanding revival reservation. Null when no cycle is running.
+		/// </summary>
+		/// <remarks>
+		/// Mutable, and that is the point. When an operator revives a monitor whose loop has ended,
+		/// its new monitoring task is added here so the cycle waits on it like any other. The cycle
+		/// concludes only when this list drains — which is what keeps a headless daemon from
+		/// shutting down on top of a freshly revived application.
+		/// </remarks>
+		private List<Task>? cycleTasks;
+
+		/// <summary>
+		/// Whether the current cycle can still take a monitoring task back. Cleared, under
+		/// <see cref="cycleLock"/>, in the same step that observes <see cref="cycleTasks"/> empty,
+		/// so a revival either gets in before the cycle concludes or is refused outright.
+		/// </summary>
+		private bool cycleAcceptsRevivals;
+
+		/// <summary>
+		/// The current cycle's linked cancellation token (cycle stop or daemon shutdown). Default,
+		/// which is never cancelled, when no cycle is running — <see cref="cycleTasks"/> being null
+		/// is what refuses revivals in that case.
+		/// </summary>
+		private CancellationToken cycleToken;
 
 		/// <summary>
 		/// Cancellation token source for daemon-wide shutdown.
@@ -100,8 +171,13 @@ namespace AppHealthMonitor
 		/// </summary>
 		/// <param name="appConfigs">The raw application configurations from settings.</param>
 		/// <param name="headless">Whether all monitored applications should be launched in headless mode.</param>
+		/// <param name="configuration">
+		/// The daemon's configuration, used only to construct the optional database control plane.
+		/// Null, or a configuration with no database credentials, means the daemon supervises exactly
+		/// as it always has with no control plane at all.
+		/// </param>
 		/// <exception cref="InvalidOperationException">Thrown when no application configurations are provided, a configuration entry is invalid, or duplicate application names are detected.</exception>
-		public DaemonOrchestrator(IReadOnlyList<AppConfig> appConfigs, bool headless)
+		public DaemonOrchestrator(IReadOnlyList<AppConfig> appConfigs, bool headless, IConfiguration? configuration = null)
 		{
 			ArgumentNullException.ThrowIfNull(appConfigs);
 
@@ -125,7 +201,7 @@ namespace AppHealthMonitor
 					throw new InvalidOperationException($"Duplicate application name '{appConfig.Name}'. Each application must have a unique Name.");
 				}
 
-				var healthCheckers = HealthCheckerFactory.Create(appConfig.PortTypes);
+				var healthCheckers = HealthCheckerFactory.Create(appConfig.PortTypes, appConfig, boardService);
 				apps.Add((appConfig, healthCheckers));
 
 				LogAppConfiguration(appConfig);
@@ -134,6 +210,8 @@ namespace AppHealthMonitor
 			validatedApps = apps;
 
 			this.headless = headless;
+			this.configuration = configuration;
+			boardService = DaemonControlPlane.TryCreateBoardService(configuration);
 
 			Log.Info("Orchestration", $"Loaded {apps.Count} valid application configuration(s). Headless: {headless}");
 		}
@@ -164,7 +242,6 @@ namespace AppHealthMonitor
 				{ "MaxRestartDelay", $"{appConfig.MaxRestartDelaySeconds}s" },
 				{ "MaxRestartAttempts", appConfig.MaxRestartAttempts },
 				{ "PortCheckTimeout", $"{appConfig.PortCheckTimeoutMs}ms" },
-				{ "WebSocketCheckTimeout", $"{appConfig.WebSocketCheckTimeoutMs}ms" },
 				{ "CircuitBreakerFailureThreshold", appConfig.CircuitBreakerFailureThreshold }
 			};
 
@@ -306,6 +383,198 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
+		/// Gets the validated application configurations this daemon supervises, in configured order.
+		/// </summary>
+		/// <remarks>
+		/// This list is loaded from this host's own <c>appsettings.json</c> and is the only place a
+		/// name may resolve to something launchable. <see cref="DaemonControlPlane"/> resolves every
+		/// command's application name against it, which is what keeps a database row from naming
+		/// anything this daemon was not already configured to run.
+		/// </remarks>
+		public IReadOnlyList<AppConfig> ConfiguredApplications
+		{
+			get
+			{
+				var configs = new List<AppConfig>(validatedApps.Count);
+				foreach (var (config, _) in validatedApps)
+				{
+					configs.Add(config);
+				}
+				return configs;
+			}
+		}
+
+		/// <summary>
+		/// Finds the live monitor for a configured application name.
+		/// </summary>
+		/// <param name="name">The application name, matched case-insensitively as configuration names are.</param>
+		/// <param name="monitor">The live monitor when one exists for the current cycle; otherwise, null.</param>
+		/// <returns>True when a live monitor was found; otherwise, false.</returns>
+		public bool TryGetActiveMonitor(string name, out HealthMonitor? monitor)
+		{
+			monitor = null;
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				return false;
+			}
+
+			lock (activeMonitorsLock)
+			{
+				foreach (var candidate in activeMonitors)
+				{
+					if (string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase))
+					{
+						monitor = candidate;
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Reserves a place in the running monitoring cycle for a monitor about to be revived.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The reservation is a placeholder task added to <see cref="cycleTasks"/>. It is incomplete
+		/// until disposed, so the cycle's wait loop cannot observe the list empty and conclude while
+		/// a revival is being launched. That is the whole mechanism: the caller may safely start a
+		/// process knowing the cycle will still be there to take its monitoring task.
+		/// </para>
+		/// <para>
+		/// Refused when there is no cycle, when the cycle has already concluded, or when the cycle or
+		/// the daemon is cancelled. A refusal is what stops an unwatched process from being launched.
+		/// </para>
+		/// </remarks>
+		/// <param name="monitorName">The monitor's name, for logging only.</param>
+		/// <param name="refusal">A sentence saying why, when the reservation was refused.</param>
+		/// <returns>A reservation, or null when supervision cannot be resumed.</returns>
+		public ISupervisionReservation? TryReserveRevival(string monitorName, out string refusal)
+		{
+			lock (cycleLock)
+			{
+				if (cycleTasks == null || !cycleAcceptsRevivals)
+				{
+					refusal = $"supervision for '{monitorName}' cannot be resumed because no monitoring cycle is running on host '{Environment.MachineName}'.";
+					return null;
+				}
+
+				if (cycleToken.IsCancellationRequested || daemonCts.IsCancellationRequested)
+				{
+					refusal = $"supervision for '{monitorName}' cannot be resumed because the monitoring cycle on host '{Environment.MachineName}' is shutting down.";
+					return null;
+				}
+
+				var placeholder = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+				cycleTasks.Add(placeholder.Task);
+
+				refusal = string.Empty;
+				Log.Info("Orchestration", $"Holding the monitoring cycle open while supervision for '{monitorName}' is re-established.");
+				return new CycleReservation(this, placeholder);
+			}
+		}
+
+		/// <summary>
+		/// Attaches a revived monitor's new monitoring task to the running cycle.
+		/// </summary>
+		/// <remarks>
+		/// Only ever called through a live <see cref="CycleReservation"/>, whose placeholder is still
+		/// holding the cycle open, so the list is guaranteed to exist and the cycle is guaranteed not
+		/// to have concluded.
+		/// </remarks>
+		/// <param name="monitoringTask">The revived monitoring loop.</param>
+		private void AttachRevivedTask(Task monitoringTask)
+		{
+			lock (cycleLock)
+			{
+				// Null only if the cycle tore down while a reservation was outstanding, which the
+				// placeholder prevents. Guarded anyway: the task is already running and the monitor
+				// is still in activeMonitors, so cleanup will stop its process either way.
+				cycleTasks?.Add(monitoringTask);
+			}
+		}
+
+		/// <summary>
+		/// Releases a revival reservation, letting the cycle conclude again once nothing else is
+		/// outstanding.
+		/// </summary>
+		/// <param name="placeholder">The reservation's placeholder.</param>
+		private void ReleaseRevivalReservation(TaskCompletionSource placeholder)
+		{
+			lock (cycleLock)
+			{
+				cycleTasks?.Remove(placeholder.Task);
+			}
+
+			// Completed after the removal so the wait loop, which re-locks when it wakes, never sees
+			// a completed placeholder still in the list. Continuations run asynchronously, so this is
+			// safe to call whether or not a lock is held.
+			placeholder.TrySetResult();
+		}
+
+		/// <summary>
+		/// Gets whether the current cycle can still supervise. False once it or the daemon has been
+		/// cancelled, at which point a revival must not launch anything.
+		/// </summary>
+		/// <returns>True when supervision is available; otherwise, false.</returns>
+		private bool IsSupervisionAvailable()
+		{
+			if (daemonCts.IsCancellationRequested)
+			{
+				return false;
+			}
+
+			lock (cycleLock)
+			{
+				return cycleTasks != null && !cycleToken.IsCancellationRequested;
+			}
+		}
+
+		/// <summary>
+		/// A held place in the running monitoring cycle. See <see cref="TryReserveRevival"/>.
+		/// </summary>
+		private sealed class CycleReservation : ISupervisionReservation
+		{
+			private readonly DaemonOrchestrator owner;
+			private readonly TaskCompletionSource placeholder;
+
+			/// <summary>Guard so a double dispose releases the hold exactly once.</summary>
+			private int released;
+
+			/// <summary>
+			/// Initializes a new instance of the <see cref="CycleReservation"/> class.
+			/// </summary>
+			/// <param name="owner">The orchestrator holding the cycle.</param>
+			/// <param name="placeholder">The placeholder already added to the cycle's task list.</param>
+			internal CycleReservation(DaemonOrchestrator owner, TaskCompletionSource placeholder)
+			{
+				this.owner = owner;
+				this.placeholder = placeholder;
+			}
+
+			/// <inheritdoc />
+			public bool IsSupervisionAvailable => owner.IsSupervisionAvailable();
+
+			/// <inheritdoc />
+			public void Resume(Task monitoringTask)
+			{
+				ArgumentNullException.ThrowIfNull(monitoringTask);
+				owner.AttachRevivedTask(monitoringTask);
+			}
+
+			/// <inheritdoc />
+			public void Dispose()
+			{
+				if (Interlocked.Exchange(ref released, 1) != 0)
+				{
+					return;
+				}
+				owner.ReleaseRevivalReservation(placeholder);
+			}
+		}
+
+		/// <summary>
 		/// Returns a thread-safe snapshot of active monitor statuses for diagnostics.
 		/// Takes a snapshot of the monitors list under lock, then queries status outside the lock
 		/// to avoid holding the lock during process I/O (e.g., /proc reads on Linux).
@@ -323,15 +592,47 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
-		/// Signals the daemon to shut down by cancelling monitoring and the daemon-wide token.
-		/// <see cref="CancelCurrentMonitoring"/> is called defensively before <see cref="daemonCts"/>.
-		/// The linked CTS in <see cref="RunAsync"/> ensures propagation either way.
+		/// Signals the daemon to shut down by cancelling the daemon-wide token and then the current
+		/// monitoring cycle. See the comment in the body for why that order matters.
 		/// </summary>
+		/// <remarks>
+		/// The cancellation is guarded because this is called from the POSIX signal handler, on a
+		/// thread-pool thread, while the headless main path cancels and DISPOSES
+		/// <see cref="daemonCts"/> as it winds down. A SIGTERM arriving at the wrong moment reaches
+		/// a disposed source and throws <see cref="ObjectDisposedException"/> — unhandled, on a
+		/// thread with nobody to catch it, which aborts the process. A supervisor that crashes when
+		/// asked to stop leaves systemd unable to tell a clean stop from a failure. Reproduced on a
+		/// pristine build in three runs out of five.
+		/// </remarks>
 		public void Shutdown()
 		{
+			/* The daemon token goes FIRST, and the order is load-bearing.
+			 *
+			 * CancellationTokenSource.Cancel runs its registrations synchronously on the calling
+			 * thread — here, the signal handler's. Cancelling the cycle first therefore unwinds the
+			 * monitoring loops inline, and RunAsync can reach its headless "the cycle ended by
+			 * itself" check while this thread is still inside that first Cancel. It then sees a
+			 * daemon token that is not cancelled yet, concludes that every monitor exhausted, and
+			 * exits 1 — systemd is told an ordinary `stop` failed. Observed once in five SIGTERM
+			 * runs, with the log carrying "Headless monitoring cycle completed" two lines after
+			 * "SIGTERM received".
+			 *
+			 * Cancelling the daemon token first makes that impossible: IsCancellationRequested is
+			 * set before any registration runs, so whatever unwinds inline afterwards already sees
+			 * a daemon that was asked to stop. The cycle is cancelled straight after, which is
+			 * belt-and-braces — the cycle's token is linked to this one. */
+			try
+			{
+				daemonCts.Cancel();
+			}
+			catch (ObjectDisposedException)
+			{
+				// Already shutting down, which is what this was asking for.
+			}
+
 			CancelCurrentMonitoring();
-			daemonCts.Cancel();
 		}
+
 
 		/// <summary>
 		/// Runs the main orchestration loop. Waits for start signals, launches monitors,
@@ -342,6 +643,11 @@ namespace AppHealthMonitor
 		/// <returns>A task representing the asynchronous orchestration operation.</returns>
 		public async Task RunAsync()
 		{
+			// Started here so the host is visible to operators from the moment the daemon is up,
+			// including while it waits for a 'start' command. It observes the daemon token, so a
+			// shutdown stops it with everything else.
+			StartControlPlane();
+
 			try
 			{
 				while (!daemonCts.IsCancellationRequested)
@@ -383,6 +689,73 @@ namespace AppHealthMonitor
 				Shutdown();
 				throw;
 			}
+			finally
+			{
+				await StopControlPlaneAsync();
+			}
+		}
+
+		/// <summary>
+		/// Starts the optional database control plane, if this deployment has one.
+		/// </summary>
+		/// <remarks>
+		/// Every failure path here is a log line and nothing more. A daemon whose database is
+		/// missing, misconfigured or unreachable still supervises its applications — that is the
+		/// whole point of the control plane being optional.
+		/// </remarks>
+		private void StartControlPlane()
+		{
+			if (controlPlane != null)
+			{
+				return;
+			}
+
+			try
+			{
+				controlPlane = DaemonControlPlane.TryCreate(this, configuration);
+				if (controlPlane == null)
+				{
+					return;
+				}
+
+				controlPlaneTask = controlPlane.RunAsync(daemonCts.Token);
+			}
+			catch (Exception ex)
+			{
+				controlPlane = null;
+				controlPlaneTask = null;
+				Log.Error("Orchestration", $"The control plane failed to start: {ex.Message}. Supervision continues without it.", ex);
+			}
+		}
+
+		/// <summary>
+		/// Waits, with a bounded timeout, for the control plane loop to finish after shutdown.
+		/// </summary>
+		/// <returns>A task representing the asynchronous stop operation.</returns>
+		private async Task StopControlPlaneAsync()
+		{
+			var task = Interlocked.Exchange(ref controlPlaneTask, null);
+			if (task == null)
+			{
+				return;
+			}
+
+			try
+			{
+				await task.WaitAsync(controlPlaneStopTimeout);
+			}
+			catch (TimeoutException)
+			{
+				Log.Warning("Orchestration", $"The control plane did not stop within {controlPlaneStopTimeout.TotalSeconds}s. Continuing shutdown.");
+			}
+			catch (OperationCanceledException)
+			{
+				// Expected: the loop observes the daemon shutdown token.
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Orchestration", $"The control plane loop ended with an error: {ex.Message}", ex);
+			}
 		}
 
 		/// <summary>
@@ -409,75 +782,153 @@ namespace AppHealthMonitor
 					activeMonitors.Clear();
 				}
 
+				// Published before any monitor exists so a revival arriving at any point during setup
+				// finds a cycle to join rather than being refused for a race it did not cause.
 				var currentMonitoringTasks = new List<Task>();
-
-				for (int i = 0; i < validatedApps.Count; i++)
+				lock (cycleLock)
 				{
-					if (linkedCts.Token.IsCancellationRequested)
+					cycleTasks = currentMonitoringTasks;
+					cycleToken = linkedCts.Token;
+					cycleAcceptsRevivals = true;
+				}
+
+				/* Everything from here on runs against a published cycle, so the publication is
+				 * undone on every exit path — including the ones that leave during setup. The
+				 * drain loop normally does it the moment it sees the last task go, which is what
+				 * makes "the cycle has concluded" and "revivals are refused" the same instant;
+				 * this is the net for the paths that never reach the drain. */
+				try
+				{
+					for (int i = 0; i < validatedApps.Count; i++)
 					{
-						Log.Warning("Orchestration", "Monitoring launch cancelled during setup.");
-						break;
-					}
-
-					var (appConfig, healthCheckers) = validatedApps[i];
-
-					if (linkedCts.Token.IsCancellationRequested)
-					{
-						Log.Warning("Orchestration", "Monitoring launch cancelled before monitor creation.");
-						break;
-					}
-
-					Log.Info("Orchestration", $"--- Launching Monitor for: [{appConfig.Name}] ---");
-
-					var monitor = new HealthMonitor(appConfig, healthCheckers, headless, linkedCts.Token);
-
-					if (linkedCts.Token.IsCancellationRequested)
-					{
-						Log.Warning("Orchestration", "Monitoring launch cancelled after monitor creation.");
-						await monitor.DisposeAsync();
-						break;
-					}
-
-					lock (activeMonitorsLock)
-					{
-						activeMonitors.Add(monitor);
-					}
-					currentMonitoringTasks.Add(monitor.StartMonitoringAsync());
-
-					if (appConfig.LaunchDelaySeconds > 0 && i < validatedApps.Count - 1)
-					{
-						Log.Info("Orchestration", $"Pausing for {appConfig.LaunchDelaySeconds} seconds before starting the next monitor...");
-						try
+						if (linkedCts.Token.IsCancellationRequested)
 						{
-							await Task.Delay(TimeSpan.FromSeconds(appConfig.LaunchDelaySeconds), linkedCts.Token);
-						}
-						catch (OperationCanceledException)
-						{
-							Log.Warning("Orchestration", "Launch delay cancelled during monitor setup.");
+							Log.Warning("Orchestration", "Monitoring launch cancelled during setup.");
 							break;
 						}
+
+						var (appConfig, healthCheckers) = validatedApps[i];
+
+						if (linkedCts.Token.IsCancellationRequested)
+						{
+							Log.Warning("Orchestration", "Monitoring launch cancelled before monitor creation.");
+							break;
+						}
+
+						Log.Info("Orchestration", $"--- Launching Monitor for: [{appConfig.Name}] ---");
+
+						// 'this' is the supervision host: the seam a monitor uses to ask for its loop back
+						// after an operator revives it. See ISupervisionHost.
+						var monitor = new HealthMonitor(appConfig, healthCheckers, headless, linkedCts.Token, this);
+
+						if (linkedCts.Token.IsCancellationRequested)
+						{
+							Log.Warning("Orchestration", "Monitoring launch cancelled after monitor creation.");
+							await monitor.DisposeAsync();
+							break;
+						}
+
+						lock (activeMonitorsLock)
+						{
+							activeMonitors.Add(monitor);
+						}
+						currentMonitoringTasks.Add(monitor.StartMonitoringAsync());
+
+						if (appConfig.LaunchDelaySeconds > 0 && i < validatedApps.Count - 1)
+						{
+							Log.Info("Orchestration", $"Pausing for {appConfig.LaunchDelaySeconds} seconds before starting the next monitor...");
+							try
+							{
+								await Task.Delay(TimeSpan.FromSeconds(appConfig.LaunchDelaySeconds), linkedCts.Token);
+							}
+							catch (OperationCanceledException)
+							{
+								Log.Warning("Orchestration", "Launch delay cancelled during monitor setup.");
+								break;
+							}
+						}
 					}
-				}
 
-				if (currentMonitoringTasks.Count == 0)
+					if (currentMonitoringTasks.Count == 0)
+					{
+						Log.Warning("Orchestration", "No valid applications were launched for monitoring in this cycle.");
+						return;
+					}
+
+					Log.Info("Orchestration", "All configured application monitors are now active and running.");
+
+					await DrainMonitoringTasksAsync(currentMonitoringTasks);
+
+					Log.Info("Orchestration", "Current monitoring cycle concluded. Initiating cleanup of applications.");
+					await CleanupAllMonitorsAsync();
+					Log.Info("Orchestration", "Applications cleaned up for this cycle.");
+				}
+				finally
 				{
-					Log.Warning("Orchestration", "No valid applications were launched for monitoring in this cycle.");
-					return;
+					ConcludeCycleAcceptance();
 				}
+			}
+			finally
+			{
+				Interlocked.Exchange(ref currentMonitoringCts, null);
+				cycleCts.Dispose();
 
-				Log.Info("Orchestration", "All configured application monitors are now active and running.");
+				// Signal cycle completion AFTER cleanup is done, then clear the reference.
+				// This ordering ensures ForceKillAllAsync and DisposeAsync callers wait until cleanup finishes.
+				tcs.TrySetResult();
+				Volatile.Write(ref cycleCompletionSource, null);
+			}
+		}
+
+		/// <summary>
+		/// Waits for this cycle's monitoring tasks, re-reading the list after every wait so a task
+		/// handed back by a revival is waited on like any other.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The list is mutable and <see cref="Task.WhenAll(IEnumerable{Task})"/> is not — it waits on
+		/// exactly what it was handed. A single WhenAll over the starting set would therefore let the
+		/// cycle conclude, and a headless daemon exit, on top of an application an operator had just
+		/// revived: the revived task would have been added to a list nobody was reading any more.
+		/// </para>
+		/// <para>
+		/// So the list is drained instead, under <see cref="cycleLock"/>, and the step that observes
+		/// it empty is the same step that stops accepting revivals. A revival therefore either gets
+		/// its placeholder in while the cycle is still live — and the cycle then waits for it — or is
+		/// refused outright. There is no ordering in which one is accepted and then dropped.
+		/// </para>
+		/// </remarks>
+		/// <param name="monitoringTasks">The cycle's task list. Mutated by revivals under <see cref="cycleLock"/>.</param>
+		/// <returns>A task that completes when the cycle has nothing left to wait on.</returns>
+		private async Task DrainMonitoringTasksAsync(List<Task> monitoringTasks)
+		{
+			while (true)
+			{
+				Task[] pending;
+				lock (cycleLock)
+				{
+					if (monitoringTasks.Count == 0)
+					{
+						// Same lock, same step as the observation above: from here on a revival is
+						// refused rather than joining a cycle that is about to clean up.
+						ConcludeCycleAcceptance();
+						Log.Debug("Orchestration", "All monitoring tasks for this cycle have completed.");
+						return;
+					}
+
+					pending = monitoringTasks.ToArray();
+				}
 
 				try
 				{
-					await Task.WhenAll(currentMonitoringTasks);
-					Log.Debug("Orchestration", "All current monitoring tasks completed normally.");
+					await Task.WhenAll(pending);
 				}
 				catch (Exception ex)
 				{
 					// Inspect every task individually — Task.WhenAll only throws the first exception.
 					// Log the aggregate exception as a fallback in case individual inspection misses anything.
 					Log.Debug("Orchestration", $"Task.WhenAll threw: {ex.Message}", ex);
-					foreach (var task in currentMonitoringTasks)
+					foreach (var task in pending)
 					{
 						if (task.IsCanceled)
 						{
@@ -493,19 +944,30 @@ namespace AppHealthMonitor
 					}
 				}
 
-				Log.Info("Orchestration", "Current monitoring cycle concluded. Initiating cleanup of applications.");
-				await CleanupAllMonitorsAsync();
-				Log.Info("Orchestration", "Applications cleaned up for this cycle.");
+				lock (cycleLock)
+				{
+					// Only the finished ones: a revival added while the wait was in flight stays,
+					// and the next pass waits on it.
+					monitoringTasks.RemoveAll(static task => task.IsCompleted);
+				}
 			}
-			finally
-			{
-				Interlocked.Exchange(ref currentMonitoringCts, null);
-				cycleCts.Dispose();
+		}
 
-				// Signal cycle completion AFTER cleanup is done, then clear the reference.
-				// This ordering ensures ForceKillAllAsync and DisposeAsync callers wait until cleanup finishes.
-				tcs.TrySetResult();
-				Volatile.Write(ref cycleCompletionSource, null);
+		/// <summary>
+		/// Stops the current cycle from accepting revivals and unpublishes it.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent, and safe to call while already holding <see cref="cycleLock"/>. Clearing
+		/// <see cref="cycleTasks"/> is what refuses later revivals; <see cref="cycleToken"/> is
+		/// dropped with it so no reader can touch a token whose source is about to be disposed.
+		/// </remarks>
+		private void ConcludeCycleAcceptance()
+		{
+			lock (cycleLock)
+			{
+				cycleAcceptsRevivals = false;
+				cycleTasks = null;
+				cycleToken = default;
 			}
 		}
 
@@ -571,6 +1033,9 @@ namespace AppHealthMonitor
 			var tcs = Volatile.Read(ref cycleCompletionSource);
 
 			daemonCts.Cancel();
+
+			// The control plane observes the daemon token, so this only waits for its loop to unwind.
+			await StopControlPlaneAsync();
 
 			// Re-read after cancellation to catch any cycle that started in the race window
 			// between the initial TCS capture and the Cancel() call above.

@@ -366,3 +366,26 @@ ISceneInstanceDetails
 ## License
 
 This module is part of the FishMMO project and is subject to the FishMMO project license.
+
+## In-game command sets
+
+`SceneServerSystem.AdminCommands.cs` registers `/admin` at `AccessLevel.Admin`, and
+`SceneServerSystem.GameMasterCommands.cs` registers `/gm` at `AccessLevel.GameMaster`.
+
+Both use the same shape: **one registration per set**, with the sub-command parsed from the
+remainder of the message. That is not a style choice. One registration means one access
+check covers every operation in the set, so there is no way to add a sub-command that
+forgets to be gated — and it is what lets the audit hook at `ChatHelper.TryParseCommand`
+see every one of them without enumerating anything.
+
+`/admin` acts on the server: lock, shutdown, status, announce, and account access levels.
+`/gm` acts on players: who, where, info, goto, summon, kick.
+
+Two things to keep in mind when adding a sub-command here:
+
+- **Do not write an audit row from a handler.** The chat system already records the command
+  at the gate. A handler that logs its own would double-count, and a handler that forgets
+  would be the only unaudited command in the set.
+- **Move characters through `Motor`, never the transform.** The motor is what the
+  prediction system reconciles against. A transform write is corrected away on the next
+  tick, so the character snaps back and the command looks like it did nothing.

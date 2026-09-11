@@ -108,7 +108,12 @@ namespace AppHealthMonitor
 			string configFilePath = ResolveConfigPath(LoggingConfigName, applicationBaseDirectory);
 			try
 			{
-				Log.Initialize(configFilePath, new ConsoleFormatter());
+				// Awaited deliberately. Log.Initialize reads its configuration asynchronously and only
+				// then assigns the console formatter and allowed levels; anything logged before that
+				// completes is dropped on the floor by Log.Write with no trace. Leaving it
+				// unawaited silently swallowed the daemon's whole startup banner — the configuration
+				// dump, the control-plane enabled/disabled notice and any early Critical.
+				await Log.Initialize(configFilePath, new ConsoleFormatter());
 			}
 			catch (Exception ex)
 			{
@@ -146,7 +151,11 @@ namespace AppHealthMonitor
 			DaemonOrchestrator orchestrator;
 			try
 			{
-				orchestrator = new DaemonOrchestrator(appConfigs, headless);
+				// The configuration is handed over so the orchestrator can construct the optional
+				// database control plane. Credentials never come from this file — they are resolved
+				// from FISHMMO_DB_* or /etc/fishmmo/db-secrets.env, and their absence simply means
+				// no control plane.
+				orchestrator = new DaemonOrchestrator(appConfigs, headless, configuration);
 			}
 			catch (InvalidOperationException ex)
 			{

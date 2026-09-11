@@ -681,9 +681,8 @@ namespace FishMMO.Installer
                 Console.Clear();
                 Console.WriteLine("=== Configuration ===");
                 Console.WriteLine();
-                Console.WriteLine("1 : Configure Web Server Settings (IPFetch, Patcher, WebGL)");
+                Console.WriteLine("1 : Configure Web Server Settings (IPFetch, Patcher, WebGL, Control Panel)");
                 Console.WriteLine("2 : Configure Discord Bot Settings");
-                Console.WriteLine("3 : Configure CMS Server Settings");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -696,9 +695,6 @@ namespace FishMMO.Installer
                         break;
                     case ConsoleKey.D2:
                         await AppSettingsInstaller.ConfigureDiscordBotComponent();
-                        break;
-                    case ConsoleKey.D3:
-                        await AppSettingsInstaller.ConfigureCmsComponent();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:

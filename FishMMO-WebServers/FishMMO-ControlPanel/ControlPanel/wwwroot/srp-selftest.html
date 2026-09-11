@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>SRP self-test</title>
+	<meta name="robots" content="noindex, nofollow" />
+	<link rel="stylesheet" href="css/tokens.css" />
+	<link rel="stylesheet" href="css/base.css" />
+	<link rel="stylesheet" href="css/components.css" />
+	<style>
+		body { padding: 24px; }
+		main { max-width: 900px; margin: 0 auto; }
+		.result { display: flex; gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line-default); }
+		.result:last-child { border-bottom: 0; }
+		.verdict { flex-shrink: 0; width: 64px; font-weight: 600; font-family: var(--font-mono); font-size: var(--fs-sm); }
+		.pass { color: var(--ok); }
+		.fail { color: var(--danger); }
+		.detail { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-faint); overflow-wrap: anywhere; }
+	</style>
+</head>
+<body>
+<main>
+	<h1>SRP self-test</h1>
+	<p class="muted">
+		Checks <code>js/srp.js</code> — the client half of the panel's real login — against
+		known-answer vectors produced by the
+		<code>srp</code> 1.0.7 .NET library with <code>SrpParameters.Create2048&lt;SHA512&gt;()</code> —
+		the exact configuration the LoginServer authenticates with. A failure here means the
+		browser and the game server would disagree, and nobody could sign in.
+	</p>
+	<p class="muted small">
+		Serve this over <code>http://localhost</code> or HTTPS. <code>crypto.subtle</code> is
+		unavailable on <code>file://</code>, and every check will fail with a null reference.
+	</p>
+
+	<div id="summary" style="margin: 20px 0"></div>
+	<section class="card"><div class="card-body" id="results"></div></section>
+</main>
+
+<script type="module">
+import * as srp from './js/srp.js';
+
+const results = document.getElementById('results');
+const summary = document.getElementById('summary');
+let passed = 0, failed = 0;
+
+function record(name, ok, detail = '') {
+	if (ok) passed++; else failed++;
+	const row = document.createElement('div');
+	row.className = 'result';
+	row.innerHTML = `
+		<span class="verdict ${ok ? 'pass' : 'fail'}">${ok ? 'PASS' : 'FAIL'}</span>
+		<span style="flex:1">
+			<span>${name}</span>
+			${detail && !ok ? `<div class="detail">${detail}</div>` : ''}
+		</span>`;
+	results.appendChild(row);
+}
+
+function short(v) {
+	return String(v).length > 40 ? String(v).slice(0, 40) + '…' : String(v);
+}
+
+try {
+	const vectors = await (await fetch('./js/srp-vectors.json')).json();
+
+	record('group prime N matches the server', srp.parameters.N === vectors.parameters.N,
+		`expected ${short(vectors.parameters.N)}, got ${short(srp.parameters.N)}`);
+	record('generator g matches the server', srp.parameters.g === vectors.parameters.g);
+	record('pad length matches the server', srp.parameters.padHexLength === vectors.parameters.padHexLength);
+
+	for (const v of vectors.derive) {
+		const x = await srp.derivePrivateKey(v.salt, v.username, v.password);
+		record(`private key for "${v.username}"`, x === v.privateKey,
+			`expected ${short(v.privateKey)}, got ${short(x)}`);
+		const verifier = await srp.deriveVerifier(x);
+		record(`verifier for "${v.username}"`, verifier === v.verifier,
+			`expected ${short(v.verifier)}, got ${short(verifier)}`);
+	}
+
+	const e = vectors.exchange;
+	const session = await srp.deriveSession(e.clientSecret, e.serverPublic, e.salt, e.username, e.privateKey);
+	record('client public ephemeral A', session.publicEphemeral === e.clientPublic,
+		`expected ${short(e.clientPublic)}, got ${short(session.publicEphemeral)}`);
+	record('session key K', session.key === e.sessionKey,
+		`expected ${short(e.sessionKey)}, got ${short(session.key)}`);
+	record('client proof M1 the server will accept', session.proof === e.clientProof,
+		`expected ${short(e.clientProof)}, got ${short(session.proof)}`);
+
+	let verified = false;
+	try {
+		await srp.verifySession(e.clientPublic, { key: e.sessionKey, proof: e.clientProof }, e.serverProof);
+		verified = true;
+	} catch (err) {
+		verified = false;
+	}
+	record('server proof M2 verifies', verified);
+
+	// A wrong server proof must be rejected, or the check is decorative.
+	let rejected = false;
+	try {
+		const tampered = e.serverProof.slice(0, -1) + (e.serverProof.endsWith('0') ? '1' : '0');
+		await srp.verifySession(e.clientPublic, { key: e.sessionKey, proof: e.clientProof }, tampered);
+	} catch (err) {
+		rejected = true;
+	}
+	record('a tampered server proof is rejected', rejected);
+
+	// A wrong password must not produce the stored verifier.
+	const wrongX = await srp.derivePrivateKey(e.salt, e.username, e.password + 'x');
+	const wrongV = await srp.deriveVerifier(wrongX);
+	record('a wrong password yields a different verifier', wrongV !== e.verifier);
+
+} catch (err) {
+	record('the self-test ran', false, err.message);
+}
+
+summary.innerHTML = failed === 0
+	? `<div class="banner banner-ok"><div class="banner-body"><div class="banner-title">All ${passed} checks passed</div>
+	   <div class="muted small">The browser implementation is byte-compatible with the game server.</div></div></div>`
+	: `<div class="banner banner-danger"><div class="banner-body"><div class="banner-title">${failed} of ${passed + failed} checks failed</div>
+	   <div class="muted small">Do not ship this. The browser and the server would not agree on a login.</div></div></div>`;
+</script>
+</body>
+</html>

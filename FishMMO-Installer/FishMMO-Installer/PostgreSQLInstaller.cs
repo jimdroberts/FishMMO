@@ -444,12 +444,25 @@ namespace FishMMO.Installer
 								await Log.Info("FishMMOInstaller", $"User role '{dbUsername}' created successfully.");
 							}
 						}
+						// Credentials are NOT written here — use 'Configure Database Secrets'
+						// (Step 1) to write /etc/fishmmo/db-secrets.env.
+					}
+
+					/* Granting is NOT nested inside the role-creation prompt. It used to be, and an
+					 * operator whose role already existed would answer "no" to "Create User Role"
+					 * — the only sensible answer — and silently receive no privileges at all. The
+					 * symptom is every table reporting "permission denied" afterwards, with the
+					 * installer having reported success. Granting is idempotent, so running it
+					 * unconditionally costs nothing. */
+					if (await RoleExistsAsync(connection, dbUsername))
+					{
 						await Log.Info("FishMMOInstaller", $"Granting privileges on database '{appSettings.Npgsql.Database}' to user '{dbUsername}'...");
 						await GrantPrivileges(connection, dbUsername, appSettings.Npgsql.Database);
 						await Log.Info("FishMMOInstaller", "Privileges granted successfully.");
-
-						// Credentials are NOT written here — use 'Configure Database Secrets'
-						// (Step 1) to write /etc/fishmmo/db-secrets.env.
+					}
+					else
+					{
+						await Log.Warning("FishMMOInstaller", $"Role '{dbUsername}' does not exist — skipping the privilege grant. Create the role first, then re-run this step.");
 					}
 
 					await Log.Info("FishMMOInstaller", "FishMMO Database components installed/configured.");
@@ -491,6 +504,27 @@ namespace FishMMO.Installer
 					}
 
 					await Log.Info("FishMMOInstaller", "Migration completed and applied.");
+
+					/* Re-grant AFTER the migration. The grant above runs against an empty
+					 * database, where "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public"
+					 * matches nothing — it applies to the tables that exist at that moment, not
+					 * to future ones. ALTER DEFAULT PRIVILEGES in the same batch is meant to
+					 * cover what comes later, but only for objects created by the role that ran
+					 * it, so anything that creates tables as a different role slips through.
+					 * Granting again here is cheap, idempotent, and removes the dependence on
+					 * that assumption entirely. */
+					using (var grantConnection = new NpgsqlConnection(BuildConnectionString(
+						appSettings.Npgsql.Host, appSettings.Npgsql.Port,
+						superUsername, superPassword, appSettings.Npgsql.Database)))
+					{
+						await grantConnection.OpenAsync();
+						if (await RoleExistsAsync(grantConnection, dbUsername))
+						{
+							await Log.Info("FishMMOInstaller", $"Re-granting privileges on the newly created tables to '{dbUsername}'...");
+							await GrantPrivileges(grantConnection, dbUsername, appSettings.Npgsql.Database);
+							await Log.Info("FishMMOInstaller", "Privileges granted on all migrated tables.");
+						}
+					}
 				}
 			}
 			catch (NpgsqlException npgEx)
@@ -661,7 +695,27 @@ namespace FishMMO.Installer
 			if (string.IsNullOrWhiteSpace(dbName)) dbName = defaultDbName;
 			ValidateIdentifier(dbName, nameof(dbName), "database name");
 
-			string defaultUsername = appUsername ?? "fishmmo_user";
+			/* Default to the role the services ACTUALLY connect as, resolved the same way
+			 * they resolve it. This used to fall back to the literal "fishmmo_user" whenever
+			 * the caller passed nothing — which is every caller — so an operator whose role
+			 * is named anything else accepts the default and grants privileges to a role no
+			 * service uses. The install succeeds, and every table then reports "permission
+			 * denied" to the application. */
+			string? configuredUsername = appUsername ?? DatabaseSecrets.TryResolveUsername();
+			string defaultUsername = configuredUsername ?? "fishmmo_user";
+
+			if (configuredUsername == null)
+			{
+				await Log.Warning("FishMMOInstaller",
+					"No database username is configured in /etc/fishmmo/db-secrets.env or the environment. " +
+					$"Falling back to '{defaultUsername}', which is probably NOT the role your servers use. " +
+					"Run 'Configure Database Secrets' first, or type the correct role below.");
+			}
+			else
+			{
+				Console.WriteLine($"Configured database role: '{configuredUsername}' (from the secrets file or environment).");
+			}
+
 			string? usernameToGrant = InstallerProcessHelper.PromptForInput($"Enter username to grant permissions to (default: {defaultUsername}): ");
 			if (string.IsNullOrWhiteSpace(usernameToGrant)) usernameToGrant = defaultUsername;
 			ValidateIdentifier(usernameToGrant, nameof(usernameToGrant), "username");
@@ -679,6 +733,14 @@ namespace FishMMO.Installer
 					await Log.Info("FishMMOInstaller", $"Successfully connected to database '{dbName}' as superuser.");
 
 					await Log.Info("FishMMOInstaller", $"Granting comprehensive permissions to '{usernameToGrant}' on '{dbName}'...");
+					if (!await RoleExistsAsync(connection, usernameToGrant))
+					{
+						await Log.Error("FishMMOInstaller",
+							$"Role '{usernameToGrant}' does not exist on this server. Nothing was granted. " +
+							"Create the role first, or re-run with the name your servers actually connect as.");
+						return;
+					}
+
 					await GrantPrivileges(connection, usernameToGrant, dbName);
 					await Log.Info("FishMMOInstaller", $"Successfully granted comprehensive permissions to user '{usernameToGrant}' on database '{dbName}'.");
 				}
@@ -782,6 +844,14 @@ namespace FishMMO.Installer
 		/// <param name="connection">Open NpgsqlConnection.</param>
 		/// <param name="username">Username to grant privileges to.</param>
 		/// <param name="dbName">Database name.</param>
+		/// <summary>Returns whether a role exists on the server.</summary>
+		private static async Task<bool> RoleExistsAsync(NpgsqlConnection connection, string username)
+		{
+			using var cmd = new NpgsqlCommand("SELECT 1 FROM pg_roles WHERE rolname = @username", connection);
+			cmd.Parameters.AddWithValue("username", username);
+			return await cmd.ExecuteScalarAsync() != null;
+		}
+
 		private static async Task GrantPrivileges(NpgsqlConnection connection, string username, string dbName)
 		{
 			ValidateIdentifier(username, nameof(username), "username");
@@ -790,13 +860,16 @@ namespace FishMMO.Installer
 			string formatSql =
 				"SELECT format('" +
 				"GRANT ALL PRIVILEGES ON DATABASE %I TO %I; " +
+				// USAGE on the schema is required before any table grant is usable, and
+				// PostgreSQL 15 removed the implicit CREATE for PUBLIC on the public schema.
+				"GRANT USAGE, CREATE ON SCHEMA public TO %I; " +
 				"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I; " +
 				"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I; " +
 				"GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO %I; " +
 				"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO %I; " +
 				"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO %I; " +
 				"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO %I', " +
-				"@dbName, @username, @username, @username, @username, @username, @username, @username)";
+				"@dbName, @username, @username, @username, @username, @username, @username, @username, @username)";
 
 			string commandText;
 

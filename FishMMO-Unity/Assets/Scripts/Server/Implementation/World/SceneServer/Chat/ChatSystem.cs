@@ -210,6 +210,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// shared code with no server to log against, so it reports and this records.
 			ChatHelper.OnCommandRefused += ChatHelper_OnCommandRefused;
 
+			/* Every elevated command, run or refused, lands in the same audit log the Control
+			 * Panel writes to. See ChatSystem.Audit.cs. */
+			ChatHelper.OnCommandRefused += ChatHelper_OnElevatedCommandRefused;
+			ChatHelper.OnElevatedCommand += ChatHelper_OnElevatedCommand;
+
+			/* Player support commands: /report, /bug, /helpme, /tickets. Registered at Player
+			 * level and removed again in OnDeinitialize. See ChatSystem.SupportCommands.cs. */
+			RegisterSupportCommands();
+
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived, true);
 
@@ -279,6 +288,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
 
 			ChatHelper.OnCommandRefused -= ChatHelper_OnCommandRefused;
+			ChatHelper.OnCommandRefused -= ChatHelper_OnElevatedCommandRefused;
+			ChatHelper.OnElevatedCommand -= ChatHelper_OnElevatedCommand;
 
 			/* Drop the static channel registration so the next run rebuilds it.
 			 *
@@ -286,6 +297,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * They outlive a play-session restart in the editor while this object does not, and
 			 * InitializeOnce's latch meant the second session kept the first session's handlers.
 			 * Individual slash commands are removed by the systems that registered them. */
+			UnregisterSupportCommands();
 			ChatHelper.ResetChannelCommands();
 
 			// Periodic callbacks

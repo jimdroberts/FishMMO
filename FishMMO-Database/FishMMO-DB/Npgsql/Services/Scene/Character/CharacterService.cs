@@ -534,7 +534,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var tableName = dbContext.GetTableName<CharacterEntity>();
 				var guid = Guid.NewGuid().ToString("D");
-				var suffix = $"_DELETED_{guid}";
+				var suffix = $"{DeletedNameMarker}{guid}";
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"UPDATE {tableName}
@@ -600,6 +600,382 @@ namespace FishMMO.Database.Npgsql.Services
 				return entity == null ? null : MapEntityToData(entity);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> RestoreAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than 0.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var entity = await dbContext.Characters
+					.FirstOrDefaultAsync(c => c.ID == characterId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+				if (!entity.Deleted)
+				{
+					// Already live. Succeeding silently would tell the caller a restore happened.
+					throw new DatabaseException("That character is not deleted.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+
+				/* Deletion appended a marker and a GUID to the name so that the unique index
+				 * would release it. Restoring without undoing that brings the character back
+				 * called "Bob_DELETED_2f3a…", which is not a name a player may even be given.
+				 * If somebody has taken "Bob" in the meantime the index refuses this, which is
+				 * the collision the caller has to report. */
+				string original = StripDeletedSuffix(entity.Name);
+				if (!string.IsNullOrEmpty(original) && original != entity.Name)
+				{
+					// Lowered here, not inside the expression: the comparison must be a plain
+					// parameter so it uses the index on name_lowercase.
+					string originalLowered = original.ToLowerInvariant();
+					bool taken = await dbContext.Characters
+						.AsNoTracking()
+						.AnyAsync(c => c.ID != characterId && c.NameLowercase == originalLowered, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (taken)
+					{
+						throw new DatabaseException(
+							$"The name '{original}' was taken while this character was deleted.",
+							errorCode: DatabaseErrorCodes.UniqueViolation);
+					}
+					entity.Name = original;
+				}
+
+				entity.Deleted = false;
+				entity.TimeDeleted = null;
+				// Never restore straight into the selected slot: the account may have picked
+				// another character since, and two selected rows is a state the login server
+				// does not expect.
+				entity.Selected = false;
+				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterAdminData>> FetchAdminAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult<CharacterAdminData>.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than 0.");
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				var entity = await dbContext.Characters
+					.AsNoTracking()
+					.FirstOrDefaultAsync(c => c.ID == characterId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+				return MapEntityToAdminData(entity);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<CharacterAdminData>>> FetchAdminByAccountAsync(
+			string accountName,
+			bool includeDeleted,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<IReadOnlyList<CharacterAdminData>>.Failure(
+					DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				// characters.account is a foreign key to accounts.name, so it holds that exact
+				// string and the index on it serves an exact predicate. No paging: an account
+				// holds a handful of characters, and a detail page wants all of them.
+				IQueryable<CharacterEntity> q = dbContext.Characters
+					.AsNoTracking()
+					.Where(c => c.Account == accountName);
+
+				if (!includeDeleted)
+				{
+					q = q.Where(c => !c.Deleted);
+				}
+
+				var rows = await q
+					.OrderBy(c => c.Name)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				return (IReadOnlyList<CharacterAdminData>)rows.Select(MapEntityToAdminData).ToList();
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterAdminPage>> SearchAdminAsync(
+			string query,
+			bool includeDeleted,
+			bool? online,
+			int page,
+			int pageSize,
+			CancellationToken cancellationToken = default)
+		{
+			// A caller that asks for page 0 or ten thousand rows is a bug or a probe; neither
+			// gets to choose how much of the table this reads.
+			if (page < 1)
+			{
+				page = 1;
+			}
+			if (pageSize < 1)
+			{
+				pageSize = 25;
+			}
+			if (pageSize > MaxAdminPageSize)
+			{
+				pageSize = MaxAdminPageSize;
+			}
+
+			string prefix = query?.Trim().ToLowerInvariant();
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				IQueryable<CharacterEntity> q = dbContext.Characters.AsNoTracking();
+
+				if (!includeDeleted)
+				{
+					q = q.Where(c => !c.Deleted);
+				}
+				if (!string.IsNullOrEmpty(prefix))
+				{
+					/* A prefix, not a contains. A leading wildcard forecloses any index
+					 * unconditionally, so this at least leaves the door open.
+					 *
+					 * It is not an index seek as deployed, though, and the comment that used to
+					 * claim it was wrong: the database collates en_US.UTF-8 and these indexes
+					 * use the default opclass, which PostgreSQL will not use for LIKE 'x%'.
+					 * Making it one needs text_pattern_ops indexes, which is a migration and
+					 * not urgent at this table size — but do not read this as already fast. */
+					q = q.Where(c => c.NameLowercase.StartsWith(prefix) || c.Account.ToLower().StartsWith(prefix));
+				}
+				if (online.HasValue)
+				{
+					var now = DateTime.UtcNow;
+					q = online.Value
+						? q.Where(c => c.SessionState == CharacterSessionState.Online && c.SessionLeaseExpiresUtc > now)
+						: q.Where(c => c.SessionState != CharacterSessionState.Online || c.SessionLeaseExpiresUtc <= now);
+				}
+
+				int total = await q.CountAsync(cancellationToken).ConfigureAwait(false);
+
+				var rows = await q
+					.OrderByDescending(c => c.LastSaved)
+					.ThenBy(c => c.ID)
+					.Skip((page - 1) * pageSize)
+					.Take(pageSize)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				return new CharacterAdminPage
+				{
+					Items = rows.Select(MapEntityToAdminData).ToList(),
+					Page = page,
+					PageSize = pageSize,
+					TotalCount = total,
+				};
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> UpdateAdminAsync(long characterId, CharacterAdminEdit edit, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than 0.");
+			}
+			if (edit == null || edit.IsEmpty)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Nothing to change.");
+			}
+			if (edit.Level.HasValue && edit.Level.Value < 1)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Level must be at least 1.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var entity = await dbContext.Characters
+					.FirstOrDefaultAsync(c => c.ID == characterId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+				if (entity.Deleted)
+				{
+					throw new DatabaseException("That character is deleted. Restore it first.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+
+				// The lease is re-checked here, inside the write, so a server that claimed the
+				// character after the operator loaded the page wins instead of being written
+				// over. The persistence pass would overwrite anything set below anyway.
+				if (entity.SessionState == CharacterSessionState.Online &&
+					entity.SessionLeaseExpiresUtc > DateTime.UtcNow)
+				{
+					throw new DatabaseException(
+						"That character holds a live session lease and cannot be edited.",
+						errorCode: DatabaseErrorCodes.StaleState);
+				}
+
+				if (edit.X.HasValue)
+				{
+					entity.X = edit.X.Value;
+				}
+				if (edit.Y.HasValue)
+				{
+					entity.Y = edit.Y.Value;
+				}
+				if (edit.Z.HasValue)
+				{
+					entity.Z = edit.Z.Value;
+				}
+				if (edit.SceneName != null)
+				{
+					entity.SceneName = edit.SceneName;
+				}
+				if (edit.BindScene != null)
+				{
+					entity.BindScene = edit.BindScene;
+				}
+				if (edit.Level.HasValue)
+				{
+					entity.Level = edit.Level.Value;
+				}
+				if (edit.AccessLevel.HasValue)
+				{
+					entity.AccessLevel = edit.AccessLevel.Value;
+				}
+
+				// A save whose version is not greater than this one is refused by the
+				// persistence pass's own guard, so bumping it is what makes this write stick.
+				entity.Version += 1;
+				entity.LastSaved = DateTime.UtcNow;
+				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// The marker deletion appends to a character's name, followed by a GUID.
+		/// </summary>
+		/// <remarks>
+		/// Deletion renames rather than only flagging, because <c>name_lowercase</c> carries a
+		/// unique index with no partial predicate: a deleted row would otherwise hold its name
+		/// forever and nobody could ever reuse it. Restore has to undo exactly this, which is
+		/// why both sides read the marker from here instead of spelling it out twice.
+		/// </remarks>
+		private const string DeletedNameMarker = "_DELETED_";
+
+		/// <summary>
+		/// Strips the deletion suffix from a name, giving back what the character was called.
+		/// </summary>
+		/// <remarks>
+		/// The last occurrence, not the first: a player is allowed no underscores in a name, so
+		/// the marker cannot appear in one legitimately, but a row deleted, restored and deleted
+		/// again through some older path should still come back to its real name.
+		/// </remarks>
+		public static string StripDeletedSuffix(string name)
+		{
+			if (string.IsNullOrEmpty(name))
+			{
+				return name;
+			}
+			int at = name.LastIndexOf(DeletedNameMarker, StringComparison.Ordinal);
+			return at <= 0 ? name : name.Substring(0, at);
+		}
+
+		/// <summary>The most rows one operator search will read, whatever it asks for.</summary>
+		private const int MaxAdminPageSize = 100;
+
+		private static CharacterAdminData MapEntityToAdminData(CharacterEntity entity) => new CharacterAdminData
+		{
+			ID = entity.ID,
+			// A deleted row carries its mangled name; an operator needs the real one.
+			Name = entity.Deleted ? StripDeletedSuffix(entity.Name) : entity.Name,
+			StoredName = entity.Name,
+			Account = entity.Account,
+			Level = entity.Level,
+			RaceID = entity.RaceID,
+			AccessLevel = entity.AccessLevel,
+			Selected = entity.Selected,
+			Deleted = entity.Deleted,
+			TimeDeleted = entity.TimeDeleted,
+			SessionState = (int)entity.SessionState,
+			SessionOwnerServerID = entity.SessionOwnerServerId,
+			SessionLeaseExpiresUtc = entity.SessionLeaseExpiresUtc,
+			WorldServerID = entity.WorldServerID,
+			SceneName = entity.SceneName,
+			BindScene = entity.BindScene,
+			X = entity.X,
+			Y = entity.Y,
+			Z = entity.Z,
+			Version = entity.Version,
+			TimeCreated = entity.TimeCreated,
+			LastSaved = entity.LastSaved,
+		};
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> RenameAsync(long characterId, string newName, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than 0.");
+			}
+			if (!Authentication.IsAllowedCharacterName(newName))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidCharacterNameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// Deleted characters are renameable on purpose. A soft-deleted row still holds
+				// its name in the unique index, so moving it aside is how an operator frees a
+				// name — and it is the only way to restore a character whose name was taken
+				// while it was gone.
+				var entity = await dbContext.Characters
+					.FirstOrDefaultAsync(c => c.ID == characterId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+
+				// The unique index on name_lowercase is what actually prevents a collision, and
+				// it stays the guard: this check only exists so the common case answers with
+				// "that name is taken" instead of a raw constraint violation. A name claimed
+				// between this read and the save still loses, to the index.
+				string lowered = newName.ToLowerInvariant();
+				bool taken = await dbContext.Characters
+					.AsNoTracking()
+					.AnyAsync(c => c.ID != characterId && c.NameLowercase == lowered, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (taken)
+				{
+					throw new DatabaseException($"The name '{newName}' is already taken.", errorCode: DatabaseErrorCodes.UniqueViolation);
+				}
+
+				entity.Name = newName;
+				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

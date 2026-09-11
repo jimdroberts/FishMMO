@@ -90,6 +90,35 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Searches persisted chat for an operator, newest message first.
+		/// </summary>
+		/// <param name="query">The filter to apply. Null is treated as an unfiltered query.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing one page of <see cref="ChatAdminData"/> and
+		/// the total row count on success, or a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// <para>
+		/// This is the read behind a harassment or abuse report, so it is separate from
+		/// <see cref="FetchAsync"/> in every respect: that one is a cursor the scene servers pull
+		/// forward and it deliberately hides a server's own echo, while this one hides nothing and
+		/// orders backwards from now.
+		/// </para>
+		/// <para>
+		/// A message-text filter supplied with no character name, no account name and no lower time
+		/// bound is REFUSED with <see cref="DatabaseErrorCodes.ValidationError"/> rather than served.
+		/// The reason is in the implementation; callers should surface the message rather than
+		/// retrying, because a retry of the same query is refused identically.
+		/// </para>
+		/// <para>
+		/// Read-only: it uses AsNoTracking and writes nothing, including no audit row. Recording
+		/// reads in the audit log would mean every listing of the log wrote a row of its own.
+		/// </para>
+		/// </remarks>
+		Task<DatabaseResult<ChatAdminPage>> SearchAdminAsync(ChatAdminQuery query, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Persists multiple chat messages in batches.
 		/// </summary>
 		/// <param name="messages">List of chat messages to persist. Each tuple contains:

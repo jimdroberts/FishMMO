@@ -1,0 +1,879 @@
+/* FishMMO Control Panel — cards, tables, buttons, badges, modals, and the rest. */
+
+/* ── Card ────────────────────────────────────────────────────── */
+
+.card {
+	border: 1px solid var(--line-default);
+	border-radius: var(--radius-lg);
+	background: var(--surface-raised);
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+}
+
+.card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--sp-3);
+	padding: var(--sp-4) var(--sp-4);
+	border-bottom: 1px solid var(--line-default);
+	flex-wrap: wrap;
+}
+
+.card-head-text { min-width: 0; }
+
+.card-title {
+	color: var(--text-strong);
+	font-size: var(--fs-md);
+	font-weight: 600;
+}
+
+.card-sub {
+	margin-top: 2px;
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+}
+
+.card-head-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+}
+
+.card-body { padding: var(--sp-4); }
+.card-body.flush { padding: 0; }
+
+.card-foot {
+	padding: var(--sp-3) var(--sp-4);
+	border-top: 1px solid var(--line-default);
+	background: var(--surface-sunken);
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+}
+
+/* ── Stat tile ───────────────────────────────────────────────── */
+
+.stat {
+	padding: var(--sp-4);
+	border: 1px solid var(--line-default);
+	border-radius: var(--radius-lg);
+	background: var(--surface-raised);
+	box-shadow: var(--shadow-sm);
+}
+
+.stat-label {
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+	font-weight: 500;
+}
+
+.stat-value {
+	margin-top: var(--sp-1);
+	color: var(--text-strong);
+	font-size: var(--fs-2xl);
+	font-weight: 600;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+
+.stat-unit {
+	margin-left: 4px;
+	color: var(--text-muted);
+	font-size: var(--fs-md);
+	font-weight: 500;
+}
+
+.stat-note {
+	margin-top: var(--sp-2);
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+}
+
+.stat-note.is-ok { color: var(--ok); }
+.stat-note.is-warn { color: var(--warn); }
+.stat-note.is-danger { color: var(--danger); }
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--sp-2);
+	padding: 7px 13px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface-raised);
+	color: var(--text-default);
+	font-family: inherit;
+	font-size: var(--fs-base);
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+	background: var(--surface-inset);
+	border-color: var(--accent);
+	color: var(--text-strong);
+	text-decoration: none;
+}
+
+.btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.btn-primary {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+	border-color: var(--accent-hover);
+	color: var(--text-on-accent);
+}
+
+.btn-danger {
+	border-color: var(--danger);
+	background: var(--danger);
+	color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+	background: var(--danger-hover);
+	border-color: var(--danger-hover);
+	color: #fff;
+}
+
+.btn-ghost {
+	border-color: transparent;
+	background: transparent;
+	color: var(--text-muted);
+}
+
+.btn-ghost:hover:not(:disabled) {
+	background: var(--surface-inset);
+	border-color: transparent;
+	color: var(--text-strong);
+}
+
+.btn-sm {
+	padding: 4px 9px;
+	font-size: var(--fs-sm);
+}
+
+.btn-icon {
+	padding: 6px;
+	border-radius: var(--radius);
+	line-height: 0;
+}
+
+.btn-block { width: 100%; }
+
+.btn-group {
+	display: inline-flex;
+	gap: var(--sp-1);
+	flex-wrap: wrap;
+}
+
+/* ── Badges ──────────────────────────────────────────────────── */
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 8px;
+	border-radius: var(--radius-pill);
+	background: var(--neutral-soft);
+	color: var(--neutral);
+	font-size: var(--fs-xs);
+	font-weight: 600;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.badge-ok { background: var(--ok-soft); color: var(--ok); }
+.badge-warn { background: var(--warn-soft); color: var(--warn); }
+.badge-danger { background: var(--danger-soft); color: var(--danger); }
+.badge-info { background: var(--info-soft); color: var(--info); }
+.badge-accent { background: var(--accent-soft); color: var(--accent-soft-text); }
+
+.dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
+	flex-shrink: 0;
+}
+
+.dot-pulse { animation: dot-pulse 1.8s ease-in-out infinite; }
+
+@keyframes dot-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.35; }
+}
+
+/* ── Tables ──────────────────────────────────────────────────── */
+
+.table-wrap {
+	width: 100%;
+	overflow-x: auto;
+}
+
+table.data {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--fs-base);
+}
+
+table.data th {
+	padding: var(--sp-2) var(--sp-4);
+	border-bottom: 1px solid var(--line-default);
+	background: var(--surface-sunken);
+	color: var(--text-muted);
+	font-size: var(--fs-xs);
+	font-weight: 600;
+	text-align: left;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	white-space: nowrap;
+}
+
+table.data td {
+	padding: var(--sp-3) var(--sp-4);
+	border-bottom: 1px solid var(--line-default);
+	vertical-align: middle;
+}
+
+table.data tbody tr:last-child td { border-bottom: 0; }
+table.data tbody tr:hover td { background: var(--surface-sunken); }
+
+table.data tbody tr.is-clickable { cursor: pointer; }
+
+table.data tbody tr.is-selected td {
+	background: var(--accent-soft);
+}
+
+/* A refused action is the row an operator came here to find, so its tint survives the
+   hover highlight instead of vanishing under it. */
+table.data tbody tr.is-refused td,
+table.data tbody tr.is-refused:hover td {
+	background: var(--danger-soft);
+}
+
+/* The row an operator opened the page to find: a server that has stopped pulsing, a scene
+   that failed to load. Same reasoning as the refused tint above — it survives the hover
+   highlight, because losing the marking under the cursor hides the row being looked for —
+   with an edge on the first cell so the row is findable by shape as well as by colour. */
+table.data tbody tr.is-alert td,
+table.data tbody tr.is-alert:hover td {
+	background: var(--danger-soft);
+}
+
+table.data tbody tr.is-alert td:first-child {
+	box-shadow: inset 3px 0 0 0 var(--danger);
+}
+
+table.data td.num,
+table.data th.num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.cell-primary {
+	color: var(--text-strong);
+	font-weight: 600;
+}
+
+.cell-sub {
+	color: var(--text-faint);
+	font-size: var(--fs-sm);
+}
+
+.cell-actions {
+	display: flex;
+	gap: var(--sp-1);
+	justify-content: flex-end;
+}
+
+/* ── Definition list ─────────────────────────────────────────── */
+
+.dl {
+	display: grid;
+	grid-template-columns: minmax(120px, max-content) 1fr;
+	gap: var(--sp-2) var(--sp-4);
+	margin: 0;
+	font-size: var(--fs-base);
+}
+
+.dl dt {
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+}
+
+.dl dd {
+	margin: 0;
+	color: var(--text-strong);
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* ── Toolbar / filters ───────────────────────────────────────── */
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+	padding: var(--sp-3) var(--sp-4);
+	border-bottom: 1px solid var(--line-default);
+	background: var(--surface-sunken);
+}
+
+.toolbar .search {
+	flex: 1 1 220px;
+	min-width: 160px;
+	max-width: 380px;
+}
+
+.toolbar select { width: auto; min-width: 130px; }
+
+/* ── Tabs ────────────────────────────────────────────────────── */
+
+.tabs {
+	display: flex;
+	gap: var(--sp-1);
+	margin-bottom: var(--sp-4);
+	border-bottom: 1px solid var(--line-default);
+	overflow-x: auto;
+}
+
+.tab {
+	padding: var(--sp-2) var(--sp-3);
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: none;
+	color: var(--text-muted);
+	font-family: inherit;
+	font-size: var(--fs-base);
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: color 0.12s, border-color 0.12s;
+}
+
+.tab:hover { color: var(--text-strong); }
+
+.tab.is-active {
+	border-bottom-color: var(--accent);
+	color: var(--accent);
+}
+
+/* ── Meter ───────────────────────────────────────────────────── */
+
+.meter {
+	height: 6px;
+	border-radius: var(--radius-pill);
+	background: var(--surface-inset);
+	overflow: hidden;
+}
+
+.meter-fill {
+	height: 100%;
+	border-radius: var(--radius-pill);
+	background: var(--accent);
+	transition: width 0.3s ease;
+}
+
+.meter-fill.is-ok { background: var(--ok); }
+.meter-fill.is-warn { background: var(--warn); }
+.meter-fill.is-danger { background: var(--danger); }
+
+.meter-row {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+}
+
+.meter-row .meter { flex: 1; }
+
+.meter-row .meter-value {
+	min-width: 52px;
+	text-align: right;
+	color: var(--text-strong);
+	font-size: var(--fs-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Sparkline ───────────────────────────────────────────────── */
+
+.spark {
+	display: block;
+	width: 100%;
+	height: 40px;
+	overflow: visible;
+}
+
+/* ── Banner ──────────────────────────────────────────────────── */
+
+.banner {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--sp-3);
+	padding: var(--sp-3) var(--sp-4);
+	border: 1px solid var(--line-default);
+	border-left: 3px solid var(--neutral);
+	border-radius: var(--radius);
+	background: var(--surface-raised);
+	font-size: var(--fs-base);
+}
+
+.banner-icon {
+	flex-shrink: 0;
+	margin-top: 1px;
+	color: var(--neutral);
+}
+
+.banner-body { min-width: 0; flex: 1; }
+
+.banner-title {
+	color: var(--text-strong);
+	font-weight: 600;
+}
+
+.banner-ok { border-left-color: var(--ok); background: var(--ok-soft); }
+.banner-ok .banner-icon { color: var(--ok); }
+
+.banner-warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.banner-warn .banner-icon { color: var(--warn); }
+
+.banner-danger { border-left-color: var(--danger); background: var(--danger-soft); }
+.banner-danger .banner-icon { color: var(--danger); }
+
+.banner-info { border-left-color: var(--info); background: var(--info-soft); }
+.banner-info .banner-icon { color: var(--info); }
+
+/* ── Empty state ─────────────────────────────────────────────── */
+
+.empty {
+	padding: var(--sp-7) var(--sp-4);
+	text-align: center;
+	color: var(--text-muted);
+}
+
+.empty-icon {
+	margin-bottom: var(--sp-3);
+	color: var(--text-faint);
+}
+
+.empty-title {
+	margin-bottom: var(--sp-1);
+	color: var(--text-strong);
+	font-weight: 600;
+}
+
+/* ── Timeline ────────────────────────────────────────────────── */
+
+.timeline {
+	position: relative;
+	margin: 0;
+	padding: 0 0 0 var(--sp-5);
+	list-style: none;
+}
+
+.timeline::before {
+	content: "";
+	position: absolute;
+	top: 6px;
+	bottom: 6px;
+	left: 5px;
+	width: 2px;
+	background: var(--line-default);
+}
+
+.timeline li {
+	position: relative;
+	padding-bottom: var(--sp-4);
+}
+
+.timeline li:last-child { padding-bottom: 0; }
+
+.timeline li::before {
+	content: "";
+	position: absolute;
+	top: 5px;
+	left: calc(-1 * var(--sp-5) + 1px);
+	width: 10px;
+	height: 10px;
+	border: 2px solid var(--surface-raised);
+	border-radius: 50%;
+	background: var(--neutral);
+}
+
+.timeline li.is-ok::before { background: var(--ok); }
+.timeline li.is-warn::before { background: var(--warn); }
+.timeline li.is-danger::before { background: var(--danger); }
+.timeline li.is-active::before { background: var(--accent); }
+
+.timeline-title { color: var(--text-strong); font-weight: 600; }
+.timeline-meta { color: var(--text-faint); font-size: var(--fs-sm); }
+
+/* ── Steps ───────────────────────────────────────────────────── */
+
+.steps {
+	display: flex;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+}
+
+.step {
+	flex: 1 1 130px;
+	padding: var(--sp-3);
+	border: 1px solid var(--line-default);
+	border-radius: var(--radius);
+	background: var(--surface-sunken);
+}
+
+.step.is-done { border-color: var(--ok); background: var(--ok-soft); }
+.step.is-active { border-color: var(--accent); background: var(--accent-soft); }
+
+.step-index {
+	color: var(--text-faint);
+	font-size: var(--fs-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+.step-name {
+	margin-top: 2px;
+	color: var(--text-strong);
+	font-weight: 600;
+}
+
+.step-note {
+	margin-top: var(--sp-1);
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+}
+
+/* ── Log viewer ──────────────────────────────────────────────── */
+
+.logview {
+	max-height: 460px;
+	overflow: auto;
+	padding: var(--sp-3);
+	border-radius: var(--radius);
+	background: var(--surface-inset);
+	font-family: var(--font-mono);
+	font-size: var(--fs-sm);
+	line-height: 1.65;
+}
+
+.logline {
+	display: flex;
+	gap: var(--sp-3);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.logline-time { flex-shrink: 0; color: var(--text-faint); }
+.logline-level { flex-shrink: 0; width: 62px; font-weight: 600; }
+
+.level-INFO { color: var(--info); }
+.level-WARN { color: var(--warn); }
+.level-ERROR { color: var(--danger); }
+.level-DEBUG { color: var(--text-faint); }
+
+/* ── Modal ───────────────────────────────────────────────────── */
+
+.modal-scrim {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding: var(--sp-5) var(--sp-4);
+	overflow-y: auto;
+	background: rgba(9, 13, 19, 0.55);
+	backdrop-filter: blur(2px);
+}
+
+.modal {
+	width: 100%;
+	max-width: 560px;
+	margin: auto;
+	border: 1px solid var(--line-default);
+	border-radius: var(--radius-lg);
+	background: var(--surface-overlay);
+	box-shadow: var(--shadow-lg);
+}
+
+.modal.is-wide { max-width: 860px; }
+
+.modal-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--sp-3);
+	padding: var(--sp-4);
+	border-bottom: 1px solid var(--line-default);
+}
+
+.modal-title {
+	color: var(--text-strong);
+	font-size: var(--fs-md);
+	font-weight: 600;
+}
+
+.modal-sub {
+	margin-top: 2px;
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+}
+
+.modal-body { padding: var(--sp-4); }
+
+.modal-foot {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--sp-2);
+	padding: var(--sp-3) var(--sp-4);
+	border-top: 1px solid var(--line-default);
+	background: var(--surface-sunken);
+	flex-wrap: wrap;
+}
+
+/* ── Toasts ──────────────────────────────────────────────────── */
+
+.toasts {
+	position: fixed;
+	right: var(--sp-4);
+	bottom: var(--sp-4);
+	z-index: 200;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+	max-width: min(380px, calc(100vw - var(--sp-6)));
+}
+
+.toast {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--sp-3);
+	padding: var(--sp-3) var(--sp-4);
+	border: 1px solid var(--line-default);
+	border-left: 3px solid var(--accent);
+	border-radius: var(--radius);
+	background: var(--surface-overlay);
+	box-shadow: var(--shadow-lg);
+	animation: toast-in 0.18s ease-out;
+}
+
+.toast.is-ok { border-left-color: var(--ok); }
+.toast.is-warn { border-left-color: var(--warn); }
+.toast.is-danger { border-left-color: var(--danger); }
+
+.toast-body { flex: 1; min-width: 0; }
+.toast-title { color: var(--text-strong); font-weight: 600; }
+.toast-text { color: var(--text-muted); font-size: var(--fs-sm); }
+
+@keyframes toast-in {
+	from { opacity: 0; transform: translateY(8px); }
+	to { opacity: 1; transform: none; }
+}
+
+/* ── Skeleton ────────────────────────────────────────────────── */
+
+.skeleton {
+	height: 12px;
+	border-radius: var(--radius-sm);
+	background: linear-gradient(90deg, var(--surface-inset) 25%, var(--surface-sunken) 50%, var(--surface-inset) 75%);
+	background-size: 200% 100%;
+	animation: skeleton 1.3s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+	from { background-position: 200% 0; }
+	to { background-position: -200% 0; }
+}
+
+/* ── Avatar ──────────────────────────────────────────────────── */
+
+.avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font-size: var(--fs-sm);
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.avatar-sm { width: 24px; height: 24px; font-size: var(--fs-xs); }
+.avatar-lg { width: 44px; height: 44px; font-size: var(--fs-md); }
+
+.avatar-2 { background: var(--chart-2); }
+.avatar-3 { background: var(--chart-3); }
+.avatar-4 { background: var(--chart-4); }
+.avatar-5 { background: var(--chart-5); }
+
+/* ── Key/value editor rows ───────────────────────────────────── */
+
+.kv-row {
+	display: grid;
+	grid-template-columns: minmax(140px, 1fr) minmax(120px, 1fr) auto;
+	gap: var(--sp-2);
+	align-items: center;
+	padding: var(--sp-2) 0;
+	border-bottom: 1px solid var(--line-default);
+}
+
+.kv-row:last-child { border-bottom: 0; }
+
+.kv-name { color: var(--text-strong); font-weight: 500; }
+
+@media (max-width: 560px) {
+	.kv-row { grid-template-columns: 1fr; }
+}
+
+/* ── Ticket thread ───────────────────────────────────────────── */
+
+/*
+ * A support thread carries two kinds of message that must never be mistaken for one
+ * another: a reply the player will read, and an internal note they must never see. An
+ * operator skimming a heated report has to see which is which before reading a word, so the
+ * two differ in background, in border, and in a label spelled out in words — never by
+ * colour alone, which a colour-blind operator does not have, and never by an icon alone,
+ * which is the first thing a tired eye skips.
+ */
+
+.thread {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.msg {
+	padding: var(--sp-3);
+	border: 1px solid var(--line-default);
+	border-left-width: 4px;
+	border-radius: var(--radius);
+	background: var(--surface-sunken);
+}
+
+.msg-label {
+	margin-bottom: var(--sp-1);
+	color: var(--text-muted);
+	font-size: var(--fs-xs);
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.msg-head {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	margin-bottom: var(--sp-2);
+}
+
+.msg-author { color: var(--text-strong); font-weight: 600; }
+.msg-time { color: var(--text-faint); font-size: var(--fs-sm); }
+
+/* A ticket body is typed into a game client, newlines and all, and reads as nonsense
+ * reflowed into one paragraph. */
+.msg-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.msg.is-player { border-left-color: var(--neutral); }
+
+.msg.is-staff {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+}
+
+.msg.is-staff .msg-label { color: var(--accent-soft-text); }
+
+/* The one that must never be read as a reply: its own ground, a dashed edge no other
+ * message has, and its label in the warning colour. */
+.msg.is-internal {
+	border-color: var(--warn);
+	border-style: dashed;
+	border-left-style: solid;
+	background: var(--warn-soft);
+}
+
+.msg.is-internal .msg-label { color: var(--warn); }
+
+/* ── Supervision episodes ─────────────────────────────────────────────────────
+ *
+ * Daemon → Logs. A restart loop is not one event: it is eight observations of one
+ * application inside a few minutes, and drawn as a flat list they read as noise between
+ * whatever every other host was doing at the same time. Consecutive observations of one
+ * application are therefore banded into a block under a headline, and the block — not a line
+ * inside it — carries the marking, because the loop is the thing being looked for.
+ */
+
+.episode { border-bottom: 1px solid var(--line-default); }
+
+.episode:last-child { border-bottom: 0; }
+
+.episode-head {
+	width: 100%;
+	padding: var(--sp-3) var(--sp-4);
+	align-items: baseline;
+	text-align: left;
+}
+
+/* The headline is a button when there is something to fold away, and plain text when the
+   episode is a single observation. Both must look the same. */
+button.episode-head {
+	background: none;
+	border: 0;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+button.episode-head:hover { background: var(--surface-sunken); }
+
+/* The episode an operator opened this page to find: the daemon stopped trying. Marked by
+   shape as well as by colour, and on the whole block so it is findable while scrolling. */
+.episode.is-alert .episode-head {
+	background: var(--danger-soft);
+	box-shadow: inset 3px 0 0 0 var(--danger);
+}
+
+.episode-event {
+	padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-6);
+	align-items: baseline;
+}
+
+/* Indented and hairlined rather than bordered like rows in a table: these are the parts of
+   one episode, not a list of unrelated things that happen to be adjacent. */
+.episode-event + .episode-event { border-top: 1px dashed var(--line-default); }
+
+.episode-event.is-alert { background: var(--danger-soft); }
+
+.episode-event-text {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--sp-2);
+	min-width: 0;
+	overflow-wrap: anywhere;
+}

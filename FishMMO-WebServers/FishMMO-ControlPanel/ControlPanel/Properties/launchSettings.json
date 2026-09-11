@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "_comment": "Local development only. Without this, `dotnet run` starts in the Production environment, which loads appsettings.Production.json — whose AllowedHosts is the deployed panel hostname — and every request from localhost is answered with 400. Deployment does not use this file; systemd sets FISHMMO_ENVIRONMENT instead.",
+  "profiles": {
+    "ControlPanel": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

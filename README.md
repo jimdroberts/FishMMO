@@ -48,7 +48,7 @@ A modular, open-source MMO framework built on **Unity 6.4**, **FishNet**, **QUIC
 - [FishMMO-AppHealthMonitor](#fishmmo-apphealthmonitor)
 - [Optional Services](#optional-services)
   - [FishMMO-DiscordBot](#fishmmo-discordbot)
-  - [FishMMO-CMS](#fishmmo-cms)
+  - [FishMMO-ControlPanel](#fishmmo-controlpanel)
 - [Client Setup](#client-setup)
   - [Client Launcher Flow](#client-launcher-flow)
   - [Client Settings and Options](#client-settings-and-options)
@@ -82,11 +82,11 @@ FishMMO is a complete multiplayer online game framework consisting of:
 | **FishMMO-Logger** | Flexible logging library with file, email, and console backends |
 | **FishMMO-SharedUtility** | Pure C# utility library shared between client and server projects |
 | **FishMMO-AppHealthMonitor** | Daemon that monitors, auto-restarts, and health-checks server processes |
-| **FishMMO-WebServers** | ASP.NET Core 8.0 web services — IPFetch (8080), Patcher (8090), and WebGL static server (8000) |
+| **FishMMO-WebServers** | ASP.NET Core 8.0 web services — IPFetch (8080), Patcher (8090), WebGL static server (8000), and the Control Panel (8100) |
 | **FishMMO-Patcher** | Client-side updater that applies versioned patch files |
 | **FishMMO-Setup** | Configuration templates — nginx.conf, server .cfg files, appsettings.json |
 | **FishMMO-DiscordBot** | Discord bot bridging in-game chat with a Discord guild |
-| **FishMMO-CMS** | ASP.NET Core 8.0 account-management web API (registration, password/2FA self-service, admin account actions) — **scaffold only, every handler is a TODO stub** |
+| **FishMMO-ControlPanel** | ASP.NET Core 8.0 operator and player-services dashboard, under `FishMMO-WebServers/` — accounts, characters, server monitoring and control. Ships an interactive design mock; **every API handler is still a TODO stub** |
 
 The server architecture uses three server types:
 
@@ -257,9 +257,8 @@ Run with no arguments to enter the menu:
 #### Sub-Menu: Configuration
 
 ```
-1 : Configure appsettings.json (web servers — IPFetch, Patcher, WebGL)
+1 : Configure appsettings.json (web servers — IPFetch, Patcher, WebGL, Control Panel)
 2 : Configure Discord Bot
-3 : Configure CMS
 0 : Back
 ```
 
@@ -378,9 +377,9 @@ The full template maps to:
 > - `FishMMO-WebServers/IPFetchASP.NET` — login server discovery API
 > - `FishMMO-WebServers/PatcherASP.NET` — patch delivery server
 > - `FishMMO-WebServers/WebGLServerASP.NET` — WebGL static file server
+> - `FishMMO-WebServers/FishMMO-ControlPanel` — operator dashboard (scaffold + design mock)
 > - `FishMMO-AppHealthMonitor` — server health monitor daemon
 > - `FishMMO-DiscordBot` — Discord chat bridge bot
-> - `FishMMO-CMS` — account-management web API (scaffold)
 
 ### 4. Build the WebTransport C++ Library
 
@@ -911,7 +910,7 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 
 ### Logging Configuration
 
-`logging.json` at [`FishMMO-Setup/logging.json`](FishMMO-Setup/logging.json) is the canonical copy. Five .NET projects copy it into their output directory as part of the build — AppHealthMonitor, IpFetchServer, Patcher, WebGLServer and FishMMO-Installer — and the Unity **server** builds copy it alongside the `.cfg` files via `BuildExecutor.CopyConfigurationFiles()`. FishMMO-CMS and FishMMO-DiscordBot do **not** pick it up; configure their logging separately.
+`logging.json` at [`FishMMO-Setup/logging.json`](FishMMO-Setup/logging.json) is the canonical copy. Five .NET projects copy it into their output directory as part of the build — AppHealthMonitor, IpFetchServer, Patcher, WebGLServer and FishMMO-Installer — and the Unity **server** builds copy it alongside the `.cfg` files via `BuildExecutor.CopyConfigurationFiles()`. FishMMO-ControlPanel and FishMMO-DiscordBot do **not** pick it up; configure their logging separately.
 
 ```json
 {
@@ -1007,7 +1006,7 @@ FishMMO-Setup/
 │   ├── appsettings.IpFetchServer.Development.json  # Dev overrides (DB connection string)
 │   ├── appsettings.Patcher.json              # Patch delivery web server
 │   ├── appsettings.WebGLServer.json          # Static asset web server
-│   ├── appsettings.CMS.json                  # CMS web app
+│   ├── appsettings.ControlPanel.json         # Control Panel web app
 │   ├── appsettings.Database.json             # Npgsql pool / retry template
 │   ├── install-config.full.json              # Full production install template
 │   ├── install-config.quickstart.json         # Minimal dev install template
@@ -1021,7 +1020,7 @@ FishMMO-Setup/
 │   ├── appsettings.IpFetchServer.Production.json  # Prod overrides (empty — must set env vars)
 │   ├── appsettings.Patcher.json              # Patch delivery web server
 │   ├── appsettings.WebGLServer.json          # Static asset web server
-│   ├── appsettings.CMS.json                  # CMS web app
+│   ├── appsettings.ControlPanel.json         # Control Panel web app
 │   ├── LoginServer.cfg / WorldServer.cfg / SceneServer.cfg
 ```
 
@@ -1563,7 +1562,7 @@ An empty instance is unloaded once it has been stale for `StaleInstanceSceneTime
 Both `world_servers.locked` / `world_servers.shutdown_at_utc` and the matching `scene_servers`
 columns are the **authority** for a server's lifecycle state. Servers never write them on their
 own: each one reads its own row back on every pulse (~5s) and adopts what it finds. Anything that
-can write those rows therefore controls the servers — the in-game commands below, a CMS, or plain
+can write those rows therefore controls the servers — the in-game commands below, the Control Panel, or plain
 `psql` — exactly as `kick_requests` already works for accounts.
 
 **Locking drains, it does not evict.** A locked server keeps the players it has and stops
@@ -1842,23 +1841,36 @@ The templates live at `FishMMO-Setup/{Development,Production}/appsettings.Discor
 dotnet run --project FishMMO-DiscordBot/FishMMO-DiscordBot.csproj
 ```
 
-### FishMMO-CMS
+### FishMMO-ControlPanel
 
-An ASP.NET Core 8.0 web API for **account management** — the out-of-game counterpart to the in-game authentication the LoginServer performs. It exposes player self-service routes under `api/Account` (`register`, `verify`, `change-password`, `2fa/setup`) and operator routes under `api/Admin` (`accounts/search`, `ban`, `unban`, `access-level`, `revoke-tokens`, `reset-2fa`, `force-password-reset`).
+An ASP.NET Core 8.0 **Game Control Panel / Admin Dashboard**, living alongside the other web
+services at `FishMMO-WebServers/FishMMO-ControlPanel/`. It is the out-of-game counterpart to
+the in-game authentication the LoginServer performs and to the `/admin` chat commands: account
+self-service and management, character management, live server monitoring, and per-server
+lifecycle control gated on `AccessLevel`.
 
 > **This is not a news CMS.** The launcher's news panel is fetched from `Constants.Configuration.LauncherHtmlUrl`, baked at build time from `GeneratedHostConfig.LauncherHtmlUrl` (CI substitutes `FISHMMO_ROOT_DOMAIN`). Nothing in this project serves it.
 
-> **Status: scaffold — do not deploy.** The routes exist and are reachable, but **every handler body is a `TODO` stub** returning a canned success response. There is no database wiring, no auth service registration, no persistence, no caller authentication on `api/Account`, and **no authorization at all on `api/Admin`** — any caller could invoke every administrative route. Keep it off any network until those are implemented.
+> **Status: design mock — do not deploy.** The full interface exists and is clickable, but it
+> runs entirely on in-browser fixtures: the login is fake, and no request reaches a database.
+> The eleven API routes inherited from the old CMS scaffold are still `TODO` stubs with **no
+> authorization at all** on `api/Admin`, so keep the host off any network until the real
+> phases land. See [CONTROL_PANEL_DESIGN.md](CONTROL_PANEL_DESIGN.md) for the full design and
+> the phase plan.
 
 ```bash
-cd FishMMO-CMS
-dotnet build FishMMO-CMS.slnx -c Release
-dotnet run --project FishMMO-CMS.Server
+cd FishMMO-WebServers/FishMMO-ControlPanel
+dotnet build FishMMO-ControlPanel.slnx -c Release
+dotnet run --project ControlPanel
+# then browse http://localhost:8100/
 ```
 
-Configuration is layered: the build copies `FishMMO-Setup/Development/appsettings.CMS.json` (and the Production variant) into the output directory, then `./appsettings.json` and `./appsettings.{Environment}.json` in the working directory override it. Edit the templates under `FishMMO-Setup/`, not the copies in `bin/`. Swagger UI is served at `/swagger` in the Development environment only.
+The design mock can also be opened without .NET at all — serve
+`FishMMO-WebServers/FishMMO-ControlPanel/ControlPanel/wwwroot/` with any static file server.
 
-See [FishMMO-CMS/README.md](FishMMO-CMS/README.md) for the full endpoint table and implementation status.
+Configuration is layered: the build copies `FishMMO-Setup/Development/appsettings.ControlPanel.json` (and the Production variant) into the output directory, then `./appsettings.json` and `./appsettings.{Environment}.json` in the working directory override it. Edit the templates under `FishMMO-Setup/`, not the copies in `bin/`. Swagger UI is served at `/swagger` in the Development environment only.
+
+See [FishMMO-WebServers/FishMMO-ControlPanel/README.md](FishMMO-WebServers/FishMMO-ControlPanel/README.md) for the endpoint table, the mock's data seam, and implementation status.
 
 ---
 
@@ -2423,7 +2435,7 @@ flowchart TB
         IPFetch["IPFetch Server<br/>:8080<br/><i>Login server discovery</i>"]
         Patcher["Patcher Server<br/>:8090<br/><i>Patch delivery</i>"]
         WebGL["WebGL Server<br/>:8000<br/><i>Static file serving</i>"]
-        CMS["CMS Server<br/><i>Account management API<br/>(scaffold — stubs only)</i>"]
+        Panel["Control Panel<br/>:8100<br/><i>Admin dashboard + account API<br/>(design mock — stubs only)</i>"]
     end
 
     subgraph GameServers["Game Servers (GameServer executable)"]
@@ -2460,7 +2472,7 @@ flowchart TB
     SSL -->|"UDP stream :7770"| Login
     SSL -->|"UDP stream :7780"| World
     SSL -->|"UDP stream :7790+"| Scene1
-    SSL -->|"api/Account<br/>api/Admin"| CMS
+    SSL -->|"panel.fishmmo.com"| Panel
 
     Player -.->|"Direct UDP/QUIC<br/>(only if NGINX on<br/>separate machine)"| Login
     Player -.->|"Direct UDP/QUIC<br/>(only if NGINX on<br/>separate machine)"| World
@@ -2473,6 +2485,7 @@ flowchart TB
     PgBouncer --> PostgreSQL
 
     IPFetch --> PostgreSQL
+    Panel --> PostgreSQL
     World --> Scene1
     World --> SceneN
 
@@ -2481,6 +2494,7 @@ flowchart TB
     HealthMon -.->|"Monitor & restart"| Scene1
     HealthMon -.->|"Monitor & restart"| SceneN
     HealthMon -.->|"Monitor & restart"| IPFetch
+    Panel -.->|"planned: telemetry + commands"| HealthMon
 
     DiscordBot -->|"Chat API"| Scene1
 

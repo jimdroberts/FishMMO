@@ -15,6 +15,13 @@ namespace AppHealthMonitor
 		private readonly IReadOnlyList<IHealthChecker> healthCheckers;
 		private readonly CancellationToken cancellationToken;
 
+		/// <summary>
+		/// The cycle this monitor belongs to, used to ask for supervision back after the monitoring
+		/// loop has ended. Null when the monitor was constructed without a host, in which case a
+		/// revival is impossible and operator start/restart on an ended monitor is refused.
+		/// </summary>
+		private readonly ISupervisionHost? supervisionHost;
+
 		private readonly string logSource;
 		private readonly string resolvedExePath;
 		private readonly TimeSpan checkInterval;
@@ -36,7 +43,6 @@ namespace AppHealthMonitor
 		private readonly int cpuThresholdPercent;
 		private readonly int circuitBreakerFailureThreshold;
 		private readonly int monitoredPort;
-		private readonly int webSocketCheckTimeoutMs;
 		private readonly int portCheckTimeoutMs;
 		private readonly int maxRestartAttempts;
 		private readonly int resourceCheckFailureThreshold;
@@ -93,6 +99,46 @@ namespace AppHealthMonitor
 		private bool hasCompletedInitialCheck;
 
 		/// <summary>
+		/// Set when an operator deliberately stopped this application through the control plane.
+		/// While set, the monitoring loop performs no health checks and no automatic restarts, and
+		/// <see cref="LaunchApplicationAsync"/> refuses to start the process. Cleared only by an
+		/// operator start or restart. Backed by an int for lock-free access via <see cref="Volatile"/>.
+		/// </summary>
+		private int operatorStopped;
+
+		/// <summary>
+		/// Set once <see cref="StartMonitoringAsync"/> has returned, and cleared again when a
+		/// revival starts a fresh loop. A monitor whose loop has ended is supervising nothing, so an
+		/// operator start or restart must re-establish supervision before it launches anything —
+		/// see <see cref="ReviveByOperatorAsync"/> — and is refused outright when it cannot.
+		/// </summary>
+		private int monitoringLoopEnded;
+
+		/// <summary>
+		/// Claimed for the duration of a revival, so exactly one is ever in flight for this monitor.
+		/// </summary>
+		/// <remarks>
+		/// The lifecycle gate already serializes operator commands, but it is a bounded wait that can
+		/// legitimately time out; a revival that went ahead without it could otherwise hand the host a
+		/// second monitoring loop for the same application. This claim does not expire.
+		/// </remarks>
+		private int revivalInProgress;
+
+		/// <summary>
+		/// Serializes process lifecycle transitions (kill + launch pairs) between the monitoring
+		/// loop's automatic restart path and operator commands arriving from the control plane.
+		/// Deliberately NOT taken inside <see cref="KillApplicationAsync"/>, which the orchestrator
+		/// calls directly during force-kill and disposal and which must never block on this gate.
+		/// </summary>
+		private readonly SemaphoreSlim lifecycleGate = new SemaphoreSlim(1, 1);
+
+		/// <summary>
+		/// Maximum time an operator command waits for the lifecycle gate before reporting that the
+		/// monitor was busy. Bounded so a stuck restart never leaves a command uncompleted.
+		/// </summary>
+		private static readonly TimeSpan operatorActionTimeout = TimeSpan.FromSeconds(60);
+
+		/// <summary>
 		/// Guard flag to prevent double disposal. Set atomically via <see cref="Interlocked.CompareExchange"/>.
 		/// </summary>
 		private int isDisposed;
@@ -101,6 +147,17 @@ namespace AppHealthMonitor
 		/// Gets the display name of the monitored application, used for diagnostics and logging.
 		/// </summary>
 		public string Name => logSource;
+
+		/// <summary>
+		/// Gets whether an operator deliberately stopped this application and it must stay stopped.
+		/// </summary>
+		public bool IsOperatorStopped => Volatile.Read(ref operatorStopped) != 0;
+
+		/// <summary>
+		/// Gets whether the monitoring loop has ended for this monitor (restart attempts exhausted,
+		/// initial launch failed, or the cycle was cancelled).
+		/// </summary>
+		public bool IsMonitoringLoopEnded => Volatile.Read(ref monitoringLoopEnded) != 0;
 
 		/// <summary>
 		/// Groups CPU usage tracking state for clarity.
@@ -176,17 +233,24 @@ namespace AppHealthMonitor
 		/// <param name="healthCheckers">The health checkers to use for port monitoring. Empty list for process-only monitoring.</param>
 		/// <param name="headless">Whether to launch the process in headless mode (no window, shell execution disabled).</param>
 		/// <param name="cancellationToken">Token to signal cancellation of monitoring operations.</param>
+		/// <param name="supervisionHost">
+		/// The monitoring cycle this monitor runs in, asked for supervision back when an operator
+		/// starts or restarts an application whose loop has already ended. Null means no revival is
+		/// possible and such a command is refused rather than leaving an unwatched process.
+		/// </param>
 		/// <exception cref="ArgumentNullException">Thrown when config is null.</exception>
 		public HealthMonitor(
 			AppConfig config,
 			IReadOnlyList<IHealthChecker> healthCheckers,
 			bool headless,
-			CancellationToken cancellationToken)
+			CancellationToken cancellationToken,
+			ISupervisionHost? supervisionHost = null)
 		{
 			ArgumentNullException.ThrowIfNull(config);
 
 			this.healthCheckers = healthCheckers ?? Array.Empty<IHealthChecker>();
 			this.cancellationToken = cancellationToken;
+			this.supervisionHost = supervisionHost;
 
 			logSource = config.Name;
 			resolvedExePath = config.ApplicationExePath;
@@ -203,7 +267,6 @@ namespace AppHealthMonitor
 			cpuThresholdPercent = config.CpuThresholdPercent;
 			circuitBreakerFailureThreshold = config.CircuitBreakerFailureThreshold;
 			monitoredPort = config.MonitoredPort;
-			webSocketCheckTimeoutMs = config.WebSocketCheckTimeoutMs;
 			portCheckTimeoutMs = config.PortCheckTimeoutMs;
 			maxRestartAttempts = config.MaxRestartAttempts;
 			resourceCheckFailureThreshold = config.ResourceCheckFailureThreshold;
@@ -272,7 +335,8 @@ namespace AppHealthMonitor
 				Volatile.Read(ref maxRestartsReached),
 				Volatile.Read(ref hasCompletedInitialCheck),
 				Volatile.Read(ref consecutivePortCheckFailures),
-				Volatile.Read(ref consecutiveResourceCheckFailures));
+				Volatile.Read(ref consecutiveResourceCheckFailures),
+				Volatile.Read(ref operatorStopped) != 0);
 		}
 
 		/// <summary>
@@ -282,6 +346,25 @@ namespace AppHealthMonitor
 		/// </summary>
 		/// <returns>A task that represents the asynchronous monitoring operation.</returns>
 		public async Task StartMonitoringAsync()
+		{
+			try
+			{
+				await MonitorLoopAsync();
+			}
+			finally
+			{
+				// Recorded on every exit path — exhausted restarts, failed initial launch or
+				// cancellation. Operator start/restart commands consult this so they never launch
+				// a process that no supervisor is watching.
+				Volatile.Write(ref monitoringLoopEnded, 1);
+			}
+		}
+
+		/// <summary>
+		/// The monitoring loop itself. See <see cref="StartMonitoringAsync"/>.
+		/// </summary>
+		/// <returns>A task that represents the asynchronous monitoring operation.</returns>
+		private async Task MonitorLoopAsync()
 		{
 			if (cancellationToken.IsCancellationRequested)
 			{
@@ -294,7 +377,18 @@ namespace AppHealthMonitor
 			if (!IsApplicationProcessRunning())
 			{
 				Log.Info(logSource, "Application process not found at startup. Attempting initial launch.");
-				await LaunchApplicationAsync();
+
+				// Serialized against operator commands so an initial launch and a control-plane
+				// stop cannot interleave into a running process nobody asked for.
+				bool gateTaken = await TryAcquireLifecycleGateAsync(cancellationToken);
+				try
+				{
+					await LaunchApplicationAsync();
+				}
+				finally
+				{
+					ReleaseLifecycleGate(gateTaken);
+				}
 
 				if (Volatile.Read(ref monitoredProcess) == null)
 				{
@@ -330,6 +424,28 @@ namespace AppHealthMonitor
 			using var periodicTimer = new PeriodicTimer(checkInterval);
 			while (!cancellationToken.IsCancellationRequested && !Volatile.Read(ref maxRestartsReached))
 			{
+				// An operator stop means "stay stopped". Health checks would see a dead process and
+				// the supervisor would dutifully restart the very thing that was just stopped, so the
+				// whole check-and-restart pass is skipped until an operator starts it again.
+				if (Volatile.Read(ref operatorStopped) != 0)
+				{
+					Log.Debug(logSource, "Stopped by operator. Health checks and automatic restarts are suspended.");
+
+					try
+					{
+						if (!await periodicTimer.WaitForNextTickAsync(cancellationToken))
+						{
+							break;
+						}
+					}
+					catch (OperationCanceledException)
+					{
+						Log.Info(logSource, "Monitoring task cancelled while stopped by operator. Exiting loop.");
+						break;
+					}
+					continue;
+				}
+
 				Log.Debug(logSource, "Performing health check cycle.");
 
 				bool needsRestart = false;
@@ -486,8 +602,24 @@ namespace AppHealthMonitor
 				throw;
 			}
 
-			await KillApplicationAsync();
-			await LaunchApplicationAsync();
+			// An operator stop can land during the backoff delay. Re-check under the lifecycle gate
+			// so the automatic restart never revives an application somebody just stopped.
+			bool gateTaken = await TryAcquireLifecycleGateAsync(cancellationToken);
+			try
+			{
+				if (Volatile.Read(ref operatorStopped) != 0)
+				{
+					Log.Info(logSource, "Automatic restart abandoned: the application was stopped by an operator.");
+					return;
+				}
+
+				await KillApplicationAsync();
+				await LaunchApplicationAsync();
+			}
+			finally
+			{
+				ReleaseLifecycleGate(gateTaken);
+			}
 
 			// Reset consecutive failure counters so the freshly restarted application gets
 			// a clean evaluation window. Exponential backoff and MaxRestartAttempts already
@@ -637,7 +769,12 @@ namespace AppHealthMonitor
 				for (int i = 0; i < healthCheckers.Count; i++)
 				{
 					var checker = healthCheckers[i];
-					int timeout = checker.PortType == PortType.WebSocket ? webSocketCheckTimeoutMs : portCheckTimeoutMs;
+					/* A pulse check is a database round trip, not a socket connect, so it gets a
+					 * longer budget: timing it out at the port timeout would report a healthy
+					 * server as dead whenever the database was merely busy. */
+					int timeout = checker.PortType == PortType.DatabasePulse
+						? Math.Max(portCheckTimeoutMs, PulseHealthChecker.DefaultTimeoutMs)
+						: portCheckTimeoutMs;
 					Log.Debug(logSource, $"Port Check: Checking port {monitoredPort} (Type: {checker.PortType})...");
 					portCheckTasks[i] = checker.IsResponsiveAsync(healthCheckHost, monitoredPort, timeout, cancellationToken);
 				}
@@ -903,6 +1040,15 @@ namespace AppHealthMonitor
 		/// <returns>A task representing the asynchronous launch operation.</returns>
 		private async Task LaunchApplicationAsync()
 		{
+			// Last line of defence for "stop stays stopped": whatever path reaches here — the
+			// initial launch, the automatic restart, a late continuation — refuses while an
+			// operator stop is in effect. Only an operator start or restart clears that flag.
+			if (Volatile.Read(ref operatorStopped) != 0)
+			{
+				Log.Info(logSource, "Launch refused: the application is stopped by operator.");
+				return;
+			}
+
 			if (!File.Exists(resolvedExePath))
 			{
 				Log.Critical(logSource, $"Executable not found at '{resolvedExePath}'. Cannot launch application.");
@@ -947,6 +1093,343 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
+		/// Acquires the lifecycle gate with a bounded wait so no caller blocks forever.
+		/// </summary>
+		/// <param name="token">Token cancelled when monitoring or the daemon shuts down.</param>
+		/// <returns>True when the gate was taken and must be released; otherwise, false.</returns>
+		private async Task<bool> TryAcquireLifecycleGateAsync(CancellationToken token)
+		{
+			try
+			{
+				return await lifecycleGate.WaitAsync(operatorActionTimeout, token);
+			}
+			catch (ObjectDisposedException)
+			{
+				// The monitor is being disposed; proceed without the gate, the caller's work is
+				// about to be cancelled anyway.
+				return false;
+			}
+			catch (OperationCanceledException)
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Releases the lifecycle gate when it was actually taken.
+		/// </summary>
+		/// <param name="taken">Whether <see cref="TryAcquireLifecycleGateAsync"/> returned true.</param>
+		private void ReleaseLifecycleGate(bool taken)
+		{
+			if (!taken)
+			{
+				return;
+			}
+
+			try
+			{
+				lifecycleGate.Release();
+			}
+			catch (ObjectDisposedException)
+			{
+				// Disposed underneath us during shutdown — nothing left to release.
+			}
+		}
+
+		/// <summary>
+		/// Stops the application on an operator's instruction and leaves it stopped.
+		/// </summary>
+		/// <remarks>
+		/// Sets the operator-stop flag before killing, so the monitoring loop stops health-checking
+		/// it and every launch path refuses until an operator starts or restarts it. The flag is the
+		/// mechanism: killing alone would simply be seen as an unhealthy process on the next check
+		/// and restarted.
+		/// </remarks>
+		/// <param name="token">Token cancelled when monitoring or the daemon shuts down.</param>
+		/// <returns>Whether the stop succeeded, and a sentence describing what happened.</returns>
+		public async Task<(bool Succeeded, string Outcome)> StopByOperatorAsync(CancellationToken token)
+		{
+			bool gateTaken = await TryAcquireLifecycleGateAsync(token);
+			try
+			{
+				// Set first: anything already deciding to relaunch re-reads this under the gate.
+				Volatile.Write(ref operatorStopped, 1);
+
+				var process = Volatile.Read(ref monitoredProcess);
+				bool wasRunning = process != null;
+
+				await KillApplicationAsync();
+
+				// A later operator start should get a clean evaluation window.
+				Volatile.Write(ref currentRestartAttemptCount, 0);
+				Volatile.Write(ref consecutivePortCheckFailures, 0);
+				Volatile.Write(ref consecutiveResourceCheckFailures, 0);
+
+				string outcome = wasRunning
+					? $"Stopped '{logSource}'. It will stay stopped until an operator starts or restarts it."
+					: $"'{logSource}' was not running. Marked as stopped by operator so the supervisor will not relaunch it.";
+				Log.Warning(logSource, outcome);
+				return (true, outcome);
+			}
+			catch (Exception ex)
+			{
+				Log.Error(logSource, $"Operator stop failed: {ex.Message}", ex);
+				return (false, $"Stop failed on '{logSource}': {ex.Message}");
+			}
+			finally
+			{
+				ReleaseLifecycleGate(gateTaken);
+			}
+		}
+
+		/// <summary>
+		/// Starts the application on an operator's instruction, clearing any operator stop.
+		/// </summary>
+		/// <param name="token">Token cancelled when monitoring or the daemon shuts down.</param>
+		/// <returns>Whether the start succeeded, and a sentence describing what happened.</returns>
+		public Task<(bool Succeeded, string Outcome)> StartByOperatorAsync(CancellationToken token)
+		{
+			return StartOrRestartByOperatorAsync(token, forceRestart: false);
+		}
+
+		/// <summary>
+		/// Stops and starts the application on an operator's instruction, clearing any operator stop.
+		/// </summary>
+		/// <param name="token">Token cancelled when monitoring or the daemon shuts down.</param>
+		/// <returns>Whether the restart succeeded, and a sentence describing what happened.</returns>
+		public Task<(bool Succeeded, string Outcome)> RestartByOperatorAsync(CancellationToken token)
+		{
+			return StartOrRestartByOperatorAsync(token, forceRestart: true);
+		}
+
+		/// <summary>
+		/// Shared implementation of the operator start and restart verbs.
+		/// </summary>
+		/// <remarks>
+		/// Launches only through <see cref="LaunchApplicationAsync"/>, which uses the
+		/// <see cref="ProcessStartInfo"/> built once in the constructor from this monitor's own
+		/// <see cref="AppConfig"/>. Nothing about what runs comes from the caller.
+		/// </remarks>
+		/// <param name="token">Token cancelled when monitoring or the daemon shuts down.</param>
+		/// <param name="forceRestart">True to kill a running process first; false to leave it alone.</param>
+		/// <returns>Whether it succeeded, and a sentence describing what happened.</returns>
+		private async Task<(bool Succeeded, string Outcome)> StartOrRestartByOperatorAsync(CancellationToken token, bool forceRestart)
+		{
+			string verb = forceRestart ? "Restart" : "Start";
+
+			bool gateTaken = await TryAcquireLifecycleGateAsync(token);
+			try
+			{
+				/* Whether the loop has ended is decided UNDER the gate, not before it. Two commands
+				 * can arrive in a single control-plane poll batch: the first revives the monitor and
+				 * the second, waiting here, then sees a live loop and takes the ordinary path. Read
+				 * outside the gate, both would revive, and the host would be handed two monitoring
+				 * loops for one application. */
+				if (Volatile.Read(ref monitoringLoopEnded) != 0)
+				{
+					return await ReviveByOperatorAsync(verb, forceRestart);
+				}
+
+				ResetForOperatorStart();
+
+				if (!forceRestart && IsApplicationProcessRunning())
+				{
+					var running = Volatile.Read(ref monitoredProcess);
+					string already = $"'{logSource}' is already running (process id {(running != null ? running.Id.ToString() : "unknown")}). Nothing to start.";
+					Log.Info(logSource, already);
+					return (true, already);
+				}
+
+				if (forceRestart)
+				{
+					await KillApplicationAsync();
+				}
+
+				await LaunchApplicationAsync();
+
+				var launched = Volatile.Read(ref monitoredProcess);
+				if (launched == null)
+				{
+					string failed = $"{verb} failed for '{logSource}': the process did not start. See the daemon log on that host.";
+					Log.Error(logSource, failed);
+					return (false, failed);
+				}
+
+				string succeeded = $"{verb.TrimEnd('e')}ed '{logSource}'. Process id {launched.Id}.";
+				Log.Warning(logSource, succeeded);
+				return (true, succeeded);
+			}
+			catch (Exception ex)
+			{
+				Log.Error(logSource, $"Operator {verb.ToLowerInvariant()} failed: {ex.Message}", ex);
+				return (false, $"{verb} failed on '{logSource}': {ex.Message}");
+			}
+			finally
+			{
+				ReleaseLifecycleGate(gateTaken);
+			}
+		}
+
+		/// <summary>
+		/// Clears the state that would otherwise keep an application down, so an operator start gets
+		/// a clean evaluation window.
+		/// </summary>
+		/// <remarks>
+		/// Clearing <see cref="operatorStopped"/> is what re-enables launching and health checks, and
+		/// clearing <see cref="maxRestartsReached"/> both re-arms the backoff and is what makes the
+		/// application report its real state again instead of staying <c>EXHAUSTED</c>. Callers must
+		/// hold the lifecycle gate.
+		/// </remarks>
+		private void ResetForOperatorStart()
+		{
+			Volatile.Write(ref operatorStopped, 0);
+			Volatile.Write(ref currentRestartAttemptCount, 0);
+			Volatile.Write(ref consecutivePortCheckFailures, 0);
+			Volatile.Write(ref consecutiveResourceCheckFailures, 0);
+
+			// An operator asking for this application back is an explicit decision to give the
+			// backoff another run, so an exhausted monitor is re-armed.
+			Volatile.Write(ref maxRestartsReached, false);
+		}
+
+		/// <summary>
+		/// Revives supervision for this one application after its monitoring loop has ended, then
+		/// starts it. Called from <see cref="StartOrRestartByOperatorAsync"/> under the lifecycle gate.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An exhausted application is precisely the one an operator wants back, so refusing here —
+		/// as this used to — left them with no recourse but restarting the daemon, which takes down
+		/// every other application on the host. The refusal itself was sound though: launching from a
+		/// monitor whose loop has ended leaves a process nothing watches. So the launch is ordered
+		/// around re-establishing supervision instead of replacing it:
+		/// </para>
+		/// <list type="number">
+		/// <item>reserve a place in the running cycle, which cannot conclude while the reservation is held;</item>
+		/// <item>launch — and if the launch fails, nothing was started and the reservation is dropped;</item>
+		/// <item>hand a fresh monitoring loop back to the cycle before reporting success;</item>
+		/// <item>release the reservation.</item>
+		/// </list>
+		/// <para>
+		/// At no point is a process running with nothing watching it: before the launch there is no
+		/// process, and from the launch onwards the cycle is pinned open and ends by killing whatever
+		/// this monitor holds. If no reservation can be made — no cycle, a cycle that has already
+		/// concluded, or a daemon shutting down — nothing is launched and the operator is told why.
+		/// </para>
+		/// <para>
+		/// Only this application is touched. The reservation is a task in the cycle's own list; no
+		/// other monitor is signalled, restarted or even consulted.
+		/// </para>
+		/// </remarks>
+		/// <param name="verb">The operator's verb, for the message they read back.</param>
+		/// <param name="forceRestart">True to relaunch even if a process somehow survived the loop.</param>
+		/// <returns>Whether it succeeded, and a sentence describing what happened.</returns>
+		private async Task<(bool Succeeded, string Outcome)> ReviveByOperatorAsync(string verb, bool forceRestart)
+		{
+			// Not gate-dependent: one revival at a time for this monitor, full stop.
+			if (Interlocked.CompareExchange(ref revivalInProgress, 1, 0) != 0)
+			{
+				string busy = $"{verb} refused: supervision for '{logSource}' is already being resumed by another command. Nothing was done.";
+				Log.Warning(logSource, busy);
+				return (false, busy);
+			}
+
+			try
+			{
+				return await ReviveUnderClaimAsync(verb, forceRestart);
+			}
+			finally
+			{
+				Volatile.Write(ref revivalInProgress, 0);
+			}
+		}
+
+		/// <summary>
+		/// Performs the revival itself, with the single-revival claim already held.
+		/// See <see cref="ReviveByOperatorAsync"/>.
+		/// </summary>
+		/// <param name="verb">The operator's verb, for the message they read back.</param>
+		/// <param name="forceRestart">True to relaunch even if a process somehow survived the loop.</param>
+		/// <returns>Whether it succeeded, and a sentence describing what happened.</returns>
+		private async Task<(bool Succeeded, string Outcome)> ReviveUnderClaimAsync(string verb, bool forceRestart)
+		{
+			var host = supervisionHost;
+			if (host == null)
+			{
+				string noHost = $"{verb} refused: the supervisor for '{logSource}' is no longer running and there is no monitoring cycle to resume it in. Restart monitoring on that host.";
+				Log.Warning(logSource, noHost);
+				return (false, noHost);
+			}
+
+			var reservation = host.TryReserveRevival(logSource, out string refusal);
+			if (reservation == null)
+			{
+				string refused = $"{verb} refused: {refusal} Nothing was launched.";
+				Log.Warning(logSource, refused);
+				return (false, refused);
+			}
+
+			try
+			{
+				// Re-checked after the reservation: a cycle cancelled in between must not be handed a
+				// monitoring loop it will never run, and a process must not be launched into one.
+				if (!reservation.IsSupervisionAvailable)
+				{
+					string gone = $"{verb} refused: the monitoring cycle for '{logSource}' is shutting down, so supervision could not be resumed. Nothing was launched.";
+					Log.Warning(logSource, gone);
+					return (false, gone);
+				}
+
+				Log.Warning(logSource, $"Supervision for '{logSource}' had ended. Reviving it on operator {verb.ToLowerInvariant()}.");
+
+				ResetForOperatorStart();
+
+				bool alreadyRunning = !forceRestart && IsApplicationProcessRunning();
+				if (!alreadyRunning)
+				{
+					// LaunchApplicationAsync kills any stale process and awaits its exit first, so a
+					// forced restart needs nothing extra here.
+					await LaunchApplicationAsync();
+				}
+
+				var launched = Volatile.Read(ref monitoredProcess);
+				if (launched == null)
+				{
+					/* Nothing started, so nothing was revived — and the application must go back to
+					 * reporting what it is. ResetForOperatorStart cleared maxRestartsReached to
+					 * re-arm the backoff for a loop that is now never going to run; leaving it clear
+					 * would downgrade a loudly EXHAUSTED application to a quiet DOWN, which is the
+					 * one state an operator must not be told about an application nothing is
+					 * watching. */
+					Volatile.Write(ref maxRestartsReached, true);
+
+					string failed = $"{verb} failed for '{logSource}': the process did not start, so supervision was not resumed and nothing is running. It is still exhausted. See the daemon log on that host.";
+					Log.Error(logSource, failed);
+					return (false, failed);
+				}
+
+				// Read before the loop starts: once it is running it owns this reference and may
+				// dispose it the moment the process exits.
+				int processId = launched.Id;
+
+				/* The loop is started and handed back BEFORE success is reported and before the
+				 * reservation is released, which is what closes the window the old refusal was
+				 * protecting. Clearing the flag first means the fresh loop's own exit re-sets it,
+				 * so an application that exhausts again can be revived again. */
+				Volatile.Write(ref monitoringLoopEnded, 0);
+				reservation.Resume(StartMonitoringAsync());
+
+				string revived = $"{verb.TrimEnd('e')}ed '{logSource}' and resumed supervision of it. Process id {processId}.";
+				Log.Warning(logSource, revived);
+				return (true, revived);
+			}
+			finally
+			{
+				reservation.Dispose();
+			}
+		}
+
+		/// <summary>
 		/// Atomically clears the monitored process reference and disposes the stale process.
 		/// Used on error paths in <see cref="LaunchApplicationAsync"/> to avoid duplicated cleanup logic.
 		/// </summary>
@@ -971,6 +1454,7 @@ namespace AppHealthMonitor
 			GC.SuppressFinalize(this);
 			Log.Info(logSource, "Disposing health monitor.");
 			await KillApplicationAsync();
+			lifecycleGate.Dispose();
 		}
 	}
 }

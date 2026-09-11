@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using FishMMO.Auth.Core;
 using FishMMO.Database;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
 using FishMMO.Server.Core.World.SceneServer;
@@ -129,15 +130,197 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					ReportStatus(character);
 					return true;
 
+				case "announce":
+				case "broadcast":
+					Announce(character, arguments);
+					return true;
+
+				case "access":
+				case "setaccess":
+					SetAccountAccessLevel(character, arguments);
+					return true;
+
 				default:
 					/* Split across replies to stay inside ChatBroadcast.MaxTextLength (128).
 					 * Nothing enforces that constant today, but writing messages that exceed a
 					 * documented wire limit is how it stops being true quietly. */
 					Reply(character, "Admin: /admin status | lockserver | unlockserver | shutdown <seconds> | stopshutdown");
 					Reply(character, "Admin: /admin lockscene | unlockscene | shutdownscene <seconds> | stopshutdownscene");
+					Reply(character, "Admin: /admin announce <message> | access <account> <level>");
+					Reply(character, "Admin: game master commands are under /gm");
 					return true;
 			}
 		}
+
+		#region Announcements
+
+		/// <summary>Longest announcement accepted, leaving room for the prefix.</summary>
+		/// <remarks>
+		/// <see cref="ChatBroadcast.MaxTextLength"/> is the wire limit and the prefix is part of
+		/// the message that has to fit inside it, so the text an operator may type is shorter
+		/// than the limit rather than equal to it.
+		/// </remarks>
+		private const int MaxAnnouncementLength = 96;
+
+		/// <summary>
+		/// Sends a system-channel message to every character on this scene server.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This scene server only. It does not reach the world's other scene servers, and the
+		/// acknowledgement says so: an operator who believes they have warned the whole shard
+		/// about a shutdown, and has not, is worse off than one who knows they must repeat it.
+		/// A shard-wide announcement needs a row the other processes poll, which is the same
+		/// shape as the lock and shutdown commands and is not built yet.
+		/// </para>
+		/// <para>
+		/// The text is sent on the System channel, which the client renders distinctly, so a
+		/// player cannot be fooled into thinking an ordinary message came from the staff.
+		/// </para>
+		/// </remarks>
+		private void Announce(IPlayerCharacter character, string arguments)
+		{
+			string text = (arguments ?? string.Empty).Trim();
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				Reply(character, "Say what? /admin announce <message>");
+				return;
+			}
+			if (text.Length > MaxAnnouncementLength)
+			{
+				Reply(character, $"Keep it under {MaxAnnouncementLength} characters.");
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mapping) ||
+				mapping == null)
+			{
+				Reply(character, "The character mapping is unavailable.");
+				return;
+			}
+
+			var broadcast = new ChatBroadcast()
+			{
+				Channel = ChatChannel.System,
+				Text = text,
+			};
+
+			int sent = 0;
+			foreach (IPlayerCharacter target in mapping.CharactersByID.Values)
+			{
+				NetworkConnection conn = target?.Owner;
+				if (conn == null || !conn.IsActive)
+				{
+					continue;
+				}
+				Server.NetworkWrapper.Broadcast(conn, broadcast, true, FishNet.Transporting.Channel.Reliable);
+				sent++;
+			}
+
+			Log.Warning("SceneServerSystem",
+				$"Administrator '{character.CharacterName}' ({character.Account}) announced to {sent} character(s): {text}");
+
+			Reply(character, $"Announced to {sent} character(s) on this scene server only.");
+		}
+
+		#endregion
+
+		#region Access Levels
+
+		/// <summary>
+		/// Sets an account's access level.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Three guards, each closing a way this command could be used to escalate rather than
+		/// to administer: an operator may not change their own level, may not act on an account
+		/// at or above their own, and may not grant a level at or above their own. Without the
+		/// last one an administrator could mint administrators, which makes the level ceiling
+		/// decorative.
+		/// </para>
+		/// <para>
+		/// The change is recorded in the operator audit log by the chat system's subscription to
+		/// the access gate, like every other elevated command. An access level that changed with
+		/// no record of who changed it is indistinguishable from a compromise.
+		/// </para>
+		/// <para>
+		/// Existing sessions are not severed here. The Control Panel revokes a session whose
+		/// account level has changed on that session's next request, and the game reads the level
+		/// from the character row at login; a player already in the world keeps the level they
+		/// logged in with until they reconnect. Kick them as well if that matters.
+		/// </para>
+		/// </remarks>
+		private void SetAccountAccessLevel(IPlayerCharacter character, string arguments)
+		{
+			string accountName = ChatHelper.GetWordAndTrimmed(arguments ?? string.Empty, out string levelText);
+			if (string.IsNullOrWhiteSpace(accountName) || string.IsNullOrWhiteSpace(levelText))
+			{
+				Reply(character, "Usage: /admin access <account> <Banned|Player|GameMaster|Admin>");
+				return;
+			}
+
+			levelText = levelText.Trim();
+			if (!Enum.TryParse(levelText, ignoreCase: true, out AccessLevel level) ||
+				!Enum.IsDefined(typeof(AccessLevel), level))
+			{
+				Reply(character, $"'{(levelText.Length > 24 ? levelText.Substring(0, 24) : levelText)}' is not an access level.");
+				return;
+			}
+
+			if (string.Equals(accountName, character.Account, StringComparison.OrdinalIgnoreCase))
+			{
+				Reply(character, "You cannot change your own access level.");
+				return;
+			}
+
+			if (level >= character.AccessLevel)
+			{
+				Reply(character, $"You cannot grant {level}; it is at or above your own level.");
+				return;
+			}
+
+			string actorName = character.CharacterName;
+			string actorAccount = character.Account;
+			AccessLevel actorLevel = character.AccessLevel;
+
+			RunAdminAction(character, async () =>
+			{
+				if (!TryGetDbService(out IAccountService accountService))
+				{
+					return "The account service is unavailable.";
+				}
+
+				/* The target's current level is read first so an operator cannot act on somebody
+				 * at or above them. Checked here rather than in the service because it depends on
+				 * the caller, which the database layer cannot see. */
+				DatabaseResult<AccountData> existing = await accountService.FetchForLoginAsync(accountName, false);
+				if (!existing.IsSuccess)
+				{
+					// FetchForLoginAsync refuses a banned account as well as a missing one and
+					// deliberately does not say which. Neither is something to act on here.
+					return $"No account named '{accountName}' is available.";
+				}
+
+				var currentLevel = (AccessLevel)existing.Data.AccessLevel;
+				if (currentLevel >= actorLevel)
+				{
+					return $"'{accountName}' is {currentLevel}; you cannot change them.";
+				}
+
+				DatabaseResult result = await accountService.PersistAccessLevelAsync(accountName, (byte)level);
+				if (!result.IsSuccess)
+				{
+					return $"Could not set the access level: {result.ErrorCode} - {result.ErrorMessage}";
+				}
+
+				await Log.Warning("SceneServerSystem",
+					$"Administrator '{actorName}' ({actorAccount}) set account '{accountName}' from {currentLevel} to {level}.");
+
+				return $"'{accountName}' is now {level}. They keep their current level until they reconnect.";
+			});
+		}
+
+		#endregion
 
 		#region World Commands
 

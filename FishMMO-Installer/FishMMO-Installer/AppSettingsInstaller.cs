@@ -20,8 +20,8 @@ namespace FishMMO.Installer
 	///   <item>IPFetch Web Server — WebServer.HttpPort + ConnectionStrings.NpgsqlConnection</item>
 	///   <item>Patcher Web Server — WebServer.HttpPort + Patches.DirectoryName</item>
 	///   <item>WebGL Web Server — WebServer.HttpPort</item>
+	///   <item>Control Panel Web Server — WebServer.HttpPort + ConnectionStrings.NpgsqlConnection</item>
 	///   <item>Discord Bot — Discord.Token + Discord.DefaultGuildId + ConnectionStrings.Npgsql + rate-limiting</item>
-	///   <item>CMS Server — ConnectionStrings.DefaultConnection</item>
 	/// </list>
 	///
 	/// Supported outputs:
@@ -62,6 +62,7 @@ namespace FishMMO.Installer
 			Console.WriteLine("1 : IPFetch Web Server         (Login gate + IP fetch)");
 			Console.WriteLine("2 : Patcher Web Server         (Patch distribution)");
 			Console.WriteLine("3 : WebGL Web Server           (WebGL client host)");
+			Console.WriteLine("4 : Control Panel Web Server   (Admin dashboard)");
 			Console.WriteLine("0 : Back");
 
 			ConsoleKeyInfo ckey = Console.ReadKey(true);
@@ -80,6 +81,10 @@ namespace FishMMO.Installer
 				case ConsoleKey.D3:
 					await ConfigureWebServerComponent("WebGL", "WebGLServerASP.NET", "WebGLServer",
 						defaultPort: 8000, hasNpgsqlDsn: false, hasPatches: false);
+					break;
+				case ConsoleKey.D4:
+					await ConfigureWebServerComponent("Control Panel", "FishMMO-ControlPanel", "ControlPanel",
+						defaultPort: 8100, hasNpgsqlDsn: true, hasPatches: false);
 					break;
 				case ConsoleKey.D0:
 				case ConsoleKey.NumPad0:
@@ -387,90 +392,6 @@ namespace FishMMO.Installer
 			}
 		}
 
-		// ──────────────────────────────────────────────────────────────────────────
-		//  Component: CMS Server
-		// ──────────────────────────────────────────────────────────────────────────
-
-		public static async Task ConfigureCmsComponent()
-		{
-			string defaultDir = Path.Combine(FishMMODevRoot, "FishMMO-CMS", "FishMMO-CMS.Server");
-			string? targetDir = PromptComponentDirectory(defaultDir);
-			if (targetDir == null) return;
-
-			await RunActionMenu("CMS Server", targetDir,
-				writeBase: async dir => await WriteCmsSettings(dir, "appsettings.json"),
-				writeEnvOverride: async dir =>
-				{
-					string? envName = PromptEnvironmentName();
-					if (envName == null) return;
-					await WriteCmsSettings(dir, $"appsettings.{envName}.json");
-				},
-				generateSecrets: GenerateCmsSecretsFile);
-		}
-
-		private static async Task WriteCmsSettings(string targetDir, string fileName)
-		{
-			string filePath = Path.Combine(targetDir, fileName);
-
-			string? existingDsn = null;
-			if (File.Exists(filePath))
-			{
-				try
-				{
-					string text = await File.ReadAllTextAsync(filePath, Encoding.UTF8);
-					JsonObject? existing = JsonNode.Parse(text)?.AsObject();
-					existingDsn = existing?["ConnectionStrings"]?["DefaultConnection"]?.GetValue<string>();
-				}
-				catch { /* use defaults */ }
-			}
-
-			await Log.Info("FishMMOInstaller", $"Configuring: {filePath}");
-			Console.WriteLine("Press Enter to keep the current value shown in brackets.");
-			Console.WriteLine();
-
-			string npgsqlDsn = PromptNpgsqlDsn(existingDsn);
-
-			JsonObject root = await LoadOrCreateJsonObject(filePath);
-
-			JsonObject connStrings = EnsureObject(root, "ConnectionStrings");
-			connStrings["DefaultConnection"] = JsonValue.Create(npgsqlDsn);
-
-			await WriteJsonObjectSecure(filePath, root);
-			await Log.Info("FishMMOInstaller", $"{fileName} written and secured at: {filePath}");
-		}
-
-		private static async Task GenerateCmsSecretsFile(string targetDir)
-		{
-			Console.WriteLine("Select output format:");
-			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
-			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
-			Console.WriteLine("3 : PowerShell / CMD snippet  (%USERPROFILE%\\fishmmo-secrets.ps1 or .cmd)");
-			Console.WriteLine("0 : Back");
-
-			ConsoleKeyInfo key = Console.ReadKey(true);
-			Console.WriteLine();
-			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
-			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2 && key.Key != ConsoleKey.D3) return;
-
-			Console.WriteLine("Enter the CMS database connection string secret.");
-			Console.WriteLine();
-			string dsn = PromptNpgsqlDsn(existingDsn: null);
-
-			var secrets = new Dictionary<string, string>
-			{
-				["ConnectionStrings__DefaultConnection"] = dsn,
-			};
-
-			switch (key.Key)
-			{
-				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
-				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
-				case ConsoleKey.D3: await WriteWindowsSecretsSnippet(secrets); break;
-			}
-		}
-
-		// ──────────────────────────────────────────────────────────────────────────
-		//  Shared action-menu runner
 		// ──────────────────────────────────────────────────────────────────────────
 
 		private static async Task RunActionMenu(

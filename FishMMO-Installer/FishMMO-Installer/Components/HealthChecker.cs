@@ -57,7 +57,7 @@ namespace FishMMO.Installer
             // Systemd services (Linux only)
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                foreach (string svc in new[] { "fishmmo-ipfetch", "fishmmo-patcher", "fishmmo-webgl" })
+                foreach (string svc in new[] { "fishmmo-ipfetch", "fishmmo-patcher", "fishmmo-webgl", "fishmmo-controlpanel" })
                 {
                     bool active = await IsSystemdServiceActiveAsync(svc);
                     results.Add(new HealthCheckResult($"systemd: {svc}", active,

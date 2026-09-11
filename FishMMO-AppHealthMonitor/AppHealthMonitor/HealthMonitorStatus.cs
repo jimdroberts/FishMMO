@@ -12,6 +12,11 @@ namespace AppHealthMonitor
 	/// <param name="HasCompletedInitialCheck">Whether the monitor has completed its initial health check delay.</param>
 	/// <param name="ConsecutivePortFailures">The number of consecutive port check failures in the current cycle.</param>
 	/// <param name="ConsecutiveResourceFailures">The number of consecutive CPU/memory check failures in the current cycle.</param>
+	/// <param name="IsOperatorStopped">
+	/// Whether an operator deliberately stopped this application through the control plane.
+	/// The supervisor leaves it stopped until an operator starts or restarts it again, so this
+	/// state is distinct from an unexpected "DOWN" and must not be reported as one.
+	/// </param>
 	public sealed record HealthMonitorStatus(
 		string Name,
 		int? ProcessId,
@@ -21,7 +26,8 @@ namespace AppHealthMonitor
 		bool MaxRestartsReached,
 		bool HasCompletedInitialCheck,
 		int ConsecutivePortFailures,
-		int ConsecutiveResourceFailures)
+		int ConsecutiveResourceFailures,
+		bool IsOperatorStopped = false)
 	{
 		/// <summary>
 		/// Gets a human-readable state label derived from the current monitor status.

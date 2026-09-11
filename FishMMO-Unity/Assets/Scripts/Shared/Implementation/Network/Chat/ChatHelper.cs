@@ -136,6 +136,25 @@ namespace FishMMO.Shared
 		public static event Action<IPlayerCharacter, string, AccessLevel> OnCommandRefused;
 
 		/// <summary>
+		/// Raised when a character runs a command that requires more than <see cref="AccessLevel.Player"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Raised here, at the single access gate, rather than from inside each handler. That is
+		/// the whole point: a command added later is audited because it is registered with an
+		/// elevated level, not because whoever wrote it remembered to add a logging call. The
+		/// registration already cannot be made without stating a level, so the two facts that
+		/// matter — "this is privileged" and "this gets recorded" — cannot drift apart.
+		/// </para>
+		/// <para>
+		/// Carries the argument text, which is most of the value: <c>/admin shutdown</c> and
+		/// <c>/admin shutdown 0</c> are very different events. This is engine-agnostic shared
+		/// code with no database, so the server subscribes and writes the record.
+		/// </para>
+		/// </remarks>
+		public static event Action<IPlayerCharacter, string, string, AccessLevel> OnElevatedCommand;
+
+		/// <summary>
 		/// Initializes chat channel commands once, mapping each channel to its command function.
 		/// </summary>
 		/// <param name="onGetChannelCommand">Function to get the command delegate for each channel.</param>
@@ -305,6 +324,15 @@ namespace FishMMO.Shared
 			{
 				OnCommandRefused?.Invoke(sender, cmd, registration.MinimumAccessLevel);
 				return true;
+			}
+
+			/* Announced before the handler runs, not after. A command that shuts a world down or
+			 * throws an exception must still leave a record that it was run — an audit trail
+			 * that only records commands which completed is missing precisely the ones worth
+			 * reading about. The handler's own outcome is reported separately by the server. */
+			if (registration.MinimumAccessLevel > AccessLevel.Player)
+			{
+				OnElevatedCommand?.Invoke(sender, cmd, msg.Text ?? string.Empty, registration.MinimumAccessLevel);
 			}
 
 			registration.Func?.Invoke(sender, msg);

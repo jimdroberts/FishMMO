@@ -246,14 +246,40 @@ namespace FishMMO.Server.Implementation.LoginServer
 				authenticator.LoginServerId = runtimeData.ID;
 				authenticator.TokenSigningKeyId = keyResult.Data.ID;
 
-				// C7: Derive the TOTP master KEK through the KMS provider abstraction. The default
-				// LocalDeriveKmsProvider preserves the legacy HMAC-SHA256 behaviour; production
-				// deployments can register an external IKmsProvider via the service registry to
-				// keep the cleartext KEK off the application heap for the process lifetime.
-				byte[] totpMasterKey;
-				using (var localKms = new LocalDeriveKmsProvider(hmacKey))
+				/* The TOTP master KEK is a deployment-shared secret loaded from deployment_secrets,
+				 * NOT derived from this process's HMAC signing key. Deriving it meant a fresh key
+				 * on every restart and a different key on every LoginServer, which silently made
+				 * every enrolled authenticator unusable. See TotpMasterKek for the full account. */
+				byte[] totpMasterKey = null;
+				string totpKekError = $"deployment_secrets is missing the '{TotpMasterKek.DatabaseKey}' row.";
+				if (Server.Database?.ServiceRegistry != null &&
+					Server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var totpSecretService))
 				{
-					totpMasterKey = localKms.DeriveKey("fishmmo-totp-master-key-v1");
+					var totpKekResult = await totpSecretService.FetchAsync(TotpMasterKek.DatabaseKey, cancellationToken);
+					string totpKekValue = totpKekResult.IsSuccess ? totpKekResult.Data : null;
+					if (!TotpMasterKek.TryDecode(totpKekValue, out totpMasterKey, out string decodeError))
+					{
+						totpKekError = decodeError;
+						totpMasterKey = null;
+					}
+				}
+
+				if (totpMasterKey == null)
+				{
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+					/* Development convenience only: a local server with no provisioned KEK still
+					 * starts, but every account enrolled against this ephemeral key stops working
+					 * as soon as the process does — exactly the defect this replaced. It is loud
+					 * on purpose. */
+					_ = Log.Warning("LoginServerSystem",
+						$"TOTP master KEK not provisioned — using an EPHEMERAL key. Every authenticator " +
+						$"enrolled against it stops working when this process exits. {totpKekError}");
+					totpMasterKey = CryptoHelper.GenerateKey(TotpMasterKek.KeyLength);
+#else
+					_ = Log.Error("LoginServerSystem",
+						$"TOTP master KEK is REQUIRED in production. {totpKekError}");
+					return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+#endif
 				}
 				authenticator.TotpMasterKey = totpMasterKey;
 
@@ -476,26 +502,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 					return;
 				}
 
-				byte[] newTotpMasterKey;
-				using (var localKms = new LocalDeriveKmsProvider(newHmacKey))
-				{
-					newTotpMasterKey = localKms.DeriveKey("fishmmo-totp-master-key-v1");
-				}
+				/* Signing-key rotation must NOT move the TOTP master KEK with it. The KEK wraps
+				 * every account's stored TOTP secret; re-deriving it here orphaned all of them on
+				 * every rotation. Passing null tells AtomicSwapSigningKey to leave it alone. */
+				byte[] newTotpMasterKey = null;
 
 				if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
 				{
 					// Use atomic swap so concurrent token-issuance always sees a consistent
 					// (key, keyId, totpMasterKey) tuple. Prior key material is zeroed inside.
+					// null: the TOTP master KEK is deployment-wide and does not rotate with the
+					// signing key, so the account creation system keeps the key it already holds.
 					authenticator.AtomicSwapSigningKey(newHmacKey, keyResult.Data.ID, newTotpMasterKey);
-
-					if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem) &&
-						accountSystem is AccountCreationSystem concreteAccountSystem)
-					{
-						// Copy so ZeroMemory on the authenticator's copy does not affect the account system.
-						byte[] totpMasterKeyCopy = new byte[newTotpMasterKey.Length];
-						Buffer.BlockCopy(newTotpMasterKey, 0, totpMasterKeyCopy, 0, totpMasterKeyCopy.Length);
-						concreteAccountSystem.TotpMasterKey = totpMasterKeyCopy;
-					}
 				}
 
 				signingKeyIssuedUtc = DateTime.UtcNow;

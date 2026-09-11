@@ -1,4 +1,5 @@
 using FishMMO.Database;
+using FishMMO.Auth.Implementation;
 using FishMMO.Logging;
 using Npgsql;
 using System.Security.Cryptography;
@@ -15,6 +16,7 @@ namespace FishMMO.Installer
 	///   - Gate secret → deployment_secrets table (key='client_gate_secret')
 	///   - Connection token HMAC key → connection_token_keys table (key_id='shared')
 	///   - Signing key KEK → deployment_secrets table (key='signing_key_kek')
+	///   - TOTP master KEK → deployment_secrets table (key='totp_master_kek')
 	///
 	/// Client build files (ClientApiSecret.generated.cs, etc.) are generated
 	/// separately from within the Unity Editor (FishMMO > Security > Fetch Client Secrets).
@@ -126,6 +128,15 @@ namespace FishMMO.Installer
 					await Log.Info("FishMMOInstaller", "KEK → deployment_secrets table.");
 				}
 
+				/* The TOTP master KEK wraps every account's authenticator secret at rest, so
+				 * unlike the keys above it is INSERT-IF-ABSENT and never overwritten: replacing it
+				 * would make every enrolled authenticator undecryptable in one step. Re-running
+				 * this installer against a live deployment must be safe. */
+				bool totpKekCreated = await InsertSecretIfAbsentAsync(conn, TotpMasterKek.DatabaseKey, TotpMasterKek.Generate());
+				await Log.Info("FishMMOInstaller", totpKekCreated
+					? "TOTP master KEK → deployment_secrets table (newly generated)."
+					: "TOTP master KEK already present — left untouched (replacing it would lock out every authenticator).");
+
 				if (!string.IsNullOrWhiteSpace(hmacKey))
 				{
 					await UpsertConnectionTokenKeyAsync(conn, "shared", hmacKey);
@@ -173,6 +184,26 @@ namespace FishMMO.Installer
 			cmd.Parameters.AddWithValue("key", key);
 			cmd.Parameters.AddWithValue("value", value);
 			await cmd.ExecuteNonQueryAsync();
+		}
+
+		/// <summary>
+		/// Inserts a deployment secret only when the row does not already exist.
+		/// </summary>
+		/// <remarks>
+		/// For key material that other rows are encrypted under, an upsert is destructive: the old
+		/// value is the only thing that can decrypt what is already stored. Rotation for those keys
+		/// is a re-wrap operation, not an overwrite, so provisioning must never clobber.
+		/// </remarks>
+		/// <returns><c>true</c> when a new row was created; <c>false</c> when one already existed.</returns>
+		private static async Task<bool> InsertSecretIfAbsentAsync(NpgsqlConnection conn, string key, string value)
+		{
+			await using var cmd = new NpgsqlCommand(
+				"INSERT INTO deployment_secrets (key, value, created_at, updated_at) " +
+				"VALUES (@key, @value, NOW(), NOW()) " +
+				"ON CONFLICT (key) DO NOTHING", conn);
+			cmd.Parameters.AddWithValue("key", key);
+			cmd.Parameters.AddWithValue("value", value);
+			return await cmd.ExecuteNonQueryAsync() > 0;
 		}
 
 		private static async Task UpsertConnectionTokenKeyAsync(NpgsqlConnection conn, string keyId, string hmacKeyBase64)

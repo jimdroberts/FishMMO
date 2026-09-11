@@ -326,11 +326,18 @@ namespace FishMMO.Server.Implementation
 			{
 				byte[] signingKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
 				srpAuth.TokenSigningKey = signingKey;
-				using (var localKms = new LocalDeriveKmsProvider(signingKey))
-				{
-					srpAuth.TotpMasterKey = localKms.DeriveKey("fishmmo-totp-master-key-v1");
-				}
-				Log.Debug("Server", "Pre-bootstrapped TokenSigningKey + TotpMasterKey before InitializeWorkers.");
+
+				/* The TOTP master KEK is a DEPLOYMENT secret, not something derived from this
+				 * process's signing key. It used to be LocalDeriveKmsProvider(signingKey), and
+				 * because signingKey is freshly randomised on every start and never read back,
+				 * every account's stored TOTP secret became undecryptable on the next restart and
+				 * was never decryptable on a second LoginServer — with 2FA enrolment mandatory at
+				 * account creation. See TotpMasterKek. LoginServerSystem loads the real key from
+				 * deployment_secrets once the database is up; this placeholder only has to satisfy
+				 * SrpAuthenticatorCore.InitializeWorkersCore's non-null length check so the
+				 * transport can open, and is replaced before any account is served. */
+				srpAuth.TotpMasterKey = CryptoHelper.GenerateKey(TotpMasterKek.KeyLength);
+				Log.Debug("Server", "Pre-bootstrapped TokenSigningKey + placeholder TotpMasterKey before InitializeWorkers.");
 			}
 
 			NetworkWrapper.ApplyTransportConfiguration(AddressOverride, PortOverride > 0 ? PortOverride : null);

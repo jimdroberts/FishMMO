@@ -56,6 +56,8 @@ Four architectural features keep the chat pipeline responsive under extreme load
 - Rich text tag sanitization (skipped when message contains no `<` for zero-allocation fast path)
 - Command extraction and routing via `ChatHelper` command registry, keyed **including** the leading slash and matched case-insensitively
 - **Per-command access levels** — commands are registered with a minimum `AccessLevel`, enforced in `ChatHelper.TryParseCommand` against the character's own level as loaded from its database row. A command the sender may not run is *consumed*, not rejected: it is neither executed nor echoed to a channel, and the response is indistinguishable from an unknown command, so command names cannot be probed. Every refusal is reported through `ChatHelper.OnCommandRefused` and logged with the character and account that tried it
+- **Every elevated command is audited.** `ChatHelper.TryParseCommand` raises `OnElevatedCommand` for any command registered above `Player`, and `ChatSystem.Audit.cs` writes a row to `admin_audit_log` — the same table the Control Panel writes to, so "show me everything this person did" is one query rather than two. Refusals are recorded as well as successes: a player probing for admin command names produces a run of refusals against one account, which is the pattern the log exists to make visible. The actor is the **account**, not the character, so one operator's history is not split across every character they own. Recording happens at the gate rather than inside each handler, so a command added later is audited because it was registered with an elevated level and not because its author remembered
+- **Player support commands** — `/report`, `/bug`, `/helpme` and `/tickets`, all registered at `AccessLevel.Player` and filed against `ISupportTicketService`. The subject is derived from the first 60 characters (or built as `Report: <name>`) so a player never has to type two fields into a chat line; the body is what they typed. Flood control (5 unfinished tickets per account, 60-second cooldown) belongs to the service, and its refusal message is surfaced to the player verbatim rather than paraphrased. **No audit row is written**: these are Player-level commands, the audit hook at the access gate deliberately ignores them, and a player asking for help is not an operator action
 - **Authoritative sender resolution** — the sender is taken from `ICharacterMappingData.ConnectionCharacters` (populated by the character load pipeline from the database) rather than from `conn.FirstObject`, so a command's authorisation can never be decided from a network-deserialised payload
 - Post-prepend length enforcement capped at `maxMessageLength + MaxChannelIdPrefixLength` (22 chars)
 - Synchronous immediate channels: Region (scene-scoped broadcast), Say (observer-scoped broadcast), Team (arena-team-scoped broadcast)
@@ -250,6 +252,33 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
    - Discord channel messages routed to `OnSendDiscordMessage`.
 3. Pump flag cleared in main-thread `finally` block (success) or async `finally` block (failure/early return).
 
+### Player Support Commands
+
+Registered in `InitializeOnce` via `RegisterSupportCommands` and removed in `OnDeinitialize` via `UnregisterSupportCommands` — `ChatHelper.Commands` is static and holds delegates bound to this `ScriptableObject`, so a command left behind runs against a destroyed instance on the next play session.
+
+| Command | Syntax | Category |
+|---|---|---|
+| `/report` | `/report <character name> <what happened>` | `PlayerReport` |
+| `/bug` | `/bug <what happened>` | `Bug` |
+| `/helpme` | `/helpme <what you need>` | `Help` |
+| `/tickets` | `/tickets` | (lists the caller's own unfinished tickets) |
+
+`/helpme` rather than `/help`: nothing registers `/help` today, but it is the obvious name for a command that lists commands, and taking it for a ticket filing would force whoever writes that listing later either to collide with support or to rename a command players have already learned.
+
+**Filing** (`/report`, `/bug`, `/helpme`):
+- Refuses, with the usage line, when the description is empty — and `/report` also when it names nobody, or names the caller.
+- `/report` resolves the named character against `ICharacterMappingData.CharactersByLowerCaseName` to fill `TargetAccount`, `TargetCharacterName` and `TargetCharacterID`. When the target is **not** on this scene server the ticket is still filed, with the typed name and a zero id — a player who logs off the moment they are reported must not thereby become unreportable — and the reply says which of the two happened.
+- Everything the ticket needs (account, character name, character id, scene name, resolved target) is copied off the `IPlayerCharacter` **synchronously, before** the work is queued. The character is a pooled instance and may belong to somebody else by the time an `await` resumes.
+- Subject is derived: the first `SupportSubjectLength` (60) characters of the message, or `Report: <name>`. Body is clamped to `SupportBodyLength` (512) as a second bound, so what this file sends does not depend on the `maxMessageLength` inspector field.
+- On success: `Ticket #<id> filed. Staff will reply in game; check it with /tickets.`
+- On refusal: the service's own `ErrorMessage`, which is written to be shown to the player (`"You already have 5 tickets open..."`, `"You have just filed a ticket..."`).
+- Every path answers, including the busy-queue path — a support command that appears to do nothing gets typed again, which is how four identical tickets happen.
+
+**Listing** (`/tickets`):
+- Searches by the caller's own **account**, taken from the server-loaded character, filtered to `Open`, `InProgress` and `AwaitingPlayer` — the same three statuses the service's flood limit counts, so a player who cannot file another ticket can see exactly what is blocking them.
+- One line per ticket: `#<id> [<status>] <subject> - <age>`, with the subject truncated against what the rest of the line costs so the line stays inside `ChatBroadcast.MaxTextLength`. The age is relative (`just now`, `12m ago`, `3h ago`, `2d ago`), because a UTC timestamp answers nothing a player is asking.
+- Replies are addressed by **character id** and re-resolved on the main thread (`ReplySupportByCharacterID`), never by holding the character across the await.
+
 ### Failure Semantics
 
 - Invalid messages fail closed: kicked or silently dropped with no mutation.
@@ -295,6 +324,14 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 | Shutdown persist flush | Trigger deinitialize; confirm `FlushPersistQueueSync` drains all remaining persist entries |
 | Async backpressure | Saturate async worker queue; confirm new work is rejected with a logged warning |
 | Main-thread queue drain | Confirm queued async results are dispatched on the main thread within `maxMainThreadActionsPerFrame` per frame |
+| Support commands registered | Confirm `/report`, `/bug`, `/helpme` and `/tickets` appear in `ChatHelper.Commands` at `AccessLevel.Player` after initialize, and are absent after deinitialize |
+| File a bug | Send `/bug <text>`; confirm the reply names a ticket id and a row appears in `support_ticket` with category `Bug` and the derived subject |
+| Report an online player | Send `/report <online name> <text>`; confirm the reply says the target is on this scene server and the row carries `TargetAccount` and a non-zero `TargetCharacterID` |
+| Report an offline player | Send `/report <name not on this scene server> <text>`; confirm the ticket is still filed, with the typed name and `TargetCharacterID` = 0, and the reply says so |
+| Support refusal surfaced | File six tickets in a row; confirm the sixth is refused with the service's own message rather than a silent no-op |
+| Support usage replies | Send `/report` and `/bug` with no arguments; confirm each answers with its usage line |
+| List own tickets | Send `/tickets`; confirm only the caller's unfinished tickets are listed, with id, status, subject and relative age |
+| No audit row for support | Run each support command; confirm **no** row is written to `admin_audit_log` — they are Player level and the gate ignores them |
 | Deinitialize cleanup | Trigger deinitialize; confirm outbound buffers flushed, persist queue flushed, incoming queue drained, broadcast handler unregistered, and periodic callbacks unregistered |
 
 ## Flow Diagram
@@ -448,6 +485,7 @@ Chat/
 ├── ChatSystem.GroupChat.cs             # Partial: Party and Guild async channel handlers
 ├── ChatSystem.LocalChat.cs             # Partial: Region (scene-scoped) and Say (observer-scoped) broadcast handlers
 ├── ChatSystem.TellChat.cs              # Partial: Tell (private whisper) async target resolution handler
+├── ChatSystem.SupportCommands.cs       # Partial: /report, /bug, /helpme, /tickets player support commands
 ├── ChatSystem.WorldChat.cs             # Partial: World and Trade outbound-batched channel handlers + BroadcastToWorld
 ├── ChatSystemRuntimeData.cs           # Polling cursor state, lock-free queues, outbound buffers, broadcast scratch buffers
 ├── ChatSystemMainThreadQueueData.cs   # Per-system main-thread action queue container
@@ -469,6 +507,7 @@ ServerBehaviour
        ├── ChatSystem.GroupChat.cs      # OnPartyChat, OnGuildChat + async handlers
        ├── ChatSystem.LocalChat.cs      # OnRegionChat, OnSayChat
        ├── ChatSystem.TellChat.cs       # OnTellChat + async handler
+       ├── ChatSystem.SupportCommands.cs # /report, /bug, /helpme, /tickets
        └── ChatSystem.WorldChat.cs      # OnWorldChat, OnTradeChat, BroadcastToWorld
 
 RuntimeDataContainer

@@ -12,7 +12,7 @@ namespace FishMMO.Database.Data
 	/// had each server write its own in-memory <c>locked</c> flag on every pulse, so anything
 	/// that set the column out of band was overwritten within five seconds, and nothing in the
 	/// process ever set the flag either. It also means any tool that can write the row (the
-	/// Discord bot, a CMS, psql) controls the servers, exactly as the kick-request table already
+	/// Discord bot, the Control Panel, psql) controls the servers, exactly as the kick-request table already
 	/// does for accounts.
 	/// </remarks>
 	public readonly struct ServerControlState

@@ -1564,6 +1564,19 @@ namespace FishMMO.Auth.Implementation
 			/// </summary>
 			/// <param name="count">Number of codes to generate.</param>
 			/// <returns>Array of plaintext recovery codes.</returns>
+			/// <summary>Hex characters per group in a recovery code.</summary>
+			private const int RecoveryCodeGroupLength = 4;
+
+			/// <summary>Number of groups in a recovery code.</summary>
+			private const int RecoveryCodeGroupCount = 4;
+
+			/// <summary>Separator between recovery-code groups.</summary>
+			private const char RecoveryCodeSeparator = '-';
+
+			/// <summary>Total length of a formatted recovery code, separators included.</summary>
+			public const int RecoveryCodeLength =
+				(RecoveryCodeGroupLength * RecoveryCodeGroupCount) + (RecoveryCodeGroupCount - 1);
+
 			public static string[] GenerateRecoveryCodes(int count = DefaultRecoveryCodeCount)
 			{
 				if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
@@ -1573,10 +1586,68 @@ namespace FishMMO.Auth.Implementation
 				{
 					byte[] bytes = GenerateKey(8);
 					string hex = BitConverter.ToString(bytes).Replace("-", "").ToUpperInvariant();
-					codes[i] = hex.Substring(0, 4) + "-" + hex.Substring(4, 4) + "-" + hex.Substring(8, 4) + "-" + hex.Substring(12, 4);
+					// Built from the shared constants so LooksLikeRecoveryCode cannot drift from it.
+					var groups = new string[RecoveryCodeGroupCount];
+					for (int g = 0; g < RecoveryCodeGroupCount; g++)
+					{
+						groups[g] = hex.Substring(g * RecoveryCodeGroupLength, RecoveryCodeGroupLength);
+					}
+					codes[i] = string.Join(RecoveryCodeSeparator.ToString(), groups);
 					CryptographicOperationsCompat.ZeroMemory(bytes);
 				}
 				return codes;
+			}
+
+			/// <summary>
+			/// Returns <c>true</c> when a submitted code has the shape of a recovery code rather
+			/// than a TOTP code.
+			/// </summary>
+			/// <remarks>
+			/// <para>
+			/// Lives beside <see cref="GenerateRecoveryCodes"/> on purpose. The verification paths
+			/// used to carry their own copy of the test, hard-coded as "eleven characters with a
+			/// hyphen at index five" — a format this generator has never produced. It emits
+			/// <c>XXXX-XXXX-XXXX-XXXX</c>: nineteen characters, hyphens at four, nine and
+			/// fourteen. Nothing therefore ever matched, every recovery code was routed to the
+			/// TOTP verifier, and every one of them was rejected.
+			/// </para>
+			/// <para>
+			/// Deriving the test from the generator's own constants is what stops the two drifting
+			/// apart again.
+			/// </para>
+			/// </remarks>
+			/// <param name="submitted">The code the user typed. Surrounding whitespace is ignored.</param>
+			public static bool LooksLikeRecoveryCode(string submitted)
+			{
+				if (string.IsNullOrEmpty(submitted))
+				{
+					return false;
+				}
+
+				string code = submitted.Trim();
+				if (code.Length != RecoveryCodeLength)
+				{
+					return false;
+				}
+
+				for (int i = 0; i < code.Length; i++)
+				{
+					bool shouldBeSeparator = (i + 1) % (RecoveryCodeGroupLength + 1) == 0;
+					char c = code[i];
+
+					if (shouldBeSeparator)
+					{
+						if (c != RecoveryCodeSeparator) return false;
+						continue;
+					}
+
+					char upper = char.ToUpperInvariant(c);
+					if (!((upper >= '0' && upper <= '9') || (upper >= 'A' && upper <= 'F')))
+					{
+						return false;
+					}
+				}
+				return true;
 			}
 
 			/// <summary>

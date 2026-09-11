@@ -30,7 +30,36 @@ namespace AppHealthMonitor
 		public int MonitoredPort { get; set; }
 
 		/// <summary>
-		/// Gets or sets the types of ports to monitor (e.g., TCP, UDP, WebSocket).
+		/// Which server tier's pulse to read: <c>login</c>, <c>world</c> or <c>scene</c>.
+		/// </summary>
+		/// <remarks>
+		/// Required when <c>PortTypes</c> includes <c>DatabasePulse</c>, and ignored otherwise.
+		/// </remarks>
+		public string PulseTier { get; set; } = string.Empty;
+
+		/// <summary>
+		/// The name the server registers itself under, from its own <c>ServerName</c> setting.
+		/// </summary>
+		/// <remarks>
+		/// Defaults to <see cref="Name"/>. It is a separate setting because the daemon's name
+		/// for a process and the name the server registers under are configured in different
+		/// files and need not match — and matching on address or port instead would be
+		/// ambiguous, since the server rows are global and two hosts can share a port number.
+		/// </remarks>
+		public string PulseServerName { get; set; } = string.Empty;
+
+		/// <summary>
+		/// How old a pulse may be before the server counts as down. Defaults to 90 seconds.
+		/// </summary>
+		/// <remarks>
+		/// Three missed beats at the usual 30-second interval. Too tight and a momentary
+		/// database stall restarts a healthy server; too loose and a dead one lingers. If the
+		/// servers' pulse interval changes, this wants changing with it.
+		/// </remarks>
+		public int PulseStaleSeconds { get; set; }
+
+		/// <summary>
+		/// Gets or sets the health checks to run (e.g., TCP, UDP, DatabasePulse).
 		/// An empty list indicates process-only monitoring with no port checks.
 		/// </summary>
 		public List<PortType> PortTypes { get; set; } = [];
@@ -111,12 +140,6 @@ namespace AppHealthMonitor
 		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int PortCheckTimeoutMs { get; set; }
 
-		/// <summary>
-		/// Gets or sets the timeout in milliseconds for WebSocket port health checks.
-		/// WebSocket connections typically require more time due to the upgrade handshake.
-		/// </summary>
-		/// <remarks>Minimum enforced value: 1.</remarks>
-		public int WebSocketCheckTimeoutMs { get; set; }
 
 		/// <summary>
 		/// Gets or sets the host address used for port health checks.
@@ -198,21 +221,53 @@ namespace AppHealthMonitor
 			// Store normalized host to keep probe behavior consistent across checkers.
 			HealthCheckHost = normalizedHealthCheckHost;
 
+			if (PortTypes != null && PortTypes.Contains(PortType.DatabasePulse))
+			{
+				if (string.IsNullOrWhiteSpace(PulseServerName))
+				{
+					PulseServerName = Name;
+				}
+				if (PulseStaleSeconds <= 0)
+				{
+					PulseStaleSeconds = 90;
+				}
+
+				string tier = (PulseTier ?? string.Empty).Trim().ToLowerInvariant();
+				if (tier != "login" && tier != "world" && tier != "scene")
+				{
+					error = $"'{Name}' uses DatabasePulse but PulseTier is '{PulseTier}'. Set it to login, world or scene.";
+					return false;
+				}
+			}
+
 			if (MonitoredPort < 0 || MonitoredPort > 65535)
 			{
 				error = $"MonitoredPort must be between 0 and 65535 for '{Name}'. Got: {MonitoredPort}.";
 				return false;
 			}
 
-			if (PortTypes.Count > 0 && MonitoredPort == 0)
+			/* Only a check that actually opens a socket needs a port. A DatabasePulse check
+			 * reads a row and never touches the network, so demanding a port for it would force
+			 * an operator to invent a number — and an invented port is one somebody later
+			 * believes is real. */
+			bool needsPort = PortTypes.Exists(t => t == PortType.TCP || t == PortType.UDP);
+
+			if (needsPort && MonitoredPort == 0)
 			{
-				error = $"MonitoredPort must be between 1 and 65535 when PortTypes are configured for '{Name}'.";
+				error = $"MonitoredPort must be between 1 and 65535 when '{Name}' has a TCP or UDP check.";
 				return false;
 			}
 
 			if (MonitoredPort > 0 && PortTypes.Count == 0)
 			{
-				error = $"MonitoredPort is set to {MonitoredPort} but PortTypes is empty for '{Name}'. Add PortTypes (e.g., TCP, UDP, WebSocket) to enable port health checks, or set MonitoredPort to 0 for process-only monitoring.";
+				error = $"MonitoredPort is set to {MonitoredPort} but PortTypes is empty for '{Name}'. Add PortTypes (e.g., TCP, DatabasePulse) to enable health checks, or set MonitoredPort to 0 for process-only monitoring.";
+				return false;
+			}
+
+			if (MonitoredPort > 0 && !needsPort)
+			{
+				error = $"MonitoredPort is set to {MonitoredPort} for '{Name}', but none of its checks use a port. " +
+					"A DatabasePulse check reads the server's pulse from the database and never connects to it; set MonitoredPort to 0.";
 				return false;
 			}
 
@@ -282,12 +337,6 @@ namespace AppHealthMonitor
 				return false;
 			}
 
-			if (WebSocketCheckTimeoutMs > 60000)
-			{
-				error = $"WebSocketCheckTimeoutMs ({WebSocketCheckTimeoutMs}) exceeds 60000ms for '{Name}'. This will cause excessively long health check cycles.";
-				return false;
-			}
-
 			if (ForceKillTimeoutSeconds > 60)
 			{
 				error = $"ForceKillTimeoutSeconds ({ForceKillTimeoutSeconds}) exceeds 60s for '{Name}'. This may cause the daemon to hang during shutdown.";
@@ -338,7 +387,6 @@ namespace AppHealthMonitor
 			InitialHealthCheckDelaySeconds = Math.Max(InitialHealthCheckDelaySeconds, 1);
 			PostLaunchSettleDelaySeconds = Math.Max(PostLaunchSettleDelaySeconds, 1);
 			PortCheckTimeoutMs = Math.Max(PortCheckTimeoutMs, 1);
-			WebSocketCheckTimeoutMs = Math.Max(WebSocketCheckTimeoutMs, 1);
 			ForceKillTimeoutSeconds = Math.Max(ForceKillTimeoutSeconds, 1);
 			ResourceCheckFailureThreshold = Math.Max(ResourceCheckFailureThreshold, 1);
 			LaunchDelaySeconds = Math.Max(LaunchDelaySeconds, 0);

@@ -10,7 +10,7 @@ namespace AppHealthMonitor
 	/// <strong>Limitation:</strong> UDP is connectionless. A successful send only confirms the local
 	/// OS accepted the datagram into the send buffer, not that the remote endpoint received it or is
 	/// alive. This checker will report success even if the target application is down. For reliable
-	/// health checking, prefer TCP or WebSocket. Use UDP checks only as a supplementary probe alongside
+	/// health checking, prefer TCP, or DatabasePulse for a FishMMO game server. Use UDP only as a supplementary probe alongside
 	/// other port types.
 	/// </para>
 	/// </summary>

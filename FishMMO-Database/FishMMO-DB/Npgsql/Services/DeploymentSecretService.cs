@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -37,6 +39,33 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<DeploymentSecretInfo>>> FetchInventoryAsync(
+			CancellationToken cancellationToken = default)
+		{
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				/* The projection names four columns and Value is not one of them, so the secret
+				 * material never leaves the database — not into this process's memory, let alone
+				 * into a response. Selecting the entity and mapping afterwards would read every
+				 * key into the heap for no reason. */
+				var rows = await dbContext.Set<DeploymentSecretEntity>()
+					.AsNoTracking()
+					.OrderBy(e => e.Key)
+					.Select(e => new DeploymentSecretInfo
+					{
+						Key = e.Key,
+						ValueLength = e.Value.Length,
+						CreatedUtc = e.TimeCreated,
+						UpdatedUtc = e.TimeUpdated,
+					})
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				return (IReadOnlyList<DeploymentSecretInfo>)rows;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
 		public async Task<DatabaseResult<string>> FetchAsync(
 			string key,
 			CancellationToken cancellationToken = default)

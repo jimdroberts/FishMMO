@@ -365,6 +365,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// In-game operator commands. See SceneServerSystem.AdminCommands.
 			RegisterAdminCommands();
+			RegisterGameMasterCommands();
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -433,6 +434,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			UnregisterAdminCommands();
+			UnregisterGameMasterCommands();
 
 			// A shutdown that has been carried out must not still be pending in the database, or
 			// an automatic restart stops again immediately. See ClearConsumedShutdownOnTeardown.

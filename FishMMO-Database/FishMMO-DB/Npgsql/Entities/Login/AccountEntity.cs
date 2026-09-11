@@ -8,8 +8,16 @@ namespace FishMMO.Database.Npgsql.Entities
 	public class AccountEntity
 	{
 		/// <summary>
-		/// Unique account name (primary key) — preserves the casing the user registered with.
+		/// Unique account name, and the primary key.
 		/// </summary>
+		/// <remarks>
+		/// <b>Stored lowercase.</b> It used to be documented as preserving the casing the user
+		/// registered with, and it does not: <c>AccountService.PersistAsync</c> inserts
+		/// <c>ToLowerInvariant()</c>. Anything that displays this back to a player shows
+		/// lowercase, and any code written on the belief that the original casing survives is
+		/// wrong. <see cref="NameLowercase"/> is a generated column that exists so the unique
+		/// index is case-insensitive regardless of what is inserted here.
+		/// </remarks>
 		public string Name { get; set; }
 
 		/// <summary>

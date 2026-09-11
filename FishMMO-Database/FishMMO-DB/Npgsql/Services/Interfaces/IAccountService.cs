@@ -138,6 +138,26 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Replaces the SRP salt and verifier for an account, for a password change.
+		/// </summary>
+		/// <remarks>
+		/// The caller must already have proved possession of the CURRENT password — this method
+		/// performs no such check. The panel proves it by running a full SRP exchange against the
+		/// stored verifier before calling here; the plaintext password is never seen by either
+		/// side, so there is nothing else this layer could verify.
+		/// </remarks>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="salt">The new SRP salt, derived client-side.</param>
+		/// <param name="verifier">The new SRP verifier, derived client-side.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistSrpCredentialsAsync(
+			string accountName,
+			string salt,
+			string verifier,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Updates the email address for an account.
 		/// </summary>
 		/// <param name="accountName">The account name.</param>
@@ -274,6 +294,42 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="accountName">The account name.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>DatabaseResult indicating success or failure.</returns>
+		/// <summary>
+		/// Sets an account's access level.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The level is the account's whole authorization surface, in the game and in the Control
+		/// Panel alike, so this is the single most consequential write in this service. It does
+		/// no policy checking of its own — who may promote whom, and how far, is the caller's to
+		/// decide and depends on the caller's own level, which this layer cannot see.
+		/// </para>
+		/// <para>
+		/// Every caller must record the change in the audit log. A level that changed with no
+		/// record of who changed it is indistinguishable from a compromise.
+		/// </para>
+		/// </remarks>
+		/// <param name="accountName">Account to change.</param>
+		/// <param name="accessLevel">The new level.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> PersistAccessLevelAsync(
+			string accountName,
+			byte accessLevel,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Marks an account verified without requiring a verification code, clearing any
+		/// pending code in the process.
+		///
+		/// This is the server-initiated counterpart to <see cref="PersistVerifiedAsync"/> and
+		/// exists for the development-only <c>AutoVerifyAccounts</c> path, where no code is
+		/// ever generated or emailed. It performs no code check, so it must never be reachable
+		/// from a client-supplied value — client-driven verification goes through
+		/// <see cref="PersistVerifiedAsync"/>, which validates the code atomically.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
 		Task<DatabaseResult> PersistAutoVerifiedAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
@@ -301,6 +357,100 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>DatabaseResult indicating success or failure.</returns>
 		Task<DatabaseResult> PersistVerificationEmailSentAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Searches accounts for an operator, one page at a time.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Returns <see cref="AccountAdminData"/>, which deliberately carries no SRP or TOTP
+		/// material. See that type's remarks; do not "helpfully" widen it.
+		/// </para>
+		/// <para>
+		/// The text filter is a prefix match, and <see cref="AccountAdminQuery.PageSize"/> is
+		/// clamped by the implementation. Both are deliberate: a search box is reachable by
+		/// anyone who reaches the panel, and neither an unanchored pattern nor an unbounded page
+		/// size gets to decide how much of the table one request reads.
+		/// </para>
+		/// </remarks>
+		/// <param name="query">The filter. Null is treated as an unfiltered first page.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>One page of matching accounts, with the total for the pager.</returns>
+		Task<DatabaseResult<AccountAdminPage>> SearchAdminAsync(
+			AccountAdminQuery query,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches a single account for an operator.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Not <see cref="FetchForLoginAsync"/>. That method refuses banned accounts and reports
+		/// a missing account and a banned one with the same message, because a login path that
+		/// distinguished them would be an account-enumeration oracle. Both behaviours are wrong
+		/// here: the operator most likely to open an account page is the one looking at a ban,
+		/// and an operator who cannot tell "no such account" from "banned" cannot do the job.
+		/// </para>
+		/// <para>
+		/// The caller is responsible for the access-level check that makes that distinction safe
+		/// to expose, and for auditing the read if the deployment audits reads.
+		/// </para>
+		/// </remarks>
+		/// <param name="accountName">Account to fetch. Matched case-insensitively.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The account, or DB_NOT_FOUND when no such account exists.</returns>
+		Task<DatabaseResult<AccountAdminData>> FetchAdminAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Bans an account: drops it to <c>AccessLevel.Banned</c>, revokes its auth tokens and
+		/// Control Panel sessions, and queues a kick so the game servers disconnect it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// All four writes land together or none of them do. A half-applied ban leaves the
+		/// account playing: the access level is the login gate and nothing else, so lowering it
+		/// alone stops the next sign-in and does nothing to the session already connected, while
+		/// revoking tokens alone lets the player sign straight back in. The failure this
+		/// atomicity exists to prevent is exactly that — an operator who is told the ban
+		/// succeeded, watching the banned account keep playing.
+		/// </para>
+		/// <para>
+		/// This layer does no policy checking. Who may ban whom is the caller's decision, and
+		/// every caller must record the ban in the audit log.
+		/// </para>
+		/// </remarks>
+		/// <param name="accountName">Account to ban. Matched case-insensitively.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or DB_NOT_FOUND when no such account exists.</returns>
+		Task<DatabaseResult> BanAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Lifts a ban by restoring <c>AccessLevel.Player</c>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Deliberately not the inverse of <see cref="BanAsync"/>. It restores the level and
+		/// nothing else: the auth tokens and panel sessions the ban revoked are correctly gone,
+		/// and reviving them would hand back credentials that may well be the reason for the ban
+		/// and have since been shared or stolen. The player signs in again, which re-issues
+		/// everything through the paths that are allowed to mint it.
+		/// </para>
+		/// <para>
+		/// It restores <c>Player</c> specifically, not whatever the level was before. This layer
+		/// does not record the previous level, and guessing wrong in the upward direction would
+		/// silently hand back operator access.
+		/// </para>
+		/// </remarks>
+		/// <param name="accountName">Account to unban. Matched case-insensitively.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or DB_NOT_FOUND when no such account exists.</returns>
+		Task<DatabaseResult> UnbanAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
 	}

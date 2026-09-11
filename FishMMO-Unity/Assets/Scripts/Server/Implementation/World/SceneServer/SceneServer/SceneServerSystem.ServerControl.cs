@@ -26,7 +26,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// process. Commands here write the row; every world and scene server reads its own row back
 	/// on each pulse and adopts what it finds. That is what makes a single in-game command reach
 	/// processes the player is not connected to — and it means anything else that can write those
-	/// rows (the Discord bot, a CMS, psql) controls the servers identically, exactly as
+	/// rows (the Discord bot, the Control Panel, psql) controls the servers identically, exactly as
 	/// <c>kick_requests</c> already works for accounts.
 	/// </para>
 	/// <para>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>FishMMO Control Panel</title>
+	<meta name="description" content="Operator and player-services dashboard for a FishMMO shard." />
+	<meta name="color-scheme" content="light dark" />
+	<meta name="robots" content="noindex, nofollow" />
+
+	<!--
+		No CSRF token is stamped, and none is needed today: the session cookie is HttpOnly,
+		Secure and SameSite=Strict, so a cross-site request carries no session at all. If a
+		token is ever added, js/api.js already reads it from here.
+		<meta name="csrf-token" content="..." />
+	-->
+
+	<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 3a9 9 0 0 0-9 9 9 9 0 0 0 1.6 5.1h14.8A9 9 0 0 0 21 12a9 9 0 0 0-9-9Z'/%3E%3Cpath d='M12 12l4-3'/%3E%3C/svg%3E" />
+
+	<link rel="stylesheet" href="css/tokens.css" />
+	<link rel="stylesheet" href="css/base.css" />
+	<link rel="stylesheet" href="css/layout.css" />
+	<link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+	<div id="root">
+		<div id="boot" style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#5f6b80;font:500 13px system-ui,sans-serif">
+			Loading the Control Panel…
+		</div>
+	</div>
+
+	<noscript>
+		<div style="max-width:44ch;margin:12vh auto;padding:24px;border:1px solid #dae0ea;border-radius:12px;background:#fff;color:#303a4d;font:400 14px/1.5 system-ui,sans-serif">
+			<strong style="display:block;margin-bottom:8px;color:#0d1220">JavaScript is required</strong>
+			The Control Panel is an interactive dashboard and cannot be rendered without it.
+		</div>
+	</noscript>
+
+	<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -76,6 +76,30 @@ namespace FishMMO.Shared
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 		#endregion
 
+		#region Pattern Accessors
+		/*
+		 * The patterns themselves, so a client can apply exactly these rules without
+		 * sending the value it is validating. The Control Panel needs this for the
+		 * password field in particular: asking a server "is this password allowed?"
+		 * means transmitting the password, which is precisely what SRP exists to avoid.
+		 */
+
+		/// <summary>The username pattern, as a plain regex string.</summary>
+		public static string UsernamePattern => usernameRegex.ToString();
+
+		/// <summary>The password pattern, as a plain regex string.</summary>
+		public static string PasswordPattern => passwordRegex.ToString();
+
+		/// <summary>The email pattern, as a plain regex string.</summary>
+		public static string EmailPattern => emailUsernameRegex.ToString();
+
+		/// <summary>The character name pattern, as a plain regex string.</summary>
+		public static string CharacterNamePattern => characterNameRegex.ToString();
+
+		/// <summary>The guild name pattern, as a plain regex string.</summary>
+		public static string GuildNamePattern => guildNameRegex.ToString();
+		#endregion
+
 		/// <summary>Validates an email address against the email regex pattern. Returns false for null/empty/whitespace input.</summary>
 		public static bool IsAllowedEmailUsername(string email) =>
 			!string.IsNullOrWhiteSpace(email) && emailUsernameRegex.IsMatch(email);

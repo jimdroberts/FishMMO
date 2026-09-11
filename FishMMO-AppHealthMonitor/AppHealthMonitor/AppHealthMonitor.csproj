@@ -8,14 +8,18 @@
     <NoWarn>$(NoWarn);CS4014</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Required for loading configuration from appsettings.json -->
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+    <!-- Required for loading configuration from appsettings.json. Pinned to 9.0.4 to match
+         FishMMO-DB, which the control plane references; a lower version is a package downgrade. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.4" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
+    <!-- The database-backed control plane. Optional at runtime: with no credentials the daemon
+         supervises exactly as it did before. -->
+    <ProjectReference Include="..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Shared logging configuration (no rename needed). -->

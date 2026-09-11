@@ -163,14 +163,29 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			return await ExecuteWriteAsync(async dbContext =>
 			{
+				/* Releasing the claim is the whole point of recording a failure.
+				 *
+				 * DequeueNextAsync only ever selects rows with claimed_at IS NULL, so a row
+				 * left claimed is a row no login server will ever look at again. Incrementing
+				 * attempts without clearing it meant the documented retry limit could never be
+				 * reached, because there was never a second attempt: one failed send left a
+				 * player permanently unable to verify their account, and nothing said so.
+				 *
+				 * The claim is therefore dropped while attempts remain, and deliberately kept
+				 * once they are spent — that is what "give up" looks like in a schema with no
+				 * state column, and it is what stops a permanently undeliverable address being
+				 * retried forever. The error stays either way: it is the evidence, and on a
+				 * released row it is what an operator reads to see why it is back in line. */
 				var sql = $@"UPDATE {TableName}
 					SET attempts = attempts + 1,
-					    last_error = {{0}}
+					    last_error = {{0}},
+					    claimed_at = CASE WHEN attempts + 1 < {{2}} THEN NULL ELSE claimed_at END,
+					    claimed_by = CASE WHEN attempts + 1 < {{2}} THEN NULL ELSE claimed_by END
 					WHERE id = {{1}}";
 
 				var affected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { error ?? "Unknown error", id },
+					new object[] { error ?? "Unknown error", id, maxAttempts },
 					cancellationToken)
 					.ConfigureAwait(false);
 
