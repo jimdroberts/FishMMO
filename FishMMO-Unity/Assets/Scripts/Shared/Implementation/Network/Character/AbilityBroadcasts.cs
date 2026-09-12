@@ -1,4 +1,4 @@
-using FishNet.Broadcast;
+﻿using FishNet.Broadcast;
 using FishNet.Serializing;
 using FishNet.CodeGenerating;
 using FishMMO.Logging;
@@ -40,6 +40,48 @@ namespace FishMMO.Shared
 			{
 				TemplateID = reader.ReadInt32Unpacked(),
 			};
+		}
+
+		/// <summary>Writes an array of <see cref="KnownAbilityAddBroadcast"/>.</summary>
+		/// <remarks>
+		/// Explicit because the element carries <c>[UseGlobalCustomSerializer]</c>. That attribute
+		/// tells FishNet the element has a hand-written serializer, and codegen then declines to
+		/// synthesise one for the ARRAY as well — it emits nothing and says nothing at build time.
+		/// The gap only appears when a broadcast carrying the array is actually sent, as
+		/// "Write method not found for KnownAbilityAddBroadcast[]", by which point the send has already failed.
+		/// A null array is written as length -1 so it round-trips as null rather than as empty.
+		/// </remarks>
+		public static void WriteKnownAbilityAddBroadcastArray(this Writer writer, KnownAbilityAddBroadcast[] value)
+		{
+			if (value == null)
+			{
+				writer.WriteInt32(-1);
+				return;
+			}
+
+			writer.WriteInt32(value.Length);
+			for (int i = 0; i < value.Length; i++)
+			{
+				writer.WriteKnownAbilityAddBroadcast(value[i]);
+			}
+		}
+
+		/// <summary>Reads an array of <see cref="KnownAbilityAddBroadcast"/>.</summary>
+		public static KnownAbilityAddBroadcast[] ReadKnownAbilityAddBroadcastArray(this Reader reader)
+		{
+			int length = reader.ReadInt32();
+			if (length < 0)
+			{
+				return null;
+			}
+
+			KnownAbilityAddBroadcast[] value = new KnownAbilityAddBroadcast[length];
+			for (int i = 0; i < length; i++)
+			{
+				value[i] = reader.ReadKnownAbilityAddBroadcast();
+			}
+
+			return value;
 		}
 	}
 
@@ -86,6 +128,48 @@ namespace FishMMO.Shared
 			{
 				TemplateID = reader.ReadInt32Unpacked(),
 			};
+		}
+
+		/// <summary>Writes an array of <see cref="KnownAbilityEventAddBroadcast"/>.</summary>
+		/// <remarks>
+		/// Explicit because the element carries <c>[UseGlobalCustomSerializer]</c>. That attribute
+		/// tells FishNet the element has a hand-written serializer, and codegen then declines to
+		/// synthesise one for the ARRAY as well — it emits nothing and says nothing at build time.
+		/// The gap only appears when a broadcast carrying the array is actually sent, as
+		/// "Write method not found for KnownAbilityEventAddBroadcast[]", by which point the send has already failed.
+		/// A null array is written as length -1 so it round-trips as null rather than as empty.
+		/// </remarks>
+		public static void WriteKnownAbilityEventAddBroadcastArray(this Writer writer, KnownAbilityEventAddBroadcast[] value)
+		{
+			if (value == null)
+			{
+				writer.WriteInt32(-1);
+				return;
+			}
+
+			writer.WriteInt32(value.Length);
+			for (int i = 0; i < value.Length; i++)
+			{
+				writer.WriteKnownAbilityEventAddBroadcast(value[i]);
+			}
+		}
+
+		/// <summary>Reads an array of <see cref="KnownAbilityEventAddBroadcast"/>.</summary>
+		public static KnownAbilityEventAddBroadcast[] ReadKnownAbilityEventAddBroadcastArray(this Reader reader)
+		{
+			int length = reader.ReadInt32();
+			if (length < 0)
+			{
+				return null;
+			}
+
+			KnownAbilityEventAddBroadcast[] value = new KnownAbilityEventAddBroadcast[length];
+			for (int i = 0; i < length; i++)
+			{
+				value[i] = reader.ReadKnownAbilityEventAddBroadcast();
+			}
+
+			return value;
 		}
 	}
 
@@ -189,6 +273,48 @@ namespace FishMMO.Shared
 				TemplateID = templateID,
 				Events = events,
 			};
+		}
+
+		/// <summary>Writes an array of <see cref="AbilityAddBroadcast"/>.</summary>
+		/// <remarks>
+		/// Explicit because the element carries <c>[UseGlobalCustomSerializer]</c>. That attribute
+		/// tells FishNet the element has a hand-written serializer, and codegen then declines to
+		/// synthesise one for the ARRAY as well — it emits nothing and says nothing at build time.
+		/// The gap only appears when a broadcast carrying the array is actually sent, as
+		/// "Write method not found for AbilityAddBroadcast[]", by which point the send has already failed.
+		/// A null array is written as length -1 so it round-trips as null rather than as empty.
+		/// </remarks>
+		public static void WriteAbilityAddBroadcastArray(this Writer writer, AbilityAddBroadcast[] value)
+		{
+			if (value == null)
+			{
+				writer.WriteInt32(-1);
+				return;
+			}
+
+			writer.WriteInt32(value.Length);
+			for (int i = 0; i < value.Length; i++)
+			{
+				writer.WriteAbilityAddBroadcast(value[i]);
+			}
+		}
+
+		/// <summary>Reads an array of <see cref="AbilityAddBroadcast"/>.</summary>
+		public static AbilityAddBroadcast[] ReadAbilityAddBroadcastArray(this Reader reader)
+		{
+			int length = reader.ReadInt32();
+			if (length < 0)
+			{
+				return null;
+			}
+
+			AbilityAddBroadcast[] value = new AbilityAddBroadcast[length];
+			for (int i = 0; i < length; i++)
+			{
+				value[i] = reader.ReadAbilityAddBroadcast();
+			}
+
+			return value;
 		}
 	}
 

@@ -1,4 +1,4 @@
-using FishNet.Broadcast;
+﻿using FishNet.Broadcast;
 using FishNet.Serializing;
 using FishNet.CodeGenerating;
 
@@ -56,6 +56,48 @@ namespace FishMMO.Shared
 				Seed = reader.ReadInt32Unpacked(),
 				StackSize = reader.ReadUInt32(),
 			};
+		}
+
+		/// <summary>Writes an array of <see cref="InventorySetItemBroadcast"/>.</summary>
+		/// <remarks>
+		/// Explicit because the element carries <c>[UseGlobalCustomSerializer]</c>. That attribute
+		/// tells FishNet the element has a hand-written serializer, and codegen then declines to
+		/// synthesise one for the ARRAY as well — it emits nothing and says nothing at build time.
+		/// The gap only appears when a broadcast carrying the array is actually sent, as
+		/// "Write method not found for InventorySetItemBroadcast[]", by which point the send has already failed.
+		/// A null array is written as length -1 so it round-trips as null rather than as empty.
+		/// </remarks>
+		public static void WriteInventorySetItemBroadcastArray(this Writer writer, InventorySetItemBroadcast[] value)
+		{
+			if (value == null)
+			{
+				writer.WriteInt32(-1);
+				return;
+			}
+
+			writer.WriteInt32(value.Length);
+			for (int i = 0; i < value.Length; i++)
+			{
+				writer.WriteInventorySetItemBroadcast(value[i]);
+			}
+		}
+
+		/// <summary>Reads an array of <see cref="InventorySetItemBroadcast"/>.</summary>
+		public static InventorySetItemBroadcast[] ReadInventorySetItemBroadcastArray(this Reader reader)
+		{
+			int length = reader.ReadInt32();
+			if (length < 0)
+			{
+				return null;
+			}
+
+			InventorySetItemBroadcast[] value = new InventorySetItemBroadcast[length];
+			for (int i = 0; i < length; i++)
+			{
+				value[i] = reader.ReadInventorySetItemBroadcast();
+			}
+
+			return value;
 		}
 	}
 
