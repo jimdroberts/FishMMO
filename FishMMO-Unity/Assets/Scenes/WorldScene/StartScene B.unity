@@ -4034,13 +4034,24 @@ MonoBehaviour:
   DayNightCycle: 1
   DayCycleDuration: 10800
   NightCycleDuration: 10800
-  DaySkyboxMaterial: {fileID: 0}
-  NightSkyBoxMaterial: {fileID: 0}
-  RotateObjects: []
-  DayObjects: []
+  DaySkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  NightSkyBoxMaterial: {fileID: 2100000, guid: 16eb23baeafad21469a3509842b500e3, type: 2}
+  RotateObjects:
+  - {fileID: 5871419508359712386}
+  - {fileID: 782950642}
+  - {fileID: 961621781}
+  - {fileID: 1573858113}
+  DayObjects:
+  - {fileID: 0}
   NightObjects: []
   FadeThreshold: 1
-  DayFadeObjects: []
+  DayFadeObjects:
+  - {fileID: 1830284267}
+  - {fileID: 449765938}
+  - {fileID: 1542368377}
+  - {fileID: 1835022672}
+  - {fileID: 12365299}
+  - {fileID: 99313407}
   NightFadeObjects: []
   isDaytime: 1
   onSceneLoadTriggers: []
@@ -6696,6 +6707,12 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d9b40c4bb7d3f5d4c965814c5433ce65, type: 3}
+--- !u!1 &5871419508359712386 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6291631714174163124, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
+    type: 3}
+  m_PrefabInstance: {fileID: 5871419508359712385}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

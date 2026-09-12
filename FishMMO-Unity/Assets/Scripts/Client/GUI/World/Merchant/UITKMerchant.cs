@@ -785,7 +785,7 @@ namespace FishMMO.Client
 			for (int slot = 0; slot < items.Count; ++slot)
 			{
 				Item item = items[slot];
-				if (item == null || item.Template == null || item.Template.Price <= 0)
+				if (item == null || item.Template == null || item.Template.Price < 0)
 				{
 					continue;
 				}
