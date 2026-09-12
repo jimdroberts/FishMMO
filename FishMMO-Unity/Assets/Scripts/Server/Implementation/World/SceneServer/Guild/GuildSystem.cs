@@ -1382,6 +1382,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guildExists = true;
 				RecordCurrencyMovement(characterID, feeCharged, CurrencyMovementReason.GuildCreation, absorbed: true);
 
+				/* Announce the new guild to the cross-server update pump. Every OTHER membership
+				 * mutation writes this marker, and this one did not, so a guild created and then
+				 * left alone was polled (it is in the character tracker) but had nothing to fetch:
+				 * the roster the founder had just been sent was never re-sent, and any column the
+				 * immediate add could not know stayed wrong until the founder relogged. Written
+				 * AFTER guildExists is set, so a failure here cannot refund a fee that bought a
+				 * guild — the marker is an optimisation of freshness, not part of the purchase. */
+				if (TryGetDbService(out IGuildUpdateService guildUpdateService))
+				{
+					DatabaseResult createUpdateResult = await guildUpdateService.PersistAsync(newGuildID);
+					if (!createUpdateResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"CreateGuildAsync guild update notification failed (GuildID={newGuildID}): {createUpdateResult.ErrorCode} - {createUpdateResult.ErrorMessage}");
+					}
+				}
+
 				// Marshal in-memory state changes + Broadcast back to main thread
 				TryEnqueueMainThread(() =>
 				{
@@ -1398,15 +1414,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					AddGuildCharacterTracker(gc.ID, characterID);
 
 					// tell the character we made their guild successfully
+					/* Projected from the LIVE character, not hand-built: this row has no database
+					 * membership row behind it yet, so the race can only come from the character
+					 * itself. An inline entry here omitted RaceID and left the founder staring at
+					 * an em dash in the roster's race column until a relog re-read the roster. */
 					Server.NetworkWrapper.Broadcast(conn, new GuildAddBroadcast()
 					{
 						GuildID = gc.ID,
-						Member = new GuildAddEntry()
-						{
-							CharacterID = characterID,
-							RankOrder = gc.RankOrder,
-							Location = sceneName,
-						},
+						Member = BuildSelfRosterEntry(conn.FirstObject.GetComponent<IPlayerCharacter>(), characterID, gc.RankOrder, sceneName),
 					}, true, Channel.Reliable);
 
 					// Hand the founder the (empty) notice and message of the day so the panel's
@@ -1917,15 +1932,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					AddGuildCharacterTracker(gc.ID, characterID);
 
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
+					/* Same projection as the create path. Without the race the new member's own
+					 * row reads as an em dash until the pump's next full roster lands. */
 					Server.NetworkWrapper.Broadcast(conn, new GuildAddBroadcast()
 					{
 						GuildID = gc.ID,
-						Member = new GuildAddEntry()
-						{
-							CharacterID = characterID,
-							RankOrder = joinRankOrder,
-							Location = sceneName,
-						},
+						Member = BuildSelfRosterEntry(conn.FirstObject.GetComponent<IPlayerCharacter>(), characterID, joinRankOrder, sceneName),
 					}, true, Channel.Reliable);
 
 					// The new member has no guild text yet; send it alongside the join rather than

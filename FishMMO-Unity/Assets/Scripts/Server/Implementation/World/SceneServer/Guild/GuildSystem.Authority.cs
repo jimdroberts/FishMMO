@@ -405,6 +405,52 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Projects a character's OWN membership row onto the wire, for the immediate add sent to
+		/// that character the moment they found or join a guild.
+		/// </summary>
+		/// <param name="character">
+		/// The member's live character, or null when it could not be resolved from the connection.
+		/// </param>
+		/// <param name="characterID">
+		/// The member's character identifier. Taken from the caller rather than from
+		/// <paramref name="character"/> so the row is still labelled correctly when the component
+		/// lookup fails; the character only supplies the race.
+		/// </param>
+		/// <param name="rankOrder">The member's position on the guild's rank ladder.</param>
+		/// <param name="location">The member's location label.</param>
+		/// <returns>The roster entry to send.</returns>
+		/// <remarks>
+		/// <para>
+		/// The counterpart of <see cref="BuildRosterEntry"/> for a member who has no database row
+		/// to project yet: the create and join paths answer the caller before the roster pump has
+		/// read anything back, so the only place their race can come from is the live character —
+		/// the same field the character table is written from, so the row the member is sent and
+		/// the row the next roster read produces agree.
+		/// </para>
+		/// <para>
+		/// It exists as a helper rather than as two inline initialisers because those two had
+		/// already drifted: both omitted <see cref="GuildAddEntry.RaceID"/>, so a founder's own
+		/// row carried 0 — which the client renders as an em dash — until something re-read the
+		/// roster from the database.
+		/// </para>
+		/// <para>
+		/// The notes and last-seen columns are deliberately left at their defaults: a member who
+		/// has just founded or joined a guild has no note yet, and is on this server by
+		/// definition, so <paramref name="location"/> is what the row displays.
+		/// </para>
+		/// </remarks>
+		internal static GuildAddEntry BuildSelfRosterEntry(IPlayerCharacter character, long characterID, byte rankOrder, string location)
+		{
+			return new GuildAddEntry()
+			{
+				CharacterID = characterID,
+				RankOrder = rankOrder,
+				Location = location ?? string.Empty,
+				RaceID = character != null ? character.RaceID : 0,
+			};
+		}
+
+		/// <summary>
 		/// Projects one membership row onto the wire, applying the officer-note filter.
 		/// </summary>
 		/// <param name="member">The membership row.</param>
