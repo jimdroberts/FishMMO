@@ -36,18 +36,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		private void OnServerMailFetchBroadcastReceived(NetworkConnection conn, MailFetchBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
-			{
-				return;
-			}
-
-			if (!CharacterStateValidation.CanAct(character))
-				return;
+			IPlayerCharacter character = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
@@ -970,18 +963,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		private void OnServerMailDeleteBroadcastReceived(NetworkConnection conn, MailDeleteBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
-			{
-				return;
-			}
-			
-			if (!CharacterStateValidation.CanAct(character))
-				return;
+			IPlayerCharacter character = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{

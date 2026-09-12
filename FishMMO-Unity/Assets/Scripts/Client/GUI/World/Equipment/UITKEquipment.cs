@@ -13,12 +13,43 @@ namespace FishMMO.Client
 	/// equipped items alongside the attributes they contribute to.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// This panel renders the server's answer and never its own guess. Every request it sends
 	/// leaves the slot looking exactly as it did, marked as waiting, until the equipment container
 	/// is replicated back — see <see cref="HandleSlotRightClick"/> for what that replaced and why.
+	/// </para>
+	/// <para>
+	/// Everything a SLOT does — joining the operation tracker, deciding whether a slot is
+	/// available, painting the icon and the stack badge and the lock overlay, keeping the tooltip
+	/// honest, starting a drag, abandoning what is in flight — comes from
+	/// <see cref="UITKSlotPanelBase"/>, which this panel shares with the bag and the bank. It used
+	/// to be a second copy of all of it, eighteen identically named members, and it had drifted
+	/// from the grid version in three ways; that class records which, and
+	/// <see cref="OnSlotPointerDown"/> below carries the one that was a player-visible bug.
+	/// </para>
+	/// <para>
+	/// What is genuinely this panel's own is the half a socket does differently: its slots are
+	/// AUTHORED in <c>UIEquipment.uxml</c> rather than built from a container's slot count, a drop
+	/// onto one is an equip rather than a swap, and beside the sockets it draws the attributes and
+	/// the live character preview that no item grid has.
+	/// </para>
 	/// </remarks>
-	public class UITKEquipment : UITKCharacterControl
+	public class UITKEquipment : UITKSlotPanelBase
 	{
+		// ── What this panel says about itself ─────────────────────────────────
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// "eq", which is already the prefix every class in <c>UIEquipment.uss</c> carries:
+		/// <c>eq-hidden</c> and <c>eq-slot__lock--pending</c> are exactly the two names the shared
+		/// painters derive from it. The two <c>const</c> strings that used to spell them out here
+		/// were the same convention written a second time.
+		/// </remarks>
+		protected override string Prefix => "eq";
+
+		/// <inheritdoc/>
+		protected override ReferenceButtonType DragType => ReferenceButtonType.Equipment;
+
 		// ── UXML element names ────────────────────────────────────────────────
 
 		/// <summary>Name of the attribute list ScrollView element in the UXML.</summary>
@@ -34,14 +65,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the stamina stat label element in the UXML.</summary>
 		private const string STAT_STAM_NAME     = "stat-stam";
 
-		// ── Shared UI overlay names (panels resolved by GameObject name via UIManager) ──
-
-		/// <summary>Name of the shared drag object overlay.</summary>
-		private const string DRAG_OBJECT_NAME = "UIDragObject";
-		/// <summary>Name of the shared tooltip overlay.</summary>
-		private const string TOOLTIP_NAME = "UITooltip";
-		/// <summary>Name of the shared transient-notice overlay.</summary>
-		private const string TOAST_NAME = "UIToast";
+		/* DRAG_OBJECT_NAME, TOOLTIP_NAME and TOAST_NAME are on UITKSlotPanelBase — three string
+		 * constants that were identical in this file and in the item grid, naming overlays neither
+		 * panel owns. */
 
 		/// <summary>
 		/// UXML element name for every <see cref="ItemSlot"/>, indexed by its enum value.
@@ -79,10 +105,10 @@ namespace FishMMO.Client
 
 		// ── USS class names ───────────────────────────────────────────────────
 
-		/// <summary>USS class for hiding equipment elements.</summary>
-		private const string CSS_HIDDEN         = "eq-hidden";
-		/// <summary>USS class marking a slot as waiting on the server.</summary>
-		private const string CSS_LOCK_PENDING   = "eq-slot__lock--pending";
+		/* eq-hidden and eq-slot__lock--pending are derived from Prefix by UITKSlotPanelBase, which
+		 * owns the painters that apply them. The attribute-row classes below are this panel's
+		 * alone: no item grid has an attribute list. */
+
 		/// <summary>USS class for an attribute category header.</summary>
 		private const string CSS_ATTR_CATEGORY  = "fish-attr-category";
 		/// <summary>USS class for an attribute row.</summary>
@@ -96,25 +122,13 @@ namespace FishMMO.Client
 		/// <summary>USS class for a percentage attribute value label.</summary>
 		private const string CSS_ATTR_PERCENT   = "fish-attr-row__value--percent";
 
-		// ── Per-slot view data ────────────────────────────────────────────────
-
-		/// <summary>Runtime view data for a single equipment slot element.</summary>
-		private struct SlotView
-		{
-			/// <summary>Root VisualElement of the slot (e.g. "slot-head").</summary>
-			public VisualElement Root;
-			/// <summary>Icon element (fish-slot__icon).</summary>
-			public VisualElement Icon;
-			/// <summary>Amount label (fish-slot__amount).</summary>
-			public Label Amount;
-			/// <summary>Lock overlay element (fish-slot__lock).</summary>
-			public VisualElement Lock;
-		}
-
 		// ── Private state ─────────────────────────────────────────────────────
 
-		/// <summary>Indexed by (int)ItemSlot; null until <see cref="OnStarting"/> has run.</summary>
-		private SlotView[] slotViews;
+		/* The SlotView struct and the slotViews collection are on UITKSlotPanelBase. This panel
+		 * used to hold them as an ARRAY that was null until OnStarting had seen a populated tree,
+		 * which meant eight null tests, one of which read .Length before testing and was an NRE on
+		 * the first equip of any session the player had not opened this window in. The shared list
+		 * starts empty instead, so every bounds check answers the same way with no special case. */
 
 		/// <summary>Live attribute value labels keyed by attribute template ID.</summary>
 		private readonly Dictionary<int, Label> attributeValueLabels = new Dictionary<int, Label>();
@@ -172,9 +186,6 @@ namespace FishMMO.Client
 		/// </remarks>
 		private RenderTexture previewTexture;
 
-		/// <summary>True while this panel holds a subscription on the shared operation tracker.</summary>
-		private bool trackerSubscribed;
-
 		// ── UITKControl lifecycle ─────────────────────────────────────────────
 
 		/// <summary>
@@ -207,27 +218,57 @@ namespace FishMMO.Client
 				closeBtn.clicked += Hide;
 			}
 
-			/* Equipment slots. The callbacks below are registered on elements that belong to the
-			 * tree being resolved right now — a rebuilt tree brings new elements and the old
-			 * handlers go with the old ones, so there is nothing to unregister and no per-rebuild
-			 * accumulation. The rebuilt views are captured wholesale into a fresh array for the
-			 * same reason: a stale SlotView points into a tree nobody can see. */
+			BuildSlotViewsFromMarkup(root);
+		}
+
+		/// <summary>
+		/// Fills the shared slot list from the sockets authored in the UXML.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// THIS IS THE PART A SHARED BASE MUST NOT OWN, and the reason
+		/// <see cref="UITKSlotPanelBase"/> holds the list but never populates it. The item grids
+		/// CREATE one element per container slot, so their slot count follows the container. These
+		/// ten sockets are authored in <c>UIEquipment.uxml</c> and found by name, so their count
+		/// follows the <see cref="ItemSlot"/> enum and the markup has to agree with it.
+		/// </para>
+		/// <para>
+		/// A socket whose element is missing is still ADDED, as a default
+		/// <c>SlotView</c> with a null root. Skipping it would shorten the list and every socket
+		/// after it would then draw the wrong item — the index into this list is the container slot
+		/// index, and that is the contract <see cref="SlotElementNames"/> exists to keep. The
+		/// shared painters already treat a null root as nothing to draw.
+		/// </para>
+		/// <para>
+		/// The callbacks are registered on elements that belong to the tree being resolved right
+		/// now — a rebuilt tree brings new elements and the old handlers go with the old ones, so
+		/// there is nothing to unregister and no per-rebuild accumulation. The list is cleared
+		/// first for the same reason: a stale SlotView points into a tree nobody can see.
+		/// </para>
+		/// </remarks>
+		private void BuildSlotViewsFromMarkup(VisualElement root)
+		{
+			slotViews.Clear();
+
 			int slotCount = SlotElementNames.Length;
-			slotViews = new SlotView[slotCount];
 			for (int i = 0; i < slotCount; ++i)
 			{
 				VisualElement slotRoot = root.Q(SlotElementNames[i]);
+
+				SlotView view = default;
+				if (slotRoot != null)
+				{
+					view.Root   = slotRoot;
+					view.Icon   = slotRoot.Q(className: "fish-slot__icon");
+					view.Amount = slotRoot.Q<Label>(className: "fish-slot__amount");
+					view.Lock   = slotRoot.Q(className: "fish-slot__lock");
+				}
+				slotViews.Add(view);
+
 				if (slotRoot == null)
 				{
 					continue;
 				}
-
-				SlotView view;
-				view.Root   = slotRoot;
-				view.Icon   = slotRoot.Q(className: "fish-slot__icon");
-				view.Amount = slotRoot.Q<Label>(className: "fish-slot__amount");
-				view.Lock   = slotRoot.Q(className: "fish-slot__lock");
-				slotViews[i] = view;
 
 				int slotIndex = i;
 				slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, slotIndex));
@@ -237,69 +278,24 @@ namespace FishMMO.Client
 			}
 		}
 
+		/* OnAfterStarting, OnAfterShow, OnClientSet, OnClientUnset and Hide are on
+		 * UITKSlotPanelBase. All five were the same overrides the item grid had written, THE
+		 * CONTRACT about the first open included — the same paragraph of explanation appeared in
+		 * both files. */
+
 		/// <summary>
-		/// Re-applies per-open content after the visual tree has been rebuilt.
+		/// Refreshes the character preview while the panel is on screen.
 		/// </summary>
 		/// <remarks>
-		/// The base implementation re-runs the character pre/post pair, which repopulates the
-		/// slots and attribute rows. What it does not carry across is the pending marks, which
-		/// live in the shared tracker rather than in the tree, so they have to be repainted onto
-		/// the new elements here.
-		/// </remarks>
-		protected override void OnAfterStarting()
-		{
-			base.OnAfterStarting();
-			ApplyPerOpenContent();
-		}
-
-		/// <summary>
-		/// Re-applies per-open content on every show, including the very first one.
-		/// </summary>
-		/// <remarks>
-		/// <c>OnAfterStarting</c> alone is not enough, and this is the trap THE CONTRACT warns
-		/// about: on the first ever open <c>hasStarted</c> is still false, so
-		/// <c>ReinitializeIfTreeReplaced</c> returns before re-running it. Doing the work from
-		/// both hooks is what makes the first open behave like every later one. Both paths are
-		/// idempotent — this re-reads state and repaints, it does not accumulate anything.
-		/// </remarks>
-		protected override void OnAfterShow()
-		{
-			ApplyPerOpenContent();
-		}
-
-		/// <summary>
-		/// Registers with the shared item-operation tracker.
-		/// </summary>
-		public override void OnClientSet()
-		{
-			SubscribeTracker();
-		}
-
-		/// <summary>
-		/// Detaches from the shared item-operation tracker.
-		/// </summary>
-		public override void OnClientUnset()
-		{
-			UnsubscribeTracker();
-		}
-
-		/// <summary>
-		/// Times out item operations whose reply never arrived, and refreshes the character
-		/// preview while the panel is on screen.
-		/// </summary>
-		/// <remarks>
-		/// <para>The tracker is shared and self-clearing, so it does not matter that all three item
-		/// panels drive it; whichever ticks first in a frame does the work and the others find
-		/// nothing outstanding.</para>
-		/// <para>The preview is refreshed here rather than on the equipment events because a
-		/// preview shows an animating character: the idle pose moves every frame, and a texture
-		/// rendered once when the panel opened would freeze it mid-stride. A frame is also when
-		/// the viewport's layout first becomes measurable, so this is the hook that gets the
-		/// preview its size on the opening frame.</para>
+		/// The preview is refreshed here rather than on the equipment events because a preview
+		/// shows an animating character: the idle pose moves every frame, and a texture rendered
+		/// once when the panel opened would freeze it mid-stride. A frame is also when the
+		/// viewport's layout first becomes measurable, so this is the hook that gets the preview
+		/// its size on the opening frame. The base ticks the operation tracker.
 		/// </remarks>
 		protected override void OnTick()
 		{
-			ItemOperationTracker.Tick();
+			base.OnTick();
 
 			if (Visible)
 			{
@@ -308,14 +304,15 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Releases the preview camera and texture, runtime-created attribute elements and every
-		/// subscription this panel holds.
+		/// Releases the preview camera and texture, the runtime-created attribute elements, and the
+		/// equipment subscriptions.
 		/// </summary>
-		public override void OnDestroying()
+		/// <remarks>
+		/// The tracker subscription and the drag are released by the base before this runs, which
+		/// is the order this panel already used.
+		/// </remarks>
+		protected override void OnPanelDestroying()
 		{
-			UnsubscribeTracker();
-			ReleaseAndClearDrag();
-
 			if (Character != null && Character.TryGet(out IEquipmentController equipmentController))
 			{
 				equipmentController.OnSlotUpdated     -= OnEquipmentSlotUpdated;
@@ -331,40 +328,27 @@ namespace FishMMO.Client
 			previewFramed = false;
 
 			DestroyAttributeElements();
-			base.OnDestroying();
 		}
 
 		// ── Visibility overrides (preview sync) ──────────────────────────────
 
 		/// <summary>
-		/// Hides the equipment panel, releases the preview camera and abandons anything this panel
-		/// had in flight.
+		/// Hands the preview camera back once the panel has actually gone off screen.
 		/// </summary>
 		/// <remarks>
-		/// <para><c>Hide(bool)</c> and not <c>Hide()</c>: <c>Hide()</c> delegates here, but Escape
-		/// (<c>UIManager.CloseNext</c>) and quit-to-login (<c>Hide(false)</c>) both arrive at this
-		/// overload directly. A pending mark or a half-finished drag that outlives the panel is
-		/// invisible to the player and refuses their next click for no stated reason.</para>
-		/// <para>The camera is handed back here rather than simply left enabled, because the
-		/// preview's cost is paid every frame whether or not anyone is looking at it.</para>
+		/// The camera is handed back rather than simply left enabled, because the preview's cost is
+		/// paid every frame whether or not anyone is looking at it. The base decides WHEN this is —
+		/// including the Escape and quit-to-login paths, which reach <c>Hide(bool)</c> directly
+		/// rather than through <c>Hide()</c> — and abandons the pending marks and any half-finished
+		/// drag afterwards. Both used to be spelled out here and in the item grid.
 		/// </remarks>
-		/// <param name="overrideIsAlwaysOpen">When true, the call is a no-op.</param>
-		public override void Hide(bool overrideIsAlwaysOpen)
+		protected override void OnPanelHidden()
 		{
-			base.Hide(overrideIsAlwaysOpen);
-
-			if (Visible)
-			{
-				return;
-			}
-
 			/* The element stops drawing the texture before the renderer destroys it, so no frame
 			 * can find a destroyed texture still on the element's style. */
 			ApplyPreviewTexture(null);
 			previewRenderer.Configure(null);
 			previewFramed = false;
-
-			ReleaseAndClearDrag();
 		}
 
 		// ── Character control ─────────────────────────────────────────────────
@@ -471,11 +455,12 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnEquipmentSlotLockChanged(IItemContainer container, int slot, bool isLocked)
 		{
-			/* slotViews is null until OnStarting has seen a populated tree, and a panel that
-			 * starts hidden is handed a character — and therefore these events — long before
-			 * that. Reading .Length first was an NRE on the first equip of every session in which
-			 * the player had not opened this window. */
-			if (slotViews == null || slot < 0 || slot >= slotViews.Length)
+			/* The slot list is EMPTY until OnStarting has seen a populated tree, and a panel that
+			 * starts hidden is handed a character — and therefore these events — long before that.
+			 * An empty list fails the bounds check below; the array this used to be was null, and
+			 * reading its .Length first was an NRE on the first equip of every session in which the
+			 * player had not opened this window. */
+			if (slot < 0 || slot >= slotViews.Count)
 			{
 				return;
 			}
@@ -497,36 +482,26 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void OnEquipmentSlotUpdated(IItemContainer container, Item item, int equipmentSlot)
 		{
-			if (container == null || slotViews == null ||
-				equipmentSlot < 0 || equipmentSlot >= slotViews.Length)
-			{
-				return;
-			}
+			ApplySlotUpdate(container, item, equipmentSlot);
+		}
 
-			ItemOperationTracker.Release(ReferenceButtonType.Equipment, equipmentSlot);
-
-			/* Equipment changes the silhouette: a two-handed weapon reaches further than a dagger,
-			 * and a frame sized before it existed crops it. Re-framing on the next frame rather
-			 * than this one is deliberate — the mesh is attached by the visual controller in the
-			 * same call chain, and measuring before it lands would measure the old silhouette
-			 * again. */
+		/// <summary>
+		/// Invalidates the preview framing when a socket has changed.
+		/// </summary>
+		/// <remarks>
+		/// Equipment changes the silhouette: a two-handed weapon reaches further than a dagger, and
+		/// a frame sized before it existed crops it. Re-framing on the next frame rather than this
+		/// one is deliberate — the mesh is attached by the visual controller in the same call chain,
+		/// and measuring before it lands would measure the old silhouette again.
+		/// <para>
+		/// A hook rather than part of the shared update, because it is the one thing a socket update
+		/// does that a bag-slot update has no equivalent of. It runs only for an update the shared
+		/// path accepted, which is where it sat before.
+		/// </para>
+		/// </remarks>
+		protected override void OnSlotUpdateReceived(int slotIndex)
+		{
 			previewFramed = false;
-
-			bool empty = container.IsSlotEmpty(equipmentSlot);
-			if (!empty)
-			{
-				SetSlotItem(equipmentSlot, item);
-			}
-			else
-			{
-				ClearSlot(equipmentSlot);
-			}
-
-			// A drag started from this slot no longer refers to what it was started from.
-			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject))
-			{
-				dragObject.NotifySlotChanged(ReferenceButtonType.Equipment, equipmentSlot, empty ? null : item);
-			}
 		}
 
 		// ── Attribute update callbacks ────────────────────────────────────────
@@ -672,89 +647,19 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		// ── Shared operation tracker ──────────────────────────────────────────
-
-		/// <summary>
-		/// Joins the shared item-operation tracker, once.
-		/// </summary>
-		private void SubscribeTracker()
-		{
-			if (trackerSubscribed)
-			{
-				return;
-			}
-			trackerSubscribed = true;
-
-			/* -= before += on a static event. OnClientSet can run more than once in a session
-			 * (quit to login does SetClient(null) then SetClient(client)), and a static event
-			 * outlives this component, so a missed unsubscribe is a handler running forever on a
-			 * destroyed panel. */
-			ItemOperationTracker.SlotPendingChanged -= OnTrackerSlotPendingChanged;
-			ItemOperationTracker.SlotPendingChanged += OnTrackerSlotPendingChanged;
-			ItemOperationTracker.ResyncRequested    -= OnTrackerResyncRequested;
-			ItemOperationTracker.ResyncRequested    += OnTrackerResyncRequested;
-			ItemOperationTracker.Attach();
-		}
-
-		/// <summary>
-		/// Leaves the shared item-operation tracker, once.
-		/// </summary>
-		private void UnsubscribeTracker()
-		{
-			if (!trackerSubscribed)
-			{
-				return;
-			}
-			trackerSubscribed = false;
-
-			ItemOperationTracker.SlotPendingChanged -= OnTrackerSlotPendingChanged;
-			ItemOperationTracker.ResyncRequested    -= OnTrackerResyncRequested;
-			ItemOperationTracker.Detach();
-		}
-
-		/// <summary>
-		/// Repaints a slot when it starts or stops waiting on the server.
-		/// </summary>
-		private void OnTrackerSlotPendingChanged(ReferenceButtonType type, int slot, bool pending)
-		{
-			if (type != ReferenceButtonType.Equipment || slotViews == null ||
-				slot < 0 || slot >= slotViews.Length)
-			{
-				return;
-			}
-
-			ApplySlotLockVisual(slot, IsSlotBlocked(slot));
-		}
-
-		/// <summary>
-		/// Re-renders every slot from the replicated container.
-		/// </summary>
-		/// <remarks>
-		/// Raised when the server said the outcome of an operation is unknown, which is not the
-		/// same as saying it failed — see <c>ItemOperationFailureReason.ServerBusy</c>. Nothing is
-		/// reverted; the container is simply read again.
-		/// </remarks>
-		private void OnTrackerResyncRequested(ReferenceButtonType type)
-		{
-			if (type != ReferenceButtonType.Equipment)
-			{
-				return;
-			}
-
-			if (Character != null && Character.TryGet(out IEquipmentController equipmentController))
-			{
-				RefreshAllSlots(equipmentController);
-			}
-		}
+		/* SubscribeTracker, UnsubscribeTracker, OnTrackerSlotPendingChanged and
+		 * OnTrackerResyncRequested are on UITKSlotPanelBase. Four methods, some sixty lines,
+		 * character for character the same as the item grid's — including the -= before += on a
+		 * static event, and the reason for it, written out twice. */
 
 		// ── Private helpers ───────────────────────────────────────────────────
 
 		/// <summary>
 		/// Re-reads everything this panel shows from the character, without rebuilding the tree.
 		/// </summary>
-		private void ApplyPerOpenContent()
+		protected override void ApplyPerOpenContent()
 		{
-			if (slotViews == null || Character == null)
+			if (slotViews.Count == 0 || Character == null)
 			{
 				return;
 			}
@@ -776,185 +681,13 @@ namespace FishMMO.Client
 			RefreshPreview();
 		}
 
-		/// <summary>
-		/// Repaints every slot's item and lock state from the container.
-		/// </summary>
-		private void RefreshAllSlots(IEquipmentController container)
-		{
-			if (slotViews == null || container == null)
-			{
-				return;
-			}
+		/* RefreshAllSlots, IsSlotBlocked, RefreshSlot, SetSlotItem, ClearSlot, RefreshSlotTooltip
+		 * and ApplySlotLockVisual are on UITKSlotPanelBase — around two hundred lines that were a
+		 * second copy of the item grid's, down to the comment about a missing icon and the one
+		 * about issue #280. Two of them had drifted; read the base's remarks on IsSlotBlocked and
+		 * ApplySlotUpdate for what was different and which way it was settled. RefreshSlot is gone
+		 * entirely: it was a two-branch helper the shared refresh loop inlines. */
 
-			for (int i = 0; i < slotViews.Length; ++i)
-			{
-				if (slotViews[i].Root == null)
-				{
-					continue;
-				}
-				RefreshSlot(container, i);
-				ApplySlotLockVisual(i, IsSlotBlocked(i));
-			}
-		}
-
-		/// <summary>
-		/// Reports whether a slot is unavailable for a new request, for any reason.
-		/// </summary>
-		private bool IsSlotBlocked(int slotIndex)
-		{
-			if (ItemOperationTracker.IsPending(ReferenceButtonType.Equipment, slotIndex))
-			{
-				return true;
-			}
-
-			return Character != null &&
-				   Character.TryGet(out IEquipmentController equipmentController) &&
-				   equipmentController.IsSlotLocked(slotIndex);
-		}
-
-		/// <summary>
-		/// Refreshes a slot's icon and amount display from the equipment container.
-		/// </summary>
-		private void RefreshSlot(IEquipmentController container, int slotIndex)
-		{
-			if (container.TryGetItem(slotIndex, out Item item))
-			{
-				SetSlotItem(slotIndex, item);
-			}
-			else
-			{
-				ClearSlot(slotIndex);
-			}
-		}
-
-		/// <summary>
-		/// Populates a slot's icon and stack-count badge.
-		/// </summary>
-		private void SetSlotItem(int slotIndex, Item item)
-		{
-			if (item == null || slotViews == null || slotIndex < 0 || slotIndex >= slotViews.Length)
-			{
-				return;
-			}
-
-			ref SlotView view = ref slotViews[slotIndex];
-			if (view.Root == null)
-			{
-				return;
-			}
-
-			// Placeholder when the template has no icon: an occupied slot must look occupied.
-			UITKItemIcon.Apply(view.Icon, item.Template != null ? item.Template.Icon : null);
-
-			if (view.Amount != null)
-			{
-				if (item.IsStackable && item.Stackable != null)
-				{
-					view.Amount.text = item.Stackable.Amount.ToString();
-					view.Amount.RemoveFromClassList(CSS_HIDDEN);
-				}
-				else
-				{
-					view.Amount.text = "";
-					view.Amount.AddToClassList(CSS_HIDDEN);
-				}
-			}
-
-			RefreshSlotTooltip(slotIndex, item);
-		}
-
-		/// <summary>
-		/// Clears a slot's icon and hides the stack-count badge.
-		/// </summary>
-		private void ClearSlot(int slotIndex)
-		{
-			if (slotViews == null || slotIndex < 0 || slotIndex >= slotViews.Length)
-			{
-				return;
-			}
-
-			ref SlotView view = ref slotViews[slotIndex];
-			if (view.Root == null)
-			{
-				return;
-			}
-
-			UITKItemIcon.Clear(view.Icon);
-			if (view.Amount != null)
-			{
-				view.Amount.text = "";
-				view.Amount.AddToClassList(CSS_HIDDEN);
-			}
-
-			RefreshSlotTooltip(slotIndex, null);
-		}
-
-		/// <summary>
-		/// Keeps the tooltip for a slot in step with what the slot now shows.
-		/// </summary>
-		/// <remarks>
-		/// The same defect the item grids had (issue #280), and the same place to fix it: an
-		/// equipment slot that changes under a stationary cursor — a swap, an unequip, or the
-		/// replicate that acknowledges either — never gets a pointer leave or enter, so the tooltip
-		/// went on describing the item that was there when the pointer arrived.
-		/// <para>
-		/// <see cref="UITKTooltip.RefreshFor"/> ignores a slot the pointer is not over, which is what
-		/// makes it safe to call from the refresh loop that repaints all ten.
-		/// </para>
-		/// </remarks>
-		/// <param name="slotIndex">The slot that was just painted.</param>
-		/// <param name="item">What it now holds, or null when it now holds nothing.</param>
-		private void RefreshSlotTooltip(int slotIndex, Item item)
-		{
-			if (slotViews == null || slotIndex < 0 || slotIndex >= slotViews.Length)
-			{
-				return;
-			}
-
-			VisualElement owner = slotViews[slotIndex].Root;
-			if (owner == null)
-			{
-				return;
-			}
-
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
-			{
-				tooltip.RefreshFor(owner, item);
-			}
-		}
-
-		/// <summary>
-		/// Shows or hides the lock overlay on a slot.
-		/// </summary>
-		/// <remarks>
-		/// The same overlay carries two meanings — the container's own slot lock and a request
-		/// this panel is waiting on — because to the player they are the same statement: this slot
-		/// is busy, do not click it. The <c>--pending</c> modifier distinguishes them visually
-		/// without needing a second element in every slot.
-		/// </remarks>
-		private void ApplySlotLockVisual(int slotIndex, bool isLocked)
-		{
-			if (slotViews == null || slotIndex < 0 || slotIndex >= slotViews.Length)
-			{
-				return;
-			}
-
-			VisualElement lockEl = slotViews[slotIndex].Lock;
-			if (lockEl == null)
-			{
-				return;
-			}
-
-			lockEl.EnableInClassList(CSS_HIDDEN, !isLocked);
-			lockEl.EnableInClassList(CSS_LOCK_PENDING,
-				isLocked && ItemOperationTracker.IsPending(ReferenceButtonType.Equipment, slotIndex));
-		}
-
-		/// <summary>
-		/// Handles pointer-down events on an equipment slot element.
-		/// Left button: drag-and-drop equip or start drag.
-		/// Right button: unequip.
-		/// </summary>
 		/// <summary>
 		/// Completes a press-and-drag when the pointer is released over an equipment slot.
 		/// </summary>
@@ -989,6 +722,36 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles pointer-down events on an equipment slot element.
+		/// Left button: drag-and-drop equip, or start a drag.
+		/// Shift + left button: send the item straight to the bag.
+		/// Right button: unequip.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// /* DELIBERATE BEHAVIOUR CHANGE. */ THE SHIFT BRANCH IS NEW AND IT IS A BUG FIX, not a
+		/// feature. Shift-click means "send this item to the other container" everywhere else in
+		/// the game — issue #197 put it in the bag and in the bank, and
+		/// <c>UITKItemGridPanel.OnSlotPointerDown</c> is where that lives — and a socket's other
+		/// container is the bag. Here it did nothing at all. The reason it did nothing is the reason
+		/// this whole file now has a shared base: the routing method existed twice under the same
+		/// name, the fix was made to one copy, and nothing connected the two. A player who learns
+		/// shift-click emptying their bags into the bank finds it dead the moment they try it on
+		/// what they are wearing, and reads that as the game not registering the click.
+		/// </para>
+		/// <para>
+		/// It routes to the same unequip a right-click performs, which is what makes it safe: no
+		/// new request, no new server path, no new refusal to explain. The only difference from a
+		/// right-click is that a shift-click is not also a way to cancel a drag, so it does not
+		/// clear one.
+		/// </para>
+		/// <para>
+		/// Shift is read from the event rather than from global input state: the modifier that
+		/// matters is the one held when this click happened, and a poll can answer for a moment
+		/// either side of it.
+		/// </para>
+		/// </remarks>
 		private void OnSlotPointerDown(PointerDownEvent evt, int slotIndex)
 		{
 			if (Character == null || Client == null)
@@ -998,7 +761,14 @@ namespace FishMMO.Client
 
 			if (evt.button == 0) // left
 			{
-				HandleSlotLeftClick(slotIndex);
+				if (evt.shiftKey)
+				{
+					TryQuickUnequip(slotIndex);
+				}
+				else
+				{
+					HandleSlotLeftClick(slotIndex);
+				}
 			}
 			else if (evt.button == 1) // right
 			{
@@ -1006,36 +776,9 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Shows the item tooltip when the pointer enters an equipment slot that contains an item.
-		/// </summary>
-		private void OnSlotPointerEnter(int slotIndex, VisualElement owner)
-		{
-			if (Character == null ||
-				!Character.TryGet(out IEquipmentController equipmentController) ||
-				!equipmentController.TryGetItem(slotIndex, out Item item))
-			{
-				return;
-			}
-
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
-			{
-				// With an owner, so the tooltip closes itself if this slot is rebuilt under it.
-				tooltip.Open(item, owner);
-			}
-		}
-
-		/// <summary>
-		/// Hides the item tooltip when the pointer leaves an equipment slot.
-		/// </summary>
-		private void OnSlotPointerLeave(VisualElement owner)
-		{
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
-			{
-				// HideFor, so a stale leave cannot close a tooltip a different slot has since opened.
-				tooltip.HideFor(owner);
-			}
-		}
+		/* OnSlotPointerEnter and OnSlotPointerLeave are on UITKSlotPanelBase. Opening a tooltip for
+		 * whatever a slot holds, and closing it with HideFor so a stale leave cannot shut a tooltip
+		 * another slot has since opened, is the same act in a socket and in a bag slot. */
 
 		/// <summary>
 		/// Left-click: if a drag object is active, equip the dragged item into this slot;
@@ -1193,31 +936,8 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Starts a drag from an occupied equipment slot.
-		/// </summary>
-		private void BeginDragFromSlot(UITKDragObject dragObject, IEquipmentController equipmentController, int slotIndex)
-		{
-			bool blocked = IsSlotBlocked(slotIndex);
-			bool gotItem = equipmentController.TryGetItem(slotIndex, out Item item);
-
-			// Report the refusal, not just the success — see UITKInventory.BeginDragFromSlot.
-			if (blocked || !gotItem || item == null)
-			{
-				FishMMO.Logging.Log.Debug("UITKEquipment",
-					$"BeginDrag REFUSED slot {slotIndex}: blocked={blocked} " +
-					$"(pending={ItemOperationTracker.IsPending(ReferenceButtonType.Equipment, slotIndex)}) " +
-					$"gotItem={gotItem} itemNull={item == null}.");
-				return;
-			}
-
-			// Same as the inventory: a missing icon must not prevent the item being unequipped.
-			Sprite icon = item.Template != null ? item.Template.Icon : null;
-
-			/* The item, not just the slot index. A slot index alone is only true for as long as
-			 * nothing writes to that slot, and the server can write to it at any moment. */
-			dragObject.SetItemReference(icon, slotIndex, ReferenceButtonType.Equipment, item);
-		}
+		/* BeginDragFromSlot is on UITKSlotPanelBase, refusal log and all — this copy and the item
+		 * grid's differed only in that the grid's had lost the log line. */
 
 		/// <summary>
 		/// Right-click: unequip the item to the inventory.
@@ -1237,6 +957,25 @@ namespace FishMMO.Client
 				dragObject.Clear();
 			}
 
+			TryQuickUnequip(slotIndex);
+		}
+
+		/// <summary>
+		/// Sends the item in <paramref name="slotIndex"/> back to the bag.
+		/// </summary>
+		/// <remarks>
+		/// Split out of <see cref="HandleSlotRightClick"/> so that shift-click can reach the same
+		/// request — see <see cref="OnSlotPointerDown"/> for why a socket needed a shift-click at
+		/// all. The one thing right-click does that shift-click does not is cancel a drag in
+		/// progress, which is why that stayed behind rather than moving in here.
+		/// <para>
+		/// Nothing is written on this client. The slot keeps rendering the item and is marked as
+		/// waiting; the equipment container being replicated back is what empties it.
+		/// </para>
+		/// </remarks>
+		/// <param name="slotIndex">The socket to empty.</param>
+		private void TryQuickUnequip(int slotIndex)
+		{
 			if (!Character.TryGet(out IEquipmentController equipmentController))
 			{
 				return;
@@ -1263,51 +1002,24 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Resolves the character's container for a drag source type.
-		/// </summary>
-		private IItemContainer ResolveContainer(ReferenceButtonType type)
-		{
-			if (Character == null)
-			{
-				return null;
-			}
-
-			switch (type)
-			{
-				case ReferenceButtonType.Inventory:
-					return Character.TryGet(out IInventoryController inventoryController) ? inventoryController : null;
-				case ReferenceButtonType.Bank:
-					return Character.TryGet(out IBankController bankController) ? bankController : null;
-				case ReferenceButtonType.Equipment:
-					return Character.TryGet(out IEquipmentController equipmentController) ? equipmentController : null;
-				default:
-					return null;
-			}
-		}
-
-		/// <summary>
-		/// Abandons this panel's in-flight operations and any drag that started here.
-		/// </summary>
-		private void ReleaseAndClearDrag()
-		{
-			ItemOperationTracker.ReleaseAll(ReferenceButtonType.Equipment);
-
-			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) &&
-				dragObject.IsDragging &&
-				dragObject.Type == ReferenceButtonType.Equipment)
-			{
-				dragObject.Clear();
-			}
-		}
+		/* ResolveContainer and ReleaseAndClearDrag are on UITKSlotPanelBase. ResolveContainer was
+		 * character for character identical to the item grid's, switch arms and all — the clearest
+		 * single sign that these two panels wanted one base: a method about the CHARACTER's
+		 * containers, with no reference to the panel it was written in, existing twice. */
 
 		/// <summary>
 		/// Shows a transient notice, if the toast panel is up.
 		/// </summary>
 		/// <remarks>
-		/// The same helper the item grids use. A drop this panel refuses is a gesture the player
-		/// made and expects an answer to — see <see cref="CompleteDropOntoSlot"/> — and the
-		/// equipment sockets are the one place a refusal has nowhere else to surface.
+		/// The same helper the item grids use, and the one piece of duplication deliberately left
+		/// standing: <c>QuickTransferTests</c> scans <c>UITKItemGridPanel</c> by locating this
+		/// method's summary line, so hoisting it would break a fixture outside this change's scope
+		/// for the sake of five lines. Said plainly rather than left to be rediscovered.
+		/// <para>
+		/// A drop this panel refuses is a gesture the player made and expects an answer to — see
+		/// <see cref="CompleteDropOntoSlot"/> — and the equipment sockets are the one place a
+		/// refusal has nowhere else to surface.
+		/// </para>
 		/// </remarks>
 		private static void Notify(string text, ToastSeverity severity)
 		{

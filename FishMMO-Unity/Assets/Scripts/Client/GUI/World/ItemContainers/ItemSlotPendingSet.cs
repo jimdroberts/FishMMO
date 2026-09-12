@@ -146,6 +146,44 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Collects every slot that currently has a request outstanding.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// For the one question the per-slot accessors cannot answer: which pending slots are no
+		/// longer worth waiting for. A panel viewing a SHARED pile — a corpse, a world chest — is
+		/// re-sent the whole contents whenever any looter takes something, and a slot that has
+		/// vanished from that snapshot is a request this client lost the race on. Its reply is
+		/// already accounted for by the snapshot, so the panel prunes it immediately rather than
+		/// leaving it locked until the watchdog fires, on a row that is no longer on screen.
+		/// Answering that needs the pending set enumerated, because the caller is looking for slots
+		/// it does NOT have any more and so has nothing to ask <see cref="IsPending"/> about.
+		/// </para>
+		/// <para>
+		/// Fills a caller-supplied list rather than returning a shared buffer, unlike
+		/// <see cref="CollectExpired"/>: the caller iterates the result while calling
+		/// <see cref="Release"/>, and a prune interleaved with a tick must not have the tick's
+		/// buffer pulled out from under it.
+		/// </para>
+		/// </remarks>
+		/// <param name="into">Receives the pending slot indices. Not cleared by this call.</param>
+		public void CollectPending(List<int> into)
+		{
+			if (into == null || PendingCount < 1)
+			{
+				return;
+			}
+
+			foreach (KeyValuePair<int, PendingReplyGuard> pair in guards)
+			{
+				if (pair.Value.IsPending)
+				{
+					into.Add(pair.Key);
+				}
+			}
+		}
+
+		/// <summary>
 		/// Collects the slots whose wait has just expired.
 		/// </summary>
 		/// <remarks>

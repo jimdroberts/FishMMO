@@ -99,10 +99,20 @@ namespace FishMMO.Client
 		/// Seconds a request may go unanswered before its row is made clickable again.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// The server replies to every take, successful or not, so this should never fire. It
 		/// exists because the alternative failure mode is unrecoverable: a reply lost to a dropped
 		/// connection would leave the row waiting forever, and the player cannot clear it without
 		/// closing a window whose corpse is about to decay.
+		/// </para>
+		/// <para>
+		/// Passed explicitly to every <see cref="ItemSlotPendingSet.TryBegin"/> and
+		/// <see cref="PendingReplyGuard.Begin"/> call below rather than letting the shared types
+		/// apply their own defaults, which are longer — 8s for an item operation, 30s for a login
+		/// round trip. A corpse is a shared pile that another looter is emptying while this panel
+		/// watches, so a row locked for eight seconds after a lost reply is a row the player
+		/// watches somebody else take.
+		/// </para>
 		/// </remarks>
 		private const float PENDING_TIMEOUT_SECONDS = 5f;
 
@@ -140,18 +150,46 @@ namespace FishMMO.Client
 		/// <summary>Rendered rows, one per non-empty corpse slot.</summary>
 		private readonly List<RowView> rowViews = new List<RowView>();
 
+		/*  Both of these used to be hand-rolled here: a Dictionary<int, float> of send times and a
+		 *  float sentinel, swept against Time.time by the tick below. That was a live bug, not just
+		 *  duplication. Time.time is scaled by Time.timeScale, so anything that pauses or slows the
+		 *  game — a settings menu, a death screen, a cutscene — stops this panel's watchdog dead
+		 *  while the network keeps running. A take whose reply is lost during a pause left its row
+		 *  locked with nothing able to release it, and at timeScale 0 the row stayed locked for the
+		 *  rest of the corpse's life however long the player waited.
+		 *
+		 *  ItemSlotPendingSet and PendingReplyGuard both measure in Time.unscaledTime, which is the
+		 *  only correct clock for a deadline on something the server is doing: the server does not
+		 *  slow down when this client opens a menu. Adopting them fixes the clock and removes the
+		 *  second copy of the sweep in one move — see PendingSlotWatchdogTests for the guard that
+		 *  keeps a third copy from appearing. */
+
 		/// <summary>
-		/// Corpse slots with a take in flight, mapped to the time the request was sent.
+		/// Corpse slots with a take in flight.
 		/// </summary>
 		/// <remarks>
 		/// Keyed by slot rather than by row index because rows are rebuilt whenever the server
 		/// re-sends the contents, and a row's position moves as other looters empty slots above
 		/// it. The slot index is the only identifier that survives a rebuild.
 		/// </remarks>
-		private readonly Dictionary<int, float> pendingSlots = new Dictionary<int, float>();
+		private readonly ItemSlotPendingSet pendingSlots = new ItemSlotPendingSet();
 
-		/// <summary>True while a currency or take-all request is in flight.</summary>
-		private float pendingBulkTime = -1f;
+		/// <summary>
+		/// Watchdog for a currency or take-all request, which are not per-slot.
+		/// </summary>
+		/// <remarks>
+		/// A single <see cref="PendingReplyGuard"/> rather than a slot in
+		/// <see cref="pendingSlots"/>, because that is exactly what this is: one wait, not a set of
+		/// them. Currency and take-all have no slot index — the server answers both with
+		/// <see cref="NON_ITEM_SLOT"/> — and giving them a fake key in a map of corpse slots would
+		/// make every reader of that map responsible for remembering which key is not a slot.
+		/// <see cref="ItemSlotPendingSet"/> is the same guard keyed by slot, so this shares its
+		/// clock and its self-clearing timeout without pretending to be per-slot state.
+		/// </remarks>
+		private readonly PendingReplyGuard bulkPending = new PendingReplyGuard();
+
+		/// <summary>Reused by the prune below so a corpse refresh allocates nothing.</summary>
+		private readonly List<int> pendingScratch = new List<int>();
 
 		/// <summary>The container runtime rows are appended to.</summary>
 		private VisualElement listRoot;
@@ -327,8 +365,8 @@ namespace FishMMO.Client
 					}, Channel.Reliable);
 				}
 
-				pendingSlots.Clear();
-				pendingBulkTime = -1f;
+				pendingSlots.ReleaseAll();
+				bulkPending.Clear();
 				SetStatus(string.Empty);
 			}
 
@@ -365,11 +403,11 @@ namespace FishMMO.Client
 
 			if (msg.Slot == NON_ITEM_SLOT)
 			{
-				pendingBulkTime = -1f;
+				bulkPending.Clear();
 			}
 			else
 			{
-				pendingSlots.Remove(msg.Slot);
+				pendingSlots.Release(msg.Slot);
 			}
 
 			SetStatus(msg.Success ? string.Empty : DescribeFailure(msg.Reason));
@@ -415,13 +453,14 @@ namespace FishMMO.Client
 			}
 
 			// One request per slot at a time. A shared pile makes double-clicking a row the
-			// natural reaction to it not disappearing immediately.
-			if (pendingSlots.ContainsKey(slot))
+			// natural reaction to it not disappearing immediately. TryBegin refusing rather than
+			// re-arming is what lets a genuinely stuck row time out: re-arming would push the
+			// deadline out on every impatient click.
+			if (!pendingSlots.TryBegin(slot, PENDING_TIMEOUT_SECONDS))
 			{
 				return;
 			}
 
-			pendingSlots[slot] = Time.time;
 			ApplyPendingVisuals();
 
 			Client.Broadcast(new CorpseLootTakeItemBroadcast()
@@ -436,12 +475,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private void RequestTakeCurrency()
 		{
-			if (corpseID == 0 || Client == null || corpseCurrency < 1 || pendingBulkTime >= 0f)
+			if (corpseID == 0 || Client == null || corpseCurrency < 1 || bulkPending.IsPending)
 			{
 				return;
 			}
 
-			pendingBulkTime = Time.time;
+			bulkPending.Begin(PENDING_TIMEOUT_SECONDS);
 			ApplyPendingVisuals();
 
 			Client.Broadcast(new CorpseLootTakeCurrencyBroadcast()
@@ -455,12 +494,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private void RequestTakeAll()
 		{
-			if (corpseID == 0 || Client == null || pendingBulkTime >= 0f)
+			if (corpseID == 0 || Client == null || bulkPending.IsPending)
 			{
 				return;
 			}
 
-			pendingBulkTime = Time.time;
+			bulkPending.Begin(PENDING_TIMEOUT_SECONDS);
 			ApplyPendingVisuals();
 
 			Client.Broadcast(new CorpseLootTakeAllBroadcast()
@@ -472,38 +511,18 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Re-enables requests whose reply never arrived.
 		/// </summary>
+		/// <remarks>
+		/// Both watchdogs are self-clearing and report a timeout exactly once, so this can be driven
+		/// straight from the tick without tracking anything itself — and a late reply arriving after
+		/// the release is still handled normally, because releasing only re-enables the row.
+		/// </remarks>
 		private void ReleaseTimedOutRequests()
 		{
-			bool changed = false;
-			float now = Time.time;
+			bool changed = bulkPending.HasExpired();
 
-			if (pendingBulkTime >= 0f && now - pendingBulkTime > PENDING_TIMEOUT_SECONDS)
+			if (pendingSlots.HasAnyPending && pendingSlots.CollectExpired().Count > 0)
 			{
-				pendingBulkTime = -1f;
 				changed = true;
-			}
-
-			if (pendingSlots.Count > 0)
-			{
-				// Collected before removing: the dictionary cannot be modified while enumerated.
-				List<int> expired = null;
-				foreach (KeyValuePair<int, float> kvp in pendingSlots)
-				{
-					if (now - kvp.Value > PENDING_TIMEOUT_SECONDS)
-					{
-						expired ??= new List<int>();
-						expired.Add(kvp.Key);
-					}
-				}
-
-				if (expired != null)
-				{
-					for (int i = 0; i < expired.Count; ++i)
-					{
-						pendingSlots.Remove(expired[i]);
-					}
-					changed = true;
-				}
 			}
 
 			if (changed && Visible)
@@ -696,7 +715,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ApplyPendingVisuals()
 		{
-			bool bulkPending = pendingBulkTime >= 0f;
+			bool bulkWaiting = bulkPending.IsPending;
 
 			for (int i = 0; i < rowViews.Count; ++i)
 			{
@@ -707,7 +726,7 @@ namespace FishMMO.Client
 				}
 
 				// A take-all covers every row, so all of them wait on it.
-				bool waiting = bulkPending || pendingSlots.ContainsKey(view.Slot);
+				bool waiting = bulkWaiting || pendingSlots.IsPending(view.Slot);
 				if (waiting)
 				{
 					view.Pending.RemoveFromClassList(CSS_HIDDEN);
@@ -718,9 +737,9 @@ namespace FishMMO.Client
 				}
 			}
 
-			if (takeAllButton != null && (bulkPending || rowViews.Count > 0 || corpseCurrency > 0))
+			if (takeAllButton != null && (bulkWaiting || rowViews.Count > 0 || corpseCurrency > 0))
 			{
-				takeAllButton.SetEnabled(!bulkPending && (rowViews.Count > 0 || corpseCurrency > 0));
+				takeAllButton.SetEnabled(!bulkWaiting && (rowViews.Count > 0 || corpseCurrency > 0));
 			}
 		}
 
@@ -729,18 +748,24 @@ namespace FishMMO.Client
 		/// </summary>
 		private void PrunePendingSlots()
 		{
-			if (pendingSlots.Count < 1)
+			if (!pendingSlots.HasAnyPending)
 			{
 				return;
 			}
 
-			List<int> stale = null;
-			foreach (KeyValuePair<int, float> kvp in pendingSlots)
+			/* Enumerated rather than asked slot by slot, because the slots worth releasing are the
+			 * ones this panel no longer has — there is nothing left on screen to ask about. */
+			pendingScratch.Clear();
+			pendingSlots.CollectPending(pendingScratch);
+
+			for (int i = 0; i < pendingScratch.Count; ++i)
 			{
+				int slot = pendingScratch[i];
+
 				bool stillPresent = false;
-				for (int i = 0; i < slotData.Length; ++i)
+				for (int j = 0; j < slotData.Length; ++j)
 				{
-					if (slotData[i].Slot == kvp.Key)
+					if (slotData[j].Slot == slot)
 					{
 						stillPresent = true;
 						break;
@@ -749,19 +774,8 @@ namespace FishMMO.Client
 
 				if (!stillPresent)
 				{
-					stale ??= new List<int>();
-					stale.Add(kvp.Key);
+					pendingSlots.Release(slot);
 				}
-			}
-
-			if (stale == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < stale.Count; ++i)
-			{
-				pendingSlots.Remove(stale[i]);
 			}
 		}
 
@@ -774,8 +788,8 @@ namespace FishMMO.Client
 			corpseName = string.Empty;
 			corpseCurrency = 0;
 			slotData = new CorpseLootSlotData[0];
-			pendingSlots.Clear();
-			pendingBulkTime = -1f;
+			pendingSlots.ReleaseAll();
+			bulkPending.Clear();
 			SetStatus(string.Empty);
 			DestroyRows();
 		}

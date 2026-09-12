@@ -16,7 +16,7 @@ namespace FishMMO.Server.Implementation
 	/// Base class for all server-side behaviours in the FishMMO server architecture.
 	/// Provides registration, initialization, and lifecycle management for server behaviours.
 	/// </summary>
-	public abstract class ServerBehaviour : ScriptableObject, IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, IServerBehaviour>
+	public abstract partial class ServerBehaviour : ScriptableObject, IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, IServerBehaviour>
 	{
 		/// <summary>
 		/// Indicates whether this behaviour has been initialized.
