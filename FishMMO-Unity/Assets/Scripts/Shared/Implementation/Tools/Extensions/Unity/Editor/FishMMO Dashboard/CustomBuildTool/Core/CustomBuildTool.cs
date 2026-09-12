@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using UnityEditor;
 using UnityEditorInternal;
 using System.IO;
@@ -438,13 +438,25 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		// can be generated from CI.
 		// =====================================================================
 
-		/// <summary>CLI entry: build the Client player. OS target read from -fishmmoOSTarget arg.</summary>
+		/// <summary>CLI entry: build the Client player ONLY. OS target read from -fishmmoOSTarget arg.</summary>
+		/// <remarks>
+		/// Does NOT rebuild Addressables — the existing bundles are shipped untouched. Use
+		/// <see cref="BuildClientWithAddressablesCLI"/> unless you know the content on disk is
+		/// current, because a stale bundle produces a player that runs new code against old
+		/// assets and reports nothing unusual while doing it.
+		/// </remarks>
 		public static void BuildClientCLI()
 		{
 			RunCliBuild(BuildTypeEnvironment.Client, includeAddressables: false, addressablesOnly: false);
 		}
 
-		/// <summary>CLI entry: build the Server player. OS target read from -fishmmoOSTarget arg.</summary>
+		/// <summary>CLI entry: build the Server player ONLY. OS target read from -fishmmoOSTarget arg.</summary>
+		/// <remarks>
+		/// Does NOT rebuild Addressables — the existing bundles are shipped untouched. Use
+		/// <see cref="BuildServerWithAddressablesCLI"/> unless you know the content on disk is
+		/// current, because a stale bundle produces a player that runs new code against old
+		/// assets and reports nothing unusual while doing it.
+		/// </remarks>
 		public static void BuildServerCLI()
 		{
 			RunCliBuild(BuildTypeEnvironment.Server, includeAddressables: false, addressablesOnly: false);
@@ -495,6 +507,26 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					UnityEngine.Debug.LogError("[CustomBuildTool] WebGL Server builds are not supported. Aborting.");
 					if (Application.isBatchMode) EditorApplication.Exit(2);
 					return;
+				}
+
+				/* A player-only build ships whatever Addressables content is already on disk.
+				 *
+				 * That is the point of the entry point and sometimes what you want, but the two
+				 * CLI names differ by one word and the stale outcome is silent: the build reports
+				 * every step, exits zero, and the player then loads templates, prefabs and scenes
+				 * from bundles that may predate the code it was just built from. A content change
+				 * made in the editor simply does not appear, and nothing in the log says why.
+				 *
+				 * Cost a day of misdiagnosis: a server built this way kept granting a starting
+				 * ability that had been removed from the race templates hours earlier, because the
+				 * bundle holding those templates was never rebuilt. Say so, so the next person
+				 * reads it in the log rather than inferring it from behaviour. */
+				if (!includeAddressables && !addressablesOnly)
+				{
+					UnityEngine.Debug.LogWarning(
+						$"[CustomBuildTool] Building the {buildType} player WITHOUT Addressables. " +
+						"Existing bundles are shipped as-is, so any content changed since they were " +
+						$"last built will NOT appear. Use Build{buildType}WithAddressablesCLI to rebuild both.");
 				}
 
 				BuildEnvironmentOptions.SetBuildType(buildType);
