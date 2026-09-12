@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Orc
   m_EditorClassIdentifier: 
   Playable: 1
-  Category: Humanoid
   Prefab: {fileID: 4573496687782621821, guid: 7b96a8c61db3a844ebc4c92b2487b0d1, type: 3}
   PlaceholderModel:
     m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
@@ -21,13 +20,21 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
+  GenderedModels: []
   Description: 
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
   InitialAttributes: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
   InitialFaction: {fileID: 11400000, guid: e5859044195c03e44adebc73805dd570, type: 2}
-  StartingAbilities:
-  - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
+  StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -88,7 +95,7 @@ MonoBehaviour:
       - rak
       - urg
       - ok
-      Description: 'Guttural stops, minimal vowels — forged in battle-cries'
+      Description: "Guttural stops, minimal vowels \u2014 forged in battle-cries"
       Tags:
       - War-names
       - Clan marks
@@ -148,7 +155,7 @@ MonoBehaviour:
         - rak
         - ork
         - tar
-        Description: 'Sea Orc — raiders, storm-voiced, salt-scarred'
+        Description: "Sea Orc \u2014 raiders, storm-voiced, salt-scarred"
         Tags:
         - Ship-names
         - Raid-bonds
@@ -207,7 +214,7 @@ MonoBehaviour:
         - ar
         - ul
         - an
-        Description: 'Steppe Orc — nomadic, horse-lord, wind-hardened'
+        Description: "Steppe Orc \u2014 nomadic, horse-lord, wind-hardened"
         Tags:
         - Herd-names
         - Ride-bonds
@@ -311,6 +318,7 @@ MonoBehaviour:
       - ruin
       - boneyard
       - char
+    AllowGenericOccupations: 1
   BiomeAffinities:
   - BiomeID: 599899035
     Weight: 2

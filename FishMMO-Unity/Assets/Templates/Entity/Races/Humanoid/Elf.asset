@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Elf
   m_EditorClassIdentifier: 
   Playable: 1
-  Category: Humanoid
   Prefab: {fileID: 4573496687782621821, guid: 3243c87cb242a03478e9ee038f7873ed, type: 3}
   PlaceholderModel:
     m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
@@ -21,13 +20,21 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
+  GenderedModels: []
   Description: 
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
   InitialAttributes: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
   InitialFaction: {fileID: 11400000, guid: 1ab8069820abc0b45ad5dd91bc796d4c, type: 2}
-  StartingAbilities:
-  - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
+  StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -90,7 +97,7 @@ MonoBehaviour:
       - mir
       - las
       - ion
-      Description: 'Flowing diphthongs, melodic endings — ancient and lyrical'
+      Description: "Flowing diphthongs, melodic endings \u2014 ancient and lyrical"
       Tags:
       - Nature bonds
       - Star-names
@@ -180,7 +187,7 @@ MonoBehaviour:
         - mir
         - las
         - rien
-        Description: 'High Elvish — ancient, long, deeply voweled'
+        Description: "High Elvish \u2014 ancient, long, deeply voweled"
         Tags:
         - Star-names
         - True-names
@@ -240,7 +247,7 @@ MonoBehaviour:
         - orn
         - ark
         - in
-        Description: 'Sylvan Elvish — nature-rooted, gentle, green'
+        Description: "Sylvan Elvish \u2014 nature-rooted, gentle, green"
         Tags:
         - Grove-names
         - Bloom-bonds
@@ -251,7 +258,7 @@ MonoBehaviour:
     - the Silverwood
     - Starfall Glade
     - the Moonspire
-    - 'Quel''thanan'
+    - Quel'thanan
     - the Ancient Court
     - the Dreaming Pools
     - Sunweave Spire
@@ -354,6 +361,7 @@ MonoBehaviour:
       - echo
       - weep
       - fade
+    AllowGenericOccupations: 1
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3

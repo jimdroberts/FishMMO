@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Human
   m_EditorClassIdentifier: 
   Playable: 1
-  Category: Humanoid
   Prefab: {fileID: 4573496687782621821, guid: 793ad9eb498a9224989b975a594d5a38, type: 3}
   PlaceholderModel:
     m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
@@ -21,13 +20,21 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
+  GenderedModels: []
   Description: 
+  DefaultProportions:
+    Height: 1
+    ArmLength: 1
+    LegLength: 1
+    TorsoLength: 1
+    ShoulderWidth: 1
+    HeadScale: 1
   InitialAttributes: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
   InitialFaction: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
-  StartingAbilities:
-  - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
+  StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -75,7 +82,7 @@ MonoBehaviour:
       - an
       - en
       - in
-      - 'on'
+      - on
       - ul
       - ar
       SyllMin: 2
@@ -90,7 +97,8 @@ MonoBehaviour:
       - ard
       - mund
       - win
-      Description: 'Common tongue — varied, adaptable, weighty and formal by turns'
+      Description: "Common tongue \u2014 varied, adaptable, weighty and formal by
+        turns"
       Tags:
       - Short forms
       - Trade names
@@ -152,7 +160,7 @@ MonoBehaviour:
         - ar
         - ud
         - ir
-        Description: 'Desert — trade-road cadence, starlit and sparse'
+        Description: "Desert \u2014 trade-road cadence, starlit and sparse"
         Tags:
         - Caravan names
         - Trade titles
@@ -193,10 +201,10 @@ MonoBehaviour:
         - mi
         - to
         - ka
-        - 'no'
+        - no
         - ri
         Middles:
-        - 'no'
+        - no
         - wa
         - ya
         - mo
@@ -213,7 +221,7 @@ MonoBehaviour:
         - ta
         - shi
         - to
-        Description: 'East-Asian inspired — precise, balanced, elegant'
+        Description: "East-Asian inspired \u2014 precise, balanced, elegant"
         Tags:
         - Family names
         - Honor titles
@@ -275,7 +283,7 @@ MonoBehaviour:
         - rik
         - ulf
         - ald
-        Description: 'Northern — hard, wind-bitten, clan-named'
+        Description: "Northern \u2014 hard, wind-bitten, clan-named"
         Tags:
         - Clan names
         - Saga titles
@@ -334,7 +342,7 @@ MonoBehaviour:
         - us
         - ius
         - ix
-        Description: 'Imperial — senatorial, structured, formal'
+        Description: "Imperial \u2014 senatorial, structured, formal"
         Tags:
         - House names
         - Legion titles
@@ -465,6 +473,7 @@ MonoBehaviour:
       - barrow
       - scar
       - waste
+    AllowGenericOccupations: 1
   BiomeAffinities:
   - BiomeID: -1951431387
     Weight: 2

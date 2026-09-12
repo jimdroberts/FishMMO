@@ -169,9 +169,4 @@ QualitySettings:
     terrainMaxTrees: 50
     excludedTargetPlatforms: []
   m_TextureMipmapLimitGroupNames: []
-  m_PerPlatformDefaultQuality:
-    Nintendo Switch 2: 2
-    Server: 0
-    Standalone: 0
-    WebGL: 0
-    Windows Store Apps: 0
+  m_PerPlatformDefaultQuality: {}
