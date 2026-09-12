@@ -16,11 +16,19 @@
     screen, so a root with a size but no position resolves to the top-left
     corner. Top-centre, matching the uGUI target frame. The root itself paints
     nothing: it is only the row the cards sit in.
+
+    An absolute 48px rather than 6%. An absolutely-positioned panel's containing
+    block is the screen, and the screen is 1200 units wide at every aspect ratio
+    but 1200 * (screenH / screenW) tall — 675 at 16:9, 800 at 1200x800. A
+    percentage top therefore moves against the panels that are anchored to an
+    edge in fixed units, and UIArenaHud, which sits directly under this frame,
+    carries the absolute offset. These two are 48 and 132; 48 was already 6% of
+    800, so nothing moved at the reference resolution.
 */
 .target-panel {
     position: absolute;
     left: 50%;
-    top: 6%;
+    top: 48px;
     translate: -50% 0;
     flex-direction: row;
     justify-content: center;

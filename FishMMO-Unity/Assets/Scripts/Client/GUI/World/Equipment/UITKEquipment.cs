@@ -730,6 +730,8 @@ namespace FishMMO.Client
 					view.Amount.AddToClassList(CSS_HIDDEN);
 				}
 			}
+
+			RefreshSlotTooltip(slotIndex, item);
 		}
 
 		/// <summary>
@@ -753,6 +755,42 @@ namespace FishMMO.Client
 			{
 				view.Amount.text = "";
 				view.Amount.AddToClassList(CSS_HIDDEN);
+			}
+
+			RefreshSlotTooltip(slotIndex, null);
+		}
+
+		/// <summary>
+		/// Keeps the tooltip for a slot in step with what the slot now shows.
+		/// </summary>
+		/// <remarks>
+		/// The same defect the item grids had (issue #280), and the same place to fix it: an
+		/// equipment slot that changes under a stationary cursor — a swap, an unequip, or the
+		/// replicate that acknowledges either — never gets a pointer leave or enter, so the tooltip
+		/// went on describing the item that was there when the pointer arrived.
+		/// <para>
+		/// <see cref="UITKTooltip.RefreshFor"/> ignores a slot the pointer is not over, which is what
+		/// makes it safe to call from the refresh loop that repaints all ten.
+		/// </para>
+		/// </remarks>
+		/// <param name="slotIndex">The slot that was just painted.</param>
+		/// <param name="item">What it now holds, or null when it now holds nothing.</param>
+		private void RefreshSlotTooltip(int slotIndex, Item item)
+		{
+			if (slotViews == null || slotIndex < 0 || slotIndex >= slotViews.Length)
+			{
+				return;
+			}
+
+			VisualElement owner = slotViews[slotIndex].Root;
+			if (owner == null)
+			{
+				return;
+			}
+
+			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
+			{
+				tooltip.RefreshFor(owner, item);
 			}
 		}
 

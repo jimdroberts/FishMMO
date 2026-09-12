@@ -153,27 +153,13 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   EMPTY STATE
-   ═══════════════════════════════════════════════════════════ */
-
-/*
-    Shown in place of the grid when nothing is carried. A grid of empty slots
-    already reads as "no items", but only once the player counts them — a
-    sentence says it immediately, and distinguishes empty from not-yet-loaded.
-*/
-.bank-empty {
-    margin-top: 20px;
-    margin-bottom: 20px;
-}
-
-/* ═══════════════════════════════════════════════════════════
    FOOTER : capacity readout
    ═══════════════════════════════════════════════════════════ */
 
 /*
-    Used / free either side of a fill bar. The bar is the glanceable form of
-    the same two numbers — a player who is nearly full sees it before reading
-    either figure, which is the whole point of putting it between them.
+    One readout, so the row is a single item. It was built as used / bar / free
+    and the two counts and the bar have all moved to the header, where the
+    capacity they describe actually belongs.
 */
 .bank-footer {
     flex-direction: row;
@@ -184,44 +170,85 @@
     flex-shrink: 0;
 }
 
-.bank-footer__stat {
-    width: 56px;
-    flex-shrink: 0;
+/*
+    The character's currency, drawn as the same chip the equipment panel uses for
+    HP / MP / STM so the two panels read alike. The name and value are filled in
+    from the attribute template configured on the panel.
+*/
+.bank-currency {
+    flex-direction: row;
+    align-items: center;
 }
 
-.bank-footer__stat--right {
-    -unity-text-align: middle-right;
-}
-
-.bank-capacity {
-    flex-grow: 1;
+/* Currency is gold everywhere else it appears; it should be gold here too. */
+.bank-currency__dot {
+    width: 6px;
     height: 6px;
-    margin-left: 8px;
-    margin-right: 8px;
-}
-
-.bank-capacity__fill {
-    height: 100%;
-    width: 0;
-}
-
-/* Slot-usage line under the title. */
-.bank-header__subtitle {
     flex-shrink: 0;
+    margin-right: 4px;
+    background-color: var(--gold);
+}
+
+/* Same spacing as .eq-chip__label, so the two panels' chips line up when read together. */
+.bank-currency__name {
+    margin-right: 3px;
+}
+
+/* The one departure from the equipment chip: currency is gold wherever else it is drawn. */
+.bank-currency__value {
+    color: var(--gold);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER : capacity bar
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Sits under the title where the plain count used to be, and is drawn the way
+    the resource bars are: track from the theme, fill driven from C# as a
+    percentage, count centred over both.
+
+    The height is pinned because the header gives it a fixed 44px to live in —
+    the title's 15px line plus this is what that header has to carry, and a bar
+    that measured itself would take its height from the label inside it.
+*/
+.bank-capacity {
+    height: 12px;
+    width: 100%;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* Grows left-to-right; width is set from C#. */
+.bank-capacity__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: 2px;
 }
 
 /*
-    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
-    Label a generous intrinsic height, so an unconstrained pair measures taller
-    than the header that contains it — the subtitle then overflows into
-    whatever sits below the header, which is exactly what it did.
+    The count, centred on the bar rather than beside it. Colour, weight and the text shadow come
+    from .fish-bar__label in the theme, the same way the target and pet frames do it; only the
+    fill and the size override are here.
+*/
+.bank-capacity__label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    font-size: 9px;
+}
+
+/*
+    A stacked title + bar needs the title's line box pinned. Unity gives a Label
+    a generous intrinsic height, so an unconstrained pair measures taller than
+    the header that contains it and overflows into whatever sits below.
 */
 .bank-header__titles > .fish-panel__title {
     height: 15px;
-    flex-shrink: 0;
-}
-
-.bank-header__titles > .fish-panel__subtitle {
-    height: 12px;
     flex-shrink: 0;
 }

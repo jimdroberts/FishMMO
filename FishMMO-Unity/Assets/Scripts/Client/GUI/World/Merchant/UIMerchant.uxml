@@ -41,7 +41,7 @@
             <ui:Label name="merchant-transaction-name" text="" class="fish-label merchant-transaction__name" />
             <ui:VisualElement name="merchant-quantity-row" class="merchant-quantity-row">
                 <ui:Button name="merchant-qty-less" text="−" class="fish-button merchant-qty-btn" />
-                <ui:IntegerField name="merchant-qty-field" value="1" class="fish-input merchant-qty-field" />
+                <ui:IntegerField name="merchant-qty-field" value="1" class="fish-input fish-input--compact merchant-qty-field" />
                 <ui:Button name="merchant-qty-more" text="+" class="fish-button merchant-qty-btn" />
                 <ui:Button name="merchant-qty-max" text="Max" class="fish-button merchant-qty-btn merchant-qty-btn--max" />
                 <ui:Label name="merchant-transaction-total" text="" class="fish-label merchant-transaction__total" />

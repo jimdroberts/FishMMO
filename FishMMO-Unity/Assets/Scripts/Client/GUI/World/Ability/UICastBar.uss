@@ -4,16 +4,32 @@
 */
 
 /*
-    A fixed, centred strip rather than width: 100%. Each panel is its own UIDocument whose root
-    fills the screen, so a percentage width here resolved against the viewport and the cast bar
-    stretched edge to edge. 220px matches .res-bar so the cast bar and the resource bars below
-    it line up as one HUD block, which is how the uGUI ones sat at 160px against their 160px.
+    The TOP of the bottom-centre block, directly above the mana bar and above the buff/debuff
+    strips that sit between the two.
+
+    It was `position: relative; align-self: center`, which made it the first flex item of a
+    screen-filling document root and therefore pinned it to the top edge of the screen — and
+    above the target frame, with which it collided by 50x10px as soon as either buff strip
+    reached twelve icons. The width and centre were already chosen for this block ("220px
+    matches .res-bar so the cast bar and the resource bars below it line up as one HUD block");
+    only the placement never followed, and the two widths had drifted to 220 against 160.
+
+    200 wide, sitting over the middle bar of the row below it: the resource bars went side by
+    side (see the layout note in UIResourceBar.uss) and the middle one — mana — starts at x500,
+    which is exactly where this is anchored, at exactly its width.
+
+    bottom:132px is 10px above the buff/debuff strips, whose band starts at 122 (bottom:106 plus
+    their 16px icons) and which the user placed here deliberately: bars, then the icons read
+    outward from the centre, then the cast bar above both. Every offset in this block is measured
+    from the bottom so the whole thing tracks the hotkey bar — itself bottom-anchored — instead
+    of drifting with the aspect ratio.
 */
 .castbar-root {
-    width: 220px;
+    position: absolute;
+    left: 500px;
+    bottom: 132px;
+    width: 200px;
     height: 22px;
-    position: relative;
-    align-self: center;
 }
 
 /* The fill represents remaining cast time; width is driven from C# as a percentage. */

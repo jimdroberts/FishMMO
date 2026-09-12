@@ -27,6 +27,17 @@
     is under the cursor — answers true everywhere. Everything gated on UIManager.ControlHasFocus()
     then stops: world/target clicks, the Interact action, hotkey ability activation and dropping a
     dragged item into the world. Children stay pickable; picking is not inherited.
+
+    UNPADDED, so the frame sits in the corner it belongs in: top-right anchored by `align-items:
+    flex-end` (right) and `justify-content: flex-start` (top), with nothing in front of it. Its
+    top edge is at y8, which is the frame's own 8px margin and nothing else.
+
+    This root carried `padding-top: 136px` to keep the frame clear of the debuff strip that used
+    to own this corner — the strip's worst case was four rows of 28px icons ending at y136, so
+    the frame was pushed to y144. The strips have since moved to the bottom centre and grow
+    outward from the screen's midline (see UIBuffContainer.uss), which leaves the corner empty
+    again and hands back 136 units of the map's column. The kill feed in UIArenaHud.uss was
+    anchored 8px under this frame's old bottom edge at y388 and has come back up with it.
 */
 .minimap-root {
     flex-grow: 1;

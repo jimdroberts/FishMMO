@@ -14,22 +14,55 @@
 */
 
 /*
-    Anchored explicitly. Each panel is its own UIDocument whose root fills the
-    screen, so a root with a size but no position resolves to the top-left
-    corner. Left-centre matches where the uGUI party panel sat.
+    Anchored explicitly, in the left column below the target frame. Each panel is its own
+    UIDocument whose root fills the screen, so a root with a size but no position resolves to the
+    top-left corner.
 
-    Wider than the roster it replaced because it now carries four columns
-    instead of three narrow ones. Sized against the 1200x800 reference
-    resolution in PanelSettings.asset, so this is a little over a third of the
-    screen's width — which is what a frame carrying six members' buffs needs,
-    and why the effects column is the one that flexes.
+    BOTH EDGES PINNED, so the frame occupies exactly the space that is free rather than a height
+    of its own. It used to be `top: 50%; translate: 0 -50%` — vertically centred — which is the
+    one place that cannot work: the chat panel is anchored to the bottom and gives ground
+    downward as the window shortens, so the two met in the middle. Measured at 1200x800 they
+    overlapped by 420x1.5px, and the overlap is 64px at 16:9 (a 675-unit panel) and grows from
+    there as the screen gets wider. So the roster fills the gap instead: top at 129px, which is
+    8px under the target frame, and bottom at 368px, which is the toast stack's offset — the
+    frame ends where the toasts begin.
+
+    The target frame is what sets 129 now, and it is a hard limit rather than a preference. It is
+    centred and 536 wide, so it spans x332..868, and this frame's right edge at x454 is a long way
+    under it. The columns only stop crossing if the roster is narrowed to 300 — measured, and a
+    quarter of its width given up for it — so the height is what gives way instead. That was one
+    of the two defects this 129 replaced: at 8 it overlapped the target frame by 122x73px in every
+    buff/debuff state, because the frame had been free to take the corner the buff strip vacated.
+
+    It was 144 before that, which was 8px under the buff strip's four rows in this same corner.
+    The strip has moved to the bottom centre, and 129 is the 15 units that came back — the frame
+    cannot start higher than y121 whatever else happens. Past that the column is booked solid by
+    bottom-anchored panels: the chat log's top edge is 354 up and the toast stack sits 6px above
+    it, so on a 21:9 panel, 506 units tall, there is nothing left for a roster and this frame is
+    squeezed to a sliver. The remedy for that is the panel's match mode — PanelSettings matches
+    width, so the panel is 1200 units wide at every aspect ratio and its height is whatever the
+    screen gives — and that is a pass over every HUD panel rather than a number here.
+
+    It is the internal scroll that absorbs this. .party-scroll already flex-grows with a
+    min-height, so a frame given 288 units on a 16:10 screen shows more of a six-member party
+    than one given 163 on a 16:9 screen, and neither ever collides with anything.
+
+    Wider than the roster it replaced because it now carries four columns instead of three
+    narrow ones. Sized against the 1200x800 reference resolution in PanelSettings.asset, so this
+    is a little over a third of the screen's width — which is what a frame carrying six members'
+    buffs needs, and why the effects column is the one that flexes.
+
+    430 rather than 450. At left:2% (24 units of the 1200 the panel is always wide) that puts the
+    right edge at x454, which is what clears .arenahud-root — centred, 260 wide, so x470..730 —
+    by 16px. At 450 the two overlapped by 4x58px for as long as a party was in an arena, which
+    is every arena match with a party in it.
 */
 .party-panel {
     position: absolute;
     left: 2%;
-    top: 50%;
-    translate: 0 -50%;
-    width: 450px;
+    top: 129px;
+    bottom: 368px;
+    width: 430px;
     max-height: 72%;
     flex-direction: column;
     flex-shrink: 0;

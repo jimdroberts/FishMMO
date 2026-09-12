@@ -230,6 +230,7 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 1
+  CurrencyTemplateID: -1797163030
 --- !u!114 &121521363
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1317,6 +1318,7 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 1
+  CurrencyTemplateID: -1797163030
 --- !u!114 &1232911441
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1201,6 +1201,29 @@ TextField.fish-input > #unity-text-input {
     transition: border-color 0.12s ease;
 }
 
+/*
+    A .fish-input the panel gives an exact height to.
+
+    Unity's default theme pads the editable surface inside a text field by 10px top and bottom,
+    which is sized for a 36px inspector row. A field pinned to 22px spends its entire content box
+    on that padding, and the glyph box — the element that draws the characters — is the element
+    that stretches to fill whatever is left. Left with nothing, it resolves to zero height: nothing
+    is drawn in the box and there is nothing to click into. That is one defect arriving as two
+    reports, "the number is not rendered in the quantity box" and "can't edit it" (issues #263 and
+    #277). Colour was never involved; measured, the glyph box resolves to this theme's own
+    --abyss-100 on --abyss-900 the whole time.
+
+    Trimming the padding is the one remedy that leaves the panel's own layout alone — the field
+    keeps the height its panel gave it. Chat and the guild roster search each do exactly this by
+    hand; the mail compose fields take the other route and refuse to pin a height at all. Any panel
+    that gives a .fish-input an exact height has to put this class on it, or its box renders empty.
+*/
+.fish-input--compact > #unity-text-input,
+TextField.fish-input--compact > #unity-text-input {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
 .fish-input > #unity-text-input:hover,
 TextField.fish-input > #unity-text-input:hover {
     border-color: var(--abyss-300);

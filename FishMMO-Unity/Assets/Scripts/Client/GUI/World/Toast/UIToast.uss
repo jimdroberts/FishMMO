@@ -12,9 +12,14 @@
     bottom: 0;
 }
 
-/* Sits directly above the chat panel, which is anchored left: 24px / bottom: 40px at 420px wide
- * and 280px tall — so its top edge is 320px up, and this clears it by 8px. Moved here from
- * top-centre, where the target frame covered it.
+/* Sits above the chat panel and below the party frames — the only gap in the left column wide
+ * enough for a stack that grows. All three panels are anchored by their bottom edges, so the
+ * gap between them is the same at every aspect ratio and none of these numbers is a percentage:
+ * .chat-panel's top edge is 354 up (bottom: 132px and 222 tall — the log grows downward as the
+ * bottom-centre block claims more room, never upward), .party-panel ends at bottom: 368px. 360
+ * is the offset that clears both — the stack's bottom edge lands at y315 on a 675-unit panel and
+ * y440 on an 800-unit one, 6px under the chat log's top edge and 8px under the party frame's, in
+ * both cases.
  *
  * Anchored by its BOTTOM edge, so the stack grows upward as toasts arrive: the newest sits
  * closest to the chat log and older ones drift away from the eye, which is the direction chat
@@ -22,7 +27,7 @@
 .toast-stack {
     position: absolute;
     left: 24px;
-    bottom: 328px;
+    bottom: 360px;
     width: 420px;
     align-items: flex-start;
 }

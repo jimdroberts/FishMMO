@@ -27,7 +27,7 @@
                 <ui:VisualElement name="trade-own-grid" class="trade-grid" />
                 <ui:VisualElement class="trade-currency-row">
                     <ui:Label text="Currency" class="fish-label fish-label--muted trade-currency__label" />
-                    <ui:IntegerField name="trade-own-currency" value="0" class="fish-input trade-currency__field" />
+                    <ui:IntegerField name="trade-own-currency" value="0" class="fish-input fish-input--compact trade-currency__field" />
                     <ui:Label name="trade-own-balance" text="" class="fish-label fish-label--caption trade-currency__balance" />
                 </ui:VisualElement>
                 <ui:Label name="trade-own-hint" text="Drag items from your bag, or right-click them." class="fish-hint trade-column__hint" />

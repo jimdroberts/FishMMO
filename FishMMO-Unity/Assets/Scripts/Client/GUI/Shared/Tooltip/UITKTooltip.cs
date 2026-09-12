@@ -225,6 +225,26 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Reports whether this tooltip is the one belonging to <paramref name="element"/>.
+		/// </summary>
+		/// <remarks>
+		/// An element's tooltip is either the one opened on it or one opened on something inside it,
+		/// so both a slot and a container holding that slot address the same tooltip. Identity is
+		/// tested alongside ancestry because <c>VisualElement.Contains</c> is strictly ancestor-of:
+		/// an element does not contain itself, and naming the owner exactly is the common case.
+		/// <para>
+		/// One method rather than the same rule spelled out at each call site. This is the check
+		/// that decides whether a caller may close, or may rewrite, what is on screen, and two
+		/// copies of it drifting apart is how a tooltip ends up describing a slot it is not on.
+		/// </para>
+		/// </remarks>
+		private bool Describes(VisualElement element)
+		{
+			return owner != null && element != null &&
+				   (ReferenceEquals(owner, element) || element.Contains(owner));
+		}
+
+		/// <summary>
 		/// Closes the tooltip only if it is currently showing for <paramref name="owner"/>.
 		/// </summary>
 		/// <param name="owner">
@@ -233,11 +253,53 @@ namespace FishMMO.Client
 		/// </param>
 		public void HideFor(VisualElement owner)
 		{
-			if (owner == null || this.owner == null ||
-				ReferenceEquals(this.owner, owner) || owner.Contains(this.owner))
+			/* The null-owner branch is kept as it was: a tooltip with no owner at all has no claim
+			 * on the screen that a caller asking to hide could be wrong about. */
+			if (owner == null || this.owner == null || Describes(owner))
 			{
 				ForceHide();
 			}
+		}
+
+		/// <summary>
+		/// Re-describes <paramref name="owner"/> after the thing it stands for has changed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A tooltip is opened from whatever the pointer found at the moment it entered an element,
+		/// and nothing re-reads that afterwards. For a slot that holds an item this is wrong the
+		/// moment the slot changes: swapping two items repaints both slots under a cursor that never
+		/// moved, so no leave and no enter ever fire and the tooltip goes on describing the item
+		/// that used to be there.
+		/// </para>
+		/// <para>
+		/// Guarded by ownership, like <see cref="HideFor"/>. A container repaints every one of its
+		/// slots when it resyncs and only one of them is under the pointer, so a refresh addressed
+		/// to some other element must not touch what is on screen — and, because this is the path
+		/// a whole grid's repaint goes through, a refresh must never be what opens a tooltip.
+		/// </para>
+		/// </remarks>
+		/// <param name="owner">The element being described, whose description has changed.</param>
+		/// <param name="source">
+		/// What that element describes now, or null when it has stopped describing anything — in
+		/// which case the tooltip closes, since there is nothing left to follow the cursor with.
+		/// </param>
+		public void RefreshFor(VisualElement owner, ITooltip source)
+		{
+			if (!Describes(owner))
+			{
+				return;
+			}
+
+			if (source == null)
+			{
+				ForceHide();
+				return;
+			}
+
+			/* The owner is handed straight back to Open so the tooltip is never unowned, not even
+			 * for the length of this call — an unowned tooltip is one nothing is holding on to. */
+			Open(source, this.owner);
 		}
 
 		/// <summary>

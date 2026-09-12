@@ -15,6 +15,30 @@ namespace FishMMO.Client
 		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
 		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
 
+		/// <summary>
+		/// The player may drag this bar, so the row above the hotkey bar is a starting point
+		/// rather than the only place it can live.
+		/// </summary>
+		/// <remarks>
+		/// The HUD is not draggable by default — see UITKControl.CanDrag — and the three bars are
+		/// the exception to that, along with the buff and debuff strips. Each bar has no header, so
+		/// the bar itself is the handle; it is 200x14 and carries no controls, so there is nothing
+		/// on it a press could have meant instead.
+		/// <para>
+		/// Where a player leaves one is kept per panel name in <see cref="UITKPanelPositions"/>,
+		/// snapping to the same grid the rest of the HUD uses. The three bars are placed by
+		/// <c>.res-bar--hp/mp/stam</c> in one row and nothing else, so a bar that has been dragged
+		/// keeps its position across a relog while the two it did not touch stay in the row.
+		/// </para>
+		/// <para>
+		/// Dragging one out of the row is a supported arrangement rather than a mess to tidy up:
+		/// the stylesheet anchors each bar by its absolute left and by the BOTTOM edge so the block
+		/// tracks the hotkey bar, and UITKControl.SetDragPosition releases that edge when it writes
+		/// an absolute left/top.
+		/// </para>
+		/// </remarks>
+		protected override bool CanDrag => true;
+
 		/// <summary>Name of the fill element inside the resource-bar UXML.</summary>
 		private const string FILL_NAME = "bar-fill";
 

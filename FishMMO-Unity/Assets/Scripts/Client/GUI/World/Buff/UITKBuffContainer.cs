@@ -38,6 +38,23 @@ namespace FishMMO.Client
 		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
 		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
 
+		/// <summary>
+		/// The player may drag this strip to a corner or edge of their choosing.
+		/// </summary>
+		/// <remarks>
+		/// The HUD is not draggable by default — see UITKControl.CanDrag — and both
+		/// strips are the exception to that. They have no header, so the strip itself is the handle
+		/// and it stays safe to drag from: a press that does not move is still a click on the buff
+		/// under it, which is what removes a removable buff.
+		/// <para>
+		/// The stylesheet's anchor is the default the player starts from, not a fixed position —
+		/// UITKControl writes an absolute left/top on the first drag, releases the `right` the
+		/// debuff strip is anchored by, and keeps the result in UITKPanelPositions under this
+		/// panel's name.
+		/// </para>
+		/// </remarks>
+		protected override bool CanDrag => true;
+
 		/// <summary>Name of the container element that holds the buff/debuff icons.</summary>
 		private const string LIST_NAME = "buff-list";
 
@@ -381,7 +398,7 @@ namespace FishMMO.Client
 				list.Add(view.Root);
 			}
 
-			// Quantised: the icon is 40px tall, so sub-percent changes are not visible and writing
+			// Quantised: the icon is 16px tall, so sub-percent changes are not visible and writing
 			// them every tick would repaint the element for nothing.
 			if (Mathf.Abs(view.AppliedFraction - entry.Fraction) >= 0.005f)
 			{

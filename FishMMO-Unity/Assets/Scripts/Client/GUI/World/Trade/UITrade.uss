@@ -221,6 +221,12 @@ Label.trade-currency__label {
     flex-shrink: 0;
 }
 
+/*
+    Pinned to a row height, so the field carries fish-input--compact as well as fish-input. Without
+    it Unity's default 10px of vertical padding inside the field uses up the whole 22px, the glyph
+    box has nothing left to fill, and the amount the player is offering draws as an empty box —
+    the same defect the merchant quantity box was reported for (issues #263 / #277).
+*/
 .trade-currency__field {
     width: 96px;
     height: 22px;

@@ -5,46 +5,128 @@
 */
 
 /*
-    Anchored explicitly. Each panel is its own UIDocument whose root fills the screen, so a
-    container with no position resolves to the top-left corner — which is right for buffs and
-    wrong for debuffs, and put both strips on top of each other. The modifiers below place each
-    one where its uGUI anchor had it: buffs top-left, debuffs top-right.
+    BOTTOM CENTRE, GROWING OUTWARD FROM THE SCREEN'S MIDLINE. Buffs run left from the centre,
+    debuffs run right from it, and the two share one 16-unit band directly above the resource
+    row — so what a fight is currently doing to the player is read in a single glance at the spot
+    the camera already looks at, rather than in two top corners the eye has to travel to.
+
+    Each container is FIT-CONTENT and pinned by its INNER edge: buffs are `right: 50%`, debuffs
+    are `left: 50%`. With `width: auto` the element is exactly as wide as the icons it holds, so
+    its inner edge stays on the midline and it grows outward as entries arrive — and the drag
+    handle stays the size of the strip. Every panel here is draggable (see the CanDrag override
+    in UITKBuffContainer), and a full-width transparent band across the bottom of the screen
+    would swallow every click that landed in it.
+
+    Not `left: 50%; translate: -100% 0`, which pins the inner edge just as well but moves the
+    painted box by a percentage of the element's OWN width — and that width changes every time an
+    icon arrives, so a strip the player had dragged would crawl sideways on its own.
+    SetDragPosition deliberately leaves `translate` in place (it measures and compensates rather
+    than clears it), which is right for the fixed-size windows that rule was written for and
+    wrong here.
+
+    BOUNDED AND WRAPPING. max-width is what gives `flex-wrap` on .buff-list a limit to fold
+    against; without one, a fit-content flex container grows along a single row for as long as it
+    has icons. Measured at 1200x800 with the 40px icons of the time: twelve icons made a 528px
+    strip and thirty made a 1320px one that ran off both edges of a 1200-wide screen, crossing
+    the bars and the cast bar on the way.
+
+    16px ICONS, DOWN FROM 28 — and that number is set by the worst case, not by taste. At 2px of
+    gutter the pitch is 18 and half the panel is 600 wide, so 33 icons fit in the 594 available
+    and the thirty the probe drives are ONE ROW. The old corner strips wrapped at eight per row,
+    which made thirty entries four rows and 124 units of height; this is 16. They are still large
+    in practice: 16 reference units is about 26 physical pixels at 1920x1080.
+
+    What is ABOVE and BELOW the band is load-bearing, and every panel around it is a separate
+    UIDocument that cannot be laid out relative to anything else: .res-bar sits 8px below at
+    bottom:84, .castbar-root is 10px above at bottom:132, and .chat-panel's bottom edge is at 132
+    so the strip passes under the log. Move an offset, an icon size or a margin here and those
+    have to move with it. Every number is measured, not estimated — see UIResourceBar.uss.
+
+    These offsets were `top: 12px` in the two top corners until the strips moved down here, which
+    is why UIMinimap.uss carried a 136px top padding and .party-panel started at y144. Both gave
+    way to a strip that is no longer up there: the map took its whole corner back, and the party
+    frame the 15 units the target frame leaves it.
+
+    Both strips are draggable; the icons are the handle. Dragging one writes an absolute left/top
+    and releases the inner edge, so a placed strip stays placed and grows from where it was put.
 */
 .buff-container {
     position: absolute;
-    top: 12px;
+    max-width: 600px;
+    bottom: 106px;
     flex-direction: row;
     align-items: flex-start;
     background-color: var(--clear);
 }
 
+/* Inner edges on the midline: the half-row each side grows away from. The 6px of padding is the
+   gutter they leave around the screen's centre, and it is inside the 600 rather than beside it,
+   because 600 is what `right: 50%` puts between an edge of the panel and the midline. */
 .buff-container--buff {
-    left: 12px;
+    right: 50%;
+    padding-right: 6px;
 }
 
 .buff-container--debuff {
-    right: 12px;
-    justify-content: flex-end;
+    left: 50%;
+    padding-left: 6px;
 }
 
-/* Horizontal strip that holds the generated buff groups. */
+/* Horizontal strip that holds the generated buff groups. The container's max-width is what
+   gives this wrap a limit to fold against; without a limit the row never breaks. */
 .buff-list {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: flex-start;
 }
 
+/* Both sides pack toward the midline, which is the whole point of the arrangement: the first
+   icon of the newest row appears at the centre and the strip is read outward from there. The
+   buffs' list packs right because the list sits in the left half; the debuffs' packs left
+   because theirs sits in the right half. Only visible once a side has wrapped, which takes more
+   than 33 icons. */
+.buff-container--buff .buff-list {
+    justify-content: flex-end;
+}
+
+.buff-container--debuff .buff-list {
+    justify-content: flex-start;
+}
+
 /* A single buff/debuff entry. */
 .buff-group {
-    width: 40px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
     margin-right: 4px;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     border-width: 1px;
     border-color: var(--abyss-500);
     border-radius: 6px;
     background-color: var(--abyss-800);
     overflow: hidden;
+}
+
+/* The player's own strips are the small ones. Scoped to the two containers in this file rather
+   than changed on .buff-group itself, because two other panels reuse that base at their own
+   sizes: the target frame's buff/debuff lists take it at 28 (UITarget.uss pads the lists and
+   nothing else), and .party-effects__strip restates it down to 20 of its own accord.
+
+   margin-bottom goes to 0 with the smaller icon. It exists to space wrapped rows apart, and on a
+   single row it only makes the strip's box 3 units taller than the icons in it — which is 3
+   units of the 8 that separate it from the resource bar. Past 33 icons a second line appears and
+   sits flush under the first. */
+.buff-container > .buff-list > .buff-group {
+    width: 16px;
+    height: 16px;
+    margin-right: 2px;
+    margin-bottom: 0;
+    border-radius: 4px;
+}
+
+/* The stacks count, scaled with the icon it annotates: 8px was chosen against a 28px icon and
+   would cover half of a 16px one. */
+.buff-container > .buff-list > .buff-group > .buff-group__label {
+    font-size: 7px;
 }
 
 /* Depleting duration fill (drawn behind the icon, height driven from C#). */

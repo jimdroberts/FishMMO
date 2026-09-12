@@ -39,11 +39,11 @@ namespace FishMMO.Client
 		/// Element and USS name prefix for this panel, without a trailing dash.
 		/// </summary>
 		/// <remarks>
-		/// Every panel-specific name is this prefix plus a fixed suffix — "bank-used" and
-		/// "inv-used", "bank-slot__lock--pending" and "inv-slot__lock--pending". Ten constants
-		/// followed that pattern in each panel without exception, so one string replaces all
-		/// twenty. A panel whose markup does not follow it should override the names below rather
-		/// than bend the prefix.
+		/// Every panel-specific name is this prefix plus a fixed suffix — "bank-capacity-fill" and
+		/// "inv-capacity-fill", "bank-currency-value" and "inv-currency-value". The constants that
+		/// followed that pattern in each panel were one string apiece written twice; one prefix
+		/// replaces them. A panel whose markup does not follow it should override the names below
+		/// rather than bend the prefix.
 		/// </remarks>
 		protected abstract string Prefix { get; }
 
@@ -52,6 +52,25 @@ namespace FishMMO.Client
 
 		/// <summary>This panel's container, as the server names it in a request.</summary>
 		protected abstract InventoryType OwnInventoryType { get; }
+
+		// ── What the designer configures per panel ────────────────────────────
+
+		/// <summary>
+		/// Which character attribute this panel shows in its footer as the currency.
+		/// </summary>
+		/// <remarks>
+		/// Resolved by id like the other currency-aware panels — trade and crafting both take
+		/// the same setting — because currency is an ordinary <see cref="CharacterAttribute"/>
+		/// rather than a field of its own. See <see cref="CharacterCurrency"/> for why that
+		/// matters: the balance is the attribute's base value, and reading the wrong half of it
+		/// has already let a buff be spent as money once.
+		/// <para>
+		/// Zero means this panel shows no currency, and the whole chip is hidden rather than
+		/// left standing empty in the footer.
+		/// </para>
+		/// </remarks>
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int CurrencyTemplateID;
 
 		/// <summary>
 		/// Asks the server to move an item into one of this panel's slots.
@@ -85,14 +104,14 @@ namespace FishMMO.Client
 		private const string SUBTITLE_NAME = "header-subtitle";
 		private const string CLOSE_BTN_NAME = "close-button";
 
-		/// <summary>Name of the footer label counting occupied slots.</summary>
-		protected virtual string UsedName => Prefix + "-used";
-		/// <summary>Name of the footer label counting free slots.</summary>
-		protected virtual string FreeName => Prefix + "-free";
-		/// <summary>Name of the footer capacity bar fill.</summary>
+		/// <summary>Name of the header capacity bar fill.</summary>
 		protected virtual string CapacityFillName => Prefix + "-capacity-fill";
-		/// <summary>Name of the label shown when nothing is stored.</summary>
-		protected virtual string EmptyName => Prefix + "-empty";
+		/// <summary>Name of the footer chip showing the character's currency.</summary>
+		protected virtual string CurrencyChipName => Prefix + "-currency-chip";
+		/// <summary>Name of the label naming the currency attribute.</summary>
+		protected virtual string CurrencyNameLabelName => Prefix + "-currency-name";
+		/// <summary>Name of the label showing the currency balance.</summary>
+		protected virtual string CurrencyValueLabelName => Prefix + "-currency-value";
 
 		// ── Shared UI overlay names (panels resolved by GameObject name via UIManager) ──
 
@@ -134,16 +153,29 @@ namespace FishMMO.Client
 
 		/// <summary>Slot views indexed by container slot index.</summary>
 		protected readonly List<SlotView> slotViews = new List<SlotView>();
-		/// <summary>Header line showing slot usage.</summary>
+		/// <summary>Header line showing slot usage, drawn over the capacity bar.</summary>
 		private Label subtitleLabel;
-		/// <summary>Footer label counting occupied slots.</summary>
-		private Label usedLabel;
-		/// <summary>Footer label counting free slots.</summary>
-		private Label freeLabel;
-		/// <summary>Footer capacity bar fill.</summary>
+		/// <summary>Header capacity bar fill.</summary>
 		private VisualElement capacityFill;
-		/// <summary>Label shown in place of the grid when nothing is stored.</summary>
-		private Label emptyLabel;
+
+		/// <summary>Footer chip showing the character's currency.</summary>
+		private VisualElement currencyChip;
+		/// <summary>Label naming the currency attribute.</summary>
+		private Label currencyNameLabel;
+		/// <summary>Label showing the currency balance.</summary>
+		private Label currencyValueLabel;
+
+		/// <summary>
+		/// The attribute this panel shows in its footer as the character's currency.
+		/// </summary>
+		/// <remarks>
+		/// Null when no template is configured or the character does not carry that attribute,
+		/// in which case the chip is hidden. Held rather than re-resolved on each repaint so the
+		/// subscription and the unsubscribe name the same attribute — the character's attribute
+		/// set can be replaced under it, and detaching from a re-resolved instance would leave
+		/// the original wired to this panel forever.
+		/// </remarks>
+		private CharacterAttribute currencyAttribute;
 
 		/// <summary>The slot grid container element.</summary>
 		private VisualElement slotGrid;
@@ -196,10 +228,11 @@ namespace FishMMO.Client
 
 			slotGrid = root.Q(SLOT_GRID_NAME);
 			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
-			usedLabel = root.Q<Label>(UsedName);
-			freeLabel = root.Q<Label>(FreeName);
 			capacityFill = root.Q(CapacityFillName);
-			emptyLabel = root.Q<Label>(EmptyName);
+
+			currencyChip = root.Q(CurrencyChipName);
+			currencyNameLabel = root.Q<Label>(CurrencyNameLabelName);
+			currencyValueLabel = root.Q<Label>(CurrencyValueLabelName);
 
 			Button closeBtn = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeBtn != null)
@@ -296,6 +329,7 @@ namespace FishMMO.Client
 		public override void OnPreSetCharacter()
 		{
 			UnsubscribeContainer();
+			UnsubscribeCurrency();
 		}
 
 		/// <summary>
@@ -304,6 +338,11 @@ namespace FishMMO.Client
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
+
+			/* Before the container is considered, and not behind its null check. The same trap
+			 * the subscriptions below carry a warning about: a character with no container yet
+			 * would otherwise skip the currency wiring, and nothing else would retry it. */
+			SubscribeCurrency();
 
 			DestroySlots();
 
@@ -340,6 +379,7 @@ namespace FishMMO.Client
 		public override void OnPreUnsetCharacter()
 		{
 			UnsubscribeContainer();
+			UnsubscribeCurrency();
 			ReleaseAndClearDrag();
 		}
 
@@ -493,6 +533,10 @@ namespace FishMMO.Client
 		/// </summary>
 		protected void ApplyPerOpenContent()
 		{
+			/* Ahead of the container check. A character with no container yet still has a
+			 * currency, and the footer is the only place this panel draws it. */
+			RefreshCurrency();
+
 			IItemContainer container = OwnContainer;
 			if (container == null)
 			{
@@ -701,10 +745,12 @@ namespace FishMMO.Client
 					view.Amount.AddToClassList(CssHidden);
 				}
 			}
+
+			RefreshSlotTooltip(slotIndex, item);
 		}
 
 		/// <summary>
-		/// Recomputes the header subtitle, footer counts and capacity bar.
+		/// Recomputes the capacity count and the bar it is drawn on.
 		/// </summary>
 		/// <remarks>
 		/// Occupancy comes from the container, which is the only thing that knows it. Both panels
@@ -713,6 +759,11 @@ namespace FishMMO.Client
 		/// item has an ICON, not whether a slot holds an item. Every item whose template has no
 		/// icon assigned, or whose icon had not finished loading, left a null there and was
 		/// counted as an empty slot, so the totals read low and drifted as icons resolved.
+		/// <para>
+		/// One number, stated once. The count and the bar used to be one of three separate
+		/// readouts of the same fact, the other two being a "used" and a "free" figure in the
+		/// footer; the footer now shows currency instead, and the count sits on the bar.
+		/// </para>
 		/// </remarks>
 		private void RefreshCapacity()
 		{
@@ -735,15 +786,10 @@ namespace FishMMO.Client
 
 			if (subtitleLabel != null)
 			{
-				subtitleLabel.text = $"{used} / {total} slots";
-			}
-			if (usedLabel != null)
-			{
-				usedLabel.text = $"{used} used";
-			}
-			if (freeLabel != null)
-			{
-				freeLabel.text = $"{free} free";
+				/* No noun: the label is drawn on the capacity bar now, under the panel's own
+				 * title, which says what is being counted. A resource bar reads "100 / 100"
+				 * and this one should read the same way. */
+				subtitleLabel.text = $"{used} / {total}";
 			}
 			if (capacityFill != null)
 			{
@@ -752,10 +798,102 @@ namespace FishMMO.Client
 				// Near-full is worth flagging before the player finds out by failing to loot.
 				capacityFill.EnableInClassList("fish-bar__fill--hp", total > 0 && free <= 2);
 			}
-			if (emptyLabel != null)
+		}
+
+		// ── Footer currency ───────────────────────────────────────────────────
+
+		/// <summary>
+		/// Resolves this panel's currency attribute for the current character and subscribes to it.
+		/// </summary>
+		/// <remarks>
+		/// Every exit path repaints. A character switch, or a template that stops resolving, has
+		/// to take the old balance off the screen — leaving the previous character's money in the
+		/// footer is worse than leaving it blank.
+		/// </remarks>
+		private void SubscribeCurrency()
+		{
+			currencyAttribute = null;
+
+			if (CurrencyTemplateID == 0 || Character == null)
 			{
-				emptyLabel.style.display = used == 0 && total > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+				// Nothing configured: the chip is hidden rather than filled with a guess.
+				RefreshCurrency();
+				return;
 			}
+
+			CharacterAttributeTemplate template =
+				CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(CurrencyTemplateID);
+
+			if (template == null ||
+				!Character.TryGet(out ICharacterAttributeController attributeController) ||
+				!attributeController.TryGetAttribute(template, out CharacterAttribute currency))
+			{
+				RefreshCurrency();
+				return;
+			}
+
+			currencyAttribute = currency;
+			currencyAttribute.OnAttributeUpdated -= OnCurrencyUpdated;
+			currencyAttribute.OnAttributeUpdated += OnCurrencyUpdated;
+
+			RefreshCurrency();
+		}
+
+		/// <summary>
+		/// Detaches this panel from the currency attribute it resolved.
+		/// </summary>
+		private void UnsubscribeCurrency()
+		{
+			if (currencyAttribute == null)
+			{
+				return;
+			}
+
+			currencyAttribute.OnAttributeUpdated -= OnCurrencyUpdated;
+			currencyAttribute = null;
+		}
+
+		/// <summary>
+		/// Repaints the footer when the currency balance changes.
+		/// </summary>
+		private void OnCurrencyUpdated(CharacterAttribute attribute)
+		{
+			RefreshCurrency();
+		}
+
+		/// <summary>
+		/// Paints the footer currency chip, or hides it when there is no currency to show.
+		/// </summary>
+		/// <remarks>
+		/// Reads <see cref="CharacterAttribute.Value"/>, the base value, and not
+		/// <c>FinalValue</c>. That is the number spending is checked against, so showing the
+		/// final value would offer the player money a currency-boosting buff has lent them and
+		/// <see cref="CharacterCurrency.TrySpend"/> would refuse to spend — which is exactly the
+		/// defect that helper was written to close.
+		/// </remarks>
+		private void RefreshCurrency()
+		{
+			if (currencyChip == null)
+			{
+				return;
+			}
+
+			if (currencyAttribute == null || currencyNameLabel == null || currencyValueLabel == null)
+			{
+				currencyChip.AddToClassList(CssHidden);
+				return;
+			}
+
+			/* Template is resolved from the cache when the attribute is constructed, so it is
+			 * null for an attribute whose template was never registered — a real possibility
+			 * for anything built from an asset that did not go through the boot loader. The
+			 * value is still the character's money and still worth showing; only the name is
+			 * lost, and it is lost as a blank rather than as an exception in a repaint. */
+			CharacterAttributeTemplate template = currencyAttribute.Template;
+
+			currencyChip.RemoveFromClassList(CssHidden);
+			currencyNameLabel.text = template != null ? template.Name : string.Empty;
+			currencyValueLabel.text = currencyAttribute.Value.ToString();
 		}
 
 		/// <summary>
@@ -781,6 +919,43 @@ namespace FishMMO.Client
 			{
 				view.Amount.text = "";
 				view.Amount.AddToClassList(CssHidden);
+			}
+
+			RefreshSlotTooltip(slotIndex, null);
+		}
+
+		/// <summary>
+		/// Keeps the tooltip for a slot in step with what the slot now shows.
+		/// </summary>
+		/// <remarks>
+		/// Called from the two methods that paint a slot, so every path that changes one — a
+		/// replicate arriving, a resync, a rebuild, a panel opening — keeps the tooltip honest
+		/// without having to remember to. The tooltip was opened from the item the pointer found on
+		/// the way in and nothing re-read it, so a swap under a stationary cursor left it describing
+		/// the item that used to be in the slot the player is looking at. Issue #280.
+		/// <para>
+		/// <see cref="UITKTooltip.RefreshFor"/> does nothing unless the pointer is over THIS slot,
+		/// which is what makes the per-slot call safe from the loops above.
+		/// </para>
+		/// </remarks>
+		/// <param name="slotIndex">The slot that was just painted.</param>
+		/// <param name="item">What it now holds, or null when it now holds nothing.</param>
+		private void RefreshSlotTooltip(int slotIndex, Item item)
+		{
+			if (slotIndex < 0 || slotIndex >= slotViews.Count)
+			{
+				return;
+			}
+
+			VisualElement owner = slotViews[slotIndex].Root;
+			if (owner == null)
+			{
+				return;
+			}
+
+			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
+			{
+				tooltip.RefreshFor(owner, item);
 			}
 		}
 

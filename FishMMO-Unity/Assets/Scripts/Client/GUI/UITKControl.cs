@@ -287,10 +287,24 @@ namespace FishMMO.Client
 		/// the <c>panel-header</c> handle authored into nearly every window's UXML — was dead code
 		/// in the world scene.
 		/// <para>
-		/// Windows and dialogs are the things a player arranges; the HUD stays where its
-		/// stylesheet puts it, and popups, tooltips and full-screen overlays are transient or
+		/// Windows and dialogs are the things a player arranges; the rest of the HUD stays where
+		/// its stylesheet puts it, and popups, tooltips and full-screen overlays are transient or
 		/// cover the screen anyway. A newly written window therefore inherits "draggable" instead
 		/// of silently not being.
+		/// </para>
+		/// <para>
+		/// Five HUD panels override this to true — the health, mana and stamina bars and the buff
+		/// and debuff strips — because their authors could only pick one default stack and players
+		/// want a different one: see <c>.res-bar--*</c> in UIResourceBar.uss for the arrangement
+		/// and what it cost to guess. An override is per panel and not per layer on purpose. A HUD
+		/// root that fills the viewport, like the minimap's, must never opt in: with no header the
+		/// whole root becomes the handle, and every press anywhere on screen would start a drag of
+		/// it.
+		/// </para>
+		/// <para>
+		/// A panel in that set may be anchored by any edge — the bars and the cast bar by the
+		/// bottom, the debuff strip by the right — which the drag path already handles: see the
+		/// edge-release and transform-compensation notes in <see cref="SetDragPosition"/>.
 		/// </para>
 		/// <para>
 		/// The login-flow screens override this to false: they carry a header, but they are

@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 using UnityEngine.UIElements;
 using FishMMO.Client;
 using FishMMO.Shared;
@@ -225,6 +227,43 @@ namespace FishMMO.UnitTests
 			Button accept = Live.Q<Button>("trade-accept-btn");
 			LogAssert.AreEqual("Accept", accept.text, "the accept button offers to accept");
 			LogAssert.IsFalse(accept.enabledSelf, "but is dead until both sides confirm");
+		}
+
+		/// <summary>
+		/// The currency box has to be tall enough for the element that draws the amount.
+		/// </summary>
+		/// <remarks>
+		/// The same defect the merchant quantity box was reported for (issues #263 and #277), found
+		/// here while fixing it: this field is also pinned to a 22px row, and Unity's default theme
+		/// spends 10px of that on the input's own top and bottom padding, which leaves the thing that
+		/// draws the digits nothing to fill. It measured 96x22 with a 74x0 glyph box — a currency
+		/// field that looks empty however much is in it. See
+		/// MerchantPanelTests.TheQuantityBoxHasRoomToDrawItsNumber for the measurement.
+		/// </remarks>
+		[UnityTest]
+		public IEnumerator TheCurrencyBoxHasRoomToDrawItsAmount()
+		{
+			trade.OpenWith(22, "Bob", 15.0f);
+			trade.ApplyState(State(null, 40, false, null, 0, false));
+
+			for (int frame = 0; frame < 10; ++frame)
+			{
+				yield return null;
+			}
+
+			IntegerField field = Live.Q<IntegerField>("trade-own-currency");
+			VisualElement input = field.Q("unity-text-input");
+			VisualElement glyph = input?.Q(className: "unity-text-element");
+
+			LogAssert.IsNotNull(glyph, "the element inside the field that draws the amount");
+
+			LogAssert.IsTrue(Mathf.Abs(field.layout.height - 22f) < 0.5f,
+				$"the column's own 22px box must survive; it laid out at {field.layout.height}");
+			LogAssert.IsTrue(glyph.layout.height > 0f,
+				$"the amount must have a height to be drawn in; the glyph box resolved to " +
+				$"{glyph.layout.width}x{glyph.layout.height}");
+			LogAssert.IsTrue(glyph.layout.width > 0f,
+				$"and a width; it resolved to {glyph.layout.width}x{glyph.layout.height}");
 		}
 
 		[Test]

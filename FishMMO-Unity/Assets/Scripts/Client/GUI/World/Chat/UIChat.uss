@@ -4,16 +4,46 @@
 */
 
 /*
-    Anchored bottom-right. Each panel is its own UIDocument whose root fills the screen, so a
+    Anchored bottom-left. Each panel is its own UIDocument whose root fills the screen, so a
     panel with a size but no position resolves to the top-left corner rather than anywhere
     meaningful — which is where this sat.
+
+    LIFTED clear of the bottom-centre block. It was at bottom:40, which put its bottom-right
+    corner under the hotkey strip: measured at 1200x800, .hotkey-list resolves to x294..906 while
+    this panel is x24..444, so the two overlapped by 150x32px — the first three slots drawn over
+    the chat log. A centred 12-slot strip is 612 wide and cannot clear a 420-wide bottom-left
+    panel on a 1200-wide screen at any slot size, so the chat log is what has to move, and it has
+    moved twice since: to 104 when the resource bars went side by side into that column, and to
+    132 when the buff/debuff strips were put in the band above the bars.
+
+    The 104 was set by the resource row. The row is 612 wide and so reaches into x294..444, this
+    panel's column — the old 280-wide stack was chosen specifically to stop short of it. The log
+    gave way instead and took the 6px of gutter that was left over.
+
+    The 132 is set by the strips, which now run the full width of the screen at y678..694 on an
+    800-unit panel and pass underneath this one. Their top edge is 10px below this panel's bottom
+    edge, and they are the only thing there — the cast bar next to them is x500..700 and this log
+    stops at x444, so the two never meet.
+
+    A FIXED 222, not `height: 280; max-height: 34%`. The band this panel may occupy is bounded at
+    both ends by bottom-anchored panels — the strip band below it and the toast stack at 360
+    above it — so it is 360 - 132 - 6 = 222 units at EVERY aspect ratio, and a percentage cap
+    makes that band depend on the screen's height instead: at 675 units tall (16:9) a 34% cap bit
+    at 229 and the log floated 20 units shorter than it needed to, and at 800 the 280 stood. Both
+    numbers were always the same distance from the bottom edge; only one of them knew it.
+
+    None of this moved the panel's TOP edge, which is 354 units up and is what .toast-stack's 360
+    offset was measured against; each time the log gave ground it did so downward.
+
+    UIToast.uss anchors its stack off this panel's top edge and UIParty.uss off its own top, so
+    both carry offsets derived from these numbers.
 */
 .chat-panel {
     position: absolute;
     left: 24px;
-    bottom: 40px;
+    bottom: 132px;
     width: 420px;
-    height: 280px;
+    height: 222px;
 }
 
 .chat-tabs-bar {

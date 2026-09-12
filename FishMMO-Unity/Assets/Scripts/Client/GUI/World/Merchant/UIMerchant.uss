@@ -217,6 +217,14 @@
     width: 38px;
 }
 
+/*
+    Pinned to a row height, so the field carries fish-input--compact as well as fish-input. An
+    exact height is what starves the element that draws the number: Unity's default theme pads the
+    field's editable surface by 10px top and bottom, 22 - 10 - 10 - 1 - 1 leaves the glyph box
+    nothing to fill, and it collapses to zero. The box then draws no digits and cannot be clicked
+    into — reported as "the quantity is not rendered" and "can't edit it" (issues #263 and #277).
+    See the class in FishMMO-Theme.uss.
+*/
 .merchant-qty-field {
     width: 54px;
     height: 22px;

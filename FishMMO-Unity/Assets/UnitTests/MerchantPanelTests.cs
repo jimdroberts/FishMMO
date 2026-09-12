@@ -1,7 +1,9 @@
-﻿using System.Reflection;
+﻿using System.Collections;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEngine.TestTools;
 using UnityEditor;
 using FishMMO.Client;
 using FishMMO.Shared;
@@ -95,6 +97,14 @@ namespace FishMMO.UnitTests
 			FieldInfo info = typeof(UITKMerchant).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
 			LogAssert.IsNotNull(info, $"UITKMerchant must still declare {name}");
 			return info.GetValue(merchant) as T;
+		}
+
+		/// <summary>Reads an int field off the panel, for the ones <see cref="Field{T}"/> cannot box.</summary>
+		private int Number(string name)
+		{
+			FieldInfo info = typeof(UITKMerchant).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+			LogAssert.IsNotNull(info, $"UITKMerchant must still declare {name}");
+			return (int)info.GetValue(merchant);
 		}
 
 		/// <summary>Selects an entry through the panel's own selection path.</summary>
@@ -259,6 +269,104 @@ namespace FishMMO.UnitTests
 			field.value = 99;
 
 			LogAssert.AreEqual(3, field.value, "a hand-typed quantity above the ceiling is written back clamped");
+		}
+
+		/// <summary>
+		/// The reported defect itself: the box has to be tall enough for the element that draws the
+		/// number, and that element has to be painted in a colour that shows.
+		/// </summary>
+		/// <remarks>
+		/// Issue #263 was reported as "the quantity is not being rendered in the quantity box — is it
+		/// due to the background colour being the same as the value font colour?", and #277 as "doesn't
+		/// populate, can't edit it". Colour was never involved: measured, the glyph box resolves to
+		/// this theme's own light text colour on the panel's dark ground the whole time, and the
+		/// second half of this test keeps it that way.
+		/// <para>
+		/// The height is the defect. Unity's default theme pads the editable surface inside a text
+		/// field by 10px top and bottom, sized for a 36px inspector row. The quantity box is pinned to
+		/// 22px, so 22 − 10 − 10 − 1 − 1 leaves the element that stretches to that surface — the one
+		/// that draws the characters — nothing at all, and it resolves to zero height. Nothing is
+		/// drawn in the box and there is nothing to click into, which is both reports at once. The fix
+		/// trims that padding on the field's own <c>fish-input--compact</c> class
+		/// (FishMMO-Theme.uss); this asserts it stays trimmed.
+		/// </para>
+		/// <para>
+		/// A coroutine, because layout settles over frames rather than inside the call that changed
+		/// the tree — the same reason ColorPickerTests.TheHexFieldHasRoomToShowItsCode is one. The
+		/// field's own height is asserted first and on purpose: it is what shows the numbers below are
+		/// a laid-out tree rather than a tree that was never measured, where every size is zero and a
+		/// "greater than zero" check could not tell a fix from a failure.
+		/// </para>
+		/// </remarks>
+		[UnityTest]
+		public IEnumerator TheQuantityBoxHasRoomToDrawItsNumber()
+		{
+			IntegerField field = Live.Q<IntegerField>("merchant-qty-field");
+
+			// A stackable selection: the quantity controls exist only when there is a quantity to choose.
+			Select(new VisualElement(), 25, 20, "Bread", false, 0);
+
+			for (int frame = 0; frame < 10; ++frame)
+			{
+				yield return null;
+			}
+
+			VisualElement input = field.Q("unity-text-input");
+			VisualElement glyph = input?.Q(className: "unity-text-element");
+
+			LogAssert.IsNotNull(input, "the field's editable surface (#unity-text-input) must exist");
+			LogAssert.IsNotNull(glyph, "and the element inside it that draws the characters");
+
+			LogAssert.IsTrue(Mathf.Abs(field.layout.height - 22f) < 0.5f,
+				$"the panel's own 22px box must survive the fix; it laid out at {field.layout.height}");
+			LogAssert.IsTrue(glyph.layout.height > 0f,
+				$"the element that draws the number must have a height to draw in; it resolved to " +
+				$"{glyph.layout.width}x{glyph.layout.height}, so the box renders empty and cannot be " +
+				"clicked into (issues #263 and #277)");
+			LogAssert.IsTrue(glyph.layout.width > 0f,
+				$"and a width; it resolved to {glyph.layout.width}x{glyph.layout.height}");
+
+			/* The half of the report that named a cause, so it cannot come back: the number must be
+			 * drawn in a colour that stands off the box behind it. */
+			Color number = glyph.resolvedStyle.color;
+			LogAssert.IsTrue(number.a > 0f, "the number must not be drawn fully transparent");
+			LogAssert.IsTrue(number.r + number.g + number.b >= 1.5f,
+				$"the number must be drawn in the panel's light text colour, not a dark one that " +
+				$"disappears into the box; it resolved to {number}");
+			LogAssert.AreNotEqual(field.resolvedStyle.backgroundColor, number,
+				"and it must not be the colour it is sitting on");
+		}
+
+		/// <summary>
+		/// Max on a sale must reach the whole slot, which is what #277 asked for in as many words:
+		/// "Max Sell Quantity at a time should be max stack size."
+		/// </summary>
+		/// <remarks>
+		/// The ceiling is the row's, and a sell row's ceiling is the stack in the bag slot — the
+		/// server caps a sale at exactly that (<c>InteractableSystem.Merchant</c>: the requested
+		/// quantity is clamped to the slot's own amount), so asking for the whole stack is honoured
+		/// rather than quietly reduced. Nothing had to change here for that: the box simply had to
+		/// render, which is the test above.
+		/// </remarks>
+		[Test]
+		public void MaxOnASaleAsksForTheWholeSlot()
+		{
+			IntegerField field = Live.Q<IntegerField>("merchant-qty-field");
+			Label total = Live.Q<Label>("merchant-transaction-total");
+			Button max = Live.Q<Button>("merchant-qty-max");
+
+			// A twenty-strong stack in a bag slot, as BuildSellEntries reports it.
+			Select(new VisualElement(), 4, 20, "Bread", true, 123L);
+
+			LogAssert.AreEqual(20, Number("selectedMaxQuantity"),
+				"a sell row's ceiling must be the stack in the slot, not one");
+			LogAssert.AreEqual(DisplayStyle.Flex, max.style.display.value, "a stack gets its adjusters");
+
+			// Exactly what the Max button does.
+			Invoke(merchant, "SetQuantity", Number("selectedMaxQuantity"));
+
+			LogAssert.AreEqual(20, field.value, "Max must fill the box with the stack");
+			LogAssert.AreEqual("+80", total.text, "and the payout is the whole stack's");
 		}
 
 		[Test]

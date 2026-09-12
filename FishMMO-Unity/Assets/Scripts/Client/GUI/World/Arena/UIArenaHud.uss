@@ -4,11 +4,19 @@
     against the 1200x800 reference resolution declared by Assets/UI Toolkit/PanelSettings.asset.
 */
 
-/* Top centre, under the target frame and clear of the minimap. */
+/*
+    Top centre, under the target frame and clear of the minimap — which it was not: at 12% of an
+    800-unit panel this resolved to y96..166 while .target-panel's cards resolve to y48..121, so
+    the two overlapped by 260x25px for as long as both were on screen, which in an arena is
+    always. .target-panel is anchored at an absolute 48px and is 73 units tall, so 132 clears it
+    by 11px; an absolute offset rather than a percentage, because the panel is 1200 units wide at
+    every aspect ratio but 1200 * (screenH / screenW) tall, and a percentage would drift against
+    it. See the note in UITarget.uss.
+*/
 .arenahud-root {
     position: absolute;
     left: 50%;
-    top: 12%;
+    top: 132px;
     translate: -50% 0;
     width: 260px;
     flex-direction: column;
@@ -134,11 +142,26 @@
 
 /* ── Kill feed ──────────────────────────────────────────── */
 
+/*
+    Below the minimap, which it used to be drawn through. At 26% of an 800-unit panel the first
+    line resolved to y208 while the frame ended at y252, so every line of the feed covered part of
+    the map for as long as the feed had anything in it. The frame is 244 tall in the top-right
+    corner (see UIMinimap.uss), so it ends at y252 and the feed is anchored at an absolute 260 —
+    8px under it, and an absolute offset rather than a percentage for the reason given at
+    .arenahud-root. Both numbers were 144 higher while the minimap was padded down to clear the
+    debuff strip that used to sit in that corner.
+
+    260 wide rather than 300, so its left edge is x924 and it stops 18px short of the resource row
+    at x906. At 300 it began at x884 and the row's stamina bar ends at x906, and the resource row
+    is where the feed's column ends up on a short panel — 21:9 is 506 units tall. The feed has no
+    content of its own until a kill happens, so nothing draws there today; the width is what keeps
+    that true when something does.
+*/
 .arenahud-feed {
     position: absolute;
     right: 16px;
-    top: 26%;
-    width: 300px;
+    top: 260px;
+    width: 260px;
     flex-direction: column;
     align-items: flex-end;
 }

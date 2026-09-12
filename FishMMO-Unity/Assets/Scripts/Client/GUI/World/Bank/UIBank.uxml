@@ -32,9 +32,20 @@
                     <ui:Label name="header-title"
                               class="fish-panel__title bank-header__title"
                               text="BANK" />
-                    <ui:Label name="header-subtitle"
-                              class="fish-panel__subtitle bank-header__subtitle"
-                              text="0 / 0 slots" />
+
+                    <!--
+                        Capacity, drawn as a resource bar — track, fill, and the count
+                        centred over them. This replaces a bare "0 / 32 slots" line here
+                        plus a second count either side of a second bar in the footer:
+                        three statements of one fact. The bar and its fill keep the
+                        names the panel resolves them by, so only the markup moved.
+                    -->
+                    <ui:VisualElement name="bank-capacity-track" class="fish-bar bank-capacity">
+                        <ui:VisualElement name="bank-capacity-fill" class="fish-bar__fill bank-capacity__fill" />
+                        <ui:Label name="header-subtitle"
+                                  class="fish-bar__label bank-capacity__label"
+                                  text="0 / 0" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
 
@@ -56,17 +67,30 @@
                      Lock        →  fish-slot__lock bank-slot__lock
             -->
             <ui:VisualElement name="slot-grid" class="bank-grid" />
-            <ui:Label name="bank-empty" text="Your vault is empty." class="fish-empty bank-empty" />
 
         </ui:ScrollView>
 
-        <!-- ── FOOTER : capacity readout ────────────────────── -->
+        <!-- ── FOOTER : currency ────────────────────────────── -->
+        <!--
+            The footer used to restate the capacity readout as two more counts either
+            side of a second bar. It shows the character's currency instead, drawn as
+            the same chip the equipment panel uses for its HP / MP / STM readouts: a
+            coloured dot, a name, and the value.
+
+            The name and value labels are filled in by UITKItemGridPanel from the
+            attribute template named by its CurrencyTemplateID. With no template
+            configured the whole chip is hidden rather than left showing a placeholder.
+        -->
         <ui:VisualElement name="panel-footer" class="fish-panel__footer bank-footer">
-            <ui:Label name="bank-used" text="0 used" class="fish-label fish-label--caption bank-footer__stat" />
-            <ui:VisualElement name="bank-capacity-track" class="fish-bar bank-capacity">
-                <ui:VisualElement name="bank-capacity-fill" class="fish-bar__fill bank-capacity__fill" />
+            <ui:VisualElement name="bank-currency-chip" class="bank-currency">
+                <ui:VisualElement class="fish-chip__dot bank-currency__dot" />
+                <ui:Label name="bank-currency-name"
+                          class="fish-chip__label bank-currency__name"
+                          text="Currency" />
+                <ui:Label name="bank-currency-value"
+                          class="fish-chip__value bank-currency__value"
+                          text="0" />
             </ui:VisualElement>
-            <ui:Label name="bank-free" text="0 free" class="fish-label fish-label--caption bank-footer__stat bank-footer__stat--right" />
         </ui:VisualElement>
 
     </ui:VisualElement>

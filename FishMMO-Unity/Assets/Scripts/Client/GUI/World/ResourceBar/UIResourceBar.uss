@@ -9,38 +9,67 @@
     unanchored they all resolved to the same full-width strip across the top and drew on top
     of each other, so only whichever panel sorted last was visible and the other two looked
     like they were missing entirely. Anchoring each one explicitly is what keeps them apart.
+
+    SIDE BY SIDE, each 200x14. The three were stacked and 280x20 until the block was moved above
+    the hotkey bar, at which point the stack was using 76 units of height directly over the one
+    place a player looks while fighting. Laid out in a row they cost 14.
+
+    The row is exactly as wide as the hotkey strip beneath it and exactly on top of it: three
+    200px bars and two 6px gaps is 612, which is what .hotkey-bar measures at the twelve-slot
+    maximum (12 x (48 + 3)). A centred block of width W starts at (1200 - W) / 2, so the row
+    spans x294..906 — the strip's own edges — and each bar is placed by an absolute left rather
+    than by `left: 50%; translate: -50%`, because a translate is per-bar and three of them cannot
+    each be half-centred and land in a row. Absolute lefts are stable here for the same reason
+    the panel is: PanelSettings matches WIDTH, so the panel is always exactly 1200 units wide.
+
+    BOTTOM-anchored, not top. PanelSettings matches WIDTH (m_ScreenMatchMode 0 / m_Match 0), so
+    the panel is always exactly 1200 units wide but its height is 1200 * (screenH / screenW) —
+    675 at 16:9, 750 at 1280x800, 800 at 1200x800, 900 at 4:3. A top offset would therefore
+    drift relative to the hotkey bar at every aspect ratio while a bottom offset cannot. This is
+    the same fact UITKControl.SetDragPosition compensates for when it re-clamps a stored
+    position after a resize.
+
+    Measured at 1200x800: the hotkey strip resolves to y728..776, so .hotkey-bar's 24px padding
+    plus its 48px slots put its top edge 72 units up. The row sits at bottom:84 — 12px clear of
+    it — and the cast bar climbs 10px above the row.
+
+    RAISING THE CHAT LOG is part of this. The row is 612 wide and so reaches into x294..444,
+    which is the chat panel's column; the old 280-wide stack was chosen specifically to stop
+    16px short of it (see the history below). A row cannot be both centred and that narrow, so
+    the chat panel moves up instead: .chat-panel is at bottom:104 and capped at 250px, which is
+    6px under the row and 6px under the toast stack at every aspect ratio, since all three
+    offsets are bottom-anchored.
+
+    Was top-left at y64/92/120, under a buff strip that has since been bounded and moved. The
+    history is worth keeping: they were first at bottom 96/68/40 with left:24, which is inside
+    the chat panel, and all three were laid out correctly the whole time and simply drawn
+    underneath it (the health bar measured 160x20 at (24,652) on a 768-tall screen).
+
+    All three are draggable: see the CanDrag override in UITKResourceBar.
 */
 .res-bar {
     position: absolute;
-    left: 24px;
-    width: 160px;
-    height: 20px;
+    width: 200px;
+    height: 14px;
 }
 
-/*
-    Top-left, not bottom-left. They were at bottom 96/68/40 with left:24 — which is inside the
-    chat panel, authored at left:24 bottom:40 with a 420x280 body and an opaque .fish-panel
-    background. All three bars were laid out correctly the whole time and drawn underneath it.
-    Measured: the health bar resolved to 160x20 at (24, 652) on a 768-tall screen, squarely
-    within chat's rectangle.
+.res-bar--hp   { left: 294px; bottom: 84px; }
+.res-bar--mp   { left: 500px; bottom: 84px; }
+.res-bar--stam { left: 706px; bottom: 84px; }
 
-    The top-left corner is free, and is where a player looks for their own resources anyway.
-*/
-.res-bar--hp   { top: 24px; }
-.res-bar--mp   { top: 52px; }
-.res-bar--stam { top: 80px; }
-
-/* The fill grows left-to-right; width is driven from C# as a percentage. */
+/* The fill grows left-to-right; width is driven from C# as a percentage. Radius comes from
+   .fish-bar__fill in the theme — this used to restate it as 3px, which was a heavier corner than
+   the 14px-tall bar can carry. */
 .res-bar__fill {
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
     width: 100%;
-    border-radius: 3px;
 }
 
-/* Centered value label drawn on top of the fill. */
+/* Centered value label drawn on top of the fill. 9px, not the 11px the 20px-tall bar carried:
+   the bar is 14 now, and "100/100" is the widest this label ever gets. */
 .res-bar__label {
     position: absolute;
     left: 0;
@@ -49,7 +78,7 @@
     bottom: 0;
     -unity-text-align: middle-center;
     -unity-font-style: bold;
-    font-size: 11px;
+    font-size: 9px;
     color: var(--text-bright);
     text-shadow: 0 1px 2px var(--edge-dark);
 }
