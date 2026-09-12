@@ -141,16 +141,16 @@ Assets/UnitTests/
 ├── AI/                          (27)         # NPC brains, threat, pets, NavMesh, spawners
 ├── Currency/                     (2)         # Spend/grant path + persisted ledger numbering
 ├── Housing/                     (10)         # Plot identity, access, placement, lifecycle, fees
-├── Map/                          (2)         # Map projection, explored readout
+├── Map/                          (5)         # Map projection, explored readout, marker culling, dungeon entrances
 ├── NPC/                          (1)         # Dashboard NPC designer / NPCPrefabFactory
 ├── Persistence/                  (1)         # 2026-09-07 persistence audit invariants
-├── Prediction/                  (95)         # Prediction, combat, observers, bandwidth
+├── Prediction/                  (96)         # Prediction, combat, observers, bandwidth
 ├── Server/                       (1)         # Scene-server placement policy
 ├── Teleport/                     (1)         # Teleporter key + live-vs-baked waypoints
 ├── Waypoint/                     (1)         # Waypoint unlock bit set, travel truth table
 ├── PlayMode/                     (5)         # Simulation-scene tests + Update dispatch cost
 │   └── FishMMO.UnitTests.PlayMode.asmdef
-├── *.cs                         (75)         # Auth, UI panels, items, abilities, social, content
+├── *.cs                         (88)         # Auth, UI panels, items, abilities, social, content
 └── README.md                                 # This document
 ```
 

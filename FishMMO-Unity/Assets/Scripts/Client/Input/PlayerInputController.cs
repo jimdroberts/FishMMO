@@ -841,15 +841,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Callback for equipment input action.
-		/// Shows the equipment UI and sets the equipment view camera.
+		/// Callback for equipment input action. Toggles the equipment UI.
 		/// </summary>
+		/// <remarks>
+		/// The panel takes its own preview camera from the character it is showing, so nothing is
+		/// handed over here. Injection at this point made the preview a property of the hotkey
+		/// rather than of the panel: any other route to opening it arrived with no camera at all.
+		/// </remarks>
 		private void OnEquipmentPerformed(InputAction.CallbackContext context)
 		{
 			if (TypingIntoField) return;
 			if (UIManager.TryGetTK("UIEquipment", out UITKEquipment equipment))
 			{
-				equipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
 				equipment.ToggleVisibility();
 			}
 		}

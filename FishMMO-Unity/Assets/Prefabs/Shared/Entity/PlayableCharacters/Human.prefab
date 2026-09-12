@@ -660,7 +660,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 4964627840297570917}
   characterNameplate: {fileID: 642337216996108136}
   meshRoot: {fileID: 2976285799004961102}
-  equipmentViewCamera: {fileID: 0}
+  equipmentViewCamera: {fileID: 6274733150604385851}
 --- !u!136 &4989737185595066850
 CapsuleCollider:
   m_ObjectHideFlags: 8

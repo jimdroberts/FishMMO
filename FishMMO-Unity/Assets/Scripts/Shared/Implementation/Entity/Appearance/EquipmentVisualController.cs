@@ -75,6 +75,12 @@ namespace FishMMO.Shared
 
 			GameObject rootGO = new GameObject("EquipmentRoot");
 			rootGO.transform.SetParent(meshRoot, false);
+			/* Every mesh this controller builds hangs off here and is drawn as part of the
+			 * character, so it belongs on the same layer the body models do. A new GameObject
+			 * starts on Default regardless of its parent, hence the explicit assignment —
+			 * otherwise armor fills would be missing from the equipment preview, which culls to
+			 * the character visual layer alone. */
+			BaseCharacter.ApplyVisualLayer(rootGO);
 			equipmentRoot = rootGO.transform;
 
 			slotCount = System.Enum.GetNames(typeof(ItemSlot)).Length;
@@ -188,6 +194,7 @@ namespace FishMMO.Shared
 			int index = (int)slot;
 			GameObject go = new GameObject($"Equipment_{slot}");
 			go.transform.SetParent(equipmentRoot, false);
+			BaseCharacter.ApplyVisualLayer(go);
 			go.SetActive(false);
 			SlotRenderer r = new SlotRenderer { GameObject = go, Slot = slot };
 			SkinnedMeshRenderer smr = go.AddComponent<SkinnedMeshRenderer>();
@@ -345,6 +352,7 @@ namespace FishMMO.Shared
 
 			GameObject go = new GameObject($"Weapon_{wt.Name}");
 			go.transform.SetParent(bone, false);
+			BaseCharacter.ApplyVisualLayer(go);
 			go.transform.localPosition = Vector3.zero;
 			go.transform.localRotation = Quaternion.identity;
 			go.transform.localScale = Vector3.one;

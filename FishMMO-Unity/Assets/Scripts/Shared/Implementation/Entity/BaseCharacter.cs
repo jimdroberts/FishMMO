@@ -135,6 +135,59 @@ namespace FishMMO.Shared
 		/// </summary>
 		public Transform MeshRoot { get { return this.meshRoot; } }
 
+		/// <summary>
+		/// Puts <paramref name="root"/> and everything beneath it on the layer character visuals
+		/// are drawn on, so a camera that culls to that layer sees the character and nothing else.
+		/// </summary>
+		/// <param name="root">The root of the visual hierarchy to move. May be null.</param>
+		/// <remarks>
+		/// <para>This is the single source of the rule for visual hierarchies.
+		/// <see cref="InstantiateRaceModelFromIndex"/> applies it to the model it instantiates and
+		/// <see cref="EquipmentVisualController"/> to the meshes it builds, so the two cannot drift
+		/// apart. <see cref="Awake"/> reads the same layer for the character's own GameObject, but
+		/// assigns it to that one object only — the character root also carries the nameplate and
+		/// the follow points, and those are not part of the preview's subject.</para>
+		/// <para>It has to be applied per GameObject: <c>Instantiate</c> copies a prefab's own
+		/// layers verbatim and never inherits the parent's, which is why a character whose root sat
+		/// on the Player layer still had a body drawn on Default. That mismatch is what the
+		/// equipment preview's authored camera — culling to Player — was rendering nothing
+		/// through.</para>
+		/// <para>Missing layers are skipped rather than assigned. <see cref="Constants.Layers.Index.Player"/>
+		/// is -1 when the project's Tag Manager does not define "Player", and writing -1 to
+		/// <c>GameObject.layer</c> throws; leaving the hierarchy where it is keeps the character
+		/// visible to the main camera, which is the failure a player can live with.</para>
+		/// </remarks>
+		public static void ApplyVisualLayer(GameObject root)
+		{
+			if (root == null)
+			{
+				return;
+			}
+
+			int layer = Constants.Layers.Index.Player;
+			if (layer < 0)
+			{
+				return;
+			}
+
+			ApplyVisualLayer(root.transform, layer);
+		}
+
+		/// <summary>
+		/// Recursion behind <see cref="ApplyVisualLayer(GameObject)"/>.
+		/// </summary>
+		/// <param name="target">The transform to move, and whose children are moved in turn.</param>
+		/// <param name="layer">The layer index to assign.</param>
+		private static void ApplyVisualLayer(Transform target, int layer)
+		{
+			target.gameObject.layer = layer;
+
+			for (int i = 0; i < target.childCount; ++i)
+			{
+				ApplyVisualLayer(target.GetChild(i), layer);
+			}
+		}
+
 #if !UNITY_SERVER
 		/// <summary>
 		/// Instantiates the character's race model prefab at the specified index and attaches it to the mesh root.
@@ -182,6 +235,14 @@ namespace FishMMO.Shared
 				GameObject modelInstance = Instantiate(go);
 				modelInstance.transform.SetParent(MeshRoot);
 				modelInstance.transform.SetLocalPositionRotationAndScale(Vector3.zero, Quaternion.identity, Vector3.one);
+
+				/* The instantiated model arrives on the layer its prefab was authored with —
+				 * Default — because Instantiate copies the prefab's layers and never inherits the
+				 * new parent's. Moving the whole hierarchy to the character visual layer is what
+				 * lets the equipment preview's camera, which culls to that layer alone, see the
+				 * body at all. Done after SetParent so the model is already in place if a
+				 * behaviour below looks at it. */
+				ApplyVisualLayer(modelInstance);
 
 				// Wire the model's Animator to NetworkAnimator for network sync
 				// NetworkAnimator auto-discovers the Animator on child GameObjects.

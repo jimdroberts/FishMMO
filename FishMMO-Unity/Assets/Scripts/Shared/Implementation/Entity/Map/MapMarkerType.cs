@@ -1,8 +1,8 @@
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What a marker represents. Drives the default icon tier, the draw order between overlapping
-	/// markers, and which filter rows the world map offers.
+	/// What a marker represents. Drives the shape and colour a marker is drawn in, the draw order
+	/// between overlapping markers, and which filter rows the world map offers.
 	/// </summary>
 	/// <remarks>
 	/// Deliberately not a flags enum. A marker is exactly one thing, and the filter UI wants a
@@ -50,5 +50,20 @@ namespace FishMMO.Shared
 		/// from a marker component. Appended last: the enum ordinal is draw order.
 		/// </summary>
 		Waypoint,
+
+		/// <summary>
+		/// A dungeon entrance — the portal in the open world that leads to an instanced scene.
+		/// </summary>
+		/// <remarks>
+		/// Registered by the <c>DungeonEntrance</c> interactable itself rather than authored onto a
+		/// prefab, and revealed by the discovery rule: the entrance appears on both maps once the
+		/// player has explored the chunk it stands in. It is a fixed, public fixture once found, so
+		/// unlike a player character it is drawn exactly and labelled.
+		/// <para>
+		/// Appended after <see cref="Waypoint"/>, which is not cosmetic — the ordinal is draw order
+		/// and inserting anywhere earlier renumbers every type below it.
+		/// </para>
+		/// </remarks>
+		DungeonEntrance,
 	}
 }

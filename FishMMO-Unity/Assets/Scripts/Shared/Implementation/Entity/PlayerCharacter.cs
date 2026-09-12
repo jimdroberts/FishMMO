@@ -60,6 +60,9 @@ namespace FishMMO.Shared
 		public KCCPlayer KCCPlayer { get; private set; }
 		#endregion
 
+		/// <summary>Name of the child GameObject carrying the equipment view camera.</summary>
+		private const string EQUIPMENT_VIEW_CAMERA_NAME = "EquipmentViewCamera";
+
 		/// <summary>
 		/// The camera used for equipment view (e.g., inspecting gear).
 		/// </summary>
@@ -68,7 +71,56 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Gets or sets the equipment view camera.
 		/// </summary>
-		public Camera EquipmentViewCamera { get { return this.equipmentViewCamera; } set { this.equipmentViewCamera = value; } }
+		/// <remarks>
+		/// The getter falls back to a lookup when the serialized reference is missing, because a
+		/// null here is invisible: the equipment panel checks it, finds nothing, and simply never
+		/// shows a preview. The field has been serialized as null in all three playable prefabs
+		/// for months — three separate re-serializations dropped it — and nothing reported it.
+		/// Finding the camera by name costs one search the first time and is then cached in the
+		/// field, so the wiring being correct and the wiring being lost both end in a working
+		/// preview.
+		/// </remarks>
+		public Camera EquipmentViewCamera
+		{
+			get
+			{
+				if (this.equipmentViewCamera == null)
+				{
+					this.equipmentViewCamera = ResolveEquipmentViewCamera();
+				}
+				return this.equipmentViewCamera;
+			}
+			set { this.equipmentViewCamera = value; }
+		}
+
+		/// <summary>
+		/// Searches this character's hierarchy for the equipment view camera.
+		/// </summary>
+		/// <returns>The camera, or null when the character has none.</returns>
+		/// <remarks>
+		/// The camera object is authored inactive, so the search has to include inactive children
+		/// or it finds nothing. Matched by name first — a character prefab is free to carry other
+		/// cameras — and the first camera found is the answer only when no name matches, which
+		/// keeps a renamed object working rather than knocking the preview out again.
+		/// </remarks>
+		private Camera ResolveEquipmentViewCamera()
+		{
+			Camera[] cameras = GetComponentsInChildren<Camera>(true);
+			if (cameras == null || cameras.Length == 0)
+			{
+				return null;
+			}
+
+			for (int i = 0; i < cameras.Length; ++i)
+			{
+				if (cameras[i] != null && cameras[i].gameObject.name == EQUIPMENT_VIEW_CAMERA_NAME)
+				{
+					return cameras[i];
+				}
+			}
+
+			return cameras[0];
+		}
 
 		/// <summary>
 		/// The character's real name. Use this for referencing by name.

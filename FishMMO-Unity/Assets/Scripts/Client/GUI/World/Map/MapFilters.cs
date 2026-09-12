@@ -6,8 +6,8 @@ namespace FishMMO.Client
 	/// The groups of markers the world map lets the player switch on and off.
 	/// </summary>
 	/// <remarks>
-	/// Coarser than <see cref="MapMarkerType"/> on purpose. Seventeen checkboxes is a settings
-	/// screen, not a legend; six is a thing a player reads once and then uses. The mapping from
+	/// Coarser than <see cref="MapMarkerType"/> on purpose. Nineteen checkboxes is a settings
+	/// screen, not a legend; seven is a thing a player reads once and then uses. The mapping from
 	/// type to category lives in <see cref="MapFilters"/> so a type added to the enum has exactly
 	/// one place to be classified.
 	/// </remarks>
@@ -111,6 +111,7 @@ namespace FishMMO.Client
 				case MapMarkerType.Teleporter:
 				case MapMarkerType.Landmark:
 				case MapMarkerType.Waypoint:
+				case MapMarkerType.DungeonEntrance:
 					return MapFilterCategory.Landmarks;
 
 				case MapMarkerType.Note:

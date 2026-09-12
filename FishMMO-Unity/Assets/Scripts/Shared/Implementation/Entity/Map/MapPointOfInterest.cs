@@ -24,11 +24,15 @@ namespace FishMMO.Shared
 		public string Description;
 
 		/// <summary>Which marker family this landmark belongs to.</summary>
-		[Tooltip("Marker family, used for filtering and for the default icon.")]
+		[Tooltip("Marker family, used for filtering and for the shape drawn when there is no icon.")]
 		public MapMarkerType Type = MapMarkerType.Landmark;
 
-		/// <summary>Icon drawn for the landmark. Falls back to the type default when null.</summary>
-		[Tooltip("Icon drawn for the landmark. Uses the type's default icon when empty.")]
+		/// <summary>Icon drawn for the landmark. Falls back to the type's shape when null.</summary>
+		/// <remarks>
+		/// There is no type-to-icon table: a landmark with no artwork here is drawn in its type's
+		/// USS shape, not with some default sprite.
+		/// </remarks>
+		[Tooltip("Icon drawn for the landmark. Uses the type's shape when empty.")]
 		public Sprite Icon;
 
 		/// <summary>Zoom tier at which the landmark starts being drawn, lowest first.</summary>

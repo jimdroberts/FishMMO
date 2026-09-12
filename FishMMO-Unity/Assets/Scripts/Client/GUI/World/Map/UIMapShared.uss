@@ -158,3 +158,16 @@
     rotate: 45deg;
     border-width: 2px;
 }
+
+/*
+    A dungeon entrance. Squared like the other places on the map rather than round like the things
+    in it, and ringed, because a portal reads as a threshold rather than as a dot. This is the
+    fallback appearance: an entrance whose DungeonTemplate carries artwork draws that sprite
+    instead, and this shape is what shows through until it loads — or forever, for a dungeon that
+    has no artwork.
+*/
+.map-marker--dungeonentrance .map-marker__icon {
+    background-color: var(--map-dungeon);
+    border-radius: 2px;
+    border-width: 2px;
+}

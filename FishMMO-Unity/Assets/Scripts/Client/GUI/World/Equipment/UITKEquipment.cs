@@ -147,8 +147,28 @@ namespace FishMMO.Client
 		/// <summary>Label displaying the stamina stat value.</summary>
 		private Label statStamLabel;
 
-		/// <summary>Camera used for the 3D character preview viewport.</summary>
-		private Camera equipmentViewCamera;
+		/// <summary>Owns the preview camera and the render texture the viewport draws.</summary>
+		private readonly EquipmentPreviewRenderer previewRenderer = new EquipmentPreviewRenderer();
+
+		/// <summary>
+		/// True once the preview camera has been framed against the character actually on screen.
+		/// </summary>
+		/// <remarks>
+		/// Cleared whenever the thing being photographed changes — a different character, or a
+		/// different set of equipped meshes — and set again the first time the renderer can see
+		/// one. Frame is otherwise a per-open cost, not a per-frame one: re-deriving the camera
+		/// every frame would make the picture breathe as the character animates.
+		/// </remarks>
+		private bool previewFramed;
+
+		/// <summary>The render texture currently on the preview element, or null.</summary>
+		/// <remarks>
+		/// Held so the style is only rewritten when the texture is actually replaced. The preview
+		/// is refreshed every frame, and assigning a fresh <see cref="StyleBackground"/> each time
+		/// would rebuild the style object, invalidate the element and allocate — for a value that
+		/// only changes when the viewport is resized.
+		/// </remarks>
+		private RenderTexture previewTexture;
 
 		/// <summary>True while this panel holds a subscription on the shared operation tracker.</summary>
 		private bool trackerSubscribed;
@@ -262,20 +282,31 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Times out item operations whose reply never arrived.
+		/// Times out item operations whose reply never arrived, and refreshes the character
+		/// preview while the panel is on screen.
 		/// </summary>
 		/// <remarks>
-		/// The tracker is shared and self-clearing, so it does not matter that all three item
+		/// <para>The tracker is shared and self-clearing, so it does not matter that all three item
 		/// panels drive it; whichever ticks first in a frame does the work and the others find
-		/// nothing outstanding.
+		/// nothing outstanding.</para>
+		/// <para>The preview is refreshed here rather than on the equipment events because a
+		/// preview shows an animating character: the idle pose moves every frame, and a texture
+		/// rendered once when the panel opened would freeze it mid-stride. A frame is also when
+		/// the viewport's layout first becomes measurable, so this is the hook that gets the
+		/// preview its size on the opening frame.</para>
 		/// </remarks>
 		protected override void OnTick()
 		{
 			ItemOperationTracker.Tick();
+
+			if (Visible)
+			{
+				RefreshPreview();
+			}
 		}
 
 		/// <summary>
-		/// Cleans up the camera reference, runtime-created attribute elements and every
+		/// Releases the preview camera and texture, runtime-created attribute elements and every
 		/// subscription this panel holds.
 		/// </summary>
 		public override void OnDestroying()
@@ -290,35 +321,30 @@ namespace FishMMO.Client
 				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 			}
 
-			equipmentViewCamera = null;
+			/* Disposes rather than dropping the reference. The camera belongs to the character and
+			 * would otherwise stay enabled — rendering the character into a texture nobody draws,
+			 * every frame, for the rest of the session. */
+			ApplyPreviewTexture(null);
+			previewRenderer.Dispose();
+			previewFramed = false;
+
 			DestroyAttributeElements();
 			base.OnDestroying();
 		}
 
-		// ── Visibility overrides (camera sync) ───────────────────────────────
+		// ── Visibility overrides (preview sync) ──────────────────────────────
 
 		/// <summary>
-		/// Shows the equipment panel and enables the equipment-view camera if assigned.
-		/// </summary>
-		public override void Show()
-		{
-			base.Show();
-
-			if (equipmentViewCamera != null)
-			{
-				equipmentViewCamera.gameObject.SetActive(true);
-			}
-		}
-
-		/// <summary>
-		/// Hides the equipment panel, disables the preview camera and abandons anything this
-		/// panel had in flight.
+		/// Hides the equipment panel, releases the preview camera and abandons anything this panel
+		/// had in flight.
 		/// </summary>
 		/// <remarks>
-		/// <c>Hide(bool)</c> and not <c>Hide()</c>: <c>Hide()</c> delegates here, but Escape
+		/// <para><c>Hide(bool)</c> and not <c>Hide()</c>: <c>Hide()</c> delegates here, but Escape
 		/// (<c>UIManager.CloseNext</c>) and quit-to-login (<c>Hide(false)</c>) both arrive at this
 		/// overload directly. A pending mark or a half-finished drag that outlives the panel is
-		/// invisible to the player and refuses their next click for no stated reason.
+		/// invisible to the player and refuses their next click for no stated reason.</para>
+		/// <para>The camera is handed back here rather than simply left enabled, because the
+		/// preview's cost is paid every frame whether or not anyone is looking at it.</para>
 		/// </remarks>
 		/// <param name="overrideIsAlwaysOpen">When true, the call is a no-op.</param>
 		public override void Hide(bool overrideIsAlwaysOpen)
@@ -330,25 +356,13 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (equipmentViewCamera != null)
-			{
-				equipmentViewCamera.gameObject.SetActive(false);
-			}
+			/* The element stops drawing the texture before the renderer destroys it, so no frame
+			 * can find a destroyed texture still on the element's style. */
+			ApplyPreviewTexture(null);
+			previewRenderer.Configure(null);
+			previewFramed = false;
 
 			ReleaseAndClearDrag();
-		}
-
-		/// <summary>
-		/// Toggles the panel and syncs the camera accordingly.
-		/// </summary>
-		public override void ToggleVisibility()
-		{
-			base.ToggleVisibility();
-
-			if (equipmentViewCamera != null)
-			{
-				equipmentViewCamera.gameObject.SetActive(Visible);
-			}
 		}
 
 		// ── Character control ─────────────────────────────────────────────────
@@ -358,6 +372,15 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnPreSetCharacter()
 		{
+			/* The outgoing character is still the one this panel is pointed at, so its camera has
+			 * to be handed back before the reference moves — otherwise that character's camera
+			 * stays enabled and renders into a texture nothing is drawing. */
+			/* The element stops drawing the texture before the renderer destroys it, so no frame
+			 * can find a destroyed texture still on the element's style. */
+			ApplyPreviewTexture(null);
+			previewRenderer.Configure(null);
+			previewFramed = false;
+
 			if (Character != null &&
 				Character.TryGet(out IEquipmentController equipmentController))
 			{
@@ -429,6 +452,12 @@ namespace FishMMO.Client
 				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 			}
 
+			/* The element stops drawing the texture before the renderer destroys it, so no frame
+			 * can find a destroyed texture still on the element's style. */
+			ApplyPreviewTexture(null);
+			previewRenderer.Configure(null);
+			previewFramed = false;
+
 			UnsubscribeAttributes();
 			ReleaseAndClearDrag();
 		}
@@ -473,6 +502,13 @@ namespace FishMMO.Client
 			}
 
 			ItemOperationTracker.Release(ReferenceButtonType.Equipment, equipmentSlot);
+
+			/* Equipment changes the silhouette: a two-handed weapon reaches further than a dagger,
+			 * and a frame sized before it existed crops it. Re-framing on the next frame rather
+			 * than this one is deliberate — the mesh is attached by the visual controller in the
+			 * same call chain, and measuring before it lands would measure the old silhouette
+			 * again. */
+			previewFramed = false;
 
 			bool empty = container.IsSlotEmpty(equipmentSlot);
 			if (!empty)
@@ -520,25 +556,79 @@ namespace FishMMO.Client
 			}
 		}
 
-		// ── Camera ────────────────────────────────────────────────────────────
+		// ── Character preview ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// Assigns the camera used for the 3D character preview viewport.
-		/// Pass null to clear the reference.
+		/// Adopts the current character's preview camera and renders it into the viewport.
 		/// </summary>
-		/// <param name="camera">Camera to use for preview rendering.</param>
-		public void SetEquipmentViewCamera(Camera camera)
+		/// <remarks>
+		/// <para>Safe to call every frame: it returns immediately until the UI layout engine has
+		/// measured the viewport, and once the preview is framed it is one small orthographic
+		/// render into a texture already sized for the element.</para>
+		/// <para>The camera is taken from the character rather than injected by whoever opened the
+		/// panel. It used to be handed over by the equipment hotkey, which meant the preview
+		/// depended on how the panel was opened and not on what it was showing.</para>
+		/// </remarks>
+		private void RefreshPreview()
 		{
-			equipmentViewCamera = camera;
+			if (previewRt == null)
+			{
+				return;
+			}
+
+			Camera camera = Character != null ? Character.EquipmentViewCamera : null;
+			if (camera == null)
+			{
+				ApplyPreviewTexture(null);
+				previewFramed = false;
+				return;
+			}
+
+			previewRenderer.Configure(camera);
+
+			if (!TryMeasureViewport(previewRt, out int width, out int height))
+			{
+				return;
+			}
+
+			if (!previewRenderer.Render(width, height))
+			{
+				return;
+			}
+
+			/* Render before Frame, deliberately: Frame needs the texture's aspect to know whether
+			 * the subject is limited by its height or its width, and the texture is only created
+			 * once a size is known. The first frame of an opening therefore draws with the
+			 * prefab's authored framing and the second with the corrected one. */
+			if (!previewFramed)
+			{
+				previewFramed = previewRenderer.Frame(Character.MeshRoot);
+			}
+
+			ApplyPreviewTexture(previewRenderer.Texture);
 		}
 
 		/// <summary>
-		/// Assigns a RenderTexture to the preview-rt element so the camera feed is
-		/// visible inside the UXML viewport.
+		/// Displays <paramref name="rt"/> inside the preview element.
 		/// </summary>
-		/// <param name="rt">The render texture to display.</param>
-		public void SetPreviewRenderTexture(RenderTexture rt)
+		/// <param name="rt">The render texture to show, or null to show nothing.</param>
+		/// <remarks>
+		/// Toolkit cannot sample a RenderTexture through a texture slot, so it goes on as a
+		/// background image. That is also why the viewport element is a plain
+		/// <see cref="VisualElement"/> and not an <c>Image</c>: nothing here needs a sprite.
+		/// </remarks>
+		private void ApplyPreviewTexture(RenderTexture rt)
 		{
+			/* A raw reference compare, not Unity's overloaded == : this is about the texture having
+			 * been replaced, and the renderer nulls its own field on release rather than leaving a
+			 * destroyed object behind. */
+			if (object.ReferenceEquals(previewTexture, rt))
+			{
+				return;
+			}
+
+			previewTexture = rt;
+
 			if (previewRt == null)
 			{
 				return;
@@ -547,6 +637,37 @@ namespace FishMMO.Client
 			previewRt.style.backgroundImage = rt != null
 				? new StyleBackground(Background.FromRenderTexture(rt))
 				: StyleKeyword.None;
+		}
+
+		/// <summary>
+		/// Reads the viewport's measured size, in whole pixels.
+		/// </summary>
+		/// <param name="element">The element to measure.</param>
+		/// <param name="width">Receives the width in pixels.</param>
+		/// <param name="height">Receives the height in pixels.</param>
+		/// <returns>True when the layout engine has produced a usable size.</returns>
+		/// <remarks>
+		/// <c>resolvedStyle</c> reports NaN for a property that has never been resolved, which is
+		/// the state of every element between being added to a panel and its first layout pass —
+		/// so the NaN test is the real guard here and the size test only rejects a degenerate box.
+		/// </remarks>
+		private static bool TryMeasureViewport(VisualElement element, out int width, out int height)
+		{
+			width = 0;
+			height = 0;
+
+			float measuredWidth = element.resolvedStyle.width;
+			float measuredHeight = element.resolvedStyle.height;
+
+			if (float.IsNaN(measuredWidth) || float.IsNaN(measuredHeight) ||
+				measuredWidth < 2.0f || measuredHeight < 2.0f)
+			{
+				return false;
+			}
+
+			width = Mathf.RoundToInt(measuredWidth);
+			height = Mathf.RoundToInt(measuredHeight);
+			return true;
 		}
 
 		// ── Shared operation tracker ──────────────────────────────────────────
@@ -645,6 +766,12 @@ namespace FishMMO.Client
 			{
 				UpdateStatusBar(attributeController);
 			}
+
+			/* The preview is rebuilt on every open, not just the first. The camera and texture
+			 * belong to the character and are handed back when the panel closes, so the opening
+			 * after that starts from nothing. */
+			previewFramed = false;
+			RefreshPreview();
 		}
 
 		/// <summary>

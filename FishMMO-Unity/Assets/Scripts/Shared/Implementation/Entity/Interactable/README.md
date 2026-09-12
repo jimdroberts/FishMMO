@@ -324,7 +324,7 @@ Two of those lists sell abilities, and they sell different things. `Abilities` s
 
 | Method            | Description                                                              |
 |-------------------|--------------------------------------------------------------------------|
-| `Awake()`         | Caches `Transform`, computes `interactionRangeSqr`. Client: strips "(Clone)" from name, renders title label. Server: calls `SceneObject.Register()`. |
+| `Awake()`         | Caches `Transform`, computes `interactionRangeSqr`, then calls the virtual `OnAwake()` a subclass overrides. Client: strips "(Clone)" from name, renders title label. Server: calls `SceneObject.Register()`. |
 | `OnDestroy()`     | Calls `SceneObject.Unregister()`.                                        |
 | `ReadPayload()`   | Reads `ID` (Int64) from network reader, registers in scene.             |
 | `WritePayload()`  | Writes `ID` (Int64) to network writer.                                  |
@@ -361,7 +361,7 @@ Two of those lists sell abilities, and they sell different things. `Abilities` s
 | CapturePoint          | PvP/PvE objective: ownership + capture progress tracking                 | `CapturePointTemplate`  |
 | Container             | Chest/crate with items. `IItemContainer` for full slot management        | `ContainerTemplate`     |
 | DialogueInteractable  | NPC dialogue tree with branching, conditions, and actions                | `DialogueTemplate`      |
-| DungeonEntrance       | Portal to a dungeon scene. Achievement-integrated                        | —                       |
+| DungeonEntrance       | Portal to a dungeon scene. Achievement-integrated. `[RequireComponent(typeof(MapMarker))]`; maps itself on awake — see the [shared map README](../Map/README.md#objects-that-register-themselves) | `DungeonTemplate`       |
 | GatheringNode         | Harvestable resource node with weighted drops and limited uses           | `GatheringNodeTemplate` |
 | LoreObject            | Discoverable lore granting abilities, events, or items                   | `LoreObjectTemplate`    |
 | Mailbox               | Opens the mail UI. No template required                                  | —                       |

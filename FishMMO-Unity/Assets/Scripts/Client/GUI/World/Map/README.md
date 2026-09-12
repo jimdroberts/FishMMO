@@ -91,6 +91,16 @@ Add a `MapMarker`. Set `Type` for what it is and `Visibility` for who may see it
 Party and guild members are promoted to full fidelity at runtime regardless of the authored rule,
 so authoring the strict rule costs nothing.
 
+Some objects put themselves on the map instead, because they are always mappable and an author
+should not have to remember a component. A `DungeonEntrance` requires a `MapMarker`, fills it in on
+awake as `DungeonEntrance` / `Discovered`, and draws its `DungeonTemplate`'s artwork through
+`IMapMarkerIconSource` — read live, because that artwork arrives from Addressables some time after
+awake. See the [shared map README](../../../../Shared/Implementation/Entity/Map/README.md#objects-that-register-themselves).
+When an entrance has no artwork yet, or its dungeon has none, the marker falls back to the type's
+**USS shape** — there is no type-to-icon table anywhere, so a marker type with no `.map-marker--*`
+rule draws in the fallback grey, which is an NPC's. `DungeonEntranceMapMarkerTests.EveryMarkerTypeHasAStyleRule`
+is the guard that keeps a new type from arriving that way.
+
 ## What stays on the frame
 
 A marker is drawn until the whole of it has left the frame, and it is the rectangle it actually

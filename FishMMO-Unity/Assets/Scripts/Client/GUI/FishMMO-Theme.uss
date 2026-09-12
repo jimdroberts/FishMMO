@@ -220,6 +220,7 @@
     --map-landmark:     rgb(236, 220, 180);
     --map-note:         rgb(250, 216, 90);
     --map-waypoint:     rgb(255, 156, 56);
+    --map-dungeon:      rgb(214, 96, 168);
     --map-fog:          rgba(3, 7, 11, 0.94);
     --map-surface:      rgb(6, 12, 17);
     --map-grid:         rgba(88, 179, 241, 0.14);

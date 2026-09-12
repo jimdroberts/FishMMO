@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 	public class MapMarker : MonoBehaviour
 	{
 		/// <summary>What this marker represents.</summary>
-		[Tooltip("What this marker represents. Drives the default icon, draw order and filter row.")]
+		[Tooltip("What this marker represents. Drives the shape and colour it draws in, draw order and filter row.")]
 		public MapMarkerType Type = MapMarkerType.Interactable;
 
 		/// <summary>The rule deciding whether the local player may see this marker.</summary>
@@ -47,8 +47,15 @@ namespace FishMMO.Shared
 		[Tooltip("Rule deciding whether the local player may see this marker.")]
 		public MapMarkerVisibility Visibility = MapMarkerVisibility.Always;
 
-		/// <summary>Icon drawn for this marker. Falls back to the type's default when null.</summary>
-		[Tooltip("Icon drawn for this marker. Uses the type's default icon when empty.")]
+		/// <summary>
+		/// Icon drawn for this marker. Falls back to <see cref="ResolvedIcon"/> when null.
+		/// </summary>
+		/// <remarks>
+		/// Authored artwork for this particular object. There is no type-to-icon table to fall back
+		/// on — a marker with neither this nor an <see cref="IMapMarkerIconSource"/> beside it is
+		/// drawn as its type's shape, which is the type's USS rule and not an icon at all.
+		/// </remarks>
+		[Tooltip("Icon drawn for this marker. Falls back to the object's icon source, then to the type's shape.")]
 		public Sprite Icon;
 
 		/// <summary>Tint multiplied into the icon.</summary>
@@ -104,6 +111,42 @@ namespace FishMMO.Shared
 		public ICharacter Character { get; private set; }
 
 		/// <summary>
+		/// Supplies the icon when this marker has none authored, resolved once on enable.
+		/// </summary>
+		/// <remarks>
+		/// Cached for the same reason <see cref="Character"/> is, and read live rather than copied:
+		/// a source whose artwork loads asynchronously has nothing to give at enable time. See
+		/// <see cref="IMapMarkerIconSource"/>.
+		/// </remarks>
+#if !UNITY_SERVER
+		private IMapMarkerIconSource iconSource;
+#endif
+
+		/// <summary>
+		/// The icon to draw: this marker's own, else its icon source's, else null.
+		/// </summary>
+		/// <remarks>
+		/// Null is a normal answer, not a failure — the view then draws the type's shape from its
+		/// USS rule.
+		/// </remarks>
+		public Sprite ResolvedIcon
+		{
+			get
+			{
+				if (Icon != null)
+				{
+					return Icon;
+				}
+
+#if !UNITY_SERVER
+				return iconSource != null ? iconSource.MapIcon : null;
+#else
+				return null;
+#endif
+			}
+		}
+
+		/// <summary>
 		/// Where the marker is drawn. Defaults to this transform.
 		/// </summary>
 		/// <remarks>
@@ -133,6 +176,7 @@ namespace FishMMO.Shared
 		private void OnEnable()
 		{
 			Character = GetComponent<ICharacter>();
+			iconSource = GetComponent<IMapMarkerIconSource>();
 			MapMarkerRegistry.Register(this);
 		}
 

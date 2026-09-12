@@ -16,6 +16,8 @@ here is data and scene authoring; nothing here draws.
 - [What lives here](#what-lives-here)
 - [Authoring a scene's map](#authoring-a-scenes-map)
 - [Putting an object on the map](#putting-an-object-on-the-map)
+- [Objects that register themselves](#objects-that-register-themselves)
+- [Live icons](#live-icons)
 - [Bounds resolution](#bounds-resolution)
 - [Project Structure](#project-structure)
 
@@ -40,7 +42,8 @@ a headless server where no map exists.
 | `MapRegionLabelDetails` / `MapPointOfInterestDetails` | `[Serializable]` | The harvested forms of the two above, stored in the definition |
 | `MapMarker` | `MonoBehaviour` | "Draw this object on the map." Carries a `MapMarkerType` and a `MapMarkerVisibility` |
 | `MapMarkerRegistry` | `static` | Runtime index of live markers, with register/unregister events so a panel does not poll |
-| `MapMarkerType` | `enum` | What the thing is — 18 values, from `Self` and `PartyMember` through `Vendor`, `Resource`, `Teleporter`, `Landmark`, `Note`, `Waypoint` |
+| `MapMarkerType` | `enum` | What the thing is — 19 values, from `Self` and `PartyMember` through `Vendor`, `Resource`, `Teleporter`, `Landmark`, `Note`, `Waypoint`, `DungeonEntrance`. **The ordinal is draw order, so values are appended, never inserted** |
+| `IMapMarkerIconSource` | `interface` | Supplies a marker's icon when the icon belongs to something the marker points at and arrives asynchronously — see [Live icons](#live-icons) |
 | `MapMarkerVisibility` | `enum` | Who may see it — `Always`, `SelfOnly`, `PartyOrGuild`, `Detection`, `Discovered` |
 | `MapBoundsResolver` | `static` | Derives a usable map rectangle when a scene has no definition |
 | `Editor/WorldMapBaker` | Editor | The bake, behind **FishMMO → World Map → Bake Maps**; **Remove Baked Maps** undoes it |
@@ -82,6 +85,58 @@ Party and guild members are promoted to full fidelity at runtime regardless of t
 **authoring the strict rule costs nothing** — author `Detection` and let the client widen it, rather
 than authoring a permissive rule the filter then has to narrow.
 
+## Objects that register themselves
+
+A `MapMarker` is normally authored onto a prefab. A component whose objects are *always* mappable
+should instead require one and fill it in on awake, so the thing is mapped wherever it is placed and
+an author cannot forget the component:
+
+```csharp
+[RequireComponent(typeof(MapMarker))]
+public class DungeonEntrance : Interactable, IMapMarkerIconSource
+{
+    public override void OnAwake()
+    {
+        MapMarker marker = GetComponent<MapMarker>();
+        if (marker == null)
+        {
+            marker = gameObject.AddComponent<MapMarker>();
+        }
+
+        marker.Type = MapMarkerType.DungeonEntrance;
+        marker.Visibility = MapMarkerVisibility.Discovered;
+
+        if (string.IsNullOrEmpty(marker.Label))
+        {
+            marker.Label = ResolvedDungeonName;
+        }
+    }
+}
+```
+
+Two details are load-bearing. **Write only what the component knows** — its type, its visibility
+rule, and a label when nobody authored one. Icon, icon size, priority, edge clamping and the two
+`ShowOn…` flags belong to whoever placed the object, and overwriting them makes the component
+impossible to author against.
+
+**Keep the `AddComponent` fallback.** `[RequireComponent]` is an editor-time guarantee: it adds the
+component when this one is added, and to existing objects the next time the scene is opened and
+saved. A build taken from a scene that was never re-saved in the editor has an object with no marker
+at all, and the only symptom is a thing that silently never appears on the map.
+
+## Live icons
+
+`MapMarker.ResolvedIcon` is the marker's authored `Icon`, else whatever an `IMapMarkerIconSource` on
+the same object answers, else null — and null is a normal answer: the view then draws the type's
+USS shape.
+
+The seam exists because a marker's icon is sometimes not the marker's property at all. A dungeon
+entrance draws its `DungeonTemplate`'s artwork, and that template resolves the sprite through
+Addressables — so at awake there is nothing to copy, and a marker that copied the null would hold it
+forever with nothing to tell it the artwork had arrived. `MapIcon` is therefore *read* on every map
+refresh rather than assigned once, and the artwork appears on the next refresh after it loads. No
+polling, no subscription, no event to leak.
+
 ## Waypoints
 
 `Waypoint` (an interactable, under `Entity/Interactable`) is harvested into
@@ -112,7 +167,8 @@ Map/
 ├── MapPointOfInterestDetails.cs # Harvested form stored in the definition
 ├── MapMarker.cs                 # "Draw this object on the map"
 ├── MapMarkerRegistry.cs         # Runtime index + register/unregister events
-├── MapMarkerType.cs             # 18 marker kinds
+├── IMapMarkerIconSource.cs      # "The icon is the object's, and it is not ready yet"
+├── MapMarkerType.cs             # 19 marker kinds; the ordinal is draw order
 ├── MapMarkerVisibility.cs       # 5 visibility rules
 ├── MapBoundsResolver.cs         # Definition → SceneBoundary → terrain fallback chain
 └── Editor/

@@ -137,7 +137,11 @@ namespace FishMMO.Client
 					HasFacing = exact && IsCharacterRelationship(relationship),
 					Type = ResolveType(marker, relationship),
 					Relationship = relationship,
-					Icon = marker.Icon,
+					/* Resolved, not the authored field: a marker whose object supplies its own icon
+					 * — a dungeon entrance drawing its dungeon's artwork — has nothing in Icon, and
+					 * that artwork arrives asynchronously. Read through the property so it is picked
+					 * up on the refresh after it lands. */
+					Icon = marker.ResolvedIcon,
 					Tint = marker.Tint,
 					/* A label is only ever attached to something drawn exactly. A name beside a
 					 * coarsened, one-second-old position would hand back precisely the identity

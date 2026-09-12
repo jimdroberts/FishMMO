@@ -27,10 +27,10 @@ namespace FishMMO.Shared
 		/// <summary>Position of the landmark in world space.</summary>
 		public Vector3 Position;
 
-		/// <summary>Which marker family this landmark belongs to, for filtering and icon choice.</summary>
+		/// <summary>Which marker family this landmark belongs to, for filtering and draw order.</summary>
 		public MapMarkerType Type = MapMarkerType.Landmark;
 
-		/// <summary>Icon drawn for the landmark. Falls back to the type's default when null.</summary>
+		/// <summary>Icon drawn for the landmark. Falls back to the type's shape when null.</summary>
 		public Sprite Icon;
 
 		/// <summary>
