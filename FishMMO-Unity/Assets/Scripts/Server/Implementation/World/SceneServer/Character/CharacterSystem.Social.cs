@@ -112,7 +112,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							RankOrder = x.Rank,
 							Location = x.Location ?? string.Empty,
 							RaceID = x.RaceID,
-							Level = x.Level,
 							PublicNote = x.PublicNote ?? string.Empty,
 							OfficerNote = mayReadOfficerNotes ? (x.OfficerNote ?? string.Empty) : string.Empty,
 							LastOnlineUnixSeconds = x.LastOnlineUtc > DateTime.UnixEpoch

@@ -804,11 +804,6 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Nothing to change.");
 			}
-			if (edit.Level.HasValue && edit.Level.Value < 1)
-			{
-				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Level must be at least 1.");
-			}
-
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var entity = await dbContext.Characters
@@ -854,10 +849,6 @@ namespace FishMMO.Database.Npgsql.Services
 				if (edit.BindScene != null)
 				{
 					entity.BindScene = edit.BindScene;
-				}
-				if (edit.Level.HasValue)
-				{
-					entity.Level = edit.Level.Value;
 				}
 				if (edit.AccessLevel.HasValue)
 				{
@@ -911,7 +902,6 @@ namespace FishMMO.Database.Npgsql.Services
 			Name = entity.Deleted ? StripDeletedSuffix(entity.Name) : entity.Name,
 			StoredName = entity.Name,
 			Account = entity.Account,
-			Level = entity.Level,
 			RaceID = entity.RaceID,
 			AccessLevel = entity.AccessLevel,
 			Selected = entity.Selected,

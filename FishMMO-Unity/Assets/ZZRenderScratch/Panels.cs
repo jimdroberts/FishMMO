@@ -184,14 +184,14 @@ namespace FishMMO.RenderScratch
 				"Raid forms at 19:00 server time. Bring tide-warding charms.",
 				"Welcome to the Covenant. Read the notice, mind the reef, and never sail alone.");
 
-			g.GuildController_OnAddMember(GMember(1001, 0, "Sunken Cathedral", 60, "Guild lead"));
-			g.GuildController_OnAddMember(GMember(1002, 1, "Coral Wastes", 58, "Raid officer"));
-			g.GuildController_OnAddMember(GMember(1003, 1, "Sunken Cathedral", 57, "Recruitment"));
-			g.GuildController_OnAddMember(GMember(1004, 2, "Tidewatch Keep", 52, ""));
-			g.GuildController_OnAddMember(GMember(1005, 2, "Coral Wastes", 49, "Alt of Brynn"));
-			g.GuildController_OnAddMember(GMember(1006, 2, "", 44, ""));
-			g.GuildController_OnAddMember(GMember(1007, 3, "", 21, "New — needs a mentor"));
-			g.GuildController_OnAddMember(GMember(1008, 3, "Tidewatch Keep", 17, ""));
+			g.GuildController_OnAddMember(GMember(1001, 0, "Sunken Cathedral", "Guild lead"));
+			g.GuildController_OnAddMember(GMember(1002, 1, "Coral Wastes", "Raid officer"));
+			g.GuildController_OnAddMember(GMember(1003, 1, "Sunken Cathedral", "Recruitment"));
+			g.GuildController_OnAddMember(GMember(1004, 2, "Tidewatch Keep", ""));
+			g.GuildController_OnAddMember(GMember(1005, 2, "Coral Wastes", "Alt of Brynn"));
+			g.GuildController_OnAddMember(GMember(1006, 2, "", ""));
+			g.GuildController_OnAddMember(GMember(1007, 3, "", "New — needs a mentor"));
+			g.GuildController_OnAddMember(GMember(1008, 3, "Tidewatch Keep", ""));
 
 			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), hour = 3600L;
 			g.GuildController_OnReceiveGuildLog(new[]
@@ -209,7 +209,7 @@ namespace FishMMO.RenderScratch
 			Tick(g);
 		}
 
-		private static GuildAddBroadcast GMember(long id, byte rank, string loc, int level, string note)
+		private static GuildAddBroadcast GMember(long id, byte rank, string loc, string note)
 		{
 			return new GuildAddBroadcast
 			{
@@ -217,7 +217,7 @@ namespace FishMMO.RenderScratch
 				Member = new GuildAddEntry
 				{
 					CharacterID = id, RankOrder = rank,
-					Location = loc, RaceID = 1, Level = level, PublicNote = note,
+					Location = loc, RaceID = 1, PublicNote = note,
 				},
 			};
 		}

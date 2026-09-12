@@ -201,9 +201,6 @@
 }
 
 .guild-column--name     { flex-grow: 1; }
-/* Narrow and fixed. A level is at most three digits and the roster is read by scanning
-   down the column, so a width that tracks content would make it unscannable. */
-.guild-column--level    { width: 44px; }
 .guild-column--rank     { width: 70px; }
 .guild-column--race    { width: 90px; }
 .guild-column--location { width: 110px; }
@@ -241,11 +238,6 @@
 .guild-member__name {
     flex-grow: 1;
     overflow: hidden;
-}
-
-.guild-member__level {
-    width: 44px;
-    flex-shrink: 0;
 }
 
 .guild-member__rank {
@@ -383,6 +375,21 @@
     flex-direction: row;
     align-items: center;
     min-height: 20px;
+    transition: background-color 0.08s ease;
+}
+
+/*
+    The header folds its rank open and shut, so it is a control and has to read as one.
+
+    It used to say so with `cursor: link`, which is an editor-only keyword: a runtime panel
+    can only set the cursor from a texture, so the keyword warned from UIElementsRuntimeUtility
+    and the EventSystem on every frame the pointer rested here and changed nothing. Hover is
+    the same signal through a mechanism that works at runtime, and it matches the vocabulary
+    `.fish-row:hover` and `.fish-attr-row:hover` already use. See FishMMO-Theme.uss,
+    "NO CURSOR RULES".
+*/
+.guild-rank__header:hover {
+    background-color: var(--abyss-700);
 }
 
 .guild-rank__name {
@@ -439,10 +446,6 @@
     color: var(--abyss-200);
     -unity-text-align: middle-center;
     flex-shrink: 0;
-}
-
-.guild-rank__header {
-    cursor: link;
 }
 
 .guild-rank__toggle {

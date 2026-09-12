@@ -15,7 +15,7 @@ export async function render(host, ctx) {
 
 	const rows = ui.table({
 		columns: [
-			{ label: 'Character', cell: (r) => `<div class="cell-primary">${ui.esc(r.name)}</div><div class="cell-sub">Level ${r.level} · race ${r.raceId}</div>` },
+			{ label: 'Character', cell: (r) => `<div class="cell-primary">${ui.esc(r.name)}</div><div class="cell-sub">race ${r.raceId}</div>` },
 			{ label: 'Account', cell: (r) => `<a href="#/support/accounts/${encodeURIComponent(r.account)}">${ui.esc(r.account)}</a>` },
 			{ label: 'State', cell: (r) => (r.online ? ui.statusBadge('in world', 'ok', true) : ui.badge('offline')) },
 			{ label: 'Last saved', cell: (r) => ui.ago(r.lastSavedUtc) },

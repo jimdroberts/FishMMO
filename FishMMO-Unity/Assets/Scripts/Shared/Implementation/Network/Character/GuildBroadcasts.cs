@@ -82,8 +82,6 @@ namespace FishMMO.Shared
 		public string Location;
 		/// <summary>The member's race identifier, for the roster's class column.</summary>
 		public int RaceID;
-		/// <summary>The member's character level, for the roster's level column.</summary>
-		public int Level;
 		/// <summary>Note about this member visible to every member of the guild.</summary>
 		public string PublicNote;
 		/// <summary>

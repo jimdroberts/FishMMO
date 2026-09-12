@@ -7,7 +7,6 @@
         <ui:VisualElement name="target-card-pinned" class="fish-panel target-card target-card--pinned">
             <ui:VisualElement name="target-top" class="target-top">
                 <ui:Label name="target-pin-badge" text="PINNED" class="fish-badge fish-badge--accent target-pin-badge" />
-                <ui:Label name="target-level" text="" class="fish-badge target-level" />
                 <ui:Label name="target-name" text="Target" class="target-name" />
                 <ui:Label name="target-faction" text="" class="fish-badge target-faction" />
             </ui:VisualElement>
@@ -23,7 +22,6 @@
 
         <ui:VisualElement name="target-card-hover" class="fish-panel target-card">
             <ui:VisualElement name="target-top" class="target-top">
-                <ui:Label name="target-level" text="" class="fish-badge target-level" />
                 <ui:Label name="target-name" text="Target" class="target-name" />
                 <ui:Label name="target-faction" text="" class="fish-badge target-faction" />
             </ui:VisualElement>

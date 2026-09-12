@@ -741,6 +741,13 @@ namespace FishMMO.Client
 		/// <param name="empty">Placeholder shown when the list has no rows. May be null.</param>
 		/// <param name="singular">Noun for exactly one row, e.g. "item".</param>
 		/// <param name="plural">Noun for zero or many rows, e.g. "items".</param>
+		/// <param name="rowCount">
+		/// How to count the rows in <paramref name="list"/>. Defaults to its direct child count,
+		/// which is right for a container whose children ARE the rows. A container that groups
+		/// its rows under section elements — so that the sections can be ordered, headed and
+		/// hidden as units — passes a counter instead, or the badge would report the number of
+		/// sections.
+		/// </param>
 		/// <remarks>
 		/// Driven off the container's own geometry rather than from each panel's rebuild path.
 		/// The panels that own these lists fill them from half a dozen different broadcast
@@ -748,9 +755,14 @@ namespace FishMMO.Client
 		/// list beneath it. UI Toolkit has no "children changed" event, but adding or removing a
 		/// row relayouts the container, so its geometry is a reliable proxy — and a redundant
 		/// recount costs one integer read.
+		/// <para>
+		/// A counter is passed rather than overridden per control because one control may hold
+		/// several bindings over different containers — see <see cref="listChromeBindings"/> —
+		/// and one tab's counting rule must not be applied to another tab's container.
+		/// </para>
 		/// </remarks>
 		protected void BindListChrome(VisualElement list, Label count, Label subtitle,
-			Label empty, string singular, string plural)
+			Label empty, string singular, string plural, Func<VisualElement, int> rowCount = null)
 		{
 			if (list == null)
 			{
@@ -759,7 +771,7 @@ namespace FishMMO.Client
 
 			void Refresh()
 			{
-				int rows = list.childCount;
+				int rows = rowCount != null ? rowCount(list) : list.childCount;
 
 				if (count != null)
 				{

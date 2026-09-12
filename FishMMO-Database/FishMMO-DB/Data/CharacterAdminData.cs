@@ -38,9 +38,6 @@ namespace FishMMO.Database.Data
 		/// <summary>Owning account name.</summary>
 		public string Account { get; set; }
 
-		/// <summary>Level.</summary>
-		public int Level { get; set; }
-
 		/// <summary>Race template ID. The panel has no template table, so it shows the ID.</summary>
 		public int RaceID { get; set; }
 
@@ -118,9 +115,6 @@ namespace FishMMO.Database.Data
 		/// <summary>New respawn scene, or null.</summary>
 		public string BindScene { get; set; }
 
-		/// <summary>New level, or null.</summary>
-		public int? Level { get; set; }
-
 		/// <summary>New character access level, or null.</summary>
 		public byte? AccessLevel { get; set; }
 
@@ -128,7 +122,7 @@ namespace FishMMO.Database.Data
 		public bool IsEmpty =>
 			X == null && Y == null && Z == null &&
 			SceneName == null && BindScene == null &&
-			Level == null && AccessLevel == null;
+			AccessLevel == null;
 	}
 
 	/// <summary>One page of <see cref="CharacterAdminData"/>, with the total the pager needs.</summary>

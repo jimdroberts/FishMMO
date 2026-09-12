@@ -11,8 +11,33 @@
             <ui:Label name="faction-count" text="0" class="fish-badge faction-count" />
             <ui:Button name="close-button" class="fish-close-btn faction-close-btn" text="✕" />
         </ui:VisualElement>
+        <!--
+            Three sections, in FactionAllianceLevel's own numeric order: Ally, Neutral, Enemy.
+            UITKFactions resolves them by looping that enum, so this file and the enum cannot
+            drift apart in either name or order.
+
+            Each is authored carrying the empty modifier class, so a freshly opened panel does
+            not stack three headings over the empty placeholder before the first standing
+            arrives.
+
+            The rows containers are what the panel files rows into, and what the header count
+            badge counts. See UITKFactions.CountRows.
+        -->
         <ui:ScrollView name="faction-scroll" class="fish-scroll faction-scroll">
-            <ui:VisualElement name="faction-list" class="faction-list" />
+            <ui:VisualElement name="faction-list" class="faction-list">
+                <ui:VisualElement name="faction-section-ally" class="faction-section faction-section--empty">
+                    <ui:Label text="ALLIES" class="fish-attr-category faction-section__header" />
+                    <ui:VisualElement name="faction-section-rows-ally" class="faction-section__rows" />
+                </ui:VisualElement>
+                <ui:VisualElement name="faction-section-neutral" class="faction-section faction-section--empty">
+                    <ui:Label text="NEUTRAL" class="fish-attr-category faction-section__header" />
+                    <ui:VisualElement name="faction-section-rows-neutral" class="faction-section__rows" />
+                </ui:VisualElement>
+                <ui:VisualElement name="faction-section-enemy" class="faction-section faction-section--empty">
+                    <ui:Label text="ENEMIES" class="fish-attr-category faction-section__header" />
+                    <ui:VisualElement name="faction-section-rows-enemy" class="faction-section__rows" />
+                </ui:VisualElement>
+            </ui:VisualElement>
             <ui:Label name="faction-empty" text="No factions encountered yet." class="fish-empty faction-empty" />
         </ui:ScrollView>
     </ui:VisualElement>

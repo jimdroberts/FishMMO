@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -138,13 +139,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private float targetVerticalAngle;
 		/// <summary>
-		/// Number of current obstructions detected.
+		/// Buffer the obstruction sphere cast fills. Grown through
+		/// <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> rather than fixed.
 		/// </summary>
-		private int obstructionCount;
-		/// <summary>
-		/// Array of detected obstructions from sphere cast.
-		/// </summary>
-		private RaycastHit[] obstructions = new RaycastHit[MaxObstructions];
+		private RaycastHit[] obstructions = new RaycastHit[TargetOrdering.QueryBufferSize(0)];
 		/// <summary>
 		/// The current position the camera is following.
 		/// </summary>
@@ -159,11 +157,6 @@ namespace FishMMO.Shared
 		/// The rotation authored in the scene. See <see cref="restPosition"/>.
 		/// </summary>
 		private Quaternion restRotation;
-
-		/// <summary>
-		/// Maximum number of obstructions to check for.
-		/// </summary>
-		private const int MaxObstructions = 32;
 
 		/// <summary>
 		/// Clamps default distance and vertical angle values when edited in inspector.
@@ -204,7 +197,6 @@ namespace FishMMO.Shared
 			PlanarDirection = Vector3.forward;
 
 			distanceIsObstructed = false;
-			obstructionCount = 0;
 			currentFollowPosition = Vector3.zero;
 		}
 
@@ -355,16 +347,50 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Handles camera obstructions by sphere casting and adjusting distance.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The cast runs in the physics scene the character lives in, not the default one.</b>
+		/// World scenes are loaded with <c>LocalPhysicsMode.Physics3D</c> — the scene server asks for
+		/// it on the connection load and FishNet hands the client the same options — so the terrain,
+		/// the walls and every other collider of the world sit in a private
+		/// <see cref="PhysicsScene"/>. The static <c>Physics.*</c> queries only ever see the default
+		/// scene, so the sphere cast this used to run matched nothing there however close the
+		/// geometry was: the camera kept its full distance and travelled straight through the world,
+		/// which is what "the camera clips through the terrain and walls" was. Resolving the scene
+		/// from <see cref="FollowTransform"/> is what points the cast at the colliders the player is
+		/// actually standing among.
+		/// </para>
+		/// <para>
+		/// <b>The direction is this frame's rotation, not the camera's own position.</b> Deriving it
+		/// from where the camera currently sits lags a frame behind the rotation the player just
+		/// gave — and on the first update after a character claims the camera it is not a camera
+		/// direction at all, it is the pose the scene authored. <see cref="UpdateWithInput"/> has
+		/// already applied the rotation by the time this runs, so the camera is about to be placed
+		/// backwards along <c>Transform.forward</c> and that is the ray to test.
+		/// </para>
+		/// </remarks>
 		/// <param name="deltaTime">Frame time.</param>
 		private void HandleObstructions(float deltaTime)
 		{
 			RaycastHit closestHit = new RaycastHit();
 			closestHit.distance = Mathf.Infinity;
 
-			Vector3 playerToCameraDir = transform.position - currentFollowPosition;
-			playerToCameraDir.Normalize();
+			Vector3 playerToCameraDir = -Transform.forward;
 
-			obstructionCount = Physics.SphereCastNonAlloc(currentFollowPosition, ObstructionCheckRadius, playerToCameraDir, obstructions, TargetDistance, ObstructionLayers, QueryTriggerInteraction.Ignore);
+			PhysicsScene physicsScene = ResolvePhysicsScene();
+
+			/* A non-allocating query that comes back full has already discarded results in broadphase
+			 * order, and the one it discarded may be the closest — which is the only entry this method
+			 * reads. Grow until it stops coming back full. */
+			int obstructionCount;
+			while (true)
+			{
+				obstructionCount = physicsScene.SphereCast(currentFollowPosition, ObstructionCheckRadius, playerToCameraDir, obstructions, TargetDistance, ObstructionLayers, QueryTriggerInteraction.Ignore);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref obstructions, obstructionCount))
+				{
+					break;
+				}
+			}
 
 			// Check for the closest obstruction
 			for (int i = 0; i < obstructionCount; i++)
@@ -396,6 +422,40 @@ namespace FishMMO.Shared
 		private bool IsColliderIgnored(Collider collider)
 		{
 			return IgnoredColliders.Contains(collider);
+		}
+
+		/// <summary>
+		/// The physics scene the obstruction cast has to run in: the one the character being followed
+		/// lives in.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The scene is taken from <see cref="FollowTransform"/> rather than from this component's own
+		/// <c>gameObject</c>. The camera is persistent — it is authored in ClientPreboot and outlives
+		/// every world — while the character is spawned into a world scene, and when those are two
+		/// different physics scenes the camera's own answers with the default one. The default scene
+		/// holds none of the world's colliders, so a cast made there matches nothing at all.
+		/// </para>
+		/// <para>
+		/// The <c>IsValid</c> check is not decoration: <c>Scene.GetPhysicsScene</c> throws on an
+		/// invalid scene instead of answering, and a follow target that is mid-destruction has one.
+		/// Everything else — including a scene that owns no physics of its own, which answers with the
+		/// default scene — resolves without it.
+		/// </para>
+		/// </remarks>
+		/// <returns>The physics scene to query for obstructions.</returns>
+		private PhysicsScene ResolvePhysicsScene()
+		{
+			if (FollowTransform != null)
+			{
+				Scene scene = FollowTransform.gameObject.scene;
+				if (scene.IsValid())
+				{
+					return scene.GetPhysicsScene();
+				}
+			}
+
+			return Physics.defaultPhysicsScene;
 		}
 
 		/// <summary>

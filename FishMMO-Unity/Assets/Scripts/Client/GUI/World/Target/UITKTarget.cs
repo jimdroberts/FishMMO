@@ -59,9 +59,6 @@ namespace FishMMO.Client
 		/// <summary>Name of a card's target name label element.</summary>
 		private const string NAME_LABEL_NAME = "target-name";
 
-		/// <summary>Name of a card's target level badge element.</summary>
-		private const string LEVEL_LABEL_NAME = "target-level";
-
 		/// <summary>Name of a card's target faction badge element.</summary>
 		private const string FACTION_LABEL_NAME = "target-faction";
 
@@ -145,8 +142,6 @@ namespace FishMMO.Client
 			public VisualElement Root;
 			/// <summary>Cached reference to the name label element.</summary>
 			public Label NameLabel;
-			/// <summary>Cached reference to the level badge element.</summary>
-			public Label LevelLabel;
 			/// <summary>Cached reference to the faction badge element.</summary>
 			public Label FactionLabel;
 			/// <summary>Cached reference to the health fill element.</summary>
@@ -247,7 +242,6 @@ namespace FishMMO.Client
 			{
 				Root = panelRoot?.Q(RootName);
 				NameLabel = Root?.Q<Label>(NAME_LABEL_NAME);
-				LevelLabel = Root?.Q<Label>(LEVEL_LABEL_NAME);
 				FactionLabel = Root?.Q<Label>(FACTION_LABEL_NAME);
 				HealthFill = Root?.Q(HEALTH_FILL_NAME);
 				HealthBar = Root?.Q(HEALTH_BAR_NAME);
@@ -312,19 +306,6 @@ namespace FishMMO.Client
 			VisualElement root = Root;
 			hoverCard.QueryElements(root);
 			pinnedCard.QueryElements(root);
-
-			/* There is no level anywhere in the character model — no column, no attribute template,
-			 * no broadcast field — so the badge has nothing to show. Hidden rather than left as a
-			 * permanently empty box holding layout open. It is wired and ready for the day a level
-			 * exists. */
-			if (hoverCard.LevelLabel != null)
-			{
-				hoverCard.LevelLabel.style.display = DisplayStyle.None;
-			}
-			if (pinnedCard.LevelLabel != null)
-			{
-				pinnedCard.LevelLabel.style.display = DisplayStyle.None;
-			}
 
 			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
 			IBuffController.OnObservedBuffsChanged += BuffController_OnObservedBuffsChanged;

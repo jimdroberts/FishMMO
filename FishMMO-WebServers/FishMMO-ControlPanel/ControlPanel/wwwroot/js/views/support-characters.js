@@ -63,7 +63,7 @@ async function renderList(host, ctx) {
 							<span class="avatar avatar-sm ${ui.avatarClass(c.name)}">${ui.esc(ui.initials(c.name))}</span>
 							<span>
 								<span class="cell-primary">${ui.esc(c.name)}</span>
-								<span class="cell-sub" style="display:block">Level ${c.level} · race ${c.raceId}</span>
+								<span class="cell-sub" style="display:block">race ${c.raceId}</span>
 							</span>
 						</div>`,
 				},
@@ -136,7 +136,7 @@ async function renderDetail(host, ctx, id) {
 					<div>
 						<h1>${ui.esc(c.name)}</h1>
 						<div class="page-head-sub">
-							Level ${c.level} · race ${c.raceId} ·
+							race ${c.raceId} ·
 							<a href="#/support/accounts/${encodeURIComponent(c.account)}">${ui.esc(c.account)}</a>
 						</div>
 					</div>
@@ -154,8 +154,7 @@ async function renderDetail(host, ctx, id) {
 				? ui.banner('warn', 'Held by a live session', c.editLock.message)
 				: ''}
 
-			<div class="grid grid-4">
-				${ui.stat({ label: 'Level', value: c.level })}
+			<div class="grid grid-3">
 				${ui.stat({ label: 'Access level', value: ui.levelName(c.accessLevel) })}
 				${ui.stat({ label: 'Row version', value: ui.num(c.version), note: 'Bumps on every save' })}
 				${ui.stat({ label: 'Last saved', value: ui.ago(c.lastSavedUtc) })}

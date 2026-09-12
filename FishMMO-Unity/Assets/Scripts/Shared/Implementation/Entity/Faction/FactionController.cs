@@ -709,6 +709,46 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// The <see cref="FactionAllianceLevel"/> a standing expresses: positive is
+		/// <see cref="FactionAllianceLevel.Ally"/>, zero is <see cref="FactionAllianceLevel.Neutral"/>,
+		/// negative is <see cref="FactionAllianceLevel.Enemy"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The same three-way partition <see cref="InsertToAllianceGroup"/> and
+		/// <see cref="RemoveFromAllianceGroup"/> apply when filing a faction into
+		/// <see cref="Allied"/>, <see cref="Neutral"/> or <see cref="Hostile"/>. Those two are
+		/// inlined hot-path code read by <see cref="GetAllianceLevel"/> and keep their own
+		/// comparisons; this method is their named, testable statement of the same rule, and
+		/// <c>AllianceLevel_AgreesWithTheAllianceTablesItRepresents</c> pins the agreement rather
+		/// than leaving it to be re-derived.
+		/// </para>
+		/// <para>
+		/// Spelled out rather than folded through <see cref="StandingSign"/>: that returns
+		/// +1 for allied, so <c>StandingSign(value) + 1</c> is the INVERSE mapping — it would name
+		/// every ally an enemy, and the enum's own numeric order (<c>Ally</c>, <c>Neutral</c>,
+		/// <c>Enemy</c>) is the display order a caller can index an array by.
+		/// </para>
+		/// <para>
+		/// Pure and static so a UI panel can group by it without a live controller.
+		/// </para>
+		/// </remarks>
+		/// <param name="standing">A standing value.</param>
+		/// <returns>The alliance level that standing expresses.</returns>
+		public static FactionAllianceLevel GetAllianceLevelForStanding(int standing)
+		{
+			if (standing > 0)
+			{
+				return FactionAllianceLevel.Ally;
+			}
+			if (standing < 0)
+			{
+				return FactionAllianceLevel.Enemy;
+			}
+			return FactionAllianceLevel.Neutral;
+		}
+
+		/// <summary>
 		/// Encodes a standing's sign as the single unsigned byte the observer payload carries:
 		/// 0 hostile, 1 neutral, 2 allied.
 		/// </summary>

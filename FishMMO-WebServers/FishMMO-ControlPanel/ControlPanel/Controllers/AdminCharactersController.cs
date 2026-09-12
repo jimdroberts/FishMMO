@@ -55,7 +55,7 @@ namespace FishMMO.ControlPanel.Controllers
 		/// Applies an edit to a character's stored row.
 		/// </summary>
 		/// <remarks>
-		/// Position, scene, level and the character's own access level. The service re-checks
+		/// Position, scene and the character's own access level. The service re-checks
 		/// the session lease inside the write, so a character claimed between the operator's
 		/// read and this call is refused rather than written over.
 		/// </remarks>
@@ -71,7 +71,7 @@ namespace FishMMO.ControlPanel.Controllers
 
 			audit.TargetName = await TargetNameAsync(id);
 
-			/* An operator must not be able to hand a character a level the panel itself
+			/* An operator must not be able to hand a character an access level the panel itself
 			 * refuses to grant an account. AccessLevel is the whole authorization surface of
 			 * the game's command system, so it is bounded here as well as in the database. */
 			if (request.AccessLevel.HasValue && request.AccessLevel.Value > (byte)FishMMO.Auth.Core.AccessLevel.GameMaster)
@@ -90,7 +90,6 @@ namespace FishMMO.ControlPanel.Controllers
 				Z = request.Z,
 				SceneName = string.IsNullOrWhiteSpace(request.SceneName) ? null : request.SceneName.Trim(),
 				BindScene = string.IsNullOrWhiteSpace(request.BindScene) ? null : request.BindScene.Trim(),
-				Level = request.Level,
 				AccessLevel = request.AccessLevel,
 			};
 
@@ -110,7 +109,7 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = result.ErrorMessage ?? "That character could not be edited." });
 			}
 
-			audit.Details = new { edit.X, edit.Y, edit.Z, edit.SceneName, edit.BindScene, edit.Level, edit.AccessLevel };
+			audit.Details = new { edit.X, edit.Y, edit.Z, edit.SceneName, edit.BindScene, edit.AccessLevel };
 
 			log.LogInformation("Character {Id} edited by '{Actor}'. Reason: {Reason}",
 				id, User.Identity?.Name, request.Reason);
@@ -276,9 +275,6 @@ namespace FishMMO.ControlPanel.Controllers
 
 			/// <summary>New respawn scene.</summary>
 			public string BindScene { get; set; }
-
-			/// <summary>New level.</summary>
-			public int? Level { get; set; }
 
 			/// <summary>New character access level.</summary>
 			public byte? AccessLevel { get; set; }

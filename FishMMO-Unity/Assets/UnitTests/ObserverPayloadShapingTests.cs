@@ -163,6 +163,103 @@ namespace FishMMO.UnitTests
 			Assert.IsTrue(FactionController.ObserverNeedsSignUpdate(true, -1, 1));
 		}
 
+		// ── The alliance level a standing belongs to, named once ─────────────────
+
+		/// <summary>
+		/// <c>GetAllianceLevelForStanding</c> is the sign of the standing, spelled as a level.
+		/// </summary>
+		/// <remarks>
+		/// The reputation panel groups its rows by this, and the controller's own Allied / Neutral
+		/// and Hostile tables are built on the same boundary — so this is the one statement of the
+		/// partition both sides now read. <c>StandingSign(value) + 1</c> is not it: sign +1 is
+		/// Enemy, which is exactly the inversion that would file allies under the ENEMIES header.
+		/// </remarks>
+		[Test]
+		public void GetAllianceLevelForStanding_IsTheSignOfTheStanding()
+		{
+			Assert.AreEqual(FactionAllianceLevel.Ally, FactionController.GetAllianceLevelForStanding(1));
+			Assert.AreEqual(FactionAllianceLevel.Ally, FactionController.GetAllianceLevelForStanding(FactionTemplate.Maximum));
+			Assert.AreEqual(FactionAllianceLevel.Neutral, FactionController.GetAllianceLevelForStanding(0));
+			Assert.AreEqual(FactionAllianceLevel.Enemy, FactionController.GetAllianceLevelForStanding(-1));
+			Assert.AreEqual(FactionAllianceLevel.Enemy, FactionController.GetAllianceLevelForStanding(FactionTemplate.Minimum));
+
+			/* Every standing the templates allow, so no boundary is a special case. 20001 iterations
+			 * of a three-way branch, which is cheaper than being wrong about one of them. */
+			for (int value = FactionTemplate.Minimum; value <= FactionTemplate.Maximum; ++value)
+			{
+				FactionAllianceLevel expected =
+					value > 0 ? FactionAllianceLevel.Ally :
+					value < 0 ? FactionAllianceLevel.Enemy :
+					FactionAllianceLevel.Neutral;
+
+				Assert.AreEqual(expected, FactionController.GetAllianceLevelForStanding(value),
+					$"a standing of {value} belongs to {expected}");
+			}
+
+			/* The panel uses the enum's own numeric value as its section index, so the enum's
+			 * declaration order IS the display order the issue asks for: allies first, neutrals in
+			 * the middle, enemies last. Reordering the members would silently reorder the panel. */
+			Assert.Less((byte)FactionAllianceLevel.Ally, (byte)FactionAllianceLevel.Neutral,
+				"allies must sort before neutrals");
+			Assert.Less((byte)FactionAllianceLevel.Neutral, (byte)FactionAllianceLevel.Enemy,
+				"and neutrals before enemies");
+		}
+
+		/// <summary>
+		/// The level the helper names is the table the controller actually files the standing in.
+		/// </summary>
+		/// <remarks>
+		/// Two definitions of one partition is one more than can be kept in step by reading them.
+		/// <c>ApplyFactionValue</c> files through the inlined <c>InsertToAllianceGroup</c>; this
+		/// drives a real controller and asserts that each standing lands in exactly the dictionary
+		/// the helper names, converting the agreement into something checked.
+		/// </remarks>
+		[Test]
+		public void GetAllianceLevelForStanding_NamesTheTableTheControllerFilesInto()
+		{
+			FactionTemplate allied = NewFaction("ObserverShaping_AgreementAlly");
+			FactionTemplate neutral = NewFaction("ObserverShaping_AgreementNeutral");
+			FactionTemplate hostile = NewFaction("ObserverShaping_AgreementEnemy");
+
+			FactionController controller = NewBehaviour<FactionController>("FactionAgreement", new RecordingCharacter(8));
+			controller.SetFaction(allied.ID, 4321, skipEvent: true);
+			controller.SetFaction(neutral.ID, 0, skipEvent: true);
+			controller.SetFaction(hostile.ID, -8765, skipEvent: true);
+
+			Assert.AreEqual(3, controller.Factions.Count, "all three standings must be installed");
+
+			foreach (Faction faction in controller.Factions.Values)
+			{
+				FactionAllianceLevel level = FactionController.GetAllianceLevelForStanding(faction.Value);
+
+				Dictionary<int, Faction> named;
+				switch (level)
+				{
+					case FactionAllianceLevel.Ally: named = controller.Allied; break;
+					case FactionAllianceLevel.Enemy: named = controller.Hostile; break;
+					default: named = controller.Neutral; break;
+				}
+
+				Assert.IsTrue(named.ContainsKey(faction.Template.ID),
+					$"{faction.Template.Name} has a standing of {faction.Value}, so the helper calls it " +
+					$"{level} — and the controller must have filed it in that table");
+
+				// And in exactly one, since a row cannot be in two sections at once.
+				int tables = (controller.Allied.ContainsKey(faction.Template.ID) ? 1 : 0)
+					+ (controller.Neutral.ContainsKey(faction.Template.ID) ? 1 : 0)
+					+ (controller.Hostile.ContainsKey(faction.Template.ID) ? 1 : 0);
+				Assert.AreEqual(1, tables, "a faction belongs to one alliance level, not several");
+			}
+
+			// A crossing moves it between tables, and the helper moves with it.
+			controller.SetFaction(allied.ID, -1, skipEvent: true);
+			Assert.IsFalse(controller.Allied.ContainsKey(allied.ID), "a crossed row leaves the allied table");
+			Assert.IsTrue(controller.Hostile.ContainsKey(allied.ID), "and arrives in the hostile one");
+			Assert.AreEqual(FactionAllianceLevel.Enemy,
+				FactionController.GetAllianceLevelForStanding(controller.Factions[allied.ID].Value),
+				"which is the level the helper names for it now");
+		}
+
 		[Test]
 		public void FactionPayload_NonOwnerReceivesSignsRatherThanStandings()
 		{

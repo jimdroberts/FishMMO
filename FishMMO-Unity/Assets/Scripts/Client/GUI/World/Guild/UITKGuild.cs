@@ -61,7 +61,6 @@ namespace FishMMO.Client
 		private const string ROW_NAME_CLASS = "guild-member__name";
 
 		/// <summary>USS class applied to a member row's rank label.</summary>
-		private const string ROW_LEVEL_CLASS = "guild-member__level";
 		private const string ROW_RANK_CLASS = "guild-member__rank";
 
 		/// <summary>USS class applied to a member row's class label.</summary>
@@ -263,8 +262,6 @@ namespace FishMMO.Client
 			/// so a rank rename re-renders the roster without the roster knowing anything changed.
 			/// </remarks>
 			public byte RankOrder;
-			/// <summary>The member's character level.</summary>
-			public int Level;
 			/// <summary>Note about this member visible to every member of the guild.</summary>
 			public string PublicNote = string.Empty;
 			/// <summary>
@@ -310,8 +307,6 @@ namespace FishMMO.Client
 			public VisualElement Dot;
 			/// <summary>Member name label.</summary>
 			public Label Name;
-			/// <summary>Member level label.</summary>
-			public Label Level;
 			/// <summary>Member rank label.</summary>
 			public Label Rank;
 			/// <summary>Member class label.</summary>
@@ -947,7 +942,6 @@ namespace FishMMO.Client
 			model.RankOrder = member.RankOrder;
 			model.Location = member.Location ?? string.Empty;
 			model.RaceID = member.RaceID;
-			model.Level = member.Level;
 			model.PublicNote = member.PublicNote ?? string.Empty;
 			/* Stored exactly as received. An empty officer note means the SERVER did not send one
 			 * — either because there is none or because this client's rank may not read it — and
@@ -2028,11 +2022,6 @@ namespace FishMMO.Client
 			name.enableRichText = false;
 			rowRoot.Add(name);
 
-			Label level = new Label();
-			level.AddToClassList("fish-row__meta");
-			level.AddToClassList(ROW_LEVEL_CLASS);
-			rowRoot.Add(level);
-
 			Label rank = new Label();
 			rank.AddToClassList("fish-row__meta");
 			rank.AddToClassList(ROW_RANK_CLASS);
@@ -2055,7 +2044,6 @@ namespace FishMMO.Client
 				Root = rowRoot,
 				Dot = dot,
 				Name = name,
-				Level = level,
 				Rank = rank,
 				Race = memberRace,
 				Location = location,
@@ -2087,7 +2075,6 @@ namespace FishMMO.Client
 			bool online = model.IsOnline;
 
 			row.Name.text = model.Name;
-			row.Level.text = model.Level > 0 ? model.Level.ToString() : "—";
 			row.Rank.text = ResolveRankName(model.RankOrder);
 			row.Race.text = ResolveRaceName(model.RaceID);
 			row.Location.text = online ? model.Location : DescribeLastSeen(model.LastOnlineUnixSeconds);

@@ -44,7 +44,6 @@
 
             <ui:VisualElement name="guild-columns" class="guild-columns">
                 <ui:Label text="MEMBER" class="fish-col-head guild-column guild-column--name" />
-                <ui:Label text="LVL" class="fish-col-head guild-column guild-column--level" />
                 <ui:Label text="RANK" class="fish-col-head guild-column guild-column--rank" />
                 <ui:Label text="RACE" class="fish-col-head guild-column guild-column--race" />
                 <ui:Label text="LOCATION" class="fish-col-head guild-column guild-column--location" />

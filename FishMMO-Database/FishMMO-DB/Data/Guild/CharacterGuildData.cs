@@ -34,9 +34,6 @@ namespace FishMMO.Database.Data
 		/// </summary>
 		public readonly DateTime LastOnlineUtc;
 
-		/// <summary>The member's level, joined in from the character row.</summary>
-		public readonly int Level;
-
 		/// <summary>Note about this member visible to every member of the guild.</summary>
 		public readonly string PublicNote;
 
@@ -57,7 +54,7 @@ namespace FishMMO.Database.Data
 		{
 		}
 
-		public CharacterGuildData(long id, long version, long characterID, long guildID, byte rank, string location, int raceID = 0, DateTime lastOnlineUtc = default, int level = 0, string publicNote = "", string officerNote = "")
+		public CharacterGuildData(long id, long version, long characterID, long guildID, byte rank, string location, int raceID = 0, DateTime lastOnlineUtc = default, string publicNote = "", string officerNote = "")
 		{
 			ID = id;
 			Version = version;
@@ -67,14 +64,13 @@ namespace FishMMO.Database.Data
 			Location = location;
 			RaceID = raceID;
 			LastOnlineUtc = lastOnlineUtc;
-			Level = level;
 			PublicNote = publicNote ?? string.Empty;
 			OfficerNote = officerNote ?? string.Empty;
 		}
 
 		public CharacterGuildData WithVersion(long newVersion)
 		{
-			return new CharacterGuildData(ID, newVersion, CharacterID, GuildID, Rank, Location, RaceID, LastOnlineUtc, Level, PublicNote, OfficerNote);
+			return new CharacterGuildData(ID, newVersion, CharacterID, GuildID, Rank, Location, RaceID, LastOnlineUtc, PublicNote, OfficerNote);
 		}
 	}
 }

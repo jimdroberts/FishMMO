@@ -126,7 +126,6 @@ namespace FishMMO.ControlPanel.Controllers
 					characterId = m.CharacterID,
 					name = m.CharacterName,
 					deleted = m.CharacterDeleted,
-					level = m.Level,
 					online = IsOnline(m.SessionState, m.SessionLeaseExpiresUtc, m.CharacterDeleted),
 					rank = m.Rank,
 					// Null when the membership points at a rung the ladder no longer defines.
@@ -141,7 +140,6 @@ namespace FishMMO.ControlPanel.Controllers
 					id = a.ID,
 					characterId = a.CharacterID,
 					name = a.CharacterName,
-					level = a.Level,
 					message = a.Message,
 					appliedUtc = a.TimeCreated,
 				}),
@@ -219,7 +217,6 @@ namespace FishMMO.ControlPanel.Controllers
 						characterId = m.CharacterID,
 						name = m.CharacterName,
 						deleted = m.CharacterDeleted,
-						level = m.Level,
 						sceneName = m.SceneName,
 						online = IsOnline(m.SessionState, m.SessionLeaseExpiresUtc, m.CharacterDeleted),
 						// PartyRank: 0 none, 1 member, 2 leader. The client names them.

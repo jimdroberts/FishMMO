@@ -120,9 +120,6 @@ namespace FishMMO.Database.Data
 		/// <summary>Whether the character row behind this membership is soft-deleted.</summary>
 		public bool CharacterDeleted { get; set; }
 
-		/// <summary>Character level.</summary>
-		public int Level { get; set; }
-
 		/// <summary>0 offline, 1 online. Mirrors <c>CharacterSessionState</c>.</summary>
 		public int SessionState { get; set; }
 
@@ -178,9 +175,6 @@ namespace FishMMO.Database.Data
 
 		/// <summary>The applicant's character name, deletion marker stripped.</summary>
 		public string CharacterName { get; set; }
-
-		/// <summary>Applicant level.</summary>
-		public int Level { get; set; }
 
 		/// <summary>The applicant's message. May be empty. Player-supplied text.</summary>
 		public string Message { get; set; }
@@ -284,9 +278,6 @@ namespace FishMMO.Database.Data
 
 		/// <summary>Whether the character row behind this membership is soft-deleted.</summary>
 		public bool CharacterDeleted { get; set; }
-
-		/// <summary>Character level.</summary>
-		public int Level { get; set; }
 
 		/// <summary>The scene the character was last recorded in.</summary>
 		public string SceneName { get; set; }

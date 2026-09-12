@@ -68,7 +68,6 @@ namespace FishMMO.Database.Npgsql.Services
 						Location = g.Location,
 						RaceID = g.Character.RaceID,
 						LastSaved = g.Character.LastSaved,
-						Level = g.Character.Level,
 						PublicNote = g.PublicNote,
 						OfficerNote = g.OfficerNote,
 					}));
@@ -87,7 +86,6 @@ namespace FishMMO.Database.Npgsql.Services
 			public string Location { get; set; }
 			public int RaceID { get; set; }
 			public DateTime LastSaved { get; set; }
-			public int Level { get; set; }
 			public string PublicNote { get; set; }
 			public string OfficerNote { get; set; }
 		}
@@ -383,7 +381,6 @@ namespace FishMMO.Database.Npgsql.Services
 					location: g.Location,
 					raceID: g.RaceID,
 					lastOnlineUtc: g.LastSaved,
-					level: g.Level,
 					publicNote: g.PublicNote,
 					officerNote: g.OfficerNote)).ToList();
 

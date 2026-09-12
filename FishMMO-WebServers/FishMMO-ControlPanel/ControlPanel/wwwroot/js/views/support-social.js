@@ -268,10 +268,7 @@ async function renderGuild(host, ctx, id) {
 							cell: (m) => `
 								<div class="row">
 									<span class="avatar avatar-sm ${ui.avatarClass(m.name)}">${ui.esc(ui.initials(m.name))}</span>
-									<span>
-										<span class="cell-primary">${characterLink(ui, m.characterId, m.name, m.deleted)}</span>
-										<span class="cell-sub" style="display:block">Level ${ui.esc(m.level)}</span>
-									</span>
+									<span class="cell-primary">${characterLink(ui, m.characterId, m.name, m.deleted)}</span>
 								</div>`,
 						},
 						{
@@ -316,7 +313,7 @@ async function renderGuild(host, ctx, id) {
 				flush: true,
 				body: ui.table({
 					columns: [
-						{ label: 'Applicant', cell: (a) => `${characterLink(ui, a.characterId, a.name, false)}<div class="cell-sub">Level ${ui.esc(a.level)}</div>` },
+						{ label: 'Applicant', cell: (a) => characterLink(ui, a.characterId, a.name, false) },
 						{ label: 'Message', cell: (a) => (a.message
 							? `<span style="max-width:52ch;display:inline-block;overflow-wrap:anywhere">${ui.esc(a.message)}</span>`
 							: '<span class="faint">—</span>') },
@@ -512,7 +509,6 @@ function rosterPanel(ui, party) {
 		columns: [
 			{ label: 'Member', cell: (m) => characterLink(ui, m.characterId, m.name, m.deleted) },
 			{ label: 'Rank', cell: (m) => ui.esc(PARTY_RANKS[m.rank] ?? `rank ${m.rank}`) },
-			{ label: 'Level', align: 'right', cell: (m) => ui.esc(m.level) },
 			{ label: 'Scene', cell: (m) => (m.sceneName ? ui.esc(m.sceneName) : '<span class="faint">—</span>') },
 			{ label: 'State', cell: (m) => memberState(ui, m) },
 			{

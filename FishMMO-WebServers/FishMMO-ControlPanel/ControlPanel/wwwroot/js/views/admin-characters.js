@@ -59,7 +59,7 @@ async function renderPicker(host, ctx) {
 
 		results.innerHTML = ui.table({
 			columns: [
-				{ label: 'Character', cell: (c) => `<div class="cell-primary">${ui.esc(c.name)}</div><div class="cell-sub">Level ${c.level} · race ${c.raceId}</div>` },
+				{ label: 'Character', cell: (c) => `<div class="cell-primary">${ui.esc(c.name)}</div><div class="cell-sub">race ${c.raceId}</div>` },
 				{ label: 'Account', cell: (c) => `<a href="#/support/accounts/${encodeURIComponent(c.account)}">${ui.esc(c.account)}</a>` },
 				{ label: 'Editable', cell: (c) => c.deleted
 					? ui.badge('deleted', 'danger')
@@ -130,7 +130,7 @@ async function renderEditor(host, ctx, id) {
 						<div>
 							<h1>${ui.esc(c.name)}</h1>
 							<div class="page-head-sub">
-								Level ${c.level} · race ${c.raceId} ·
+								race ${c.raceId} ·
 								<a href="#/support/accounts/${encodeURIComponent(c.account)}">${ui.esc(c.account)}</a> ·
 								row version <span class="tnum">${ui.num(c.version)}</span>
 							</div>
@@ -273,10 +273,6 @@ function identityTab(ui, c, lock) {
 		body: fieldset(ui, lock, `
 			<div class="field-row">
 				<div class="field">
-					<label for="level">Level</label>
-					<input id="level" name="level" type="number" min="1" max="100" value="${c.level}" />
-				</div>
-				<div class="field">
 					<label for="accessLevel">Character access level</label>
 					<select id="accessLevel" name="accessLevel">
 						${[0, 1, 2, 3].map((l) => `<option value="${l}"${c.accessLevel === l ? ' selected' : ''}>${ui.levelName(l)}</option>`).join('')}
@@ -387,9 +383,9 @@ function wireTab(body, ctx, c, lock, redraw, tab) {
 			if (!v) return;
 
 			/* Only the fields this tab actually carries are sent. The service treats a
-			 * missing field as "leave alone", so a position save cannot blank a level. */
+			 * missing field as "leave alone", so a position save cannot blank an access level. */
 			const patch = {};
-			for (const key of ['x', 'y', 'z', 'level', 'accessLevel']) {
+			for (const key of ['x', 'y', 'z', 'accessLevel']) {
 				if (values[key] !== undefined) patch[key] = Number(values[key]);
 			}
 			for (const key of ['sceneName', 'bindScene']) {

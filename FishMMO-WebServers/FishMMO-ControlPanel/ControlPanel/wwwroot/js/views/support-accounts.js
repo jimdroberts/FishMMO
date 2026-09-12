@@ -189,7 +189,7 @@ async function renderDetail(host, ctx, name) {
 												<span class="avatar avatar-sm ${ui.avatarClass(c.name)}">${ui.esc(ui.initials(c.name))}</span>
 												<span>
 													<span class="cell-primary">${ui.esc(c.name)}</span>
-													<span class="cell-sub" style="display:block">Level ${ui.num(c.level)} · race ${ui.num(c.raceId)}</span>
+													<span class="cell-sub" style="display:block">race ${ui.num(c.raceId)}</span>
 												</span>
 											</div>`,
 									},

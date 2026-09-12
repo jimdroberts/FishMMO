@@ -32,7 +32,46 @@
     padding: 6px;
 }
 
+/*
+    The list has no height of its own — the sections and their rows drive it — but flex-shrink: 0
+    keeps it at that height once the three sections together exceed the ~364px scroll viewport.
+    Without it Yoga compresses the rows to fit instead of engaging the scroller, and the rows
+    lose their text rather than overflowing. Same fix, same reason, as .options-list.
+*/
 .faction-list {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/*
+    A section is a header plus the container its rows are filed into. Hidden outright while it
+    holds no rows (see faction-section--empty) so an opened panel with only allies does not
+    show two headings over nothing.
+
+    Hidden rather than removed from the hierarchy: UITKFactions resolves these by name once,
+    and a section that had left the tree could not be resolved again when a row arrived for it.
+*/
+.faction-section {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.faction-section--empty {
+    display: none;
+}
+
+/*
+    Sized by its own line box — do NOT pin a height here. .fish-attr-category carries the
+    colours, the letter-spacing and the bottom rule.
+*/
+.faction-section__header {
+    margin-top: 10px;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+    flex-shrink: 0;
+}
+
+.faction-section__rows {
     flex-direction: column;
 }
 
@@ -43,6 +82,17 @@
     margin-bottom: 4px;
     border-radius: 4px;
     background-color: var(--abyss-800);
+    transition: background-color 0.08s ease;
+}
+
+/*
+    Hover is written here rather than borrowed from .fish-row:hover or .fish-attr-row:hover.
+    Those two are declared in the theme sheet, which loads first, and .faction-row sets its own
+    background-color at equal specificity — so the theme's hover rule is out-ordered and loses
+    silently. The row would simply never light up.
+*/
+.faction-row:hover {
+    background-color: var(--abyss-700);
 }
 
 .faction-row__icon {
@@ -57,6 +107,26 @@
     flex-direction: column;
 }
 
+/*
+    The caret and the name sit on one line, so they need a row of their own: .faction-row__column
+    is a flex COLUMN, so a caret added straight to it would take a line above the name.
+*/
+.faction-row__nameline {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/*
+    A fixed width, so the names of rows that are open and shut still line up. Marked flex-shrink: 0
+    because a fixed width is the first thing Yoga gives up when a row is short of space.
+*/
+.faction-row__caret {
+    width: 14px;
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+}
+
 .faction-row__name {
     font-size: 13px;
     -unity-font-style: bold;
@@ -67,6 +137,11 @@
     font-size: 10px;
     color: var(--abyss-200);
     margin-bottom: 4px;
+}
+
+/* Applied to a row's description while that row is folded shut, and to every row by default. */
+.faction-row__desc--collapsed {
+    display: none;
 }
 
 /*

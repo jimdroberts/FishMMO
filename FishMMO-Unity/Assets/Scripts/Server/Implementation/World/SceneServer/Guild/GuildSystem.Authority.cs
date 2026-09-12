@@ -426,7 +426,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				RankOrder = member.Rank,
 				Location = member.Location ?? string.Empty,
 				RaceID = member.RaceID,
-				Level = member.Level,
 				PublicNote = member.PublicNote ?? string.Empty,
 				OfficerNote = includeOfficerNote ? (member.OfficerNote ?? string.Empty) : string.Empty,
 				LastOnlineUnixSeconds = ToUnixSeconds(member.LastOnlineUtc),

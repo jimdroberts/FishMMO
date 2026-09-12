@@ -170,7 +170,6 @@ namespace FishMMO.Database.Npgsql.Services
 						CharacterID = m.CharacterID,
 						CharacterName = m.Character.Name,
 						CharacterDeleted = m.Character.Deleted,
-						Level = m.Character.Level,
 						SessionState = (int)m.Character.SessionState,
 						SessionLeaseExpiresUtc = m.Character.SessionLeaseExpiresUtc,
 						Rank = m.Rank,
@@ -190,7 +189,6 @@ namespace FishMMO.Database.Npgsql.Services
 						ID = a.ID,
 						CharacterID = a.CharacterID,
 						CharacterName = a.Character.Name,
-						Level = a.Character.Level,
 						Message = a.Message,
 						TimeCreated = a.TimeCreated,
 					})
@@ -377,7 +375,6 @@ namespace FishMMO.Database.Npgsql.Services
 								CharacterID = m.CharacterID,
 								CharacterName = m.Character.Name,
 								CharacterDeleted = m.Character.Deleted,
-								Level = m.Character.Level,
 								SceneName = m.Character.SceneName,
 								SessionState = (int)m.Character.SessionState,
 								SessionLeaseExpiresUtc = m.Character.SessionLeaseExpiresUtc,
