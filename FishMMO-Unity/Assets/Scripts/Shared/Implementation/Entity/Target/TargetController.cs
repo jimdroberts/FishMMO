@@ -111,11 +111,49 @@ namespace FishMMO.Shared
 				{
 					return false;
 				}
+				ICharacterDamageController damageController = DamageController;
+				return damageController != null && damageController.Immortal;
+			}
+		}
+
+		/// <summary>
+		/// The character's own damage controller, resolved on first use and cached.
+		/// </summary>
+		/// <remarks>
+		/// A property rather than a field read because resolution can legitimately have failed in
+		/// <see cref="InitializeOnce"/> — the component may not exist yet at that point — and the
+		/// callers below run per trace tick. Asking again is a registry lookup on a miss and a
+		/// field read once it succeeds.
+		/// </remarks>
+		private ICharacterDamageController DamageController
+		{
+			get
+			{
 				if (cachedDamageController == null && Character != null)
 				{
 					Character.TryGet(out cachedDamageController);
 				}
-				return cachedDamageController != null && cachedDamageController.Immortal;
+				return cachedDamageController;
+			}
+		}
+
+		/// <summary>
+		/// True while the player holding the pin can still be watching a card — false once they
+		/// are dead.
+		/// </summary>
+		/// <remarks>
+		/// Health, deliberately not <see cref="ICharacterDamageController.Immortal"/>. A player is
+		/// briefly immortal across a teleport (see <see cref="IsImmortalNpc"/>), and a pin must
+		/// ride through that rather than blink out and back. Only a health value of zero is dead.
+		/// A character with no damage controller at all has nothing to lose, so it reads alive —
+		/// the same convention <see cref="PinnedTargetRules"/> uses for the target.
+		/// </remarks>
+		private bool IsOwnerAlive
+		{
+			get
+			{
+				ICharacterDamageController damageController = DamageController;
+				return damageController == null || damageController.IsAlive;
 			}
 		}
 
@@ -162,14 +200,31 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			Transform hovered = Current.Target != null ? Current.Target : null;
-
-			/* Nothing under the pointer, or the pinned character itself: the key means "let go".
-			 * A key that only ever pinned would need a second key to release, and the natural
-			 * gesture for "stop tracking this one" is to point at it and press again. */
-			if (hovered == null || ReferenceEquals(hovered, pinnedTarget))
+			/* STRICT toggle: a held pin is released by this key whatever is under the pointer, and
+			 * only when nothing is pinned does the key pin what the pointer is on.
+			 *
+			 * It was contextual — release when the pointer was on the pinned character or on
+			 * nothing, otherwise (re)pin whatever it was on — which reads well right up until it
+			 * matters. In a fight the pointer is on an enemy essentially always, so the only way to
+			 * let go of a pin was to aim at empty sky first, and aiming at a second enemy silently
+			 * MOVED the pin rather than dropping it. Release was reachable only by first doing
+			 * something that is not releasing, which is what made the whole feature feel broken.
+			 *
+			 * The cost is that moving a pin takes two presses. That is the trade taken here: one
+			 * meaning per press, and the player never has to look at the pointer to know which one
+			 * they are about to get. */
+			if (!ReferenceEquals(pinnedTarget, null))
 			{
+				/* Reference identity, not Unity's overloaded ==. A target destroyed since the last
+				 * validation tick is still a live reference here, and it must take this branch —
+				 * the release is exactly what clears it and takes the card down. */
 				ClearPinnedTarget();
+				return false;
+			}
+
+			Transform hovered = Current.Target != null ? Current.Target : null;
+			if (hovered == null)
+			{
 				return false;
 			}
 
@@ -240,7 +295,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Drops the pin without raising the release event. For teardown paths where the
-		/// subscribers are being cleared as well.
+		/// subscribers are being cleared as well — see <see cref="OnDestroying"/>, which nulls
+		/// both pin events immediately before calling this.
 		/// </summary>
 		private void ForgetPinnedTarget()
 		{
@@ -255,12 +311,21 @@ namespace FishMMO.Shared
 		/// Clears client-reported target state on despawn/pool reuse: the next occupant of a
 		/// pooled object must not inherit the previous player's target frame.
 		/// </summary>
+		/// <remarks>
+		/// The pin goes through <see cref="ClearPinnedTarget"/> rather than
+		/// <see cref="ForgetPinnedTarget"/> so the release is RAISED. Despawn is how a player
+		/// leaves a scene, and the target frame outlives that on the login path — a silent drop
+		/// left a pinned card on screen with nothing behind it and no event coming to take it
+		/// down. Raising costs nothing when the panel has already unsubscribed, which is the
+		/// other half of this teardown. The server never reaches the body of the call: a pin
+		/// exists only on the owning client, so <c>pinnedTarget</c> is null there.
+		/// </remarks>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
 			ClientSelectedTargetObjectId = 0;
 			HasClientSelectedTarget = false;
-			ForgetPinnedTarget();
+			ClearPinnedTarget();
 #if !UNITY_SERVER
 			hasSentTargetSelection = false;
 			lastSentTargetObjectId = 0;
@@ -443,12 +508,15 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Releases the pin when the pinned target can no longer be followed — see
-		/// <see cref="PinnedTargetRules"/> for the rule.
+		/// Releases the pin when it can no longer be honoured — the target gone, dead or out of
+		/// range, or the player holding it dead. See <see cref="PinnedTargetRules"/> for the rule.
 		/// </summary>
 		/// <remarks>
 		/// Runs on the trace tick rather than every frame: the facts it reads move no faster than
-		/// that, and the release it may raise is a UI change that nobody can see sooner.
+		/// that, and the release it may raise is a UI change that nobody can see sooner. That
+		/// includes the holder's own death, which is read here rather than subscribed to — the
+		/// tick is already running and a subscription would be one more thing to unwind on
+		/// teardown.
 		/// </remarks>
 		private void ValidatePinnedTarget()
 		{
@@ -467,7 +535,7 @@ namespace FishMMO.Shared
 				? float.PositiveInfinity
 				: (pinnedTarget.position - transform.position).sqrMagnitude;
 
-			if (PinnedTargetRules.ShouldRelease(isDestroyed, isSpawned, isAlive, sqrDistance, PinnedTargetRules.RELEASE_DISTANCE))
+			if (PinnedTargetRules.ShouldRelease(isDestroyed, isSpawned, isAlive, sqrDistance, PinnedTargetRules.RELEASE_DISTANCE, IsOwnerAlive))
 			{
 				ClearPinnedTarget();
 			}

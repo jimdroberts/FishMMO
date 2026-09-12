@@ -1,9 +1,9 @@
 # FishMMO Unit Tests
 
-The FishMMO test suite. **221 fixtures / ~2,100 test methods** live here, split across two
+The FishMMO test suite. **226 fixtures / ~2,170 test methods** live here, split across two
 assemblies:
 
-- **`FishMMO.UnitTests`** — 216 EditMode fixtures, all running without a NetworkManager, a
+- **`FishMMO.UnitTests`** — 221 EditMode fixtures, all running without a NetworkManager, a
   physics simulation, or a live server.
 - **`FishMMO.UnitTests.PlayMode`** — 5 fixtures that drive the simulation harness in
   `Assets/TestHarness/` under a real player loop and a real FishNet server.
@@ -11,7 +11,7 @@ assemblies:
 | Area | Folder | Fixtures | What it covers |
 | --- | --- | --- | --- |
 | **Prediction & combat** | `Prediction/` | 95 | The unified prediction pipeline, delta serialization, lag compensation, the attribute ledger, buffs, cooldowns, abilities, observer sync/culling, bandwidth budgets |
-| **Gameplay, UI, content** | root | 75 | Auth, UI Toolkit panels, items/trade/merchant, abilities, guild/group/arena, naming & races, world map, nameplates, prefab authoring |
+| **Gameplay, UI, content** | root | 80 | Auth, UI Toolkit panels, items/trade/merchant, abilities, guild/group/arena, naming & races, world map, nameplates, prefab authoring |
 | **NPC AI** | `AI/` | 27 | Combat decisions, personalities, kiting, threat, pets, NavMesh bake agreement, spawners, AI LOD |
 | **Housing** | `Housing/` | 10 | Plot identity, ownership, access, placement, lifecycle, tax and vault fees |
 | **PlayMode sims** | `PlayMode/` | 5 | The four simulation scenes plus an `Update`-dispatch cost probe |
@@ -60,11 +60,18 @@ recurring pattern rather than an accident:
 
 Panel fixtures (`MerchantPanelTests`, `TradePanelTests`, `AbilitiesPanelTests`,
 `EquipmentPanelLayoutTests`, `ColorPickerTests`, `ScrollbarThemeTests`,
-`Map/ExploredReadoutTests`, `NameGeneratorWindowTests`) mount the real panel on a real
-`UIDocument`: clone `Assets/UI Toolkit/PanelSettings.asset`, set `visualTreeAsset` to the
-panel's UXML, `AddComponent` the panel class, then call its `OnStarting()` directly — Unity's
-own callbacks never fire in edit mode. There is no shared helper; each fixture builds its own
-so the setup stays legible next to the assertions.
+`Map/ExploredReadoutTests`, `NameGeneratorWindowTests`, `BuffDismissTooltipTests`) mount the real
+panel on a real `UIDocument`: clone `Assets/UI Toolkit/PanelSettings.asset`, set `visualTreeAsset`
+to the panel's UXML, `AddComponent` the panel class, then call its `OnStarting()` directly —
+Unity's own callbacks never fire in edit mode. There is no shared helper; each fixture builds its
+own so the setup stays legible next to the assertions.
+
+`FishMMO.Client` carries no `InternalsVisibleTo` (only `Assets/Scripts/Shared/AssemblyInfo.cs`
+does), so a `Client` panel's `internal` seams — `UITKBuffContainer.TryRequestDismiss`,
+`CanDismiss`, `UITKControl.Awake` — are reached by reflection rather than widened to `public` for
+the tests' sake. `BuffDismissTooltipTests` also seeds the strip's private `entries` model by
+reflection, asserting the *permitted* case as well as the refused one so a silently failed seed
+cannot pass.
 
 Two traps that have already been paid for: hiding a panel disables its `UIDocument` and
 discards the tree, so a re-`Show()` must be followed by re-querying elements; and a
@@ -244,7 +251,7 @@ The remaining root fixtures, by theme. Each one's `<summary>` states the invaria
 | Naming & content data | `NameGenerationTemplateTests`, `NameGeneratorWindowTests`, `TitleGenerationTests`, `RaceCatalogTests`, `BiomeSystemTests`, `SceneObjectNamerTests` |
 | World & scenes | `WorldMapDefinitionTests`, `WorldSceneDetailsCacheBuilderTests`, `WorldLabelProjectionOrderTests`, `CharacterGroundingLayerTests` |
 | Nameplates | `NameplateModelTests`, `NameplateOptionsTests`, `NameplateVisibilityTests` |
-| Options & UI chrome | `CrosshairSettingsTests`, `CameraSettingsTests`, `AudioChannelRoutingTests`, `AnisotropicFilteringTests`, `AntialiasingSettingTests`, `KeyBindingDisplayNameTests`, `OptionsRowLayoutTests`, `CloseButtonConsistencyTests`, `TextInputHeightTests`, `ScrollbarThemeTests`, `ColorPickerTests`, `ChatScrollBehaviourTests`, `InteractPanelInventoryTests`, `PinnedTargetRulesTests` |
+| Options & UI chrome | `CrosshairSettingsTests`, `CameraSettingsTests`, `AudioChannelRoutingTests`, `AnisotropicFilteringTests`, `AntialiasingSettingTests`, `KeyBindingDisplayNameTests`, `OptionsRowLayoutTests`, `CloseButtonConsistencyTests`, `TextInputHeightTests`, `ScrollbarThemeTests`, `ColorPickerTests`, `ChatScrollBehaviourTests`, `InteractPanelInventoryTests`, `PinnedTargetRulesTests`, `TooltipSlotRefreshTests`, `BuffDismissTooltipTests` |
 | Chat & models | `ChatSanitizerTests`, `BodyRegionDiscoveryTests` |
 | Prefab authoring | `PrefabNetworkObjectBindingTests`, `NetworkBehaviourOwnerRebindTests` |
 | Observer shaping | `ObserverPayloadShapingTests`, `CastVisibilityTests` |

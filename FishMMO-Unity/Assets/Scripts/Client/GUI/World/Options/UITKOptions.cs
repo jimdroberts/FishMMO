@@ -274,6 +274,82 @@ namespace FishMMO.Client
 		};
 
 		/// <summary>
+		/// Player-facing labels for the actions in the Player map, keyed by action name.
+		/// </summary>
+		/// <remarks>
+		/// The caption on a key-binding row used to be the action's name, which is an identifier
+		/// rather than a word: the list read "ToggleMouseMode", "CloseLastUI", "ArenaScoreboard",
+		/// "PinTarget". Every row was affected, but it matters most for an action the player cannot
+		/// otherwise discover — a row labelled <c>PinTarget</c> gives no clue that it is the key
+		/// that drops the pinned target, and reads like an internal name that was never meant to be
+		/// shown.
+		/// <para>
+		/// Keyed by action name because that is the stable half: <see cref="SharedBindingGroups"/>
+		/// uses the same key for the same reason. Only the keyboard row and the gamepad row of one
+		/// action share a label, and neither depends on which control is bound, so a rebind never
+		/// invalidates an entry.
+		/// </para>
+		/// <para>
+		/// An action missing from this table falls back to its own name, so a newly authored action
+		/// gets a row that is merely ugly rather than a blank one.
+		/// </para>
+		/// </remarks>
+		private static readonly Dictionary<string, string> ActionDisplayNames =
+			new Dictionary<string, string>(System.StringComparer.Ordinal)
+		{
+			{ "Move", "Move" },
+			{ "Look", "Look" },
+			{ "Jump", "Jump" },
+			{ "Crouch", "Crouch" },
+			{ "Sprint", "Sprint" },
+			{ "Interact", "Interact" },
+			{ "ToggleMouseMode", "Mouse Mode" },
+			{ "ToggleFirstPerson", "First Person" },
+			{ "Cancel", "Cancel" },
+			{ "CloseLastUI", "Close UI" },
+			{ "Chat", "Chat" },
+			{ "Hotkey1", "Hotbar 1" },
+			{ "Hotkey2", "Hotbar 2" },
+			{ "Hotkey3", "Hotbar 3" },
+			{ "Hotkey4", "Hotbar 4" },
+			{ "Hotkey5", "Hotbar 5" },
+			{ "Hotkey6", "Hotbar 6" },
+			{ "Hotkey7", "Hotbar 7" },
+			{ "Hotkey8", "Hotbar 8" },
+			{ "Hotkey9", "Hotbar 9" },
+			{ "Hotkey0", "Hotbar 0" },
+			{ "Inventory", "Inventory" },
+			{ "Abilities", "Abilities" },
+			{ "Equipment", "Equipment" },
+			{ "Guild", "Guild" },
+			{ "Party", "Party" },
+			{ "Friends", "Friends" },
+			{ "Achievements", "Achievements" },
+			{ "Factions", "Factions" },
+			{ "Minimap", "Minimap" },
+			{ "WorldMap", "World Map" },
+			{ "Lore", "Lore" },
+			{ "ArenaScoreboard", "Arena Scoreboard" },
+			{ "PinTarget", "Pin Target" },
+			{ "Pet", "Pet" },
+			{ "Options", "Options" },
+			{ "Menu", "Menu" },
+		};
+
+		/// <summary>
+		/// The player-facing label for an action, falling back to its name.
+		/// </summary>
+		/// <param name="actionName">The action's name in the input asset.</param>
+		private static string DisplayNameFor(string actionName)
+		{
+			if (string.IsNullOrEmpty(actionName))
+			{
+				return actionName;
+			}
+			return ActionDisplayNames.TryGetValue(actionName, out string display) ? display : actionName;
+		}
+
+		/// <summary>
 		/// Player-facing labels for the themeable colours, indexed alongside
 		/// <see cref="UITKTheme.ColorNames"/>.
 		/// </summary>
@@ -2734,9 +2810,13 @@ namespace FishMMO.Client
 		/// </remarks>
 		private static string DescribeBinding(InputAction action, InputBinding binding)
 		{
-			string name = binding.isPartOfComposite && !string.IsNullOrEmpty(binding.name)
-				? $"{action.name} / {binding.name}"
-				: action.name;
+			string name = DisplayNameFor(action.name);
+			if (binding.isPartOfComposite && !string.IsNullOrEmpty(binding.name))
+			{
+				/* A composite part keeps its own name verbatim: Up, Down, Left, Right are already
+				 * the words a player expects on a movement row. */
+				name = $"{name} / {binding.name}";
+			}
 
 			return IsGamepadBinding(binding) ? name + "  (Gamepad)" : name;
 		}

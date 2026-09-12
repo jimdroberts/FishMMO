@@ -7,8 +7,8 @@ using UnityEngine.UIElements;
 namespace FishMMO.RenderScratch
 {
 	/// <summary>
-	/// Reports the resolved geometry of the dungeon finder's footer toggle, which renders its
-	/// label truncated even though the row has slack to spare.
+	/// Reports the resolved geometry of the dungeon finder's footer: the toggle, whose label used
+	/// to truncate, and the three action buttons beside it, which have to fit in the panel with it.
 	/// </summary>
 	public static class FooterProbe
 	{
@@ -57,11 +57,40 @@ namespace FishMMO.RenderScratch
 					Panels.DungeonFinder(liveHost, liveDoc);
 					Settle(liveDoc);
 
-					Toggle liveToggle = liveDoc.rootVisualElement.Q<Toggle>("dungeonfinder-public");
-					Dump("live/root", liveDoc.rootVisualElement);
-					Dump("live/footer", liveDoc.rootVisualElement.Q<VisualElement>("panel-footer"));
+					VisualElement liveRoot = liveDoc.rootVisualElement;
+					Toggle liveToggle = liveRoot.Q<Toggle>("dungeonfinder-public");
+					Dump("live/root", liveRoot);
+					Dump("live/footer", liveRoot.Q<VisualElement>("panel-footer"));
 					Dump("live/toggle", liveToggle);
 					Dump("live/label", liveToggle?.Q<Label>(className: "unity-base-field__label"));
+
+					/* The footer is a row of four controls that share one fixed width, and the panel
+					 * clips anything past its edge (theme .fish-panel is overflow:hidden). Measure the
+					 * whole chain so the budget question is answered with numbers: how wide the panel
+					 * gives the row, how wide the row's children each resolve, and where the last one
+					 * lands relative to the panel's own right edge. */
+					VisualElement livePanel = liveRoot.Q<VisualElement>("dungeonfinder-panel");
+					VisualElement liveFooter = liveRoot.Q<VisualElement>("panel-footer");
+					VisualElement liveActions = liveFooter?.Q<VisualElement>(className: "dungeonfinder-footer__actions");
+					Dump("live/panel", livePanel);
+					Dump("live/actions", liveActions);
+					Dump("live/btn-find", liveRoot.Q<Button>("dungeonfinder-findgroup-btn"));
+					Dump("live/btn-refresh", liveRoot.Q<Button>("dungeonfinder-refresh-btn"));
+					Dump("live/btn-start", liveRoot.Q<Button>("dungeonfinder-start-btn"));
+
+					Debug.Log($"[Footer] budget: actions children sum=" +
+						$"{SumChildren(liveActions):F2} + footer padding L/R=" +
+						$"{liveFooter.resolvedStyle.paddingLeft}/{liveFooter.resolvedStyle.paddingRight}" +
+						$" toggle={liveToggle?.resolvedStyle.width:F2} panel={livePanel.resolvedStyle.width:F2}");
+
+					Clip("live/panel", livePanel, "footer", liveFooter);
+					Clip("live/panel", livePanel, "actions", liveActions);
+					Clip("live/panel", livePanel, "toggle", liveToggle);
+					Clip("live/panel", livePanel, "btn-find", liveRoot.Q<Button>("dungeonfinder-findgroup-btn"));
+					Clip("live/panel", livePanel, "btn-refresh", liveRoot.Q<Button>("dungeonfinder-refresh-btn"));
+					Clip("live/panel", livePanel, "btn-start", liveRoot.Q<Button>("dungeonfinder-start-btn"));
+					Clip("live/panel", livePanel, "btn-close", liveRoot.Q<Button>("dungeonfinder-close-btn"));
+					Clip("live/panel", livePanel, "scroll", liveRoot.Q<ScrollView>("dungeonfinder-scroll"));
 				}
 				finally
 				{
@@ -97,6 +126,41 @@ namespace FishMMO.RenderScratch
 						| System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)
 					?.Invoke(null, null);
 			}
+		}
+
+		/// <summary>Total intrinsic width of a row's children, margins included.</summary>
+		private static float SumChildren(VisualElement row)
+		{
+			if (row == null) { return 0f; }
+			float sum = 0f;
+			foreach (VisualElement child in row.Children())
+			{
+				IResolvedStyle s = child.resolvedStyle;
+				sum += child.layout.width + s.marginLeft + s.marginRight;
+			}
+			return sum;
+		}
+
+		/// <summary>
+		/// Whether an element falls outside the box that clips it. The panel is overflow:hidden, so
+		/// anything past its edge is invisible to the player however correctly it laid itself out.
+		/// </summary>
+		private static void Clip(string panelTag, VisualElement panel, string tag, VisualElement e)
+		{
+			if (panel == null || e == null) { Debug.Log($"[Footer] clip {tag}: NULL"); return; }
+
+			Rect p = panel.worldBound;
+			Rect r = e.worldBound;
+			float right = r.xMax - p.xMax;
+			float left = p.xMin - r.xMin;
+			float bottom = r.yMax - p.yMax;
+			float top = p.yMin - r.yMin;
+			bool clipped = right > 0.01f || left > 0.01f || bottom > 0.01f || top > 0.01f;
+
+			Debug.Log($"[Footer] clip {panelTag} <- {tag}: {(clipped ? "CLIPPED" : "inside")} " +
+				$"world={r.xMin:F2},{r.yMin:F2},{r.width:F2}x{r.height:F2} " +
+				$"panel={p.xMin:F2},{p.yMin:F2},{p.width:F2}x{p.height:F2} " +
+				$"over right={right:F2} left={left:F2} bottom={bottom:F2} top={top:F2}");
 		}
 
 		private static void Dump(string tag, VisualElement e)

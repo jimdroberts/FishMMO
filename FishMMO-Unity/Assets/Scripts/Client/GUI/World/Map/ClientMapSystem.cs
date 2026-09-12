@@ -30,10 +30,12 @@ namespace FishMMO.Client
 	{
 		/// <summary>How often the fog is revealed around the character, in seconds.</summary>
 		/// <remarks>
-		/// Four times a second. The reveal writes a disc of cells whose radius is tens of metres,
-		/// which is thousands of byte comparisons; at sixty hertz that is real work to produce a
-		/// result no player can perceive, because a character cannot cross a four-metre cell in a
-		/// sixtieth of a second.
+		/// Four times a second. This is the cadence the character's position needs sampling at rather
+		/// than a limit on the work: since the chunk model landed a reveal marks the single chunk the
+		/// character stands in, which is two divisions and a byte. What the interval has to be short
+		/// enough for is that nobody crosses a whole chunk between two samples — at the default
+		/// forty-metre grain that would take a hundred and sixty metres a second — because ground
+		/// passed entirely between samples is ground the map never records.
 		/// </remarks>
 		private const double RevealInterval = 0.25;
 
@@ -705,22 +707,34 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// A hundred and twenty-eight metres, which makes the shipped thousand-metre scenes nine
-		/// chunks square. That is the number chosen to make the percentage worth showing: each
-		/// chunk entered is a little over one percent, so the readout moves a visible step every
-		/// time the player reaches new ground, rather than creeping by a point per sixty metres
-		/// walked as the per-cell version did.
+		/// Forty metres, which divides a shipped thousand-metre scene into a grid of twenty-eight
+		/// chunks — each one an eighth of a percent of the scene.
 		/// </para>
 		/// <para>
-		/// It is also about the area the old reveal disc covered, so a scene opens up at roughly
-		/// the rate it used to — in blocks with edges rather than as a spreading smudge.
+		/// <b>This was 128 metres, and the reversal is worth keeping.</b> The chunk model replaced a
+		/// per-cell reveal whose percentage crept by a point per sixty metres walked, and the answer
+		/// at the time was a grain coarse enough that entering a chunk was a visible step: a little
+		/// over one percent each. That swapped one failure for another. On a nine-chunk grid the
+		/// displayed value only ever moves in whole numbers, so a step of a bit over one percent
+		/// reads as a fixed increment — the readout looks like a count of blocks rather than a
+		/// measurement of ground, which is how it was reported.
+		/// </para>
+		/// <para>
+		/// Both failures have the same root: a whole-number percentage over a coarse grid. So the
+		/// grid is fine enough to be worth measuring and the readout shows the fraction —
+		/// <c>UITKMap</c> prints tenths. At this size one chunk is 0.13% and a hundred metres of
+		/// straight walking crosses two and a half of them, so the number climbs as the player
+		/// travels instead of lurching once a block.
 		/// </para>
 		/// <para>
 		/// A scene that wants a different grain sets <c>FogChunkSize</c> on its map definition. A
-		/// small interior wants a smaller number: at this size a two-hundred-metre scene is four
-		/// chunks, and each one is a quarter of the map.
+		/// small interior wants a smaller number still: a two-hundred-metre scene at the default is
+		/// five chunks across. Going much below this is self-defeating for the same reason the
+		/// 128-metre grain was wrong in the other direction — a scene of ten thousand chunks moves
+		/// the tenths digit once per twenty metres, which is a readout that appears to flicker
+		/// rather than to measure.
 		/// </para>
 		/// </remarks>
-		public const float ChunkSize = 128.0f;
+		public const float ChunkSize = 40.0f;
 	}
 }

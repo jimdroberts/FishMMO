@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -31,6 +32,13 @@ namespace FishMMO.Client
 	/// <see cref="groups"/> holds the elements of ONE visual tree. <c>UIDocument</c> re-clones the
 	/// UXML on every enable, so a dictionary of elements cached across a hide/show points into a
 	/// discarded tree and the strip comes back permanently empty.
+	/// </para>
+	/// <para>
+	/// <b>Dismissal.</b> A click on an icon asks the server to take that buff off the character —
+	/// see <see cref="DismissBuffBroadcast"/>. Whether the ask is even made, whether the tooltip
+	/// advertises it, and whether the server honours it are all the same expression,
+	/// <see cref="BaseBuffTemplate.CanBeDismissedByPlayer"/>. This strip is the owner's own, so
+	/// nothing here removes another character's buff.
 	/// </para>
 	/// </remarks>
 	public abstract class UITKBuffContainer : UITKCharacterControl
@@ -74,12 +82,25 @@ namespace FishMMO.Client
 		private const string TOOLTIP_NAME = "UITooltip";
 
 		/// <summary>
+		/// Guidance shown on a buff the player is allowed to click off.
+		/// </summary>
+		/// <remarks>
+		/// One string for every dismissable buff, rather than a constant per container: whether the
+		/// hint appears is decided by <see cref="BaseBuffTemplate.CanBeDismissedByPlayer"/> — the
+		/// same property the click handler and the server read — so the tooltip cannot promise
+		/// something the click will not do.
+		/// </remarks>
+		private const string DISMISS_HINT = "Left Mouse Button to remove.";
+
+		/// <summary>
 		/// What is being displayed for one buff. Plain data — survives a tree rebuild.
 		/// </summary>
 		private struct BuffEntry
 		{
 			/// <summary>The buff template being rendered.</summary>
 			public BaseBuffTemplate Template;
+			/// <summary>The buff instance, for the live values the tooltip reports. Null once removed.</summary>
+			public Buff Instance;
 			/// <summary>Remaining duration fraction (0-1).</summary>
 			public float Fraction;
 			/// <summary>Stack count above the base application.</summary>
@@ -105,9 +126,6 @@ namespace FishMMO.Client
 
 		/// <summary>True for the debuff container, false for the buff container.</summary>
 		protected abstract bool IsDebuff { get; }
-
-		/// <summary>Extra tooltip hint appended for interactive (removable) buffs, if any.</summary>
-		protected virtual string TooltipHint => null;
 
 		/// <summary>Subscribes the concrete container to its specific add/remove events.</summary>
 		protected abstract void SubscribeAddRemove();
@@ -297,6 +315,7 @@ namespace FishMMO.Client
 			entries[buff.Template.ID] = new BuffEntry()
 			{
 				Template = buff.Template,
+				Instance = buff,
 				Fraction = Mathf.Clamp01(fraction),
 				Stacks = buff.Stacks,
 			};
@@ -457,36 +476,124 @@ namespace FishMMO.Client
 			view.AppliedFraction = -1.0f;
 			view.AppliedStacks = -1;
 
-			groupRoot.RegisterCallback<PointerEnterEvent>(evt => OnGroupPointerEnter(template, groupRoot));
+			groupRoot.RegisterCallback<PointerEnterEvent>(evt => OnGroupPointerEnter(template.ID, groupRoot));
 			groupRoot.RegisterCallback<PointerLeaveEvent>(evt => OnGroupPointerLeave(groupRoot));
+			groupRoot.RegisterCallback<ClickEvent>(evt => OnGroupClicked(template.ID, evt));
 
 			return view;
 		}
 
 		/// <summary>
-		/// Shows the buff tooltip when the pointer enters a buff group.
+		/// Sends a dismissal request for the clicked buff, if the player is allowed to dismiss it.
 		/// </summary>
-		/// <param name="template">The buff template to describe.</param>
-		/// <param name="owner">The hovered element, used to auto-close the tooltip.</param>
-		private void OnGroupPointerEnter(BaseBuffTemplate template, VisualElement owner)
+		/// <remarks>
+		/// The click bubbles from whichever child the pointer landed on — the icon draws, and any
+		/// element whose picking mode is not Ignore becomes the event target — so it is the group
+		/// root that listens. Nothing is removed here: the request goes to the server, which decides,
+		/// and the icon leaves when the reconcile carrying the removal arrives.
+		/// </remarks>
+		/// <param name="templateID">The buff template that was clicked.</param>
+		/// <param name="evt">The click event, stopped so it cannot reach whatever is behind the strip.</param>
+		private void OnGroupClicked(int templateID, ClickEvent evt)
 		{
-			if (template == null)
+			if (!TryRequestDismiss(templateID))
 			{
 				return;
 			}
 
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
+			/* Only swallowed when something was actually asked for. A click on a debuff is not the
+			 * strip's business and is left to travel on, exactly as it did before any of this. */
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Asks the server to remove the buff with this template ID from the local player.
+		/// </summary>
+		/// <remarks>
+		/// The send is the last thing that happens and the least interesting part of it — whether the
+		/// request is justified is <see cref="CanDismiss"/>'s answer, and the server reaches the same
+		/// one again on receipt. So this is the polite half of the check and not the guard.
+		/// </remarks>
+		/// <param name="templateID">The buff template to remove.</param>
+		/// <returns>True when a request was sent.</returns>
+		internal bool TryRequestDismiss(int templateID)
+		{
+			if (!CanDismiss(templateID) || Client == null)
 			{
-				/* The hint is a row of the content now, not a string glued onto the end of a
-				 * formatted blob — so it renders as guidance rather than as another paragraph of
-				 * the buff's own description. */
-				TooltipContent content = template.BuildContent();
-				if (!string.IsNullOrEmpty(TooltipHint))
-				{
-					content.AddHint(TooltipHint);
-				}
-				tooltip.Open(content, owner);
+				return false;
 			}
+
+			Client.Broadcast(new DismissBuffBroadcast()
+			{
+				TemplateID = templateID,
+			}, Channel.Reliable);
+
+			return true;
+		}
+
+		/// <summary>
+		/// True when this strip is showing the buff and the player may dismiss it.
+		/// </summary>
+		/// <remarks>
+		/// Two questions, both answered from what the strip itself holds: whether an entry exists for
+		/// this template ID, and what <see cref="BaseBuffTemplate.CanBeDismissedByPlayer"/> says
+		/// about it. The second is the reason a debuff cannot be cleared through the buff strip even
+		/// if one were somehow drawn on it — the strip is not where the rule lives.
+		/// </remarks>
+		/// <param name="templateID">The buff template to test.</param>
+		/// <returns>True when a dismissal request would be justified.</returns>
+		internal bool CanDismiss(int templateID)
+		{
+			return entries.TryGetValue(templateID, out BuffEntry entry) &&
+				entry.Template != null &&
+				entry.Template.CanBeDismissedByPlayer;
+		}
+
+		/// <summary>
+		/// Shows the buff tooltip when the pointer enters a buff group.
+		/// </summary>
+		/// <param name="templateID">The buff template to describe.</param>
+		/// <param name="owner">The hovered element, used to auto-close the tooltip.</param>
+		private void OnGroupPointerEnter(int templateID, VisualElement owner)
+		{
+			if (!entries.TryGetValue(templateID, out BuffEntry entry) || entry.Template == null)
+			{
+				return;
+			}
+
+			if (!UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
+			{
+				return;
+			}
+
+			TooltipContent content = entry.Template.BuildContent();
+
+			/* Live instance values, which only this strip has — the target and party frames hover
+			 * somebody else's buff and describe the template alone. */
+			BuffTooltip.AppendLiveState(content, entry.Instance, GetCurrentTick());
+
+			/* The hint is a row of the content now, not a string glued onto the end of a formatted
+			 * blob — so it renders as guidance rather than as another paragraph of the buff's own
+			 * description. It appears only where the click would actually do something. */
+			if (entry.Template.CanBeDismissedByPlayer)
+			{
+				content.AddHint(DISMISS_HINT);
+			}
+
+			tooltip.Open(content, owner);
+		}
+
+		/// <summary>
+		/// The local character's current network tick, or 0 when it cannot be asked.
+		/// </summary>
+		private uint GetCurrentTick()
+		{
+			if (Character != null && Character.TryGet(out IBuffController buffController))
+			{
+				return buffController.GetCurrentDomainTick();
+			}
+
+			return 0u;
 		}
 
 		/// <summary>

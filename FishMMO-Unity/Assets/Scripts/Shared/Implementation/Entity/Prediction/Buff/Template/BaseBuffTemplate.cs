@@ -89,7 +89,26 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool IsDebuff;
 
-				/// <summary>
+		/// <summary>
+		/// True when the player may click this buff off their own HUD strip.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>One rule, three readers.</b> The tooltip hint, the strip's click handler and the
+		/// server's dismissal handler all test this and nothing else, so what the tooltip promises
+		/// and what the server honours cannot drift apart. A player who clicks a debuff gets no
+		/// request sent, and a modified client that sends one anyway is refused — a debuff is on you
+		/// until it expires or something dispels it, which is the point of it.
+		/// </para>
+		/// <para>
+		/// Derived rather than authored, so no asset can be authored into an inconsistent state and
+		/// no existing asset changes behaviour. Loosening this later — an authored opt-out for a
+		/// quest blessing, say — is a single expression here rather than a second rule everywhere.
+		/// </para>
+		/// </remarks>
+		public bool CanBeDismissedByPlayer { get { return !IsDebuff; } }
+
+		/// <summary>
 		/// The name of this buff template (from the ScriptableObject's name).
 		/// </summary>
 		public string Name { get { return this.name; } }
@@ -102,10 +121,44 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the tooltip string for this buff, including name, description, and secondary details.
 		/// </summary>
+		/// <remarks>
+		/// What the buff IS comes first — polarity, how long it lasts, how often it acts, how far it
+		/// stacks — so a player can read the shape of the effect before the numbers. Anything the
+		/// buff cannot have (no tick cadence, no stacking) is omitted rather than printed as a dash:
+		/// a row that says "Max Stacks: 0" reads as a broken value, and there are seven template
+		/// types that would each need the reader to know which zero is meaningful.
+		/// <para>
+		/// The live state of one instance — seconds remaining, current stacks — is not here. A
+		/// template is shared by every instance of the buff on every character, and the target and
+		/// party frames hover somebody else's buff, where there is no instance to report. See
+		/// <see cref="BuffTooltip.AppendLiveState"/>, which the owner's own strip calls.
+		/// </para>
+		/// </remarks>
 		public virtual void BuildTooltip(TooltipContent content)
 		{
 			content.Icon = Icon;
 			content.AddTitle(Name);
+			content.AddSubtitle(IsDebuff ? "Debuff" : "Buff");
+
+			if (IsPermanent)
+			{
+				content.AddStat("Duration", "Permanent", TooltipPriority.Stats);
+			}
+			else if (Duration > 0.0f)
+			{
+				content.AddStat("Duration", $"{Duration:0.##}s", TooltipPriority.Stats);
+			}
+
+			if (TickRate > 0.0f)
+			{
+				content.AddStat("Tick Rate", $"{TickRate:0.##}s", TooltipPriority.Stats + 1);
+			}
+
+			if (MaxStacks > 0u)
+			{
+				content.AddStat("Max Stacks", MaxStacks.ToString(), TooltipPriority.Stats + 2);
+			}
+
 			if (!string.IsNullOrWhiteSpace(Description))
 			{
 				content.AddBody(Description);

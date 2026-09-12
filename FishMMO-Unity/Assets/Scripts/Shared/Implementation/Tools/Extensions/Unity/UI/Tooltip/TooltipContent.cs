@@ -166,6 +166,8 @@ namespace FishMMO.Shared
 		public const int Identity = 20;
 		/// <summary>The numbers.</summary>
 		public const int Stats = 30;
+		/// <summary>Where one instance stands right now — seconds remaining, stacks held.</summary>
+		public const int LiveState = 35;
 		/// <summary>Attribute rolls and generated values.</summary>
 		public const int Attributes = 40;
 		/// <summary>What it costs to use.</summary>

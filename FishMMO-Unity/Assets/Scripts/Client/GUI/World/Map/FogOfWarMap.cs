@@ -17,14 +17,17 @@ namespace FishMMO.Client
 	/// metres of ground: a thousand-metre scene was a 277 by 277 grid, seventy-seven thousand bytes
 	/// held in memory, gzipped on every save, and uploaded to a texture through a dirty-rectangle
 	/// tracker. The percentage it produced moved by about one point per sixty metres walked, which
-	/// read as a readout that never changed. The same scene is nine chunks square here: eighty-one
-	/// bytes, no compression, no dirty rectangle, and every chunk entered is a visible step.
+	/// read as a readout that never changed. The same scene is twenty-eight chunks square here:
+	/// seven hundred and eighty-four bytes, no compression, and no dirty rectangle.
 	/// </para>
 	/// <para>
 	/// <b>Chunk size is a scene's own business.</b> It comes from the map definition, falling back
 	/// to <c>FogOfWarDefaults.ChunkSize</c>, so a cramped dungeon can be divided more finely than
 	/// open country without anything else changing. It is baked into the saved file and a change
-	/// discards the old one — a chunk index means a different piece of ground at a different size.
+	/// discards the old one — a chunk index means a different piece of ground at a different size, so
+	/// changing either starts every character again in that scene. The default is finer than it once
+	/// was, and the world map's readout prints tenths of a percent; both halves of that decision,
+	/// and the reason neither works on its own, live on <c>FogOfWarDefaults.ChunkSize</c>.
 	/// </para>
 	/// </remarks>
 	public sealed class FogOfWarMap
@@ -403,8 +406,9 @@ namespace FishMMO.Client
 		/// not, and the edge between the two is a real boundary the player can walk across — so it
 		/// is drawn as one. Interpolating would smear each chunk into its neighbours and produce a
 		/// soft blob that no longer lines up with the ground it describes.</para>
-		/// <para>The whole grid is uploaded on any change. It is a few hundred texels for a scene,
-		/// so the dirty-rectangle bookkeeping the per-cell version needed buys nothing here.</para>
+		/// <para>The whole grid is uploaded on any change. At the default grain that is under a
+		/// thousand texels for a shipped scene — four kilobytes — so the dirty-rectangle bookkeeping
+		/// the per-cell version needed still buys nothing here.</para>
 		/// </remarks>
 		public Texture2D GetTexture()
 		{

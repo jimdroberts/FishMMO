@@ -545,6 +545,24 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Updates the explored-percentage readout.
 		/// </summary>
+		/// <remarks>
+		/// To a tenth of a percent, and floored rather than rounded. Whole numbers were the readout's
+		/// whole problem: over a grid of chunks each worth a bit over one percent, a value that only
+		/// ever moves in ones is indistinguishable from a counter that increments per chunk, which is
+		/// how it was reported. Printing the fraction is only half of that fix — the other half is
+		/// the grain, and <c>FogOfWarDefaults.ChunkSize</c> carries the reasoning.
+		/// <para>
+		/// Floored, like the whole-percent version was, because the number is a claim about how much
+		/// of the scene the player has seen: rounding 99.96 up to 100.0 would say they have been
+		/// everywhere with ground still left.
+		/// </para>
+		/// <para>
+		/// Assembled from an integer rather than formatted from a float. The separator between the
+		/// two digits is not the machine's to choose — a culture that writes 3,7 would put a comma in
+		/// the middle of the readout, and this is a string a player reads rather than a file anything
+		/// parses.
+		/// </para>
+		/// </remarks>
 		private void RefreshExplored()
 		{
 			if (exploredLabel == null)
@@ -558,8 +576,8 @@ namespace FishMMO.Client
 				return;
 			}
 
-			float fraction = ClientMapSystem.Fog.ExploredFraction();
-			exploredLabel.text = $"Explored {Mathf.FloorToInt(fraction * 100.0f)}%";
+			int tenths = Mathf.FloorToInt(ClientMapSystem.Fog.ExploredFraction() * 1000.0f);
+			exploredLabel.text = $"Explored {tenths / 10}.{tenths % 10}%";
 		}
 
 		/// <summary>

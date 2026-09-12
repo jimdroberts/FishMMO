@@ -715,6 +715,49 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			targetController.ServerSetClientSelectedTarget(verifiedTargetId);
 		}
 
+		/// <summary>
+		/// Removes a buff the client asked to dismiss from its own character.
+		/// </summary>
+		/// <remarks>
+		/// The whole job is verification. The client names a template ID and the server decides
+		/// whether that means anything: the buff is looked for in the SENDER'S OWN container, so an
+		/// id naming a buff somebody else is carrying resolves to nothing here, and
+		/// <see cref="BaseBuffTemplate.CanBeDismissedByPlayer"/> is what refuses a debuff. Both
+		/// tests are on this side of the wire, which is what makes the tooltip's "Left Mouse Button
+		/// to remove" a description of what will happen rather than a hope.
+		/// <para>
+		/// Nothing is sent back. <see cref="BuffController.Remove"/> marks the snapshot dirty, and
+		/// the buff's absence reaches the owner on the reconcile it already receives.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">The connection that asked.</param>
+		/// <param name="msg">The buff the client wants gone.</param>
+		/// <param name="channel">The channel the broadcast arrived on.</param>
+		private void OnClientDismissBuffBroadcastReceived(NetworkConnection conn, DismissBuffBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			if (conn == null)
+				return;
+			/* Synchronous handler, so the in-flight marker is released at once and only the debounce
+			 * stamp applies — same shape as the target-selection handler above. */
+			if (!respawnResurrectGuard.TryBegin(conn.ClientId, BuffDismissOperation, BuffDismissDebounceMs, out long dismissGuardKey))
+				return;
+			respawnResurrectGuard.End(dismissGuardKey);
+
+			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+				return;
+			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+				return;
+			if (player == null || !player.TryGet(out IBuffController buffController))
+				return;
+
+			if (!buffController.Buffs.TryGetValue(msg.TemplateID, out Buff buff))
+				return;
+			if (buff == null || buff.Template == null || !buff.Template.CanBeDismissedByPlayer)
+				return;
+
+			buffController.Remove(msg.TemplateID);
+		}
+
 		private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
 		{
 			if (!TryBeginRespawnResurrectGuard(conn.ClientId, RespawnOperation, out long guardKey))
@@ -1208,6 +1251,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Target selection: cheap, but a Spawned lookup and a GetComponent per packet with no limit at all.</summary>
 		private const byte TargetSelectionOperation = 7;
 		private const int TargetSelectionDebounceMs = 50;
+
+		/// <summary>Buff dismissal: a click, so an order of magnitude rarer than a target report — and a click that is refused costs a dictionary lookup and nothing else.</summary>
+		private const byte BuffDismissOperation = 8;
+		private const int BuffDismissDebounceMs = 100;
 
 		private bool TryBeginRespawnResurrectGuard(int clientId, byte operation, out long guardKey)
 		{

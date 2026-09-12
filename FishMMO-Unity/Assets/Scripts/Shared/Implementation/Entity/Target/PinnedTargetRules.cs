@@ -8,8 +8,9 @@ namespace FishMMO.Shared
 	/// A pin is a promise the frame makes to the player: "this card stays up until you let go".
 	/// The only things that break the promise are the target ceasing to be something a card can
 	/// describe — destroyed or despawned on this client, or dead — and the target leaving the
-	/// distance inside which targeting means anything at all. Nothing else does: not the pointer
-	/// moving, not a panel opening, not the pinned character walking behind a wall.
+	/// distance inside which targeting means anything at all, and the death of the player the
+	/// promise was made to. Nothing else does: not the pointer moving, not a panel opening, not
+	/// the pinned character walking behind a wall.
 	/// </para>
 	/// <para>
 	/// Static and free of Unity types so the truth table can be pinned by a plain unit test.
@@ -37,10 +38,25 @@ namespace FishMMO.Shared
 		/// <param name="isAlive">True when the target is alive, or has no health to lose.</param>
 		/// <param name="sqrDistance">Squared distance from the local player to the target, in metres squared.</param>
 		/// <param name="releaseDistance">The release distance, in metres; zero or less means no distance limit.</param>
+		/// <param name="isOwnerAlive">True when the player holding the pin is alive, or has no health to lose.</param>
 		/// <returns>True when the pin must be released.</returns>
-		public static bool ShouldRelease(bool isDestroyed, bool isSpawned, bool isAlive, float sqrDistance, float releaseDistance)
+		public static bool ShouldRelease(bool isDestroyed, bool isSpawned, bool isAlive, float sqrDistance, float releaseDistance, bool isOwnerAlive)
 		{
 			if (isDestroyed || !isSpawned)
+			{
+				return true;
+			}
+
+			/* The death of the player HOLDING the pin releases it too, and it is tested before
+			 * the target's own death because the two say different things. A pin is a promise
+			 * made to a player who is watching a card; there is no one watching while that player
+			 * is dead, and the frame they come back to should not be holding a decision they made
+			 * in a fight they already lost.
+			 *
+			 * It is deliberately NOT a question about the target. A player who dies to the
+			 * character they pinned must not see that card survive their own respawn — that is
+			 * the one case where the pin outlives its reason by minutes rather than ticks. */
+			if (!isOwnerAlive)
 			{
 				return true;
 			}

@@ -743,20 +743,31 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Callback for the pin-target key: pins the hovered character to the target frame's
-		/// pinned card, or releases the pin when nothing — or the pinned character itself — is
-		/// under the pointer.
+		/// Callback for the pin-target key: releases a held pin, or pins the hovered character
+		/// when nothing is pinned. See <see cref="ITargetController.TogglePinnedTarget"/>.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Purely a HUD action. The pin never steers an ability: acquisition stays a server-side
 		/// raycast from the replicated aim, so this key changes what the player is SHOWN, not what
 		/// they hit. That is why it carries no rate limit and sends nothing of its own — the
 		/// controller folds the pin into the advisory target report it already makes.
+		/// </para>
+		/// <para>
+		/// Gated on typing alone, like every other HUD shortcut here — Inventory, the minimap, the
+		/// map, Options. It used to demand <c>CanUpdateInput()</c> as well, which requires the
+		/// cursor to be locked and a live character to read the state from, and that was the wrong
+		/// question for this key. The hover trace reads <c>Mouse.current.position</c> whatever the
+		/// cursor mode is, so with the cursor free the frame tracks what the MOUSE is over — a
+		/// player can point at a character, watch the frame frame it, and get nothing at all from
+		/// the key. The aliveness half of the old gate was merely redundant rather than wrong: a
+		/// dead player holds no pin at all, because their own death releases it on the next trace
+		/// tick.
+		/// </para>
 		/// </remarks>
 		private void OnPinTargetPerformed(InputAction.CallbackContext context)
 		{
 			if (TypingIntoField) return;
-			if (!CanUpdateInput() || UIManager.ControlHasFocus()) return;
 
 			if (!Character.TryGet(out ITargetController targetController))
 			{
@@ -912,10 +923,17 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// A key of its own rather than sharing the minimap's. The two are different things — one
-		/// hides a permanent HUD element, the other opens a window — and binding both to M would
+		/// hides a permanent HUD element, the other opens a window — and one key for both would
 		/// make the common action (open the map) also perform the rare and confusing one (make the
 		/// minimap disappear). The minimap's own MAP button opens the same panel for players who
 		/// never learn the key.
+		/// <para>
+		/// The map holds <b>M</b> and the minimap <b>N</b>, the pair swapped from their earlier
+		/// assignment. M is the mnemonic for the map, and the map is the one that opens a window
+		/// the player looks for by name; the minimap is the smaller, quieter of the two and takes
+		/// the key beside it. Both are defaults, so a player who has ever rebound either keeps
+		/// their own key — this changes nothing for them.
+		/// </para>
 		/// </remarks>
 		private void OnWorldMapPerformed(InputAction.CallbackContext context)
 		{

@@ -29,7 +29,13 @@ namespace FishMMO.Shared
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
 				if (buffAttribute?.Template == null) continue;
-				content.AddStat(buffAttribute.Template.Name, buffAttribute.Value.ToString(), TooltipPriority.Attributes + 1 + i,
+
+				/* Through the attribute's own formatter, so a percentage attribute reads as a
+				 * percentage. Authored raw it said "Move Speed 30" where the buff grants 30
+				 * PERCENT — see CharacterAttributeTemplate.FormatValue. */
+				content.AddStat(buffAttribute.Template.Name,
+					buffAttribute.Template.FormatValue(buffAttribute.Value),
+					TooltipPriority.Attributes + 1 + i,
 					tone: buffAttribute.Value >= 0 ? TooltipTone.Good : TooltipTone.Bad);
 			}
 		}

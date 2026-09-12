@@ -77,6 +77,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - Dirty marks cleared only by a write that actually landed (`MarkAttributesPersisted` and friends), and only when the bulk result reports `Filtered == 0` — a row the service declined to attempt never reached the database, so retiring its value would lose it
 - Item persistence handed off, not duplicated: the logout item flush is captured by `ICharacterInventorySystem.CaptureDespawnFlush` while the character is still resident and **awaited inside save-and-release, before the release**
 - Verified client target reports (`TargetSelectionBroadcast`), which feed the observer-streaming target pin
+- Verified client buff dismissal (`DismissBuffBroadcast`): resolved against the sender's own character and its own buff container, refused for debuffs, and rate-limited on the same ingress guard as respawn and target reports
 - Optimistic concurrency via `character.Version++` on every save
 - Runtime mapping caches for fast lookups: by ID, by lowercase name, by world, by connection, waiting-scene-load, session tokens
 - Lifecycle events for cross-system coordination: `OnBeforeLoadCharacter`, `OnAfterLoadCharacter`, `OnConnect`, `OnDisconnect`, `OnSpawnCharacter`, `OnDespawnCharacter`, `OnPetKilled`
@@ -183,6 +184,9 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `InstanceKickBroadcast` | `OnClientInstanceKickBroadcastReceived` | Party leader removes a member from the run |
 | `InstancePrivacyBroadcast` | `OnClientInstancePrivacyBroadcastReceived` | Party leader changes the run's listing |
 | `TargetSelectionBroadcast` | `OnClientTargetSelectionBroadcastReceived` | Client reports its selected target; verified, then installed on `ITargetController` |
+| `DismissBuffBroadcast` | `OnClientDismissBuffBroadcastReceived` | Player clicks a buff off their own HUD strip; verified against the sender's own buffs, then removed |
+
+`DismissBuffBroadcast` carries a template ID and nothing else, and is debounced per connection (`BuffDismissOperation` = 8, `BuffDismissDebounceMs` = 100). It resolves the **sender's own** character and that character's own buff container — a request can never name someone else's buff — and refuses anything `BaseBuffTemplate.CanBeDismissedByPlayer` rejects, which is every debuff. The removal then rides the existing reconcile: `BuffController.Remove` marks the snapshot dirty and the owner's `RestoreFromReconcile` fires `OnRemoveBuff`, so there is no second message and no client-side optimistic removal. See the buff system's README for the client half.
 
 `TargetSelectionBroadcast` is debounced per connection (`TargetSelectionOperation` = 7, `TargetSelectionDebounceMs` = 50). Verification is the whole job: the value feeds the observer-streaming target pin, so a non-zero id must resolve to a spawned **character in the sender's own scene** or an unverified id would let a modified client pin arbitrary objects into its own observer budget. Anything that fails to resolve is stored as no-target rather than dropped, so a bad report cannot leave a stale pin standing. Range is deliberately not checked at receipt — the pin bounds it at use, where the live distance is already in hand, and rejecting on a moving value would flap.
 
@@ -505,6 +509,7 @@ respawning *into* rather than the one they died in.
 | Sub-entity persistence | Change a buff, faction, waypoint, archetype and known ability; wait for `saveRate`; confirm each list is enqueued and its dirty marks cleared only on a write with `Filtered == 0` |
 | Item flush ordering | Disconnect a character; confirm `CaptureDespawnFlush` is awaited inside the save-and-release work item, before the session release |
 | Target selection | Send `TargetSelectionBroadcast` naming an object in another scene; confirm it is stored as no-target rather than pinned |
+| Buff dismissal | Send `DismissBuffBroadcast` for a debuff on the sender's own character; confirm nothing is removed and no error is raised. Then repeat for an ordinary buff and confirm the icon leaves the owner's strip on the next reconcile |
 | Scene validation | Confirm `SceneManager_OnClientLoadedStartScenes` validates the scene and sends `ClientValidatedSceneBroadcast` |
 | Character spawn | Confirm `OnClientValidatedSceneBroadcastReceived` promotes character into active maps, spawns network object, and fires `OnSpawnCharacter` |
 | Non-DB payload broadcast | After spawn, confirm client receives known abilities, achievements, inventory, bank, and hotkeys broadcasts |

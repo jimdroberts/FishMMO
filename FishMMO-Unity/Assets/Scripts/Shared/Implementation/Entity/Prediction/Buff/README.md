@@ -54,6 +54,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - **Buff/debuff distinction** — Unified pipeline with `IsDebuff` flag for categorization, events, and UI
 - **Seven template types** — `AttributeBuffTemplate`, `AttributeTickBuffTemplate`, `CompositeBuffTemplate`, `ResourceTickBuffTemplate`, `StateBuffTemplate`, `DamageNegationBuffTemplate`, `DeflectBuffTemplate`
 - **Spendable charges** — `BaseBuffTemplate.InitialCharges` and `Buff.RemainingCharges`, in whatever unit the template means (damage points for an absorb shield, deflections for a guard); reconciled, refilled on re-apply
+- **Player dismissal** — clicking a buff icon on your own HUD strip removes the whole thing, stacks and all, through a server-validated request. Debuffs are excluded by construction (`CanBeDismissedByPlayer => !IsDebuff`), so the debuff strip has no click path at all. See [Dismissal](#dismissal)
 - **Observer buff strips with real timers** — `ObservedBuffEntry` carries stacks and seconds remaining in a seven-byte wire form over `CharacterBuffsBroadcast`, delta or full set
 - **Static events** — `OnAddBuff`, `OnRemoveBuff`, `OnAddDebuff`, `OnRemoveDebuff`, `OnBuffTick` for UI and other systems
 - **Database persistence** — Buffs are serialized/deserialized via payload methods for save/load
@@ -62,6 +63,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 
 - Buff state is server-authoritative — clients cannot apply or remove buffs without server validation
 - Prediction reconcile restores authoritative buff state on mismatch, preventing client-side buff manipulation
+- Dismissal is a client **request**, never an instruction. `DismissBuffBroadcast` carries a template ID and nothing else; the server resolves the *sender's own* character from the connection, refuses any template `CanBeDismissedByPlayer` rejects, and is rate-limited on the existing per-connection ingress guard (operation byte 8, 100 ms debounce). A hand-crafted packet asking to clear a debuff, or another character's buff, changes nothing.
 
 ## Prerequisites
 
@@ -152,6 +154,19 @@ across a removal that is going to be immediately re-populated (a model reload, a
 | `IsPermanent` | `bool` | If true, buff does not expire and `RemoveAll` / `RemoveRandom` skip it |
 | `IsDebuff` | `bool` | Determines buff vs debuff categorization for events and UI |
 | `OnTickEvents` | `List<BuffTickEvent>` | ECA triggers fired on every tick. Initiator is the caster, target is the carrier. |
+
+`BaseBuffTemplate` also exposes two **derived** properties. Neither is authored, and neither has a
+field in the inspector — do not add one:
+
+| Property | Value | Description |
+|----------|-------|-------------|
+| `InitialCharges` | virtual, default 0 | The template's own charge pool, expressed in whatever unit it already authors |
+| `CanBeDismissedByPlayer` | `!IsDebuff` | Whether the player may click this buff off their own HUD strip |
+
+`CanBeDismissedByPlayer` is deliberately the *only* place the dismissal rule is written. The tooltip
+hint, the client click path and the server handler each read it, so what the UI advertises and what
+the server honours cannot drift apart. A debuff is undismissable because it is a debuff, not because
+a panel forgot to wire a callback — see [Dismissal](#dismissal).
 
 ### Attribute Modification
 
@@ -249,11 +264,21 @@ All events are defined on `IBuffController`:
 
 | Event | Signature | When Fired |
 |-------|-----------|------------|
-| `OnBuffTick` | `Action<Buff, uint>` | Each time a buff's `OnTick` fires during `Tick()` |
-| `OnAddBuff` | `Action<Buff>` | When a non-debuff is applied |
-| `OnRemoveBuff` | `Action<Buff>` | When a non-debuff is removed |
-| `OnAddDebuff` | `Action<Buff>` | When a debuff is applied |
-| `OnRemoveDebuff` | `Action<Buff>` | When a debuff is removed |
+| `OnBuffTick` | `Action<IBuffController, Buff, uint>` | Each time a buff's `OnTick` fires during `Tick()` |
+| `OnAddBuff` | `Action<IBuffController, Buff>` | When a non-debuff is applied |
+| `OnRemoveBuff` | `Action<IBuffController, Buff>` | When a non-debuff is removed |
+| `OnAddDebuff` | `Action<IBuffController, Buff>` | When a debuff is applied |
+| `OnRemoveDebuff` | `Action<IBuffController, Buff>` | When a debuff is removed |
+
+**Every event carries the owning controller, and that is load-bearing.** These are STATIC — one invocation list for the whole process — and they used to carry the `Buff` alone, which has no owner. Every buff applied to every NPC, pet, summon and other player in view was therefore delivered to the local player's own HUD strip and drawn on it. Keying the strip by template ID hid it: N mobs carrying one debuff collapsed into a single icon that looked plausible. A static event cannot be scoped at subscription time, so a subscriber must compare the controller against the character it is showing — see `UITKBuffContainer.IsOwnController`.
+
+### Dismissal
+
+A player may click a buff off their own HUD strip. `BaseBuffTemplate.CanBeDismissedByPlayer` is the whole rule (`!IsDebuff`), and it is read in three places so they cannot disagree: the tooltip that advertises the click, the strip that makes it, and the server that decides.
+
+- **Client** — `UITKBuffContainer` sends `DismissBuffBroadcast { TemplateID }` on `Channel.Reliable`. Nothing is removed locally: the icon leaves when the server's reconcile arrives.
+- **Server** — `OnClientDismissBuffBroadcastReceived` resolves the SENDER'S OWN character and its own buff container, refuses anything `CanBeDismissedByPlayer` rejects, then calls `BuffController.Remove(templateID)`. A debuff cannot be cleared this way, however it was asked for.
+- **No new sync path** — `Remove` marks the snapshot dirty, and the owner's `RestoreFromReconcile` fires `OnRemoveBuff` exactly as an expiring buff does.
 
 ### External Integration Points
 

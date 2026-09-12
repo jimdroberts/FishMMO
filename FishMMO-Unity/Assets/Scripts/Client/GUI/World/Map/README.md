@@ -120,16 +120,21 @@ map subsystem was protecting, because the map never held anything better.
 ## Exploration and Cartography
 
 Exploration works in **chunks**. A scene's bounds are divided into squares of `FogChunkSize` metres
-(the map definition's field, defaulting to `FogOfWarDefaults.ChunkSize`, 128 m — nine chunks across
-a shipped thousand-metre scene), and walking into a chunk explores all of it. A chunk is explored or
-it is not; there is no coverage value and no radius. `ExploredFraction` is therefore chunks visited
-over chunks in the scene, and the world map's readout moves a visible step — a little over one
-percent — every time the player reaches new ground.
+(the map definition's field, defaulting to `FogOfWarDefaults.ChunkSize`, 40 m — twenty-eight chunks
+across a shipped thousand-metre scene), and walking into a chunk explores all of it. A chunk is
+explored or it is not; there is no coverage value and no radius. `ExploredFraction` is therefore
+chunks visited over chunks in the scene, and the world map's readout prints it to a tenth of a
+percent — one chunk of a shipped scene is 0.13% — so the number climbs as the player walks instead
+of stepping a block at a time.
 
 This replaced a per-cell radial reveal that stored a coverage byte per four metres of ground:
 seventy-seven thousand bytes for a scene, gzipped on every save, uploaded through a dirty-rectangle
 tracker, and producing a percentage that climbed about one point per sixty metres walked — which
-read, correctly, as a readout that never changed.
+read, correctly, as a readout that never changed. The chunk model first answered that with a grain
+coarse enough that every chunk entered was a visible step, and that turned out to be its own
+failure: over a nine-chunk grid a whole-number readout can only move in ones, so a step of a bit over
+one percent is indistinguishable from a fixed increment. The grain and the readout are one decision —
+see `FogOfWarDefaults.ChunkSize` — and neither half works without the other.
 
 ### Granting exploration that was not walked
 

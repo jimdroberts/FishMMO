@@ -229,10 +229,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// Exploration works in whole chunks: walking into one reveals all of it, and the explored
-		/// percentage counts them. Smaller chunks mean a finer map and a slower-moving percentage;
-		/// the client default suits open country, and a compact interior usually wants less.
+		/// percentage counts them. Smaller chunks mean a finer map and a smaller step between
+		/// percentages; the client default suits open country, and a compact interior usually wants
+		/// less still. Changing this on a shipped scene discards every character's explored map for
+		/// it — the chunk indices in the saved file no longer name the same ground.
 		/// </remarks>
-		[Tooltip("Length of one exploration chunk in metres. Zero uses the client default (128m).")]
+		[Tooltip("Length of one exploration chunk in metres. Zero uses the client default (40m).")]
 		public float FogChunkSize;
 
 		// ── Authored content ────────────────────────────────────────

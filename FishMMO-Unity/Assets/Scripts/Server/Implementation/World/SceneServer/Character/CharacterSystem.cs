@@ -190,6 +190,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<InstanceKickBroadcast>(OnClientInstanceKickBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<InstancePrivacyBroadcast>(OnClientInstancePrivacyBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<TargetSelectionBroadcast>(OnClientTargetSelectionBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<DismissBuffBroadcast>(OnClientDismissBuffBroadcastReceived, true);
 
 			// Chat commands. See OnLeaveInstanceCommand for why this exists alongside the
 			// RequestLeaveInstanceBroadcast handler.
@@ -268,6 +269,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<InstanceKickBroadcast>(OnClientInstanceKickBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<InstancePrivacyBroadcast>(OnClientInstancePrivacyBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<TargetSelectionBroadcast>(OnClientTargetSelectionBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<DismissBuffBroadcast>(OnClientDismissBuffBroadcastReceived);
 
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;

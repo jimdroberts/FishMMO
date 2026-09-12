@@ -95,6 +95,15 @@ namespace FishMMO.RenderScratch
 					queue.Add(Make(name, path, populate));
 				}
 
+				/* Optional label filter. A single-panel fix needs its own before/after, and
+				 * re-rendering the whole set to get it would mean deleting every PNG on disk
+				 * first — which the resumable skip would otherwise refuse to redo. */
+				string only = Environment.GetEnvironmentVariable("FISHMMO_RENDER_ONLY");
+				if (!string.IsNullOrEmpty(only))
+				{
+					queue.RemoveAll(j => j.Label.IndexOf(only, StringComparison.OrdinalIgnoreCase) < 0);
+				}
+
 				int total = queue.Count;
 				queue.RemoveAll(AlreadyRendered);
 				Debug.Log($"[All] queued {queue.Count} captures ({total - queue.Count} already present)");

@@ -21,12 +21,25 @@
     bottom: 0;
 }
 
+/*
+    520px, not 440. The panel is as wide as its widest row needs it to be, and that row is
+    the footer (below): four controls that cannot shrink, wrap, or drop a label, measured at
+    471px together. 440 left the footer 420px of usable width once its 10px/8px side padding
+    and the 1px borders came off — 51px less than the row needed. A .fish-panel clips at its
+    own edge, which the action row crossed by 46px, and the last control in it went with it:
+    the primary "Open New Dungeon" button lost its final four characters and 42px of its box
+    (issue #276).
+
+    Widening the panel is what the footer's own rule asks for: the primary button keeps its
+    width and its label, and nothing else in the column is fighting for the space. Widths in
+    this theme are per-panel — siblings run 420 to 660 — so 520 costs nothing elsewhere.
+*/
 .dungeonfinder-panel {
     position: absolute;
     left: 50%;
     top: 50%;
     translate: -50% -50%;
-    width: 440px;
+    width: 520px;
     max-height: 82%;
     flex-direction: column;
     flex-shrink: 0;
@@ -337,10 +350,18 @@
 }
 
 /*
-    Four footer controls share 440px: the toggle, Find Group, Refresh and Open New
+    Four footer controls share one row: the toggle, Find Group, Refresh and Open New
     Dungeon. The primary button keeps its width; the other two sit at their text.
     The panel is one column, so nothing here wraps — if a fifth control is ever
     added the footer needs a second row, not a narrower button.
+
+    That row is what sets the panel's width, and it is worth writing the numbers
+    down, because assuming them is how the last one got cut off. Measured at the
+    reference resolution: the toggle resolves 135px plus a 4px outer margin, and the
+    three buttons 92 + 72 + 144 at their text plus 4px margins each — 471px in all.
+    The footer's own 10px/8px side padding comes off the top, so a panel W wide
+    offers the row W - 20px and needs W of 491 to break even. The panel is 520,
+    which gives the row 500px and 29px to spare.
 */
 .dungeonfinder-action--find {
     min-width: 76px;

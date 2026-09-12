@@ -63,7 +63,7 @@ namespace FishMMO.Shared
 				{
 					BuffAttributeTemplate attr = BonusAttributes[i];
 					if (attr?.Template == null) continue;
-					content.AddStat(attr.Template.Name, attr.Value.ToString(), order++,
+					content.AddStat(attr.Template.Name, attr.Template.FormatValue(attr.Value), order++,
 						tone: attr.Value >= 0 ? TooltipTone.Good : TooltipTone.Bad);
 				}
 			}
@@ -84,8 +84,10 @@ namespace FishMMO.Shared
 				{
 					BuffAttributeTemplate tick = TickAttributes[i];
 					if (tick?.Template == null) continue;
-					string label = tick.Value >= 0 ? "+" : "";
-					content.AddStat(tick.Template.Name, $"{label}{tick.Value}/tick", order++,
+					/* The attribute's own formatter carries the sign, and the unit where it has one.
+					 * The "/tick" suffix here is this row's own addition — it says how often, which
+					 * the attribute has no way to know. */
+					content.AddStat(tick.Template.Name, $"{tick.Template.FormatValue(tick.Value)}/tick", order++,
 						tone: tick.Value >= 0 ? TooltipTone.Good : TooltipTone.Bad);
 				}
 			}

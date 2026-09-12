@@ -101,6 +101,29 @@ namespace FishMMO.Shared
 		public float InitialValueAsPct { get { return InitialValue * 0.01f; } }
 
 		/// <summary>
+		/// Formats a value in this attribute's own unit, signed.
+		/// </summary>
+		/// <remarks>
+		/// Every tooltip that writes one of these values — an attribute's own sheet numbers, the
+		/// bonus an <see cref="AttributeBuffTemplate"/> grants, a modifier a
+		/// <see cref="CompositeBuffTemplate"/> carries — goes through here, because the value alone
+		/// is ambiguous in a way that is easy to author and impossible to notice. A percentage
+		/// attribute's value is in percentage POINTS (<see cref="InitialValueAsPct"/> divides by
+		/// 100), so a movement-speed buff authored as 30 means "+30%"; printed raw it reads as
+		/// "30", which is a plausible-looking number and wrong by two orders of magnitude.
+		/// <para>
+		/// The sign is always written, so a modifier is legible as a modifier rather than as an
+		/// absolute value that happens to sit in a "Bonus Attributes" block.
+		/// </para>
+		/// </remarks>
+		/// <param name="value">The value to format, in this attribute's own unit.</param>
+		/// <returns>The value with its sign and its unit suffix.</returns>
+		public string FormatValue(int value)
+		{
+			return IsPercentage ? $"{value:+#;-#;0}%" : $"{value:+#;-#;0}";
+		}
+
+		/// <summary>
 		/// Describes the attribute: what it is and the range it lives in.
 		/// </summary>
 		/// <param name="content">The content being assembled.</param>
@@ -116,15 +139,15 @@ namespace FishMMO.Shared
 			}
 			if (InitialValue > 0)
 			{
-				content.AddStat("Initial", InitialValue.ToString(), TooltipPriority.Stats);
+				content.AddStat("Initial", FormatValue(InitialValue), TooltipPriority.Stats);
 			}
 			if (MinValue > 0)
 			{
-				content.AddStat("Minimum", MinValue.ToString(), TooltipPriority.Stats + 1);
+				content.AddStat("Minimum", FormatValue(MinValue), TooltipPriority.Stats + 1);
 			}
 			if (MaxValue > 0)
 			{
-				content.AddStat("Maximum", MaxValue.ToString(), TooltipPriority.Stats + 2);
+				content.AddStat("Maximum", FormatValue(MaxValue), TooltipPriority.Stats + 2);
 			}
 		}
 	}

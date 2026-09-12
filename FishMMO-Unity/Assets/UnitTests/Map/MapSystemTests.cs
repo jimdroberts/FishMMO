@@ -335,13 +335,16 @@ namespace FishMMO.UnitTests
 		{
 			/* The fog texture is one texel per chunk, so whatever rectangle the drawing code says
 			 * that texture covers is the rectangle it gets stretched across. Handing it the scene's
-			 * rectangle instead of the grid's squeezes nine chunks into the space of 8.6 and walks
+			 * rectangle instead of the grid's squeezes twenty-eight chunks into the space of 27.6 and walks
 			 * the fog out of alignment with the ground — a third of a chunk by the far edge at the
 			 * shipped sizes. See UITKMapView.OnGenerateFogContent. */
 			Rect scene = new Rect(-540.96f, -540.96f, 1105.92f, 1105.92f);
-			FogOfWarMap fog = new FogOfWarMap(scene, 128.0f);
+			FogOfWarMap fog = new FogOfWarMap(scene, FogOfWarDefaults.ChunkSize);
 
-			Assert.AreEqual(9, fog.ChunksX);
+			/* The default constant, not a number typed in here. What this test is about is the shipped
+			 * configuration, and a grain that moved without it following would leave it proving a
+			 * property of a grid no player has. */
+			Assert.AreEqual(28, fog.ChunksX);
 			Assert.AreEqual(scene.xMin, fog.GridRect.xMin, 1e-3f, "the grid starts where the scene does");
 			Assert.AreEqual(scene.yMin, fog.GridRect.yMin, 1e-3f);
 			Assert.AreEqual(fog.ChunksX * fog.ChunkSize, fog.GridRect.width, 1e-3f, "and spans whole chunks");

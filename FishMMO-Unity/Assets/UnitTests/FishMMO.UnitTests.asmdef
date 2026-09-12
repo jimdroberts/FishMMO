@@ -8,6 +8,7 @@
         "FishMMO.Client",
         "FishMMO.Server",
         "FishNet.Runtime",
+        "Unity.InputSystem",
         "KinematicCharacterController",
         "Unity.TextMeshPro",
         "Unity.RenderPipelines.Universal.Runtime",

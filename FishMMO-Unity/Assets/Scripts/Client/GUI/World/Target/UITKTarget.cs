@@ -9,8 +9,10 @@ namespace FishMMO.Client
 	/// <summary>
 	/// UI Toolkit target frame: two cards side by side. The HOVER card follows the pointer, as
 	/// the frame always has; the PINNED card holds a character the player chose to track and stays
-	/// up until they release it, it dies, it despawns or it leaves range. Each card shows its
-	/// target's name (faction-coloured), a health bar, its faction standing, and strips of the
+	/// up until they release it — the pin key is a strict toggle — or until the pin stops being
+	/// honourable, which is the target dying, despawning or leaving range, or the player holding
+	/// it dying. Each card shows its target's
+	/// name (faction-coloured), a health bar, its faction standing, and strips of the
 	/// buffs and debuffs the SERVER has chosen to show observers. The overhead 3D label, outline
 	/// and faction colouring are rendering-agnostic and driven from here rather than from the
 	/// visual tree.
@@ -132,13 +134,9 @@ namespace FishMMO.Client
 			/// <summary>Name of the card's root element in the UXML.</summary>
 			public readonly string RootName;
 
-			/// <summary>True for the card that holds the pinned character.</summary>
-			public readonly bool IsPinned;
-
-			public TargetCard(string rootName, bool isPinned)
+			public TargetCard(string rootName)
 			{
 				RootName = rootName;
-				IsPinned = isPinned;
 			}
 
 			#region Elements (belong to the current visual tree)
@@ -281,10 +279,16 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The card that follows the pointer.</summary>
-		private readonly TargetCard hoverCard = new TargetCard(HOVER_CARD_NAME, isPinned: false);
+		private readonly TargetCard hoverCard = new TargetCard(HOVER_CARD_NAME);
 
-		/// <summary>The card that holds the pinned character.</summary>
-		private readonly TargetCard pinnedCard = new TargetCard(PINNED_CARD_NAME, isPinned: true);
+		/// <summary>
+		/// The card that holds the pinned character. Which card is which is carried by the
+		/// instance and its UXML name, so no flag has to be threaded through the shared drawing
+		/// code — and none is: the pinned card is only ever presented from
+		/// <see cref="TargetController_OnPinTarget"/>, so "has a target" and "is a pin" cannot
+		/// disagree.
+		/// </summary>
+		private readonly TargetCard pinnedCard = new TargetCard(PINNED_CARD_NAME);
 
 		/// <summary>Detached icons available for reuse by either card.</summary>
 		private readonly List<BuffIcon> iconPool = new List<BuffIcon>();

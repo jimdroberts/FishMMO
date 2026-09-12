@@ -26,6 +26,13 @@ namespace FishMMO.UnitTests
 	/// pinned below, warning included, because a silent one is indistinguishable from a broken
 	/// readout — which is how it was reported.
 	/// </para>
+	/// <para>
+	/// Reported again, differently, as "exploring a chunk only gives one percent" — the same
+	/// readout, that time reading as a counter rather than a measurement. That one was the grid
+	/// grain and the display format together, and <c>OneChunkOfAShippedScene_IsAFractionOfAPercent</c>
+	/// pins both. Worth keeping the two reports apart when reading these tests: the first is a
+	/// reveal that never lands, the second a reveal that lands and moves the number too far.
+	/// </para>
 	/// </remarks>
 	[TestFixture]
 	public class ExploredReadoutTests
@@ -47,6 +54,13 @@ namespace FishMMO.UnitTests
 		{
 			UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
 			ClientMapSystem.SetCharacter(null);
+
+			/* SetCharacter early-returns when it is already pointed at nobody, which is the state the
+			 * readout tests run in — they do not arm a character, they stand a grid up and hand it to
+			 * the panel. Without this the grid outlives its test and the next test's readout reports
+			 * ground nobody explored. */
+			typeof(ClientMapSystem).GetProperty("Fog").SetValue(null, null);
+
 			FogOfWarStore.DeleteAll(TestCharacterID);
 
 			if (characterHost != null)
@@ -154,8 +168,11 @@ namespace FishMMO.UnitTests
 			float fraction = ClientMapSystem.Fog.ExploredFraction();
 			LogAssert.IsTrue(ClientMapSystem.Fog.ExploredChunkCount >= 3,
 				$"300 metres in a straight line crosses several chunks, but only {ClientMapSystem.Fog.ExploredChunkCount} were explored");
-			LogAssert.IsTrue(fraction > 0.02f,
-				$"and that must be a visible slice of the scene, but it is {fraction * 100.0f:F3}%");
+			/* One displayed tenth is the smallest move the readout can make, and that is the bar
+			 * here. Asking for a bigger slice would re-pin the chunk grain in a second place, and
+			 * the grain belongs where it is decided — FogOfWarDefaults.ChunkSize. */
+			LogAssert.IsTrue(fraction >= 0.001f,
+				$"and that must move the readout by at least a tenth, but it is {fraction * 100.0f:F3}%");
 		}
 
 		[Test]
@@ -298,7 +315,62 @@ namespace FishMMO.UnitTests
 		public void TheReadout_ReportsWhateverTheFogSays()
 		{
 			Rect world = WorldRect();
+			UITKMap map = MountMapPanel(world, out Label label, out MethodInfo refresh);
 
+			refresh.Invoke(map, null);
+			LogAssert.IsTrue(label.text == "Explored 0.0%", $"an unexplored map reads zero, not '{label.text}'");
+
+			Vector3 walk = new Vector3(world.center.x, 0.0f, world.center.y);
+			for (int i = 0; i < 200; ++i)
+			{
+				walk.x += 1.5f;
+				ClientMapSystem.Fog.Reveal(walk);
+			}
+
+			refresh.Invoke(map, null);
+			LogAssert.IsTrue(label.text != "Explored 0.0%",
+				$"the readout must follow the fog it is given, but it still reads '{label.text}'");
+		}
+
+		[Test]
+		public void OneChunkOfAShippedScene_IsAFractionOfAPercent()
+		{
+			/* The reported defect: entering a chunk moved the readout by a whole point, so the number
+			 * read as a count of blocks rather than a measurement of ground. Both halves of the fix
+			 * are pinned here, because neither works alone — the grain has to make one chunk a
+			 * fraction of a percent, and the readout has to print that fraction. A grid this fine
+			 * shown in whole numbers would read as a map that never moves, which is the failure the
+			 * coarse grain was originally chosen to avoid.
+			 *
+			 * One chunk of this scene, entering it, must therefore move the readout by a tenth. */
+			Rect world = WorldRect();
+			UITKMap map = MountMapPanel(world, out Label label, out MethodInfo refresh);
+
+			refresh.Invoke(map, null);
+			LogAssert.IsTrue(label.text == "Explored 0.0%", $"an unexplored map reads zero, not '{label.text}'");
+
+			ClientMapSystem.Fog.Reveal(new Vector3(world.center.x, 0.0f, world.center.y));
+			refresh.Invoke(map, null);
+
+			LogAssert.IsTrue(label.text == "Explored 0.1%",
+				$"one chunk of this scene is {100.0f / ClientMapSystem.Fog.ChunkCount:F3}% of it, so entering one " +
+				$"must move the readout a tenth and not a whole point, but it reads '{label.text}'");
+		}
+
+		/// <summary>
+		/// Stands the world map panel up over a fog grid the test owns, and wires the grid in.
+		/// </summary>
+		/// <param name="world">The rectangle the fog grid covers.</param>
+		/// <param name="label">The explored readout, once the panel has found it.</param>
+		/// <param name="refresh">The panel's private <c>RefreshExplored</c>, which the tests call.</param>
+		/// <returns>The mounted panel.</returns>
+		/// <remarks>
+		/// Both readout tests need exactly this: the panel draws whatever <c>ClientMapSystem.Fog</c>
+		/// holds rather than owning a grid, so a test that wants to drive the readout has to stand one
+		/// up and hand it over. TearDown takes it back.
+		/// </remarks>
+		private UITKMap MountMapPanel(Rect world, out Label label, out MethodInfo refresh)
+		{
 			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
 			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(MapUxmlPath);
 			LogAssert.IsNotNull(settings, $"panel settings must exist at {PanelSettingsPath}");
@@ -313,33 +385,17 @@ namespace FishMMO.UnitTests
 			map.Document = document;
 			map.OnStarting();
 
-			MethodInfo refresh = typeof(UITKMap).GetMethod("RefreshExplored", BindingFlags.Instance | BindingFlags.NonPublic);
+			refresh = typeof(UITKMap).GetMethod("RefreshExplored", BindingFlags.Instance | BindingFlags.NonPublic);
 			FieldInfo labelField = typeof(UITKMap).GetField("exploredLabel", BindingFlags.Instance | BindingFlags.NonPublic);
 			LogAssert.IsNotNull(refresh, "UITKMap must still declare RefreshExplored");
 			LogAssert.IsNotNull(labelField, "UITKMap must still hold the explored label");
 
-			PropertyInfo fogProperty = typeof(ClientMapSystem).GetProperty("Fog");
+			typeof(ClientMapSystem).GetProperty("Fog")
+				.SetValue(null, new FogOfWarMap(world, FogOfWarDefaults.ChunkSize));
 
-			FogOfWarMap fog = new FogOfWarMap(world, FogOfWarDefaults.ChunkSize);
-			fogProperty.SetValue(null, fog);
-			refresh.Invoke(map, null);
-
-			Label label = (Label)labelField.GetValue(map);
+			label = (Label)labelField.GetValue(map);
 			LogAssert.IsNotNull(label, "the world map UXML must still carry the explored label");
-			LogAssert.IsTrue(label.text == "Explored 0%", $"an unexplored map reads zero, not '{label.text}'");
-
-			Vector3 walk = new Vector3(world.center.x, 0.0f, world.center.y);
-			for (int i = 0; i < 200; ++i)
-			{
-				walk.x += 1.5f;
-				fog.Reveal(walk);
-			}
-
-			refresh.Invoke(map, null);
-			LogAssert.IsTrue(label.text != "Explored 0%",
-				$"the readout must follow the fog it is given, but it still reads '{label.text}'");
-
-			fogProperty.SetValue(null, null);
+			return map;
 		}
 	}
 }

@@ -61,5 +61,46 @@ namespace FishMMO.UnitTests
 			 * ship. They would draw as the same box, so they fall through as well. */
 			LogAssert.AreEqual("Escape", Readable("", "Escape"), "private-use glyph");
 		}
+
+		/// <summary>The caption on the row, as opposed to the key shown on its button.</summary>
+		private static string Caption(string actionName)
+		{
+			MethodInfo method = typeof(UITKOptions).GetMethod("DisplayNameFor", BindingFlags.Static | BindingFlags.NonPublic);
+			LogAssert.IsNotNull(method, "UITKOptions must still declare DisplayNameFor");
+			return (string)method.Invoke(null, new object[] { actionName });
+		}
+
+		/// <summary>
+		/// The caption is a phrase, not the action's identifier.
+		/// </summary>
+		/// <remarks>
+		/// The row for the pin key read <c>PinTarget</c>, which names nothing a player can act on.
+		/// It is asserted by name because it is the row this was reported against, and it is the
+		/// one whose meaning is least guessable from the key alone.
+		/// </remarks>
+		[Test]
+		public void AnActionIdentifier_ReadsAsAPhrase()
+		{
+			LogAssert.AreEqual("Pin Target", Caption("PinTarget"), "the pin key");
+			LogAssert.AreEqual("Close UI", Caption("CloseLastUI"), "an identifier is not a caption");
+			LogAssert.AreEqual("Mouse Mode", Caption("ToggleMouseMode"), "nor is a verb a menu entry");
+			LogAssert.AreEqual("Hotbar 1", Caption("Hotkey1"), "a numbered action still needs its noun");
+		}
+
+		/// <summary>
+		/// An action with no label of its own falls back to its name rather than to nothing.
+		/// </summary>
+		/// <remarks>
+		/// The failure is designed to be survivable: an action authored in the input asset and not
+		/// yet added to the table gets a row reading <c>SomeNewAction</c>, which is ugly but still
+		/// tells the player which row they are rebinding. A blank caption would not.
+		/// </remarks>
+		[Test]
+		public void AnUnlistedAction_FallsBackToItsName()
+		{
+			LogAssert.AreEqual("SomeNewAction", Caption("SomeNewAction"), "an action added to the asset but not to the table");
+			LogAssert.AreEqual(string.Empty, Caption(string.Empty), "and the empty name stays empty rather than throwing");
+			LogAssert.IsNull(Caption(null), "as does null");
+		}
 	}
 }
