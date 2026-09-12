@@ -22,16 +22,23 @@ namespace FishMMO.Shared.Core
 		Transform Target { get; set; }
 
 		/// <summary>
-		/// The simulated camera position for ability targeting.
-		/// Mirrors <see cref="KCCController.VirtualCameraPosition"/> for player characters.
+		/// The world-space point this NPC's abilities fire from, and the point it sees from.
 		/// </summary>
-		Vector3 VirtualCameraPosition { get; }
+		/// <remarks>
+		/// Derived, never replicated — only the aim <em>direction</em> travels, and every peer
+		/// re-derives the origin from the same state. See <see cref="CharacterAimOrigin"/>.
+		/// </remarks>
+		Vector3 AimOrigin { get; }
 
 		/// <summary>
-		/// The simulated camera rotation for ability targeting.
-		/// Mirrors <see cref="KCCController.VirtualCameraRotation"/> for player characters.
+		/// The rotation whose forward vector is the direction this NPC aims.
 		/// </summary>
-		Quaternion VirtualCameraRotation { get; }
+		/// <remarks>
+		/// The AI counterpart of <see cref="KCCController.VirtualCameraRotation"/>. A player aims
+		/// with a real camera; an NPC has none, so its aim is solved toward its current target and
+		/// refreshed on every network tick.
+		/// </remarks>
+		Quaternion AimRotation { get; }
 
 		/// <summary>
 		/// Initializes the controller with a home position and optional waypoints.

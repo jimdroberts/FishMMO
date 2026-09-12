@@ -67,6 +67,10 @@ namespace FishMMO.Shared
 		[Tooltip("Optional high-level behavior tree evaluated above the state machine.")]
 		public AIBehaviorTree BehaviorTree;
 
+		[Header("Aiming")]
+		[Tooltip("How accurately this NPC aims. Leave empty for exact aim — a profile only ever makes an NPC less accurate, never more.")]
+		public AIAimProfile AimProfile;
+
 		[Header("Threat")]
 		[Tooltip("Threat per 1 point of damage taken.")]
 		public float AggressionDamageWeight = 1.0f;
@@ -164,6 +168,31 @@ namespace FishMMO.Shared
 			if (ReturnHomeState == null && InitialState != null && InitialState.LeashUpdateRate > 0f)
 			{
 				problems.Add("InitialState has leashing enabled but no ReturnHomeState is assigned — CheckLeash bails out and the NPC never leashes.");
+			}
+
+			/* The retreat state needs the target for the same reason the emergency retreat does, and
+			 * this rule was missing while the emergency one shipped. RetreatState.Enter reads the
+			 * target's position to work out which way is away from it, so a retreat state without
+			 * KeepsCombatTarget is entered with the target already dropped and the NPC has no
+			 * direction to run — it wanders instead of fleeing. The shipped 'Basic Retreat State'
+			 * asset had exactly this set wrong. */
+			if (RetreatState != null && !RetreatState.KeepsCombatTarget)
+			{
+				problems.Add($"RetreatState '{RetreatState.name}' does not have KeepsCombatTarget enabled — it needs the target to know which way to run.");
+			}
+
+			if (AimProfile != null)
+			{
+				/* A local, not a field. A template asset is shared by every NPC that references it,
+				 * so a scratch buffer hung on one would be mutable state living on authored data —
+				 * and Validate is an editor and test entry point, where the allocation is free. */
+				System.Collections.Generic.List<string> aimProblems = new System.Collections.Generic.List<string>();
+				AimProfile.Validate(aimProblems);
+
+				for (int i = 0; i < aimProblems.Count; i++)
+				{
+					problems.Add(aimProblems[i]);
+				}
 			}
 
 			return problems.Count == 0;

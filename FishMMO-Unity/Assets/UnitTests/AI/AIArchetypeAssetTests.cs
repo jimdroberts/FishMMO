@@ -29,6 +29,9 @@ namespace FishMMO.UnitTests.AI
 		/// <summary>Folder the generated archetype assets live in.</summary>
 		private const string ARCHETYPE_FOLDER = "Assets/Templates/Entity/NPCs/AI/Archetypes";
 
+		/// <summary>Folder the authored aim profiles live in.</summary>
+		private const string AIM_FOLDER = "Assets/Templates/Entity/NPCs/AI/Aim";
+
 		/// <summary>Every archetype asset in the project, loaded once.</summary>
 		private static List<AIArchetypeTemplate> archetypes;
 
@@ -511,6 +514,68 @@ namespace FishMMO.UnitTests.AI
 				Assert.Greater(state.DetectionRadius, 0f,
 					$"'{state.name}' has a zero detection radius.");
 			}
+		}
+
+		// --- Aim quality (issue #274) -------------------------------------------------------
+
+		[Test]
+		public void TheCasterArchetype_AimsWithAProfile()
+		{
+			/* The one authored example of the aim quality system. A null profile means perfect aim, so
+			 * without this asset the whole profile path — the lock ramp, the scatter, the minimum lock
+			 * before firing — would ship unexercised. */
+			AIArchetypeTemplate caster = Require("Enemy - Caster");
+
+			Assert.IsNotNull(caster.AimProfile,
+				"'Enemy - Caster' is the archetype the aim profile path is pinned against.");
+			Assert.IsTrue(caster.AimProfile.Validate(new List<string>()),
+				$"'{caster.AimProfile.name}' is not internally consistent.");
+		}
+
+		[Test]
+		public void EveryAuthoredAimProfile_IsInternallyConsistent()
+		{
+			// Profiles are data, so nothing about them is checked by the compiler: an unsatisfiable
+			// lock, a negative spread or a profile that does nothing at all all load and run happily.
+			string[] guids = AssetDatabase.FindAssets("t:AIAimProfile", new[] { AIM_FOLDER });
+			Assert.Greater(guids.Length, 0, $"no AI aim profiles found under {AIM_FOLDER}.");
+
+			for (int i = 0; i < guids.Length; i++)
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+				AIAimProfile profile = AssetDatabase.LoadAssetAtPath<AIAimProfile>(path);
+				if (profile == null)
+				{
+					continue;
+				}
+
+				List<string> problems = new List<string>();
+				Assert.IsTrue(profile.Validate(problems), $"{path}:\n  " + string.Join("\n  ", problems));
+			}
+		}
+
+		[Test]
+		public void TheCasterProfile_RampsFromARealSpreadToANearMiss()
+		{
+			/* The authored numbers, run through the solver, so a retune of the asset has to be
+			 * deliberate. The contract is that a cold caster is meaningfully inaccurate and a settled
+			 * one lands inside a character — the two halves of "aim quality". */
+			AIAimProfile profile = Require("Enemy - Caster").AimProfile;
+
+			Assert.Greater(profile.MinimumLockToFire, 0f,
+				"a caster that fires the instant it acquires a target never exercises the ramp.");
+			Assert.LessOrEqual(profile.MinimumLockToFire, profile.LockSeconds,
+				"a minimum lock longer than the ramp can never be satisfied — the NPC would never cast.");
+
+			float coldAccuracy = AIAimSolver.ResolveAccuracy(0f, profile.LockSeconds, profile.BaseAccuracy);
+			float warmAccuracy = AIAimSolver.ResolveAccuracy(profile.LockSeconds, profile.LockSeconds, profile.BaseAccuracy);
+
+			float coldSpread = AIAimSolver.ResolveSpread(profile.SpreadDegrees, coldAccuracy);
+			float warmSpread = AIAimSolver.ResolveSpread(profile.SpreadDegrees, warmAccuracy);
+
+			Assert.Greater(coldSpread, warmSpread, "accuracy must improve as the target is tracked.");
+			Assert.Less(warmSpread, 2f,
+				"a settled shot must land inside a 1.8 m character: under 2 degrees is about 0.45 m at 20 m.");
 		}
 
 		// --- Helper ------------------------------------------------------------------------

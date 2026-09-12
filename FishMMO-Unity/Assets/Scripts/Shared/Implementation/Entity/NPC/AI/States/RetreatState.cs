@@ -39,6 +39,81 @@ namespace FishMMO.Shared
 		[Tooltip("Seconds spent retreating before giving up. 0 = retreat until safe.")]
 		public float MaxRetreatSeconds = 8.0f;
 
+		[Header("Turning Back")]
+		/// <summary>
+		/// Seconds to retreat before turning back to fight is considered at all.
+		/// </summary>
+		/// <remarks>
+		/// Without a floor the re-engagement roll can fire on the first tick of a retreat, so an NPC
+		/// whose roll succeeds immediately never actually leaves — it turns on the spot, which reads
+		/// as a stutter rather than as a decision.
+		/// </remarks>
+		[Tooltip("Seconds to retreat before turning back is considered. 0 allows turning back immediately.")]
+		public float MinRetreatSeconds = 1.5f;
+
+		/// <summary>
+		/// Base chance, per check, that the NPC turns around and fights instead of continuing to run.
+		/// </summary>
+		[Tooltip("Base chance per check of turning back to fight. 0 = never turns back on chance alone.")]
+		[Range(0f, 1f)]
+		public float ReengageChance = 0.15f;
+
+		/// <summary>
+		/// Added to <see cref="ReengageChance"/> for each retreat taken this fight, counting the one in
+		/// progress.
+		/// </summary>
+		/// <remarks>
+		/// This ramp is what guarantees a long chase ends in a fight. A flat chance can lose the same
+		/// roll a hundred times; a chance that climbs with every retreat the NPC has already made
+		/// against the same opponent converges on certainty, so an NPC being chased across the zone
+		/// will always eventually stop and turn.
+		/// </remarks>
+		[Tooltip("Added to the re-engagement chance per retreat taken this fight, the one in progress included. This is what guarantees a long chase ends in a fight.")]
+		[Range(0f, 1f)]
+		public float ReengageChanceRamp = 0.2f;
+
+		/// <summary>
+		/// Seconds between re-engagement checks.
+		/// </summary>
+		[Tooltip("Seconds between re-engagement checks while retreating.")]
+		public float ReengageCheckInterval = 1.0f;
+
+		/// <summary>
+		/// Seconds during which fleeing is refused after the NPC turns back to fight.
+		/// </summary>
+		/// <remarks>
+		/// Without this the attacking state re-plans on the very next tick, finds the same health
+		/// threshold still violated, and hands straight back to this state — the NPC turns to fight
+		/// and flees again before either is visible.
+		/// </remarks>
+		[Tooltip("Seconds during which fleeing is refused after turning back to fight.")]
+		public float ReengageCooldownSeconds = 6.0f;
+
+		[Header("Cumulative Limit")]
+		/// <summary>
+		/// Total seconds this NPC may spend retreating within a single fight. 0 disables the cap.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Separate from <see cref="MaxRetreatSeconds"/>, which bounds one leg. This bounds the sum
+		/// across every leg of one fight, and is the backstop for a pursuer that keeps re-triggering
+		/// the flee threshold: the NPC gets its budget, and then it fights.
+		/// </para>
+		/// <para>
+		/// <b>0 preserves the old behaviour exactly.</b> Combined with
+		/// <see cref="ReengageChance"/> and <see cref="ReengageChanceRamp"/> at 0, an archetype that
+		/// wants to keep fleeing forever — a pet ordered to run, say — can, without a code change.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Total seconds of retreating allowed per fight. 0 = unlimited, which is the old behaviour.")]
+		public float MaxCumulativeRetreatSeconds = 12.0f;
+
+		/// <summary>
+		/// Seconds the NPC must stand and fight once the cumulative cap is spent.
+		/// </summary>
+		[Tooltip("Seconds of hold once the cumulative cap is spent.")]
+		public float RetreatRecoverySeconds = 8.0f;
+
 		/// <summary>
 		/// Picks the first retreat destination.
 		/// </summary>
@@ -53,6 +128,20 @@ namespace FishMMO.Shared
 				controller.TransitionToIdleState();
 				return;
 			}
+
+			/* Drop the look target so the NPC turns and runs, rather than backpedalling at its
+			 * pursuer.
+			 *
+			 * FaceLookTarget runs on every network tick and yaws the body at LookTarget, and
+			 * StepAgent only applies its own heading resolution while LookTarget is null — so a look
+			 * target left set here suppressed the one mechanism that would have turned the body
+			 * around, for the whole of the retreat. The target survived the transition because this
+			 * state has KeepsCombatTarget enabled, which is required for a different reason (the
+			 * retreat direction is computed from the target). The two are not in conflict: keep the
+			 * target, drop the look target. */
+			controller.LookTarget = null;
+
+			controller.Retreat.NoteRetreatStart(ReengageCheckInterval);
 
 			controller.Resume();
 			MoveAway(controller);
@@ -79,28 +168,78 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Safe already? Stop, whatever the path is doing.
-			float sqrDistance = controller.GetSqrDistanceToTarget();
-			if (sqrDistance > SafeDistance * SafeDistance)
-			{
-				Disengage(controller);
-				return;
-			}
-
+			bool outOfPatience = false;
 			if (MaxRetreatSeconds > 0f)
 			{
 				controller.SubStateTimer -= deltaTime;
-				if (controller.SubStateTimer <= 0f)
-				{
-					/* Out of patience. The NPC is cornered or the pursuer is faster than it is;
-					 * either way, standing in a retreat state achieves nothing. Hand back to the
-					 * attacking state so it fights rather than cowering in place. */
-					ReturnToCombatOrIdle(controller);
-					return;
-				}
+				outOfPatience = controller.SubStateTimer <= 0f;
 			}
 
-			switch (controller.GetMovementProgress(deltaTime))
+			AIMovementProgress progress = controller.GetMovementProgress(deltaTime);
+
+			/* Cornered is measured from this tick, not remembered: a stuck step and a destination
+			 * that could not be pathed to at all are the two ways "there is no room behind me"
+			 * shows up, and both are visible right here. A flag kept across ticks on this asset
+			 * would be shared by every NPC using it. */
+			bool pathBlocked = progress == AIMovementProgress.Stuck;
+
+			AIRetreatContext context = new AIRetreatContext
+			{
+				SqrDistanceToTarget = controller.GetSqrDistanceToTarget(),
+				SafeDistance = SafeDistance,
+				TargetClosingSpeed = controller.TargetClosingSpeed,
+				PathBlocked = pathBlocked,
+				OutOfPatience = outOfPatience,
+				CumulativeCapSpent = controller.Retreat.RecoveryTimer > 0f,
+				SecondsRetreating = MaxRetreatSeconds > 0f
+					? MaxRetreatSeconds - controller.SubStateTimer
+					: float.PositiveInfinity,
+				MinRetreatSeconds = MinRetreatSeconds,
+				ConsecutiveRetreats = controller.Retreat.ConsecutiveRetreats,
+				ReengageChance = ReengageChance,
+				ReengageChanceRamp = ReengageChanceRamp,
+				ReengageRoll = 0f,
+			};
+
+			/* The roll is drawn only when it can matter, and only once per check interval. The NPC's
+			 * RNG is shared with cooldown jitter, target selection and movement-variety rolls, so
+			 * drawing from it every tick would perturb all of them — and a roll redrawn every tick
+			 * would fire almost immediately on any chance above zero rather than testing the chance
+			 * once per decision. */
+			if (!context.OutOfPatience &&
+				!context.CumulativeCapSpent &&
+				!context.PathBlocked &&
+				context.SecondsRetreating >= MinRetreatSeconds)
+			{
+				if (controller.Retreat.DecisionTimer <= 0f)
+				{
+					context.ReengageRoll = (controller.NpcRNG ?? DeterministicRNG.Shared).NextFloat();
+					controller.Retreat.DecisionTimer = ReengageCheckInterval;
+				}
+				else
+				{
+					// Not yet due a check: keep running, and do not let the roll decide anything.
+					context.ReengageRoll = float.PositiveInfinity;
+				}
+			}
+			else
+			{
+				context.ReengageRoll = float.PositiveInfinity;
+			}
+
+			switch (AIRetreatDecision.Decide(context))
+			{
+				case AIRetreatOutcome.TurnAndFight:
+					TurnAndFight(controller);
+					return;
+
+				case AIRetreatOutcome.Disengage:
+					Disengage(controller);
+					return;
+			}
+
+			// Keep retreating.
+			switch (progress)
 			{
 				case AIMovementProgress.Arrived:
 					// Reached this leg but still not safe — take another one.
@@ -108,7 +247,7 @@ namespace FishMMO.Shared
 					return;
 
 				case AIMovementProgress.Stuck:
-					// Backed into geometry. Try to slide out; the timeout above is the backstop.
+					// Backed into geometry. Try to slide out; the decision above is the backstop.
 					controller.TryRecoverFromStuck(controller.Home);
 					return;
 
@@ -119,6 +258,22 @@ namespace FishMMO.Shared
 				default:
 					return;
 			}
+		}
+
+		/// <summary>
+		/// Stops running and goes back on the offensive.
+		/// </summary>
+		/// <remarks>
+		/// The cooldown is what makes the decision stick. Handing control back without it re-enters
+		/// this state on the next tick, because the health threshold that sent the NPC running is
+		/// still violated — the NPC would flicker between running and turning without ever being
+		/// visibly committed to either.
+		/// </remarks>
+		/// <param name="controller">The AI controller managing this NPC.</param>
+		private void TurnAndFight(AIController controller)
+		{
+			controller.Retreat.NoteReengage(ReengageCooldownSeconds);
+			ReturnToCombatOrIdle(controller);
 		}
 
 		/// <summary>

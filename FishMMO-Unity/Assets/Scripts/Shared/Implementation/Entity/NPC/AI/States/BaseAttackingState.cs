@@ -589,6 +589,7 @@ namespace FishMMO.Shared
 			context.AbilityRange = chosenAbility != null ? controller.ResolveAbilityReach(chosenAbility) : 0f;
 			context.MeleeReach = GetMeleeReach(controller);
 			context.KiteExhausted = controller.Kite.Exhausted;
+			context.RetreatExhausted = controller.Retreat.Exhausted;
 
 			/* Spacing the NPC can actually fight at. The archetype's numbers are fitted to the
 			 * longest reach among the abilities this NPC really knows, so a caster archetype on
@@ -642,6 +643,18 @@ namespace FishMMO.Shared
 				return;
 
 			Ability chosenAbility = controller.AttackCooldownTimer > 0f ? null : PickAbility(controller);
+
+			/* An aim profile that demands a moment's lock withholds the cast until it has one.
+			 *
+			 * The ability is dropped rather than a new intent invented, so the planner simply sees
+			 * "nothing to cast" and routes to spacing: the NPC keeps positioning and closing while
+			 * its aim settles, which is what an archer drawing a bead actually looks like. Adding a
+			 * new intent for this would have meant every archetype's plan-handling had to learn about
+			 * it, to express something the existing ladder already says. */
+			if (chosenAbility != null && !HasAimLock(controller))
+			{
+				chosenAbility = null;
+			}
 
 			AICombatContext context = BuildContext(controller, distance, chosenAbility);
 			AICombatPlan plan = AICombatDecision.Plan(context);
@@ -861,6 +874,18 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			/* Roll the aim for this cast, once, and only now that the ability is definitely going
+			 * out. Rolling before the Activate would spend a draw on a cast that then failed; rolling
+			 * per tick would advance the NPC's shared RNG thirty times a second and change the
+			 * behaviour of every other consumer of it — cooldown jitter, target selection, movement
+			 * variety, wander rates.
+			 *
+			 * This is the single funnel every AI cast passes through, which is what makes "once per
+			 * cast" a property of the code rather than a convention each attacking state has to
+			 * remember. */
+			AIAimProfile aimProfile = controller.Archetype != null ? controller.Archetype.AimProfile : null;
+			controller.RollAimForCast(aimProfile, ability.Speed);
+
 			if (AttackCooldown > 0f)
 			{
 				float jitter = 0f;
@@ -872,6 +897,25 @@ namespace FishMMO.Shared
 				controller.AttackCooldownTimer = AttackCooldown + jitter;
 			}
 			return true;
+		}
+
+		/// <summary>
+		/// True when this NPC has held its current target long enough for its aim profile to allow a
+		/// cast.
+		/// </summary>
+		/// <remarks>
+		/// True for every archetype without an aim profile, which is what keeps this a no-op for
+		/// everything that does not opt in.
+		/// </remarks>
+		/// <param name="controller">The AI controller.</param>
+		/// <returns>True if a cast may proceed.</returns>
+		protected static bool HasAimLock(AIController controller)
+		{
+			AIAimProfile profile = controller.Archetype != null ? controller.Archetype.AimProfile : null;
+
+			return profile == null ||
+				   profile.MinimumLockToFire <= 0f ||
+				   controller.AimLock >= profile.MinimumLockToFire;
 		}
 
 		/// <summary>

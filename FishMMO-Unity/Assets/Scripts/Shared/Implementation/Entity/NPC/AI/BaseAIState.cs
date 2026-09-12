@@ -147,6 +147,15 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Checks if the AI has line of sight to the target. Uses raycasting to determine if any objects block the view.
 		/// </summary>
+		/// <remarks>
+		/// <b>Rayed from the aim origin, at the aim point.</b> This used to ray from
+		/// <c>EyeTransform.position</c> — which was the character root, the NPC's ankles — at the
+		/// centre of the target's collider, while the aim was solved from the ankles toward a
+		/// separately cached point and the projectile actually left the eye. Three different
+		/// descriptions of the same line meant an NPC could see a target it could not hit, or hit one
+		/// it could not see. Both ends now come from the same resolvers the aim itself uses, so the
+		/// seen line and the fired line are the same line by construction.
+		/// </remarks>
 		/// <param name="controller">The AI controller managing this NPC.</param>
 		/// <param name="target">The target character to check line of sight to.</param>
 		/// <returns>True if line of sight exists, false otherwise.</returns>
@@ -157,15 +166,12 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			// Use the eye transform for ray origin if available, otherwise use character position.
-			Vector3 rayOrigin = controller.EyeTransform.position;
+			Vector3 rayOrigin = controller.AimOrigin;
 
-			// Use the center of the target's collider if available for more accurate targeting.
-			Vector3 targetPoint = target.Transform.position;
-			if (target != null && target.Collider != null)
-			{
-				targetPoint = target.Collider.bounds.center;
-			}
+			Vector3 targetPoint = AIAimSolver.ResolveAimPoint(
+				target.Transform.position,
+				target.Collider,
+				AIAimPoint.Center);
 
 			Vector3 direction = (targetPoint - rayOrigin).normalized;
 			float distance = Vector3.Distance(rayOrigin, targetPoint);

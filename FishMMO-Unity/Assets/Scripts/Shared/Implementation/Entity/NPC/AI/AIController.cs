@@ -241,14 +241,6 @@ namespace FishMMO.Shared
 			set { if (AggressionState != null) AggressionState.TargetReevaluationTimer = value; }
 		}
 
-		[SerializeField]
-		private Transform eyeTransform;
-
-		/// <summary>
-		/// The transform used for vision checks. Defaults to the character's transform if not set.
-		/// </summary>
-		public Transform EyeTransform => eyeTransform != null ? eyeTransform : Character.Transform;
-
 		/// <summary>
 		/// The current look target for the AI (used for facing/rotation).
 		/// </summary>
@@ -260,18 +252,39 @@ namespace FishMMO.Shared
 		public bool RandomizeState;
 
 		/// <summary>
-		/// Virtual camera position used by the ability system to aim projectiles.
-		/// Computed from the eye transform, aimed toward the current target's center.
-		/// Mirrors the role of KCCController.VirtualCameraPosition for player characters.
+		/// The world-space point this NPC's abilities fire from.
 		/// </summary>
-		public Vector3 VirtualCameraPosition { get; private set; }
+		/// <remarks>
+		/// <para>
+		/// <b>Computed, never cached.</b> This returns exactly what
+		/// <see cref="CharacterAimOrigin.Resolve(ICharacter)"/> returns on every peer, and it must:
+		/// only the aim <em>direction</em> is replicated, so wherever a shot is actually spawned the
+		/// origin is re-derived independently. A cached copy of a derived value is the defect this
+		/// replaces — the old code solved its aim direction from the character root while the
+		/// projectile left from root + 1.45 m, and nothing could detect the disagreement.
+		/// </para>
+		/// <para>
+		/// <b>One point, two consumers.</b> The aim direction is solved from here and
+		/// <see cref="BaseAIState.HasLineOfSight"/> rays from here, so the point an NPC shoots from
+		/// and the point it sees from are the same by construction. They used to differ — vision
+		/// rayed from the ankles, aim was solved from the ankles, the bolt left the eye — and that
+		/// 1.45 m of parallel-ray displacement is what made every fireball pass over its target's
+		/// head, at any range.
+		/// </para>
+		/// </remarks>
+		public Vector3 AimOrigin => CharacterAimOrigin.Resolve(Character);
 
 		/// <summary>
-		/// Virtual camera rotation used by the ability system to aim projectiles.
-		/// Points from the eye transform toward the current target's center.
-		/// Mirrors the role of KCCController.VirtualCameraRotation for player characters.
+		/// The rotation whose forward vector is the direction this NPC aims.
 		/// </summary>
-		public Quaternion VirtualCameraRotation { get; private set; }
+		/// <remarks>
+		/// Written by <see cref="UpdateAim"/> on every network tick, because
+		/// <c>AbilityController.PopulateAiAim</c> reads it on every network tick. It is held as
+		/// state rather than derived on demand because the per-cast scatter offset is deliberately
+		/// fixed for the duration of a cast — see <see cref="AimScatter"/> — so the result depends
+		/// on more than the current positions.
+		/// </remarks>
+		public Quaternion AimRotation { get; private set; }
 
 		//public List<AIState> AllowedRandomStates;
 
@@ -354,6 +367,16 @@ namespace FishMMO.Shared
 				 * whose answer only changes when the target does. */
 				cachedTargetCharacter = value != null ? value.GetComponent<ICharacter>() : null;
 				cachedTargetCharacterID = cachedTargetCharacter != null ? cachedTargetCharacter.ID : 0;
+
+				/* The aim ramp and the velocity estimate are both properties of *this* engagement.
+				 * Carrying either across a target change would hand a freshly acquired target the
+				 * accuracy earned against the last one, and let the lead inherit a velocity sampled
+				 * from a body that is no longer here. Reset here rather than in UpdateAim so that
+				 * every path which changes the target gets it, including the ones that never reach
+				 * an aim tick. */
+				AimLock = 0f;
+				TargetVelocity = Vector3.zero;
+				hasLastTargetPosition = false;
 
 				if (!AgentIsUsable())
 					return;
@@ -508,9 +531,88 @@ namespace FishMMO.Shared
 		private float nextLeashUpdate = 0.0f;
 		private float nextEnemySweepUpdate = 0.0f;
 		private float aggressionTickTimer = 0.0f;
-		private float cachedTargetHalfHeight = 0.0f;
-		private Transform cachedTargetHeightSource;
 		private int staggerID;
+
+		/// <summary>
+		/// Seconds the current target has been continuously tracked, which drives the aim accuracy
+		/// ramp.
+		/// </summary>
+		/// <remarks>
+		/// Reset whenever <see cref="Target"/> changes, so a target re-acquired after a disengage
+		/// must be re-acquired by the aim as well. Advanced only while the controller is in a tier
+		/// that runs combat — see <see cref="UpdateAim"/> — because a ramp that measured wall-clock
+		/// time with a target rather than time actually spent tracking one would hand an NPC full
+		/// accuracy the moment a player walked back into range.
+		/// </remarks>
+		public float AimLock { get; private set; }
+
+		/// <summary>
+		/// The angular error held for the current cast.
+		/// </summary>
+		/// <remarks>
+		/// Rolled once when a cast begins, by <c>BaseAttackingState.ActivateAbility</c>, and held
+		/// until the next cast. Held rather than re-rolled per tick on purpose — see
+		/// <see cref="AIAimSolver.RollScatter"/> — so an inaccurate NPC tracks its target with a
+		/// stable bias instead of spraying around it.
+		/// </remarks>
+		public Quaternion AimScatter { get; private set; } = Quaternion.identity;
+
+		/// <summary>
+		/// Travel speed of the ability being cast, or 0 when nothing is being cast or the ability has
+		/// no travel time.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Set by <see cref="RollAimForCast"/> from the ability it is about to cast, and read on every
+		/// network tick by <see cref="UpdateAim"/> to derive a lead time from the <em>current</em>
+		/// distance.
+		/// </para>
+		/// <para>
+		/// <b>Why the speed is held rather than the lead time.</b> The flight time is distance over
+		/// speed, and the distance changes: the bolt does not leave the caster's hand until the windup
+		/// finishes — 0.4 s on <c>Orc Firebolt</c> — and the target keeps moving throughout. Baking the
+		/// lead seconds at the moment the cast was queued would aim the shot at where the target was
+		/// going to be a windup ago. Keeping the speed and recomputing the time each tick means the
+		/// lead is correct at the instant the projectile actually spawns, and it costs one subtraction
+		/// and a divide on a tick that already solves a look rotation.
+		/// </para>
+		/// </remarks>
+		public float AimLeadSpeed { get; private set; }
+
+		/// <summary>
+		/// The current target's position at the previous tick, used to estimate its velocity.
+		/// </summary>
+		private Vector3 lastTargetPosition;
+
+		/// <summary>
+		/// Whether <see cref="lastTargetPosition"/> holds a sample from the previous tick.
+		/// </summary>
+		private bool hasLastTargetPosition;
+
+		/// <summary>
+		/// The current target's estimated velocity in units per second.
+		/// </summary>
+		/// <remarks>
+		/// Sampled rather than asked for. Nothing in the AI currently tracks target motion, and the
+		/// alternative — reading the target's own velocity — would mean a different source per
+		/// character type: a player's motion lives on the KCC motor, an NPC's on its agent, and a
+		/// pet's on whichever of the two it is. The aim needs one number in one unit for every kind
+		/// of target, and differencing the replicated position gives exactly that with no new
+		/// dependency.
+		/// </remarks>
+		public Vector3 TargetVelocity { get; private set; }
+
+		/// <summary>
+		/// Target speed above which a sampled displacement is treated as a teleport, not motion.
+		/// </summary>
+		/// <remarks>
+		/// A blink, a charge, a pull or a spawner relocating its charge moves a target further in one
+		/// tick than any run speed could. Believing that displacement would fling the lead offset
+		/// across the scene and guarantee the miss it was meant to prevent, so an implausible sample
+		/// is discarded and the previous velocity kept. Well above the fastest legitimate movement —
+		/// a sprinting player is a small fraction of this — and reachable only by a genuine jump.
+		/// </remarks>
+		private const float MaxPlausibleTargetSpeed = 100f;
 		/// <summary>Scratch list for <see cref="TransitionToRandomMovementState"/>; refilled per call.</summary>
 		private readonly List<BaseAIState> movementStates = new List<BaseAIState>(4);
 		private List<ICharacter> sweepResults = new List<ICharacter>(10);
@@ -654,6 +756,32 @@ namespace FishMMO.Shared
 		/// </summary>
 		[System.NonSerialized]
 		public AIKiteBudget Kite;
+
+		/// <summary>
+		/// Per-NPC retreat memory: how long it has run, how often, and whether it may run again.
+		/// See <see cref="AIRetreatBudget"/>.
+		/// </summary>
+		/// <remarks>
+		/// Lives here, on the instance, and not on the retreat state asset. That asset is shared by
+		/// every NPC that flees, so a counter stored on it would be one counter for the whole
+		/// server — and it holds authored configuration, which runtime bookkeeping has no business
+		/// being written into. Non-serialized for the same reason: this is state, not prefab data.
+		/// </remarks>
+		[System.NonSerialized]
+		public AIRetreatBudget Retreat;
+
+		/// <summary>
+		/// How fast the current target is closing on this NPC, in units per second.
+		/// </summary>
+		/// <remarks>
+		/// Negative when the target is moving away, zero with no target. What tells a retreating NPC
+		/// the difference between "I have escaped" and "it is still coming" — the distinction the
+		/// reported behaviour was missing. Measured from the sampled
+		/// <see cref="TargetVelocity"/> rather than from a change in distance, so it is available on
+		/// the same tick the target moves instead of a tick later, and it does not confuse a target
+		/// circling at a steady radius for one closing in.
+		/// </remarks>
+		public float TargetClosingSpeed { get; private set; }
 
 		/// <summary>
 		/// The longest reach among this NPC's offensive abilities, in metres. 0 when it knows none.
@@ -1058,8 +1186,13 @@ namespace FishMMO.Shared
 			Target = null;
 			ResetMovementState();
 			LookTarget = null;
-			VirtualCameraPosition = Vector3.zero;
-			VirtualCameraRotation = Quaternion.identity;
+			AimRotation = Quaternion.identity;
+			AimScatter = Quaternion.identity;
+			AimLeadSpeed = 0f;
+			AimLock = 0f;
+			TargetVelocity = Vector3.zero;
+			lastTargetPosition = Vector3.zero;
+			hasLastTargetPosition = false;
 			OrbitAngle = 0f;
 			RotationIndex = 0;
 			AttackCooldownTimer = 0f;
@@ -1073,14 +1206,14 @@ namespace FishMMO.Shared
 			LastAiDeltaTime = 0f;
 			StateDeltaTime = 0f;
 			Kite.Clear();
+			Retreat.Clear();
+			TargetClosingSpeed = 0f;
 			MaxOffensiveReach = 0f;
 			separationVelocity = Vector3.zero;
 			offMeshReseatTimer = 0f;
 			offMeshWarned = false;
 			stateClock = default;
 			aggressionTickTimer = 0f;
-			cachedTargetHalfHeight = 0f;
-			cachedTargetHeightSource = null;
 			behaviorTreeTimer = 0f;
 			lodReevaluateTimer = 0f;
 			currentLodTier = AILodTier.Active;
@@ -1151,6 +1284,13 @@ namespace FishMMO.Shared
 				FaceLookTarget(networkTickDelta);
 			}
 
+			/* The aim is written on the same schedule as the facing, and for the same reason. Both
+			 * feed AbilityController.PopulateAiAim, which runs on every network tick — so a value
+			 * written on the brain tick is between one and four ticks stale by the time it is read.
+			 * The brain tick throttles thinking, and aiming is not thinking: it is one subtraction
+			 * and a LookRotation against state the controller already holds. */
+			UpdateAim(networkTickDelta);
+
 			aiTickCounter++;
 
 			// --- AI tick gate: only a fraction of network ticks drive the brain. ---
@@ -1211,6 +1351,17 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* The retreat budget advances on every AI tick regardless of state, because the refund
+			 * and both holds have to run while the NPC is *not* retreating — a budget that only
+			 * ticked inside the retreat state could never refill, and the hold imposed after
+			 * choosing to fight would never expire. Its authored numbers come off the retreat state,
+			 * which may be null on an archetype that never flees. */
+			RetreatState retreatAsset = RetreatState as RetreatState;
+			Retreat.Tick(ReferenceEquals(CurrentState, retreatAsset),
+				dt,
+				retreatAsset != null ? retreatAsset.MaxCumulativeRetreatSeconds : 0f,
+				retreatAsset != null ? retreatAsset.RetreatRecoverySeconds : 0f);
+
 			// --- Dispatch to tier-appropriate update pipeline ---
 			switch (currentLodTier)
 			{
@@ -1264,7 +1415,6 @@ namespace FishMMO.Shared
 				UpdateCurrentState(dt);
 			}
 
-			UpdateVirtualCamera();
 			TickAggression(dt);
 		}
 
@@ -1281,7 +1431,6 @@ namespace FishMMO.Shared
 			UpdateSeparation();
 			CheckLeash(dt);
 			UpdateCurrentState(dt);
-			UpdateVirtualCamera();
 			TickAggression(dt);
 		}
 
@@ -1600,6 +1749,20 @@ namespace FishMMO.Shared
 				AggressionState?.Tick(AGGRESSION_TICK_INTERVAL);
 				aggressionTickTimer = AGGRESSION_TICK_INTERVAL;
 			}
+
+			/* An empty threat table is what "this fight is over" means, and it is the only signal
+			 * that can safely say so.
+			 *
+			 * The obvious alternative — clearing the retreat streak wherever the target is dropped —
+			 * is wrong, because a retreat drops its own target on the way out. The streak would
+			 * reset on every single retreat and the ramp driven by it would never climb past one,
+			 * which is the whole mechanism that makes a long chase end. Deriving the end of the
+			 * fight from the threat table instead also means it cannot be forgotten: this is one
+			 * place, rather than a line added to each of the six sites that clear that table. */
+			if (Retreat.ConsecutiveRetreats > 0 && !(AggressionState?.HasAggression ?? false))
+			{
+				Retreat.Clear();
+			}
 		}
 
 		/// <summary>
@@ -1836,42 +1999,140 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Updates the virtual camera position and rotation to aim from the eye
-		/// transform toward the current target. When no target is present, the
-		/// camera simply looks along the character's forward direction.
-		/// Called every frame so the ability system always has fresh aim data.
+		/// Recomputes <see cref="AimRotation"/> for the current tick.
 		/// </summary>
-		private void UpdateVirtualCamera()
+		/// <remarks>
+		/// <para>
+		/// <b>Every network tick, not every brain tick.</b> Called from
+		/// <see cref="TimeManager_OnTick"/> beside <see cref="FaceLookTarget"/> and for the same
+		/// reason: <c>AbilityController.PopulateAiAim</c> reads the result on every network tick, so
+		/// it has to be written on every network tick. It used to be called from the brain tick —
+		/// 8 Hz in Active, 2.7 Hz in Nearby, never in Far — which left the value between one and
+		/// four network ticks stale at the moment a shot resolved. Facing was moved off the brain
+		/// tick for exactly this reason; the aim is the other half of the same replicated transform
+		/// and belongs on the same schedule.
+		/// </para>
+		/// <para>
+		/// <b>The origin is <see cref="AimOrigin"/>, not the transform.</b> Solving from the
+		/// character root while the projectile leaves from root + 1.45 m is the defect this whole
+		/// change exists to fix: the two rays are parallel and 1.45 m apart, so the error is constant
+		/// at every range and puts the shot over a standing player's head.
+		/// </para>
+		/// </remarks>
+		/// <param name="deltaTime">Seconds elapsed since the previous network tick.</param>
+		private void UpdateAim(float deltaTime)
 		{
-			VirtualCameraPosition = EyeTransform.position;
-
-			if (Target != null)
+			if (Target == null)
 			{
-				// Cache the target's collider half-height to avoid querying bounds every frame.
-				if (cachedTargetHeightSource != Target)
+				/* No target, no aim. Body facing is the honest answer, and it is what the melee path
+				 * reads anyway — AbilitySpawnTarget.Forward derives its pose from the body, so
+				 * writing anything else here would only affect ranged casts that have no target to
+				 * range against. */
+				AimRotation = Character.Transform.rotation;
+				TargetClosingSpeed = 0f;
+				return;
+			}
+
+			/* Tracked time, not wall-clock time. Combat runs only in the Active and Nearby tiers; a
+			 * target held through a drop to Far is not being tracked at all, and a ramp that kept
+			 * counting would hand the NPC full accuracy the instant the player came back into range
+			 * without it ever having aimed at them. */
+			if (currentLodTier == AILodTier.Active || currentLodTier == AILodTier.Nearby)
+			{
+				AimLock += deltaTime;
+			}
+
+			Vector3 targetPosition = Target.position;
+
+			if (hasLastTargetPosition && deltaTime > 0f)
+			{
+				Vector3 travel = targetPosition - lastTargetPosition;
+				float speedSqr = travel.sqrMagnitude / (deltaTime * deltaTime);
+
+				if (speedSqr <= MaxPlausibleTargetSpeed * MaxPlausibleTargetSpeed)
 				{
-					cachedTargetHeightSource = Target;
-					cachedTargetHalfHeight = 0f;
-
-					ICharacter targetCharacter = Target.GetComponent<ICharacter>();
-					if (targetCharacter != null && targetCharacter.Collider != null)
-					{
-						cachedTargetHalfHeight = targetCharacter.Collider.bounds.extents.y;
-					}
-				}
-
-				Vector3 targetPoint = Target.position + Vector3.up * cachedTargetHalfHeight;
-
-				Vector3 direction = (targetPoint - VirtualCameraPosition).normalized;
-				if (direction.sqrMagnitude > 0.0001f)
-				{
-					VirtualCameraRotation = Quaternion.LookRotation(direction);
+					TargetVelocity = travel / deltaTime;
 				}
 			}
-			else
+
+			lastTargetPosition = targetPosition;
+			hasLastTargetPosition = true;
+
+			/* Positive when the target is closing on us. The sign is what a retreating NPC needs:
+			 * its own backing away does not move this number, only the target's pursuit does, so a
+			 * pursuer is distinguishable from a target that happens to be far away. */
+			Vector3 toSelf = Character.Transform.position - targetPosition;
+			TargetClosingSpeed = toSelf.sqrMagnitude > AIAimSolver.MinimumAimDistanceSqr
+				? Vector3.Dot(TargetVelocity, toSelf.normalized)
+				: 0f;
+
+			AIAimProfile profile = Archetype != null ? Archetype.AimProfile : null;
+			ICharacter targetCharacter = TargetCharacter;
+
+			Vector3 aimPoint = AIAimSolver.ResolveAimPoint(
+				targetPosition,
+				targetCharacter != null ? targetCharacter.Collider : null,
+				profile != null ? profile.AimPoint : AIAimPoint.Center);
+
+			if (AimLeadSpeed > 0f)
 			{
-				VirtualCameraRotation = Character.Transform.rotation;
+				/* Recomputed every tick from the live distance, so the lead is right at the moment the
+				 * projectile spawns rather than right at the moment the cast was queued — see
+				 * AimLeadSpeed. The accuracy dial is read per tick too; the profile is authored data and
+				 * nothing mutates it at runtime. */
+				float leadTime = AIAimSolver.ResolveLeadTime(
+					Vector3.Distance(AimOrigin, aimPoint),
+					AimLeadSpeed,
+					profile != null ? profile.LeadAccuracy : 0f);
+
+				aimPoint += AIAimSolver.ResolveLeadOffset(TargetVelocity, leadTime);
 			}
+
+			/* A degenerate solve keeps the previous rotation rather than writing a zero vector:
+			 * AimDirectionCompression.Encode substitutes its fallback direction for a degenerate
+			 * input, so writing one would silently snap the NPC's aim to a fixed world direction
+			 * for a tick. Only reachable when the aim origin is inside the target's collider. */
+			if (AIAimSolver.TryComposeAim(AimOrigin, aimPoint, AimScatter, out Vector3 direction))
+			{
+				AimRotation = Quaternion.LookRotation(direction);
+			}
+		}
+
+		/// <summary>
+		/// Rolls the aim error for a cast that is about to begin, and notes what it is being cast with.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Once per cast, never per tick.</b> The NPC's seeded RNG is shared with cooldown
+		/// jitter, target selection, movement-variety rolls, wander rates and leash timing. Drawing
+		/// from it on every network tick would advance that stream thirty times a second and change
+		/// the behaviour of every one of those, none of which this feature is tuning. Once per cast
+		/// is also what the design wants: the error belongs to the shot, not to the tick, and holding
+		/// it is what makes an inaccurate NPC read as aiming badly rather than spraying.
+		/// </para>
+		/// <para>
+		/// A null profile rolls nothing, which is the exact-aim default every archetype without an
+		/// aim profile keeps.
+		/// </para>
+		/// </remarks>
+		/// <param name="profile">The archetype's aim profile, or null for exact aim.</param>
+		/// <param name="projectileSpeed">The ability's travel speed, or 0 for an instant ability.</param>
+		public void RollAimForCast(AIAimProfile profile, float projectileSpeed)
+		{
+			if (profile == null)
+			{
+				AimScatter = Quaternion.identity;
+				AimLeadSpeed = 0f;
+				return;
+			}
+
+			float accuracy = AIAimSolver.ResolveAccuracy(AimLock, profile.LockSeconds, profile.BaseAccuracy);
+			float spread = AIAimSolver.ResolveSpread(profile.SpreadDegrees, accuracy);
+
+			DeterministicRNG rng = NpcRNG ?? DeterministicRNG.Shared;
+
+			AimScatter = AIAimSolver.RollScatter(spread, rng.Range(-1f, 1f), rng.Range(-1f, 1f));
+			AimLeadSpeed = projectileSpeed;
 		}
 
 		/// <summary>

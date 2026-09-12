@@ -101,6 +101,58 @@ namespace FishMMO.UnitTests.AI
 				"Without a retreat state there is nothing to flee into.");
 		}
 
+		// --- Retreat budget ------------------------------------------------------------------
+
+		[Test]
+		public void Plan_RetreatBudgetSpent_DoesNotFleeEvenBelowThreshold()
+		{
+			// The backstop that ends the loop reported in issue #262: an NPC that has used up its
+			// retreating for this fight stops running and fights, wherever that leaves it.
+			AICombatContext context = Melee(2f);
+			context.CanFlee = true;
+			context.FleeHealthThreshold = 0.9f;
+			context.HealthPercent = 0.1f;
+			context.RetreatExhausted = true;
+
+			Assert.AreNotEqual(AICombatIntent.Flee, AICombatDecision.Plan(context).Intent,
+				"An NPC whose retreat budget is spent has to stand and fight.");
+		}
+
+		[Test]
+		public void Plan_RetreatBudgetSpent_DoesNotEmergencyRetreat()
+		{
+			AICombatContext context = Ranged(2.0f);
+			context.RetreatExhausted = true;
+
+			Assert.AreNotEqual(AICombatIntent.EmergencyRetreat, AICombatDecision.Plan(context).Intent,
+				"A panic retreat is still a retreat, and the budget governs all of them.");
+		}
+
+		[Test]
+		public void Plan_RetreatBudgetSpent_StillBacksAway()
+		{
+			/* Deliberately not gated. The retreat budget governs running away and the kite budget
+			 * governs backing away; they are tuned separately per archetype, and letting one silently
+			 * overrule the other's tuning would make a melee archetype's spacing depend on a threshold
+			 * it never set. */
+			AICombatContext context = Ranged(4.0f);
+			context.RetreatExhausted = true;
+
+			Assert.AreEqual(AICombatIntent.BackAway, AICombatDecision.Plan(context).Intent,
+				"A spent retreat budget must not reach into the kiting band.");
+		}
+
+		[Test]
+		public void Plan_KiteBudgetSpent_DoesGateBackingAway()
+		{
+			// The other half of the asymmetry above, so the pair reads as a decision rather than an
+			// oversight: the kite budget does stop backing away.
+			AICombatContext context = Ranged(4.0f);
+			context.KiteExhausted = true;
+
+			Assert.AreNotEqual(AICombatIntent.BackAway, AICombatDecision.Plan(context).Intent);
+		}
+
 		// --- Spacing -----------------------------------------------------------------------
 
 		[Test]

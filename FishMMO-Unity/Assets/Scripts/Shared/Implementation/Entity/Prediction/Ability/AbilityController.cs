@@ -597,7 +597,7 @@ namespace FishMMO.Shared
 			 * peer -- see CharacterAimOrigin -- so an NPC and a player resolve it the same way. */
 			// Quantised on the way in, for the same reason the player path quantises — see
 			// AimDirectionCompression.
-			input.AimDirection = AimDirectionCompression.Quantize(ai.VirtualCameraRotation * Vector3.forward);
+			input.AimDirection = AimDirectionCompression.Quantize(ai.AimRotation * Vector3.forward);
 		}
 
 		/// <summary>

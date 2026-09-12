@@ -27,3 +27,10 @@ MonoBehaviour:
   RetreatDistance: 12
   SafeDistance: 30
   MaxRetreatSeconds: 8
+  MinRetreatSeconds: 1.5
+  ReengageChance: 0.15
+  ReengageChanceRamp: 0.2
+  ReengageCheckInterval: 1
+  ReengageCooldownSeconds: 6
+  MaxCumulativeRetreatSeconds: 12
+  RetreatRecoverySeconds: 8

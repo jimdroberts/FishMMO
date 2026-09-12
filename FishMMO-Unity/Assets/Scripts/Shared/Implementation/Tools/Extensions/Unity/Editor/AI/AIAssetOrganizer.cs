@@ -42,6 +42,7 @@ namespace FishMMO.Shared
 			// The primary authoring surface gets the top-level folder.
 			(typeof(AIArchetypeTemplate), AI_ROOT + "/Archetypes"),
 			(typeof(AICombatPersonality), AI_ROOT + "/Personalities"),
+			(typeof(AIAimProfile), AI_ROOT + "/Aim"),
 
 			// Combat: everything the NPC does while it has a target.
 			(typeof(BaseAttackingState), AI_ROOT + "/States/Attack"),

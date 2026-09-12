@@ -23,7 +23,7 @@ MonoBehaviour:
   LineOfSightBlockingLayers:
     serializedVersion: 2
     m_Bits: 0
-  KeepsCombatTarget: 0
+  KeepsCombatTarget: 1
   RetreatDistance: 10
   SafeDistance: 20
   MaxRetreatSeconds: 8

@@ -357,6 +357,25 @@ namespace FishMMO.Shared
 
 			categories.Add(new TemplateCategory
 			{
+				DisplayName = "AI Aim Profiles",
+				Group = "NPCs",
+				AssetType = typeof(AIAimProfile),
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/Aim",
+				CreateAssetMenuName = "FishMMO/Character/NPC/AI/Aim Profile",
+				GetGroupLabel = asset =>
+				{
+					AIAimProfile profile = asset as AIAimProfile;
+					return profile != null ? profile.AimPoint.ToString() : "Unknown";
+				},
+				GetSortOrder = asset =>
+				{
+					AIAimProfile profile = asset as AIAimProfile;
+					return profile != null ? (int)profile.AimPoint : 0;
+				},
+			});
+
+			categories.Add(new TemplateCategory
+			{
 				DisplayName = "AI States",
 				Group = "NPCs",
 				AssetType = typeof(BaseAIState),

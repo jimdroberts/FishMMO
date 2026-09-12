@@ -70,6 +70,19 @@
 		/// its ground. See <see cref="AIKiteBudget"/>.
 		/// </summary>
 		public bool KiteExhausted;
+
+		/// <summary>
+		/// True while the NPC must not run away — its retreat budget for this fight is spent, or it
+		/// has just chosen to turn and fight. See <see cref="AIRetreatBudget"/>.
+		/// </summary>
+		/// <remarks>
+		/// Gates <see cref="AICombatIntent.Flee"/> and <see cref="AICombatIntent.EmergencyRetreat"/>
+		/// but deliberately <em>not</em> <see cref="AICombatIntent.BackAway"/>. The retreat budget
+		/// governs running away and the kite budget governs backing away; they are separately tuned
+		/// per archetype, and having one silently overrule the other's tuning would make a melee
+		/// archetype's spacing depend on a threshold it never set.
+		/// </remarks>
+		public bool RetreatExhausted;
 	}
 
 	/// <summary>
@@ -158,7 +171,11 @@
 
 			// 1. Self-preservation outranks everything. A personality with no retreat threshold,
 			//    or a Berserker/Rampaging style, arrives here with CanFlee false and fights on.
+			//    A spent retreat budget suspends it entirely: an NPC that has run out of running
+			//    turns and fights, which is what keeps a fleeing NPC from being unkillable and a
+			//    chase from having no end.
 			if (context.CanFlee &&
+				!context.RetreatExhausted &&
 				context.FleeHealthThreshold > 0f &&
 				context.HealthPercent <= context.FleeHealthThreshold)
 			{
@@ -172,6 +189,7 @@
 			//    the ordinary BackAway below. A spent kite budget suspends both: the NPC has
 			//    run enough, and now it fights where it stands.
 			if (!context.KiteExhausted &&
+				!context.RetreatExhausted &&
 				context.MinComfortDistance > 0f &&
 				context.Distance < context.MinComfortDistance * context.EmergencyRetreatThreshold)
 			{
