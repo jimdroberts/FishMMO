@@ -1,4 +1,4 @@
-using FishNet.Broadcast;
+﻿using FishNet.Broadcast;
 using FishNet.Serializing;
 using FishNet.CodeGenerating;
 
@@ -45,6 +45,48 @@ namespace FishMMO.Shared
 				TemplateID = reader.ReadInt32Unpacked(),
 				NewValue = reader.ReadInt32(),
 			};
+		}
+
+		/// <summary>Writes an array of <see cref="FactionUpdateBroadcast"/>.</summary>
+		/// <remarks>
+		/// Explicit because the element carries <c>[UseGlobalCustomSerializer]</c>. That attribute
+		/// tells FishNet the element has a hand-written serializer, and codegen then declines to
+		/// synthesise one for the ARRAY as well — it emits nothing and says nothing at build time.
+		/// The gap only appears when a broadcast carrying the array is actually sent, as
+		/// "Write method not found for FactionUpdateBroadcast[]", by which point the send has already failed.
+		/// A null array is written as length -1 so it round-trips as null rather than as empty.
+		/// </remarks>
+		public static void WriteFactionUpdateBroadcastArray(this Writer writer, FactionUpdateBroadcast[] value)
+		{
+			if (value == null)
+			{
+				writer.WriteInt32(-1);
+				return;
+			}
+
+			writer.WriteInt32(value.Length);
+			for (int i = 0; i < value.Length; i++)
+			{
+				writer.WriteFactionUpdateBroadcast(value[i]);
+			}
+		}
+
+		/// <summary>Reads an array of <see cref="FactionUpdateBroadcast"/>.</summary>
+		public static FactionUpdateBroadcast[] ReadFactionUpdateBroadcastArray(this Reader reader)
+		{
+			int length = reader.ReadInt32();
+			if (length < 0)
+			{
+				return null;
+			}
+
+			FactionUpdateBroadcast[] value = new FactionUpdateBroadcast[length];
+			for (int i = 0; i < length; i++)
+			{
+				value[i] = reader.ReadFactionUpdateBroadcast();
+			}
+
+			return value;
 		}
 	}
 
