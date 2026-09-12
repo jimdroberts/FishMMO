@@ -6,7 +6,8 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Manages the client-side post-boot operations, including camera state management and scene loading.
+	/// Manages the client-side post-boot operations: starting the client, loading the template cache,
+	/// and bringing the login scenes back when the player leaves the world.
 	/// </summary>
 	public class ClientPostbootSystem : BootstrapSystem
 	{
@@ -14,15 +15,6 @@ namespace FishMMO.Client
 		/// The client behaviour reference that must be initialized after the client bootstrap sequence finishes.
 		/// </summary>
 		public Client Client;
-
-		/// <summary>
-		/// Stores the initial position of the main camera for scene reloads.
-		/// </summary>
-		private Vector3 cameraInitialPosition;
-		/// <summary>
-		/// Stores the initial rotation of the main camera for scene reloads.
-		/// </summary>
-		private Quaternion cameraInitialRotation;
 
 		public override void OnCompleteProcessing()
 		{
@@ -39,17 +31,10 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Called during preload phase. Captures initial camera state and loads template cache.
+		/// Called during preload phase. Subscribes to addressable events and loads the template cache.
 		/// </summary>
 		public override void OnPreload()
 		{
-			// Try to capture the initial camera position and rotation
-			if (Camera.main != null)
-			{
-				cameraInitialPosition = Camera.main.transform.position;
-				cameraInitialRotation = Camera.main.transform.rotation;
-			}
-
 			// Subscribe to addressable load/unload events and enqueue template cache load.
 			AddressableLoadProcessor.OnAddressableLoaded += AddressableLoadProcessor_OnAddressableLoaded;
 			AddressableLoadProcessor.OnAddressableUnloaded += AddressableLoadProcessor_OnAddressableUnloaded;
@@ -126,17 +111,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Reloads postload scenes and resets the camera to its initial state.
+		/// Reloads the postload scenes, bringing the login screens back.
 		/// </summary>
+		/// <remarks>
+		/// The camera is not restored here. It used to be — the pose was captured in
+		/// <see cref="OnPreload"/> and written back to <c>Camera.main</c> at this point — and it
+		/// never worked, because <c>KCCCamera</c> re-derives the camera's position and rotation from
+		/// its own state every frame and undid the write. The camera now returns to its authored
+		/// pose through <c>Client.QuitToLogin</c>, which releases the follow target as well; one
+		/// owner of that pose, not two.
+		/// </remarks>
 		private void ReloadPostloadScenes()
 		{
-			// Try to reset the initial camera position and rotation
-			if (Camera.main != null)
-			{
-				Camera.main.transform.position = cameraInitialPosition;
-				Camera.main.transform.rotation = cameraInitialRotation;
-			}
-
 			AddressableLoadProcessor.EnqueueLoad(PostloadScenes);
 			try
 			{

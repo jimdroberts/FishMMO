@@ -709,60 +709,111 @@ namespace FishMMO.Shared
 			Vector3 inputRight = Vector3.Cross(moveInputVector, Motor.CharacterUp);
 			Vector3 reorientedInput = Vector3.Cross(effectiveGroundNormal, inputRight).normalized * moveInputVector.magnitude;
 
-			float targetSpeed = Constants.Character.RunSpeed;
-
-			if (cachedAttributeController != null)
+			// Sprint is a held flag, so it has to be paid for on every tick it is down. Holding it
+			// with no stamina left falls through to the run-speed path rather than standing still
+			// or paying a cost the character cannot cover.
+			bool sprinting = false;
+			if (sprintInputDown && SprintSpeedTemplate != null && moveInputMagnitude > 0f &&
+				cachedAttributeController != null &&
+				cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina))
 			{
-				if (isCrouching)
+				float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
+				if (stamina.CurrentValue >= currentStaminaCost)
 				{
-					targetSpeed = Constants.Character.CrouchSpeed;
-				}
-				else if (sprintInputDown &&
-						 SprintSpeedTemplate != null &&
-						 moveInputMagnitude > 0f &&
-						 cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
-						 cachedAttributeController.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
-				{
-					float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
-
-					if (stamina.CurrentValue >= currentStaminaCost)
-					{
-						stamina.Consume(currentStaminaCost);
-						targetSpeed = Constants.Character.SprintSpeed * sprintSpeedModifier.FinalValueAsPct;
-					}
-				}
-				else if (MoveSpeedTemplate != null &&
-						 cachedAttributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
-				{
-					targetSpeed = Constants.Character.RunSpeed * moveSpeedModifier.FinalValueAsPct;
-				}
-			}
-			else
-			{
-				if (isCrouching)
-				{
-					targetSpeed = Constants.Character.CrouchSpeed;
-				}
-				else if (sprintInputDown)
-				{
-					targetSpeed = Constants.Character.SprintSpeed;
+					stamina.Consume(currentStaminaCost);
+					sprinting = true;
 				}
 			}
 
+			float targetSpeed = ResolveGroundSpeed(isCrouching, sprinting, moveInputMagnitude, cachedAttributeController);
+
+			Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
+
+			// Smooth movement Velocity
+			currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, StableMovementSharpness * deltaTime);
+		}
+
+		/// <summary>
+		/// Resolves the ground speed for this tick from the character's stance and the two speed
+		/// attributes, with the exploit cap applied to the result.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Move Speed scales every ground speed, including sprint.</b> It used to be an
+		/// <c>else if</c> alternative to the sprint branch, which made the two mutually exclusive:
+		/// a <c>Minor Increase Move Speed</c> buff was worth +30% walking and exactly 0% sprinting,
+		/// and a <c>Mock Slow Debuff</c> did not slow a sprinting character at all. Sprint Speed and
+		/// Move Speed are separate attributes with separate ledgers, so both are read and multiplied.
+		/// </para>
+		/// <para>
+		/// Crouch is deliberately unscaled — slow crouch movement is a stance rule, not a speed
+		/// attribute, and no speed buff has ever applied to it.
+		/// </para>
+		/// <para>
+		/// Takes the attribute controller explicitly rather than reading the cached field, so the
+		/// speed decision can be exercised without running a character through the motor.
+		/// </para>
+		/// </remarks>
+		/// <param name="isCrouching">Whether the character is in the crouch stance.</param>
+		/// <param name="isSprinting">
+		/// Whether sprint is actually being paid for this tick. <c>false</c> when the sprint key is
+		/// held but stamina is exhausted, and the character falls back to
+		/// <see cref="Constants.Character.RunSpeed"/> — still scaled by Move Speed.
+		/// </param>
+		/// <param name="moveInputMagnitude">Magnitude of the move input; sprint is stationary-only.</param>
+		/// <param name="attributes">
+		/// Attribute source for this character, or <c>null</c> for a character with no attribute
+		/// controller (nothing can scale the base speeds in that case).
+		/// </param>
+		internal float ResolveGroundSpeed(
+			bool isCrouching,
+			bool isSprinting,
+			float moveInputMagnitude,
+			ICharacterAttributeController attributes)
+		{
+			if (isCrouching)
+			{
+				return Constants.Character.CrouchSpeed;
+			}
+
+			float moveSpeedMultiplier = 1f;
+			if (MoveSpeedTemplate != null &&
+				attributes != null &&
+				attributes.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
+			{
+				moveSpeedMultiplier = moveSpeedModifier.FinalValueAsPct;
+			}
+
+			float targetSpeed = Constants.Character.RunSpeed * moveSpeedMultiplier;
+
+			if (isSprinting && moveInputMagnitude > 0f)
+			{
+				// Sprint Speed is the sprint/run ratio (authored at 100 = the stock 6.0 m/s).
+				// Move Speed has already been folded in above and applies to this too. The attribute
+				// is only a scale on the ratio — a character whose controller has no Sprint Speed
+				// entry still sprints, they just sprint at the stock ratio.
+				float sprintMultiplier = 1f;
+				if (SprintSpeedTemplate != null &&
+					attributes != null &&
+					attributes.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
+				{
+					sprintMultiplier = sprintSpeedModifier.FinalValueAsPct;
+				}
+
+				float sprintRatio = Constants.Character.SprintSpeed / Constants.Character.RunSpeed;
+				targetSpeed = Constants.Character.RunSpeed * sprintRatio * sprintMultiplier * moveSpeedMultiplier;
+			}
 
 			// Speed cap — enforced identically on client and server through the
 			// shared deterministic prediction pipeline. Prevents super-speed exploits
 			// from stacking movement buffs or attribute calculation bugs.
 			// Because this runs in shared code on both sides, a modified client that
 			// removes the clamp will see a brief local misprediction that snaps back
-			// on the next reconcile pass.
+			// on the next reconcile pass. Only reachable by stacking several buffs:
+			// 18 m/s is 3x the stock sprint, and this is the ceiling the resolver
+			// guarantees rather than the sum of every modifier available.
 			const float MaxAllowedSpeed = Constants.Character.SprintSpeed * 3.0f;
-			targetSpeed = Mathf.Min(targetSpeed, MaxAllowedSpeed);
-
-			Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
-
-			// Smooth movement Velocity
-			currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, StableMovementSharpness * deltaTime);
+			return Mathf.Min(targetSpeed, MaxAllowedSpeed);
 		}
 
 		/// <summary>

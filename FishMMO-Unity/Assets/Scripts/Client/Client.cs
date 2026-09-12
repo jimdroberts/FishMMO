@@ -629,6 +629,23 @@ namespace FishMMO.Client
 			if (forceDisconnect) DisconnectAfterRevocationFlush();
 			Connection?.ResetReconnectState();
 			this.cachedConnectionToken = null;
+
+			/* Hand the camera back before the login scenes come up.
+			 *
+			 * The camera is not part of the world: it is authored in ClientPreboot, adopted by
+			 * KCCPlayer when the local character spawns, and left behind when that character dies.
+			 * Restoring its transform alone never worked, because KCCCamera rewrites both the
+			 * position and the rotation from its own state on every LateUpdate — so the pose was
+			 * undone a frame later, and once the character was gone the camera froze there and the
+			 * login screen was framed from wherever the player logged out. Releasing the follow
+			 * target is the part that makes the restore stick; KCCCamera.ReleaseFollowTarget
+			 * explains why. */
+			Camera mainCamera = Camera.main;
+			if (mainCamera != null)
+			{
+				mainCamera.gameObject.GetComponent<KCCCamera>()?.ReleaseFollowTarget();
+			}
+
 			OnQuitToLogin?.Invoke();
 
 			// After the panels are back, never before — see ShowPendingDisconnectNotice.

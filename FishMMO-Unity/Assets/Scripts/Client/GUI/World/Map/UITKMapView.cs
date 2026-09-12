@@ -405,22 +405,41 @@ namespace FishMMO.Client
 			{
 				MapMarkerSnapshot snapshot = snapshots[i];
 				VisualElement element = activeMarkers[i];
+				MarkerElements parts = (MarkerElements)element.userData;
+
+				/* Measured before anything below writes to the element, so that the geometry this
+				 * reads is the previous frame's styles settled, and not half of two frames. */
+				MeasureDrawnBounds(element, parts);
 
 				Vector3 position = ResolvePosition(in snapshot);
 				Vector2 view = View.WorldToView(position);
 				bool outside = view.x < 0.0f || view.x > 1.0f || view.y < 0.0f || view.y > 1.0f;
 
-				if (outside && !snapshot.ClampToEdge)
+				/* Culled by the rectangle the marker draws, not by where its centre stands. Half a
+				 * marker is still on the frame when its centre crosses the border, and hiding it
+				 * there cuts a half-drawn icon out of the picture (issue #271); what actually leaves
+				 * the frame is the whole rectangle — icon and the name hanging off its right — and
+				 * that is the thing to ask.
+				 *
+				 * An element that has not been laid out yet has no rectangle to be judged by, so it
+				 * is given this frame to produce one. That is once per element rather than once per
+				 * frame: after it has been drawn once, the measurement is kept. */
+				if (parts.DrawnBoundsMeasured && !snapshot.ClampToEdge &&
+					!OverlapsFrame(view, in parts.DrawnBounds, content))
 				{
 					element.style.display = DisplayStyle.None;
 					continue;
 				}
 
-				bool clamped = false;
-				if (outside)
+				/* Pinned to the frame edge only when the marker is one that asked for it and its
+				 * object is off the view. A marker that is still being drawn at the edge is drawn
+				 * where it is: pinning it inwards would move it away from the thing it marks, to a
+				 * place it is already sitting on top of. The pin is for a marker with nothing left on
+				 * the frame, which is why it is decided here rather than by `outside` alone. */
+				bool clamped = outside && snapshot.ClampToEdge;
+				if (clamped)
 				{
 					view = ClampToFrame(view);
-					clamped = true;
 				}
 
 				element.style.display = DisplayStyle.Flex;
@@ -436,6 +455,136 @@ namespace FishMMO.Client
 			{
 				activeMarkers[i].style.display = DisplayStyle.None;
 			}
+		}
+
+		/// <summary>
+		/// Records the rectangle a marker is drawn over, as offsets from the point its position maps
+		/// to.
+		/// </summary>
+		/// <param name="element">The marker element.</param>
+		/// <param name="parts">Its cached pieces, which the measurement is written to.</param>
+		/// <remarks>
+		/// <para>Kept rather than taken fresh each frame, because a culled marker is hidden with
+		/// <c>display: none</c> and a hidden element has no geometry left to read — so a marker that
+		/// leaves the frame would lose the only description of itself it had, and a marker whose name
+		/// reached back onto the frame would then stay hidden for good.</para>
+		/// <para>Offsets relative to the position rather than a rectangle in pixels, because the
+		/// measurement is taken where the marker was and used where it is: the map moves under its
+		/// markers every frame, and the rectangle moves with them.</para>
+		/// </remarks>
+		private void MeasureDrawnBounds(VisualElement element, MarkerElements parts)
+		{
+			/* A clamped marker is drawn shrunk, turned to point out of the frame, and without its
+			 * name — none of which is the shape the marker has when it stands where it belongs, and
+			 * all of which would be measured here. Skipped rather than invalidated: the rectangle is
+			 * kept as offsets from the marker's position, so the last measurement taken of the marker
+			 * itself is still the measurement of this marker wherever it has since moved to. */
+			if (element.ClassListContains(MarkerClampedClass))
+			{
+				return;
+			}
+
+			if (!TryGetDrawnBounds(element, out Rect bounds))
+			{
+				return;
+			}
+
+			/* The marker's box is centred on its position by the -50%/-50% translate, so its icon's
+			 * centre is that position — including for a clamped marker, which is scaled and rotated
+			 * about the same point. */
+			VisualElement self = this;
+			Vector2 anchor = self.WorldToLocal(parts.Icon.worldBound.center);
+
+			parts.DrawnBounds = new Rect(bounds.position - anchor, bounds.size);
+			parts.DrawnBoundsMeasured = true;
+		}
+
+		/// <summary>
+		/// The rectangle a marker is drawn over, in this element's coordinates.
+		/// </summary>
+		/// <param name="marker">The drawn element for one snapshot.</param>
+		/// <param name="rect">The rectangle the marker and everything it draws cover.</param>
+		/// <returns>False when there is no geometry: the marker is hidden, or not laid out yet.</returns>
+		/// <remarks>
+		/// Read from <c>worldBound</c> rather than <c>layout</c>, because that is the rectangle the
+		/// player sees: the icon and the label are both moved off their layout boxes on purpose, and
+		/// the layout boxes answer for rectangles that are not on screen.
+		/// </remarks>
+		private bool TryGetDrawnBounds(VisualElement marker, out Rect rect)
+		{
+			rect = default;
+
+			if (marker == null || marker.resolvedStyle.display == DisplayStyle.None)
+			{
+				return false;
+			}
+
+			Rect bound = marker.worldBound;
+			float xMin = bound.xMin;
+			float yMin = bound.yMin;
+			float xMax = bound.xMax;
+			float yMax = bound.yMax;
+
+			/* The marker's own rectangle, plus whatever it draws. A marker's label is laid out of
+			 * flow — see .map-marker__label — so it lies outside the marker's own rectangle and has
+			 * to be taken in separately, or a click on a waypoint's name would fall through to the
+			 * ground beneath it and drop a note pin, and a marker would be culled while its own name
+			 * was still on the frame. A label that is turned off is not there to be clicked, and is
+			 * skipped rather than counted at wherever it was last drawn. */
+			for (int i = 0; i < marker.childCount; ++i)
+			{
+				VisualElement child = marker[i];
+				if (child.resolvedStyle.display == DisplayStyle.None)
+				{
+					continue;
+				}
+
+				Rect childBound = child.worldBound;
+				xMin = Mathf.Min(xMin, childBound.xMin);
+				yMin = Mathf.Min(yMin, childBound.yMin);
+				xMax = Mathf.Max(xMax, childBound.xMax);
+				yMax = Mathf.Max(yMax, childBound.yMax);
+			}
+
+			/* Asked of the base class on purpose. This element declares a WorldToLocal of its own
+			 * that takes a world position and answers in map coordinates, and the inherited one —
+			 * which is what converts a panel point into a point here — has to be named by type to be
+			 * reached. */
+			VisualElement element = this;
+
+			Vector2 min = element.WorldToLocal(new Vector2(xMin, yMin));
+			Vector2 max = element.WorldToLocal(new Vector2(xMax, yMax));
+
+			rect = new Rect(min, max - min);
+
+			/* Both zero means nothing has been laid out: an element that has just been created, or
+			 * one whose styles arrived a frame ago and whose box the panel has not sized yet. Such a
+			 * rectangle is not a measurement of anything, and returning it as one would have every
+			 * freshly pooled marker culled by the geometry of an empty box. */
+			return rect.width > 0.0f || rect.height > 0.0f;
+		}
+
+		/// <summary>
+		/// Whether any part of the rectangle a marker draws is inside the frame.
+		/// </summary>
+		/// <param name="view">The marker's position, in view coordinates.</param>
+		/// <param name="drawn">The rectangle it draws, as offsets from that position.</param>
+		/// <param name="content">The frame, in points.</param>
+		/// <returns>True while any of the marker is still on the frame.</returns>
+		/// <remarks>
+		/// The rectangle is measured outside this element's clip, so a marker is not culled at the
+		/// edge of its own drawing but at the edge of the frame: an icon half over the border is half
+		/// an icon the player can see, and it stays until the last of it is gone.
+		/// </remarks>
+		private static bool OverlapsFrame(Vector2 view, in Rect drawn, Rect content)
+		{
+			float anchorX = view.x * content.width;
+			float anchorY = (1.0f - view.y) * content.height;
+
+			return anchorX + drawn.xMax > 0.0f
+				&& anchorX + drawn.xMin < content.width
+				&& anchorY + drawn.yMax > 0.0f
+				&& anchorY + drawn.yMin < content.height;
 		}
 
 		/// <summary>
@@ -496,17 +645,27 @@ namespace FishMMO.Client
 			/* A clamped marker points at where its object actually is; an unclamped one shows the
 			 * object's heading. Rotating a clamped marker by the object's heading instead would
 			 * make the edge indicator point wherever that creature happened to be facing. */
-			float rotation;
 			if (clamped)
 			{
 				Vector2 direction = View.WorldToView(position) - new Vector2(0.5f, 0.5f);
-				rotation = Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg;
+				parts.Icon.style.rotate = new StyleRotate(
+					new Rotate(Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg));
+			}
+			else if (snapshot.HasFacing)
+			{
+				parts.Icon.style.rotate = new StyleRotate(
+					new Rotate(View.WorldToViewAngle(ResolveFacing(in snapshot))));
 			}
 			else
 			{
-				rotation = snapshot.HasFacing ? View.WorldToViewAngle(ResolveFacing(in snapshot)) : 0.0f;
+				/* Cleared rather than written as zero degrees, so that a rotation the icon wears from
+				 * its own rule survives. A discovered waypoint is a diamond because of one — the only
+				 * shape no other marker uses, and the reason it is recognisable as the one marker
+				 * that is pressed rather than read. An inline 0deg over the top of it drew every
+				 * waypoint as a square, indistinguishable in shape from the notes and landmarks
+				 * beside it. */
+				parts.Icon.style.rotate = StyleKeyword.Null;
 			}
-			parts.Icon.style.rotate = new StyleRotate(new Rotate(rotation));
 
 			bool hasLabel = !clamped && !string.IsNullOrEmpty(snapshot.Label);
 			parts.Label.style.display = hasLabel ? DisplayStyle.Flex : DisplayStyle.None;
@@ -527,6 +686,13 @@ namespace FishMMO.Client
 			while (activeMarkers.Count < count)
 			{
 				VisualElement element = markerPool.Count > 0 ? markerPool.Pop() : CreateMarkerElement();
+
+				/* A pooled element still wears the last marker it drew, name and all, and its
+				 * measurement describes that one. Thrown away rather than trusted: the element then
+				 * spends a frame drawn to be measured again, which is what a new element spends
+				 * anyway, and no marker is ever culled by another marker's name. */
+				((MarkerElements)element.userData).DrawnBoundsMeasured = false;
+
 				activeMarkers.Add(element);
 				markerLayer.Add(element);
 			}
@@ -543,6 +709,18 @@ namespace FishMMO.Client
 
 			/// <summary>The type modifier class currently applied, so it can be swapped cleanly.</summary>
 			public string TypeClass;
+
+			/// <summary>
+			/// The rectangle the marker draws — its icon and the name beside it — as offsets from the
+			/// point its position maps to. See <see cref="MeasureDrawnBounds"/>.
+			/// </summary>
+			public Rect DrawnBounds;
+
+			/// <summary>
+			/// Whether <see cref="DrawnBounds"/> describes anything yet. False until the element has
+			/// been laid out once, and again after it is taken back out of the pool.
+			/// </summary>
+			public bool DrawnBoundsMeasured;
 		}
 
 		/// <summary>
@@ -560,7 +738,14 @@ namespace FishMMO.Client
 
 			/* Translated by minus half its own size so that left/top address the marker's centre.
 			 * Without it every marker sits down and to the right of the thing it marks by half an
-			 * icon, which at sixteen points is enough to put a gathering node in the wrong bush. */
+			 * icon, which at sixteen points is enough to put a gathering node in the wrong bush.
+			 *
+			 * "Its own size" is the icon's, and the label — which is laid out of flow, see
+			 * .map-marker__label — is what keeps it that way. A label in the row would make this
+			 * marker's size the icon's plus the label's, and the same -50% would then slide a
+			 * labelled marker off its position by half the width of its own name: the icon drawn
+			 * tens of points from the place it stands for, and a click on it selecting nothing
+			 * (issue #270). */
 			root.style.translate = new StyleTranslate(new Translate(Length.Percent(-50.0f), Length.Percent(-50.0f)));
 
 			VisualElement icon = new VisualElement()
@@ -662,9 +847,14 @@ namespace FishMMO.Client
 		/// <param name="localPosition">The point in the element's own coordinate space.</param>
 		/// <returns>The nearest marker, or null when none is within its own icon of the point.</returns>
 		/// <remarks>
-		/// Answered by distance rather than by hit-testing the elements, because the marker
+		/// <para>Answered by distance rather than by hit-testing the elements, because the marker
 		/// elements are all <c>PickingMode.Ignore</c> — they have to be, or a marker under the
-		/// pointer would swallow the press the map itself needs in order to pan or place a note.
+		/// pointer would swallow the press the map itself needs in order to pan or place a note.</para>
+		/// <para>Two things count as being on a marker: a circle around its position, wide enough to
+		/// forgive a small icon and an unsteady hand, and the rectangle it is actually drawn over.
+		/// The second is what makes a marker's name part of the marker — a player aiming at a
+		/// waypoint's label is aiming at the waypoint, and the label hangs off the icon's right, well
+		/// outside any radius that would not also swallow everything near it.</para>
 		/// </remarks>
 		private MapMarkerSnapshot? FindNearestSnapshot(Vector2 localPosition)
 		{
@@ -681,7 +871,17 @@ namespace FishMMO.Client
 				float distance = Vector2.Distance(point, localPosition);
 				float radius = Mathf.Max(8.0f, snapshot.Size);
 
-				if (distance < radius && distance < bestDistance)
+				/* Guarded rather than assumed: the markers are placed by a layout pass, and a click
+				 * can arrive between a marker joining the list and being given an element. */
+				if (i < activeMarkers.Count)
+				{
+					distance = Mathf.Min(distance, DistanceToDrawnMarker(activeMarkers[i], localPosition));
+				}
+
+				/* `<=` so that overlapping markers resolve to the one drawn on top. The list is
+				 * sorted lowest-priority-first, and a tie is the common case for two rectangles that
+				 * both contain the point. */
+				if (distance < radius && distance <= bestDistance)
 				{
 					bestDistance = distance;
 					bestIndex = i;
@@ -689,6 +889,27 @@ namespace FishMMO.Client
 			}
 
 			return bestIndex >= 0 ? snapshots[bestIndex] : (MapMarkerSnapshot?)null;
+		}
+
+		/// <summary>
+		/// How far a point is outside the rectangle a marker is drawn over.
+		/// </summary>
+		/// <param name="marker">The drawn element for one snapshot.</param>
+		/// <param name="localPosition">A point in this element's coordinates.</param>
+		/// <returns>Zero anywhere inside the marker, the distance to its nearest edge outside it.</returns>
+		private float DistanceToDrawnMarker(VisualElement marker, Vector2 localPosition)
+		{
+			/* The same rectangle the cull is decided by, so that what is clickable and what is culled
+			 * cannot come apart: a marker the frame no longer draws answers as far away as possible,
+			 * and one it draws — name included — answers for every point of it. */
+			if (!TryGetDrawnBounds(marker, out Rect rect))
+			{
+				return float.MaxValue;
+			}
+
+			float dx = Mathf.Max(Mathf.Max(rect.xMin - localPosition.x, 0.0f), localPosition.x - rect.xMax);
+			float dy = Mathf.Max(Mathf.Max(rect.yMin - localPosition.y, 0.0f), localPosition.y - rect.yMax);
+			return Mathf.Sqrt(dx * dx + dy * dy);
 		}
 
 		/// <summary>

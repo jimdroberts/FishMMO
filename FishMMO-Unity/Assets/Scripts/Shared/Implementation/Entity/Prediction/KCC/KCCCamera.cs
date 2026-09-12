@@ -151,6 +151,16 @@ namespace FishMMO.Shared
 		private Vector3 currentFollowPosition;
 
 		/// <summary>
+		/// The position authored in the scene, captured in <see cref="Awake"/> before anything can
+		/// have moved the camera. What <see cref="ReleaseFollowTarget"/> puts back.
+		/// </summary>
+		private Vector3 restPosition;
+		/// <summary>
+		/// The rotation authored in the scene. See <see cref="restPosition"/>.
+		/// </summary>
+		private Quaternion restRotation;
+
+		/// <summary>
 		/// Maximum number of obstructions to check for.
 		/// </summary>
 		private const int MaxObstructions = 32;
@@ -171,12 +181,31 @@ namespace FishMMO.Shared
 		{
 			Transform = this.transform;
 
+			/* Captured here rather than by whoever later wants the camera back where it started.
+			 * This is the last moment before anything in the game can have moved it, and the pose
+			 * belongs to the object that has to restore it. */
+			restPosition = Transform.position;
+			restRotation = Transform.rotation;
+
+			ResetMotionState();
+		}
+
+		/// <summary>
+		/// Returns every field that decides where the camera sits and which way it looks to the
+		/// values it holds before a character claims it.
+		/// </summary>
+		private void ResetMotionState()
+		{
 			currentDistance = DefaultDistance;
 			TargetDistance = currentDistance;
 
 			targetVerticalAngle = 0f;
 
 			PlanarDirection = Vector3.forward;
+
+			distanceIsObstructed = false;
+			obstructionCount = 0;
+			currentFollowPosition = Vector3.zero;
 		}
 
 		/// <summary>
@@ -191,6 +220,39 @@ namespace FishMMO.Shared
 				PlanarDirection = FollowTransform.forward;
 				currentFollowPosition = FollowTransform.position;
 			}
+		}
+
+		/// <summary>
+		/// Detaches the camera from the character it was following and puts it back where the scene
+		/// authored it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Called when the world is left. Writing the transform from outside does not accomplish
+		/// this: every <see cref="UpdateWithInput"/> re-derives both the position and the rotation
+		/// from this component's own state, so a pose written from a teardown path is undone by the
+		/// next LateUpdate and the camera ends up framed from wherever the player logged out.
+		/// Clearing <see cref="FollowTransform"/> is what makes the restore stick — every update
+		/// returns early from then on.
+		/// </para>
+		/// <para>
+		/// Not a one-way door. <see cref="SetFollowTransform"/> is how the next character adopts the
+		/// camera, and it re-seeds the direction from that character, so the state reset here is not
+		/// something a later session inherits.
+		/// </para>
+		/// </remarks>
+		public void ReleaseFollowTarget()
+		{
+			FollowTransform = null;
+
+			/* Cleared rather than kept: these were the departed character's own colliders, and the
+			 * next character contributes its own on bind. Holding them would keep a list of
+			 * destroyed objects alive for the remainder of the session. */
+			IgnoredColliders.Clear();
+
+			ResetMotionState();
+
+			Transform.SetPositionAndRotation(restPosition, restRotation);
 		}
 
 		/// <summary>

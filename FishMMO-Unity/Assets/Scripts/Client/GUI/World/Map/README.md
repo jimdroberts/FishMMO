@@ -91,6 +91,30 @@ Add a `MapMarker`. Set `Type` for what it is and `Visibility` for who may see it
 Party and guild members are promoted to full fidelity at runtime regardless of the authored rule,
 so authoring the strict rule costs nothing.
 
+## What stays on the frame
+
+A marker is drawn until the whole of it has left the frame, and it is the rectangle it actually
+draws that decides that — its icon plus the name hanging off the icon's right — not the position it
+marks. A marker whose position has crossed the border is usually still half on screen, and hiding it
+there cuts a half-drawn icon out of the picture; a name is worse, because it extends to the right of
+its icon, so off the frame's left edge a marker can have its icon entirely gone while the whole name
+is still legible, and culling by the icon takes the name away while it is being read. The same
+rectangle answers clicks (`FindNearestSnapshot`), so what is drawn and what is clickable cannot come
+apart.
+
+The rectangle is measured from the laid-out element and kept as offsets from the marker's position,
+for two reasons: the map moves under its markers every frame, and a hidden element has no geometry
+left to measure. A marker that has never been laid out is drawn for a frame to be measured; one taken
+from the pool throws the previous marker's measurement away rather than being culled by another
+marker's name. A marker wearing `.map-marker--clamped` is never measured, because it is drawn shrunk,
+turned and unlabelled.
+
+`ClampToEdge` markers are the exception to all of it. One whose position is off the view is pinned
+inside the border instead of being culled, since a `Detection` marker has to be readable from off the
+edge or the minimap would be a picture of nothing. A `ClampToEdge` marker still on the frame is drawn
+where it is: pinning it inwards would move it away from the object it marks, to a point it already
+sits on top of.
+
 ## Waypoints and fast travel
 
 A discovered waypoint is drawn as an orange diamond from the character's own unlock record

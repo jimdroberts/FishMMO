@@ -178,6 +178,70 @@ namespace FishMMO.Shared
 			return value;
 		}
 
+		/// <summary>Writes an array of <see cref="ArenaMemberEntry"/>.</summary>
+		/// <remarks>
+		/// <para>
+		/// Explicit because the element carries <c>[UseGlobalCustomSerializer]</c>. That attribute
+		/// tells FishNet the element has a hand-written serializer, and codegen then declines to
+		/// synthesise one for the ARRAY as well — it emits nothing and says nothing at build time.
+		/// The gap only appears when a broadcast carrying the array is actually sent, as
+		/// "Write method not found for ArenaMemberEntry[]", by which point the send has already
+		/// failed.
+		/// </para>
+		/// <para>
+		/// <see cref="ArenaMatchStateBroadcast"/> never needed this: it is hand written too, and
+		/// its own writer walks its members element by element. <see cref="ArenaResultsBroadcast"/>
+		/// is NOT hand written, so codegen writes it, and codegen reaches for the array serializer
+		/// this method is. Without it every placement is dropped from the results screen while the
+		/// scalar fields beside it arrive intact — an empty podium for a match that places players.
+		/// </para>
+		/// <para>
+		/// A null array is written as length -1 so it round-trips as null rather than as empty.
+		/// </para>
+		/// </remarks>
+		public static void WriteArenaMemberEntryArray(this Writer writer, ArenaMemberEntry[] value)
+		{
+			if (value == null)
+			{
+				writer.WriteInt32(-1);
+				return;
+			}
+
+			writer.WriteInt32(value.Length);
+			for (int i = 0; i < value.Length; i++)
+			{
+				writer.WriteArenaMemberEntry(value[i]);
+			}
+		}
+
+		/// <summary>Reads an array of <see cref="ArenaMemberEntry"/> written by the method above.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxMembers"/> cannot be allocated and cannot be resynchronised
+		/// past either — the entries behind it are of unknown length — so the array comes back
+		/// empty, exactly as <see cref="ReadArenaMatchStateBroadcast"/> treats an untrusted member
+		/// count. Only the sender's own -1, which is not a length at all, means null.
+		/// </remarks>
+		public static ArenaMemberEntry[] ReadArenaMemberEntryArray(this Reader reader)
+		{
+			int length = reader.ReadInt32();
+			if (length < 0)
+			{
+				return null;
+			}
+			if (length > MaxMembers)
+			{
+				return System.Array.Empty<ArenaMemberEntry>();
+			}
+
+			ArenaMemberEntry[] value = new ArenaMemberEntry[length];
+			for (int i = 0; i < length; i++)
+			{
+				value[i] = reader.ReadArenaMemberEntry();
+			}
+
+			return value;
+		}
+
 		// ──────────────────────────────────────────────────────────────────
 		//  Match state
 		// ──────────────────────────────────────────────────────────────────

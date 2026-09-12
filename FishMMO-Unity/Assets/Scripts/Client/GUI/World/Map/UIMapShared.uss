@@ -32,6 +32,11 @@
 /*
     Positioned absolutely by C#, which writes left/top in pixels and a -50%/-50% translate so those
     coordinates address the marker's centre rather than its top-left corner.
+
+    The marker's size is its icon's size, and that is load-bearing: -50% of "its own size" is only
+    the icon's centre while the row is no bigger than the icon. The label is laid out of flow below
+    so that it cannot grow the row — in flow, a marker wearing a name measured 123px wide, and the
+    same -50% drew its icon 51px left of the position it marks (issue #270).
 */
 .map-marker {
     position: absolute;
@@ -55,8 +60,29 @@
     flex-shrink: 0;
 }
 
+/*
+    The name beside the icon. Out of flow — hung off the icon's right edge and centred on it —
+    so that the row stays exactly the icon's size and a long name cannot move the marker; see
+    .map-marker. It is still part of the marker: UITKMapView counts everything a marker draws as
+    the marker, so clicking the name chooses the waypoint it belongs to.
+
+    Centred by the translate rather than by stretching the box between top and bottom. A Label
+    arrives from the default theme wearing 4px of padding and 4px of margin, and a margin is
+    outside the height a -50% translate measures against — so the name sat four points low until
+    both were zeroed here. Zeroed rather than stretched so that the alignment does not depend on
+    how tall the theme decides a line of text is.
+*/
 .map-marker__label {
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    translate: 0 -50%;
     margin-left: 3px;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    -unity-text-align: middle-left;
     font-size: 10px;
     color: var(--text-bright);
     text-shadow: 1px 1px 2px var(--shadow-text-hard);

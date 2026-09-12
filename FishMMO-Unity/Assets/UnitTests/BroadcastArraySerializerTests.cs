@@ -27,6 +27,16 @@ namespace FishMMO.UnitTests
 	/// Structs WITHOUT the attribute are fine — codegen covers element and array both — so this
 	/// checks the pairing rather than every array in the codebase.
 	/// </para>
+	/// <para>
+	/// <b>Read this together with <c>KnowledgeSyncWireTests.EverySerializedArrayOnTheWireHasALiveSerializer</c>.</b>
+	/// This test reads source, which has two consequences worth knowing before trusting it alone:
+	/// it can only see that a method was WRITTEN (a method FishNet never wires up reads exactly the
+	/// same here), and it finds array fields by looking for the text <c>Broadcast[]</c>, so an array
+	/// of a hand-serialized element not itself named <c>*Broadcast</c> — <c>ArenaMemberEntry[]</c>,
+	/// for one — is invisible to it. That blind spot is how <c>ArenaResultsBroadcast.Placements</c>
+	/// lost every seat on the results screen while this test passed. The runtime check asks FishNet
+	/// directly and walks the declarations, so it has neither limitation.
+	/// </para>
 	/// </remarks>
 	[TestFixture]
 	public class BroadcastArraySerializerTests

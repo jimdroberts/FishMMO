@@ -518,11 +518,18 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Handles TwoFactorRequired: opens a TOTP code input dialog.
 		/// </summary>
+		/// <remarks>
+		/// The prompt names the recovery codes as well, because the Login Server accepts one here
+		/// (<c>ServerAuthenticator.VerifyTotpCodeCoreAsync</c> tells the two apart by shape) and
+		/// the dialog itself has always been free text. A player who has lost the authenticator
+		/// reads one sentence that mentions the codes they wrote down, instead of concluding that
+		/// the account is gone.
+		/// </remarks>
 		private void OnTwoFactorRequired()
 		{
 			SetSignInLocked(true);
 			Hide();
-			OpenTotpDialog("Enter the 6-digit code from your authenticator app.");
+			OpenTotpDialog("Enter the 6-digit code from your authenticator app, or one of your recovery codes.");
 		}
 
 		/// <summary>

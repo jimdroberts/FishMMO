@@ -45,6 +45,26 @@ const VIEWS = {
 
 const THEME_KEY = 'fishmmo.panel.theme';
 
+/* ── Code shapes ─────────────────────────────────────────────── */
+
+/*
+ * The recovery-code shape, as the generator writes it: four groups of four hex characters
+ * joined by hyphens — nineteen characters.
+ *
+ * The two fields that take a code — the sign-in card and the step-up dialog — are the only
+ * ones on the panel that must accept either a TOTP code or a recovery code, because
+ * /auth/2fa/verify and /auth/step-up take both and tell them apart by shape
+ * (CryptoHelper.TwoFactor.LooksLikeRecoveryCode). They used to cap at eight characters, and
+ * the sign-in card's recovery branch at twelve with an XXXX-XXXX hint, so every recovery code
+ * a player typed or pasted was cut down to its first group or two before it was sent and the
+ * server — which tests all nineteen characters — never saw one.
+ *
+ * These are the generator's own numbers (RecoveryCodeGroupLength 4 x RecoveryCodeGroupCount 4,
+ * plus the separators). Change them there and here together.
+ */
+const RECOVERY_CODE_LENGTH = 19;
+const RECOVERY_CODE_HINT = 'XXXX-XXXX-XXXX-XXXX';
+
 const state = {
 	session: null,
 	route: null,
@@ -98,6 +118,11 @@ applyTheme(readStoredTheme());
 /**
  * Wraps an action that may need a fresh two-factor code. On a 428 the operator
  * is prompted once and the action is retried, so a step-up never loses work.
+ *
+ * The prompt takes a recovery code as well as a TOTP code, which is why its field carries no
+ * digits-only pattern, no numeric keyboard hint and the full recovery-code length: the server
+ * already accepts either, and a field that could not physically hold one was the only thing
+ * refusing it. Losing the authenticator must not also cost an operator a destructive action.
  */
 export async function withStepUp(action) {
 	try {
@@ -106,13 +131,13 @@ export async function withStepUp(action) {
 		if (!err.needsStepUp && err.status !== 428) throw err;
 		const done = await ui.modal({
 			title: 'Confirm it is you',
-			sub: 'This action needs a fresh code from your authenticator.',
+			sub: 'This action needs a fresh code from your authenticator, or one of your recovery codes.',
 			confirmLabel: 'Confirm',
 			body: `
 				<div class="field">
-					<label for="su-code">Six-digit code</label>
-					<input id="su-code" name="code" inputmode="numeric" autocomplete="one-time-code"
-						pattern="[0-9 ]{6,8}" maxlength="8" required placeholder="000000" />
+					<label for="su-code">Authenticator or recovery code</label>
+					<input id="su-code" name="code" autocomplete="one-time-code"
+						maxlength="${RECOVERY_CODE_LENGTH}" required placeholder="000000" />
 				</div>`,
 			onSubmit: async (values) => {
 				await api.stepUp(values.code);
@@ -215,9 +240,9 @@ function renderSignIn(stage = 'credentials', context = {}) {
 						<button class="btn btn-primary btn-block" type="submit">Sign in</button>
 					` : `
 						<div class="field">
-							<label for="code">Authenticator code</label>
+							<label for="code">Authenticator or recovery code</label>
 							<input id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
-								maxlength="8" required placeholder="000000" />
+								maxlength="${RECOVERY_CODE_LENGTH}" required placeholder="000000" />
 						</div>
 						<button class="btn btn-primary btn-block" type="submit">Verify</button>
 						<button class="btn btn-ghost btn-block" type="button" id="use-recovery">Use a recovery code instead</button>
@@ -273,14 +298,18 @@ function renderSignIn(stage = 'credentials', context = {}) {
 		}
 	});
 
+	/* The button is a hint, not a mode: the field and the endpoint behind it take either kind
+	 * of code, so this only points the label and placeholder at the recovery-code shape and
+	 * drops the numeric keypad hint, which cannot type a hyphen. The length is set from the
+	 * same constant the field is rendered with, so the two cannot drift apart again. */
 	root.querySelector('#use-recovery')?.addEventListener('click', () => {
 		renderSignIn('two-factor', { ...context, recovery: true });
 		const label = document.querySelector('label[for="code"]');
 		if (label) label.textContent = 'Recovery code';
 		const input = document.querySelector('#code');
 		if (input) {
-			input.placeholder = 'XXXX-XXXX';
-			input.maxLength = 12;
+			input.placeholder = RECOVERY_CODE_HINT;
+			input.maxLength = RECOVERY_CODE_LENGTH;
 			input.removeAttribute('inputmode');
 		}
 	});

@@ -39,7 +39,7 @@ With the encrypted channel established by the core, the authenticator supports f
 
 3. **Token-based reconnection** — After a successful SRP login with the LoginServer, the core stores an encrypted auth token. On subsequent connections to World/Scene servers, the stored token is encrypted and sent via `TokenAuthBroadcast`, bypassing the full SRP flow. While connected, the server periodically pushes a freshly-minted token via `RenewTokenResponseBroadcast`; `TryApplyRenewedToken` decrypts it over the existing AES-GCM channel and replaces the stored copy, so the token stays usable however long the session lasts. Each renewal advances the server→client sequence counter, so renewals must be applied in order and exactly once — a skipped or duplicated one breaks every later renewal on that connection.
 
-4. **Two-factor authentication** — If the server returns `TwoFactorRequired` after SRP proof, the public `SendTotpCode(string)` API encrypts and sends a TOTP code (6-digit) or recovery code (XXXXX-XXXXX) via `TwoFactorVerifyBroadcast`. During account creation, the server may send `TwoFactorSetupBroadcast` containing the encrypted otpauth URI and recovery codes; the core surfaces this via `OnTwoFactorSetupReceived`.
+4. **Two-factor authentication** — If the server returns `TwoFactorRequired` after SRP proof, the public `SendTotpCode(string)` API encrypts and sends a TOTP code (6-digit) or recovery code (XXXX-XXXX-XXXX-XXXX) via `TwoFactorVerifyBroadcast`. During account creation, the server may send `TwoFactorSetupBroadcast` containing the encrypted otpauth URI and recovery codes; the core surfaces this via `OnTwoFactorSetupReceived`.
 
 `ClientSrpData` (from `FishMMO.Auth.Core`) wraps the `SrpClient` library (2048-bit group, SHA-512) to generate ephemeral values, compute client proofs, generate salt/verifier pairs for registration, and verify server proofs. All SRP references are explicitly nulled on cleanup to allow GC collection of sensitive string data.
 
@@ -76,7 +76,7 @@ Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (Cry
 - **SRP-6a authentication (2048-bit, SHA-512)** — client generates ephemeral, receives encrypted salt + server ephemeral, computes proof, and verifies server proof via `ClientSrpData`.
 - **Account creation flow** — generates SRP salt and verifier, encrypts username/salt/verifier, and sends `CreateAccountBroadcast` with implicit sequence encoding (server derives per-field sequences from a single `Seq` value).
 - **Token-based reconnection** — after LoginServer SRP success, an encrypted auth token is stored and automatically sent via `TokenAuthBroadcast` on subsequent World/Scene server connections; token expiration is enforced server-side.
-- **Two-factor authentication** — `SendTotpCode(code)` encrypts and sends a TOTP or recovery code via `TwoFactorVerifyBroadcast`. The `code` parameter accepts both 6-digit TOTP codes and XXXXX-XXXXX recovery codes. `OnTwoFactorSetupReceived(string, string[], int)` fires during account creation with the otpauth URI, recovery codes, and verification code.
+- **Two-factor authentication** — `SendTotpCode(code)` encrypts and sends a TOTP or recovery code via `TwoFactorVerifyBroadcast`. The `code` parameter accepts both 6-digit TOTP codes and XXXX-XXXX-XXXX-XXXX recovery codes. `OnTwoFactorSetupReceived(string, string[], int)` fires during account creation with the otpauth URI, recovery codes, and verification code.
 - **Token failure handling** — `ClientAuthResultBroadcast` with `TokenInvalid`, `TokenExpired`, or `TokenRevoked` clears the stored token via `ClearAuthToken()` in the core, and `Client.OnAuthResult` additionally abandons the session and returns to the login screen. Clearing the token alone did not stop the reconnect loop, which then spent ten backoff attempts (minutes) that could not succeed with no token and no credentials.
 - **Mid-session token renewal** — World/Scene servers push a re-minted token on a timer (default: halfway through the token lifetime), not only at authentication. The client applies it via `TryApplyRenewedToken` after checking `RenewTokenResponseBroadcast.Result`. Without this, a session that stayed in one scene past the token lifetime hit `TokenExpired` on its next scene transfer, because a transfer re-authenticates through the World server.
 - **Credential clearing** — `username` and `password` are nulled immediately after `SrpData.GetProof()` (the last point of use) and again as a safety net in `ClearKeyMaterial()` on disconnect.
@@ -135,7 +135,7 @@ Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNe
 
 1. Subscribe to `OnTwoFactorSetupReceived` for account-creation 2FA setup events (provides otpauth URI and recovery codes).
 2. During login, if `OnClientAuthenticationResult` fires with `TwoFactorRequired`, prompt the user for a TOTP code or recovery code.
-3. Call `authenticator.SendTotpCode(code)` with the 6-digit TOTP code or XXXXX-XXXXX recovery code.
+3. Call `authenticator.SendTotpCode(code)` with the 6-digit TOTP code or XXXX-XXXX-XXXX-XXXX recovery code.
 4. `OnClientAuthenticationResult` fires again with `LoginSuccess` (on valid code) or `TwoFactorInvalid` (on failure — retry allowed).
 
 ## Configuration
@@ -154,7 +154,7 @@ Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNe
 | `SetLoginCredentials()` | `string username, string password, bool register = false` | Sets login credentials and register flag before connection |
 | `SetClient()` | `Client client` | Assigns the FishNet client instance for broadcasting |
 | `ClearAuthToken()` | — | Zeroes and nulls the stored auth token |
-| `SendTotpCode()` | `string code` | Encrypts and sends a TOTP (6-digit) or recovery code (XXXXX-XXXXX) via `TwoFactorVerifyBroadcast` |
+| `SendTotpCode()` | `string code` | Encrypts and sends a TOTP (6-digit) or recovery code (XXXX-XXXX-XXXX-XXXX) via `TwoFactorVerifyBroadcast` |
 
 ### Validation Rules (from `FishMMO.Shared.Authentication`)
 

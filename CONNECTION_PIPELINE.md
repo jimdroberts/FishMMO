@@ -506,7 +506,7 @@ sequenceDiagram
 
     alt Standard TOTP (6 digits)
         Server->>Server: CryptoHelper.VerifyTotpCode(), • ±1 window drift tolerance, • PersistLastTotpWindow on success
-    else Recovery Code (XXXXX-XXXXX hex)
+    else Recovery Code (XXXX-XXXX-XXXX-XXXX hex)
         Server->>DB: FetchUnusedRecoveryCodes(username)
         Server->>Server: VerifyRecoveryCode(), • Constant-time HMAC compare, • ConsumeCode on success (single-use)
     end

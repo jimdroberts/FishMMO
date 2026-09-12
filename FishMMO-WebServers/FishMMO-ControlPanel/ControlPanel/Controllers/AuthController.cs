@@ -280,7 +280,7 @@ namespace FishMMO.ControlPanel.Controllers
 		/// <summary>Body of a code submission.</summary>
 		public sealed class CodeRequest
 		{
-			/// <summary>A six-digit TOTP code, or an eleven-character recovery code.</summary>
+			/// <summary>A six-digit TOTP code, or a recovery code in XXXX-XXXX-XXXX-XXXX form.</summary>
 			public string Code { get; set; }
 		}
 	}

@@ -372,7 +372,7 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Verifies a TOTP code or single-use recovery code for the account.
-		/// Handles both 6-digit TOTP and XXXXX-XXXXX hex recovery code formats.
+		/// Handles both 6-digit TOTP and XXXX-XXXX-XXXX-XXXX hex recovery code formats.
 		/// Returns <c>true</c> on success; zeroes the decrypted TOTP secret in all paths.
 		/// </summary>
 		private async Task<bool> VerifyTotpCodeCoreAsync(string username, string totpCode, byte[] totpMasterKeySnapshot)
