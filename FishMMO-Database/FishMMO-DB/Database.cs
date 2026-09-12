@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -165,6 +166,59 @@ namespace FishMMO.Database
 		/// <param name="dbContextFactory">Factory instance to pass to service constructors. Cannot be <c>null</c>.</param>
 		/// <exception cref="ArgumentNullException">Thrown when <paramref name="registry"/> or <paramref name="dbContextFactory"/> is <c>null</c>.</exception>
 		/// <exception cref="DatabaseException">Thrown when service discovery or construction fails.</exception>
+		/// <summary>
+		/// Picks a constructor whose every parameter can be supplied right now, and fills it.
+		/// </summary>
+		/// <remarks>
+		/// A parameter is satisfied by the context factory, or by a service already registered.
+		/// Returning false is not a failure — it means "not yet", and the caller retries on a later
+		/// pass once more siblings exist. Constructors are tried widest-first so a service that can
+		/// take its collaborators gets them rather than silently binding a narrower overload.
+		/// </remarks>
+		private static bool TryResolveConstructorArguments(
+			Type implementation,
+			INpgsqlDbContextFactory dbContextFactory,
+			NpgsqlServiceRegistry registry,
+			out object[] arguments)
+		{
+			foreach (var constructor in implementation.GetConstructors()
+				.OrderByDescending(c => c.GetParameters().Length))
+			{
+				var parameters = constructor.GetParameters();
+				var resolved = new object[parameters.Length];
+				bool satisfied = true;
+
+				for (int i = 0; i < parameters.Length; i++)
+				{
+					Type parameterType = parameters[i].ParameterType;
+
+					if (parameterType.IsInstanceOfType(dbContextFactory))
+					{
+						resolved[i] = dbContextFactory;
+						continue;
+					}
+
+					if (registry.TryGet(parameterType, out object sibling))
+					{
+						resolved[i] = sibling;
+						continue;
+					}
+
+					satisfied = false;
+					break;
+				}
+
+				if (satisfied)
+				{
+					arguments = resolved;
+					return true;
+				}
+			}
+
+			arguments = Array.Empty<object>();
+			return false;
+		}
+
 		private static void RegisterNpgsqlServicesByReflection(NpgsqlServiceRegistry registry, INpgsqlDbContextFactory dbContextFactory)
 		{
 			if (registry == null)
@@ -254,54 +308,92 @@ namespace FishMMO.Database
 				.OrderBy(g => g.Key.FullName, StringComparer.Ordinal)
 				.ToArray();
 
-			foreach (var group in groupedByImplementation)
+			/* Construction order follows dependency, not name.
+			 *
+			 * Every service used to take the context factory alone, so a single pass in name order
+			 * was enough. A service that also needs a SIBLING service breaks that assumption twice:
+			 * Activator is handed one argument and cannot match the constructor, and even a matching
+			 * call would need the sibling to exist already. The first failure is the loud one —
+			 * MissingMethodException, rethrown as a construction failure, which takes the whole
+			 * database orchestrator and therefore every server down at startup.
+			 *
+			 * So: repeat passes, building whatever can be satisfied from the factory plus what is
+			 * already registered, until a pass adds nothing. A leftover means a genuinely unsatisfiable
+			 * dependency — a missing service or a cycle — and is reported as itself rather than as a
+			 * missing constructor. */
+			var pending = groupedByImplementation.ToList();
+
+			while (pending.Count > 0)
 			{
-				var implementation = group.Key;
-				object instance;
+				var deferred = new List<IGrouping<Type, Type>>();
+				bool progressed = false;
 
-				try
+				foreach (var group in pending)
 				{
-					instance = Activator.CreateInstance(implementation, dbContextFactory)!;
-				}
-				catch (TargetInvocationException tie)
-				{
-					var inner = tie.InnerException ?? tie;
-					var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
-					throw new DatabaseException(
-						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}.",
-						innerException: inner,
-						errorCode: "INVALID_CONFIGURATION");
-				}
-				catch (Exception ex)
-				{
-					var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
-					throw new DatabaseException(
-						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}. " +
-						$"Ensure it has a public constructor accepting '{nameof(INpgsqlDbContextFactory)}'.",
-						innerException: ex,
-						errorCode: "INVALID_CONFIGURATION");
-				}
+					var implementation = group.Key;
+					object instance;
 
-				foreach (var serviceInterface in group.OrderBy(t => t.FullName, StringComparer.Ordinal))
-				{
+					if (!TryResolveConstructorArguments(implementation, dbContextFactory, registry, out object[] arguments))
+					{
+						deferred.Add(group);
+						continue;
+					}
+
 					try
 					{
-						var registerMethod = registerOpenMethod.MakeGenericMethod(serviceInterface);
-						registerMethod.Invoke(registry, new[] { instance });
+						instance = Activator.CreateInstance(implementation, arguments)!;
+						progressed = true;
+					}
+					catch (TargetInvocationException tie)
+					{
+						var inner = tie.InnerException ?? tie;
+						var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
+						throw new DatabaseException(
+							$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}.",
+							innerException: inner,
+							errorCode: "INVALID_CONFIGURATION");
 					}
 					catch (Exception ex)
 					{
+						var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
 						throw new DatabaseException(
-							$"Failed to register '{implementation.FullName}' for interface '{serviceInterface.FullName}'. " +
-							$"The naming convention requires '{implementation.Name}' to implement exactly the interface " +
-							$"'{serviceInterface.Name}' and the registry method must accept that type. " +
-							$"See the XML doc on {nameof(RegisterNpgsqlServicesByReflection)} for debugging steps.",
+							$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}. " +
+							$"Ensure it has a public constructor accepting '{nameof(INpgsqlDbContextFactory)}'.",
 							innerException: ex,
 							errorCode: "INVALID_CONFIGURATION");
 					}
+
+					foreach (var serviceInterface in group.OrderBy(t => t.FullName, StringComparer.Ordinal))
+					{
+						try
+						{
+							var registerMethod = registerOpenMethod.MakeGenericMethod(serviceInterface);
+							registerMethod.Invoke(registry, new[] { instance });
+						}
+						catch (Exception ex)
+						{
+							throw new DatabaseException(
+								$"Failed to register '{implementation.FullName}' for interface '{serviceInterface.FullName}'. " +
+								$"The naming convention requires '{implementation.Name}' to implement exactly the interface " +
+								$"'{serviceInterface.Name}' and the registry method must accept that type. " +
+								$"See the XML doc on {nameof(RegisterNpgsqlServicesByReflection)} for debugging steps.",
+								innerException: ex,
+								errorCode: "INVALID_CONFIGURATION");
+						}
+					}
 				}
-			}
-		}
+
+				if (!progressed && deferred.Count > 0)
+				{
+					var stuck = string.Join(", ", deferred.Select(g => g.Key.FullName).OrderBy(n => n, StringComparer.Ordinal));
+					throw new DatabaseException(
+						$"Unable to construct these services; a constructor dependency is missing or circular: {stuck}. " +
+						$"A service constructor may take '{nameof(INpgsqlDbContextFactory)}' and any other registered service interface.",
+						errorCode: "INVALID_CONFIGURATION");
+				}
+
+				pending = deferred;
+			}		}
 
 		/// <inheritdoc/>
 		public void Shutdown()
