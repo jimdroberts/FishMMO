@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -547,7 +547,11 @@ namespace FishMMO.UnitTests
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
 			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path);
+			/* Normalised, because one assertion below matches a pattern spanning a line break.
+			 * The working tree is CRLF on Windows, so a bare \n never matches there and the
+			 * assertion fails against code that is present and correct. Sibling fixtures in this
+			 * folder already normalise for the same reason. */
+			return File.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		private T NewTemplate<T>(string name) where T : ScriptableObject

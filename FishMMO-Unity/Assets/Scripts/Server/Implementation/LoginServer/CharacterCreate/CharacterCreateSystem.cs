@@ -714,6 +714,34 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Builds CPU-only prepared ability entries from immutable templates.
 		/// </summary>
+		/// <summary>True when this ability has already been prepared for the character.</summary>
+		/// <remarks>
+		/// Starting abilities come from two places — the global list on this system, and the race
+		/// template — and nothing stops an ability appearing in both. Knowing an ability is a fact,
+		/// not a quantity, so the same ability twice is one ability, not two.
+		///
+		/// Without this the batch carries two rows with the same key. The service filters the
+		/// collision, the write reports 1/2 applied, and because these are newly created rows
+		/// nothing can legitimately supersede them — so the incomplete write is treated as failure
+		/// and the whole character creation rolls back. The player is told creation failed; the
+		/// server log names the ability count and not the duplicate.
+		///
+		/// Deliberately NOT applied to starting inventory: two of the same potion is a legitimate
+		/// request, and those rows are keyed by slot rather than by template.
+		/// </remarks>
+		private static bool AlreadyPrepared(List<PreparedAbilityEntry> abilities, int templateID)
+		{
+			for (int i = 0; i < abilities.Count; ++i)
+			{
+				if (abilities[i].TemplateID == templateID)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		private void BuildStartingAbilityEntries(List<AbilityTemplate> startingAbilities, List<PreparedAbilityEntry> abilities)
 		{
 			if (startingAbilities == null)
@@ -723,6 +751,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			foreach (AbilityTemplate startingAbility in startingAbilities)
 			{
+				if (startingAbility == null || AlreadyPrepared(abilities, startingAbility.ID))
+				{
+					continue;
+				}
+
 				abilities.Add(new PreparedAbilityEntry(startingAbility.ID, startingAbility.GetAllAbilityEventIDs()));
 			}
 		}
@@ -740,7 +773,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			foreach (int id in templateIDs)
 			{
 				AbilityTemplate startingAbility = AbilityTemplate.Get<AbilityTemplate>(id);
-				if (startingAbility != null)
+				if (startingAbility != null && !AlreadyPrepared(abilities, startingAbility.ID))
 				{
 					abilities.Add(new PreparedAbilityEntry(startingAbility.ID, startingAbility.GetAllAbilityEventIDs()));
 				}
