@@ -684,7 +684,33 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			ReturnToAnyContainer(item, null);
+
+			/* The recorded origin's INDEX was taken, but its CONTAINER is still known, and that is
+			 * what the fallback has to use. ReturnToAnyContainer's own order is the inventory
+			 * first — right for an item that came out of the inventory, and wrong for one that came
+			 * out of the bank, which is how a bank item came to be sitting in the inventory where
+			 * the server does not have it and every request naming it is refused. The unequip
+			 * correction passes its destination for the same reason; an equip knows where it came
+			 * from and must say so. */
+			ReturnToAnyContainer(item, PredictedOriginContainer(item, slot));
+		}
+
+		/// <summary>
+		/// The container a predicted move recorded as this item's origin, or null when no record
+		/// names it.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="TryReturnToPredictedOrigin"/> because the container is known
+		/// whether or not the index it names is still free: the index decides where the item can go
+		/// back to exactly, the container decides which one must not be passed over.
+		/// </remarks>
+		private InventoryType? PredictedOriginContainer(Item item, byte socket)
+		{
+			if (predictedEquips.TryGetValue(socket, out PredictedMove move) && move.ItemID == item.ID)
+			{
+				return move.Container;
+			}
+			return null;
 		}
 
 		/// <summary>Takes an item out of an equipment slot: modifiers off, slot null, listeners told.</summary>

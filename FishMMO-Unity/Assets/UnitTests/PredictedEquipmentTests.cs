@@ -235,6 +235,76 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void PredictedEquipFromTheBank_StaleSnapshotRestoresIt_AndTheReplayEquipsAgain()
+		{
+			/* Equipping straight out of the bank is the same operation as equipping out of a bag
+			 * with one field changed — the source container — and it has to survive the same
+			 * reconcile. It did not, because nothing exercised it: the only bank case in here was
+			 * the unequip INTO the bank, which travels the other way round the same code. */
+			Item a = PutInBank(100, 4);
+
+			CharacterReplicateData input = QueueAndPopulate(() => equipment.RequestEquip(a, 4, InventoryType.Bank, ItemSlot.Primary), tick: 50);
+			LogAssert.IsTrue(equipment.ApplyEquipmentInput(ref input, authoritative: false, owner: true, replayed: false), "the owner applies its own bank equip");
+			AssertSocket(a, "after the predicted equip");
+			LogAssert.IsTrue(bank.IsSlotEmpty(4), "the bank slot is vacated");
+			LogAssert.AreEqual(0, inventory.FilledSlots(), "nothing touched the inventory");
+
+			// The snapshot for tick 48 arrives: the server had not seen the request yet.
+			equipment.RestoreFromReconcile(null, reconcileTick: 48);
+			LogAssert.IsTrue(equipment.IsSlotEmpty(PrimarySocket), "a snapshot before the request empties the socket");
+			LogAssert.IsTrue(ReferenceEquals(Get(bank, 4), a), "the item goes back to the bank index it came from");
+			LogAssert.AreEqual(0, inventory.FilledSlots(), "not to the inventory");
+
+			LogAssert.IsTrue(equipment.ApplyEquipmentInput(ref input, authoritative: false, owner: true, replayed: true), "the replay re-applies the request");
+			AssertSocket(a, "after the replay");
+			LogAssert.IsTrue(bank.IsSlotEmpty(4), "the bank slot is vacated again");
+
+			equipment.RestoreFromReconcile(new[] { Entry(a) }, reconcileTick: 52);
+			AssertSocket(a, "after the confirming snapshot");
+			LogAssert.IsTrue(bank.IsSlotEmpty(4), "confirmed out of the bank");
+			LogAssert.IsFalse(equipment.HasPredictedMove(PrimarySocket), "a snapshot at or past the request settles it");
+		}
+
+		[Test]
+		public void TheServerEquipsFromTheBank_AndReportsTheBankIndex()
+		{
+			Item a = PutInBank(100, 4);
+			equipment.ServerAuthorityForTests = true;
+
+			InventoryType seenContainer = InventoryType.Equipment;
+			EquipmentController.ServerRequestValidator = (c, container) => { seenContainer = container; return true; };
+
+			EquipmentChange? reported = null;
+			equipment.OnServerEquipmentChanged += (c, change) => reported = change;
+
+			CharacterReplicateData input = QueueAndPopulate(() => equipment.RequestEquip(a, 4, InventoryType.Bank, ItemSlot.Primary), tick: 50);
+			LogAssert.IsTrue(equipment.ApplyEquipmentInput(ref input, authoritative: true, owner: false, replayed: false), "the server applies the replicated bank equip");
+			AssertSocket(a, "server socket");
+			LogAssert.IsTrue(bank.IsSlotEmpty(4), "the bank slot is vacated on the server too");
+			LogAssert.AreEqual(InventoryType.Bank, seenContainer, "the gate is asked about the container the item came from");
+			LogAssert.IsTrue(reported.HasValue, "the persistence hook hears about it");
+			LogAssert.AreEqual(InventoryType.Bank, reported.Value.ContainerType, "and the row is written back to the bank");
+			LogAssert.AreEqual(4, reported.Value.ContainerIndex, "with the bank index");
+		}
+
+		[Test]
+		public void ARefusedBankEquip_LeavesTheBankAlone()
+		{
+			/* What the server gate does when the character is not standing at the banker. The
+			 * refusal is silent — there is no failure broadcast on the replicate path — so the
+			 * client's own prediction is the thing that has to put the item back, and it can only
+			 * do that from the origin it recorded. */
+			Item a = PutInBank(100, 4);
+			equipment.ServerAuthorityForTests = true;
+			EquipmentController.ServerRequestValidator = (c, container) => false;
+
+			CharacterReplicateData input = QueueAndPopulate(() => equipment.RequestEquip(a, 4, InventoryType.Bank, ItemSlot.Primary), tick: 50);
+			LogAssert.IsFalse(equipment.ApplyEquipmentInput(ref input, authoritative: true, owner: false, replayed: false), "refused by the gate");
+			LogAssert.IsTrue(equipment.IsSlotEmpty(PrimarySocket), "socket untouched");
+			LogAssert.IsTrue(ReferenceEquals(Get(bank, 4), a), "the bank slot still holds it, at the same index");
+		}
+
+		[Test]
 		public void TheServerAppliesTheSameInput_AndReportsTheChange()
 		{
 			Item a = PutInInventory(100, 3);
@@ -318,6 +388,13 @@ namespace FishMMO.UnitTests
 		{
 			Item item = new Item(id, 0, sword, 1);
 			LogAssert.IsTrue(inventory.SetItemSlot(item, slot), $"seed inventory slot {slot}");
+			return item;
+		}
+
+		private Item PutInBank(long id, int slot)
+		{
+			Item item = new Item(id, 0, sword, 1);
+			LogAssert.IsTrue(bank.SetItemSlot(item, slot), $"seed bank slot {slot}");
 			return item;
 		}
 

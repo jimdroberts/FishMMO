@@ -40,6 +40,8 @@ namespace FishMMO.Client
 		private const string DRAG_OBJECT_NAME = "UIDragObject";
 		/// <summary>Name of the shared tooltip overlay.</summary>
 		private const string TOOLTIP_NAME = "UITooltip";
+		/// <summary>Name of the shared transient-notice overlay.</summary>
+		private const string TOAST_NAME = "UIToast";
 
 		/// <summary>
 		/// UXML element name for every <see cref="ItemSlot"/>, indexed by its enum value.
@@ -1095,6 +1097,11 @@ namespace FishMMO.Client
 			if (dragObject.Type != ReferenceButtonType.Inventory &&
 				dragObject.Type != ReferenceButtonType.Bank)
 			{
+				if (dragObject.Type == ReferenceButtonType.Equipment)
+				{
+					// Dropping one socket onto another reads as a move, and it silently is not one.
+					Notify("Unequip it first to move it to another socket.", ToastSeverity.Warning);
+				}
 				dragObject.Clear();
 				return;
 			}
@@ -1115,6 +1122,10 @@ namespace FishMMO.Client
 				sourceContainer.IsSlotLocked(sourceSlot) ||
 				equipmentController.IsSlotLocked(slotIndex))
 			{
+				/* One of the two slots is answering a request of its own. Said out loud because
+				 * the alternative — the drag simply disappearing — is what the player reads as a
+				 * lock that will not clear. */
+				Notify("That slot is busy; try again in a moment.", ToastSeverity.Warning);
 				dragObject.Clear();
 				return;
 			}
@@ -1123,12 +1134,14 @@ namespace FishMMO.Client
 			 * slot marked as waiting for a request that was never sent. */
 			if (!ItemOperationTracker.TryBegin(dragObject.Type, sourceSlot))
 			{
+				Notify("That slot is busy; try again in a moment.", ToastSeverity.Warning);
 				dragObject.Clear();
 				return;
 			}
 			if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Equipment, slotIndex))
 			{
 				ItemOperationTracker.Release(dragObject.Type, sourceSlot);
+				Notify("That socket is busy; try again in a moment.", ToastSeverity.Warning);
 				dragObject.Clear();
 				return;
 			}
@@ -1142,6 +1155,18 @@ namespace FishMMO.Client
 			{
 				ItemOperationTracker.Release(dragObject.Type, sourceSlot);
 				ItemOperationTracker.Release(ReferenceButtonType.Equipment, slotIndex);
+
+				/* The one refusal a drop onto a socket can be given that the player can act on is
+				 * aiming at the wrong socket — a sword dropped on the off-hand — and it is silent
+				 * everywhere else: the item is not where the request says, or has no identity yet,
+				 * and neither is something the player did. Naming the socket the item does fit is
+				 * what turns "the bank will not let me equip this" into a second attempt that
+				 * works. There is no other way to equip out of the bank, so silence here is the
+				 * whole bug report. Issue #268. */
+				if (sourceItem.Template is EquippableItemTemplate equippable && (ItemSlot)slotIndex != equippable.Slot)
+				{
+					Notify($"{sourceItem.Name} goes in the {equippable.Slot} socket.", ToastSeverity.Warning);
+				}
 			}
 
 			dragObject.Clear();
@@ -1273,6 +1298,22 @@ namespace FishMMO.Client
 				dragObject.Type == ReferenceButtonType.Equipment)
 			{
 				dragObject.Clear();
+			}
+		}
+
+		/// <summary>
+		/// Shows a transient notice, if the toast panel is up.
+		/// </summary>
+		/// <remarks>
+		/// The same helper the item grids use. A drop this panel refuses is a gesture the player
+		/// made and expects an answer to — see <see cref="CompleteDropOntoSlot"/> — and the
+		/// equipment sockets are the one place a refusal has nowhere else to surface.
+		/// </remarks>
+		private static void Notify(string text, ToastSeverity severity)
+		{
+			if (UIManager.TryGetTK(TOAST_NAME, out UITKToast toast))
+			{
+				toast.Show(text, severity);
 			}
 		}
 

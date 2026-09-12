@@ -1,5 +1,6 @@
 ﻿using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 using UnityEngine;
 
@@ -67,6 +68,86 @@ namespace FishMMO.Client
 			}
 
 			Show();
+		}
+
+		/// <summary>
+		/// Right-click wears the item if it can be worn, and otherwise offers to split it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The bank used to inherit the grid's meaning for this click and nothing else, so a
+		/// right-click on a sword did nothing at all — <see cref="UITKItemGridPanel"/>'s handler
+		/// only prompts for a stack, and a sword is not one — and the one way to equip out of the
+		/// bank was to press, drag and release on the single socket the item's own template names.
+		/// The same click in the bag wears the item, so the gesture players already have was
+		/// silently a no-op here. Issue #268.
+		/// </para>
+		/// <para>
+		/// The destination comes from the item's template rather than from where the pointer is,
+		/// which is what makes one click enough: a breastplate has exactly one socket it can go to.
+		/// </para>
+		/// <para>
+		/// No trade branch, unlike the inventory: a trade offer is drawn from the inventory, so a
+		/// bank slot has nothing to be offered to.
+		/// </para>
+		/// </remarks>
+		/// <param name="slotIndex">The slot that was clicked.</param>
+		protected override void HandleSlotRightClick(int slotIndex)
+		{
+			if (IsSlotBlocked(slotIndex))
+			{
+				return;
+			}
+
+			IItemContainer container = OwnContainer;
+			if (container == null ||
+				!container.TryGetItem(slotIndex, out Item item))
+			{
+				return;
+			}
+
+			if (!(item.Template is EquippableItemTemplate equippable))
+			{
+				// Not wearable: the click means what it means in every item grid.
+				base.HandleSlotRightClick(slotIndex);
+				return;
+			}
+
+			/* The same pre-flight a drop onto a socket runs. The server re-validates and remains
+			 * the only authority, but a request it is certain to reject costs a round trip and
+			 * leaves both slots marked pending until the refusal arrives. */
+			if (!container.CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character) ||
+				container.IsSlotLocked(slotIndex))
+			{
+				return;
+			}
+
+			if (!Character.TryGet(out IEquipmentController equipmentController))
+			{
+				return;
+			}
+
+			// Claim both ends before sending, or neither: a slot marked as waiting for a request
+			// that was never sent stays locked until the tracker's timeout.
+			if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Bank, slotIndex))
+			{
+				return;
+			}
+			if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Equipment, (int)equippable.Slot))
+			{
+				ItemOperationTracker.Release(ReferenceButtonType.Bank, slotIndex);
+				return;
+			}
+
+			/* Queued on the controller and applied inside the owner's next replicate tick, on both
+			 * peers at once — see IEquipmentController. A local refusal frees the marks now; a
+			 * server refusal arrives as a reconcile that puts the item back in the bank. */
+			if (!equipmentController.RequestEquip(item, slotIndex, InventoryType.Bank, equippable.Slot))
+			{
+				ItemOperationTracker.Release(ReferenceButtonType.Bank, slotIndex);
+				ItemOperationTracker.Release(ReferenceButtonType.Equipment, (int)equippable.Slot);
+			}
 		}
 
 		/// <inheritdoc/>

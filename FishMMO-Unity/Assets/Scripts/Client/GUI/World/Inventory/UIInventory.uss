@@ -24,13 +24,29 @@
 /*
     Anchored explicitly. Each panel is its own UIDocument whose root fills the screen, so a
     root with a size but no position resolves to the top-left corner — with the uGUI layer
-    gone, every one of these panels stacked there on top of each other. The values restore
-    where the panel sat in the uGUI scene, expressed as percentages so they hold at any
-    aspect ratio. Dragging overwrites left/top, which is why position is absolute here.
+    gone, every one of these panels stacked there on top of each other. Dragging overwrites
+    left/top, which is why position is absolute here.
+
+    The character sheet, the bank and the bag can be open at the same time — the bank opens the
+    bag itself — and they are siblings in ONE UI Toolkit panel, ordered by UIDocument.sortingOrder.
+    A click on a socket that another window covers is delivered to that window instead, so the
+    three are tiled across the panel's width rather than stacked in the corners they used to
+    share. Issue #268: with the sheet against the right edge, the bag and the bank covered eight
+    of its ten equipment sockets, so a bank item dragged onto a socket landed in the bag, moved
+    there, and locked the slot it landed in.
+
+        character sheet     12 ..  532      left: 1%,  520 wide
+        bank               552 ..  882      left: 46%, 330 wide
+        bag                908 .. 1188      right: 1%, 280 wide
+
+    Panel space is always exactly 1200 units wide (PanelSettings matches width), so these
+    percentages are a fixed horizontal arrangement at every aspect ratio. Any move here has to
+    be matched in the other two stylesheets; WindowOverlapTests fails if the three stop being
+    disjoint, or if any of them leaves the panel.
 */
 .inv-panel {
     position: absolute;
-    right: 2%; top: 46%; translate: 0 -50%;
+    right: 1%; top: 46%; translate: 0 -50%;
     width: 280px;
     height: 320px;
     flex-direction: column;

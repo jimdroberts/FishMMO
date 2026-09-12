@@ -1711,10 +1711,10 @@ namespace FishMMO.Client
 
 			/* And the opposite edges released, or the window stretches instead of moving. Most
 			 * authored windows are anchored to the side of the screen they belong on rather than
-			 * to the top-left — .inv-panel, .eq-panel and .friend-panel set `right`, .chat-panel,
-			 * .pet-panel and .dialogue-panel set `bottom` — and an absolute box with BOTH edges
-			 * pinned derives its size from the gap between them. Writing left onto a panel that
-			 * still has right from its stylesheet therefore resized it under the pointer.
+			 * to the top-left — .inv-panel and .friend-panel set `right`, .chat-panel, .pet-panel
+			 * and .dialogue-panel set `bottom` — and an absolute box with BOTH edges pinned
+			 * derives its size from the gap between them. Writing left onto a panel that still has
+			 * right from its stylesheet therefore resized it under the pointer.
 			 *
 			 * Auto rather than StyleKeyword.Null: Null removes the inline value and hands the
 			 * property back to the stylesheet, which is where the anchoring came from in the
