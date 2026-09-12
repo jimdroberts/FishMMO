@@ -82,6 +82,16 @@ namespace FishMMO.Client
 		/// <summary>Name of the channel selector button beside the input.</summary>
 		private const string CHAT_CHANNEL_SELECTOR_NAME = "chat-channel-selector";
 
+		/// <summary>
+		/// Name of the element inside a <see cref="TextField"/> that actually draws the typed text.
+		/// </summary>
+		/// <remarks>
+		/// A TextField is a wrapper: the glyphs belong to this child, and the panel's stylesheet
+		/// already reaches it through the same name to trim its padding. The font size has to be
+		/// given to it directly for the same reason.
+		/// </remarks>
+		private const string INPUT_TEXT_ELEMENT_NAME = "unity-text-input";
+
 		/// <summary>Theme class giving a chat tab its shared tab appearance.</summary>
 		/// <remarks>
 		/// Chat tabs are built in code rather than declared in the UXML, so they have to opt into
@@ -436,6 +446,12 @@ namespace FishMMO.Client
 				scrollView.verticalScroller.valueChanged += OnVerticalScroll;
 			}
 
+			/* Idempotent, like the pill's handler above: OnStarting runs again whenever the tree is
+			 * replaced, and a second subscription would re-apply the size once per rebuild. */
+			ClientChatSettings.OnChanged -= OnChatFontSizeChanged;
+			ClientChatSettings.OnChanged += OnChatFontSizeChanged;
+			ApplyChatFontSize();
+
 			ChatHelper.InitializeOnce(GetChannelCommand);
 
 			if (!welcomeSeeded)
@@ -461,6 +477,76 @@ namespace FishMMO.Client
 		protected override void OnAfterStarting()
 		{
 			ScrollToBottomDeferred();
+		}
+
+		/// <summary>
+		/// Applies the chosen chat text size to the input field and to every row already built.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="RenderRecord"/> sizes new rows, but a log is only ever appended to, so without
+		/// this a change would reach the next message and nothing else — and the lines a player is
+		/// looking at while they drag the slider are exactly the ones that would not change.
+		/// </remarks>
+		private void ApplyChatFontSize()
+		{
+			float size = ClientChatSettings.FontSize;
+
+			if (inputField != null)
+			{
+				inputField.style.fontSize = size;
+
+				VisualElement inputText = inputField.Q(INPUT_TEXT_ELEMENT_NAME);
+				if (inputText != null)
+				{
+					inputText.style.fontSize = size;
+				}
+			}
+
+			for (int i = 0; i < messageViews.Count; ++i)
+			{
+				ChatMessageView view = messageViews[i];
+				if (view.NameLabel != null)
+				{
+					view.NameLabel.style.fontSize = size;
+				}
+				if (view.TextLabel != null)
+				{
+					view.TextLabel.style.fontSize = size;
+				}
+			}
+		}
+
+		/// <summary>Re-applies the chat font size after the player changes it.</summary>
+		private void OnChatFontSizeChanged()
+		{
+			/* Read before the rows are resized. A reader who has scrolled up to finish something
+			 * should not be thrown to the bottom by the act of making the text bigger, and the
+			 * deferred scroll below sets the stick flag itself — so this has to be captured first
+			 * or it would always read true. */
+			bool wasAtBottom = stickToBottom;
+
+			ApplyChatFontSize();
+
+			/* Every row is a different height now, so the offset the reader was parked at no
+			 * longer points at the same message. Only a reader who was already at the bottom is
+			 * moved; anyone else keeps their place, which is now a different one. */
+			if (wasAtBottom)
+			{
+				ScrollToBottomDeferred();
+			}
+		}
+
+		/// <summary>
+		/// Drops the chat settings subscription.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="ClientChatSettings.OnChanged"/> is static, so a panel that went away without
+		/// unsubscribing would be held by it — and every later change would write to a disposed
+		/// visual tree.
+		/// </remarks>
+		public override void OnDestroying()
+		{
+			ClientChatSettings.OnChanged -= OnChatFontSizeChanged;
 		}
 
 		/// <summary>
@@ -1322,14 +1408,22 @@ namespace FishMMO.Client
 			VisualElement row = new VisualElement();
 			row.AddToClassList(MESSAGE_ROW_CLASS);
 
+			/* Both halves are sized inline rather than through a class, and they have to be: the
+			 * panel's own stylesheet carries no font size for them any more, so the value here is
+			 * the only one — read fresh for every row, which is what makes a message that arrives
+			 * after the player moved the slider come out at the size they chose. */
+			float fontSize = ClientChatSettings.FontSize;
+
 			Label nameLabel = new Label(BuildNameText(record));
 			nameLabel.AddToClassList(MESSAGE_NAME_CLASS);
 			nameLabel.style.color = resolved;
+			nameLabel.style.fontSize = fontSize;
 			DisableRichText(nameLabel);
 
 			Label textLabel = new Label(record.Text);
 			textLabel.AddToClassList(MESSAGE_TEXT_CLASS);
 			textLabel.style.color = resolved;
+			textLabel.style.fontSize = fontSize;
 			DisableRichText(textLabel);
 
 			/* Left out of the row entirely rather than hidden with display: none. The row wraps,

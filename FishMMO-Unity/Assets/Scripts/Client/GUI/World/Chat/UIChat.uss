@@ -73,7 +73,7 @@
 
 .chat-scroll {
     flex-grow: 1;
-    padding: 4px;
+    padding: 2px 4px;
 }
 
 .chat-messages {
@@ -95,17 +95,47 @@
     to do not sit on the same baseline.
 */
 .chat-message__name {
-    font-size: 12px;
+    /* Sized from C#, not here — see the note below .chat-message__text. */
     -unity-font-style: bold;
     -unity-text-align: middle-left;
-    margin-right: 2px;
+    margin: 0 4px 0 0;
+    padding: 0;
 }
 
+/*
+    THE SIZE IS NOT HERE, on purpose.
+
+    Both halves of a line are sized from C#, by UITKChat reading ClientChatSettings.FontSize —
+    the player's "Message Font Size" in the Options UI tab — and writing it inline on each label.
+    This rule used to carry a hard-coded 12px, and leaving one here now would be a second source
+    of truth for the same number: it would silently disagree with the setting the moment the
+    player moved the slider, and the panel would draw a size nothing had chosen. A value read
+    per row is also what makes a message arriving after the change come out the right size.
+
+    The rest of the box is this file's business, though, and what follows is why the log reads
+    the way it does.
+
+    The box chrome is zeroed, and that is the whole reason a single 12px line was costing 29px
+    of log.
+
+    Measured on a rendered panel: the label resolved to padding 1,4,2,4 and margin 2,4,4,2 —
+    eleven pixels of vertical box around a twelve-pixel line — and the row came out 29px tall with
+    a 1px gap under it. NONE of it is in this file. Unity's default runtime theme applies it to
+    every text element, and because the theme's own header promises it carries no layout
+    properties, nothing here had ever contradicted it: the two message rules set an alignment and
+    a font style and left the rest to a stylesheet the panel does not own.
+
+    Left alone, the density of the log is decided by a default nobody chose. Zeroed, the line box
+    is the glyphs plus their natural leading, which is what every other dense list in this game
+    already gets -- the party rows and the attribute rows both set their own padding for the same
+    reason.
+*/
 .chat-message__text {
-    font-size: 12px;
     -unity-text-align: middle-left;
     white-space: normal;
     flex-shrink: 1;
+    margin: 0;
+    padding: 0;
 }
 
 /*

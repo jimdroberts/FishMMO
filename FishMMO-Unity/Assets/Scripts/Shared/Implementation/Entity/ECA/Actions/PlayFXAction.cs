@@ -1,6 +1,7 @@
 ﻿using System;
 using FishMMO.Logging;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -169,6 +170,14 @@ namespace FishMMO.Shared
 		/// <para>
 		/// VFX instantiation is suppressed during prediction replay ticks to prevent visual spam.
 		/// </para>
+		/// <para>
+		/// <b>The instance this creates is the action's responsibility.</b> It is placed in the scene
+		/// the effect happened in rather than the active one, and is handed to
+		/// <see cref="FXInstanceLifetime"/> so that it ends whether or not its prefab knows how to end
+		/// itself. Both are what the action previously left to chance; see issue #258 for what that
+		/// cost, and <see cref="ResolveSpawnScene"/> and <see cref="FXInstanceLifetime"/> for the two
+		/// halves of it.
+		/// </para>
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
@@ -199,7 +208,81 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			UnityEngine.Object.Instantiate(FXPrefab, spawnPosition, Quaternion.identity);
+			SpawnFX(FXPrefab, spawnPosition, ResolveSpawnScene(initiator, eventData));
+		}
+
+		/// <summary>
+		/// Creates the FX instance, places it where it belongs, and makes the action answerable for it.
+		/// </summary>
+		/// <param name="prefab">The FX prefab to play.</param>
+		/// <param name="position">Where to play it.</param>
+		/// <param name="scene">The scene it belongs in, from <see cref="ResolveSpawnScene"/>.</param>
+		/// <returns>The instance, already bounded by its own lifetime, or null if there was no prefab.</returns>
+		/// <remarks>
+		/// Separate from <see cref="Execute"/> so the two promises the action makes about the instance —
+		/// the scene it lands in, and that it ends — are assertable without a peer, an event or a
+		/// NetworkManager. Everything the spawn needs is passed in; nothing here reads the event.
+		/// </remarks>
+		internal static GameObject SpawnFX(GameObject prefab, Vector3 position, Scene scene)
+		{
+			if (prefab == null)
+			{
+				return null;
+			}
+
+			GameObject instance = UnityEngine.Object.Instantiate(prefab, position, Quaternion.identity);
+
+			/* Not the active scene, which a bare Instantiate would have used: see ResolveSpawnScene. */
+			if (scene.IsValid() && scene.isLoaded && instance.scene != scene)
+			{
+				SceneManager.MoveGameObjectToScene(instance, scene);
+			}
+
+			/* This action spawned it, so this action is answerable for it ending. Leaving that to the
+			 * prefab left every hit of the three fire abilities with a looping, stop-action None
+			 * particle system in the world, forever, on every peer — issue #258. */
+			FXInstanceLifetime.Attach(instance);
+
+			return instance;
+		}
+
+		/// <summary>
+		/// The scene an FX instance belongs in: wherever the effect actually happened, not wherever the
+		/// client happens to have decided its active scene is.
+		/// </summary>
+		/// <param name="initiator">The character the action is running for, or null.</param>
+		/// <param name="eventData">The event being executed, or null.</param>
+		/// <returns>The scene to place the instance in.</returns>
+		/// <remarks>
+		/// A bare <c>Instantiate</c> places its object in the active scene. This project loads world
+		/// scenes additively and never calls <c>SetActiveScene</c> itself, so the active scene is
+		/// whatever the client was started in — which means an effect played in a world scene could
+		/// outlive that scene being unloaded and still be on screen after a scene change (issue #269).
+		/// <see cref="AbilityObject.Spawn"/> moves its instances to the caster's scene for exactly this
+		/// reason, and the ability object has already made that decision here, so it is asked first.
+		/// </remarks>
+		internal static Scene ResolveSpawnScene(ICharacter initiator, EventData eventData)
+		{
+			if (AbilityObject.TryResolveFrom(eventData, out AbilityObject abilityObject) &&
+				IsUsableScene(abilityObject.GameObject))
+			{
+				return abilityObject.GameObject.scene;
+			}
+
+			if (initiator != null && IsUsableScene(initiator.GameObject))
+			{
+				return initiator.GameObject.scene;
+			}
+
+			return SceneManager.GetActiveScene();
+		}
+
+		/// <summary>
+		/// Whether a GameObject's scene is one an instance can be moved into.
+		/// </summary>
+		private static bool IsUsableScene(GameObject gameObject)
+		{
+			return gameObject != null && gameObject.scene.IsValid() && gameObject.scene.isLoaded;
 		}
 	}
 }

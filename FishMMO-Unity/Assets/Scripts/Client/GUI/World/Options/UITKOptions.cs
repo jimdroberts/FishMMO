@@ -148,6 +148,8 @@ namespace FishMMO.Client
 		private const string SNAP_VALUE_NAME = "ui-snap-value";
 		private const string UI_SCALE_SLIDER_NAME = "ui-scale-slider";
 		private const string UI_SCALE_VALUE_NAME = "ui-scale-value";
+		private const string CHAT_FONT_SLIDER_NAME = "chat-font-slider";
+		private const string CHAT_FONT_VALUE_NAME = "chat-font-value";
 		private const string RESET_LAYOUT_NAME = "options-reset-layout-btn";
 		private const string PROFILE_DROPDOWN_NAME = "ui-profile-dropdown";
 		private const string PROFILE_LOAD_NAME = "ui-profile-load-btn";
@@ -394,6 +396,8 @@ namespace FishMMO.Client
 		private Label snapValueLabel;
 		private Slider uiScaleSlider;
 		private Label uiScaleValueLabel;
+		private Slider chatFontSlider;
+		private Label chatFontValueLabel;
 		private DropdownField profileDropdown;
 		private Label profileStatus;
 
@@ -570,6 +574,8 @@ namespace FishMMO.Client
 			snapValueLabel = Root.Q<Label>(SNAP_VALUE_NAME);
 			uiScaleSlider = Root.Q<Slider>(UI_SCALE_SLIDER_NAME);
 			uiScaleValueLabel = Root.Q<Label>(UI_SCALE_VALUE_NAME);
+			chatFontSlider = Root.Q<Slider>(CHAT_FONT_SLIDER_NAME);
+			chatFontValueLabel = Root.Q<Label>(CHAT_FONT_VALUE_NAME);
 			profileDropdown = Root.Q<DropdownField>(PROFILE_DROPDOWN_NAME);
 			profileStatus = Root.Q<Label>(PROFILE_STATUS_NAME);
 
@@ -587,6 +593,7 @@ namespace FishMMO.Client
 			InitializeWorldLabelSettings();
 			InitializeNameplateSettings();
 			InitializeInterfaceSettings();
+			InitializeChatSettings();
 			InitializeColorSettings();
 			InitializeProfileSection();
 			InitializeControlsSection();
@@ -2032,6 +2039,15 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>Writes a whole number of points into a label.</summary>
+		private static void UpdatePointLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				label.text = $"{Mathf.RoundToInt(value)} pt";
+			}
+		}
+
 		/// <summary>Writes a whole number of metres into a label.</summary>
 		private static void UpdateMetreLabel(Label label, float value)
 		{
@@ -2142,6 +2158,51 @@ namespace FishMMO.Client
 				};
 				snapSlider.RegisterValueChangedCallback(snapGridChanged);
 			}
+		}
+
+		// ── Chat ────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Binds the chat font size slider to <see cref="ClientChatSettings"/>.
+		/// </summary>
+		/// <remarks>
+		/// A control of its own rather than a second use of Interface Scale. That slider divides
+		/// the panel asset's reference resolution, which resizes every panel and stops at 1.5x —
+		/// so it cannot help a player who can read the HUD but not the chat log, and 1.5x of the
+		/// old 12px line is 18px whether or not 18 was the size they needed. This one names the
+		/// size directly, which also makes it the only control here a player can reason about
+		/// without knowing what the default was.
+		/// </remarks>
+		private void InitializeChatSettings()
+		{
+			if (chatFontSlider == null)
+			{
+				return;
+			}
+
+			chatFontSlider.lowValue = ClientChatSettings.MinimumFontSize;
+			chatFontSlider.highValue = ClientChatSettings.MaximumFontSize;
+
+			float size = ClientChatSettings.FontSize;
+			chatFontSlider.SetValueWithoutNotify(size);
+			UpdatePointLabel(chatFontValueLabel, size);
+
+			chatFontSlider.RegisterValueChangedCallback((evt) =>
+			{
+				// A size, so the stored value is a whole point; the slider itself is continuous.
+				float value = Mathf.Round(evt.newValue);
+				ClientChatSettings.SetFontSize(value);
+				UpdatePointLabel(chatFontValueLabel, value);
+
+				/* The handle is moved onto the value that was stored, so a drag that lands on
+				 * 14.4 does not leave it sitting between the ticks the read-out is naming. Same
+				 * treatment the snap grid's slider gets, and safe inside the callback for the
+				 * same reason: SetValueWithoutNotify raises nothing. */
+				if (!Mathf.Approximately(value, evt.newValue))
+				{
+					chatFontSlider.SetValueWithoutNotify(value);
+				}
+			});
 		}
 
 		/// <summary>Writes the interface scale beside its slider.</summary>

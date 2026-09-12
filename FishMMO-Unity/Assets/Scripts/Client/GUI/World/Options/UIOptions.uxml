@@ -270,6 +270,22 @@
                                class="fish-button options-reset-btn" />
                 </ui:VisualElement>
 
+                <!--
+                    Chat text. Deliberately NOT a second use of Interface Scale above: that
+                    slider resizes every panel and stops at 1.5x, so it cannot help a player
+                    who can read the rest of the HUD but not the chat log. Tabs and the
+                    channel selector keep their authored sizes — both sit in fixed-height
+                    strips that a larger font would clip rather than grow.
+                -->
+                <ui:Label text="CHAT" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Message Font Size" class="fish-label options-row-label" />
+                    <ui:Slider name="chat-font-slider" low-value="10" high-value="20" class="options-row-field" />
+                    <ui:Label name="chat-font-value" text="12 pt" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:Label text="Sets the size of the message log and the text you type."
+                          class="fish-hint options-hint" />
+
                 <ui:Label text="COLOURS" class="fish-attr-category options-section" />
                 <ui:VisualElement name="options-color-list" class="options-list" />
                 <ui:VisualElement class="options-row options-row--action">

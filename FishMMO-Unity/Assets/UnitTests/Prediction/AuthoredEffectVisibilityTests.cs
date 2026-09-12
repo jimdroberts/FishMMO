@@ -5,23 +5,32 @@ using FishNet.Object.Prediction;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the four ways an authored ECA effect could be dispatched, resolved and still be seen by
-	/// nobody.
+	/// Pins the ways an authored ECA effect could be dispatched, resolved, spawned and still be seen
+	/// by nobody — or by everybody, forever.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// All four share a shape: a guard or a payload test that is correct in isolation and, in the
+	/// The first four share a shape: a guard or a payload test that is correct in isolation and, in the
 	/// dispatch it actually receives, silently answers "do nothing". <c>PlayFXAction</c> demanded a
 	/// payload type that no destroy, spawn or tick dispatch has; the selector fan-out ran an action
 	/// once per selected target and so ran it zero times on the peer that is not allowed to select;
 	/// <c>AbilityApplyTargetAction</c> demanded the one payload shape that makes it recurse; and
 	/// <c>BaseAction.IsReplayTick</c> reads a flag no dispatch was in a position to set.
+	/// </para>
+	/// <para>
+	/// The fifth is the same action and the opposite failure: the effect REACHED everyone, and then
+	/// never left. The action spawned an instance it did not own, in a scene it did not choose, and
+	/// left its ending to whatever the prefab happened to do — which for the fire FX the three fire
+	/// abilities play was nothing at all (issue #258, and issue #269 for the same instances surviving
+	/// a scene change).
 	/// </para>
 	/// <para>
 	/// The pure functions below are the load-bearing assertions. Each replaced an inline condition
@@ -404,6 +413,126 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue((bool)isReplayTick.Invoke(null, new object[] { replayDispatch }),
 				"And a dispatch that declares itself a replay must be suppressed — the guard is live, " +
 				"not decorative.");
+		}
+
+		// ── Defect 5: an effect was spawned, and nothing was ever going to end it ───────────────
+
+		/// <summary>
+		/// The FX the three fire abilities play as their impact, taken from the shipped asset.
+		/// </summary>
+		/// <remarks>
+		/// Loaded rather than probed synthetically, because the whole defect is a property of THIS
+		/// prefab: it is a looping, prewarmed ambient burn with <c>stopAction: None</c>, and a looping
+		/// system with no stop action never reaches an end of its own. Nothing in this project calls
+		/// <c>ParticleSystem.Stop</c> either, so the prefab had no way to end and no one to end it.
+		/// </remarks>
+		private const string FireFXPath = "Assets/Prefabs/Client/FX/Abilities/Fire.prefab";
+
+		private static GameObject ShippedFireFX()
+		{
+			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(FireFXPath);
+			LogAssert.IsNotNull(prefab, $"Expected the shipped fire FX at {FireFXPath}.");
+			return prefab;
+		}
+
+		/// <summary>
+		/// An instance the action spawns is given a life, measured from the effect itself.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Issue #258. The action's body used to end at a bare <c>Instantiate</c>: no parent, no owner,
+		/// no end. Anything that left the caller's cleanup to the prefab was therefore one authoring
+		/// mistake from being permanent, and the shipped content made it — so each hit of Lesser
+		/// Fireball, Orc Firebolt and Scroll of Flame Impact left a particle system in the world for
+		/// the rest of the session, on every peer that saw the hit.
+		/// </para>
+		/// <para>
+		/// What lingers is only the visuals, which is why walking into one triggers no ability event:
+		/// no <c>AbilityObject</c> is involved in this path at all. That is the whole of the defect.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void PlayFX_SpawnedInstanceIsGivenALife()
+		{
+			Vector3 where = new Vector3(1f, 2f, 3f);
+			GameObject instance = Track(PlayFXAction.SpawnFX(ShippedFireFX(), where, SceneManager.GetActiveScene()));
+			LogAssert.IsNotNull(instance, "A prefab was supplied, so an instance must come back.");
+			LogAssert.AreEqual(where, instance.transform.position, "At the position it was handed.");
+
+			FXInstanceLifetime bound = instance.GetComponent<FXInstanceLifetime>();
+			LogAssert.IsNotNull(bound,
+				"Every instance this action spawns must be bounded, whatever its prefab does about despawn.");
+
+			/* One period plus padding at the very least. Fire.prefab is a 0.5s system emitting 1s
+			 * particles, so a bound taken from the system length alone would come out at a second and
+			 * cut the effect off halfway through — generous is the safe direction here. */
+			LogAssert.IsTrue(bound.Lifetime >= 1.5f,
+				$"The bound ({bound.Lifetime}s) must outlast the effect it bounds, or the leak has been " +
+				"traded for a truncation.");
+			LogAssert.IsTrue(bound.Lifetime <= FXInstanceLifetime.MaximumLifetime,
+				$"And it must be finite, which is the whole of the defect: {bound.Lifetime}s.");
+		}
+
+		/// <summary>That life actually runs out, and not before.</summary>
+		/// <remarks>
+		/// The bound is only half the fix; the other half is that reaching it destroys the instance.
+		/// <c>Tick</c> is the seam that makes it assertable — <c>Time.deltaTime</c> is zero in edit
+		/// mode, so a test driving <c>Update</c> through Unity would never reach the end of anything.
+		/// </remarks>
+		[Test]
+		public void PlayFX_SpawnedInstanceEndsWhenItsLifeIsSpent()
+		{
+			GameObject instance = Track(PlayFXAction.SpawnFX(ShippedFireFX(), Vector3.zero, SceneManager.GetActiveScene()));
+			FXInstanceLifetime bound = instance.GetComponent<FXInstanceLifetime>();
+
+			LogAssert.IsFalse(bound.Tick(bound.Lifetime * 0.5f), "Half a life is not the end of one.");
+			LogAssert.IsFalse(bound.Tick(bound.Lifetime * 0.4f), "Nor is nine tenths of one.");
+			LogAssert.IsTrue(bound.Tick(bound.Lifetime * 0.2f),
+				"The life runs out and the instance is destroyed. Nothing else was ever going to do it.");
+		}
+
+		/// <summary>
+		/// The instance is placed in the scene the effect happened in, not the client's active scene.
+		/// </summary>
+		/// <remarks>
+		/// Issue #269. World scenes are loaded additively and this project never calls
+		/// <c>SetActiveScene</c> itself, so a bare <c>Instantiate</c> lands everything in whatever scene
+		/// the client was started in. An effect played in a world scene then survives that scene being
+		/// unloaded and is still on screen after a scene change — which is exactly the report.
+		/// <c>AbilityObject.Spawn</c> moves its instances to the caster's scene for the same reason,
+		/// and the ability object has therefore already made this decision.
+		/// </remarks>
+		[Test]
+		public void PlayFX_PlacesTheInstanceInTheSceneTheEffectHappenedIn()
+		{
+			Scene active = SceneManager.GetActiveScene();
+
+			/* A preview scene: fully isolated and legal in edit mode, where SceneManager.CreateScene is
+			 * not, and it never touches the scene the test runner is standing in. */
+			Scene world = UnityEditor.SceneManagement.EditorSceneManager.NewPreviewScene();
+
+			try
+			{
+				LogAssert.IsFalse(world == active, "Sanity: the effect's scene must not be the active one.");
+
+				AbilityObject abilityObject = MakeAbilityObject(Vector3.zero);
+				SceneManager.MoveGameObjectToScene(abilityObject.GameObject, world);
+
+				EventData destroy = new AbilityDestroyEventData(null, abilityObject);
+				LogAssert.AreEqual(world, PlayFXAction.ResolveSpawnScene(null, destroy),
+					"The ability object has already been placed in the caster's scene, so it is asked first.");
+
+				GameObject instance = Track(PlayFXAction.SpawnFX(ShippedFireFX(), Vector3.zero,
+					PlayFXAction.ResolveSpawnScene(null, destroy)));
+
+				LogAssert.AreEqual(world, instance.scene,
+					"The instance follows the effect into its scene — a bare Instantiate would have left it " +
+					"in the active one, where it outlives the scene it belongs to.");
+			}
+			finally
+			{
+				UnityEditor.SceneManagement.EditorSceneManager.ClosePreviewScene(world);
+			}
 		}
 
 		// ── Probes ──────────────────────────────────────────────────────────────────────────────

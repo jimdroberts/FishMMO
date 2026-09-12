@@ -268,6 +268,18 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for the keybinding override blob written by the input system.</summary>
 		public const string InputBindingOverridesKey = "InputBindingOverrides";
 
+		// ── Chat ────────────────────────────────────────────────────
+
+		/// <summary>Configuration key for the chat log's message font size, in points.</summary>
+		/// <remarks>
+		/// Under a prefix of its own rather than folded into the interface scale, because the two
+		/// answer different complaints. The interface scale multiplies the panel asset's reference
+		/// resolution: it resizes every panel and every word in every one of them, and it stops at
+		/// 1.5x. A player who can read the rest of the HUD and not the chat log has no remedy in
+		/// it — and 1.5x of a 12px line is 18px whether or not that is the size they needed.
+		/// </remarks>
+		public const string ChatFontSizeKey = "Chat.FontSize";
+
 		// ── Map ─────────────────────────────────────────────────────
 
 		/// <summary>Configuration key for the minimap's zoom, as the view's half-extent in metres.</summary>
