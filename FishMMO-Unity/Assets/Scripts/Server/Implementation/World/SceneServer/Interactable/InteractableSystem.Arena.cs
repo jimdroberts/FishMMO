@@ -217,21 +217,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Validates that a connection is standing at a board that offers the arena and format it
 		/// asked for. Main thread only.
 		/// </summary>
+		/// <remarks>
+		/// Deliberately NOT gated on <see cref="CharacterStateValidation.CanAct"/>, for the same
+		/// reason the group-finder queue handler states outright: queuing is not a move. The gate
+		/// that matters is on the TRANSFER, not on the request — an arena entry is a
+		/// <c>GroupFinderEntry</c> in the same <c>groupFinderEntries</c> table as a dungeon one
+		/// (see <c>BuildArenaEntry</c>), and <c>HandleMatchedEntry</c> refuses to move any matched
+		/// entry unless <see cref="CharacterStateValidation.CanActOrMove"/> passes and the player is
+		/// still at the door. So a player who dies, is stunned or starts teleporting after queuing
+		/// keeps their place and is not moved; gating here as well would only refuse the request
+		/// earlier, and would refuse a dead player the right to queue for their next match.
+		/// </remarks>
 		private bool TryResolveArenaBoard(NetworkConnection conn, ArenaQueueBroadcast msg, out ArenaRequestContext context, out GroupFinderRefusalReason refusal)
 		{
 			context = default;
 			refusal = GroupFinderRefusalReason.NoEntrance;
 
-			if (conn == null || conn.FirstObject == null)
+			/* PlayerRequestGate.SkipCanAct, not an oversight — see the remarks above for which
+			 * later gate covers this one. Written through the shared entry point so that the
+			 * opt-out is a named argument rather than an absence nobody can tell from a bug. */
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request, PlayerRequestGate.SkipCanAct))
 			{
 				return false;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
-			{
-				return false;
-			}
+			IPlayerCharacter character = request.Character;
 
 			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{

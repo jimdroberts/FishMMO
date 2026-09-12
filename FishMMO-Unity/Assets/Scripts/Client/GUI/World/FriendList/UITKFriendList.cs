@@ -340,38 +340,33 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Prompts for a name and broadcasts an add-friend request.
 		/// </summary>
+		/// <remarks>
+		/// The name-to-ID half is <see cref="UITKControl.PromptForCharacterID"/>, shared with the
+		/// guild and party invite buttons, which held the same flow verbatim. Only the broadcast and
+		/// the "that is you" wording are this panel's.
+		/// <para>
+		/// There is deliberately NO target-first path here, unlike those two: a friend is added by
+		/// name on purpose. Adding whoever happens to be under the pointer is a different and much
+		/// easier-to-misfire action, and the roster row is where an already-known character is acted
+		/// on.
+		/// </para>
+		/// <para>
+		/// There is also no connection guard around this, again unlike the invite buttons — they
+		/// require a guild or a party to exist, which cannot be true offline, whereas this button has
+		/// no such precondition to lean on. The broadcast itself is the guard: it goes nowhere when
+		/// the client is not started.
+		/// </para>
+		/// </remarks>
 		public void OnButtonAddFriend()
 		{
-			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox tooltip))
-			{
-				tooltip.Open("Please type the name of the person you wish to add.", (s) =>
+			PromptForCharacterID(
+				"Please type the name of the person you wish to add.",
+				() => Character,
+				"You can't add yourself as a friend.",
+				(id) => Client.Broadcast(new FriendAddNewBroadcast()
 				{
-					if (Authentication.IsAllowedCharacterName(s))
-					{
-						ClientNamingSystem.GetCharacterID(s, (id) =>
-						{
-							if (id != 0)
-							{
-								if (Character != null && Character.ID != id)
-								{
-									Client.Broadcast(new FriendAddNewBroadcast()
-									{
-										CharacterID = id
-									}, Channel.Reliable);
-								}
-								else if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-								{
-									chat.InstantiateChatMessage(ChatChannel.System, "", "You can't add yourself as a friend.");
-								}
-							}
-							else if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-							{
-								chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found.");
-							}
-						});
-					}
-				}, null);
-			}
+					CharacterID = id
+				}, Channel.Reliable));
 		}
 
 		/// <summary>

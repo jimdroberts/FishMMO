@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -31,6 +31,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				!character.TryGet(out IInventoryController inventoryController) ||
 				!CharacterStateValidation.CanAct(character))
 			{
+				/* Answer, do not just drop it.
+				 *
+				 * SendContainerResult is what releases the client's pending lock on the slot, and
+				 * the throttle gate immediately below already understood that. This gate did not:
+				 * a player who is dead, stunned, teleporting or mid-load clicking a chest slot got
+				 * silence, and the slot stayed locked in their client until the window was closed.
+				 *
+				 * The guard key is taken below, so this cannot fold into the try/finally that covers
+				 * every later exit — EndIngressGuard would have nothing to release. Replying here is
+				 * the same shape the throttle path uses, which keeps the two gates symmetrical. */
+				SendContainerResult(conn, msg.InteractableID, msg.Slot, false, ContainerFailureReason.ServerError);
 				return;
 			}
 
