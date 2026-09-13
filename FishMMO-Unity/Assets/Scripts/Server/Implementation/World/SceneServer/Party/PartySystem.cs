@@ -2177,14 +2177,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public void OnServerPartyCreateBroadcastReceived(NetworkConnection conn, PartyCreateBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
+			IPlayerCharacter player = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Create, out long guardKey))
 			{
@@ -2330,14 +2327,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyInviteBroadcastReceived(NetworkConnection conn, PartyInviteBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Invite, out long guardKey))
 			{
@@ -2531,14 +2524,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyAcceptInviteBroadcastReceived(NetworkConnection conn, PartyAcceptInviteBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AcceptInvite, out long guardKey))
 			{
@@ -3096,14 +3085,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyDeclineInviteBroadcastReceived(NetworkConnection conn, PartyDeclineInviteBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null || !CharacterStateValidation.CanAct(character))
-				return;
+			IPlayerCharacter character = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DeclineInvite, out long guardKey))
 			{
@@ -3138,14 +3124,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyLeaveBroadcastReceived(NetworkConnection conn, PartyLeaveBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Leave, out long guardKey))
 			{
@@ -4073,14 +4055,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyRemoveBroadcastReceived(NetworkConnection conn, PartyRemoveBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Remove, out long guardKey))
 			{
@@ -4261,14 +4239,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyChangeRankBroadcastReceived(NetworkConnection conn, PartyChangeRankBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.ChangeRank, out long guardKey))
 			{

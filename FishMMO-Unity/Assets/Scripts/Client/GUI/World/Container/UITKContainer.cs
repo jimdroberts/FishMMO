@@ -99,15 +99,24 @@ namespace FishMMO.Client
 		/// <summary>Rendered rows, one per non-empty container slot.</summary>
 		private readonly List<RowView> rowViews = new List<RowView>();
 
+		/*  This was a hand-rolled Dictionary<int, float> of send times with its own expiry sweep,
+		 *  the third such sweep in the client and the second one in a world item panel. The clock
+		 *  here was already the right one (unscaledTime), which is precisely why the duplication was
+		 *  dangerous: the corpse loot panel next door had written the same watchdog against
+		 *  Time.time, so the two panels disagreed about whether a paused game pauses a network
+		 *  deadline, and only one of them was right. Sharing one implementation is what makes that
+		 *  disagreement impossible rather than merely currently-absent — see
+		 *  PendingSlotWatchdogTests. */
+
 		/// <summary>
-		/// Container slots with a take in flight, mapped to the time the request was sent.
+		/// Container slots with a take in flight.
 		/// </summary>
 		/// <remarks>
 		/// Keyed by slot rather than by row index because rows are rebuilt whenever the server
 		/// re-sends the contents, and a row's position moves as slots above it empty. The slot
 		/// index is the only identifier that survives a rebuild.
 		/// </remarks>
-		private readonly Dictionary<int, float> pendingSlots = new Dictionary<int, float>();
+		private readonly ItemSlotPendingSet pendingSlots = new ItemSlotPendingSet();
 
 		private VisualElement listRoot;
 		private Label subtitleLabel;
@@ -256,7 +265,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			pendingSlots.Remove(msg.Slot);
+			pendingSlots.Release(msg.Slot);
 			ApplyPendingOverlays();
 
 			SetStatus(msg.Success ? string.Empty : DescribeFailure(msg.Reason));
@@ -433,7 +442,7 @@ namespace FishMMO.Client
 			for (int i = 0; i < rowViews.Count; ++i)
 			{
 				RowView view = rowViews[i];
-				bool waiting = pendingSlots.ContainsKey(view.Slot);
+				bool waiting = pendingSlots.IsPending(view.Slot);
 				view.Pending?.EnableInClassList(CSS_HIDDEN, !waiting);
 			}
 		}
@@ -450,12 +459,16 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (pendingSlots.ContainsKey(slot))
+			/* The double-submit guard. TryBegin refuses a slot that already has a request in flight
+			 * rather than re-arming its watchdog, so clicking a stuck row repeatedly cannot keep
+			 * pushing its deadline out — the timeout below still fires on schedule. The 5s is passed
+			 * explicitly because the shared default is 8s, and adopting it here would have quietly
+			 * lengthened how long a row stays locked. */
+			if (!pendingSlots.TryBegin(slot, PENDING_TIMEOUT_SECONDS))
 			{
 				return;
 			}
 
-			pendingSlots[slot] = UnityEngine.Time.unscaledTime;
 			ApplyPendingOverlays();
 			SetStatus(string.Empty);
 
@@ -499,34 +512,22 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Clears rows whose reply never arrived.
 		/// </summary>
+		/// <remarks>
+		/// <c>CollectExpired</c> reports each slot exactly once per wait, so this is safe to drive
+		/// straight from the tick. Releasing only re-enables the row — a reply that arrives after
+		/// the release is still handled normally.
+		/// </remarks>
 		private void ReleaseTimedOutRequests()
 		{
-			if (pendingSlots.Count < 1)
+			if (!pendingSlots.HasAnyPending)
 			{
 				return;
 			}
 
-			float now = UnityEngine.Time.unscaledTime;
-			List<int> expired = null;
-
-			foreach (KeyValuePair<int, float> pair in pendingSlots)
+			if (pendingSlots.CollectExpired().Count > 0)
 			{
-				if (now - pair.Value >= PENDING_TIMEOUT_SECONDS)
-				{
-					(expired ??= new List<int>()).Add(pair.Key);
-				}
+				ApplyPendingOverlays();
 			}
-
-			if (expired == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < expired.Count; ++i)
-			{
-				pendingSlots.Remove(expired[i]);
-			}
-			ApplyPendingOverlays();
 		}
 
 		// ── Helpers ───────────────────────────────────────────────────────────
@@ -548,7 +549,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ClearPending()
 		{
-			pendingSlots.Clear();
+			pendingSlots.ReleaseAll();
 		}
 
 		/// <summary>

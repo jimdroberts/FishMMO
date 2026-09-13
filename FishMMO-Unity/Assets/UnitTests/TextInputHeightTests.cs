@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -163,6 +163,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(Directory.Exists(GuiRoot), $"the GUI must live at {GuiRoot}");
 
 			Dictionary<string, string> wornBy = ClassesWornBySingleLineTextFields();
+			HashSet<string> compactFields = FieldsWearingCompact();
 			LogAssert.IsTrue(wornBy.Count > 0, "there must be text fields to check");
 
 			List<string> offenders = new List<string>();
@@ -197,11 +198,23 @@ namespace FishMMO.UnitTests
 
 					foreach (KeyValuePair<string, string> worn in wornBy)
 					{
-						if (Targets(selector, worn.Key))
+						if (!Targets(selector, worn.Key))
 						{
-							offenders.Add(
-								$"{Path.GetFileName(sheet)} '{selector}' pins the height of {worn.Value}");
+							continue;
 						}
+
+						/* A pinned height is legal WITH fish-input--compact, which is the theme's own
+						 * remedy: it zeroes the padding Unity puts inside the editable surface, which is
+						 * what starves the glyph box at small heights. A field that pins a height and does
+						 * not wear it renders an empty box — the rule this test exists to hold. */
+						if (compactFields.Contains(worn.Value))
+						{
+							continue;
+						}
+
+						offenders.Add(
+							$"{Path.GetFileName(sheet)} '{selector}' pins the height of {worn.Value} " +
+							"without fish-input--compact");
 					}
 				}
 			}
@@ -209,6 +222,30 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(offenders.Count == 0,
 				"a single-line text field must size to its own text or its glyphs clip — use min-height. " +
 				string.Join("; ", offenders));
+		}
+
+		/// <summary>The fields that carry fish-input--compact, by the same where-key as wornBy.</summary>
+		private static HashSet<string> FieldsWearingCompact()
+		{
+			HashSet<string> compact = new HashSet<string>();
+
+			foreach (string layout in Directory.GetFiles(GuiRoot, "*.uxml", SearchOption.AllDirectories))
+			{
+				foreach (Match field in Regex.Matches(File.ReadAllText(layout),
+					"<ui:(TextField|IntegerField|FloatField|LongField|DoubleField)\\b[^>]*>"))
+				{
+					string tag = field.Value;
+					if (!tag.Contains("fish-input--compact"))
+					{
+						continue;
+					}
+
+					Match named = Regex.Match(tag, "name=\"([^\"]*)\"");
+					compact.Add($"{Path.GetFileName(layout)}:{(named.Success ? named.Groups[1].Value : "?")}");
+				}
+			}
+
+			return compact;
 		}
 
 		/// <summary>Every USS class worn by a single-line TextField, mapped to where it is worn.</summary>
@@ -220,7 +257,14 @@ namespace FishMMO.UnitTests
 			{
 				string source = File.ReadAllText(layout);
 
-				foreach (Match field in Regex.Matches(source, "<ui:TextField\\b[^>]*>"))
+				/* Every field type that draws glyphs, not only TextField.
+				 *
+				 * Scanning for TextField alone is how issues #263 and #277 returned after this test was
+				 * written: the merchant quantity box is an IntegerField, so it was never checked, and it
+				 * pinned an exact height exactly as the TextFields once did. The numeric fields derive
+				 * from the same TextInputBaseField and their glyph box collapses the same way. */
+				foreach (Match field in Regex.Matches(source,
+					"<ui:(TextField|IntegerField|FloatField|LongField|DoubleField)\\b[^>]*>"))
 				{
 					string tag = field.Value;
 

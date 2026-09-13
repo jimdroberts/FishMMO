@@ -1174,6 +1174,14 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Invites the hovered or pinned target, or prompts for a name, to the guild.
 		/// </summary>
+		/// <remarks>
+		/// Target first, name second. Both halves live on <see cref="UITKControl"/> now — see
+		/// <see cref="UITKControl.TryResolveTargetCharacter"/> and
+		/// <see cref="UITKControl.PromptForCharacterID"/> — because the party panel and the friend
+		/// list had their own copy of each, identical down to the wording of the failure messages.
+		/// What stays here is what is genuinely guild-specific: the guard (a guild must exist to
+		/// invite into), the broadcast, and the one sentence that names the guild.
+		/// </remarks>
 		public void OnButtonInviteToGuild()
 		{
 			if (Character != null &&
@@ -1181,56 +1189,24 @@ namespace FishMMO.Client
 				guildController.ID > 0 &&
 				Client.NetworkManager.IsClientStarted)
 			{
-				if (Character.TryGet(out ITargetController targetController))
+				if (TryResolveTargetCharacter(Character, out IPlayerCharacter targetCharacter))
 				{
-					/* The hovered character first, then the pinned one. The pointer is on this
-					 * button when it fires, so the hover target is usually empty — and the
-					 * pinned card is exactly the player's way of saying "this one" ahead of time. */
-					Transform target = targetController.Current.Target != null
-						? targetController.Current.Target
-						: targetController.PinnedTarget;
-					IPlayerCharacter targetCharacter = target != null ? target.GetComponent<IPlayerCharacter>() : null;
-					if (targetCharacter != null)
+					Client.Broadcast(new GuildInviteBroadcast()
 					{
-						Client.Broadcast(new GuildInviteBroadcast()
-						{
-							TargetCharacterID = targetCharacter.ID
-						}, Channel.Reliable);
+						TargetCharacterID = targetCharacter.ID
+					}, Channel.Reliable);
 
-						return;
-					}
+					return;
 				}
 
-				if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox tooltip))
-				{
-					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
+				PromptForCharacterID(
+					"Please type the name of the person you wish to invite.",
+					() => Character,
+					"You can't invite yourself to the guild.",
+					(id) => Client.Broadcast(new GuildInviteBroadcast()
 					{
-						if (Authentication.IsAllowedCharacterName(s))
-						{
-							ClientNamingSystem.GetCharacterID(s, (id) =>
-							{
-								if (id != 0)
-								{
-									if (Character != null && Character.ID != id)
-									{
-										Client.Broadcast(new GuildInviteBroadcast()
-										{
-											TargetCharacterID = id,
-										}, Channel.Reliable);
-									}
-									else if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-									{
-										chat.InstantiateChatMessage(ChatChannel.System, "", "You can't invite yourself to the guild.");
-									}
-								}
-								else if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-								{
-									chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found.");
-								}
-							});
-						}
-					}, null);
-				}
+						TargetCharacterID = id,
+					}, Channel.Reliable));
 			}
 		}
 
@@ -1277,6 +1253,17 @@ namespace FishMMO.Client
 		/// Trimmed to <paramref name="maxLength"/> here as a courtesy so the player is not silently
 		/// truncated at the database, but the server re-applies the same cap — a client's idea of
 		/// a limit is never the limit.
+		/// <para>
+		/// This is NOT <see cref="UITKControl.PromptForCharacterID"/> with different strings, and was
+		/// deliberately left as its own method when the three invite flows were merged into that one.
+		/// It asks for FREE TEXT, not a name: nothing here is validated against
+		/// <see cref="Authentication.IsAllowedCharacterName"/>, nothing is resolved through
+		/// <see cref="ClientNamingSystem"/>, there is no ID to compare against the player's own, and
+		/// it is gated on a guild PERMISSION that the invite flows have no equivalent of. Folding it
+		/// in would have meant a helper with two mutually exclusive halves selected by a flag, which
+		/// is the copy it replaced wearing one name. What it does share — finding the one input
+		/// dialog, and putting a line in chat — it now takes from the base class.
+		/// </para>
 		/// </remarks>
 		private void PromptGuildText(string prompt, string current, int maxLength, GuildPermissions required, Action<string> send)
 		{
@@ -1290,19 +1277,11 @@ namespace FishMMO.Client
 
 			if (!guildController.HasGuildPermission(required))
 			{
-				if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-				{
-					chat.InstantiateChatMessage(ChatChannel.System, "", "Your guild rank does not allow that.");
-				}
+				ShowSystemMessage("Your guild rank does not allow that.");
 				return;
 			}
 
-			if (!UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox input))
-			{
-				return;
-			}
-
-			input.Open(prompt, (s) =>
+			TryPromptForText(prompt, (s) =>
 			{
 				string text = (s ?? string.Empty).Trim();
 				if (text.Length > maxLength)
@@ -1310,7 +1289,7 @@ namespace FishMMO.Client
 					text = text.Substring(0, maxLength);
 				}
 				send(text);
-			}, null);
+			});
 		}
 
 		/// <summary>

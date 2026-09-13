@@ -1076,9 +1076,21 @@ namespace FishMMO.Client
 		private void SetQuantity(int quantity)
 		{
 			int clamped = UnityEngine.Mathf.Clamp(quantity, 1, selectedMaxQuantity);
-			if (quantityField != null && quantityField.value != clamped)
+			if (quantityField != null)
 			{
-				// SetValueWithoutNotify: the change callback re-enters this method otherwise.
+				/* Written every time, not only when the number changes.
+				 *
+				 * An IntegerField's visible text is produced BY the write. Guarding the write on
+				 * `value != clamped` meant the common case never wrote at all: the UXML authors the
+				 * field as value="1", so the first SetQuantity(1) after a selection found them equal,
+				 * skipped the assignment, and left the inner text element empty. The field was live and
+				 * editable the whole time and simply displayed nothing, which reads as a dead control.
+				 *
+				 * It also recurs after any tree rebuild — hiding the panel disposes the visual tree, so
+				 * the re-queried field is back at the authored 1 with no text — which is why it looked
+				 * intermittent rather than simply broken.
+				 *
+				 * SetValueWithoutNotify rather than value: the change callback re-enters this method. */
 				quantityField.SetValueWithoutNotify(clamped);
 			}
 			RefreshQuantityControls();

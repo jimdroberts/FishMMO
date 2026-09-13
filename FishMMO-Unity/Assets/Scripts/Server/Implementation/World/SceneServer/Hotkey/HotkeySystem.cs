@@ -325,17 +325,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetBroadcastReceived(NetworkConnection conn, HotkeySetBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
-
-			if (playerCharacter == null || !CharacterStateValidation.CanAct(playerCharacter))
-			{
-				return;
-			}
+			IPlayerCharacter playerCharacter = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetSingle, out long guardKey))
 			{
@@ -383,14 +377,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetMultipleBroadcastReceived(NetworkConnection conn, HotkeySetMultipleBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
+			IPlayerCharacter playerCharacter = request.Character;
 
-			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
-
-			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Length < 1 || !CharacterStateValidation.CanAct(playerCharacter))
+			if (msg.Hotkeys == null || msg.Hotkeys.Length < 1)
 			{
 				return;
 			}

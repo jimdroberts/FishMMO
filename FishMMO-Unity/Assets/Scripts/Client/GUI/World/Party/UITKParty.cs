@@ -969,6 +969,14 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Invites the hovered or pinned target, or prompts for a name, to the party.
 		/// </summary>
+		/// <remarks>
+		/// Target first, name second. Both halves live on <see cref="UITKControl"/> now — see
+		/// <see cref="UITKControl.TryResolveTargetCharacter"/> and
+		/// <see cref="UITKControl.PromptForCharacterID"/> — because this method and the guild
+		/// panel's were the same code twice, comment included, and the friend list held a third
+		/// copy of the name half. What stays here is the party-specific part: the guard, the
+		/// broadcast, and the one sentence that names the party.
+		/// </remarks>
 		public void OnButtonInviteToParty()
 		{
 			if (Character != null &&
@@ -976,56 +984,24 @@ namespace FishMMO.Client
 				partyController.ID > 0 &&
 				Client.NetworkManager.IsClientStarted)
 			{
-				if (Character.TryGet(out ITargetController targetController))
+				if (TryResolveTargetCharacter(Character, out IPlayerCharacter targetCharacter))
 				{
-					/* The hovered character first, then the pinned one. The pointer is on this
-					 * button when it fires, so the hover target is usually empty — and the
-					 * pinned card is exactly the player's way of saying "this one" ahead of time. */
-					Transform target = targetController.Current.Target != null
-						? targetController.Current.Target
-						: targetController.PinnedTarget;
-					IPlayerCharacter targetCharacter = target != null ? target.GetComponent<IPlayerCharacter>() : null;
-					if (targetCharacter != null)
+					Client.Broadcast(new PartyInviteBroadcast()
 					{
-						Client.Broadcast(new PartyInviteBroadcast()
-						{
-							TargetCharacterID = targetCharacter.ID,
-						}, Channel.Reliable);
+						TargetCharacterID = targetCharacter.ID,
+					}, Channel.Reliable);
 
-						return;
-					}
+					return;
 				}
 
-				if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox tooltip))
-				{
-					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
+				PromptForCharacterID(
+					"Please type the name of the person you wish to invite.",
+					() => Character,
+					"You can't invite yourself to the party.",
+					(id) => Client.Broadcast(new PartyInviteBroadcast()
 					{
-						if (Authentication.IsAllowedCharacterName(s))
-						{
-							ClientNamingSystem.GetCharacterID(s, (id) =>
-							{
-								if (id != 0)
-								{
-									if (Character != null && Character.ID != id)
-									{
-										Client.Broadcast(new PartyInviteBroadcast()
-										{
-											TargetCharacterID = id,
-										}, Channel.Reliable);
-									}
-									else if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-									{
-										chat.InstantiateChatMessage(ChatChannel.System, "", "You can't invite yourself to the party.");
-									}
-								}
-								else if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-								{
-									chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found.");
-								}
-							});
-						}
-					}, null);
-				}
+						TargetCharacterID = id,
+					}, Channel.Reliable));
 			}
 		}
 

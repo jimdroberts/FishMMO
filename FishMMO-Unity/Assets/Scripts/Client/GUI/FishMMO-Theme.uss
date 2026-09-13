@@ -1219,8 +1219,23 @@ TextField.fish-input > #unity-text-input {
     hand; the mail compose fields take the other route and refuse to pin a height at all. Any panel
     that gives a .fish-input an exact height has to put this class on it, or its box renders empty.
 */
+/*
+    The type-qualified selectors are load bearing, not belt and braces.
+
+    Unity's default stylesheet sets that 10px padding through a TYPE-qualified rule, so a bare
+    class selector loses the specificity fight and the padding survives. TextField was spelled out
+    for that reason; the numeric fields were not, and every one of them therefore kept the default
+    padding and rendered an empty box however it was styled. The merchant quantity field is an
+    IntegerField, which is why issues #263 and #277 came back after the TextField fix appeared to
+    settle them: the field accepted input and reported the right value the whole time, and simply
+    drew nothing. Any new field type given .fish-input--compact has to be named here too.
+*/
 .fish-input--compact > #unity-text-input,
-TextField.fish-input--compact > #unity-text-input {
+TextField.fish-input--compact > #unity-text-input,
+IntegerField.fish-input--compact > #unity-text-input,
+FloatField.fish-input--compact > #unity-text-input,
+LongField.fish-input--compact > #unity-text-input,
+DoubleField.fish-input--compact > #unity-text-input {
     padding-top: 0;
     padding-bottom: 0;
 }

@@ -243,14 +243,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetFollowBroadcastReceived(NetworkConnection conn, PetFollowBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Follow, out long guardKey))
 			{
@@ -280,14 +276,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetStayBroadcastReceived(NetworkConnection conn, PetStayBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Stay, out long guardKey))
 			{
@@ -356,14 +348,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetSummonBroadcastReceived(NetworkConnection conn, PetSummonBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Summon, out long guardKey))
 			{
@@ -415,14 +403,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetReleaseBroadcastReceived(NetworkConnection conn, PetReleaseBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
+			IPlayerCharacter player = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Release, out long guardKey))
 			{
@@ -538,14 +523,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void OnPetAttackBroadcastReceived(NetworkConnection conn, PetAttackBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
+			IPlayerCharacter player = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Attack, out long guardKey))
 			{
@@ -637,14 +619,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void OnPetAttackPriorityBroadcastReceived(NetworkConnection conn, PetAttackPriorityBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AttackPriority, out long guardKey))
 			{
@@ -680,14 +658,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetStanceBroadcastReceived(NetworkConnection conn, PetStanceBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out _))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-				return;
 
 			// Reject values outside the enum rather than casting a hostile byte straight in.
 			if (!Enum.IsDefined(typeof(PetStance), msg.Stance))

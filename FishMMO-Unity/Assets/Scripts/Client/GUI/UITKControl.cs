@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Logging;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
@@ -1038,6 +1039,190 @@ namespace FishMMO.Client
 				inventory.Show();
 			}
 		}
+
+		#region Name prompts
+
+		/// <summary>
+		/// Name the chat panel is registered under with <see cref="UIManager"/>.
+		/// </summary>
+		public const string ChatPanelName = "UIChat";
+
+		/// <summary>
+		/// Name the shared single-line text prompt is registered under with <see cref="UIManager"/>.
+		/// </summary>
+		public const string InputDialogPanelName = "UIDialogInputBox";
+
+		/// <summary>
+		/// The line shown when a name the player typed resolves to nobody.
+		/// </summary>
+		/// <remarks>
+		/// One constant rather than a literal per panel. The failure it reports is not
+		/// panel-specific — a name did not resolve, which has nothing to do with guilds, parties or
+		/// friend lists — so the three panels that resolved a typed name all spelled it identically
+		/// and would have drifted apart the first time one of them was reworded. The wording that IS
+		/// panel-specific, namely who you may not invite and to what, stays with the caller.
+		/// </remarks>
+		public const string UnknownCharacterMessage = "A person with that name could not be found.";
+
+		/// <summary>
+		/// Writes one line into the chat panel's system channel.
+		/// </summary>
+		/// <param name="message">The line to show.</param>
+		/// <remarks>
+		/// Chat is how this UI tells the player an action went nowhere, and every caller had written
+		/// the same lookup-then-instantiate pair to say so. A missing chat panel is silence rather
+		/// than an error: it is a panel like any other and may not be registered yet, and every
+		/// hand-rolled copy of this already behaved that way by writing the call inside the
+		/// <c>TryGetTK</c> test.
+		/// </remarks>
+		protected static void ShowSystemMessage(string message)
+		{
+			if (UIManager.TryGetTK(ChatPanelName, out UITKChat chat))
+			{
+				chat.InstantiateChatMessage(ChatChannel.System, "", message);
+			}
+		}
+
+		/// <summary>
+		/// Opens the shared single-line prompt and runs <paramref name="onAccept"/> with what the
+		/// player typed.
+		/// </summary>
+		/// <param name="prompt">The question shown in the dialog.</param>
+		/// <param name="onAccept">Receives the accepted text. Not called on cancel.</param>
+		/// <returns>True when the prompt was shown.</returns>
+		/// <remarks>
+		/// The dialog is a SHARED panel — there is one of it, registered with
+		/// <see cref="UIManager"/> — so every prompt in the client is a lookup by name that can
+		/// fail, and each panel that wanted to ask the player something wrote that lookup itself.
+		/// Failing to find it returns false rather than throwing: a panel asking a question when the
+		/// dialog does not exist has nothing useful to do, and the one thing it must not do is carry
+		/// on as though the player had answered.
+		/// </remarks>
+		protected static bool TryPromptForText(string prompt, Action<string> onAccept)
+		{
+			if (!UIManager.TryGetTK(InputDialogPanelName, out UITKDialogInputBox input))
+			{
+				return false;
+			}
+
+			input.Open(prompt, onAccept, null);
+			return true;
+		}
+
+		/// <summary>
+		/// Resolves the player character an action should act on without asking: the hovered one,
+		/// else the pinned one.
+		/// </summary>
+		/// <param name="source">The character whose targeting is read — normally the local player.</param>
+		/// <param name="targetCharacter">The resolved player character, or null.</param>
+		/// <returns>True when a player character was resolved.</returns>
+		/// <remarks>
+		/// The hovered character first, then the pinned one. The pointer is on the button when it
+		/// fires, so the hover target is usually empty — and the pinned card is exactly the player's
+		/// way of saying "this one" ahead of time.
+		/// <para>
+		/// What comes back is a character, never a name, so this path never touches the naming
+		/// system: the caller already holds the ID it needs. That is the whole difference between it
+		/// and <see cref="PromptForCharacterID"/>, and the reason a panel tries this first and only
+		/// asks when it fails.
+		/// </para>
+		/// <para>
+		/// Returning false covers three separate misses — no character, no target controller, and a
+		/// target that is not a player character — because a caller treats all three the same way:
+		/// fall back to asking for a name.
+		/// </para>
+		/// </remarks>
+		protected static bool TryResolveTargetCharacter(IPlayerCharacter source, out IPlayerCharacter targetCharacter)
+		{
+			targetCharacter = null;
+
+			if (source == null ||
+				!source.TryGet(out ITargetController targetController))
+			{
+				return false;
+			}
+
+			Transform target = targetController.Current.Target != null
+				? targetController.Current.Target
+				: targetController.PinnedTarget;
+
+			targetCharacter = target != null ? target.GetComponent<IPlayerCharacter>() : null;
+			return targetCharacter != null;
+		}
+
+		/// <summary>
+		/// Prompts for a character name, resolves it to a character ID, and hands that ID to the
+		/// caller once it is known to be somebody other than the player themselves.
+		/// </summary>
+		/// <param name="prompt">The question shown in the dialog.</param>
+		/// <param name="self">
+		/// Reads the local character AT RESOLUTION TIME — see the remarks for why this is a delegate.
+		/// </param>
+		/// <param name="selfMessage">Shown when the name resolves to the player themselves.</param>
+		/// <param name="onResolved">Receives a character ID that resolved and is not the player's.</param>
+		/// <returns>True when the prompt was shown. Resolution happens later, off a server reply.</returns>
+		/// <remarks>
+		/// <para>
+		/// Three panels — guild invite, party invite, add friend — each held an independent copy of
+		/// this entire flow, differing only in the broadcast they sent and two strings. That is a bad
+		/// shape for it, because every step has a way of being wrong that is SILENT: skip the name
+		/// validation and an unvalidatable string goes to the server to be rejected; skip the
+		/// <c>id == 0</c> test and a failed lookup sends an invite to character zero; skip the self
+		/// test and the player invites themselves and waits for a dialog that never arrives. None of
+		/// those fail at the call site, so nothing reveals the omission — which is precisely the sort
+		/// of thing that belongs in one place with a test guarding it.
+		/// </para>
+		/// <para>
+		/// <paramref name="self"/> is a delegate rather than an <see cref="IPlayerCharacter"/>
+		/// because the ID arrives from the SERVER, asynchronously: a player can leave the world
+		/// between typing a name and the reply landing. The copies this replaces read their
+		/// <c>Character</c> field INSIDE the callback, so they tested the character as it was when
+		/// the answer came back and treated "no character any more" as a reason not to send. Taking
+		/// the character by value here would have quietly turned that into a send against a stale
+		/// reference.
+		/// </para>
+		/// <para>
+		/// An invalid name is silent, as all three copies were. The dialog has closed by then, and
+		/// the name rules — length, letters, single spaces — are the ones the player already met on
+		/// the character creation screen.
+		/// </para>
+		/// </remarks>
+		protected static bool PromptForCharacterID(string prompt, Func<IPlayerCharacter> self, string selfMessage, Action<long> onResolved)
+		{
+			return TryPromptForText(prompt, (s) =>
+			{
+				if (!Authentication.IsAllowedCharacterName(s))
+				{
+					return;
+				}
+
+				ClientNamingSystem.GetCharacterID(s, (id) =>
+				{
+					if (id == 0)
+					{
+						ShowSystemMessage(UnknownCharacterMessage);
+						return;
+					}
+
+					IPlayerCharacter character = self != null ? self() : null;
+					if (character == null || character.ID == id)
+					{
+						/* A null character takes the same branch as "that is you", which is what the
+						 * copies did by testing Character != null before comparing IDs. It reads
+						 * oddly — the player is told they cannot invite themselves when in truth
+						 * there is no player — but the alternative is broadcasting from a panel
+						 * whose character is gone, and the branch is unreachable while a character
+						 * is in the world. */
+						ShowSystemMessage(selfMessage);
+						return;
+					}
+
+					onResolved?.Invoke(id);
+				});
+			});
+		}
+
+		#endregion
 
 		/// <summary>
 		/// Shows the panel by enabling the <see cref="UIDocument"/>.

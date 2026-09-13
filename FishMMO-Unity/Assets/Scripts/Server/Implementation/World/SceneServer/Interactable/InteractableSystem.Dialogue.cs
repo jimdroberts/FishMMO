@@ -443,18 +443,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		private void OnServerDialogueChoiceBroadcastReceived(NetworkConnection conn, DialogueChoiceBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
-			{
-				return;
-			}
-			
-			if (!CharacterStateValidation.CanAct(character))
-				return;
+			IPlayerCharacter character = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{

@@ -165,16 +165,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		public void OnServerGuildDirectoryRequestBroadcastReceived(NetworkConnection conn, GuildDirectoryRequestBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-			{
-				return;
-			}
+			IPlayerCharacter player = request.Character;
 
 			if (Server?.Database?.ServiceRegistry == null)
 			{
@@ -277,16 +272,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		public void OnServerGuildApplyBroadcastReceived(NetworkConnection conn, GuildApplyBroadcast msg, Channel channel)
 		{
-			if (conn == null || conn.FirstObject == null)
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
-
-			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (player == null || !CharacterStateValidation.CanAct(player))
-			{
-				return;
-			}
+			IPlayerCharacter player = request.Character;
 
 			if (Server?.Database?.ServiceRegistry == null || msg.GuildID < 1)
 			{
