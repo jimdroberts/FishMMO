@@ -125,6 +125,21 @@ namespace FishMMO.Client
 		/// <summary>What each slot is bound to. Index-aligned with <see cref="slots"/>.</summary>
 		private HotkeyBinding[] bindings;
 
+		/// <summary>
+		/// The binding a right-click lifted off the bar, and the slot it came from (-1 when none).
+		/// </summary>
+		/// <remarks>
+		/// A lifted shortcut used to be seeded onto the cursor as the item drag it pointed at — a bag
+		/// slot index typed Inventory, or a socket typed Equipment — so pressing a bag slot next moved
+		/// the real item, and pressing a socket unequipped it. The cursor now carries
+		/// <see cref="ReferenceButtonType.Hotkey"/> with the source slot, which only this bar accepts,
+		/// and what it lifted is remembered here so a drop can bind it again. The slot itself is
+		/// cleared at lift time, as it always was: a right-click IS the gesture that removes a
+		/// shortcut, and putting the drag down anywhere else simply leaves it removed.
+		/// </remarks>
+		private HotkeyBinding liftedBinding;
+		private int liftedSlotIndex = -1;
+
 		/// <summary>All created hotkey slots in index order. Belongs to the current visual tree.</summary>
 		private readonly List<HotkeySlot> slots = new List<HotkeySlot>();
 
@@ -529,6 +544,16 @@ namespace FishMMO.Client
 				RefreshAllSlots();
 			}
 
+			/* A lift whose drag was put down anywhere but on this bar — the root's cancel press,
+			 * Escape, a panel closing — is forgotten here, so it cannot be resolved by a later drag. */
+			if (liftedSlotIndex >= 0 &&
+				(!UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) ||
+				 !dragObject.Visible ||
+				 dragObject.Type != ReferenceButtonType.Hotkey))
+			{
+				liftedSlotIndex = -1;
+			}
+
 			UpdateCooldownSweeps();
 			UpdateInput();
 		}
@@ -697,12 +722,11 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.Visible)
 			{
-				if (dragObject.Type != ReferenceButtonType.Bank &&
-					dragObject.Type != ReferenceButtonType.None)
+				if (TryResolveDroppedBinding(dragObject, out ReferenceButtonType type, out long referenceID))
 				{
 					EnsureBindings();
-					bindings[slot.Index].Type = dragObject.Type;
-					bindings[slot.Index].ReferenceID = dragObject.ReferenceID;
+					bindings[slot.Index].Type = type;
+					bindings[slot.Index].ReferenceID = referenceID;
 
 					/* Applied whether or not the drag carried art. This used to skip the write
 					 * on a null sprite and defer to the refresh sweep, which resolved the same
@@ -715,13 +739,14 @@ namespace FishMMO.Client
 					{
 						HotkeyData = new HotkeyData()
 						{
-							Type = (byte)dragObject.Type,
+							Type = (byte)type,
 							Slot = slot.Index,
-							ReferenceID = dragObject.ReferenceID,
+							ReferenceID = referenceID,
 						}
 					}, Channel.Reliable);
 				}
 
+				liftedSlotIndex = -1;
 				dragObject.Clear();
 			}
 			else
@@ -735,9 +760,69 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Works out what a drag dropped on a slot should bind it to, or refuses it.
+		/// </summary>
+		/// <param name="dragObject">The drag on the cursor.</param>
+		/// <param name="type">The binding's type.</param>
+		/// <param name="referenceID">The binding's reference.</param>
+		/// <returns>True when the drag may be bound.</returns>
+		/// <remarks>
+		/// <list type="bullet">
+		/// <item>Bank is refused: the server never accepts a bank binding, and a shortcut to a slot
+		/// the player is not carrying is not a shortcut to anything.</item>
+		/// <item>A split drag is refused, per the drag object's own contract: a hotkey binds a slot,
+		/// not a quantity, and binding the whole stack under a badge that promised part of it
+		/// silently discarded the number the player typed.</item>
+		/// <item>A shortcut lifted off this bar resolves back to what was lifted — and only while the
+		/// drag is the one that lifted it, so a stale memory of an earlier lift cannot be bound by
+		/// a later, unrelated drag.</item>
+		/// </list>
+		/// </remarks>
+		private bool TryResolveDroppedBinding(UITKDragObject dragObject, out ReferenceButtonType type, out long referenceID)
+		{
+			type = ReferenceButtonType.None;
+			referenceID = ReferenceButton.NULL_REFERENCE_ID;
+
+			if (dragObject.SplitAmount != 0)
+			{
+				return false;
+			}
+
+			switch (dragObject.Type)
+			{
+				case ReferenceButtonType.Inventory:
+				case ReferenceButtonType.Equipment:
+				case ReferenceButtonType.Ability:
+					type = dragObject.Type;
+					referenceID = dragObject.ReferenceID;
+					return true;
+
+				case ReferenceButtonType.Hotkey:
+					if (liftedSlotIndex < 0 ||
+						dragObject.ReferenceID != liftedSlotIndex ||
+						liftedBinding.Type == ReferenceButtonType.None ||
+						liftedBinding.ReferenceID == ReferenceButton.NULL_REFERENCE_ID)
+					{
+						return false;
+					}
+					type = liftedBinding.Type;
+					referenceID = liftedBinding.ReferenceID;
+					return true;
+
+				default:
+					return false;
+			}
+		}
+
+		/// <summary>
 		/// Removes the slot's assignment, seeds the drag overlay, and broadcasts the change.
 		/// </summary>
 		/// <param name="slot">The slot that was right-clicked.</param>
+		/// <remarks>
+		/// The cursor carries a <see cref="ReferenceButtonType.Hotkey"/> reference to THIS slot, not
+		/// the item or ability the slot pointed at: only another hotkey slot may take it, and it
+		/// resolves through <see cref="liftedBinding"/>. See the field for why.
+		/// </remarks>
 		private void HandleSlotRightClick(HotkeySlot slot)
 		{
 			EnsureBindings();
@@ -750,7 +835,9 @@ namespace FishMMO.Client
 			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject))
 			{
 				Sprite sprite = slot.AppliedSprite;
-				dragObject.SetReference(sprite, bindings[slot.Index].ReferenceID, bindings[slot.Index].Type);
+				liftedBinding = bindings[slot.Index];
+				liftedSlotIndex = slot.Index;
+				dragObject.SetReference(sprite, slot.Index, ReferenceButtonType.Hotkey);
 
 				ClearBinding(slot.Index, broadcast: true);
 				ApplySlotSprite(slot, null, occupied: false);

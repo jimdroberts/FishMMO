@@ -179,6 +179,18 @@ namespace FishMMO.Client
 		/// </remarks>
 		private readonly List<CharacterAttribute> subscribedAttributes = new List<CharacterAttribute>();
 
+		/// <summary>
+		/// The resource attributes the status bar follows when the attribute list is NOT built.
+		/// </summary>
+		/// <remarks>
+		/// The chips used to be kept live only as a side effect of the attribute rows' subscription,
+		/// so a sheet that showed the bar without the rows — an inspected character — wrote the vitals
+		/// once at bind time and froze them there, while the observed values underneath went on
+		/// changing. Tracked separately from <see cref="subscribedAttributes"/> so the two cannot be
+		/// confused, and released by the same call.
+		/// </remarks>
+		private readonly List<CharacterAttribute> subscribedVitals = new List<CharacterAttribute>();
+
 		/// <summary>Owns the preview camera and the render texture the viewport draws.</summary>
 		private readonly EquipmentPreviewRenderer previewRenderer = new EquipmentPreviewRenderer();
 
@@ -364,6 +376,13 @@ namespace FishMMO.Client
 				if (options.ShowStatusBar)
 				{
 					UpdateStatusBar(attributeController);
+
+					/* When the rows are built they keep the chips live through OnAttributeUpdated. When
+					 * they are not, the chips need their own subscription or they freeze at bind time. */
+					if (!options.ShowAttributes)
+					{
+						SubscribeVitals(attributeController);
+					}
 				}
 			}
 
@@ -872,6 +891,50 @@ namespace FishMMO.Client
 				}
 			}
 			subscribedAttributes.Clear();
+
+			for (int i = 0; i < subscribedVitals.Count; ++i)
+			{
+				if (subscribedVitals[i] != null)
+				{
+					subscribedVitals[i].OnAttributeUpdated -= OnVitalUpdated;
+				}
+			}
+			subscribedVitals.Clear();
+		}
+
+		/// <summary>
+		/// Follows the subject's health, mana and stamina so the status bar stays live without the
+		/// attribute rows.
+		/// </summary>
+		/// <param name="ac">The subject's attribute controller.</param>
+		private void SubscribeVitals(ICharacterAttributeController ac)
+		{
+			if (ac.TryGetHealthAttribute(out CharacterResourceAttribute hp)) SubscribeVital(hp);
+			if (ac.TryGetManaAttribute(out CharacterResourceAttribute mp)) SubscribeVital(mp);
+			if (ac.TryGetStaminaAttribute(out CharacterResourceAttribute stam)) SubscribeVital(stam);
+		}
+
+		private void SubscribeVital(CharacterAttribute attribute)
+		{
+			if (attribute == null)
+			{
+				return;
+			}
+			attribute.OnAttributeUpdated -= OnVitalUpdated; // defensive dedup
+			attribute.OnAttributeUpdated += OnVitalUpdated;
+			subscribedVitals.Add(attribute);
+		}
+
+		/// <summary>
+		/// Rewrites one status-bar chip from a resource attribute that changed.
+		/// </summary>
+		private void OnVitalUpdated(CharacterAttribute attribute)
+		{
+			if (attribute?.Template == null || !(attribute is CharacterResourceAttribute resource))
+			{
+				return;
+			}
+			UpdateStatusBarChip(attribute.Template.Name, Mathf.RoundToInt(resource.CurrentValue) + " / " + resource.FinalValue);
 		}
 
 		/// <summary>

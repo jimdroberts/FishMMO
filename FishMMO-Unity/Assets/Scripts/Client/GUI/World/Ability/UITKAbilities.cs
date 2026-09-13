@@ -674,11 +674,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (dragObject.Visible)
-			{
-				dragObject.Clear();
-				return;
-			}
+			/* No "carrying something → clear and return" branch here: ability rows carry no slot
+			 * marker, so the root's trickle-down cancel handler has already cleared a drag in flight
+			 * and stopped the press before this bubble handler could run. */
 
 			if (entry.Tab == AbilityTabType.Ability &&
 				Character.TryGet(out IAbilityController abilityController) &&
@@ -714,15 +712,18 @@ namespace FishMMO.Client
 		{
 			if (Character == null ||
 				Client == null ||
+				Client.NetworkManager == null ||
 				!Client.NetworkManager.IsClientStarted)
 			{
 				return;
 			}
 
-			/* Only something the character actually has. The panel's rows are built from the
-			 * controller, but a forget already in flight leaves its row on screen until the answer
-			 * arrives, and a second press would send a second delete for the same identity — which
-			 * the server refuses as busy, at the cost of a round trip and a confusing message. */
+			/* Only something the character actually has. This is a staleness check, not an in-flight
+			 * guard: the controller removes the ability only when the server's success lands, so the
+			 * row stays on screen — and this check stays true — for the whole round trip. A second
+			 * confirm inside that window sends a second delete, which the server answers as busy (or
+			 * as unknown, once the first has landed) on the status line. Nothing is removed
+			 * optimistically, so nothing can get stuck; the cost is one round trip and a message. */
 			if (!Character.TryGet(out IAbilityController abilityController) ||
 				!abilityController.KnownAbilities.ContainsKey(entry.ReferenceID))
 			{
@@ -765,7 +766,10 @@ namespace FishMMO.Client
 			/* Unknown gets its own wording: it means the row is stale — the ability was already
 			 * forgotten, most likely in another panel or on another client — and telling the player
 			 * the server "could not" do it would send them looking for a fault that is not there.
-			 * The stale row clears itself on the next rebuild. */
+			 * The row is NOT removed here: the controller keeps the ability until a success lands,
+			 * and a rebuild re-adds it from the controller, so a client/server disagreement of this
+			 * shape stays visible until the next login re-reads the set. That is deliberate — hiding
+			 * the row would hide the disagreement rather than resolve it. */
 			SetStatus(msg.Failure switch
 			{
 				AbilityForgetFailure.Unknown => FORGET_UNKNOWN,

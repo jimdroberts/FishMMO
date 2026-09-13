@@ -49,20 +49,36 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <paramref name="onFailed"/> is reserved for a persist that was attempted and did not
 		/// land. Callers answer a <c>false</c> return themselves.
 		/// </para>
+		/// <para>
+		/// <b>Payment is settled on completion, not before the call.</b> A caller that charges for
+		/// the ability passes the charge as <paramref name="settle"/>; it runs on the main thread
+		/// once the row exists and only if the character is still resident, and the ability is
+		/// learned strictly after it returns <c>true</c>. If the character has left, or
+		/// <paramref name="settle"/> returns <c>false</c>, the row is revoked and nothing is learned,
+		/// announced or owed. Charging before the call was how a persist that failed after the
+		/// player left became an unrefundable loss. A <c>false</c> from <paramref name="settle"/>
+		/// means the caller has already answered the player; neither <paramref name="onGranted"/> nor
+		/// <paramref name="onFailed"/> runs for it.
+		/// </para>
 		/// </remarks>
 		/// <param name="character">The character receiving the ability.</param>
 		/// <param name="template">The ability template the crafted ability is built from.</param>
 		/// <param name="events">The crafted event template ids to attach, or null for none.</param>
+		/// <param name="settle">
+		/// Takes the caller's charge on the main thread once the row exists. Null when the grant is
+		/// free. Returns <c>false</c>, having answered the player, to have the row revoked.
+		/// </param>
 		/// <param name="releaseGuard">
 		/// Releases the caller's in-flight guard. Always invoked, exactly once, by this system.
 		/// </param>
-		/// <param name="onGranted">Runs on the main thread once the ability is learned and broadcast.</param>
+		/// <param name="onGranted">Runs on the main thread once the ability is settled, learned and broadcast.</param>
 		/// <param name="onFailed">Runs on the main thread when the ability could not be recorded.</param>
 		/// <returns><c>true</c> when the grant was admitted; <c>false</c> when it was refused outright.</returns>
 		bool TryGrantAbility(
 			IPlayerCharacter character,
 			AbilityTemplate template,
 			IReadOnlyList<int> events,
+			Func<IPlayerCharacter, bool> settle,
 			Action releaseGuard,
 			Action<IPlayerCharacter, Ability> onGranted,
 			Action<IPlayerCharacter> onFailed);

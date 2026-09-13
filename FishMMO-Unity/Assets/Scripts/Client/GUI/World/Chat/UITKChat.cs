@@ -1904,9 +1904,12 @@ namespace FishMMO.Client
 		public bool OnGuildChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			string cmd = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
+
+			/* Any code in the table, as party chat does. The guild system reports more than one
+			 * failure on this channel — a target already in a guild, and a target this scene server
+			 * cannot reach — and matching a single code printed the second as the raw FISHMMO_ token. */
 			if (!string.IsNullOrWhiteSpace(cmd) &&
-				 cmd.Equals(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD) &&
-				 ErrorCodes.TryGetValue(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD, out string targetErrorMsg))
+				 ErrorCodes.TryGetValue(cmd, out string targetErrorMsg))
 			{
 				AddSenderMessage(msg.Channel, msg.SenderID, targetErrorMsg);
 			}

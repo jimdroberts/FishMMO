@@ -847,6 +847,16 @@ namespace FishMMO.Client
 				return;
 			}
 			evt.StopPropagation();
+
+			/* A press while carrying something puts it down and does nothing else. The row wears
+			 * the slot marker, so the root's cancel rule leaves the drag to this handler — and
+			 * without this the carried thing survived the take, and the next Escape closed this
+			 * window instead of clearing the cursor. One press, one thing, as everywhere else. */
+			if (TryPutDownCarriedDrag())
+			{
+				return;
+			}
+
 			RequestTakeItem(slot);
 		}
 

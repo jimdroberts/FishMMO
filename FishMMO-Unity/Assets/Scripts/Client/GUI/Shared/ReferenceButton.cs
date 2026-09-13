@@ -25,6 +25,17 @@ namespace FishMMO.Client
 		/// Reference to an ability.
 		/// </summary>
 		Ability,
+		/// <summary>
+		/// A shortcut lifted off the hotkey bar. The reference id is the bar slot it came from.
+		/// </summary>
+		/// <remarks>
+		/// The hotkey bar is not a container: a binding is a shortcut to a real inventory,
+		/// equipment or ability entry, and lifting one must not put the real thing on the cursor.
+		/// A drag of this type is accepted by hotkey slots only — every item panel refuses it the
+		/// way it refuses an ability — and the bar itself resolves it back to the binding it lifted.
+		/// Never sent on the wire: <c>HotkeyData.Type</c> carries the resolved binding's type.
+		/// </remarks>
+		Hotkey,
 	}
 
 	/// <summary>

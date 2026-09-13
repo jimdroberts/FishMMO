@@ -1580,8 +1580,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Marshal invite logic back to main thread
 				TryEnqueueMainThread(() =>
 				{
-					if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+					if (Server == null || !Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 					{
+						return;
+					}
+
+					/* The target is resolved FIRST, before any state is claimed on their behalf — the
+					 * same order the party path uses, for the same reason.
+					 *
+					 * It used to be the other way round: the cooldown was taken, then the pending slot,
+					 * and only then was the target looked up. A target this scene server does not host
+					 * — in another zone, on another scene server, or logged out — fell through every one
+					 * of those in silence, leaving behind a pending invitation nothing would ever answer
+					 * (blocking every real invitation to that player until it aged out, and re-touched
+					 * on each retry) and a spent cooldown, for a modal that was never shown to anybody.
+					 * Both are now claimed only once there is somebody to deliver to, and the miss is
+					 * answered on the guild channel so the inviter can read it. */
+					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) ||
+						!characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) ||
+						targetCharacter == null ||
+						targetCharacter.Owner == null ||
+						!targetCharacter.TryGet(out IGuildController targetGuildController))
+					{
+						SendGuildChatCode(conn, targetCharacterID, ChatHelper.TARGET_OFFLINE);
+						return;
+					}
+
+					// validate target
+					if (targetGuildController.ID > 0)
+					{
+						// we should tell the inviter the target is already in a guild
+						SendGuildChatCode(conn, targetCharacterID, ChatHelper.GUILD_ERROR_TARGET_IN_GUILD);
 						return;
 					}
 
@@ -1605,34 +1634,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					PendingGuildInvitation invitation = new PendingGuildInvitation(guildID, inviterCharacterID, nowUtc);
 
 					// if the target doesn't already have a pending invite
-					if (runtimeData.TryAddPendingInvitation(targetCharacterID, invitation) &&
-						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
-						characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) &&
-						targetCharacter.TryGet(out IGuildController targetGuildController))
+					if (!runtimeData.TryAddPendingInvitation(targetCharacterID, invitation))
 					{
-						// validate target
-						if (targetGuildController.ID > 0)
-						{
-							// we should tell the inviter the target is already in a guild
-							if (conn != null && conn.IsActive)
-							{
-								Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
-								{
-									Channel = ChatChannel.Guild,
-									SenderID = targetCharacterID,
-									Text = ChatHelper.GUILD_ERROR_TARGET_IN_GUILD + " ",
-								}, true, Channel.Reliable);
-							}
-							runtimeData.RemovePendingInvitation(targetCharacterID);
-							return;
-						}
-
-						Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
-						{
-							InviterCharacterID = inviterCharacterID,
-							TargetCharacterID = targetCharacter.ID
-						}, true, Channel.Reliable);
+						return;
 					}
+
+					Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
+					{
+						InviterCharacterID = inviterCharacterID,
+						TargetCharacterID = targetCharacter.ID
+					}, true, Channel.Reliable);
 				});
 			}
 			catch (Exception ex)
@@ -1658,6 +1669,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					runtimeData.RemovePendingInvitation(characterID);
 				}
 			});
+		}
+
+		/// <summary>
+		/// Answers the requester on the guild channel with a chat error code about one character.
+		/// </summary>
+		/// <param name="conn">The requester.</param>
+		/// <param name="subjectCharacterID">The character the code is about; the client names them from it.</param>
+		/// <param name="code">A <see cref="ChatHelper"/> error code the client's chat table knows.</param>
+		/// <remarks>
+		/// Main thread only, and checks <c>IsActive</c> as well as null: the callers are marshalled
+		/// actions, so the requester may have disconnected between asking and being answered.
+		/// The party path has the same helper.
+		/// </remarks>
+		private void SendGuildChatCode(NetworkConnection conn, long subjectCharacterID, string code)
+		{
+			if (Server == null || conn == null || !conn.IsActive)
+			{
+				return;
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
+			{
+				Channel = ChatChannel.Guild,
+				SenderID = subjectCharacterID,
+				Text = code + " ",
+			}, true, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -1961,10 +1998,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg, Channel channel)
 		{
-			if (!TryBeginPlayerRequest(conn, out _))
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
 			{
 				return;
 			}
+			IPlayerCharacter character = request.Character;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DeclineInvite, out long guardKey))
 			{
@@ -1973,9 +2011,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
-				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-
-				if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) && CharacterStateValidation.CanAct(character))
+				if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 				{
 					/* Only clear the invitation the client actually declined. A decline that
 					 * arrives after the slot has been refilled would otherwise silently throw

@@ -25,26 +25,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			
-			if (character == null ||
-				!character.TryGet(out IInventoryController inventoryController) ||
-				!CharacterStateValidation.CanAct(character))
-			{
-				/* Answer, do not just drop it.
-				 *
-				 * SendContainerResult is what releases the client's pending lock on the slot, and
-				 * the throttle gate immediately below already understood that. This gate did not:
-				 * a player who is dead, stunned, teleporting or mid-load clicking a chest slot got
-				 * silence, and the slot stayed locked in their client until the window was closed.
-				 *
-				 * The guard key is taken below, so this cannot fold into the try/finally that covers
-				 * every later exit — EndIngressGuard would have nothing to release. Replying here is
-				 * the same shape the throttle path uses, which keeps the two gates symmetrical. */
-				SendContainerResult(conn, msg.InteractableID, msg.Slot, false, ContainerFailureReason.ServerError);
-				return;
-			}
-
+			/* The throttle is taken FIRST. Every refusal this handler gives is an answer — the reply
+			 * is what releases the client's pending lock on the slot — and an answer that is sent
+			 * before the throttle is an answer the throttle does not cover: a dead or teleporting
+			 * client spamming a chest slot got one reply and one log line per packet. Keyed on the
+			 * connection, the guard needs no character to be taken. */
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
 				SendContainerResult(conn, msg.InteractableID, msg.Slot, false, ContainerFailureReason.ServerError);
@@ -57,6 +42,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			try
 			{
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+
+				if (character == null ||
+					!character.TryGet(out IInventoryController inventoryController) ||
+					!CharacterStateValidation.CanAct(character))
+				{
+					/* Answered, not dropped — by the finally, with the ServerError it starts on. A
+					 * player who is dead, stunned, teleporting or mid-load clicking a chest slot used
+					 * to get silence, and the slot stayed locked in their client until the window was
+					 * closed. Resolved by hand rather than through TryBeginPlayerRequest for exactly
+					 * that reason: the entry point refuses in silence. */
+					return;
+				}
+
 				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 				{
 					return;

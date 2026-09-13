@@ -695,30 +695,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InsufficientFunds);
 					return false;
 				}
-
-				// Deduct, persist, refund on a refused write — TrySpend owns that ordering.
-				if (!CharacterCurrency.TrySpend(character, currencyTemplate, price, () => TryPersistMerchantAttributes(character)))
-				{
-					Log.Warning("InteractableSystem", $"TryPurchasePremadeAbility: charge of {price} refused for CharID={character.ID}.");
-					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InsufficientFunds);
-					return false;
-				}
 			}
 
-			/* Puts the sale back and answers it, for the same two cases the craft handler covers: a
-			 * grant refused before it was attempted, and one that failed when it was written.
-			 * Gated on a positive price because a free sale neither charged nor owes anything. */
-			void RefundRejectedSale(IPlayerCharacter refundCharacter)
+			/* The charge, taken by AbilitySystem on the main thread once the row exists and the
+			 * buyer is still here — see the craft handler for why it is not taken before the grant.
+			 * TrySpend owns the deduct-then-persist ordering and the in-memory refund on a refused
+			 * write. A refusal is answered here and AbilitySystem revokes the row. */
+			bool SettleSale(IPlayerCharacter payer)
 			{
-				if (price > 0)
+				if (price <= 0 ||
+					CharacterCurrency.TrySpend(payer, currencyTemplate, price, () => TryPersistMerchantAttributes(payer)))
 				{
-					CharacterCurrency.TryAdd(refundCharacter, currencyTemplate, price);
-					if (!TryPersistMerchantAttributes(refundCharacter))
-					{
-						Log.Error("InteractableSystem", $"TryPurchasePremadeAbility: refund persist rejected for CharID={refundCharacter.ID}; in-memory balance is correct but the DB holds the deduction.");
-					}
-					RecordCurrencyMovement(refundCharacter.ID, price, CurrencyMovementReason.AbilityPurchase, absorbed: false);
+					return true;
 				}
+				Log.Warning("InteractableSystem", $"TryPurchasePremadeAbility: charge of {price} refused for CharID={payer.ID}.");
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.InsufficientFunds);
+				return false;
+			}
+
+			/* Answers a sale that was refused before it was attempted or failed when it was written.
+			 * Nothing to refund: the charge is settled only on a grant that landed. */
+			void AnswerRejectedSale(IPlayerCharacter _)
+			{
 				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 			}
 
@@ -737,12 +735,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * second purchase of the same offer inside the window is not refused as AlreadyKnown. It
 			 * is refused by the row instead. Both writes go onto this character's worker lane in
 			 * order, the second collides on (character_id, template_id) with a version that does not
-			 * beat the first, the upsert returns no identity, and the grant fails into the refund
-			 * above. The player owns one ability and was charged once. */
+			 * beat the first, the upsert returns no identity, and the grant fails into the answer
+			 * above. Because the charge is settled only on the grant that landed, the second
+			 * purchase never costs anything: the player owns one ability and was charged once. */
 			bool accepted = abilitySystem.TryGrantAbility(
 				character,
 				template,
 				eventIDs,
+				settle: SettleSale,
 				releaseGuard: null,
 				onGranted: (grantedCharacter, _) =>
 				{
@@ -752,11 +752,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.None, 1, price);
 				},
-				onFailed: RefundRejectedSale);
+				onFailed: AnswerRejectedSale);
 
 			if (!accepted)
 			{
-				RefundRejectedSale(character);
+				AnswerRejectedSale(character);
 			}
 
 			/* True means "the sale was accepted and the ability is being recorded", not "the ability

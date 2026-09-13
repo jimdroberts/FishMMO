@@ -284,44 +284,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				/* Deduct, persist, then grant — the same ordering the merchant purchase path uses,
-				 * and for the same reason. The deduction used to be in-memory only: nothing on this
-				 * path ever enqueued a character attribute write, so the price of a crafted ability
-				 * survived only until the next periodic character save and was lost outright if the
-				 * server went down before it. TrySpend owns that ordering, and the refund when the
-				 * write is refused, so it cannot drift from the paths that do the same thing.
+				/* The charge, taken by AbilitySystem on the main thread once the row exists and the
+				 * crafter is still here — the same shape the merchant purchase path uses, and for the
+				 * same reason. Charging before the grant, as this used to, left a real loss: a write
+				 * that failed after the player had transferred or logged out could not be refunded,
+				 * and the database held the deduction with no row to show for it. Settling on
+				 * completion means nothing moves until both the row and the payer are there, and a
+				 * grant that never lands never cost anything.
+				 *
+				 * TrySpend still owns the deduct-then-persist ordering and the in-memory refund when
+				 * the attribute write is refused. The deduction used to be in-memory only: nothing on
+				 * this path ever enqueued a character attribute write, so the price of a crafted
+				 * ability survived only until the next periodic character save.
 				 *
 				 * Guarded on a positive price because TrySpend rejects a non-positive amount by
 				 * contract — a free craft is not a spend, and calling it anyway would refuse every
-				 * craft in the game: every ability and ability-event template ships at Price 0.
+				 * craft in the game: every ability and ability-event template ships at Price 0. A free
+				 * craft therefore skips the persist as well; with nothing deducted there is nothing
+				 * to write, so a refused write is no reason to refuse the ability.
 				 *
-				 * A free craft therefore skips the persist as well. That is one step further than
-				 * the code this replaced, which deducted zero and then still gated the craft on
-				 * the attribute write succeeding; with nothing deducted there is nothing to write,
-				 * so a refused write is no longer a reason to refuse the ability. */
-				if (price > 0 &&
-					!CharacterCurrency.TrySpend(character, currencyTemplate, price, () => TryPersistMerchantAttributes(character)))
+				 * A refusal here is answered here — the balance moved between the affordability check
+				 * above and now — and AbilitySystem revokes the row it was settling. */
+				bool SettleCraft(IPlayerCharacter payer)
 				{
-					Log.Warning("InteractableSystem", $"AbilityCraft: charge of {price} refused for CharID={character.ID}.");
+					if (price <= 0 ||
+						CharacterCurrency.TrySpend(payer, currencyTemplate, price, () => TryPersistMerchantAttributes(payer)))
+					{
+						return true;
+					}
+					Log.Warning("InteractableSystem", $"AbilityCraft: charge of {price} refused for CharID={payer.ID}.");
 					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.InsufficientFunds);
-					return;
+					return false;
 				}
 
-				/* Puts the charge back and answers the request, whether the grant was refused before
-				 * it was attempted or failed when it was written. The two used to be one branch —
-				 * LearnAbility returned null for both — and they still owe the player the same thing:
-				 * the money, a ledger line, and a reason.
-				 *
-				 * The refund is recorded as not absorbed, so the ledger keeps saying that this
-				 * character was charged and made whole. */
-				void RefundRejectedCraft(IPlayerCharacter refundCharacter)
+				/* Answers a grant that was refused before it was attempted or failed when it was
+				 * written. Nothing to refund: the charge is settled only on a grant that landed. */
+				void AnswerRejectedCraft(IPlayerCharacter _)
 				{
-					CharacterCurrency.TryAdd(refundCharacter, currencyTemplate, price);
-					if (!TryPersistMerchantAttributes(refundCharacter))
-					{
-						Log.Error("InteractableSystem", $"AbilityCraft: refund persist rejected for CharID={refundCharacter.ID}; in-memory balance is correct but the DB holds the deduction.");
-					}
-					RecordCurrencyMovement(refundCharacter.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: false);
 					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.PersistFailed);
 				}
 
@@ -334,15 +333,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				 * applied by the system before the learn; AbilitySystem records why it cannot be
 				 * corrected afterwards the way the item layer corrects a slot.
 				 *
-				 * The refund, the success answer, the broadcasts and the achievement all move into
+				 * The charge, the success answer, the broadcasts and the achievement all move into
 				 * the continuations, because a grant is now asynchronous where it was not: the
-				 * ability exists only once its row does. The ordering described above TrySpend is
-				 * preserved and strengthened — the charge is still written before the grant is
-				 * attempted, and the player is shown the ability strictly after it is persisted. */
+				 * ability exists only once its row does. The player is charged strictly after the
+				 * row is persisted and shown the ability strictly after they are charged. */
 				bool accepted = abilitySystem.TryGrantAbility(
 					character,
 					mainAbility,
 					msg.Events,
+					settle: SettleCraft,
 					releaseGuard: () => EndIngressGuard(guardKey),
 					onGranted: (grantedCharacter, _) =>
 					{
@@ -361,13 +360,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
 						}
 					},
-					onFailed: RefundRejectedCraft);
+					onFailed: AnswerRejectedCraft);
 
 				guardHandedOff = true;
 
 				if (!accepted)
 				{
-					RefundRejectedCraft(character);
+					AnswerRejectedCraft(character);
 				}
 			}
 			finally

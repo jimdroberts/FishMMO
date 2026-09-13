@@ -81,6 +81,17 @@ namespace FishMMO.Client
 		private IPlayerCharacter inspected;
 
 		/// <summary>
+		/// The inspected character's equipment, held only to be unsubscribed from.
+		/// </summary>
+		/// <remarks>
+		/// Observers receive slot changes for the characters they watch, and the socket tooltip reads
+		/// the live container — so a sheet painted once at open and never again showed the sword the
+		/// subject had put away while hovering it described the axe they had drawn. Following the
+		/// container keeps the icon and the tooltip describing the same item.
+		/// </remarks>
+		private IEquipmentController followedEquipment;
+
+		/// <summary>
 		/// Resolves the sheet, applies the inspect placement, and wires the close button.
 		/// </summary>
 		public override void OnStarting()
@@ -160,11 +171,23 @@ namespace FishMMO.Client
 			}
 
 			inspected = target;
+			inspectedID = target.ID;
 
 			// Shown first so the visual tree exists before Populate writes into it.
 			Show();
 			Populate(target);
 		}
+
+		/// <summary>
+		/// The character id the subject had when it was inspected.
+		/// </summary>
+		/// <remarks>
+		/// <c>IsSpawned</c> alone cannot see a pooled reuse: a despawn and a spawn processed in the
+		/// same frame hand this panel the same component as a different character before a tick ever
+		/// observes it unspawned, and the title and sockets would go on describing the old occupant
+		/// while the camera photographed the new one. The id is the thing that changes.
+		/// </remarks>
+		private long inspectedID;
 
 		/// <summary>
 		/// Writes a character's name and equipment into the sheet.
@@ -186,6 +209,45 @@ namespace FishMMO.Client
 			// the attribute list empty — this viewer may not see it.
 			sheet.SetSubject(target);
 			sheet.Refresh();
+
+			FollowEquipment(target);
+		}
+
+		/// <summary>
+		/// Subscribes to the subject's equipment container, releasing whichever one was followed before.
+		/// </summary>
+		/// <param name="target">The character to follow, or null to follow nobody.</param>
+		private void FollowEquipment(IPlayerCharacter target)
+		{
+			if (followedEquipment != null)
+			{
+				followedEquipment.OnSlotUpdated -= OnInspectedSlotUpdated;
+				followedEquipment = null;
+			}
+
+			if (target != null && target.TryGet(out IEquipmentController equipmentController))
+			{
+				followedEquipment = equipmentController;
+				followedEquipment.OnSlotUpdated += OnInspectedSlotUpdated;
+			}
+		}
+
+		/// <summary>
+		/// Repaints the sockets when the inspected character's gear changes under the window.
+		/// </summary>
+		/// <remarks>
+		/// The whole row rather than one socket: the sheet's painter is per-subject, this window
+		/// carries no pending marks to release, and the silhouette may have changed with the item,
+		/// so the preview is re-framed on the next frame as the own-equipment window does.
+		/// </remarks>
+		private void OnInspectedSlotUpdated(IItemContainer container, Item item, int equipmentSlot)
+		{
+			if (sheet == null || inspected == null)
+			{
+				return;
+			}
+			sheet.PaintSockets();
+			sheet.InvalidatePreviewFraming();
 		}
 
 		/// <summary>
@@ -205,7 +267,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (inspected != null && !IsSubjectAlive(inspected))
+			if (inspected != null && (!IsSubjectAlive(inspected) || inspected.ID != inspectedID))
 			{
 				// The subject is gone; the window has nothing left to describe.
 				Hide();
@@ -248,6 +310,7 @@ namespace FishMMO.Client
 			if (!overrideIsAlwaysOpen && Document != null)
 			{
 				inspected = null;
+				FollowEquipment(null);
 
 				/* The preview camera and texture belong to the character and are handed back, and the
 				 * sockets are emptied, so nothing of this character is left on a sheet that is about to
@@ -263,6 +326,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
+			FollowEquipment(null);
 			sheet?.Dispose();
 			sheet = null;
 

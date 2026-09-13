@@ -105,8 +105,8 @@ namespace FishMMO.UnitTests
 			LogAssert.IsFalse(body.Contains("msg.TemplateID"),
 				"the template is never what is deleted; a request that names one must not be able to reach the row");
 
-			LogAssert.IsTrue(body.Contains("long version = ability.Version + 1;"),
-				"the delete must quote a version above the row's own, which is the row state the player was looking at");
+			LogAssert.IsTrue(body.Contains("long version = long.MaxValue;"),
+				"the delete must quote the version ceiling: a forget is authoritative for a row resolved by identity, and quoting the in-memory version refused it whenever the row had been bumped by a late save");
 
 			LogAssert.IsTrue(body.Contains("ForgetAbilityAsync(characterID, abilityID, version, guardKey)"),
 				"and the delete must be handed the resolved identity rather than the request");

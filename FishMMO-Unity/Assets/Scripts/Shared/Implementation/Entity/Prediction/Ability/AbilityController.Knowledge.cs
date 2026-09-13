@@ -372,27 +372,40 @@ namespace FishMMO.Shared
 		/// <param name="referenceID">The ability reference ID to remove.</param>
 		public void RemoveAbility(long referenceID)
 		{
-			/* Update the reverse index before removing — but only when the entry it holds for this
-			 * template actually names the ability being removed.
-			 *
-			 * The index maps ONE template to ONE ability id, and the last writer wins, so two
+			/* The index maps ONE template to ONE ability id, and the last writer wins, so two
 			 * abilities built from the same template leave the index naming only the later of them.
-			 * Removing the earlier one then deleted the mapping for an ability that is still known,
+			 * Removing the earlier one used to delete the mapping for an ability that is still known,
 			 * and KnowsLearnedAbility reported false for something the character still has. Testing
-			 * the mapped id first makes the removal precise. */
-			if (KnownAbilities.TryGetValue(referenceID, out Ability removedAbility) &&
-				removedAbility.Template != null &&
-				templateToAbilityID != null &&
-				templateToAbilityID.TryGetValue(removedAbility.Template.ID, out long mappedAbilityID) &&
-				mappedAbilityID == referenceID)
-			{
-				templateToAbilityID.Remove(removedAbility.Template.ID);
-			}
+			 * the mapped id first makes the removal precise in that direction.
+			 *
+			 * The other direction needs a re-point rather than a removal: forgetting the LATER one
+			 * would otherwise drop the mapping while the earlier copy is still known, and the craft
+			 * and merchant gates — which ask KnowsLearnedAbility — would let a third copy through.
+			 * So when the mapped id is the one going, the index is handed to whichever same-template
+			 * ability survives, if any. */
+			KnownAbilities.TryGetValue(referenceID, out Ability removedAbility);
 			longestKnownAbilityRangeDirty = true;
 			if (!KnownAbilities.Remove(referenceID))
 			{
 				// Nothing was bound to that ID; do not raise a removal nobody can act on.
 				return;
+			}
+
+			if (removedAbility?.Template != null &&
+				templateToAbilityID != null &&
+				templateToAbilityID.TryGetValue(removedAbility.Template.ID, out long mappedAbilityID) &&
+				mappedAbilityID == referenceID)
+			{
+				int templateID = removedAbility.Template.ID;
+				templateToAbilityID.Remove(templateID);
+				foreach (Ability survivor in KnownAbilities.Values)
+				{
+					if (survivor?.Template != null && survivor.Template.ID == templateID)
+					{
+						templateToAbilityID[templateID] = survivor.ID;
+						break;
+					}
+				}
 			}
 
 			OnRemoveAbility?.Invoke(referenceID);

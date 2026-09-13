@@ -477,13 +477,13 @@ namespace FishMMO.Client
 		/// clear one.
 		/// </para>
 		/// <para>
-		/// SHIFT DEFERS TO A DRAG IN FLIGHT. A drop onto a socket is completed either by the press
-		/// on it or by the release over it, and the release reads no modifier — so a shift-click on
-		/// a socket while the player is carrying something has to fall through to
-		/// <see cref="HandleSlotLeftClick"/> and become that drop. Otherwise the press claims this
-		/// socket for an unequip the player never asked for, the release's own claim on the same
-		/// socket then fails, and the swap is lost in both directions: the item meant for the
-		/// socket stays where it was AND the item already in the socket is sent to the bag. Reading
+		/// SHIFT DEFERS TO A DRAG IN FLIGHT. A drop onto a socket is completed by the press on it —
+		/// there is no release path, by the shared base's rule — and the press should read no
+		/// modifier while carrying, so a shift-click on a socket while the player is carrying
+		/// something has to fall through to <see cref="HandleSlotLeftClick"/> and become that drop.
+		/// Otherwise the press claims this socket for an unequip the player never asked for and the
+		/// swap is lost in both directions: the item meant for the socket stays where it was AND
+		/// the item already in the socket is sent to the bag. Reading
 		/// the modifier is this router's job, not <see cref="TryQuickUnequip"/>'s, so the deferral
 		/// is visible in the branch that consults it. <see cref="IsDragInFlight"/> is the same test
 		/// <see cref="HandleSlotLeftClick"/> makes a line later.

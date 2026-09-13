@@ -115,9 +115,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public CharacterAbilityData AbilityData;
 			/// <summary>Crafted event template ids for the wire, or null when none were chosen.</summary>
 			public int[] CraftedEvents;
+			/// <summary>
+			/// Settles the caller's side of the grant — the charge — on the main thread, once the row
+			/// exists and the character is resident. Null when there is nothing to settle.
+			/// </summary>
+			/// <remarks>
+			/// A false return means the caller has already answered the player and the row is to be
+			/// revoked: nothing was learned, nothing was announced, nothing was paid.
+			/// </remarks>
+			public Func<IPlayerCharacter, bool> Settle;
 			/// <summary>Releases the caller's in-flight guard. Invoked exactly once, on completion.</summary>
 			public Action ReleaseGuard;
-			/// <summary>Runs on the main thread once the ability is learned and broadcast.</summary>
+			/// <summary>Runs on the main thread once the ability is settled, learned and broadcast.</summary>
 			public Action<IPlayerCharacter, Ability> OnGranted;
 			/// <summary>Runs on the main thread when the ability could not be recorded.</summary>
 			public Action<IPlayerCharacter> OnFailed;
@@ -194,6 +203,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IPlayerCharacter character,
 			AbilityTemplate template,
 			IReadOnlyList<int> events,
+			Func<IPlayerCharacter, bool> settle,
 			Action releaseGuard,
 			Action<IPlayerCharacter, Ability> onGranted,
 			Action<IPlayerCharacter> onFailed)
@@ -250,6 +260,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					abilityEvents: craftedEvents,
 					cooldown: 0f),
 				CraftedEvents = craftedEvents.Count > 0 ? craftedEvents.ToArray() : null,
+				Settle = settle,
 				ReleaseGuard = releaseGuard,
 				OnGranted = onGranted,
 				OnFailed = onFailed,
@@ -366,12 +377,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IPlayerCharacter character = ResolveResidentCharacter(request.CharacterID);
 				if (character == null)
 				{
-					/* Logged out inside a database round trip. The row is written, so the ability is
-					 * theirs from the next login; there is nothing to learn onto and nobody to tell.
-					 * The one thing lost is the caller's currency-movement ledger line — the balance
-					 * itself was persisted before the grant was attempted, so it is correct. */
+					/* Logged out inside a database round trip. Nothing has been paid — settlement
+					 * runs here, on a resident character, and never before the row exists — so the
+					 * row is revoked rather than left standing as an ability nobody paid for. The
+					 * player asked, left, and ends up exactly where they started. */
 					Log.Warning("AbilitySystem",
-						$"CompleteGrant: CharID={request.CharacterID} left before ability {request.Ability.ID} could be learned. The row is written and the ability is theirs at the next login.");
+						$"CompleteGrant: CharID={request.CharacterID} left before ability {request.Ability.ID} could be settled; the row is being revoked.");
+					RevokeUnsettledGrant(request, "the character left before settlement");
+					return;
+				}
+
+				/* The caller's charge, taken only now: the row exists and the payer is here to pay.
+				 * Charging BEFORE the write, as this used to, left a real loss path — a write that
+				 * failed after the player had transferred or logged out could not be refunded, and the
+				 * database held the deduction with no row to show for it. A refusal here (the balance
+				 * moved between the affordability check and now) has already answered the player
+				 * inside the callback; what is left is the row it was written for, which is revoked so
+				 * the database does not hold an ability that was never paid for. */
+				if (request.Settle != null && !request.Settle(character))
+				{
+					RevokeUnsettledGrant(request, "settlement was refused");
 					return;
 				}
 
@@ -436,8 +461,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IPlayerCharacter character = ResolveResidentCharacter(request.CharacterID);
 				if (character == null)
 				{
+					/* Nothing to undo: the charge is settled only on completion, so a grant that never
+					 * landed never cost anything. There is simply nobody left to answer. */
 					Log.Warning("AbilitySystem",
-						$"FailGrant: the grant of template {request.AbilityData.TemplateID} for CharID={request.CharacterID} failed and the character has since left, so nothing could be undone.");
+						$"FailGrant: the grant of template {request.AbilityData.TemplateID} for CharID={request.CharacterID} failed and the character has since left; nothing was charged.");
 					return;
 				}
 
@@ -446,6 +473,64 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			finally
 			{
 				request.ReleaseGuard?.Invoke();
+			}
+		}
+
+		/// <summary>
+		/// Removes a row that was written but never settled, so the character does not own an
+		/// ability that was never paid for.
+		/// </summary>
+		/// <param name="request">The grant whose row is to go.</param>
+		/// <param name="why">For the log.</param>
+		/// <remarks>
+		/// Keyed by character, so it lands on the same ordered lane as the write it undoes and after
+		/// it. The ability was never learned or announced, so no in-memory or observer state needs
+		/// touching — only the row. Quotes the version ceiling for the reason a forget does: the row
+		/// is resolved by identity and ownership, and the version is not the safety predicate.
+		/// </remarks>
+		private void RevokeUnsettledGrant(GrantRequest request, string why)
+		{
+			long characterID = request.CharacterID;
+			long abilityID = request.Ability.ID;
+
+			if (abilityID <= 0)
+			{
+				Log.Error("AbilitySystem",
+					$"RevokeUnsettledGrant: ability for CharID={characterID} has no identity to revoke ({why}).");
+				return;
+			}
+
+			if (!TryEnqueueAsyncWork(() => RevokeUnsettledGrantAsync(characterID, abilityID, why), characterID))
+			{
+				Log.Error("AbilitySystem",
+					$"RevokeUnsettledGrant: the async worker refused the revoke of ability {abilityID} for CharID={characterID} ({why}); the row stands and the character owns an ability that was never settled.");
+			}
+		}
+
+		/// <summary>
+		/// The worker half of <see cref="RevokeUnsettledGrant"/>.
+		/// </summary>
+		private async Task RevokeUnsettledGrantAsync(long characterID, long abilityID, string why)
+		{
+			try
+			{
+				if (!TryGetDbService<ICharacterAbilityService>(out var abilityService))
+				{
+					await Log.Error("AbilitySystem",
+						$"RevokeUnsettledGrantAsync: ICharacterAbilityService is not registered; ability {abilityID} for CharID={characterID} was not revoked ({why}).");
+					return;
+				}
+
+				DatabaseResult result = await abilityService.DeleteAbilityAsync(characterID, abilityID, long.MaxValue);
+				if (!result.IsSuccess)
+				{
+					await Log.Error("AbilitySystem",
+						$"RevokeUnsettledGrantAsync DB error (AbilityID={abilityID}, CharID={characterID}, {why}): {result.ErrorCode} - {result.ErrorMessage}. The row stands unpaid.");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("AbilitySystem", $"Error revoking unsettled ability {abilityID} for CharID={characterID} ({why}): {ex}");
 			}
 		}
 
@@ -502,10 +587,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				/* Strictly above the row's own version — the delete admits a row whose version is at
-				 * or below what it is given, and the version names the state the player was looking
-				 * at when they asked. */
-				long version = ability.Version + 1;
+				/* The delete admits a row whose version is at or below what it is given. A forget is
+				 * the player's authoritative decision about a row this server resolved by identity, so
+				 * it quotes the ceiling rather than the in-memory version plus one: the in-memory
+				 * version can trail the row's (a previous server's late snapshot landing after this
+				 * one loaded the character bumps the row and not the copy), and quoting from the
+				 * stale copy refused the forget as PersistFailed until a relog re-read it. Identity
+				 * and ownership are the safety predicate here, not the version. */
+				long version = long.MaxValue;
 				long characterID = character.ID;
 				long abilityID = msg.AbilityID;
 

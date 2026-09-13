@@ -222,7 +222,11 @@ namespace FishMMO.UnitTests
 					continue;
 				}
 
-				LogAssert.IsTrue(entry.Value.Contains("CanActOrMove"),
+				/* Either the movement gate a later step applies, or the state gate applied by hand so
+				 * that its refusal can be ANSWERED — the hotkey handlers echo the authoritative slot
+				 * on refusal, which the entry point's silent return cannot do. */
+				LogAssert.IsTrue(entry.Value.Contains("CanActOrMove") ||
+					entry.Value.Contains("CharacterStateValidation.CanAct("),
 					$"{entry.Key} skips the character-state gate, so it must name the later gate that covers it");
 			}
 		}

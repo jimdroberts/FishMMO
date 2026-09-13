@@ -325,11 +325,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetBroadcastReceived(NetworkConnection conn, HotkeySetBroadcast msg, Channel channel)
 		{
-			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request, PlayerRequestGate.SkipCanAct))
 			{
 				return;
 			}
 			IPlayerCharacter playerCharacter = request.Character;
+
+			/* The character-state gate is applied HERE, not by the entry point, so that its refusal
+			 * is answered. The entry point refuses in silence, and silence is the one thing this
+			 * handler cannot afford: the client applies a binding locally the instant the icon is
+			 * dropped, so a dead, teleporting or mid-load player who rebinds a slot and hears nothing
+			 * keeps a binding the server never took until the next login. The echo is the same
+			 * answer the throttle and the validation refusals below give — CanAct, not
+			 * CanActOrMove, is the gate that covers this request. */
+			if (!CharacterStateValidation.CanAct(playerCharacter))
+			{
+				AcknowledgeHotkey(conn, playerCharacter, msg.HotkeyData.Slot);
+				return;
+			}
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetSingle, out long guardKey))
 			{
@@ -377,7 +390,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetMultipleBroadcastReceived(NetworkConnection conn, HotkeySetMultipleBroadcast msg, Channel channel)
 		{
-			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request, PlayerRequestGate.SkipCanAct))
 			{
 				return;
 			}
@@ -385,6 +398,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (msg.Hotkeys == null || msg.Hotkeys.Length < 1)
 			{
+				return;
+			}
+
+			// Answered, not swallowed — the single-slot handler says why.
+			if (!CharacterStateValidation.CanAct(playerCharacter))
+			{
+				AcknowledgeAllHotkeys(conn, playerCharacter);
 				return;
 			}
 

@@ -397,7 +397,17 @@ namespace FishMMO.Client
 			// Captured by value. The row is discarded on the next rebuild, so this closure can
 			// never outlive the slot it names.
 			int capturedSlot = data.Slot;
-			rowRoot.RegisterCallback<PointerDownEvent>(evt => OnRowPointerDown(capturedSlot));
+			rowRoot.RegisterCallback<PointerDownEvent>(evt =>
+			{
+				/* A press while carrying something puts it down and does nothing else — the row
+				 * wears the slot marker, so the root's cancel rule leaves the drag to this handler.
+				 * Not inside OnRowPointerDown, which the take-all path also calls. */
+				if (TryPutDownCarriedDrag())
+				{
+					return;
+				}
+				OnRowPointerDown(capturedSlot);
+			});
 
 			listRoot.Add(rowRoot);
 

@@ -559,6 +559,29 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Puts down whatever the cursor is carrying, for a press that lands on a marked slot the
+		/// panel does not want to complete a drop on.
+		/// </summary>
+		/// <returns>True when something was carried and is now cleared, so the press is spent.</returns>
+		/// <remarks>
+		/// The counterpart of <see cref="OnRootPointerDownCancelDrag"/> for elements that wear
+		/// <see cref="SLOT_MARKER_CLASS"/>: the root rule leaves those to their own handler, and a
+		/// handler that takes or opens something rather than accepting a drop still owes the player
+		/// the same one-press-one-thing rule. Loot rows and container rows call it; a panel that
+		/// accepts drops does not, because for it the press IS the drop.
+		/// </remarks>
+		protected static bool TryPutDownCarriedDrag()
+		{
+			if (UIManager.TryGetTK(UITKDragObject.CONTROL_NAME, out UITKDragObject dragObject) &&
+				dragObject.IsDragging)
+			{
+				dragObject.Clear();
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Subscribes the press rules that live on the panel root.
 		/// </summary>
 		/// <remarks>

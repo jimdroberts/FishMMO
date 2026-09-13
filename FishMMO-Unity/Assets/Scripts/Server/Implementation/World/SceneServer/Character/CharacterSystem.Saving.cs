@@ -206,7 +206,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (s.Attributes.Count > 0) await SaveAttributesAsync(s.Attributes);
 			if (s.Buffs.Count > 0) await SaveBuffsAsync(s.Buffs);
-			if (s.Abilities.Count > 0) await SaveAbilitiesAsync(s.Abilities);
+			if (s.Abilities.Count > 0)
+			{
+				/* Grouped by owning character for the reason EnqueueSubEntitySaves gives: the ability
+				 * upsert validates a batch whole, so a pet whose character row is gone would otherwise
+				 * take its owner's rows down with it on the very save the next server reads under. */
+				foreach (var group in s.Abilities.GroupBy(a => a.CharacterID))
+				{
+					await SaveAbilitiesAsync(group.ToList());
+				}
+			}
 			if (s.Pets.Count > 0) await SavePetsAsync(s.Pets);
 			if (s.Achievements.Count > 0) await SaveAchievementsAsync(s.Achievements);
 			if (s.Waypoints.Count > 0) await SaveWaypointsAsync(s.Waypoints);
