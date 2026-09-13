@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests
 	public class EquipmentPanelLayoutTests
 	{
 		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
-		private const string UxmlPath = "Assets/Scripts/Client/GUI/World/Equipment/UIEquipment.uxml";
+		private const string UxmlPath = "Assets/Scripts/Client/GUI/World/CharacterSheet/UICharacterSheet.uxml";
 
 		private GameObject host;
 		private UIDocument document;

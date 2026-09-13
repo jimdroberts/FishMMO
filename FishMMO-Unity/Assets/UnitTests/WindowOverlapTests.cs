@@ -72,7 +72,7 @@ namespace FishMMO.UnitTests
 		private static readonly Window[] Windows =
 		{
 			new Window { Name = "UIInventory", UxmlPath = GuiRoot + "Inventory/UIInventory.uxml", PanelClass = "inv-panel", SortingOrder = 101 },
-			new Window { Name = "UIEquipment", UxmlPath = GuiRoot + "Equipment/UIEquipment.uxml", PanelClass = "eq-panel", SortingOrder = 100 },
+			new Window { Name = "UIEquipment", UxmlPath = GuiRoot + "CharacterSheet/UICharacterSheet.uxml", PanelClass = "eq-panel", SortingOrder = 100 },
 			new Window { Name = "UIBank", UxmlPath = GuiRoot + "Bank/UIBank.uxml", PanelClass = "bank-panel", SortingOrder = 102 },
 		};
 

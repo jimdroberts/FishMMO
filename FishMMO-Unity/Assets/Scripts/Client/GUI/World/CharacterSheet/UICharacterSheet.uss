@@ -1,19 +1,27 @@
 /*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    UIEquipment.uss
-    Equipment Panel  —  Structure & Layout only
+    UICharacterSheet.uss
+    Character Sheet  —  Structure & Layout only
     Unity UIToolkit  (Unity 6.x LTS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     PURPOSE
     ───────
     All sizing, spacing, flex directions, and positioning
-    for the equipment panel. NO colors or fonts here —
+    for the character sheet. NO colors or fonts here —
     those are in FishMMO-Theme.uss.
+
+    ONE sheet, TWO windows. UITKEquipment and UITKInspect
+    mount the same tree and read the same rules; the only
+    difference is the .sheet--inspect class UITKInspect adds
+    at runtime, declared right below .eq-panel. The eq- prefix
+    predates the sheet being shared and is kept because
+    WindowOverlapTests pins the window by its eq-panel class —
+    read it as "the sheet", not as "equipment only".
 
     LOAD ORDER in UXML (required):
         <ui:Style src="FishMMO-Theme.uss" />
-        <ui:Style src="UIEquipment.uss" />
+        <ui:Style src="UICharacterSheet.uss" />
 
     Unity UIToolkit layout rules used throughout:
     ─────────────────────────────────────────────
@@ -69,6 +77,33 @@
         below is the half that shrinks to fit.
     */
     max-height: 84%;
+}
+
+/*
+    THE INSPECT VARIANT — placement only.
+
+    A window showing somebody else's character is opened to be compared against your own, so it
+    belongs in the middle of the screen where your sheet and theirs are both readable, not tiled
+    against the right edge. It is centred by default and the player drags it wherever they want:
+    UITKControl.CanDrag already defaults true and this tree's header is already name="panel-header",
+    which is the resolved drag handle, so movability costs nothing here. Nothing about the position
+    persists — it is per-open, and a visual-tree rebuild puts it back in the middle.
+
+        1200 units  −  520 wide  =  680  →  680 / 2  =  340
+
+    It CANNOT be disjoint from the sheet, the bank and the bag: those three already tile the whole
+    1200-unit panel (see the note above .eq-panel) and a 520px window has nowhere left to go.
+    Issue #268 established what that costs — a covered UI Toolkit window is deaf rather than
+    hidden — so the inspect window covers part of the sheet's right column and part of the bank on
+    purpose, and the player moves it. Narrowing this variant is the lever if that ever reads badly.
+
+    WindowOverlapTests is unaffected by any of this. That fixture mounts the UXML bare, with no
+    component and no OnStarting, so a class added at runtime is invisible to it and the authored
+    .eq-panel placement above is the only one it ever lays out.
+*/
+.eq-panel.sheet--inspect {
+    left: 340px;
+    top: 12%;
 }
 
 /* ═══════════════════════════════════════════════════════════

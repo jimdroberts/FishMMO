@@ -55,7 +55,7 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// The one thing every slot panel must keep for itself is how its slots come into existence.
-	/// The equipment sockets are authored in <c>UIEquipment.uxml</c> and found by name; the grids
+	/// The equipment sockets are authored in <c>UICharacterSheet.uxml</c> and found by name; the grids
 	/// build theirs in code from the container's slot count. So this class owns what a slot DOES
 	/// and never how it is made: it holds the <see cref="slotViews"/> list, and the derived panel
 	/// fills it.
@@ -84,7 +84,12 @@ namespace FishMMO.Client
 		/// <summary>Name of the shared drag object overlay.</summary>
 		protected const string DRAG_OBJECT_NAME = UITKDragObject.CONTROL_NAME;
 		/// <summary>Name of the shared tooltip overlay.</summary>
-		protected const string TOOLTIP_NAME = "UITooltip";
+		/// <remarks>
+		/// Aliased rather than repeated: the same overlay is now opened by <see cref="UITKSlotPainter"/>
+		/// for panels that do not derive from this class, and two literals that agree by hand are how
+		/// a rename half-lands.
+		/// </remarks>
+		protected const string TOOLTIP_NAME = UITKSlotPainter.TOOLTIP_NAME;
 		/// <summary>Name of the shared transient-notice overlay.</summary>
 		protected const string TOAST_NAME = "UIToast";
 
@@ -441,6 +446,11 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Populates a slot's icon and stack-count badge from an item.
 		/// </summary>
+		/// <remarks>
+		/// The painting itself is <see cref="UITKSlotPainter.Paint"/>. What stays here is what is
+		/// genuinely this class's: which slot it is, whether it exists, and the capacity hook the
+		/// grids override.
+		/// </remarks>
 		protected void SetSlotItem(int slotIndex, Item item)
 		{
 			if (item == null || slotIndex < 0 || slotIndex >= slotViews.Count)
@@ -456,23 +466,7 @@ namespace FishMMO.Client
 
 			OnSlotContentChanged();
 
-			// Placeholder when the template has no icon: an occupied slot must look occupied.
-			UITKItemIcon.Apply(view.Icon, item.Template != null ? item.Template.Icon : null);
-
-			if (view.Amount != null)
-			{
-				if (item.IsStackable && item.Stackable != null)
-				{
-					view.Amount.text = item.Stackable.Amount.ToString();
-					view.Amount.RemoveFromClassList(CssHidden);
-				}
-				else
-				{
-					view.Amount.text = "";
-					view.Amount.AddToClassList(CssHidden);
-				}
-			}
-
+			UITKSlotPainter.Paint(view.Icon, view.Amount, item, CssHidden);
 			RefreshSlotTooltip(slotIndex, item);
 		}
 
@@ -494,13 +488,7 @@ namespace FishMMO.Client
 
 			OnSlotContentChanged();
 
-			UITKItemIcon.Clear(view.Icon);
-			if (view.Amount != null)
-			{
-				view.Amount.text = "";
-				view.Amount.AddToClassList(CssHidden);
-			}
-
+			UITKSlotPainter.Clear(view.Icon, view.Amount, CssHidden);
 			RefreshSlotTooltip(slotIndex, null);
 		}
 
@@ -515,10 +503,6 @@ namespace FishMMO.Client
 		/// describing the item that used to be in the slot the player is looking at. Issue #280,
 		/// which had to be fixed twice — once in the grids and once in the sockets — and is now
 		/// one place.
-		/// <para>
-		/// <see cref="UITKTooltip.RefreshFor"/> does nothing unless the pointer is over THIS slot,
-		/// which is what makes the per-slot call safe from the refresh loop above.
-		/// </para>
 		/// </remarks>
 		/// <param name="slotIndex">The slot that was just painted.</param>
 		/// <param name="item">What it now holds, or null when it now holds nothing.</param>
@@ -529,16 +513,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			VisualElement owner = slotViews[slotIndex].Root;
-			if (owner == null)
-			{
-				return;
-			}
-
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
-			{
-				tooltip.RefreshFor(owner, item);
-			}
+			UITKSlotPainter.RefreshTooltip(slotViews[slotIndex].Root, item);
 		}
 
 		/// <summary>
@@ -688,6 +663,10 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Shows the item tooltip when the pointer enters a slot that contains an item.
 		/// </summary>
+		/// <remarks>
+		/// This class answers WHERE the item is — it is the one that knows what its own container
+		/// holds — and hands the item to the painter, which answers what a tooltip does.
+		/// </remarks>
 		/// <param name="slotIndex">The slot the pointer entered.</param>
 		/// <param name="owner">The slot element, so the tooltip can close itself if it is rebuilt.</param>
 		protected void OnSlotPointerEnter(int slotIndex, VisualElement owner)
@@ -698,11 +677,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
-			{
-				// With an owner, so the tooltip closes itself if this slot is rebuilt under it.
-				tooltip.Open(item, owner);
-			}
+			UITKSlotPainter.OpenTooltip(owner, item);
 		}
 
 		/// <summary>
@@ -710,11 +685,7 @@ namespace FishMMO.Client
 		/// </summary>
 		protected void OnSlotPointerLeave(VisualElement owner)
 		{
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
-			{
-				// HideFor, so a stale leave cannot close a tooltip another slot has since opened.
-				tooltip.HideFor(owner);
-			}
+			UITKSlotPainter.HideTooltip(owner);
 		}
 
 		/// <summary>

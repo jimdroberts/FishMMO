@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEditor;
 using UnityEngine;
+using FishNet.Object;
+using FishMMO.Client;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
@@ -62,6 +65,19 @@ namespace FishMMO.RenderScratch
 			Set(character, "Transform", host.transform);
 			Set(character, "GameObject", host);
 
+			/* And the same again for the network identity, which is what a panel reads to tell that
+			 * the character it is showing still exists. RequireComponent on BaseCharacter puts a
+			 * NetworkObject on this GameObject, but NetworkBehaviour caches its reference in Awake
+			 * and reports IsSpawned from it, so without this every rigged character reads as
+			 * despawned and the inspect window closes itself on its first tick. */
+			NetworkObject networkObject = host.GetComponent<NetworkObject>();
+			if (networkObject != null)
+			{
+				Set(networkObject, "ObjectId", (int)id);
+				Set(networkObject, "IsDeinitializing", false);
+				Set(character, "_networkObjectCache", networkObject);
+			}
+
 			FieldInfo field = typeof(BaseCharacter).GetField("Behaviours",
 				BindingFlags.NonPublic | BindingFlags.Instance);
 			Dictionary<Type, ICharacterBehaviour> behaviours =
@@ -84,6 +100,88 @@ namespace FishMMO.RenderScratch
 			ICharacterBehaviour behaviour) where T : class, ICharacterBehaviour
 		{
 			behaviours[typeof(T)] = behaviour;
+		}
+
+		// ── Preview rigging ──────────────────────────────────────────────────
+
+		/// <summary>Path of the race model the character preview photographs.</summary>
+		public const string PREVIEW_MODEL_PATH =
+			"Assets/Prefabs/Client/Models/EthanCharacter/Prefabs/Ethan.prefab";
+
+		/// <summary>Height of the stand-in used when that model is missing, in metres.</summary>
+		private const float PREVIEW_STANDIN_HEIGHT = 1.8f;
+
+		/// <summary>
+		/// Gives a character the two things its preview needs: a mesh root holding a body, and a
+		/// camera authored the way the playable prefabs author theirs.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The preview is a render, so a character from <see cref="Create"/> without this has nothing
+		/// to photograph — no <c>MeshRoot</c> for the framing to measure, no <c>EquipmentViewCamera</c>
+		/// for the renderer to adopt — and the capture comes back with an empty viewport regardless of
+		/// how correct the panel is. Every capture whose panel shows the viewport calls this.
+		/// </para>
+		/// <para>
+		/// The camera is deliberately NOT written to the character's serialized field: its name is the
+		/// only thing that finds it, which is the fallback <c>PlayerCharacter.EquipmentViewCamera</c>
+		/// carries for prefabs that do not author the reference. So this is also the thing that would
+		/// fail loudly if that fallback were removed.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The character to rig.</param>
+		/// <returns>The mesh root the body was parented under, or null when there was no character.</returns>
+		public static Transform AttachPreview(PlayerCharacter character)
+		{
+			if (character == null || character.Transform == null)
+			{
+				return null;
+			}
+
+			GameObject smoothing = new GameObject("Smoothing");
+			smoothing.transform.SetParent(character.Transform, false);
+
+			GameObject visualRoot = new GameObject("MeshRoot");
+			visualRoot.transform.SetParent(smoothing.transform, false);
+
+			/* The real race model, not a stand-in: a skinned mesh reports the bounds of its bind pose,
+			 * which is what the framing has to fit, and a capsule would not exercise that. */
+			GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(PREVIEW_MODEL_PATH);
+			if (model != null)
+			{
+				GameObject body = UnityEngine.Object.Instantiate(model, visualRoot.transform);
+				body.name = "Body";
+				body.transform.localPosition = Vector3.zero;
+				body.transform.localRotation = Quaternion.identity;
+			}
+			else
+			{
+				/* A capsule is 2 units tall at unit scale, centred on its own origin, so half of the
+				 * stand-in height puts its feet on y = 0 — the ground the real models stand on. */
+				Debug.LogWarning($"[Rig] no model at {PREVIEW_MODEL_PATH}; falling back to a capsule, " +
+					"which does NOT exercise skinned bounds.");
+				GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+				body.name = "Body";
+				body.transform.SetParent(visualRoot.transform, false);
+				body.transform.localPosition = new Vector3(0.0f, PREVIEW_STANDIN_HEIGHT * 0.5f, 0.0f);
+				body.transform.localScale = new Vector3(0.45f, PREVIEW_STANDIN_HEIGHT * 0.5f, 0.45f);
+			}
+
+			GameObject cameraObject = new GameObject("EquipmentViewCamera");
+			cameraObject.transform.SetParent(smoothing.transform, false);
+			cameraObject.transform.localPosition =
+				new Vector3(0.0f, 0.0f, EquipmentPreviewRenderer.CameraDistance);
+			cameraObject.transform.localRotation = Quaternion.Euler(0.0f, 180.0f, 0.0f);
+			cameraObject.AddComponent<Camera>().orthographic = true;
+
+			// Authored disabled, exactly as the prefabs author it.
+			cameraObject.SetActive(false);
+
+			// The subject and its equipment go on the visual layer; the camera does not need to.
+			BaseCharacter.ApplyVisualLayer(visualRoot);
+
+			Set(character, "meshRoot", visualRoot.transform);
+			return visualRoot.transform;
 		}
 
 		/// <summary>Writes a property, its auto-property backing field, or a plain field.</summary>

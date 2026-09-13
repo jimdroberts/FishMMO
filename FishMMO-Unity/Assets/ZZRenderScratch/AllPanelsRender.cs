@@ -48,6 +48,7 @@ namespace FishMMO.RenderScratch
 		private static PanelSettings settings;
 		private static RenderTexture texture;
 		private static Job current;
+		private static UITKControl mounted;
 		private static int framesWaited;
 		private static readonly List<string> live = new List<string>();
 		private static readonly List<string> chrome = new List<string>();
@@ -76,6 +77,16 @@ namespace FishMMO.RenderScratch
 						queue.Add(Make("UIGuild-Roster", path, (h, d) => Panels.Guild(h, d, "guild-tab-roster")));
 						queue.Add(Make("UIGuild-Info", path, (h, d) => Panels.Guild(h, d, "guild-tab-info")));
 						queue.Add(Make("UIGuild-Log", path, (h, d) => Panels.Guild(h, d, "guild-tab-log")));
+						continue;
+					}
+					/* One UXML, two windows. The equipment panel and the inspect window mount the same
+					 * sheet, so there is one asset to find and two captures to take from it — which is
+					 * the point of the sharing: a difference between these two pictures is a difference
+					 * the two components applied, not a difference between two pieces of markup. */
+					if (name == "UICharacterSheet")
+					{
+						queue.Add(Make("UIEquipment", path, Panels.Equipment));
+						queue.Add(Make("UIInspect", path, Panels.Inspect));
 						continue;
 					}
 					if (name == "UIOptions")
@@ -142,14 +153,12 @@ namespace FishMMO.RenderScratch
 				{ "UIChat",           Panels.Chat },
 				{ "UITooltip",        Panels.Tooltip },
 				{ "UIContextMenu",    Panels.ContextMenu },
-				{ "UIInspect",        Panels.Inspect },
 				{ "UIDropdown",       Panels.Dropdown },
 				{ "UIDialogBox",      Panels.DialogBox },
 				{ "UIColorPicker",    Panels.ColorPicker },
 				{ "UILoadingScreen",  Panels.LoadingScreen },
 				{ "UIDeathDialog",    Panels.DeathDialog },
 				{ "UIInventory",      Panels.Inventory },
-				{ "UIEquipment",      Panels.Equipment },
 				{ "UIBank",           Panels.Bank },
 				{ "UIAchievements",   Panels.Achievements },
 				{ "UIFactions",       Panels.Factions },
@@ -169,6 +178,15 @@ namespace FishMMO.RenderScratch
 				if (current != null)
 				{
 					++framesWaited;
+
+					/* Two things the client's own Update does that edit mode otherwise never does.
+					 * StartWhenReady covers the fact that Awake does not run here, so a panel's tree
+					 * is cloned a frame or more after it is mounted; Tick is the per-frame hook
+					 * behind it — the character preview in particular is rendered from there, and
+					 * without it every viewport in the set captures empty. */
+					Panels.StartWhenReady(mounted);
+					Panels.Tick(mounted);
+
 					if (framesWaited < SETTLE_FRAMES)
 					{
 						document?.rootVisualElement?.MarkDirtyRepaint();
@@ -263,6 +281,9 @@ namespace FishMMO.RenderScratch
 				}
 			}
 
+			// The component this capture mounted, if it mounted one; a chrome pass has none.
+			mounted = host.GetComponent<UITKControl>();
+
 			document.rootVisualElement?.MarkDirtyRepaint();
 		}
 
@@ -293,6 +314,7 @@ namespace FishMMO.RenderScratch
 			if (host != null) UnityEngine.Object.DestroyImmediate(host);
 			host = null;
 			document = null;
+			mounted = null;
 		}
 
 		private static void ReleaseTarget()

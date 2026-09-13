@@ -9,7 +9,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit implementation of the equipment panel.
-	/// Binds to <c>UIEquipment.uxml</c> / <c>UIEquipment.uss</c> and renders the character's
+	/// Binds to <c>UICharacterSheet.uxml</c> / <c>UICharacterSheet.uss</c> and renders the character's
 	/// equipped items alongside the attributes they contribute to.
 	/// </summary>
 	/// <remarks>
@@ -29,9 +29,12 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// What is genuinely this panel's own is the half a socket does differently: its slots are
-	/// AUTHORED in <c>UIEquipment.uxml</c> rather than built from a container's slot count, a drop
-	/// onto one is an equip rather than a swap, and beside the sockets it draws the attributes and
-	/// the live character preview that no item grid has.
+	/// AUTHORED in <c>UICharacterSheet.uxml</c> rather than built from a container's slot count and a
+	/// drop onto one is an equip rather than a swap. Everything else the sheet draws — the ten
+	/// sockets' contents, the character preview, the HP / MP / Stamina chips, the attribute rows — is
+	/// <see cref="CharacterSheetView"/>'s, which this window shares with the inspect window and which
+	/// is why the two now read as one window showing two characters instead of two windows that
+	/// happened to be about equipment.
 	/// </para>
 	/// </remarks>
 	public class UITKEquipment : UITKSlotPanelBase
@@ -40,7 +43,7 @@ namespace FishMMO.Client
 
 		/// <inheritdoc/>
 		/// <remarks>
-		/// "eq", which is already the prefix every class in <c>UIEquipment.uss</c> carries:
+		/// "eq", which is already the prefix every class in <c>UICharacterSheet.uss</c> carries:
 		/// <c>eq-hidden</c> and <c>eq-slot__lock--pending</c> are exactly the two names the shared
 		/// painters derive from it. The two <c>const</c> strings that used to spell them out here
 		/// were the same convention written a second time.
@@ -52,75 +55,25 @@ namespace FishMMO.Client
 
 		// ── UXML element names ────────────────────────────────────────────────
 
-		/// <summary>Name of the attribute list ScrollView element in the UXML.</summary>
-		private const string ATTR_LIST_NAME     = "attribute-list";
-		/// <summary>Name of the preview render texture element in the UXML.</summary>
-		private const string PREVIEW_RT_NAME    = "preview-rt";
 		/// <summary>Name of the close button element in the UXML.</summary>
 		private const string CLOSE_BTN_NAME     = "close-button";
-		/// <summary>Name of the HP stat label element in the UXML.</summary>
-		private const string STAT_HP_NAME       = "stat-hp";
-		/// <summary>Name of the MP stat label element in the UXML.</summary>
-		private const string STAT_MP_NAME       = "stat-mp";
-		/// <summary>Name of the stamina stat label element in the UXML.</summary>
-		private const string STAT_STAM_NAME     = "stat-stam";
+
+		/* The attribute list, the preview viewport and the three status labels are resolved by
+		 * CharacterSheetView, which is the class that draws them; this panel asks the sheet about them
+		 * rather than holding a second set of references into the same markup. */
 
 		/* DRAG_OBJECT_NAME, TOOLTIP_NAME and TOAST_NAME are on UITKSlotPanelBase — three string
 		 * constants that were identical in this file and in the item grid, naming overlays neither
 		 * panel owns. */
 
-		/// <summary>
-		/// UXML element name for every <see cref="ItemSlot"/>, indexed by its enum value.
-		/// </summary>
-		/// <remarks>
-		/// THIS ARRAY IS A CONTRACT, NOT A CONVENIENCE. <see cref="EquipmentController"/> sizes its
-		/// container from <c>Enum.GetNames(typeof(ItemSlot)).Length</c>, so slot <c>i</c> of the
-		/// container is <c>(ItemSlot)i</c> and must be drawn by <c>SlotElementNames[i]</c>. Every
-		/// enum value needs an entry, in order, and every entry needs an element of that name in
-		/// <c>UIEquipment.uxml</c>.
-		/// <para>
-		/// The comment that used to sit here claimed the array listed "only slots that exist in
-		/// both the enum and the UXML", which was untrue in both directions: it named
-		/// <c>slot-accessory</c>, which the UXML did not define, while the UXML defined
-		/// <c>slot-neck</c> and <c>slot-ring</c>, which are not <see cref="ItemSlot"/> values and
-		/// which this array did not name. The result was an <see cref="ItemSlot.Accessory"/> slot
-		/// that could never render — <c>root.Q</c> returned null and the per-slot guard quietly
-		/// skipped it — and two dead elements the player could click to no effect. Both halves are
-		/// fixed; the UXML now declares exactly these ten names.
-		/// </para>
-		/// </remarks>
-		private static readonly string[] SlotElementNames = new[]
-		{
-			"slot-head",      // ItemSlot.Head      = 0
-			"slot-chest",     // ItemSlot.Chest     = 1
-			"slot-shoulders", // ItemSlot.Shoulders = 2
-			"slot-hands",     // ItemSlot.Hands     = 3
-			"slot-legs",      // ItemSlot.Legs      = 4
-			"slot-feet",      // ItemSlot.Feet      = 5
-			"slot-back",      // ItemSlot.Back      = 6
-			"slot-mainhand",  // ItemSlot.Primary   = 7
-			"slot-offhand",   // ItemSlot.Secondary = 8
-			"slot-accessory", // ItemSlot.Accessory = 9
-		};
-
-		// ── USS class names ───────────────────────────────────────────────────
+		/* SlotElementNames is on CharacterSheetView. It is the contract with the ItemSlot enum — one
+		 * authored element per enum value, in enum order — and both windows that mount the sheet need
+		 * it, so it is written once rather than once per panel. The inspect window has the same need
+		 * for the same ten names and no reason to know about this class. */
 
 		/* eq-hidden and eq-slot__lock--pending are derived from Prefix by UITKSlotPanelBase, which
-		 * owns the painters that apply them. The attribute-row classes below are this panel's
-		 * alone: no item grid has an attribute list. */
-
-		/// <summary>USS class for an attribute category header.</summary>
-		private const string CSS_ATTR_CATEGORY  = "fish-attr-category";
-		/// <summary>USS class for an attribute row.</summary>
-		private const string CSS_ATTR_ROW       = "fish-attr-row";
-		/// <summary>USS class for an attribute row name label.</summary>
-		private const string CSS_ATTR_NAME      = "fish-attr-row__name";
-		/// <summary>USS class for an attribute row value label.</summary>
-		private const string CSS_ATTR_VALUE     = "fish-attr-row__value";
-		/// <summary>USS class for a resource attribute value label.</summary>
-		private const string CSS_ATTR_RESOURCE  = "fish-attr-row__value--resource";
-		/// <summary>USS class for a percentage attribute value label.</summary>
-		private const string CSS_ATTR_PERCENT   = "fish-attr-row__value--percent";
+		 * owns the painters that apply them. The attribute-row classes are the sheet's; they live with
+		 * the code that creates the rows, in CharacterSheetView. */
 
 		// ── Private state ─────────────────────────────────────────────────────
 
@@ -130,61 +83,14 @@ namespace FishMMO.Client
 		 * the first equip of any session the player had not opened this window in. The shared list
 		 * starts empty instead, so every bounds check answers the same way with no special case. */
 
-		/// <summary>Live attribute value labels keyed by attribute template ID.</summary>
-		private readonly Dictionary<int, Label> attributeValueLabels = new Dictionary<int, Label>();
-
-		/// <summary>Category header elements created at runtime.</summary>
-		private readonly List<VisualElement> attributeCategoryElements = new List<VisualElement>();
-
-		/// <summary>Attribute row elements created at runtime.</summary>
-		private readonly List<VisualElement> attributeRowElements = new List<VisualElement>();
-
 		/// <summary>
-		/// The attributes this panel currently holds a subscription on.
+		/// The shared sheet: sockets' contents, preview, chips and attribute rows.
 		/// </summary>
 		/// <remarks>
-		/// Kept as its own list rather than re-derived from the character at unsubscribe time.
-		/// <c>DestroyAttributeElements</c> used to walk <c>Character</c>'s attributes to detach —
-		/// but on a character change it runs from <c>OnPostSetCharacter</c>, by which point
-		/// <c>Character</c> is already the NEW one, so the outgoing character kept every
-		/// subscription for the rest of the session and its updates went on repainting a panel
-		/// that no longer showed it.
+		/// Built in <see cref="OnStarting"/>, against the tree resolved in the same call, and rebuilt
+		/// with it. Everything it owns belongs to that tree, so a tree replacement replaces it.
 		/// </remarks>
-		private readonly List<CharacterAttribute> subscribedAttributes = new List<CharacterAttribute>();
-
-		/// <summary>The ScrollView that contains the attribute rows.</summary>
-		private ScrollView attributeList;
-		/// <summary>Character preview render texture element.</summary>
-		private VisualElement previewRt;
-		/// <summary>Label displaying the HP stat value.</summary>
-		private Label statHpLabel;
-		/// <summary>Label displaying the MP stat value.</summary>
-		private Label statMpLabel;
-		/// <summary>Label displaying the stamina stat value.</summary>
-		private Label statStamLabel;
-
-		/// <summary>Owns the preview camera and the render texture the viewport draws.</summary>
-		private readonly EquipmentPreviewRenderer previewRenderer = new EquipmentPreviewRenderer();
-
-		/// <summary>
-		/// True once the preview camera has been framed against the character actually on screen.
-		/// </summary>
-		/// <remarks>
-		/// Cleared whenever the thing being photographed changes — a different character, or a
-		/// different set of equipped meshes — and set again the first time the renderer can see
-		/// one. Frame is otherwise a per-open cost, not a per-frame one: re-deriving the camera
-		/// every frame would make the picture breathe as the character animates.
-		/// </remarks>
-		private bool previewFramed;
-
-		/// <summary>The render texture currently on the preview element, or null.</summary>
-		/// <remarks>
-		/// Held so the style is only rewritten when the texture is actually replaced. The preview
-		/// is refreshed every frame, and assigning a fresh <see cref="StyleBackground"/> each time
-		/// would rebuild the style object, invalidate the element and allocate — for a value that
-		/// only changes when the viewport is resized.
-		/// </remarks>
-		private RenderTexture previewTexture;
+		private CharacterSheetView sheet;
 
 		// ── UITKControl lifecycle ─────────────────────────────────────────────
 
@@ -199,17 +105,12 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Attribute scroll list. The slot grid above it and this list are both always
-			 * visible, so nothing here decides which half of the panel to draw. */
-			attributeList = root.Q<ScrollView>(ATTR_LIST_NAME);
-
-			// Status-bar labels
-			statHpLabel    = root.Q<Label>(STAT_HP_NAME);
-			statMpLabel    = root.Q<Label>(STAT_MP_NAME);
-			statStamLabel  = root.Q<Label>(STAT_STAM_NAME);
-
-			// Character-preview render texture element
-			previewRt = root.Q(PREVIEW_RT_NAME);
+			/* The sheet resolves the attribute list, the preview viewport and the status labels in the
+			 * same tree, and hides the regions this viewer may not see — for this panel, none. It is
+			 * disposed rather than dropped because it owns a render texture and a camera reference, and
+			 * a hide/show cycle would otherwise leak one of each every time. */
+			sheet?.Dispose();
+			sheet = new CharacterSheetView(root, CharacterSheetOptions.Equipment);
 
 			// Close button
 			Button closeBtn = root.Q<Button>(CLOSE_BTN_NAME);
@@ -229,15 +130,22 @@ namespace FishMMO.Client
 		/// THIS IS THE PART A SHARED BASE MUST NOT OWN, and the reason
 		/// <see cref="UITKSlotPanelBase"/> holds the list but never populates it. The item grids
 		/// CREATE one element per container slot, so their slot count follows the container. These
-		/// ten sockets are authored in <c>UIEquipment.uxml</c> and found by name, so their count
+		/// ten sockets are authored in <c>UICharacterSheet.uxml</c> and found by name, so their count
 		/// follows the <see cref="ItemSlot"/> enum and the markup has to agree with it.
+		/// </para>
+		/// <para>
+		/// The names come from <see cref="CharacterSheetView.SlotElementNames"/> and the elements
+		/// from the sheet that already resolved them, so there is one description of which socket is
+		/// which. What is built here is the INTERACTIVE record of each one — the icon, the stack
+		/// badge and the lock overlay this panel paints and routes clicks through — which is not
+		/// something the sheet shares, because the inspect window must not route a click at all.
 		/// </para>
 		/// <para>
 		/// A socket whose element is missing is still ADDED, as a default
 		/// <c>SlotView</c> with a null root. Skipping it would shorten the list and every socket
 		/// after it would then draw the wrong item — the index into this list is the container slot
-		/// index, and that is the contract <see cref="SlotElementNames"/> exists to keep. The
-		/// shared painters already treat a null root as nothing to draw.
+		/// index, and that is the contract the name array exists to keep. The shared painters already
+		/// treat a null root as nothing to draw.
 		/// </para>
 		/// <para>
 		/// The callbacks are registered on elements that belong to the tree being resolved right
@@ -250,10 +158,10 @@ namespace FishMMO.Client
 		{
 			slotViews.Clear();
 
-			int slotCount = SlotElementNames.Length;
+			int slotCount = CharacterSheetView.SlotElementNames.Length;
 			for (int i = 0; i < slotCount; ++i)
 			{
-				VisualElement slotRoot = root.Q(SlotElementNames[i]);
+				VisualElement slotRoot = root.Q(CharacterSheetView.SlotElementNames[i]);
 
 				SlotView view = default;
 				if (slotRoot != null)
@@ -302,7 +210,7 @@ namespace FishMMO.Client
 
 			if (Visible)
 			{
-				RefreshPreview();
+				sheet?.RefreshPreview();
 			}
 		}
 
@@ -325,12 +233,9 @@ namespace FishMMO.Client
 
 			/* Disposes rather than dropping the reference. The camera belongs to the character and
 			 * would otherwise stay enabled — rendering the character into a texture nobody draws,
-			 * every frame, for the rest of the session. */
-			ApplyPreviewTexture(null);
-			previewRenderer.Dispose();
-			previewFramed = false;
-
-			DestroyAttributeElements();
+			 * every frame, for the rest of the session. The attribute subscriptions and the
+			 * runtime-created rows go with it. */
+			sheet?.Dispose();
 		}
 
 		// ── Visibility overrides (preview sync) ──────────────────────────────
@@ -347,11 +252,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		protected override void OnPanelHidden()
 		{
-			/* The element stops drawing the texture before the renderer destroys it, so no frame
-			 * can find a destroyed texture still on the element's style. */
-			ApplyPreviewTexture(null);
-			previewRenderer.Configure(null);
-			previewFramed = false;
+			sheet?.ReleasePreview();
 		}
 
 		// ── Character control ─────────────────────────────────────────────────
@@ -364,11 +265,7 @@ namespace FishMMO.Client
 			/* The outgoing character is still the one this panel is pointed at, so its camera has
 			 * to be handed back before the reference moves — otherwise that character's camera
 			 * stays enabled and renders into a texture nothing is drawing. */
-			/* The element stops drawing the texture before the renderer destroys it, so no frame
-			 * can find a destroyed texture still on the element's style. */
-			ApplyPreviewTexture(null);
-			previewRenderer.Configure(null);
-			previewFramed = false;
+			sheet?.ReleasePreview();
 
 			if (Character != null &&
 				Character.TryGet(out IEquipmentController equipmentController))
@@ -378,23 +275,25 @@ namespace FishMMO.Client
 				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 			}
 
-			/* Detach the attribute subscriptions while Character still points at the character
-			 * that owns them. Doing it in OnPostSetCharacter, as this used to, looked up the
-			 * attributes of the INCOMING character and left the outgoing one wired to this panel
-			 * forever. */
-			UnsubscribeAttributes();
+			/* The sheet's attribute subscriptions are detached by SetSubject, which runs from
+			 * OnPostSetCharacter with the incoming character. It does not need the outgoing one to do
+			 * it: the list of attributes it is subscribed to is its own, so the detach cannot look up
+			 * the wrong character's attributes the way the old walk over Character's did. */
 		}
 
 		/// <summary>
-		/// Subscribes to equipment slot events, refreshes all slot visuals, and builds
-		/// the attribute row list for the newly set character.
+		/// Subscribes to equipment slot events, refreshes all slot visuals, and hands the new
+		/// character to the sheet.
 		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
 
-			DestroyAttributeElements();
-			ResetStatusBar();
+			/* Replaces the sheet's subject, which releases the outgoing character's attribute
+			 * subscriptions and preview camera, paints the sockets, rebuilds the attribute rows and
+			 * refreshes the chips. A null character is a legitimate subject here: the sheet empties
+			 * itself rather than keeping the last character's gear on screen. */
+			sheet?.SetSubject(Character);
 
 			if (Character == null)
 			{
@@ -413,13 +312,6 @@ namespace FishMMO.Client
 				equipmentController.OnSlotUpdated     += OnEquipmentSlotUpdated;
 				equipmentController.OnSlotLockChanged += OnEquipmentSlotLockChanged;
 				equipmentController.OnRequestResolved += OnEquipmentRequestResolved;
-			}
-
-			// ── Character attributes ──────────────────────────────────────────
-			if (Character.TryGet(out ICharacterAttributeController attributeController))
-			{
-				BuildAttributeRows(attributeController);
-				UpdateStatusBar(attributeController);
 			}
 		}
 
@@ -441,13 +333,12 @@ namespace FishMMO.Client
 				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 			}
 
-			/* The element stops drawing the texture before the renderer destroys it, so no frame
-			 * can find a destroyed texture still on the element's style. */
-			ApplyPreviewTexture(null);
-			previewRenderer.Configure(null);
-			previewFramed = false;
+			/* The sheet is unbound rather than merely un-previewed: the character is going away, so its
+			 * camera is handed back, its attribute subscriptions are dropped and its gear is taken off
+			 * the sockets. A sheet left bound to a character that no longer exists is the whole of what
+			 * this method is for. */
+			sheet?.SetSubject(null);
 
-			UnsubscribeAttributes();
 			ReleaseAndClearDrag();
 		}
 
@@ -504,151 +395,19 @@ namespace FishMMO.Client
 		/// </remarks>
 		protected override void OnSlotUpdateReceived(int slotIndex)
 		{
-			previewFramed = false;
+			sheet?.InvalidatePreviewFraming();
 		}
 
-		// ── Attribute update callbacks ────────────────────────────────────────
-
-		/// <summary>
-		/// Refreshes the attribute label for an updated attribute.
-		/// </summary>
-		public void OnAttributeUpdated(CharacterAttribute attribute)
-		{
-			if (!attributeValueLabels.TryGetValue(attribute.Template.ID, out Label valueLabel))
-			{
-				return;
-			}
-
-			if (attribute.Template.IsResourceAttribute)
-			{
-				CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
-				if (resource != null)
-				{
-					valueLabel.text = Mathf.RoundToInt(resource.CurrentValue) + " / " + resource.FinalValue;
-					UpdateStatusBarChip(attribute.Template.Name, valueLabel.text);
-				}
-			}
-			else
-			{
-				valueLabel.text = attribute.Template.IsPercentage
-					? attribute.FinalValue + "%"
-					: attribute.FinalValue.ToString();
-			}
-		}
+		/* OnAttributeUpdated is on CharacterSheetView, which owns the attribute labels and the
+		 * subscriptions that feed them. This panel used to hold both, one file's worth of label
+		 * bookkeeping beside the sockets, and the inspect window had no way to reuse any of it. */
 
 		// ── Character preview ─────────────────────────────────────────────────
 
-		/// <summary>
-		/// Adopts the current character's preview camera and renders it into the viewport.
-		/// </summary>
-		/// <remarks>
-		/// <para>Safe to call every frame: it returns immediately until the UI layout engine has
-		/// measured the viewport, and once the preview is framed it is one small orthographic
-		/// render into a texture already sized for the element.</para>
-		/// <para>The camera is taken from the character rather than injected by whoever opened the
-		/// panel. It used to be handed over by the equipment hotkey, which meant the preview
-		/// depended on how the panel was opened and not on what it was showing.</para>
-		/// </remarks>
-		private void RefreshPreview()
-		{
-			if (previewRt == null)
-			{
-				return;
-			}
-
-			Camera camera = Character != null ? Character.EquipmentViewCamera : null;
-			if (camera == null)
-			{
-				ApplyPreviewTexture(null);
-				previewFramed = false;
-				return;
-			}
-
-			previewRenderer.Configure(camera);
-
-			if (!TryMeasureViewport(previewRt, out int width, out int height))
-			{
-				return;
-			}
-
-			if (!previewRenderer.Render(width, height))
-			{
-				return;
-			}
-
-			/* Render before Frame, deliberately: Frame needs the texture's aspect to know whether
-			 * the subject is limited by its height or its width, and the texture is only created
-			 * once a size is known. The first frame of an opening therefore draws with the
-			 * prefab's authored framing and the second with the corrected one. */
-			if (!previewFramed)
-			{
-				previewFramed = previewRenderer.Frame(Character.MeshRoot);
-			}
-
-			ApplyPreviewTexture(previewRenderer.Texture);
-		}
-
-		/// <summary>
-		/// Displays <paramref name="rt"/> inside the preview element.
-		/// </summary>
-		/// <param name="rt">The render texture to show, or null to show nothing.</param>
-		/// <remarks>
-		/// Toolkit cannot sample a RenderTexture through a texture slot, so it goes on as a
-		/// background image. That is also why the viewport element is a plain
-		/// <see cref="VisualElement"/> and not an <c>Image</c>: nothing here needs a sprite.
-		/// </remarks>
-		private void ApplyPreviewTexture(RenderTexture rt)
-		{
-			/* A raw reference compare, not Unity's overloaded == : this is about the texture having
-			 * been replaced, and the renderer nulls its own field on release rather than leaving a
-			 * destroyed object behind. */
-			if (object.ReferenceEquals(previewTexture, rt))
-			{
-				return;
-			}
-
-			previewTexture = rt;
-
-			if (previewRt == null)
-			{
-				return;
-			}
-
-			previewRt.style.backgroundImage = rt != null
-				? new StyleBackground(Background.FromRenderTexture(rt))
-				: StyleKeyword.None;
-		}
-
-		/// <summary>
-		/// Reads the viewport's measured size, in whole pixels.
-		/// </summary>
-		/// <param name="element">The element to measure.</param>
-		/// <param name="width">Receives the width in pixels.</param>
-		/// <param name="height">Receives the height in pixels.</param>
-		/// <returns>True when the layout engine has produced a usable size.</returns>
-		/// <remarks>
-		/// <c>resolvedStyle</c> reports NaN for a property that has never been resolved, which is
-		/// the state of every element between being added to a panel and its first layout pass —
-		/// so the NaN test is the real guard here and the size test only rejects a degenerate box.
-		/// </remarks>
-		private static bool TryMeasureViewport(VisualElement element, out int width, out int height)
-		{
-			width = 0;
-			height = 0;
-
-			float measuredWidth = element.resolvedStyle.width;
-			float measuredHeight = element.resolvedStyle.height;
-
-			if (float.IsNaN(measuredWidth) || float.IsNaN(measuredHeight) ||
-				measuredWidth < 2.0f || measuredHeight < 2.0f)
-			{
-				return false;
-			}
-
-			width = Mathf.RoundToInt(measuredWidth);
-			height = Mathf.RoundToInt(measuredHeight);
-			return true;
-		}
+		/* RefreshPreview, ApplyPreviewTexture, TryMeasureViewport and the preview renderer are on
+		 * CharacterSheetView. The preview is a property of the SHEET — a character photographed into
+		 * the viewport the markup declares — and not of this panel, which is why an inspected
+		 * character gets one for free rather than needing its own copy of a hundred lines. */
 
 		/* SubscribeTracker, UnsubscribeTracker, OnTrackerSlotPendingChanged and
 		 * OnTrackerResyncRequested are on UITKSlotPanelBase. Four methods, some sixty lines,
@@ -672,16 +431,12 @@ namespace FishMMO.Client
 				RefreshAllSlots(equipmentController);
 			}
 
-			if (Character.TryGet(out ICharacterAttributeController attributeController))
-			{
-				UpdateStatusBar(attributeController);
-			}
-
-			/* The preview is rebuilt on every open, not just the first. The camera and texture
-			 * belong to the character and are handed back when the panel closes, so the opening
-			 * after that starts from nothing. */
-			previewFramed = false;
-			RefreshPreview();
+			/* The chips and the preview, both re-read from the character. The preview is rebuilt on
+			 * every open, not just the first: the camera and texture belong to the character and are
+			 * handed back when the panel closes, so the opening after that starts from nothing. The
+			 * attribute rows are NOT rebuilt here — they are built once per character by SetSubject,
+			 * because they carry subscriptions and rebuilding them per open would churn them. */
+			sheet?.Refresh();
 		}
 
 		/* RefreshAllSlots, IsSlotBlocked, RefreshSlot, SetSlotItem, ClearSlot, RefreshSlotTooltip
@@ -1021,215 +776,12 @@ namespace FishMMO.Client
 		 * summary line. That anchor is a fixture's convenience, not a contract; the fixture was
 		 * re-anchored rather than the duplication kept. */
 
-		// ── Attribute row building ────────────────────────────────────────────
-
-		/// <summary>
-		/// Categorises all character attributes and creates the scrollable attribute rows
-		/// inside the <c>attribute-list</c> ScrollView.
-		/// </summary>
-		private void BuildAttributeRows(ICharacterAttributeController attributeController)
-		{
-			if (attributeList == null)
-			{
-				return;
-			}
-
-			var resourceAttributes    = new List<CharacterAttribute>();
-			var damageAttributes      = new List<CharacterAttribute>();
-			var resistanceAttributes  = new List<CharacterAttribute>();
-			var coreAttributes        = new List<CharacterAttribute>();
-
-			foreach (CharacterResourceAttribute ra in attributeController.ResourceAttributes.Values)
-			{
-				resourceAttributes.Add(ra);
-			}
-
-			foreach (CharacterAttribute attr in attributeController.Attributes.Values)
-			{
-				if (attr.Template.Name.Contains("Regeneration"))
-				{
-					resourceAttributes.Add(attr);
-				}
-				else if (attr.Template is DamageAttributeTemplate)
-				{
-					damageAttributes.Add(attr);
-				}
-				else if (attr.Template is ResistanceAttributeTemplate)
-				{
-					resistanceAttributes.Add(attr);
-				}
-				else
-				{
-					coreAttributes.Add(attr);
-				}
-			}
-
-			AddAttributeCategory("Resource",    resourceAttributes);
-			AddAttributeCategory("Damage",      damageAttributes);
-			AddAttributeCategory("Resistance",  resistanceAttributes);
-			AddAttributeCategory("Core",        coreAttributes);
-
-			resourceAttributes.Clear();
-			damageAttributes.Clear();
-			resistanceAttributes.Clear();
-			coreAttributes.Clear();
-		}
-
-		/// <summary>
-		/// Creates a category header label and one row per attribute, appending all to the
-		/// attribute ScrollView and subscribing to <see cref="CharacterAttribute.OnAttributeUpdated"/>.
-		/// </summary>
-		private void AddAttributeCategory(string categoryName, List<CharacterAttribute> attributes)
-		{
-			if (attributes == null || attributes.Count == 0 || attributeList == null)
-			{
-				return;
-			}
-
-			// Category header
-			Label header = new Label(categoryName);
-			header.AddToClassList(CSS_ATTR_CATEGORY);
-			attributeList.Add(header);
-			attributeCategoryElements.Add(header);
-
-			for (int i = 0; i < attributes.Count; ++i)
-			{
-				CharacterAttribute attribute = attributes[i];
-
-				attribute.OnAttributeUpdated -= OnAttributeUpdated; // defensive dedup
-
-				VisualElement row = new VisualElement();
-				row.AddToClassList(CSS_ATTR_ROW);
-
-				Label nameLabel = new Label(attribute.Template.Name);
-				nameLabel.AddToClassList(CSS_ATTR_NAME);
-				row.Add(nameLabel);
-
-				Label valueLabel = new Label();
-				valueLabel.AddToClassList(CSS_ATTR_VALUE);
-
-				if (attribute.Template.IsResourceAttribute)
-				{
-					CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
-					if (resource != null)
-					{
-						valueLabel.text = Mathf.RoundToInt(resource.CurrentValue) + " / " + resource.FinalValue;
-					}
-					valueLabel.AddToClassList(CSS_ATTR_RESOURCE);
-				}
-				else
-				{
-					valueLabel.text = attribute.Template.IsPercentage
-						? attribute.FinalValue + "%"
-						: attribute.FinalValue.ToString();
-
-					if (attribute.Template.IsPercentage)
-					{
-						valueLabel.AddToClassList(CSS_ATTR_PERCENT);
-					}
-				}
-
-				row.Add(valueLabel);
-				attributeList.Add(row);
-				attributeRowElements.Add(row);
-
-				attributeValueLabels[attribute.Template.ID] = valueLabel;
-				attribute.OnAttributeUpdated += OnAttributeUpdated;
-				subscribedAttributes.Add(attribute);
-			}
-		}
-
-		/// <summary>
-		/// Detaches this panel from every attribute it is subscribed to.
-		/// </summary>
-		private void UnsubscribeAttributes()
-		{
-			for (int i = 0; i < subscribedAttributes.Count; ++i)
-			{
-				if (subscribedAttributes[i] != null)
-				{
-					subscribedAttributes[i].OnAttributeUpdated -= OnAttributeUpdated;
-				}
-			}
-			subscribedAttributes.Clear();
-		}
-
-		/// <summary>
-		/// Removes all runtime-created attribute elements and unsubscribes from all attribute events.
-		/// </summary>
-		private void DestroyAttributeElements()
-		{
-			UnsubscribeAttributes();
-
-			/* RemoveFromHierarchy, not attributeList.Remove. VisualElement.Remove THROWS when the
-			 * element is not its child, and after the document re-clones the UXML these rows
-			 * belong to the previous tree while attributeList is the new one — so the old code
-			 * threw part-way through, aborting the rebuild and leaving the panel permanently
-			 * empty. RemoveFromHierarchy asks the element about its own parent and is a no-op when
-			 * it has none. */
-			for (int i = 0; i < attributeCategoryElements.Count; ++i)
-			{
-				attributeCategoryElements[i]?.RemoveFromHierarchy();
-			}
-			for (int i = 0; i < attributeRowElements.Count; ++i)
-			{
-				attributeRowElements[i]?.RemoveFromHierarchy();
-			}
-
-			attributeCategoryElements.Clear();
-			attributeRowElements.Clear();
-			attributeValueLabels.Clear();
-		}
-
-		// ── Status bar ────────────────────────────────────────────────────────
-
-		/// <summary>
-		/// Populates the HP, MP, and Stamina status-bar chips from the attribute controller.
-		/// </summary>
-		private void UpdateStatusBar(ICharacterAttributeController ac)
-		{
-			if (ac.TryGetHealthAttribute(out CharacterResourceAttribute hp) && statHpLabel != null)
-			{
-				statHpLabel.text = Mathf.RoundToInt(hp.CurrentValue) + " / " + hp.FinalValue;
-			}
-			if (ac.TryGetManaAttribute(out CharacterResourceAttribute mp) && statMpLabel != null)
-			{
-				statMpLabel.text = Mathf.RoundToInt(mp.CurrentValue) + " / " + mp.FinalValue;
-			}
-			if (ac.TryGetStaminaAttribute(out CharacterResourceAttribute stam) && statStamLabel != null)
-			{
-				statStamLabel.text = Mathf.RoundToInt(stam.CurrentValue) + " / " + stam.FinalValue;
-			}
-		}
-
-		/// <summary>
-		/// Resets all status-bar chip labels to the default placeholder.
-		/// </summary>
-		private void ResetStatusBar()
-		{
-			if (statHpLabel   != null) statHpLabel.text   = "—";
-			if (statMpLabel   != null) statMpLabel.text   = "—";
-			if (statStamLabel != null) statStamLabel.text = "—";
-		}
-
-		/// <summary>
-		/// Updates a status-bar chip whose attribute name matches one of the known resource labels.
-		/// Called from <see cref="OnAttributeUpdated"/> to keep the chips in sync.
-		/// </summary>
-		private void UpdateStatusBarChip(string templateName, string formattedValue)
-		{
-			if (templateName.Contains("Health") && statHpLabel != null)
-			{
-				statHpLabel.text = formattedValue;
-			}
-			else if (templateName.Contains("Mana") && statMpLabel != null)
-			{
-				statMpLabel.text = formattedValue;
-			}
-			else if (templateName.Contains("Stamina") && statStamLabel != null)
-			{
-				statStamLabel.text = formattedValue;
-			}
-		}
+		/* BuildAttributeRows, AddAttributeCategory, UnsubscribeAttributes, DestroyAttributeElements,
+		 * UpdateStatusBar, ResetStatusBar and UpdateStatusBarChip are on CharacterSheetView. They were
+		 * this file's alone — no item grid has an attribute list and the inspect window had no way to
+		 * reuse any of it — and they are what the sheet SHARES between the two windows that mount it.
+		 * The label bookkeeping and the subscriptions have to live with each other: the bug that had
+		 * to be fixed twice was a subscription detached by walking the wrong character's attributes,
+		 * which is only possible when the list of what was subscribed is kept away from the labels. */
 	}
 }

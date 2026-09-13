@@ -47,7 +47,7 @@ namespace FishMMO.UnitTests
 	/// </para>
 	/// <para>
 	/// What is deliberately NOT pinned here is slot creation. The sockets are authored in
-	/// <c>UIEquipment.uxml</c> and found by class name; the grids build one element per container
+	/// <c>UICharacterSheet.uxml</c> and found by class name; the grids build one element per container
 	/// slot in code. That difference is real and the base must stay out of it, so one test asserts
 	/// the base does not create slots and each panel still creates its own its own way.
 	/// </para>
@@ -82,7 +82,7 @@ namespace FishMMO.UnitTests
 		/// <remarks>
 		/// Each of these has to mark what it creates, so a press on a slot can be told from a press on
 		/// anything else. The equipment panel is the awkward one: its sockets are authored in
-		/// <c>UIEquipment.uxml</c> rather than created in code, and the mark is applied to the authored
+		/// <c>UICharacterSheet.uxml</c> rather than created in code, and the mark is applied to the authored
 		/// element as it is found — the UXML carries the look, the class list carries the meaning.
 		/// </remarks>
 		private static readonly string[] SlotBuildingPaths =
@@ -357,7 +357,7 @@ namespace FishMMO.UnitTests
 			/* The line the base must NOT cross, and the reason this is a test rather than a note.
 			 * A base that also built the slots would have to choose one of the two ways they come
 			 * into existence, and either choice breaks a panel: the sockets are authored in
-			 * UIEquipment.uxml and queried by class name, so there is no eleventh one to create,
+			 * UICharacterSheet.uxml and queried by class name, so there is no eleventh one to create,
 			 * while a grid's count follows the container and has to be rebuilt when it changes. So
 			 * the base holds the list and neither fills it. */
 			string sharedBase = CodeOnly(ReadSource(BasePath));

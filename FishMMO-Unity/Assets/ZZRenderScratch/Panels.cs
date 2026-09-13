@@ -104,11 +104,51 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		private static void Tick(object panel)
+		internal static void Tick(object panel)
 		{
+			if (panel == null) { return; }
+
 			MethodInfo m = panel.GetType().GetMethod("OnTick",
 				BindingFlags.NonPublic | BindingFlags.Instance);
 			m?.Invoke(panel, null);
+		}
+
+		/// <summary>
+		/// Puts a mounted panel into the state the client's own <c>Show</c> would: started, and visible.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The client never calls <c>OnStarting</c> itself. <c>Awake</c> hides the panel — which
+		/// disables its <c>UIDocument</c> — and <c>Show</c> re-enables it, which is what clones the
+		/// UXML; <c>TryStart</c> then runs <c>OnStarting</c> against a populated tree, and
+		/// <c>WaitForVisualTree</c> retries until it can. <b>Awake does not run in edit mode</b>, so a
+		/// harness that simply calls <c>OnStarting</c> runs it against a root with no children: every
+		/// element the panel caches is null, <c>Show</c>'s own <c>TryStart</c> refuses for the same
+		/// reason, and the capture comes back as authored markup with nothing written into it.
+		/// Invoking <c>TryStart</c> is that same retry, minus the coroutine — and it is idempotent,
+		/// so calling it every frame costs one bool check once the panel has started.
+		/// </para>
+		/// <para>
+		/// <c>Visible</c> is the other half of that state and the reason this is not called
+		/// <c>StartWhenReady</c> alone. It is a private setter that only <c>Show</c> writes, so a
+		/// harness that mounted a panel without showing it leaves it false — and a panel is entitled
+		/// to gate its per-frame work on it. <c>UITKEquipment</c> does exactly that: its preview
+		/// refresh is behind <c>if (Visible)</c>, so an unshown panel renders its character once, at
+		/// whatever framing the camera had before anybody framed it, and never again.
+		/// </para>
+		/// </remarks>
+		/// <param name="panel">The mounted panel, or null for a chrome-only capture.</param>
+		internal static void StartWhenReady(object panel)
+		{
+			if (panel == null) { return; }
+
+			/* On UITKControl, not on the panel's own type: TryStart is private, and a private base
+			 * member is not inherited — GetMethod on the derived type would not find it. */
+			MethodInfo m = typeof(UITKControl).GetMethod("TryStart",
+				BindingFlags.NonPublic | BindingFlags.Instance);
+			m?.Invoke(panel, null);
+
+			Rig.Set(panel, "Visible", true);
 		}
 
 		// ── Party ───────────────────────────────────────────────────
@@ -357,17 +397,28 @@ namespace FishMMO.RenderScratch
 		/// <c>Character&lt;T&gt;</c> helper. The subject is a second rig parented under the capture's
 		/// host, so it is destroyed with the host and never leaks into the next capture; without it
 		/// the panel would render empty, which is the same picture the chrome pass already produces.
+		/// <para>
+		/// The subject is also given a body and a preview camera, which no other panel's rig needs:
+		/// this window draws the character, and without them the viewport renders the label over an
+		/// empty frame. It photographs an unarmed body — no equipment geometry is ever built for a
+		/// character you do not own — which is the real client's behaviour, not a harness gap.
+		/// </para>
 		/// </remarks>
 		public static void Inspect(GameObject h, UIDocument d)
 		{
 			GameObject subject = new GameObject("InspectSubject");
 			subject.transform.SetParent(h.transform, false);
 			PlayerCharacter target = Rig.BuildOther(subject, "Kaelen Duskwater", 1003L);
+			Rig.AttachPreview(target);
 
 			UITKInspect panel = h.AddComponent<UITKInspect>();
 			panel.Document = d;
-			panel.OnStarting();
+
+			/* Awake does not run here, so the panel is driven the way the client drives it: bind the
+			 * subject, then let the frame pump start the tree and tick it. Inspect() shows the window
+			 * itself, and a subject bound before the tree exists is re-applied by OnAfterStarting. */
 			panel.Inspect(target);
+			StartWhenReady(panel);
 			Tick(panel);
 		}
 
@@ -618,7 +669,35 @@ namespace FishMMO.RenderScratch
 		}
 
 		public static void Inventory(GameObject h, UIDocument d) => Character<UITKInventory>(h, d);
-		public static void Equipment(GameObject h, UIDocument d) => Character<UITKEquipment>(h, d);
+
+		/// <summary>
+		/// The player's own character sheet — the same window <see cref="Inspect"/> captures, showing
+		/// the viewer's own character and the attribute list the inspect variant holds back.
+		/// </summary>
+		/// <remarks>
+		/// Not the <c>Character&lt;T&gt;</c> one-liner, because this window draws the character: without
+		/// a body and a preview camera on the rig its viewport renders the label over an empty frame,
+		/// and the pair of captures stops being a comparison — the difference between them would be the
+		/// harness's rigging rather than the two components' options.
+		/// <para>
+		/// The rigging comes BEFORE the panel starts, which is the order the client lives in: a
+		/// character has its mesh root and its camera long before anybody opens this window. It also
+		/// matters to the framing — the preview frames itself on the first tick that can see a body and
+		/// keeps what it measured, so a body attached afterwards is photographed by a camera that was
+		/// framed without it.
+		/// </para>
+		/// </remarks>
+		public static void Equipment(GameObject h, UIDocument d)
+		{
+			PlayerCharacter character = Rig.Build(h);
+			Rig.AttachPreview(character);
+
+			UITKEquipment panel = h.AddComponent<UITKEquipment>();
+			panel.Document = d;
+			panel.SetCharacter(character);
+			panel.OnStarting();
+			Tick(panel);
+		}
 		public static void Bank(GameObject h, UIDocument d) => Character<UITKBank>(h, d);
 		public static void Achievements(GameObject h, UIDocument d) => Character<UITKAchievements>(h, d);
 		public static void Factions(GameObject h, UIDocument d) => Character<UITKFactions>(h, d);

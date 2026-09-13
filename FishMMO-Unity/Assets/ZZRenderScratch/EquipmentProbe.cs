@@ -29,7 +29,7 @@ namespace FishMMO.RenderScratch
 	{
 		private const string OUTPUT_DIR = "/home/jim/Dev/FishMMO-Dev/PanelRenders";
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
-		private const string UXML_PATH = "Assets/Scripts/Client/GUI/World/Equipment/UIEquipment.uxml";
+		private const string UXML_PATH = "Assets/Scripts/Client/GUI/World/CharacterSheet/UICharacterSheet.uxml";
 		private const string OUTPUT_NAME = "UIEquipment-populated.png";
 		private const int WIDTH = 1200;
 		private const int HEIGHT = 900;

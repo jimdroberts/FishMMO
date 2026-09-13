@@ -138,7 +138,7 @@ namespace FishMMO.RenderScratch
 				/* Scene order, from ClientWorldGUI: UIInventory, UIEquipment, UIBank. It decides
 				 * the order of the sibling subtrees that share a sorting order. */
 				MountPanel("UIInventory", GUI + "World/Inventory/UIInventory.uxml", typeof(UITKInventory));
-				MountPanel("UIEquipment", GUI + "World/Equipment/UIEquipment.uxml", typeof(UITKEquipment));
+				MountPanel("UIEquipment", GUI + "World/CharacterSheet/UICharacterSheet.uxml", typeof(UITKEquipment));
 				MountPanel("UIBank", GUI + "World/Bank/UIBank.uxml", typeof(UITKBank));
 				MountPanel("UIDragObject", GUI + "Shared/DragObject/UIDragObject.uxml", typeof(UITKDragObject));
 

@@ -3,21 +3,37 @@
 
     <!--
     ╔══════════════════════════════════════════════════════════════╗
-    ║  UIEquipment.uxml   —   FishMMO Equipment Panel             ║
+    ║  UICharacterSheet.uxml   —   FishMMO Character Sheet        ║
+    ║                                                             ║
+    ║  ONE tree, mounted by TWO documents: the player's own       ║
+    ║  equipment (UITKEquipment) and a read-only view of another  ║
+    ║  character (UITKInspect). They are the same window because  ║
+    ║  they answer the same question about different subjects —   ║
+    ║  the two used to be separate files and drifted apart.       ║
+    ║                                                             ║
+    ║  What differs is applied at runtime, never authored here:   ║
+    ║    inspect variant class   placement (see the stylesheet)   ║
+    ║    CharacterSheetOptions   which regions are shown at all   ║
+    ║  A variant class added in OnStarting() is what keeps the    ║
+    ║  authored tree honest: two documents that need two different ║
+    ║  things still read one file.                                ║
     ║                                                             ║
     ║  Stylesheet load order (MUST be first-to-last):             ║
-    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions       ║
-    ║    2. UIEquipment.uss    — sizes, flex, spacing             ║
+    ║    1. FishMMO-Theme.uss     — colors, fonts, transitions    ║
+    ║    2. UICharacterSheet.uss  — sizes, flex, spacing          ║
     ║                                                             ║
     ║  Class naming convention:                                   ║
     ║    fish-*   Visual theme class  (FishMMO-Theme.uss)         ║
-    ║    eq-*     Layout class        (UIEquipment.uss)           ║
-    ║  Elements that need both carry both class names.            ║
+    ║    eq-*     Layout class        (UICharacterSheet.uss)      ║
+    ║  Elements that need both carry both class names. The eq-    ║
+    ║  prefix predates the sheet being shared and is kept because ║
+    ║  WindowOverlapTests pins the window by its eq-panel class;  ║
+    ║  read it as "the sheet", not as "equipment only".           ║
     ╚══════════════════════════════════════════════════════════════╝
     -->
 
     <Style src="../../FishMMO-Theme.uss" />
-    <Style src="UIEquipment.uss" />
+    <Style src="UICharacterSheet.uss" />
 
     <!-- ══════════════════════════════════════════════════════
          PANEL ROOT

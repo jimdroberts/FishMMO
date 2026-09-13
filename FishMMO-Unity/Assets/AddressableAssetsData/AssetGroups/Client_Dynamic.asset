@@ -21,7 +21,7 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2f684d4298cafc81b81f69b8ff9d1ef6
-    m_Address: UIEquipment
+    m_Address: UICharacterSheet.uss
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -49,7 +49,7 @@ MonoBehaviour:
     - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7e1228fea737c4a8193d866b24ac727d
-    m_Address: UIEquipment
+    m_Address: UICharacterSheet
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
