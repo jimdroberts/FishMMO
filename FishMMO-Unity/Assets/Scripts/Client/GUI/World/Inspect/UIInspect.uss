@@ -82,15 +82,12 @@
 }
 
 /*
-    The item name sits under the icon inside the slot. Absolute so it overlays rather than
-    displacing the icon, and clipped by the slot's own overflow: hidden.
+    There is deliberately no label rule here. A slot used to carry the item's name under the
+    icon, and at 44px the text was wider than the slot: it ran over the border into its neighbour
+    (the shared .fish-slot overflow: hidden did not clip it) and the leading letters were cut.
+    The icon and the tooltip carry the item now, which is also how the sockets in the player's own
+    equipment panel read.
 */
-.inspect-slot__label {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 1px;
-}
 
 .inspect-empty {
     -unity-text-align: middle-center;

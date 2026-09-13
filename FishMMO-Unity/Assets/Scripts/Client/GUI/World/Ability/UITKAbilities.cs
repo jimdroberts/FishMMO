@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -81,6 +82,14 @@ namespace FishMMO.Client
 		private const string TEMPLATE_REFUSAL = "That is a base ability, not a usable one yet. Craft it at an Ability Crafter.";
 		private const string EFFECT_REFUSAL = "That is an effect. Add it to a base ability at an Ability Crafter.";
 
+		/// <summary>Tooltip on a row's forget button.</summary>
+		private const string FORGET_TOOLTIP = "Forget this ability";
+
+		/// <summary>What the status line says when a forget is refused.</summary>
+		private const string FORGET_BUSY = "The server is still answering your last request. Try again in a moment.";
+		private const string FORGET_FAILED = "The server could not forget that ability. It is still yours.";
+		private const string FORGET_UNKNOWN = "That ability is no longer known, so there was nothing to forget.";
+
 		/// <summary>Empty-list wording per view.</summary>
 		private const string ABILITY_EMPTY = "No abilities learned. Craft one at an Ability Crafter.";
 		private const string KNOWLEDGE_EMPTY = "No knowledge learned. Merchants sell base abilities and effects.";
@@ -90,8 +99,14 @@ namespace FishMMO.Client
 		private const string TEMPLATE_HINT = "Base ability. Take it to an Ability Crafter to build a usable ability from it.";
 		private const string EFFECT_HINT = "Ability effect. Add it to a base ability at an Ability Crafter.";
 
+		/// <summary>Name of the shared confirmation dialog.</summary>
+		private const string DIALOG_BOX_NAME = "UIDialogBox";
+
+		/// <summary>USS class on a row's forget button.</summary>
+		private const string FORGET_BUTTON_CLASS = "ability-entry__forget";
+
 		/// <summary>Name of the shared drag object overlay panel.</summary>
-		private const string DRAG_OBJECT_NAME = "UIDragObject";
+		private const string DRAG_OBJECT_NAME = UITKDragObject.CONTROL_NAME;
 
 		/// <summary>
 		/// One row: what it holds, what it says, and where it may go.
@@ -162,6 +177,48 @@ namespace FishMMO.Client
 
 		/// <summary>The selected entry's tab, because ids are only unique within one.</summary>
 		private AbilityTabType selectedTab;
+
+		/// <summary>
+		/// Registers the forget result handler when the client is set.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Here rather than in <see cref="OnStarting"/>, which is where this panel used to keep it.
+		/// The handler belongs to the client and not to the visual tree, and <c>SwitchTab</c> sits
+		/// after that point in <see cref="OnStarting"/> — a network manager that was not up yet threw
+		/// there and left the panel's tabs unselected, which is the failure the sibling craft panel
+		/// avoids by registering here too.
+		/// </para>
+		/// <para>
+		/// Guarded, as <see cref="UITKSceneChannel"/> guards it. <c>Client.NetworkManager</c> is a
+		/// static field resolved from the scene and may already be destroyed during teardown, so the
+		/// null check is Unity's fake-null and not a formality: without it a throw out of
+		/// <c>OnClientUnset</c> would abort <c>UITKControl.SetClient</c> before it cleared the client
+		/// and unsubscribed its quit-to-login handler.
+		/// </para>
+		/// </remarks>
+		public override void OnClientSet()
+		{
+			if (Client == null || Client.NetworkManager == null || Client.NetworkManager.ClientManager == null)
+			{
+				return;
+			}
+
+			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityForgetResultBroadcast>(OnClientAbilityForgetResultReceived);
+		}
+
+		/// <summary>
+		/// Unregisters the forget result handler when the client is unset.
+		/// </summary>
+		public override void OnClientUnset()
+		{
+			if (Client == null || Client.NetworkManager == null || Client.NetworkManager.ClientManager == null)
+			{
+				return;
+			}
+
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityForgetResultBroadcast>(OnClientAbilityForgetResultReceived);
+		}
 
 		/// <summary>
 		/// Queries elements, wires the tabs, filters and search, and subscribes to lifecycle events.
@@ -557,6 +614,36 @@ namespace FishMMO.Client
 				row.Add(badgeLabel);
 			}
 
+			/* The forget button, on usable abilities only.
+			 *
+			 * Learned knowledge is not forgettable and must not look as though it is: a base
+			 * ability or an effect the character has bought is permanent, and the only thing that
+			 * ever removes one is nothing. Offering a button that the server would refuse, on the
+			 * rows that make up most of the list, would be an invitation to a refusal.
+			 *
+			 * Appended last so it lands at the right edge — .ability-entry__text grows and pushes
+			 * everything after it over — and reached from entry.Root rather than held, so the
+			 * panel's RemoveAbility keeps working on the row it already knows. */
+			if (entry.Tab == AbilityTabType.Ability)
+			{
+				Button forgetButton = new Button(() => OnForgetClicked(entry, name));
+				forgetButton.AddToClassList("fish-close-btn");
+				forgetButton.AddToClassList(FORGET_BUTTON_CLASS);
+				forgetButton.tooltip = FORGET_TOOLTIP;
+
+				/* A Button does NOT consume its own PointerDownEvent — Unity's Clickable stops
+				 * propagation of the MOVE event only — so without this the press that opens the
+				 * confirmation would also bubble to the row's handler and pick the ability up onto
+				 * the drag object. Stopping it here is local to this control and leaves
+				 * OnEntryPointerDown's structure alone.
+				 *
+				 * Bubble phase, which is where this runs: the row's own handler is registered on an
+				 * ancestor, so the event reaches this button first and goes no further. */
+				forgetButton.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
+
+				row.Add(forgetButton);
+			}
+
 			entry.Root = row;
 
 			/* Hover previews into the details pane rather than opening the cursor tooltip. The
@@ -602,6 +689,89 @@ namespace FishMMO.Client
 			}
 
 			ExplainRefusedPickup(entry);
+		}
+
+		/// <summary>
+		/// Asks the player to confirm forgetting an ability, then sends the request.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Confirmed rather than immediate because a forgotten ability is gone for good: the row is
+		/// the only record of it, re-crafting it costs the price again, any events that were bought
+		/// with it are not refunded, and a mis-aimed click on a hover-revealed button in a list of
+		/// rows is easy. Every other destructive control in this interface confirms.
+		/// </para>
+		/// <para>
+		/// Nothing is removed here. The row goes when the server answers, in
+		/// <see cref="OnClientAbilityForgetResultReceived"/> — the server owns the row and may still
+		/// refuse, and a panel that dropped it on the click would show an ability as gone that the
+		/// next login hands straight back.
+		/// </para>
+		/// </remarks>
+		/// <param name="entry">The row whose button was pressed.</param>
+		/// <param name="name">The ability's display name.</param>
+		private void OnForgetClicked(AbilityEntry entry, string name)
+		{
+			if (Character == null ||
+				Client == null ||
+				!Client.NetworkManager.IsClientStarted)
+			{
+				return;
+			}
+
+			/* Only something the character actually has. The panel's rows are built from the
+			 * controller, but a forget already in flight leaves its row on screen until the answer
+			 * arrives, and a second press would send a second delete for the same identity — which
+			 * the server refuses as busy, at the cost of a round trip and a confusing message. */
+			if (!Character.TryGet(out IAbilityController abilityController) ||
+				!abilityController.KnownAbilities.ContainsKey(entry.ReferenceID))
+			{
+				SetStatus(FORGET_UNKNOWN);
+				return;
+			}
+
+			if (!UIManager.TryGetTK(DIALOG_BOX_NAME, out UITKDialogBox dialog))
+			{
+				return;
+			}
+
+			/* Captured by value, never by element. The row this came from is removed by the answer
+			 * the broadcast brings back, so a captured AbilityEntry would be a reference into a
+			 * detached tree by the time the accept callback runs. */
+			long abilityID = entry.ReferenceID;
+
+			dialog.Open($"Forget \"{name}\"? The ability is gone for good, and crafting it again costs the price again.",
+				() =>
+				{
+					Client.Broadcast(new AbilityForgetBroadcast()
+					{
+						AbilityID = abilityID,
+					}, Channel.Reliable);
+				},
+				() => { });
+		}
+
+		/// <summary>
+		/// Reports a refused forget. The accepted case is handled by the ability controller, which
+		/// removes the ability and raises the event this panel already listens to.
+		/// </summary>
+		private void OnClientAbilityForgetResultReceived(AbilityForgetResultBroadcast msg, Channel channel)
+		{
+			if (msg.Failure == AbilityForgetFailure.None)
+			{
+				return;
+			}
+
+			/* Unknown gets its own wording: it means the row is stale — the ability was already
+			 * forgotten, most likely in another panel or on another client — and telling the player
+			 * the server "could not" do it would send them looking for a fault that is not there.
+			 * The stale row clears itself on the next rebuild. */
+			SetStatus(msg.Failure switch
+			{
+				AbilityForgetFailure.Unknown => FORGET_UNKNOWN,
+				AbilityForgetFailure.Busy => FORGET_BUSY,
+				_ => FORGET_FAILED,
+			});
 		}
 
 		/// <summary>

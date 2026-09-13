@@ -78,6 +78,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
+			/* Resolved here rather than at the grant, so a server that cannot record a crafted
+			 * ability refuses before the player is charged rather than after. */
+			if (!Server.BehaviourRegistry.TryGet(out IAbilitySystem abilitySystem))
+			{
+				Log.Error("InteractableSystem", "OnServerAbilityCraftBroadcastReceived: IAbilitySystem is not registered; refusing every craft.");
+				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
+				return;
+			}
+
 			/* Its own reason. "You cannot do that right now" and "that crafter is gone" send the
 			 * player to different places, and CanAct is the gate a dead or stunned character
 			 * actually meets. */
@@ -93,6 +102,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
+			/* Set once the grant has taken the guard. From that point it is never this method's to
+			 * release: an accepted grant releases it when its write lands, and a refused one has
+			 * already been released by TryGrantAbility, which owns it on every path. Every refusal
+			 * above leaves this false, which is what the finally is for. */
+			bool guardHandedOff = false;
 			try
 			{
 
@@ -293,128 +307,75 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				Ability newAbility = LearnAbility(abilityController, mainAbility, new List<int>(msg.Events));
-				if (newAbility == null)
+				/* Puts the charge back and answers the request, whether the grant was refused before
+				 * it was attempted or failed when it was written. The two used to be one branch —
+				 * LearnAbility returned null for both — and they still owe the player the same thing:
+				 * the money, a ledger line, and a reason.
+				 *
+				 * The refund is recorded as not absorbed, so the ledger keeps saying that this
+				 * character was charged and made whole. */
+				void RefundRejectedCraft(IPlayerCharacter refundCharacter)
 				{
-					// Nothing was learned, so put the money back and record the refund.
-					CharacterCurrency.TryAdd(character, currencyTemplate, price);
-					if (!TryPersistMerchantAttributes(character))
+					CharacterCurrency.TryAdd(refundCharacter, currencyTemplate, price);
+					if (!TryPersistMerchantAttributes(refundCharacter))
 					{
-						Log.Error("InteractableSystem", $"AbilityCraft: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
+						Log.Error("InteractableSystem", $"AbilityCraft: refund persist rejected for CharID={refundCharacter.ID}; in-memory balance is correct but the DB holds the deduction.");
 					}
-					RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: false);
+					RecordCurrencyMovement(refundCharacter.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: false);
 					SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.PersistFailed);
-					return;
 				}
 
-				RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: true);
-
-				/* The success answer, sent alongside AbilityAddBroadcast rather than instead of it.
-				 * AbilityAddBroadcast is what grants the ability and is handled by the ability
-				 * controller; this is what the crafting panel reads to release its submit lock and
-				 * say what the craft cost. */
-				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.None, price);
-
-				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
-				{
-					ID = newAbility.ID,
-					TemplateID = newAbility.Template.ID,
-					Events = msg.Events,
-				};
-
-				Server.NetworkWrapper.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
-
-				/* Tell the character's observers too.
+				/* The grant is handed to AbilitySystem rather than performed here.
 				 *
-				 * An observer's copy of a peer's known abilities is written once, by the spawn
-				 * payload, when it starts observing. Everyone already watching this character when
-				 * it crafts learns nothing from the message above — it is addressed to the owner —
-				 * so every cast of this ability resolved to nothing on their clients and drew
-				 * nothing, for as long as they kept observing. The bytes go here, on the rare
-				 * learn, rather than on every cast.
+				 * LearnAbility used to build the ability, learn it, and persist it fire-and-forget —
+				 * so the ability entered KnownAbilities keyed on the -1 the constructor assigns, and
+				 * the id the database returned was discarded. Every crafted ability in a session
+				 * therefore landed under the same key and each new one replaced the last. The id is
+				 * applied by the system before the learn; AbilitySystem records why it cannot be
+				 * corrected afterwards the way the item layer corrects a slot.
 				 *
-				 * The events travel because they carry the ability's behaviour: its OnTick events
-				 * are what move the spawned object, and a reproduction built without them would
-				 * spawn a projectile that never left the caster. */
-				ObserverBroadcastScope.BroadcastToObserversExceptOwner(character.NetworkObject, new AbilityLearnedObserverBroadcast()
-				{
-					CasterObjectID = character.NetworkObject.ObjectId,
-					AbilityID = newAbility.ID,
-					TemplateID = newAbility.Template.ID,
-					Events = msg.Events,
-				}, Channel.Reliable);
+				 * The refund, the success answer, the broadcasts and the achievement all move into
+				 * the continuations, because a grant is now asynchronous where it was not: the
+				 * ability exists only once its row does. The ordering described above TrySpend is
+				 * preserved and strengthened — the charge is still written before the grant is
+				 * attempted, and the player is shown the ability strictly after it is persisted. */
+				bool accepted = abilitySystem.TryGrantAbility(
+					character,
+					mainAbility,
+					msg.Events,
+					releaseGuard: () => EndIngressGuard(guardKey),
+					onGranted: (grantedCharacter, _) =>
+					{
+						RecordCurrencyMovement(grantedCharacter.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: true);
 
-				// Increment achievement for crafting an ability
-				if (abilityCrafter.AchievementTemplate != null &&
-					character.TryGet(out IAchievementController achievementController))
+						/* The success answer. AbilityAddBroadcast, which is what grants the ability
+						 * and is handled by the ability controller, has already gone out by the time
+						 * this runs; this is what the crafting panel reads to release its submit lock
+						 * and say what the craft cost. */
+						SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.None, price);
+
+						// Increment achievement for crafting an ability
+						if (abilityCrafter.AchievementTemplate != null &&
+							grantedCharacter.TryGet(out IAchievementController achievementController))
+						{
+							achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
+						}
+					},
+					onFailed: RefundRejectedCraft);
+
+				guardHandedOff = true;
+
+				if (!accepted)
 				{
-					achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
+					RefundRejectedCraft(character);
 				}
 			}
 			finally
 			{
-				EndIngressGuard(guardKey);
-			}
-		}
-
-		/// <summary>
-		/// Creates and learns a new crafted ability, then schedules asynchronous persistence.
-		/// </summary>
-		/// <param name="abilityController">Ability controller receiving the new ability.</param>
-		/// <param name="abilityTemplate">Base ability template used for creation.</param>
-		/// <param name="abilityEvents">Selected ability event identifiers to attach.</param>
-		/// <returns>The created ability instance.</returns>
-		public Ability LearnAbility(IAbilityController abilityController, AbilityTemplate abilityTemplate, List<int> abilityEvents)
-		{
-			Ability newAbility = new Ability(abilityTemplate, abilityEvents);
-
-			// Fire-and-forget: persist the ability to the database
-			long charID = abilityController.Character.ID;
-			newAbility.Version++;
-			var abilityData = new CharacterAbilityData(
-				id: newAbility.ID,
-				version: newAbility.Version,
-				characterID: charID,
-				templateID: newAbility.Template.ID,
-				abilityEvents: abilityEvents,
-				cooldown: 0f
-			);
-			if (!TryEnqueueAsyncWork(() => PersistAbilityAsync(abilityData), charID))
-			{
-				Log.Warning("InteractableSystem", $"LearnAbility: Async worker rejected learned-ability persist for CharID={charID}, AbilityID={newAbility.ID}.");
-				return null;
-			}
-
-			abilityController.LearnAbility(newAbility);
-
-			return newAbility;
-		}
-
-		/// <summary>
-		/// Persists an ability to the database asynchronously.
-		/// </summary>
-		private async Task PersistAbilityAsync(CharacterAbilityData abilityData)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null)
+				if (!guardHandedOff)
 				{
-					return;
+					EndIngressGuard(guardKey);
 				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterAbilityService>(out var abilityService))
-				{
-					return;
-				}
-
-				DatabaseResult<long> result = await abilityService.PersistAsync(abilityData);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("InteractableSystem", $"PersistAbilityAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("InteractableSystem", $"Error persisting ability: {ex}");
 			}
 		}
 	}

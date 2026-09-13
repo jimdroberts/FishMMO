@@ -734,6 +734,7 @@ namespace FishMMO.Shared
 			networkManager.ClientManager.RegisterBroadcast<AbilityObjectRedirectBroadcast>(OnAbilityObjectRedirectBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityObjectDestroyedBroadcast>(OnAbilityObjectDestroyedBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityLearnedObserverBroadcast>(OnAbilityLearnedObserverBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityForgottenObserverBroadcast>(OnAbilityForgottenObserverBroadcast);
 			activationBroadcastRegistered = true;
 		}
 
@@ -957,6 +958,41 @@ namespace FishMMO.Shared
 
 			List<int> events = msg.Events != null && msg.Events.Length > 0 ? new List<int>(msg.Events) : null;
 			controller.RegisterObservedAbility(msg.AbilityID, template, events);
+		}
+
+		/// <summary>
+		/// Drops an ability an observed character no longer has.
+		/// </summary>
+		/// <remarks>
+		/// The counterpart to <see cref="OnAbilityLearnedObserverBroadcast"/>, with the same owner
+		/// guard on the same reasoning: this only ever describes somebody else, and our own
+		/// character's abilities are removed by the authoritative forget result the server sends us.
+		/// Running it here as well would be a second, weaker writer of the same dictionary.
+		/// <para>
+		/// A caster we are no longer observing is simply not found — an observer that despawned the
+		/// character between the forget and this message has nothing left to correct.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityForgottenObserverBroadcast(AbilityForgottenObserverBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null)
+			{
+				return;
+			}
+
+			controller.RemoveAbility(msg.AbilityID);
 		}
 
 		/// <summary>

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -16,8 +16,8 @@ namespace FishMMO.Client
 	/// at the top of it explains why. What it did not reach was the equipment panel, which sat
 	/// beside it re-implementing eighteen identically named members: the tracker subscription and
 	/// both of its handlers, the slot-blocked test, the slot painters, the lock overlay, the
-	/// tooltip refresh and the enter/leave pair, the drag start, the container lookup and the drag
-	/// release. Same names, same jobs, two bodies.
+	/// tooltip refresh and the enter/leave pair, the drag start and the container lookup. Same
+	/// names, same jobs, two bodies.
 	/// </para>
 	/// <para>
 	/// AND THEY HAD ALREADY DRIFTED, which is the whole argument for this class rather than a
@@ -48,6 +48,12 @@ namespace FishMMO.Client
 	/// <c>SlotPanelSharingTests</c> is what stops that seam from drifting again.
 	/// </para>
 	/// <para>
+	/// A move between slots is a PRESS to pick the item up and a PRESS to put it down, never a
+	/// release. That rule is stated where the release handler used to be — near the bottom of this
+	/// file, above <c>Notify</c> — because the absence of a <c>PointerUpEvent</c> registration
+	/// otherwise reads as an oversight, and it has already been "fixed" once.
+	/// </para>
+	/// <para>
 	/// The one thing every slot panel must keep for itself is how its slots come into existence.
 	/// The equipment sockets are authored in <c>UIEquipment.uxml</c> and found by name; the grids
 	/// build theirs in code from the container's slot count. So this class owns what a slot DOES
@@ -76,7 +82,7 @@ namespace FishMMO.Client
 		// ── Shared UI overlay names (panels resolved by GameObject name via UIManager) ──
 
 		/// <summary>Name of the shared drag object overlay.</summary>
-		protected const string DRAG_OBJECT_NAME = "UIDragObject";
+		protected const string DRAG_OBJECT_NAME = UITKDragObject.CONTROL_NAME;
 		/// <summary>Name of the shared tooltip overlay.</summary>
 		protected const string TOOLTIP_NAME = "UITooltip";
 		/// <summary>Name of the shared transient-notice overlay.</summary>
@@ -712,6 +718,28 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// True while a drag is in flight, wherever it was started.
+		/// </summary>
+		/// <remarks>
+		/// A left-click that lands while the player is carrying something is the DROP, not a click.
+		/// The panel it lands on completes the drag rather than acting on whatever occupies the slot
+		/// underneath, and that completing press reads no modifier at all — so a modifier held at
+		/// that moment cannot be allowed to divert it. Shift-click's
+		/// "send this to the other container" is an answer to a click on a slot's OWN item, and while
+		/// a drag is in flight the item that gesture would send away is not the one the player is
+		/// holding.
+		/// <para>
+		/// Shared rather than written into each router, because the routers having their own copy of
+		/// a click rule is exactly how the two of them came apart in the first place — see the class
+		/// remarks, and <c>DRAG_OBJECT_NAME</c> above for the overlay this asks.
+		/// </para>
+		/// </remarks>
+		protected static bool IsDragInFlight()
+		{
+			return UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.IsDragging;
+		}
+
+		/// <summary>
 		/// Starts a drag from an occupied slot.
 		/// </summary>
 		/// <remarks>
@@ -740,6 +768,45 @@ namespace FishMMO.Client
 			/* Carry the item, not just the slot number: the slot index stops being true the moment
 			 * anything else writes to that slot, and the drop would then move the wrong item. */
 			dragObject.SetItemReference(sprite, slotIndex, DragType, item);
+		}
+
+		/* A RELEASE NEVER MOVES AN ITEM, and nothing here registers a PointerUpEvent. The drop is
+		 * completed by a PRESS on the destination — press the item, carry it, then click where it
+		 * is to go — and that press is a press of its own, so it is the same gesture whether the
+		 * item was carried a pixel or across the screen.
+		 *
+		 * Completing on the release as well was tried and is gone. It is not an extra way to make
+		 * the same move: a press on the destination already ends the drag, so the release that
+		 * follows it finds nothing in flight, and the two paths can only ever be made to coexist
+		 * by weakening the guard that stops one gesture completing twice. Worse, a release is what
+		 * a player does when they change their mind mid-drag, so a release that moved the item
+		 * made the natural way to put something back into the only way to misfile it.
+		 *
+		 * The bag and the equipment sockets registered one (and the bank deliberately did not,
+		 * which is what made the difference look like a bug rather than a decision); both are now
+		 * press-only like the bank, and UITKTrade and UITKHotkeyBar with them. Leaving the release
+		 * unhandled is also what keeps a carried item ON THE CURSOR: the drag stays armed across
+		 * the release, so the next press is the one that completes it. */
+
+		/// <summary>
+		/// Shows a transient notice, if the toast panel is up.
+		/// </summary>
+		/// <remarks>
+		/// Hoisted from the two panels that had written it identically, five lines each. A drop the
+		/// panel refuses is a gesture the player made and expects an answer to, and in a slot panel
+		/// there is nowhere else for that answer to surface — which is why every refusal path in
+		/// both panels reaches for this.
+		/// <para>
+		/// Nothing about the overlay is per-panel: <c>TOAST_NAME</c> is already declared here for
+		/// both of them.
+		/// </para>
+		/// </remarks>
+		protected static void Notify(string text, ToastSeverity severity)
+		{
+			if (UIManager.TryGetTK(TOAST_NAME, out UITKToast toast))
+			{
+				toast.Show(text, severity);
+			}
 		}
 
 		/// <summary>

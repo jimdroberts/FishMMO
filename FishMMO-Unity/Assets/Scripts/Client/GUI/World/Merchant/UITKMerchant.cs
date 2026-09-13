@@ -164,16 +164,28 @@ namespace FishMMO.Client
 		private const string DIALOG_NAME = "UIDialogBox";
 
 		/// <summary>
-		/// How long a buy request waits before the confirm button is handed back.
+		/// How long a trade request waits before the confirm button is handed back.
 		/// </summary>
 		/// <remarks>
-		/// Every exit from the server's purchase handler now answers with a
-		/// <see cref="MerchantPurchaseResultBroadcast"/>, so this is a backstop for a reply that
-		/// never arrives at all rather than the ordinary way a refusal is noticed. Long enough to
-		/// cover a round trip that waits on a database write, short enough that a dropped packet
-		/// does not leave the button dead.
+		/// <para>
+		/// Every exit from the server's purchase and sell handlers answers with a result broadcast,
+		/// so this is a backstop for a reply that never arrives at all rather than the ordinary way
+		/// a refusal is noticed. Long enough to cover a round trip that waits on a database write,
+		/// short enough that a dropped packet does not leave the button dead.
+		/// </para>
+		/// <para>
+		/// ONE CONSTANT FOR BOTH DIRECTIONS, which is why it is named for the transaction and not
+		/// for the buy. The sell guard used to be begun with no argument, so it inherited
+		/// <see cref="PendingReplyGuard.DefaultTimeoutSeconds"/> — thirty seconds, six times the
+		/// buy's wait, in the same method, for a request that goes to the same handler family and
+		/// answers through the same shape of broadcast. A player whose sell reply was dropped sat
+		/// in front of a disabled confirm button and a status line reading "Selling…" for half a
+		/// minute, while the identical failure on the buy side cleared in five seconds. Nothing
+		/// about selling is slower to answer, and an argument-less Begin somewhere a default can
+		/// be inherited is exactly how the two came apart.
+		/// </para>
 		/// </remarks>
-		private const float BUY_TIMEOUT_SECONDS = 5.0f;
+		private const float TRANSACTION_TIMEOUT_SECONDS = 5.0f;
 
 		/// <summary>The items tab button.</summary>
 		private Button itemsTab;
@@ -1080,15 +1092,27 @@ namespace FishMMO.Client
 			{
 				/* Written every time, not only when the number changes.
 				 *
-				 * An IntegerField's visible text is produced BY the write. Guarding the write on
-				 * `value != clamped` meant the common case never wrote at all: the UXML authors the
-				 * field as value="1", so the first SetQuantity(1) after a selection found them equal,
-				 * skipped the assignment, and left the inner text element empty. The field was live and
-				 * editable the whole time and simply displayed nothing, which reads as a dead control.
+				 * NOT because the write is what draws the text. That explanation stood here first
+				 * and it is wrong: TextValueField<T>.SetValueWithoutNotify re-applies the same
+				 * equality test internally, so the guard this replaced (`value != clamped`) was
+				 * precisely its negation, and removing it changed no behaviour at all. The version
+				 * of this comment that claimed the guard left the field blank would have sent the
+				 * next reader looking for the fault in the wrong file.
 				 *
-				 * It also recurs after any tree rebuild — hiding the panel disposes the visual tree, so
-				 * the re-queried field is back at the authored 1 with no text — which is why it looked
-				 * intermittent rather than simply broken.
+				 * The blank field was the USS. Unity's default theme pads #unity-text-input by 10px
+				 * top and bottom, an exact 22px height leaves the glyph box nothing to fill, and a
+				 * bare class selector loses the specificity fight against the TYPE-qualified rule
+				 * that sets that padding — so the box drew no digits and could not be clicked into
+				 * (issues #263 and #277). Fixed in FishMMO-Theme.uss, where .fish-input--compact
+				 * zeroes the padding and every glyph-drawing field type is named on the selector:
+				 * the merchant's field is an IntegerField, which is why the TextField fix alone
+				 * did not settle it. TextInputHeightTests holds that list against the sweep that
+				 * reads it, so the next field type cannot be added to one and forgotten in the
+				 * other.
+				 *
+				 * The assignment stays unconditional anyway: it is cheap, the comparison it would
+				 * duplicate is Unity's business rather than this method's, and skipping it buys
+				 * nothing worth the extra branch.
 				 *
 				 * SetValueWithoutNotify rather than value: the change callback re-enters this method. */
 				quantityField.SetValueWithoutNotify(clamped);
@@ -1227,7 +1251,7 @@ namespace FishMMO.Client
 
 			if (selectionIsSale)
 			{
-				sellGuard.Begin();
+				sellGuard.Begin(TRANSACTION_TIMEOUT_SECONDS);
 				SetStatus("Selling…");
 				RefreshConfirmState();
 
@@ -1240,7 +1264,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			buyGuard.Begin(BUY_TIMEOUT_SECONDS);
+			buyGuard.Begin(TRANSACTION_TIMEOUT_SECONDS);
 			SetStatus("Buying…");
 			RefreshConfirmState();
 

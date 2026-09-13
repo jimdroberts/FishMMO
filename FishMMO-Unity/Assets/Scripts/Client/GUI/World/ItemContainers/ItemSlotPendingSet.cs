@@ -24,8 +24,20 @@ namespace FishMMO.Client
 	/// <para>
 	/// Guards are keyed by slot and kept after release rather than removed, because a player
 	/// working out of one bag drags the same handful of slots over and over and re-allocating a
-	/// guard per click would churn for no reason. <see cref="Count"/> therefore counts guards, not
-	/// pending slots; <see cref="HasAnyPending"/> is the question worth asking.
+	/// guard per click would churn for no reason. The dictionary therefore outlives the waits it
+	/// holds — its size counts every slot ever touched — which is why the number of slots actually
+	/// waiting is kept as its own field rather than read off <c>guards.Count</c>:
+	/// <see cref="PendingCount"/> is that number, and <see cref="HasAnyPending"/> is the question
+	/// worth asking.
+	/// </para>
+	/// <para>
+	/// This set is PER PANEL, and each panel releases it when it stops showing what it was showing
+	/// — the loot and container panels both do it from <c>Hide</c> and when a different corpse or
+	/// chest arrives, and the item panels do it through <c>ItemOperationTracker.ReleaseAll</c> on
+	/// close, on character change and on destroy. A panel torn down without one of those running
+	/// still leaves nothing behind, because the set dies with the panel that holds it and any wait
+	/// that somehow outlives the frame is expired by the tick. Nothing here is static and nothing
+	/// here is shared between panels.
 	/// </para>
 	/// </remarks>
 	public sealed class ItemSlotPendingSet
@@ -121,7 +133,9 @@ namespace FishMMO.Client
 		/// Ends every outstanding wait, reporting the slots that were released.
 		/// </summary>
 		/// <remarks>
-		/// Used by every teardown path — panel close, character change, quit to login, destroy.
+		/// The item panels reach this through <c>ItemOperationTracker.ReleaseAll</c>, which they
+		/// call on close, on character change, quit to login and destroy; the loot and container
+		/// panels call it directly from <c>Hide</c> and when the pile they are showing is replaced.
 		/// A lock that outlives the panel it belongs to is worse than no lock at all: the slot is
 		/// rebuilt from the container looking normal, but the set still refuses the next click.
 		/// </remarks>
@@ -165,8 +179,19 @@ namespace FishMMO.Client
 		/// <see cref="Release"/>, and a prune interleaved with a tick must not have the tick's
 		/// buffer pulled out from under it.
 		/// </para>
+		/// <para>
+		/// IT APPENDS AND NEVER CLEARS. The single caller clears its scratch list first, and every
+		/// caller must: a buffer carried across two calls reports the slots that were pending the
+		/// first time as well, and the prune that reads it releases on the strength of a snapshot
+		/// it has already acted on. That is not a cosmetic double-report — <see cref="Release"/>
+		/// does not care whether the slot is still the one the caller meant, so a stale index
+		/// handed back to a prune releases a LIVE claim, which is precisely the double-submit this
+		/// whole type exists to prevent. Clearing here instead would hide the mistake rather than
+		/// remove it, and would make <c>into</c> mean something different from every other
+		/// out-parameter in this file.
+		/// </para>
 		/// </remarks>
-		/// <param name="into">Receives the pending slot indices. Not cleared by this call.</param>
+		/// <param name="into">Receives the pending slot indices, appended. NOT cleared by this call.</param>
 		public void CollectPending(List<int> into)
 		{
 			if (into == null || PendingCount < 1)
@@ -190,6 +215,14 @@ namespace FishMMO.Client
 		/// <see cref="PendingReplyGuard.HasExpired"/> is self-clearing and reports true exactly
 		/// once per wait, so this can be driven straight from a per-frame tick and each slot is
 		/// handed back once. The returned list is reused; copy it if you need to keep it.
+		/// <para>
+		/// The count is clamped at zero rather than allowed to go negative. That clamp is a
+		/// courtesy, not a guarantee: it keeps a drift between the field and the guards from
+		/// turning into a counter that never comes back down and silently disables
+		/// <see cref="HasAnyPending"/>, but it also HIDES the drift while doing so — a negative
+		/// result means the field disagreed with the guards, and the fix is wherever that happened,
+		/// not here.
+		/// </para>
 		/// </remarks>
 		/// <returns>Slots released by timeout on this call. Empty when none expired.</returns>
 		public List<int> CollectExpired()

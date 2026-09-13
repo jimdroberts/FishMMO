@@ -638,6 +638,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 
+			/* Resolved here rather than at the grant, so a server that cannot record the ability
+			 * refuses the sale before the player is charged rather than after. */
+			if (!Server.BehaviourRegistry.TryGet(out IAbilitySystem abilitySystem))
+			{
+				Log.Error("InteractableSystem", "TryPurchasePremadeAbility: IAbilitySystem is not registered; refusing the sale.");
+				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
+				return false;
+			}
+
 			/* One usable ability per template, the rule the crafter applies. The premade route
 			 * must not be a way around it — and without this, a player could buy the same offer
 			 * repeatedly and fill their ability list with copies. */
@@ -696,50 +705,64 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 			}
 
-			Ability newAbility = LearnAbility(abilityController, template, eventIDs);
-			if (newAbility == null)
+			/* Puts the sale back and answers it, for the same two cases the craft handler covers: a
+			 * grant refused before it was attempted, and one that failed when it was written.
+			 * Gated on a positive price because a free sale neither charged nor owes anything. */
+			void RefundRejectedSale(IPlayerCharacter refundCharacter)
 			{
-				// Nothing was learned, so put the money back and record the refund.
 				if (price > 0)
 				{
-					CharacterCurrency.TryAdd(character, currencyTemplate, price);
-					if (!TryPersistMerchantAttributes(character))
+					CharacterCurrency.TryAdd(refundCharacter, currencyTemplate, price);
+					if (!TryPersistMerchantAttributes(refundCharacter))
 					{
-						Log.Error("InteractableSystem", $"TryPurchasePremadeAbility: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
+						Log.Error("InteractableSystem", $"TryPurchasePremadeAbility: refund persist rejected for CharID={refundCharacter.ID}; in-memory balance is correct but the DB holds the deduction.");
 					}
-					RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityPurchase, absorbed: false);
+					RecordCurrencyMovement(refundCharacter.ID, price, CurrencyMovementReason.AbilityPurchase, absorbed: false);
 				}
 				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
-				return false;
 			}
 
-			if (price > 0)
+			/* The grant is handed to AbilitySystem, as in the craft path and for the same reason:
+			 * the identity has to be on the ability before the controller keys it, and only the
+			 * database knows what it is. The broadcasts that used to follow the learn are sent from
+			 * there now.
+			 *
+			 * releaseGuard is null here, unlike the craft path. This runs inside the merchant
+			 * handler's try/finally, which still has work to do after this method returns — the
+			 * merchant-interaction achievement — so the guard stays the handler's and is released on
+			 * the way out as it always was.
+			 *
+			 * That leaves a window the craft path does not have: the handler releases its guard
+			 * before the write lands, and until it does KnowsLearnedAbility is still false, so a
+			 * second purchase of the same offer inside the window is not refused as AlreadyKnown. It
+			 * is refused by the row instead. Both writes go onto this character's worker lane in
+			 * order, the second collides on (character_id, template_id) with a version that does not
+			 * beat the first, the upsert returns no identity, and the grant fails into the refund
+			 * above. The player owns one ability and was charged once. */
+			bool accepted = abilitySystem.TryGrantAbility(
+				character,
+				template,
+				eventIDs,
+				releaseGuard: null,
+				onGranted: (grantedCharacter, _) =>
+				{
+					if (price > 0)
+					{
+						RecordCurrencyMovement(grantedCharacter.ID, price, CurrencyMovementReason.AbilityPurchase, absorbed: true);
+					}
+					SendPurchaseResult(conn, msg, MerchantPurchaseFailure.None, 1, price);
+				},
+				onFailed: RefundRejectedSale);
+
+			if (!accepted)
 			{
-				RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityPurchase, absorbed: true);
+				RefundRejectedSale(character);
 			}
 
-			int[] events = eventIDs.ToArray();
-
-			Server.NetworkWrapper.Broadcast(conn, new AbilityAddBroadcast()
-			{
-				ID = newAbility.ID,
-				TemplateID = newAbility.Template.ID,
-				Events = events,
-			}, true, Channel.Reliable);
-
-			/* Observers too, for the reason the craft handler gives: their copy of this
-			 * character's abilities was written when they started observing, and a cast of an
-			 * ability they were never told about draws nothing on their screen. */
-			ObserverBroadcastScope.BroadcastToObserversExceptOwner(character.NetworkObject, new AbilityLearnedObserverBroadcast()
-			{
-				CasterObjectID = character.NetworkObject.ObjectId,
-				AbilityID = newAbility.ID,
-				TemplateID = newAbility.Template.ID,
-				Events = events,
-			}, Channel.Reliable);
-
-			SendPurchaseResult(conn, msg, MerchantPurchaseFailure.None, 1, price);
-			return true;
+			/* True means "the sale was accepted and the ability is being recorded", not "the ability
+			 * is in hand" — the caller's next step is the merchant-interaction achievement, which a
+			 * purchase that got this far has earned. */
+			return accepted;
 		}
 
 		/// <summary>

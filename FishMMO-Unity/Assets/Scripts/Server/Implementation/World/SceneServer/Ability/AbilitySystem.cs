@@ -1,0 +1,722 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using FishNet.Connection;
+using FishNet.Transporting;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Logging;
+using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using UnityEngine;
+
+namespace FishMMO.Server.Implementation.World.SceneServer
+{
+	/// <summary>
+	/// Owns the two halves of a crafted ability's life: granting one, and forgetting one.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why a system rather than a partial of whoever asked.</b> Three paths hand out abilities —
+	/// the ability crafter, the merchant selling a premade, and (in principle) anything a content
+	/// author adds next — and all three had their own copy of "construct, learn, persist". Only the
+	/// item layer had worked out what the copies were missing, which is why
+	/// <c>InteractableSystem.SendNewItemBroadcast</c> was emptied into
+	/// <c>CharacterInventorySystem.TryGrantItem</c> and its doc says so. This is the same move for
+	/// abilities, and it is the fix for the same class of bug.
+	/// </para>
+	/// <para>
+	/// <b>The bug.</b> <c>Ability(template, events)</c> sets <c>ID = -1</c> by design — its own doc
+	/// comment says the database assigns the real id — and nothing ever put that id back.
+	/// <c>PersistAbilityAsync</c> read <c>IsSuccess</c> and threw away the <c>long</c> the upsert
+	/// returned, so <c>AbilityController.LearnAbility</c> filed every crafted ability under
+	/// <c>-1</c>: crafting a second ability from a different template silently replaced the first,
+	/// and because <c>HotkeyData.UnsetReferenceID</c> is also <c>-1</c> a hotkey bound to either of
+	/// them validated against the sentinel. The identity is applied here, before the learn, so the
+	/// window in which a crafted ability has no key does not exist.
+	/// </para>
+	/// <para>
+	/// <b>Why the learn is deferred rather than corrected afterwards.</b> The item layer can hand an
+	/// item a provisional identity and correct it on the wire because an item lives in a slot: it can
+	/// be locked while unidentified, and the slot re-sent
+	/// (<c>CharacterInventorySystem.ApplyAssignedIdentities</c>). An ability has no slot — the
+	/// instance id <i>is</i> its key on the server, in the client's known-ability table, in
+	/// <c>AbilityActivatedBroadcast</c>, and in every persisted hotkey row. Deferring the grant
+	/// costs one database round trip inside a request that already waits for its result broadcast,
+	/// and removes the window entirely.
+	/// </para>
+	/// </remarks>
+	[CreateAssetMenu(fileName = "AbilitySystem", menuName = "FishMMO/Server/SceneServer/Ability System", order = 2)]
+	[RequiresDataContainer(typeof(AbilitySystemRuntimeData))]
+	[RequiresDataContainer(typeof(AbilitySystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
+	public class AbilitySystem : ServerBehaviour, IAbilitySystem
+	{
+		/// <summary>
+		/// Debounce window in milliseconds for ability ingress requests.
+		/// </summary>
+		[Header("Ingress Protection")]
+		[Tooltip("Minimum milliseconds between ability requests per connection")]
+		[SerializeField] private int ingressDebounceMilliseconds = 75;
+
+		/// <summary>
+		/// Interval in seconds between ingress-guard cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded ingress guard cleanup sweeps")]
+		[SerializeField] private float ingressSweepIntervalSeconds = 5.0f;
+
+		/// <summary>
+		/// Guard entry time-to-live in seconds.
+		/// </summary>
+		[Tooltip("Seconds before stale ingress guard entries are removed")]
+		[SerializeField] private float ingressEntryTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Maximum stale guard entries removed per cleanup sweep.
+		/// </summary>
+		[Tooltip("Maximum stale guard entries removed per sweep")]
+		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Maximum number of grant completions applied per frame.
+		/// </summary>
+		[Header("Main Thread Queue")]
+		[Tooltip("Maximum database-minted ability identities applied per frame")]
+		[SerializeField] private int maxGrantCompletionsPerFrame = 64;
+
+		/// <summary>
+		/// Operation codes used by ability ingress guards.
+		/// </summary>
+		private enum IngressOperation : byte
+		{
+			Forget = 1,
+		}
+
+		/// <summary>
+		/// Everything one admitted grant needs in order to be finished later.
+		/// </summary>
+		/// <remarks>
+		/// A class rather than a closure per parameter, because the request crosses a thread
+		/// boundary twice and a named carrier is what keeps the main-thread completion from
+		/// closing over a worker's locals.
+		/// </remarks>
+		private sealed class GrantRequest
+		{
+			/// <summary>Character receiving the ability.</summary>
+			public long CharacterID;
+			/// <summary>The ability instance, already constructed but not yet learned.</summary>
+			public Ability Ability;
+			/// <summary>The version the row is written at, and the one the ability carries once it lands.</summary>
+			public long Version;
+			/// <summary>The row to write.</summary>
+			public CharacterAbilityData AbilityData;
+			/// <summary>Crafted event template ids for the wire, or null when none were chosen.</summary>
+			public int[] CraftedEvents;
+			/// <summary>Releases the caller's in-flight guard. Invoked exactly once, on completion.</summary>
+			public Action ReleaseGuard;
+			/// <summary>Runs on the main thread once the ability is learned and broadcast.</summary>
+			public Action<IPlayerCharacter, Ability> OnGranted;
+			/// <summary>Runs on the main thread when the ability could not be recorded.</summary>
+			public Action<IPlayerCharacter> OnFailed;
+		}
+
+		/// <summary>
+		/// Initializes the ability system, registering the forget request handler.
+		/// </summary>
+		public override ServerComponentInitializationStatus InitializeOnce()
+		{
+			if (Server == null)
+			{
+				Log.Error("AbilitySystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IAbilitySystemRuntimeData>(out _))
+			{
+				Log.Error("AbilitySystem", "InitializeOnce: IAbilitySystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			Server.NetworkWrapper.RegisterBroadcast<AbilityForgetBroadcast>(OnServerAbilityForgetBroadcastReceived, true);
+
+			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
+			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
+			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
+			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+
+			Log.Debug("AbilitySystem", "Initialized");
+			return ServerComponentInitializationStatus.Initialized;
+		}
+
+		/// <summary>
+		/// Cleans up the ability system, unregistering broadcast handlers.
+		/// </summary>
+		public override void OnDeinitialize()
+		{
+			if (Server == null)
+			{
+				Log.Error("AbilitySystem", "OnDeinitialize: Server is null");
+				return;
+			}
+
+			Server.NetworkWrapper.UnregisterBroadcast<AbilityForgetBroadcast>(OnServerAbilityForgetBroadcastReceived);
+
+			if (Server.DataContainerRegistry.TryGet<IAbilitySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressGuard?.Clear();
+			}
+		}
+
+		/// <summary>
+		/// Drains stale ingress entries with bounded cleanup each frame, and applies database-minted
+		/// ability identities that arrived during the frame.
+		/// </summary>
+		protected override void OnUpdate(float deltaTime)
+		{
+			if (Server.DataContainerRegistry.TryGet<IAbilitySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressGuard.Sweep(ingressSweepIntervalSeconds, ingressEntryTtlSeconds, ingressSweepMaxRemovals);
+			}
+
+			// The granting half of a crafted ability. The write happens on a worker and every
+			// structure it touches — the Ability, the ability controller, the broadcasts — is
+			// main-thread only.
+			DrainMainThreadQueue<IAbilitySystemMainThreadQueueData>(maxGrantCompletionsPerFrame, drainAll: false);
+		}
+
+		#region Granting
+
+		/// <inheritdoc />
+		public bool TryGrantAbility(
+			IPlayerCharacter character,
+			AbilityTemplate template,
+			IReadOnlyList<int> events,
+			Action releaseGuard,
+			Action<IPlayerCharacter, Ability> onGranted,
+			Action<IPlayerCharacter> onFailed)
+		{
+			if (character == null ||
+				template == null ||
+				character.ID <= 0 ||
+				!character.TryGet(out IAbilityController _))
+			{
+				releaseGuard?.Invoke();
+				return false;
+			}
+
+			/* A server with no ability service refuses the grant rather than granting without a
+			 * write-back. The write-back IS the fix this system exists for: an ability granted into a
+			 * process that cannot record it is keyed on the constructor's -1 for the rest of the
+			 * session and replaces whichever crafted ability preceded it. The item layer refuses on
+			 * exactly this reasoning — see the doc on InteractableSystem.SendNewItemBroadcast. */
+			if (!TryGetDbService<ICharacterAbilityService>(out _))
+			{
+				Log.Error("AbilitySystem",
+					$"TryGrantAbility: ICharacterAbilityService is not registered; refusing the grant of template {template.ID} to CharID={character.ID}.");
+				releaseGuard?.Invoke();
+				return false;
+			}
+
+			/* Null and empty mean the same thing on the wire — the serializer writes a length prefix
+			 * either way and the reader returns an empty array for a length of zero — so a request
+			 * that named no events is normalised here rather than carried as a null that the row
+			 * builder would have to special-case. */
+			List<int> craftedEvents = new List<int>(events != null ? events.Count : 0);
+			if (events != null)
+			{
+				for (int i = 0; i < events.Count; ++i)
+				{
+					craftedEvents.Add(events[i]);
+				}
+			}
+
+			Ability ability = new Ability(template, craftedEvents);
+			long version = ++ability.Version;
+			long characterID = character.ID;
+
+			GrantRequest request = new GrantRequest()
+			{
+				CharacterID = characterID,
+				Ability = ability,
+				Version = version,
+				AbilityData = new CharacterAbilityData(
+					id: ability.ID,
+					version: version,
+					characterID: characterID,
+					templateID: template.ID,
+					abilityEvents: craftedEvents,
+					cooldown: 0f),
+				CraftedEvents = craftedEvents.Count > 0 ? craftedEvents.ToArray() : null,
+				ReleaseGuard = releaseGuard,
+				OnGranted = onGranted,
+				OnFailed = onFailed,
+			};
+
+			/* Keyed by character so this lands on the same ordered lane as the character's own saves
+			 * and as a forget's delete. See AsyncWorkerData: work sharing an entityKey runs one at a
+			 * time, in the order it was enqueued. */
+			if (!TryEnqueueAsyncWork(() => PersistGrantedAbilityAsync(request), characterID))
+			{
+				Log.Warning("AbilitySystem",
+					$"TryGrantAbility: Async worker rejected the persist of template {template.ID} for CharID={characterID}; the grant was refused.");
+				releaseGuard?.Invoke();
+				return false;
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Writes the crafted ability's row and hands the database-minted identity back to the main
+		/// thread.
+		/// </summary>
+		/// <param name="request">The admitted grant.</param>
+		private async Task PersistGrantedAbilityAsync(GrantRequest request)
+		{
+			try
+			{
+				if (!TryGetDbService<ICharacterAbilityService>(out var abilityService))
+				{
+					await Log.Error("AbilitySystem",
+						$"PersistGrantedAbilityAsync: ICharacterAbilityService is not registered; the grant of template {request.AbilityData.TemplateID} to CharID={request.CharacterID} was not recorded.");
+					QueueGrantCompletion(request, persisted: false);
+					return;
+				}
+
+				DatabaseResult<long> result = await abilityService.PersistAsync(request.AbilityData);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("AbilitySystem",
+						$"PersistGrantedAbilityAsync DB error (CharID={request.CharacterID}, TemplateID={request.AbilityData.TemplateID}): {result.ErrorCode} - {result.ErrorMessage}");
+					QueueGrantCompletion(request, persisted: false);
+					return;
+				}
+
+				/* The identity the upsert's RETURNING clause minted — the whole point of this pass.
+				 * Written onto the Ability here, on the worker, ONLY because the Ability is not yet
+				 * reachable from anywhere: it is not in KnownAbilities, has never been broadcast, and
+				 * is referenced by this request alone. Every read of it happens on the main thread
+				 * after the completion below. */
+				request.Ability.ID = result.Data;
+				QueueGrantCompletion(request, persisted: true);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("AbilitySystem", $"Error persisting a granted ability: {ex}");
+				QueueGrantCompletion(request, persisted: false);
+			}
+		}
+
+		/// <summary>
+		/// Marshals a grant's outcome onto the main thread, or releases its guard and reports that it
+		/// could not be marshalled.
+		/// </summary>
+		/// <param name="request">The grant.</param>
+		/// <param name="persisted">True when the row was written and only the learn remains.</param>
+		private void QueueGrantCompletion(GrantRequest request, bool persisted)
+		{
+			if (TryEnqueueMainThread<IAbilitySystemMainThreadQueueData>(
+					() =>
+					{
+						if (persisted)
+						{
+							CompleteGrant(request);
+						}
+						else
+						{
+							FailGrant(request);
+						}
+					}))
+			{
+				return;
+			}
+
+			/* The queue is at capacity, which means the main thread has stalled long enough for async
+			 * workers to saturate it. Nothing can be applied to the character and neither callback can
+			 * run, so the guard is released here — the caller's request is over either way — and the
+			 * outcome is written down instead of being lost. */
+			request.ReleaseGuard?.Invoke();
+
+			if (persisted)
+			{
+				/* The honest state: the row exists, so the character owns the ability from their next
+				 * login, but it was never learned in this session and was never announced. Not
+				 * refunded — they do own it. */
+				Log.Error("AbilitySystem",
+					$"QueueGrantCompletion: the row for template {request.AbilityData.TemplateID} (CharID={request.CharacterID}) was written but could not be applied because the main-thread queue is saturated. The character owns it from the next login and it is unusable until then.");
+			}
+			else
+			{
+				Log.Error("AbilitySystem",
+					$"QueueGrantCompletion: the failure of the grant of template {request.AbilityData.TemplateID} (CharID={request.CharacterID}) could not be reported to the caller, which was never told and never refunded.");
+			}
+		}
+
+		/// <summary>
+		/// Learns the granted ability with the identity the database assigned, and announces it.
+		/// </summary>
+		/// <param name="request">The grant.</param>
+		private void CompleteGrant(GrantRequest request)
+		{
+			try
+			{
+				IPlayerCharacter character = ResolveResidentCharacter(request.CharacterID);
+				if (character == null)
+				{
+					/* Logged out inside a database round trip. The row is written, so the ability is
+					 * theirs from the next login; there is nothing to learn onto and nobody to tell.
+					 * The one thing lost is the caller's currency-movement ledger line — the balance
+					 * itself was persisted before the grant was attempted, so it is correct. */
+					Log.Warning("AbilitySystem",
+						$"CompleteGrant: CharID={request.CharacterID} left before ability {request.Ability.ID} could be learned. The row is written and the ability is theirs at the next login.");
+					return;
+				}
+
+				/* The version the row now holds. Re-stated rather than assumed because
+				 * MarkPersisted clears the dirty flag by comparing the ability's version with the one
+				 * that was written, and an ability that is not marked here is rewritten by the next
+				 * save for nothing. */
+				request.Ability.Version = request.Version;
+				request.Ability.MarkPersisted(request.Version);
+
+				if (character.TryGet(out IAbilityController abilityController))
+				{
+					abilityController.LearnAbility(request.Ability);
+				}
+
+				NetworkConnection owner = character.Owner;
+				if (owner != null)
+				{
+					Server.NetworkWrapper.Broadcast(owner, new AbilityAddBroadcast()
+					{
+						ID = request.Ability.ID,
+						TemplateID = request.Ability.Template.ID,
+						Events = request.CraftedEvents,
+					}, true, Channel.Reliable);
+				}
+
+				/* Tell the character's observers too.
+				 *
+				 * An observer's copy of a peer's known abilities is written once, by the spawn
+				 * payload, when it starts observing. Everyone already watching this character learns
+				 * nothing from the message above — it is addressed to the owner — so every cast of
+				 * this ability would resolve to nothing on their clients and draw nothing, for as long
+				 * as they kept observing. The bytes go on the rare learn, not on every cast. */
+				if (character.NetworkObject != null)
+				{
+					ObserverBroadcastScope.BroadcastToObserversExceptOwner(character.NetworkObject, new AbilityLearnedObserverBroadcast()
+					{
+						CasterObjectID = character.NetworkObject.ObjectId,
+						AbilityID = request.Ability.ID,
+						TemplateID = request.Ability.Template.ID,
+						Events = request.CraftedEvents,
+					}, Channel.Reliable);
+				}
+
+				request.OnGranted?.Invoke(character, request.Ability);
+			}
+			finally
+			{
+				request.ReleaseGuard?.Invoke();
+			}
+		}
+
+		/// <summary>
+		/// Reports a grant that was attempted and not recorded, so the caller can undo what it did in
+		/// anticipation.
+		/// </summary>
+		/// <param name="request">The grant.</param>
+		private void FailGrant(GrantRequest request)
+		{
+			try
+			{
+				IPlayerCharacter character = ResolveResidentCharacter(request.CharacterID);
+				if (character == null)
+				{
+					Log.Warning("AbilitySystem",
+						$"FailGrant: the grant of template {request.AbilityData.TemplateID} for CharID={request.CharacterID} failed and the character has since left, so nothing could be undone.");
+					return;
+				}
+
+				request.OnFailed?.Invoke(character);
+			}
+			finally
+			{
+				request.ReleaseGuard?.Invoke();
+			}
+		}
+
+		#endregion
+
+		#region Forgetting
+
+		/// <summary>
+		/// Handles a request to forget one crafted ability.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Addressed by the ability's row identity, never by its template. The service's statement
+		/// matches <c>WHERE id = ?</c>, and a template id would either match nothing — reporting
+		/// success for a delete that removed no row — or, on a table with several rows per template,
+		/// remove the wrong one.
+		/// </para>
+		/// <para>
+		/// The guard is held until the delete lands, not until this handler returns. A second forget
+		/// arriving in that window would otherwise read the same live ability and delete the same row
+		/// twice, and a re-craft arriving in it would see a character that still knows the ability.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="msg">Forget request naming the ability.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		public void OnServerAbilityForgetBroadcastReceived(NetworkConnection conn, AbilityForgetBroadcast msg, Channel channel)
+		{
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
+			{
+				return;
+			}
+			IPlayerCharacter character = request.Character;
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Forget, out long guardKey))
+			{
+				/* A refusal is still an answer. The panel clears its pending row on the result, and
+				 * silence would leave it waiting for its own watchdog to expire. */
+				SendForgetResult(conn, msg.AbilityID, AbilityForgetFailure.Busy);
+				return;
+			}
+
+			bool guardTransferred = false;
+			try
+			{
+				if (!character.TryGet(out IAbilityController abilityController) ||
+					!abilityController.KnownAbilities.TryGetValue(msg.AbilityID, out Ability ability) ||
+					ability == null)
+				{
+					/* Nothing to forget. Refused rather than answered with success: the client's
+					 * panel removes the row on a success, and a success for something the server
+					 * never held would hide a disagreement rather than resolve one. */
+					SendForgetResult(conn, msg.AbilityID, AbilityForgetFailure.Unknown);
+					return;
+				}
+
+				/* Strictly above the row's own version — the delete admits a row whose version is at
+				 * or below what it is given, and the version names the state the player was looking
+				 * at when they asked. */
+				long version = ability.Version + 1;
+				long characterID = character.ID;
+				long abilityID = msg.AbilityID;
+
+				guardTransferred = TryEnqueueAsyncWork(
+					() => ForgetAbilityAsync(characterID, abilityID, version, guardKey),
+					characterID);
+
+				if (!guardTransferred)
+				{
+					Log.Warning("AbilitySystem",
+						$"OnServerAbilityForgetBroadcastReceived: Async worker rejected the delete of ability {abilityID} for CharID={characterID}.");
+					SendForgetResult(conn, abilityID, AbilityForgetFailure.Busy);
+				}
+			}
+			finally
+			{
+				if (!guardTransferred)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Deletes the ability's row and hands the outcome back to the main thread.
+		/// </summary>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="abilityID">The row identity.</param>
+		/// <param name="version">The version the delete is issued at.</param>
+		/// <param name="guardKey">The ingress guard to release when this finishes.</param>
+		private async Task ForgetAbilityAsync(long characterID, long abilityID, long version, long guardKey)
+		{
+			try
+			{
+				if (!TryGetDbService<ICharacterAbilityService>(out var abilityService))
+				{
+					await Log.Error("AbilitySystem",
+						$"ForgetAbilityAsync: ICharacterAbilityService is not registered; ability {abilityID} for CharID={characterID} was not forgotten.");
+					QueueForgetCompletion(characterID, abilityID, AbilityForgetFailure.PersistFailed);
+					return;
+				}
+
+				DatabaseResult result = await abilityService.DeleteAbilityAsync(characterID, abilityID, version);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("AbilitySystem",
+						$"ForgetAbility DB error (AbilityID={abilityID}, CharID={characterID}): {result.ErrorCode} - {result.ErrorMessage}");
+					QueueForgetCompletion(characterID, abilityID, AbilityForgetFailure.PersistFailed);
+					return;
+				}
+
+				QueueForgetCompletion(characterID, abilityID, AbilityForgetFailure.None);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("AbilitySystem", $"Error forgetting ability {abilityID} for CharID={characterID}: {ex}");
+				QueueForgetCompletion(characterID, abilityID, AbilityForgetFailure.PersistFailed);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Marshals a forget's outcome onto the main thread, or reports that it could not be.
+		/// </summary>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="abilityID">The row identity.</param>
+		/// <param name="failure">Why it was refused, or <see cref="AbilityForgetFailure.None"/>.</param>
+		private void QueueForgetCompletion(long characterID, long abilityID, AbilityForgetFailure failure)
+		{
+			if (TryEnqueueMainThread<IAbilitySystemMainThreadQueueData>(
+					() => CompleteForget(characterID, abilityID, failure)))
+			{
+				return;
+			}
+
+			Log.Error("AbilitySystem",
+				$"QueueForgetCompletion: the outcome of forgetting ability {abilityID} for CharID={characterID} could not be applied because the main-thread queue is saturated. The row's state and the character's in-memory ability set may now disagree until the next login.");
+		}
+
+		/// <summary>
+		/// Applies a landed forget: drops the ability, clears the hotkeys bound to it, and answers.
+		/// </summary>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="abilityID">The row identity.</param>
+		/// <param name="failure">Why it was refused, or <see cref="AbilityForgetFailure.None"/>.</param>
+		private void CompleteForget(long characterID, long abilityID, AbilityForgetFailure failure)
+		{
+			IPlayerCharacter character = ResolveResidentCharacter(characterID);
+			if (character == null)
+			{
+				/* Logged out while the delete was in flight. The row is gone, and the ability was
+				 * never in a loaded character's set to begin with, so there is nothing to undo and
+				 * nobody to answer. */
+				if (failure != AbilityForgetFailure.None)
+				{
+					Log.Warning("AbilitySystem",
+						$"CompleteForget: forgetting ability {abilityID} for CharID={characterID} failed and the character has since left, so nothing could be undone.");
+				}
+				return;
+			}
+
+			if (failure != AbilityForgetFailure.None)
+			{
+				SendForgetResult(character.Owner, abilityID, failure);
+				return;
+			}
+
+			if (character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.RemoveAbility(abilityID);
+			}
+
+			/* Observers too, symmetric with the learn path and for the reason spelled out on
+			 * AbilityForgottenObserverBroadcast: their copy is written once when they start
+			 * observing and corrected by these two messages and nothing else. Nothing renders a
+			 * stale entry — the server will not activate the ability, so the activation that would
+			 * resolve it is never sent — but Inspect, CanActivate and faction evaluation all read
+			 * the observed character's real state, and all of them would still list this. */
+			if (character.NetworkObject != null)
+			{
+				ObserverBroadcastScope.BroadcastToObserversExceptOwner(character.NetworkObject, new AbilityForgottenObserverBroadcast()
+				{
+					CasterObjectID = character.NetworkObject.ObjectId,
+					AbilityID = abilityID,
+				}, Channel.Reliable);
+			}
+
+			/* A hotkey bound to a forgotten ability names an id nothing resolves any more. The
+			 * server's bar and the database row would keep it until the next login, because bindings
+			 * are validated when they are MADE and in the login prune and nowhere in between — so the
+			 * client would show a dead slot for the rest of the session. Clearing here, and echoing
+			 * the whole bar back, is what corrects both sides now. */
+			if (Server.BehaviourRegistry.TryGet(out IHotkeySystem hotkeySystem) && hotkeySystem != null)
+			{
+				hotkeySystem.ForgetAbilityBindings(character, abilityID);
+			}
+
+			SendForgetResult(character.Owner, abilityID, AbilityForgetFailure.None);
+		}
+
+		/// <summary>
+		/// Answers a forget request.
+		/// </summary>
+		/// <param name="conn">The requesting connection, or null when it has gone.</param>
+		/// <param name="abilityID">The row identity the request named.</param>
+		/// <param name="failure">Why it was refused, or <see cref="AbilityForgetFailure.None"/>.</param>
+		private void SendForgetResult(NetworkConnection conn, long abilityID, AbilityForgetFailure failure)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new AbilityForgetResultBroadcast()
+			{
+				AbilityID = abilityID,
+				Success = failure == AbilityForgetFailure.None,
+				Failure = failure,
+			}, true, Channel.Reliable);
+		}
+
+		#endregion
+
+		#region Helpers
+
+		/// <summary>
+		/// Attempts to acquire ingress debounce and in-flight guard for a connection operation.
+		/// </summary>
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet<IAbilitySystemRuntimeData>(out var runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, ingressDebounceMilliseconds, out guardKey);
+		}
+
+		/// <summary>
+		/// Releases a previously acquired ingress guard key.
+		/// </summary>
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet<IAbilitySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressGuard.End(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Finds a connected character by ID. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// A character that has since logged out is simply not found. Every completion treats that as
+		/// "nothing left to apply" rather than as an error, because it is the ordinary outcome of a
+		/// player quitting inside a database round trip.
+		/// </remarks>
+		private IPlayerCharacter ResolveResidentCharacter(long characterID)
+		{
+			if (Server?.DataContainerRegistry != null &&
+				Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data) &&
+				data.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character))
+			{
+				return character;
+			}
+			return null;
+		}
+
+		#endregion
+	}
+}

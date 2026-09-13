@@ -271,8 +271,11 @@ namespace FishMMO.Client
 				}
 
 				int slotIndex = i;
+				/* Marked as a slot so a press on it does not cancel the drag the player is carrying;
+				 * the authored UXML carries the look, this carries the meaning. See
+				 * UITKControl.OnRootPointerDownCancelDrag. */
+				slotRoot.AddToClassList(SLOT_MARKER_CLASS);
 				slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, slotIndex));
-				slotRoot.RegisterCallback<PointerUpEvent>(evt => OnSlotPointerUp(evt, slotIndex));
 				slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(slotIndex, slotRoot));
 				slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave(slotRoot));
 			}
@@ -688,39 +691,11 @@ namespace FishMMO.Client
 		 * ApplySlotUpdate for what was different and which way it was settled. RefreshSlot is gone
 		 * entirely: it was a two-branch helper the shared refresh loop inlines. */
 
-		/// <summary>
-		/// Completes a press-and-drag when the pointer is released over an equipment slot.
-		/// </summary>
-		/// <remarks>
-		/// See UITKInventory.OnSlotPointerUp — the same missing half. Releasing over the slot the
-		/// drag started from is a click, not a drop, and is left alone so click-to-pick-up from
-		/// an equipment slot still works.
-		/// </remarks>
-		private void OnSlotPointerUp(PointerUpEvent evt, int slotIndex)
-		{
-			if (Character == null || Client == null || evt.button != 0)
-			{
-				return;
-			}
-
-			bool draggingNow = UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.IsDragging;
-
-			if (!draggingNow)
-			{
-				return;
-			}
-
-			if (dragObject.Type == ReferenceButtonType.Equipment &&
-				(int)dragObject.ReferenceID == slotIndex)
-			{
-				return;
-			}
-
-			if (Character.TryGet(out IEquipmentController equipmentController))
-			{
-				CompleteDropOntoSlot(dragObject, equipmentController, slotIndex);
-			}
-		}
+		/* OnSlotPointerUp is gone, and nothing replaced it. It was the third hand-written copy of
+		 * "a release over a non-source slot completes the drop" — and that gesture is not one this
+		 * game has. A socket is completed by PRESSING it, like every other slot; a release over one
+		 * leaves the item on the cursor for the next press to place. See the note above Notify in
+		 * UITKSlotPanelBase, which is where the rule is written down. */
 
 		/// <summary>
 		/// Handles pointer-down events on an equipment slot element.
@@ -747,6 +722,18 @@ namespace FishMMO.Client
 		/// clear one.
 		/// </para>
 		/// <para>
+		/// SHIFT DEFERS TO A DRAG IN FLIGHT. A drop onto a socket is completed either by the press
+		/// on it or by the release over it, and the release reads no modifier — so a shift-click on
+		/// a socket while the player is carrying something has to fall through to
+		/// <see cref="HandleSlotLeftClick"/> and become that drop. Otherwise the press claims this
+		/// socket for an unequip the player never asked for, the release's own claim on the same
+		/// socket then fails, and the swap is lost in both directions: the item meant for the
+		/// socket stays where it was AND the item already in the socket is sent to the bag. Reading
+		/// the modifier is this router's job, not <see cref="TryQuickUnequip"/>'s, so the deferral
+		/// is visible in the branch that consults it. <see cref="IsDragInFlight"/> is the same test
+		/// <see cref="HandleSlotLeftClick"/> makes a line later.
+		/// </para>
+		/// <para>
 		/// Shift is read from the event rather than from global input state: the modifier that
 		/// matters is the one held when this click happened, and a poll can answer for a moment
 		/// either side of it.
@@ -761,7 +748,9 @@ namespace FishMMO.Client
 
 			if (evt.button == 0) // left
 			{
-				if (evt.shiftKey)
+				/* Shift only when nothing is being carried — see the remarks. With a drag in flight
+				 * the press is the drop, and it is completed on release. */
+				if (evt.shiftKey && !IsDragInFlight())
 				{
 					TryQuickUnequip(slotIndex);
 				}
@@ -861,9 +850,17 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* The destination is tested with the SAME predicate that paints it, and not with the
+			 * container's own lock alone. IsSlotBlocked is a superset — it adds a request this
+			 * panel is already waiting on and an item the database has not written yet — and those
+			 * two are exactly the reasons the socket is drawn locked. Consulting the narrower test
+			 * here accepted a drop onto a socket the player could see was busy, and the server
+			 * refuses every request naming an identity-less slot, so the drop cost a round trip to
+			 * be told what the lock overlay had already said. Latent rather than live — nothing
+			 * equips an item that has no identity yet — which is why it went unnoticed. */
 			if (!equipmentController.IsValidSlot(slotIndex) ||
 				sourceContainer.IsSlotLocked(sourceSlot) ||
-				equipmentController.IsSlotLocked(slotIndex))
+				IsSlotBlocked(slotIndex))
 			{
 				/* One of the two slots is answering a request of its own. Said out loud because
 				 * the alternative — the drag simply disappearing — is what the player reads as a
@@ -998,7 +995,18 @@ namespace FishMMO.Client
 			// Queued for the next replicate tick; see CompleteDropOntoSlot for the contract.
 			if (!equipmentController.RequestUnequip((ItemSlot)slotIndex, InventoryType.Inventory))
 			{
+				/* The claim comes straight off — the request was never sent, and a socket left
+				 * marked as waiting on it would stay locked until the watchdog fired. */
 				ItemOperationTracker.Release(ReferenceButtonType.Equipment, slotIndex);
+
+				/* And the refusal is said out loud, for the reason the grid's quick transfer gives
+				 * the same answer: a shift-click that silently does nothing is indistinguishable
+				 * from one the game did not register, and the player's next move is to try it
+				 * again. Everything else that can refuse here — a locked socket, an identity-less
+				 * item, a character mid-teleport — was already ruled out by the guards above, so
+				 * the one this can report is the destination: a bag with no room in it, which is
+				 * also the only one the player can do anything about. */
+				Notify("No room in your inventory.", ToastSeverity.Warning);
 			}
 		}
 
@@ -1007,27 +1015,11 @@ namespace FishMMO.Client
 		 * single sign that these two panels wanted one base: a method about the CHARACTER's
 		 * containers, with no reference to the panel it was written in, existing twice. */
 
-		/// <summary>
-		/// Shows a transient notice, if the toast panel is up.
-		/// </summary>
-		/// <remarks>
-		/// The same helper the item grids use, and the one piece of duplication deliberately left
-		/// standing: <c>QuickTransferTests</c> scans <c>UITKItemGridPanel</c> by locating this
-		/// method's summary line, so hoisting it would break a fixture outside this change's scope
-		/// for the sake of five lines. Said plainly rather than left to be rediscovered.
-		/// <para>
-		/// A drop this panel refuses is a gesture the player made and expects an answer to — see
-		/// <see cref="CompleteDropOntoSlot"/> — and the equipment sockets are the one place a
-		/// refusal has nowhere else to surface.
-		/// </para>
-		/// </remarks>
-		private static void Notify(string text, ToastSeverity severity)
-		{
-			if (UIManager.TryGetTK(TOAST_NAME, out UITKToast toast))
-			{
-				toast.Show(text, severity);
-			}
-		}
+		/* Notify is on UITKSlotPanelBase now, along with the grid's copy. The two were identical —
+		 * five lines and the same TOAST_NAME, which was already declared on the base — and the only
+		 * reason given for leaving them was that QuickTransferTests located the grid's copy by its
+		 * summary line. That anchor is a fixture's convenience, not a contract; the fixture was
+		 * re-anchored rather than the duplication kept. */
 
 		// ── Attribute row building ────────────────────────────────────────────
 

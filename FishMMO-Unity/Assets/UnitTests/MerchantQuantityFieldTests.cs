@@ -1,30 +1,42 @@
 ﻿using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Proofs that the merchant's quantity field shows the number it holds (issues #263, #277).
+	/// Proofs that the merchant's quantity field can actually draw the number it holds
+	/// (issues #263, #277).
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// A UI Toolkit <c>IntegerField</c> renders its text AS A RESULT of being written to. Guarding
-	/// that write on "only if the number changed" therefore skips the one case that matters: the
-	/// UXML authors the field as <c>value="1"</c>, so the <c>SetQuantity(1)</c> that runs when an
-	/// entry is selected found the values equal, wrote nothing, and left the inner text element
-	/// empty.
+	/// The field was live and editable throughout and simply displayed nothing, which reads as a
+	/// dead control rather than a blank one — and because hiding the panel disposes the visual tree
+	/// it came back after every reopen, so it presented as intermittent.
 	/// </para>
 	/// <para>
-	/// The field was live and editable throughout — it simply displayed nothing, which reads as a
-	/// dead control rather than a blank one. Hiding the panel disposes the visual tree, so the
-	/// re-queried field returns to the authored 1 with no text and the fault recurs, which is why
-	/// it presented as intermittent.
+	/// WHAT WAS NOT THE CAUSE, because it was written down here once and it was wrong: the write
+	/// being guarded on <c>value != clamped</c>. <c>TextValueField&lt;T&gt;.SetValueWithoutNotify</c>
+	/// re-applies that same equality test internally, so the guard was exactly its negation and
+	/// removing it changed no behaviour at all. A fixture that pinned the guard's removal was
+	/// pinning a no-op, and would have gone on passing after the real fault came back.
 	/// </para>
 	/// <para>
-	/// The rule this pins: a control whose visible text is produced by the write must be written
-	/// unconditionally. Comparing before assigning is an optimisation that costs correctness here.
+	/// WHAT WAS: the stylesheet. Unity's default theme pads the field's inner editable surface
+	/// through a TYPE-qualified rule, and <c>.fish-input--compact</c> — the class that zeroes that
+	/// padding — was written for <c>TextField</c> alone. The quantity box is an
+	/// <c>IntegerField</c>, so the padding survived, and a 22px box with 10px of padding top and
+	/// bottom leaves the glyph element nothing to fill. It collapsed to zero and drew no digits.
+	/// </para>
+	/// <para>
+	/// So this fixture asserts the invariant that actually holds the fix up, and leaves the sweep
+	/// to the thing that owns it: the field must wear the remedy, its TYPE must be one the height
+	/// sweep reads, and the theme must name that type on the selector — which is the half a class
+	/// selector alone cannot win. See <see cref="TextInputHeightTests"/>, whose
+	/// <see cref="TextInputHeightTests.TheThemeNamesEveryFieldTypeThisSweepKnowsAbout"/> is what
+	/// keeps the sweep and the stylesheet from drifting apart again.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -32,6 +44,12 @@ namespace FishMMO.UnitTests
 	{
 		private const string MerchantPath =
 			"Assets/Scripts/Client/GUI/World/Merchant/UITKMerchant.cs";
+
+		private const string MerchantLayoutPath =
+			"Assets/Scripts/Client/GUI/World/Merchant/UIMerchant.uxml";
+
+		/// <summary>The element name the panel queries with <c>root.Q</c> for the quantity box.</summary>
+		private const string QuantityFieldName = "merchant-qty-field";
 
 		/// <summary>Source text with line endings normalised, so bounds do not depend on checkout.</summary>
 		private static string ReadSource(string relativePath)
@@ -54,25 +72,61 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void TheQuantityFieldIsWrittenEvenWhenTheNumberIsUnchanged()
+		public void TheQuantityFieldIsStillWrittenWithoutACondition()
 		{
+			/* Kept, but demoted from a proof to a guard rail: the write is not what draws the text,
+			 * so this asserts only that nothing has re-introduced a branch around an assignment
+			 * that has no reason to have one. */
 			string body = MethodBody(ReadSource(MerchantPath),
 				"private void SetQuantity(int quantity)", "private void RefreshQuantityControls");
 
 			LogAssert.IsTrue(body.Contains("SetValueWithoutNotify(clamped)"),
 				"the quantity must still be pushed into the field");
 
-			/* The defect in one line. Any comparison of the field's current value against the value
-			 * being written re-introduces the skip that leaves the text blank. */
 			LogAssert.IsFalse(body.Contains("quantityField.value != clamped"),
-				"guarding the write on a value comparison leaves the field's text unrendered");
+				"a comparison before the write duplicates the setter's own equality test and buys nothing");
+		}
+
+		[Test]
+		public void TheQuantityFieldWearsTheCompactRemedyItsFieldTypeNeeds()
+		{
+			/* THE INVARIANT THE FIX RESTS ON. Three facts, all load bearing, and the fault was in
+			 * the third: the box is a glyph-drawing field type the sweep reads, it wears the class
+			 * that removes Unity's inner padding, and the theme names that TYPE on the selector —
+			 * because the bare class loses the specificity fight and covers nothing on its own. */
+			string layout = ReadSource(MerchantLayoutPath);
+
+			Match field = Regex.Match(layout,
+				"<ui:([A-Za-z][A-Za-z0-9_]*)\\b[^>]*name=\"" + Regex.Escape(QuantityFieldName) + "\"[^>]*>");
+			LogAssert.IsTrue(field.Success,
+				$"the merchant layout must still declare a field named {QuantityFieldName}");
+
+			string fieldType = field.Groups[1].Value;
+
+			LogAssert.IsTrue(Array.IndexOf(TextInputHeightTests.GlyphFieldTypes, fieldType) >= 0,
+				$"{fieldType} is not a field type the height sweep reads, so this box's glyph height " +
+				"is never measured — it is how the fault survived the TextField fix");
+
+			Match classes = Regex.Match(field.Value, "class=\"([^\"]*)\"");
+			LogAssert.IsTrue(classes.Success, "the quantity box must declare its classes");
+
+			string[] worn = classes.Groups[1].Value.Split(
+				new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+			LogAssert.IsTrue(Array.IndexOf(worn, TextInputHeightTests.CompactClass) >= 0,
+				$"the quantity box must wear .{TextInputHeightTests.CompactClass}, or Unity's inner " +
+				"padding starves the glyph box and the number never draws");
+
+			LogAssert.IsTrue(TextInputHeightTests.ThemeCompactFieldTypes().Contains(fieldType),
+				$"the theme's .{TextInputHeightTests.CompactClass} selector must name {fieldType}: " +
+				"the bare class selector loses to Unity's type-qualified padding rule, which is why " +
+				"this box stayed blank after the TextField fix");
 		}
 
 		[Test]
 		public void SelectingAnEntryStillSeedsTheQuantity()
 		{
-			/* The write only helps if something calls it on selection. This is the call the guard
-			 * was swallowing, so it is the one worth pinning. */
+			/* The write only helps if something calls it on selection. */
 			string source = ReadSource(MerchantPath);
 
 			LogAssert.IsTrue(source.Contains("SetQuantity(1)"),

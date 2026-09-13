@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared;
@@ -59,6 +60,11 @@ namespace FishMMO.RenderScratch
 
 		private static void Items(ICharacter character)
 		{
+			/* Attributes first: an ItemAttribute resolves its template by ID through the same cache,
+			 * so without these registered every generated attribute carries a null Template and
+			 * building an item's tooltip throws before any panel gets to draw it. */
+			Load<ItemAttributeTemplate>("Assets/Templates/Entity/Items/ItemAttributes");
+
 			List<BaseItemTemplate> templates = Load<BaseItemTemplate>("Assets/Templates/Entity/Items");
 			if (templates.Count == 0) { return; }
 
@@ -99,18 +105,42 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
+		/// <summary>
+		/// Reads the equipment slot an item template declares.
+		/// </summary>
+		/// <remarks>
+		/// <c>Slot</c> is a public FIELD on <c>EquippableItemTemplate</c>, not a property. The
+		/// property-only lookup this used to do matched nothing, on any template, ever — so every
+		/// equipment container in every capture came out empty, and a panel that reads one read an
+		/// empty one. Both member kinds are tried so the seam survives the field becoming a
+		/// property, which is the obvious tidy-up somebody will eventually make.
+		/// </remarks>
 		private static bool TryResolveSlot(BaseItemTemplate template, out ItemSlot slot)
 		{
 			slot = default;
-			var prop = template.GetType().GetProperty("Slot")
+			object value = null;
+
+			PropertyInfo prop = template.GetType().GetProperty("Slot")
 				?? template.GetType().GetProperty("EquipmentSlot");
-			if (prop == null) { return false; }
-			try
+			if (prop != null)
 			{
-				object value = prop.GetValue(template);
-				if (value is ItemSlot s) { slot = s; return true; }
+				try { value = prop.GetValue(template); } catch { }
 			}
-			catch { }
+
+			if (!(value is ItemSlot))
+			{
+				for (Type t = template.GetType(); t != null && !(value is ItemSlot); t = t.BaseType)
+				{
+					FieldInfo field = t.GetField("Slot", BindingFlags.Public | BindingFlags.Instance)
+						?? t.GetField("EquipmentSlot", BindingFlags.Public | BindingFlags.Instance);
+					if (field != null)
+					{
+						try { value = field.GetValue(template); } catch { }
+					}
+				}
+			}
+
+			if (value is ItemSlot s) { slot = s; return true; }
 			return false;
 		}
 

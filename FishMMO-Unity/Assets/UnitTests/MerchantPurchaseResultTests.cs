@@ -34,6 +34,19 @@ namespace FishMMO.UnitTests
 		private const string BroadcastPath =
 			"Assets/Scripts/Shared/Implementation/Network/Interactable/InteractableBroadcasts.cs";
 
+		/// <summary>The grant funnel, which now owns telling the observers about a new ability.</summary>
+		/// <remarks>
+		/// <c>TryPurchasePremadeAbility</c> used to construct the ability, learn it and send
+		/// <c>AbilityLearnedObserverBroadcast</c> itself. It hands all three to
+		/// <see cref="FishMMO.Server.Implementation.World.SceneServer.AbilitySystem"/> now, because
+		/// the ability has to carry the identity its database row was minted with before anything
+		/// learns it — and the merchant cannot know that row key at the point it used to learn.
+		/// The property this test holds, that observers are told, moved with the code rather than
+		/// going away; it is asserted against where the send now lives.
+		/// </remarks>
+		private const string SystemPath =
+			"Assets/Scripts/Server/Implementation/World/SceneServer/Ability/AbilitySystem.cs";
+
 		/// <summary>Source text with line endings normalised, so bounds do not depend on checkout.</summary>
 		private static string ReadSource(string relativePath)
 		{
@@ -189,8 +202,14 @@ namespace FishMMO.UnitTests
 				"a full ability list must be refused with its own reason");
 			LogAssert.IsTrue(body.Contains("offer.Validate("),
 				"a recipe the crafter would refuse must not be sold");
-			LogAssert.IsTrue(body.Contains("AbilityLearnedObserverBroadcast"),
-				"observers must be told about the new ability, as the craft path tells them");
+			LogAssert.IsTrue(body.Contains("abilitySystem.TryGrantAbility("),
+				"the bought ability must go through the grant funnel, which is what learns it with its row identity");
+
+			string grant = MethodBody(ReadSource(SystemPath),
+				"private void CompleteGrant(GrantRequest request)",
+				"private void FailGrant(GrantRequest request)");
+			LogAssert.IsTrue(grant.Contains("AbilityLearnedObserverBroadcast"),
+				"and that funnel must tell the observers, as the craft path does — a purchase an observer cannot see is a silent ability");
 		}
 
 		[Test]

@@ -336,15 +336,39 @@ namespace FishMMO.RenderScratch
 			UITKContextMenu m = h.AddComponent<UITKContextMenu>();
 			m.Document = d;
 			m.OnStarting();
+			/* The four entries PlayerInputController actually builds when a player is
+			 * right-clicked in mouse mode. A capture that shows more than the game can produce
+			 * is a picture of a menu that does not exist. */
 			m.Open(new List<(string, Action)>
 			{
 				("Inspect", () => { }),
 				("Add Friend", () => { }),
 				("Invite to Party", () => { }),
-				("Invite to Guild", () => { }),
 				("Trade", () => { }),
-				("Report", () => { }),
 			});
+		}
+
+		/// <summary>
+		/// The inspect window, reading a character that is not the viewer.
+		/// </summary>
+		/// <remarks>
+		/// The panel is not a <c>UITKCharacterControl</c> — it has no character of its own, only the
+		/// one it was handed — so it is driven through <c>Inspect</c> rather than through the
+		/// <c>Character&lt;T&gt;</c> helper. The subject is a second rig parented under the capture's
+		/// host, so it is destroyed with the host and never leaks into the next capture; without it
+		/// the panel would render empty, which is the same picture the chrome pass already produces.
+		/// </remarks>
+		public static void Inspect(GameObject h, UIDocument d)
+		{
+			GameObject subject = new GameObject("InspectSubject");
+			subject.transform.SetParent(h.transform, false);
+			PlayerCharacter target = Rig.BuildOther(subject, "Kaelen Duskwater", 1003L);
+
+			UITKInspect panel = h.AddComponent<UITKInspect>();
+			panel.Document = d;
+			panel.OnStarting();
+			panel.Inspect(target);
+			Tick(panel);
 		}
 
 		public static void Dropdown(GameObject h, UIDocument d)

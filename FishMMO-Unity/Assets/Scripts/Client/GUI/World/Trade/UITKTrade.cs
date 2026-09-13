@@ -80,7 +80,7 @@ namespace FishMMO.Client
 		private const string STATUS_ACCEPTED_CLASS = "trade-column__status--accepted";
 		private const string BADGE_GOOD_CLASS = "fish-badge--good";
 
-		private const string DRAG_OBJECT_NAME = "UIDragObject";
+		private const string DRAG_OBJECT_NAME = UITKDragObject.CONTROL_NAME;
 		private const string TOOLTIP_NAME = "UITooltip";
 		private const string DIALOG_NAME = "UIDialogBox";
 		private const string TOAST_NAME = "UIToast";
@@ -609,6 +609,11 @@ namespace FishMMO.Client
 				view.Root.AddToClassList(SLOT_CLASS);
 				view.Root.AddToClassList(TRADE_SLOT_CLASS);
 				view.Root.AddToClassList(SLOT_EMPTY_CLASS);
+
+				/* Marked as a slot so a press on it does not cancel the drag the player is carrying;
+				 * an item offered to the table is carried in and pressed down, not released. See
+				 * UITKControl.OnRootPointerDownCancelDrag. */
+				view.Root.AddToClassList(SLOT_MARKER_CLASS);
 				if (readOnly)
 				{
 					view.Root.AddToClassList(TRADE_SLOT_READONLY_CLASS);
@@ -632,8 +637,11 @@ namespace FishMMO.Client
 				view.Root.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave(captured));
 				if (!readOnly)
 				{
+					/* A press, and only a press. No PointerUpEvent is registered here: a release must
+					 * not move an item anywhere in this game, the trade table included — see the note
+					 * above Notify in UITKSlotPanelBase. An item carried over the table and released
+					 * stays on the cursor until the player presses where it is to go. */
 					view.Root.RegisterCallback<PointerDownEvent>(evt => OnOwnSlotPointerDown(evt, captured));
-					view.Root.RegisterCallback<PointerUpEvent>(evt => OnOwnSlotPointerUp(evt, captured));
 				}
 
 				grid.Add(view.Root);
@@ -978,16 +986,6 @@ namespace FishMMO.Client
 			{
 				TryCompleteDrop();
 			}
-		}
-
-		/// <summary>A held drag released over the table is a drop too.</summary>
-		private void OnOwnSlotPointerUp(PointerUpEvent evt, SlotView view)
-		{
-			if (!SessionOpen || evt.button != 0)
-			{
-				return;
-			}
-			TryCompleteDrop();
 		}
 
 		/// <summary>

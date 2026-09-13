@@ -358,6 +358,11 @@ namespace FishMMO.Client
 			rowRoot.AddToClassList(CSS_SLOT);
 			rowRoot.AddToClassList(CSS_ROW);
 
+			/* A press on a row is a press on a slot, so it does not cancel a carried item; the row's
+			 * own handler decides what the press means. See
+			 * UITKControl.OnRootPointerDownCancelDrag. */
+			rowRoot.AddToClassList(SLOT_MARKER_CLASS);
+
 			VisualElement icon = new VisualElement();
 			icon.AddToClassList(CSS_ICON);
 			icon.AddToClassList(CSS_ICON_LAYOUT);
@@ -459,11 +464,14 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* The double-submit guard. TryBegin refuses a slot that already has a request in flight
-			 * rather than re-arming its watchdog, so clicking a stuck row repeatedly cannot keep
-			 * pushing its deadline out — the timeout below still fires on schedule. The 5s is passed
-			 * explicitly because the shared default is 8s, and adopting it here would have quietly
-			 * lengthened how long a row stays locked. */
+			/* The double-submit guard. A slot that already has a request in flight is REFUSED, so
+			 * clicking a stuck row repeatedly cannot keep it locked: the wait still ends on its own
+			 * deadline below, whenever that was set. That the refusal is a refusal — and not a
+			 * reset of the clock — is ItemSlotPendingSet.TryBegin's contract, and the reason the
+			 * shared set is worth having: a re-arm would mean the player clicking hardest is the
+			 * one the watchdog never helps. The 5s is passed explicitly because the shared default
+			 * is 8s, and adopting it here would have quietly lengthened how long a row stays
+			 * locked. */
 			if (!pendingSlots.TryBegin(slot, PENDING_TIMEOUT_SECONDS))
 			{
 				return;

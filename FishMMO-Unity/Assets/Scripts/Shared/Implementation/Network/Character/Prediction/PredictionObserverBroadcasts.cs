@@ -921,6 +921,39 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Server → observers. A character forgot an ability.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The counterpart to <see cref="AbilityLearnedObserverBroadcast"/>, and needed for the same
+	/// reason it is. An observer's copy of a peer's abilities is written once by
+	/// <c>ReadPayload</c> when it starts observing, then kept current by the learn message. Without
+	/// a removal, that copy keeps an ability the caster no longer has for as long as the observer
+	/// stays in range.
+	/// </para>
+	/// <para>
+	/// <b>Not dead wire, though no cast can betray it.</b> Nothing renders a stale entry — the
+	/// server refuses to activate a forgotten ability, so the activation message that would resolve
+	/// it is never sent, and the renderer never asks. What reads the entry anyway is everything that
+	/// holds an observed character's real state rather than its picture: Inspect lists it,
+	/// <c>CanActivate</c> gates on it, and faction and aggro evaluation consult it. An observer
+	/// looking at the character would be told they still have an ability they just forgot.
+	/// </para>
+	/// <para>
+	/// No template id: the removal is by instance id, and the receiver already holds the template
+	/// it is dropping.
+	/// </para>
+	/// </remarks>
+	public struct AbilityForgottenObserverBroadcast : IBroadcast
+	{
+		/// <summary>NetworkObject id of the character that forgot the ability.</summary>
+		public int CasterObjectID;
+
+		/// <summary>The ability instance id, matching <c>AbilityActivatedBroadcast.AbilityID</c>.</summary>
+		public long AbilityID;
+	}
+
+	/// <summary>
 	/// Carries a character's publicly visible buffs to everyone observing it.
 	/// </summary>
 	/// <remarks>

@@ -11,8 +11,13 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// The grid, its slots, drag-and-drop, tooltips and the capacity readout all live in
 	/// <see cref="UITKItemGridPanel"/>, which the bank shares. What is left here is what is actually
-	/// particular to a backpack: a move into it is an inventory swap, right-clicking an item wears
-	/// it, and releasing a drag over a slot completes it as well as clicking does.
+	/// particular to a backpack: a move into it is an inventory swap and right-clicking an item
+	/// wears it.
+	/// <para>
+	/// Moving an item is a PRESS to pick it up and a PRESS to put it down. A release does nothing
+	/// here or in any other panel — the note above <c>Notify</c> in <see cref="UITKSlotPanelBase"/>
+	/// says why, because this class used to be the one that completed a drop on the release.
+	/// </para>
 	/// </remarks>
 	public class UITKInventory : UITKItemGridPanel
 	{
@@ -62,49 +67,6 @@ namespace FishMMO.Client
 				Amount = amount,
 				FromInventory = fromInventory,
 			}, Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Also completes a drag on pointer UP, so a held drag can be dropped rather than clicked.
-		/// </summary>
-		/// <remarks>
-		/// The bank has no equivalent: its slots are only ever a destination reached by clicking.
-		/// Here a player can press, drag across the grid and release, which never produces a second
-		/// pointer-down on the destination slot.
-		/// </remarks>
-		protected override void RegisterExtraSlotCallbacks(VisualElement slotRoot, int slotIndex)
-		{
-			slotRoot.RegisterCallback<PointerUpEvent>(evt => OnSlotPointerUp(evt, slotIndex));
-		}
-
-		/// <summary>
-		/// Completes an in-progress drag when the pointer is released over a slot.
-		/// </summary>
-		private void OnSlotPointerUp(PointerUpEvent evt, int slotIndex)
-		{
-			if (Character == null || Client == null || evt.button != 0)
-			{
-				return;
-			}
-
-			bool draggingNow = UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.IsDragging;
-			if (!draggingNow)
-			{
-				return;
-			}
-
-			// Same slot the drag came from: this is a click, not a drag. Leave it armed.
-			if (dragObject.Type == ReferenceButtonType.Inventory &&
-				(int)dragObject.ReferenceID == slotIndex)
-			{
-				return;
-			}
-
-			IItemContainer container = OwnContainer;
-			if (container != null)
-			{
-				CompleteDropOntoSlot(dragObject, container, slotIndex);
-			}
 		}
 
 		/// <summary>

@@ -117,6 +117,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
+    m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b71d352744ff0b27e8736d3f49fcc44f
     m_Address: Assets/Prefabs/Server/SceneServer/HotkeySystem.asset
     m_ReadOnly: 0

@@ -542,12 +542,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				character.Hotkeys[i] = new HotkeyData()
-				{
-					Type = 0,
-					Slot = hotkey.Slot,
-					ReferenceID = HotkeyData.UnsetReferenceID,
-				};
+				character.Hotkeys[i] = EmptyHotkey(hotkey.Slot);
 				changed = true;
 			}
 
@@ -555,6 +550,68 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				StageHotkeyPersist(character);
 			}
+		}
+
+		/// <summary>
+		/// The empty binding for a slot.
+		/// </summary>
+		/// <param name="slot">The slot the binding belongs to.</param>
+		/// <remarks>
+		/// One construction for every clear in this system — the login prune and the forget path both
+		/// write <c>Type = 0</c> with the unset sentinel, and a clear that disagreed with either half
+		/// of that pair would be a binding that is neither usable nor recognisably empty: the client
+		/// tests <c>ReferenceID</c> against the sentinel to decide what to draw, and the server's own
+		/// prune skips a row only when <c>Type</c> is 0 or the id is unset.
+		/// </remarks>
+		private static HotkeyData EmptyHotkey(int slot)
+		{
+			return new HotkeyData()
+			{
+				Type = 0,
+				Slot = slot,
+				ReferenceID = HotkeyData.UnsetReferenceID,
+			};
+		}
+
+		/// <inheritdoc/>
+		public bool ForgetAbilityBindings(IPlayerCharacter playerCharacter, long abilityID)
+		{
+			if (playerCharacter == null || playerCharacter.Hotkeys == null)
+			{
+				return false;
+			}
+
+			bool changed = false;
+			for (int i = 0; i < playerCharacter.Hotkeys.Count; ++i)
+			{
+				HotkeyData hotkey = playerCharacter.Hotkeys[i];
+
+				/* Matched on type as well as id. The id spaces are not disjoint — an inventory SLOT
+				 * index and an equipment slot index are both small integers — so clearing on the id
+				 * alone would wipe unrelated bindings that happen to share a number. */
+				if (hotkey.Type != HotkeyTypeAbility || hotkey.ReferenceID != abilityID)
+				{
+					continue;
+				}
+
+				playerCharacter.Hotkeys[i] = EmptyHotkey(hotkey.Slot);
+				changed = true;
+			}
+
+			if (!changed)
+			{
+				return false;
+			}
+
+			StageHotkeyPersist(playerCharacter);
+
+			NetworkConnection conn = playerCharacter.Owner;
+			if (conn != null)
+			{
+				AcknowledgeAllHotkeys(conn, playerCharacter);
+			}
+
+			return true;
 		}
 
 		/// <summary>

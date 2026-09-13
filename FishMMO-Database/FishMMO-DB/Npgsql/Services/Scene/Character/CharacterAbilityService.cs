@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -445,6 +445,71 @@ namespace FishMMO.Database.Npgsql.Services
 						.ConfigureAwait(false);
 
 					if (stillActive)
+					{
+						throw new StaleStateException("Ability delete rejected due to a stale Version.");
+					}
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> DeleteAbilityAsync(long characterId, long abilityId, long incomingVersion, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID");
+			}
+
+			if (abilityId <= 0)
+			{
+				// An ability that was never written has nothing to delete, and asking to remove id 0
+				// would match every unassigned row if the guard below were ever relaxed. Report it
+				// rather than issuing the statement. This is also the shape a crafted ability arrives
+				// in before its identity has been written back, so the refusal is load-bearing: a
+				// silent success here would tell the caller an ability was forgotten that never was.
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid ability ID. The ability has no database identity to delete.");
+			}
+
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid version. Version must be greater than 0.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// A forgotten ability is removed outright rather than left as a tombstone. The upsert
+				// keys on (character_id, template_id) and only writes when the incoming version beats
+				// the surviving row's, so a soft delete — which stamps the caller's version into that
+				// row — would leave it holding a version no fresh craft could outrank. The re-craft
+				// would then come back from the upsert with id 0 and be rejected as stale, making
+				// forget-then-craft, the flow the craft panel advertises, permanently impossible.
+				// CharacterItemService removes a vacated row for the same reason.
+				// The character is part of the predicate so one character's delete can never reach
+				// another's row, even if a caller passes an id it does not own.
+				var sql = $@"DELETE FROM {TableName}
+					WHERE id = {{1}} AND character_id = {{2}} AND version <= {{0}}";
+
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { incomingVersion, abilityId, characterId }, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					// Nothing was removed. Either the row is already gone — a second forget, or a
+					// tombstone left by the character-wide delete — which is a success, or it is
+					// still here and outranks the version the caller quoted, which is not.
+					var row = await dbContext.CharacterAbilities
+						.AsNoTracking()
+						.FirstOrDefaultAsync(a => a.ID == abilityId && a.CharacterID == characterId, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (row != null && !row.Deleted)
 					{
 						throw new StaleStateException("Ability delete rejected due to a stale Version.");
 					}

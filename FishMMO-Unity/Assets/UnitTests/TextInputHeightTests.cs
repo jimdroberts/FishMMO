@@ -43,6 +43,46 @@ namespace FishMMO.UnitTests
 		private const string DialogInputStylePath =
 			"Assets/Scripts/Client/GUI/Shared/DialogBox/UIDialogInputBox.uss";
 
+		/// <summary>The shared stylesheet the input rules and the theme tokens live in.</summary>
+		public const string ThemePath = "Assets/Scripts/Client/GUI/FishMMO-Theme.uss";
+
+		/// <summary>The theme's class for a field that has given up Unity's inner padding.</summary>
+		public const string CompactClass = "fish-input--compact";
+
+		/// <summary>
+		/// Every field type that draws glyphs, in the one place the sweep reads them from.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// THIS ARRAY IS THE CONTRACT, and it is deliberately the only copy of it. There used to be
+		/// three — this one's predecessor inside the UXML pattern below, a second literal of that
+		/// same pattern inside <c>FieldsWearingCompact</c>, and the type-qualified selector list in
+		/// <c>FishMMO-Theme.uss</c> — kept in agreement by hand, with nothing checking that they
+		/// agreed. The stylesheet is the copy that decides whether the field renders at all: Unity's
+		/// default theme sets the inner surface's padding through a TYPE-qualified rule, so a field
+		/// type missing from that selector keeps the padding however it is styled and draws an
+		/// empty box, which is how issues #263 and #277 came back after the TextField fix appeared
+		/// to settle them — the merchant's quantity box is an <c>IntegerField</c>.
+		/// </para>
+		/// <para>
+		/// So the pattern below is built from this array rather than written out beside it, and
+		/// <see cref="TheThemeNamesEveryFieldTypeThisSweepKnowsAbout"/> holds the one edge left: the
+		/// array against the stylesheet.
+		/// </para>
+		/// </remarks>
+		public static readonly string[] GlyphFieldTypes =
+		{
+			"TextField", "IntegerField", "FloatField", "LongField", "DoubleField",
+		};
+
+		/// <summary>A UXML opening tag for one of <see cref="GlyphFieldTypes"/>.</summary>
+		/// <remarks>
+		/// Public, and used by the merchant fixture as well, so a field type added to the sweep and
+		/// a field type checked by name somewhere else cannot disagree about which types exist.
+		/// </remarks>
+		public static readonly string FieldTagPattern =
+			"<ui:(" + string.Join("|", GlyphFieldTypes) + ")\\b[^>]*>";
+
 		private static string GuiRoot =>
 			Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/GUI");
 
@@ -93,6 +133,52 @@ namespace FishMMO.UnitTests
 			}
 
 			return false;
+		}
+
+		/// <summary>The selector list of the first rule whose text contains <paramref name="marker"/>.</summary>
+		/// <remarks>
+		/// The selector and not the body, because a test about which field TYPES a rule names has to
+		/// read the part that names them — <see cref="RuleBody"/> deliberately throws that away, and
+		/// the whole point of <see cref="ThemeCompactFieldTypes"/> is that the type-qualified
+		/// alternatives are load bearing.
+		/// </remarks>
+		private static string RuleSelector(string styleSheet, string marker)
+		{
+			string source = StripComments(styleSheet);
+
+			int at = source.IndexOf(marker, StringComparison.Ordinal);
+			LogAssert.IsTrue(at >= 0, $"the {marker} rule must still exist");
+
+			int open = source.IndexOf('{', at);
+			LogAssert.IsTrue(open > at, $"the {marker} rule must have a body");
+
+			int start = source.LastIndexOf('}', at) + 1;
+			return source.Substring(start, open - start);
+		}
+
+		/// <summary>
+		/// The field types named on the theme's <c>.fish-input--compact</c> selectors.
+		/// </summary>
+		/// <remarks>
+		/// Only the TYPE-QUALIFIED alternatives count. The bare <c>.fish-input--compact</c> that
+		/// heads that list loses the specificity fight against Unity's own type-qualified padding
+		/// rule, which is why the stylesheet spells the types out — so a field type covered by the
+		/// bare class alone is a field type the remedy does not reach.
+		/// </remarks>
+		public static HashSet<string> ThemeCompactFieldTypes()
+		{
+			string selector = RuleSelector(
+				ReadSource(ThemePath), "." + CompactClass);
+
+			HashSet<string> types = new HashSet<string>(StringComparer.Ordinal);
+
+			foreach (Match alternative in Regex.Matches(selector,
+				@"(?<![\w-])([A-Za-z][A-Za-z0-9_]*)\." + Regex.Escape(CompactClass) + @"(?![\w-])"))
+			{
+				types.Add(alternative.Groups[1].Value);
+			}
+
+			return types;
 		}
 
 		/// <summary>The declarations of the first rule whose selector contains <paramref name="selector"/>.</summary>
@@ -162,8 +248,9 @@ namespace FishMMO.UnitTests
 		{
 			LogAssert.IsTrue(Directory.Exists(GuiRoot), $"the GUI must live at {GuiRoot}");
 
-			Dictionary<string, string> wornBy = ClassesWornBySingleLineTextFields();
-			HashSet<string> compactFields = FieldsWearingCompact();
+			List<GlyphField> fields = SingleLineGlyphFields();
+			Dictionary<string, HashSet<string>> wornBy = ClassesWorn(fields);
+			HashSet<string> compactFields = FieldsWearingCompact(fields);
 			LogAssert.IsTrue(wornBy.Count > 0, "there must be text fields to check");
 
 			List<string> offenders = new List<string>();
@@ -196,7 +283,7 @@ namespace FishMMO.UnitTests
 						continue;
 					}
 
-					foreach (KeyValuePair<string, string> worn in wornBy)
+					foreach (KeyValuePair<string, HashSet<string>> worn in wornBy)
 					{
 						if (!Targets(selector, worn.Key))
 						{
@@ -206,15 +293,25 @@ namespace FishMMO.UnitTests
 						/* A pinned height is legal WITH fish-input--compact, which is the theme's own
 						 * remedy: it zeroes the padding Unity puts inside the editable surface, which is
 						 * what starves the glyph box at small heights. A field that pins a height and does
-						 * not wear it renders an empty box — the rule this test exists to hold. */
-						if (compactFields.Contains(worn.Value))
+						 * not wear it renders an empty box — the rule this test exists to hold.
+						 *
+						 * The exemption is asked of EVERY field wearing the targeted class, not of one
+						 * of them. `fish-input` is worn by compact and plain fields alike, so a rule
+						 * pinned to it would clip whichever field does not carry the remedy — exempting
+						 * it on the strength of one compact wearer would be the wrong answer.
+						 *
+						 * Which is also what makes this order-independent. The scan used to keep ONE
+						 * location per class, last writer winning over Directory.GetFiles enumeration
+						 * order, so which field answered for `fish-input` was a fact about the
+						 * filesystem rather than about the rule. */
+						if (worn.Value.IsSubsetOf(compactFields))
 						{
 							continue;
 						}
 
 						offenders.Add(
-							$"{Path.GetFileName(sheet)} '{selector}' pins the height of {worn.Value} " +
-							"without fish-input--compact");
+							$"{Path.GetFileName(sheet)} '{selector}' pins the height of the " +
+							$"{worn.Value.Count} field(s) wearing .{worn.Key} without .{CompactClass}");
 					}
 				}
 			}
@@ -224,48 +321,93 @@ namespace FishMMO.UnitTests
 				string.Join("; ", offenders));
 		}
 
-		/// <summary>The fields that carry fish-input--compact, by the same where-key as wornBy.</summary>
-		private static HashSet<string> FieldsWearingCompact()
+		[Test]
+		public void TheThemeNamesEveryFieldTypeThisSweepKnowsAbout()
 		{
-			HashSet<string> compact = new HashSet<string>();
+			/* The lists, cross-checked — or rather the one list and the stylesheet, which is all
+			 * that is left of them once the UXML pattern is built from the array rather than
+			 * written out a second time beside it.
+			 *
+			 * This is the invariant that actually protects the fix. A pinned height is only
+			 * survivable because .fish-input--compact zeroes the inner padding, and the class
+			 * alone does not do it: Unity's default theme sets that padding through a TYPE-qualified
+			 * rule, so the stylesheet has to name each field type for the override to win. A type
+			 * this sweep checks but the sheet does not name renders an empty box — issues #263 and
+			 * #277, which came back exactly once, for IntegerField, after the TextField fix looked
+			 * complete. A type the sheet names but the sweep does not read is the same hole from the
+			 * other side: the sheet would be claiming to fix a field nothing ever checks. */
+			HashSet<string> theme = ThemeCompactFieldTypes();
 
-			foreach (string layout in Directory.GetFiles(GuiRoot, "*.uxml", SearchOption.AllDirectories))
+			List<string> missing = new List<string>();
+			for (int i = 0; i < GlyphFieldTypes.Length; ++i)
 			{
-				foreach (Match field in Regex.Matches(File.ReadAllText(layout),
-					"<ui:(TextField|IntegerField|FloatField|LongField|DoubleField)\\b[^>]*>"))
+				if (!theme.Contains(GlyphFieldTypes[i]))
 				{
-					string tag = field.Value;
-					if (!tag.Contains("fish-input--compact"))
-					{
-						continue;
-					}
-
-					Match named = Regex.Match(tag, "name=\"([^\"]*)\"");
-					compact.Add($"{Path.GetFileName(layout)}:{(named.Success ? named.Groups[1].Value : "?")}");
+					missing.Add(GlyphFieldTypes[i]);
 				}
 			}
 
-			return compact;
+			LogAssert.IsTrue(missing.Count == 0,
+				$"the theme's .{CompactClass} selector does not name every field type this sweep " +
+				"treats as glyph-drawing, so Unity's own padding survives for: " +
+				string.Join(", ", missing.ToArray()) +
+				" — name them there too, or the field draws an empty box however it is styled");
+
+			List<string> unswept = new List<string>();
+			foreach (string type in theme)
+			{
+				if (Array.IndexOf(GlyphFieldTypes, type) < 0)
+				{
+					unswept.Add(type);
+				}
+			}
+
+			LogAssert.IsTrue(unswept.Count == 0,
+				$"the theme's .{CompactClass} selector names a field type the sweep does not read, " +
+				"so nothing here checks the fields of that type: " + string.Join(", ", unswept.ToArray()));
 		}
 
-		/// <summary>Every USS class worn by a single-line TextField, mapped to where it is worn.</summary>
-		private static Dictionary<string, string> ClassesWornBySingleLineTextFields()
+		/// <summary>One single-line field that draws glyphs, as found in a UXML layout.</summary>
+		private struct GlyphField
 		{
-			Dictionary<string, string> worn = new Dictionary<string, string>();
+			/// <summary>Where the field is, as <c>file:name</c> — one entry per field.</summary>
+			public string Where;
+			/// <summary>The USS classes the field wears.</summary>
+			public string[] Classes;
+		}
+
+		/// <summary>
+		/// Every single-line field that draws glyphs, in one pass over the UXML.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Every field type that draws glyphs, not only TextField. Scanning for TextField alone is
+		/// how issues #263 and #277 returned after this test was written: the merchant quantity box
+		/// is an IntegerField, so it was never checked, and it pinned an exact height exactly as
+		/// the TextFields once did. The numeric fields derive from the same TextInputBaseField and
+		/// their glyph box collapses the same way.
+		/// </para>
+		/// <para>
+		/// ONE pass, because the two questions asked of it — which classes are worn, and which
+		/// fields wear the compact class — must be answered about the same set of elements. They
+		/// were two scans with two copies of the same pattern, and the exemption in
+		/// <c>NoSingleLineTextFieldWearsAPinnedHeight</c> then trusted an answer derived from the
+		/// other one.
+		/// </para>
+		/// </remarks>
+		private static List<GlyphField> SingleLineGlyphFields()
+		{
+			List<GlyphField> fields = new List<GlyphField>();
 
 			foreach (string layout in Directory.GetFiles(GuiRoot, "*.uxml", SearchOption.AllDirectories))
 			{
 				string source = File.ReadAllText(layout);
+				string file = Path.GetFileName(layout);
+				int ordinal = 0;
 
-				/* Every field type that draws glyphs, not only TextField.
-				 *
-				 * Scanning for TextField alone is how issues #263 and #277 returned after this test was
-				 * written: the merchant quantity box is an IntegerField, so it was never checked, and it
-				 * pinned an exact height exactly as the TextFields once did. The numeric fields derive
-				 * from the same TextInputBaseField and their glyph box collapses the same way. */
-				foreach (Match field in Regex.Matches(source,
-					"<ui:(TextField|IntegerField|FloatField|LongField|DoubleField)\\b[^>]*>"))
+				foreach (Match field in Regex.Matches(source, FieldTagPattern))
 				{
+					++ordinal;
 					string tag = field.Value;
 
 					// A text area is a sized, scrolling box: pinning its height is the correct thing.
@@ -274,24 +416,68 @@ namespace FishMMO.UnitTests
 						continue;
 					}
 
-					Match classes = Regex.Match(tag, "class=\"([^\"]*)\"");
-					if (!classes.Success)
-					{
-						continue;
-					}
-
 					Match named = Regex.Match(tag, "name=\"([^\"]*)\"");
-					string where = $"{Path.GetFileName(layout)}:{(named.Success ? named.Groups[1].Value : "?")}";
+					Match classes = Regex.Match(tag, "class=\"([^\"]*)\"");
 
-					foreach (string cssClass in classes.Groups[1].Value.Split(
-						new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+					fields.Add(new GlyphField
 					{
-						worn[cssClass] = where;
+						/* An unnamed field is identified by where it sits in its file. Falling back
+						 * to one shared "?" key would let two unnamed fields collapse into a single
+						 * entry, and a class worn by both would then be judged on whichever of them
+						 * happened to be seen — the same order-dependence this pass exists to
+						 * remove. */
+						Where = $"{file}:{(named.Success ? named.Groups[1].Value : "#" + ordinal)}",
+						Classes = classes.Success
+							? classes.Groups[1].Value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+							: new string[0],
+					});
+				}
+			}
+
+			return fields;
+		}
+
+		/// <summary>Every USS class worn by a glyph-drawing field, and every field that wears it.</summary>
+		/// <remarks>
+		/// A SET of fields per class, not one. A class shared between a compact field and a plain
+		/// one has to be able to say so — see the exemption in the sweep.
+		/// </remarks>
+		private static Dictionary<string, HashSet<string>> ClassesWorn(List<GlyphField> fields)
+		{
+			Dictionary<string, HashSet<string>> worn =
+				new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+			for (int f = 0; f < fields.Count; ++f)
+			{
+				for (int c = 0; c < fields[f].Classes.Length; ++c)
+				{
+					if (!worn.TryGetValue(fields[f].Classes[c], out HashSet<string> where))
+					{
+						where = new HashSet<string>(StringComparer.Ordinal);
+						worn[fields[f].Classes[c]] = where;
 					}
+
+					where.Add(fields[f].Where);
 				}
 			}
 
 			return worn;
+		}
+
+		/// <summary>The fields that carry fish-input--compact, by the same where-key.</summary>
+		private static HashSet<string> FieldsWearingCompact(List<GlyphField> fields)
+		{
+			HashSet<string> compact = new HashSet<string>(StringComparer.Ordinal);
+
+			for (int i = 0; i < fields.Count; ++i)
+			{
+				if (Array.IndexOf(fields[i].Classes, CompactClass) >= 0)
+				{
+					compact.Add(fields[i].Where);
+				}
+			}
+
+			return compact;
 		}
 
 		/// <summary>True when the rule applies to the element wearing <paramref name="cssClass"/> itself.</summary>

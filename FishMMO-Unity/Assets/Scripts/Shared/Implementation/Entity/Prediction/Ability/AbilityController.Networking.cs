@@ -91,6 +91,7 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
 			ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 			ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
+			ClientManager.RegisterBroadcast<AbilityForgetResultBroadcast>(OnClientAbilityForgetResultBroadcastReceived);
 
 			// invoke client reset event
 			OnReset?.Invoke();
@@ -118,6 +119,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<AbilityForgetResultBroadcast>(OnClientAbilityForgetResultBroadcastReceived);
 			}
 		}
 
@@ -286,6 +288,32 @@ namespace FishMMO.Shared
 					OnAddAbility?.Invoke(newAbility);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Server answered a forget request.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The removal happens HERE rather than when the player pressed the button. The server is what
+		/// decides whether an ability is forgotten — it owns the row, and it may still refuse — so a
+		/// panel that dropped the row on the click would show an ability as gone that the next login
+		/// hands straight back.
+		/// </para>
+		/// <para>
+		/// A refusal is deliberately not surfaced here. The panel is the only thing that can say why,
+		/// and it reads the same message this handler does; raising a second notification from here
+		/// would report every refusal twice.
+		/// </para>
+		/// </remarks>
+		private void OnClientAbilityForgetResultBroadcastReceived(AbilityForgetResultBroadcast msg, Channel channel)
+		{
+			if (msg.Failure != AbilityForgetFailure.None)
+			{
+				return;
+			}
+
+			RemoveAbility(msg.AbilityID);
 		}
 #endif
 

@@ -60,7 +60,9 @@ namespace FishMMO.UnitTests
 			/* The one thing quick transfer must get right. A swap into an occupied slot exchanges
 			 * two items when the player asked to move one, and a slot that is locked is already
 			 * answering a different request. */
-			string body = MethodBody(PanelPath, "private static int FirstFreeSlot", "/// <summary>Shows a transient notice");
+			/* FirstFreeSlot is the last of the transfer helpers, so the next thing after it is a
+			 * method of its own again. The end anchor is the doc line that opens that method. */
+			string body = MethodBody(PanelPath, "private static int FirstFreeSlot", "Right-click on a slot: offers to split the stack in it.");
 
 			LogAssert.IsTrue(body.Contains("IsSlotEmpty"),
 				"the destination must be an empty slot");

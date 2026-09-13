@@ -433,6 +433,10 @@ namespace FishMMO.Client
 			slotRoot.AddToClassList(CSS_SLOT);
 			slotRoot.AddToClassList(CssSlotGrid);
 
+			/* So a press here is classified as landing on a slot, and does not cancel the drag the
+			 * player is carrying — see UITKControl.OnRootPointerDownCancelDrag. */
+			slotRoot.AddToClassList(SLOT_MARKER_CLASS);
+
 			VisualElement icon = new VisualElement();
 			icon.AddToClassList(CSS_SLOT_ICON);
 			icon.AddToClassList(CssSlotIconLayout);
@@ -454,7 +458,10 @@ namespace FishMMO.Client
 			slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, captured));
 			slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(captured, slotRoot));
 			slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave(slotRoot));
-			RegisterExtraSlotCallbacks(slotRoot, captured);
+
+			/* A slot takes the press and nothing else — no PointerUpEvent is registered here or in
+			 * any panel that builds on this one, because a release never moves an item. See the note
+			 * above Notify in UITKSlotPanelBase for why that is the rule and not a missing line. */
 
 			slotGrid.Add(slotRoot);
 
@@ -464,20 +471,6 @@ namespace FishMMO.Client
 			view.Amount = amount;
 			view.Lock = lockOverlay;
 			return view;
-		}
-
-		/// <summary>
-		/// Lets a panel register additional callbacks on a freshly created slot.
-		/// </summary>
-		/// <remarks>
-		/// Registered here rather than after the fact because these elements are discarded and
-		/// rebuilt, so a panel that attached its handlers elsewhere would lose them on the next
-		/// rebuild.
-		/// </remarks>
-		/// <param name="slotRoot">The slot element being created.</param>
-		/// <param name="slotIndex">The slot's index, already captured for closures.</param>
-		protected virtual void RegisterExtraSlotCallbacks(VisualElement slotRoot, int slotIndex)
-		{
 		}
 
 		/// <summary>
@@ -669,8 +662,15 @@ namespace FishMMO.Client
 			{
 				/* Shift is read from the event rather than from global input state: the modifier
 				 * that matters is the one held when this click happened, and a poll can answer for
-				 * a moment either side of it. */
-				if (evt.shiftKey)
+				 * a moment either side of it.
+				 *
+				 * And it is read only when nothing is being carried. A left-click with a drag in
+				 * flight is the DROP: a grid completes it on the press, the bag on the release, and
+				 * the release reads no modifier either way — so diverting the press here would send
+				 * this slot's item to the other container while the drag the player is actually
+				 * holding stays armed. Deferring keeps the two routers on one rule; see
+				 * UITKSlotPanelBase.IsDragInFlight. */
+				if (evt.shiftKey && !IsDragInFlight())
 				{
 					TryQuickTransfer(slotIndex);
 				}
@@ -807,15 +807,6 @@ namespace FishMMO.Client
 			}
 
 			return -1;
-		}
-
-		/// <summary>Shows a transient notice, if the toast panel is up.</summary>
-		private static void Notify(string text, ToastSeverity severity)
-		{
-			if (UIManager.TryGetTK(TOAST_NAME, out UITKToast toast))
-			{
-				toast.Show(text, severity);
-			}
 		}
 
 		/// <summary>

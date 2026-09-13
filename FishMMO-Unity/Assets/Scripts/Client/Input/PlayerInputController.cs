@@ -553,8 +553,33 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* A spectating game master flies a free camera and the right button is that camera's
+			 * look control — the same reason CanUpdateInput() excludes the spectator. Without
+			 * this, holding it to look opened a menu on whoever the camera happened to be
+			 * pointed at. */
+			if (ArenaSpectatorCamera.Active)
+			{
+				return;
+			}
+
 			Mouse mouse = Mouse.current;
 			if (mouse == null || !mouse.rightButton.wasPressedThisFrame)
+			{
+				return;
+			}
+
+			/* Asked AFTER the button edge, so the pick costs nothing on the frames it cannot
+			 * matter.
+			 *
+			 * The right button already means something wherever it lands inside the interface —
+			 * split a stack, unequip a socket, take back a trade offer, clear a hotkey, close a
+			 * dropdown — and the poll below never asked whether the cursor was over a panel at
+			 * all. So a player right-clicking an item in their bag while another player stood
+			 * behind the bag got both: the item action, and a context menu raised over the window
+			 * at Popup layer. The menu is placed with its top-left at the cursor, so the click
+			 * they made next landed on its first entry rather than on the control they were
+			 * using. Same predicate UITKDragObject uses to tell a world click from a UI click. */
+			if (UIManager.ControlHasFocus())
 			{
 				return;
 			}
@@ -570,8 +595,11 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* The target arrives from the hover trace, which normalises a destroyed character to
+			 * null on the way in — but a character mid-spawn or mid-despawn can still be there
+			 * with no NetworkObject yet, and IsOwner on one throws. */
 			IPlayerCharacter targetPlayer = target.GetComponent<IPlayerCharacter>();
-			if (targetPlayer == null || targetPlayer.NetworkObject.IsOwner)
+			if (targetPlayer == null || targetPlayer.NetworkObject == null || targetPlayer.NetworkObject.IsOwner)
 			{
 				return;
 			}

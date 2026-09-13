@@ -152,11 +152,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Hands every non-empty list of a snapshot to the persistence lane, independently.
 		/// The periodic and linger paths, where nothing waits on the outcome.
 		/// </summary>
+		/// <remarks>
+		/// The ability rows are grouped by their own character and keyed by it, the one list here
+		/// that is. A snapshot can hold abilities belonging to more than one character — a pet's
+		/// rows are captured into its owner's snapshot — so the group key is the row's
+		/// <c>CharacterID</c> rather than the snapshot's owner.
+		/// <para>
+		/// Keyed for two reasons, neither of which is the one that keeps a forgotten ability
+		/// forgotten. A batch is validated whole: the ability upsert throws when any character it
+		/// names is missing or deleted, so an unkeyed batch would let one departed character's pet
+		/// rows take the entire snapshot's ability writes down with them. And same-character work on
+		/// one lane runs one at a time, in order, so two batches cannot interleave on the same rows.
+		/// The item layer keys its flush the same way
+		/// (<c>CharacterSystem.CombatLogout</c> passes <c>character.ID</c>).
+		/// </para>
+		/// <para>
+		/// What keeps a forgotten row gone is narrower: the batch carries each ability's real
+		/// <c>ID</c>, so the upsert's existing-row half drops any row that is no longer there rather
+		/// than re-inserting it. Lane order is not load-bearing for that — a lookup that does not
+		/// exist cannot be written back, whatever order the two writes land in.
+		/// </para>
+		/// </remarks>
 		private void EnqueueSubEntitySaves(SubEntitySnapshot s)
 		{
 			if (s.Buffs.Count > 0) EnqueuePersistence(() => SaveBuffsAsync(s.Buffs));
 			if (s.Attributes.Count > 0) EnqueuePersistence(() => SaveAttributesAsync(s.Attributes));
-			if (s.Abilities.Count > 0) EnqueuePersistence(() => SaveAbilitiesAsync(s.Abilities));
+			if (s.Abilities.Count > 0)
+			{
+				foreach (var group in s.Abilities.GroupBy(a => a.CharacterID))
+				{
+					List<CharacterAbilityData> rows = group.ToList();
+					EnqueuePersistence(() => SaveAbilitiesAsync(rows), group.Key);
+				}
+			}
 			if (s.Pets.Count > 0) EnqueuePersistence(() => SavePetsAsync(s.Pets));
 			if (s.Achievements.Count > 0) EnqueuePersistence(() => SaveAchievementsAsync(s.Achievements));
 			if (s.Waypoints.Count > 0) EnqueuePersistence(() => SaveWaypointsAsync(s.Waypoints));

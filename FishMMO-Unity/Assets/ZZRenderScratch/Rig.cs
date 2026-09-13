@@ -24,33 +24,64 @@ namespace FishMMO.RenderScratch
 	{
 		public static PlayerCharacter Character { get; private set; }
 
-		private static Dictionary<Type, ICharacterBehaviour> behaviours;
-
-		/// <summary>Creates the character and registers every faked controller on it.</summary>
+		/// <summary>Creates the viewer's character and registers every faked controller on it.</summary>
 		public static PlayerCharacter Build(GameObject host)
 		{
-			Character = host.AddComponent<PlayerCharacter>();
-			Set(Character, "CharacterName", "Thalorin");
-			Set(Character, "ID", 1001L);
-
-			FieldInfo field = typeof(BaseCharacter).GetField("Behaviours",
-				BindingFlags.NonPublic | BindingFlags.Instance);
-			behaviours = field.GetValue(Character) as Dictionary<Type, ICharacterBehaviour>;
-
-			Register<IInventoryController>(new FakeInventory(Character));
-			Register<IEquipmentController>(new FakeEquipment(Character));
-			Register<IBankController>(new FakeBank(Character));
-			Register<ICharacterAttributeController>(new FakeAttributes(Character));
-			Register<IAchievementController>(new FakeAchievements(Character));
-			Register<IFactionController>(new FakeFactions(Character));
-			Register<IFriendController>(new FakeFriends(Character));
-			Register<IPetController>(new FakePet(Character));
-
-			Fixtures.Apply(Character);
+			Character = Create(host, "Thalorin", 1001L);
 			return Character;
 		}
 
-		private static void Register<T>(ICharacterBehaviour behaviour) where T : class, ICharacterBehaviour
+		/// <summary>
+		/// Creates a second, fully furnished character that is not the viewer.
+		/// </summary>
+		/// <remarks>
+		/// For the panels that display somebody else's data — inspecting a player reads their
+		/// equipment controller, not the viewer's. Deliberately does not touch
+		/// <see cref="Character"/>: every other panel in the run believes that property is the
+		/// player, and a capture that quietly reassigned it would render the wrong character
+		/// everywhere it ran before this one.
+		/// </remarks>
+		/// <param name="host">GameObject to attach the character to.</param>
+		/// <param name="name">Character name to display.</param>
+		/// <param name="id">Character ID.</param>
+		public static PlayerCharacter BuildOther(GameObject host, string name, long id)
+		{
+			return Create(host, name, id);
+		}
+
+		private static PlayerCharacter Create(GameObject host, string name, long id)
+		{
+			PlayerCharacter character = host.AddComponent<PlayerCharacter>();
+			Set(character, "CharacterName", name);
+			Set(character, "ID", id);
+
+			/* Awake never runs on a component added in edit mode, so the two references
+			 * BaseCharacter assigns there are still null. Panels that take a character from
+			 * somewhere other than SetCharacter — the inspect window — refuse a target with no
+			 * Transform, and would silently render nothing. */
+			Set(character, "Transform", host.transform);
+			Set(character, "GameObject", host);
+
+			FieldInfo field = typeof(BaseCharacter).GetField("Behaviours",
+				BindingFlags.NonPublic | BindingFlags.Instance);
+			Dictionary<Type, ICharacterBehaviour> behaviours =
+				field.GetValue(character) as Dictionary<Type, ICharacterBehaviour>;
+
+			Register<IInventoryController>(behaviours, new FakeInventory(character));
+			Register<IEquipmentController>(behaviours, new FakeEquipment(character));
+			Register<IBankController>(behaviours, new FakeBank(character));
+			Register<ICharacterAttributeController>(behaviours, new FakeAttributes(character));
+			Register<IAchievementController>(behaviours, new FakeAchievements(character));
+			Register<IFactionController>(behaviours, new FakeFactions(character));
+			Register<IFriendController>(behaviours, new FakeFriends(character));
+			Register<IPetController>(behaviours, new FakePet(character));
+
+			Fixtures.Apply(character);
+			return character;
+		}
+
+		private static void Register<T>(Dictionary<Type, ICharacterBehaviour> behaviours,
+			ICharacterBehaviour behaviour) where T : class, ICharacterBehaviour
 		{
 			behaviours[typeof(T)] = behaviour;
 		}

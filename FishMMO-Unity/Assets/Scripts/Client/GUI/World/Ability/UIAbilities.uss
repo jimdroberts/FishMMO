@@ -169,6 +169,29 @@
 .ability-entry__badge--craft   { background-color: rgba(216, 149, 42, 0.35); }
 .ability-entry__badge--effect  { background-color: rgba(63, 201, 192, 0.30); }
 
+/*
+    The forget button only appears on hover, so a list of a dozen abilities does
+    not read as a list of a dozen things to delete. Same bargain as
+    .friend-row__remove, and the same geometry — a control this destructive
+    should not be the loudest thing in the row it sits in.
+
+    Margin rather than padding on the row: the row is the hover target, so the
+    gap between the text and the X belongs to the button's own box and hovering
+    it does not stop being a hover on the row.
+*/
+.ability-entry__forget {
+    width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+}
+
+.ability-entry:hover .ability-entry__forget {
+    opacity: 1;
+}
+
 /* A knowledge entry is not a usable ability, and the dimmed icon says so before anything is read. */
 .ability-entry--knowledge .ability-entry__icon {
     opacity: 0.65;

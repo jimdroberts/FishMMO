@@ -48,6 +48,19 @@ namespace FishMMO.UnitTests
 			return File.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
+		/// <summary>
+		/// Where the craft handler's body ends: the partial's own closing braces.
+		/// </summary>
+		/// <remarks>
+		/// The handler is the LAST member of its partial now. The two that used to follow it —
+		/// <c>LearnAbility</c> and <c>PersistAbilityAsync</c> — were emptied into
+		/// <see cref="FishMMO.Server.Implementation.World.SceneServer.AbilitySystem"/>, which owns
+		/// putting the database-minted identity on an ability before anything learns it. Anchoring on
+		/// a signature that no longer exists fails the assertion rather than the build, so this is
+		/// the anchor that has to move when that file's members move again.
+		/// </remarks>
+		private const string CraftHandlerEnd = "\n\t}\n}";
+
 		/// <summary>The body of a named method, bounded by the next member's signature.</summary>
 		private static string MethodBody(string source, string signature, string nextSymbol)
 		{
@@ -78,7 +91,7 @@ namespace FishMMO.UnitTests
 			 * request the server understood, refused, and dropped — and the panel then waits out
 			 * its own watchdog and blames the network. */
 			string body = MethodBody(ReadSource(ServerPath),
-				"public void OnServerAbilityCraftBroadcastReceived", "public Ability LearnAbility(");
+				"public void OnServerAbilityCraftBroadcastReceived", CraftHandlerEnd);
 
 			int searchFrom = 0;
 			int refusals = 0;
@@ -122,7 +135,7 @@ namespace FishMMO.UnitTests
 			/* One reason for three situations tells the player nothing: buying the template,
 			 * forgetting an ability, and making room are three different things to go and do. */
 			string body = MethodBody(ReadSource(ServerPath),
-				"public void OnServerAbilityCraftBroadcastReceived", "public Ability LearnAbility(");
+				"public void OnServerAbilityCraftBroadcastReceived", CraftHandlerEnd);
 
 			LogAssert.IsTrue(body.Contains("AbilityCraftFailure.NotKnown"),
 				"a template the character never learned must say so");

@@ -40,6 +40,17 @@ namespace FishMMO.Client
 		protected override UITKPanelLayer Layer => UITKPanelLayer.Drag;
 
 		/// <summary>
+		/// The name this overlay is registered under and resolved by.
+		/// </summary>
+		/// <remarks>
+		/// It is a GameObject name set in the scene, so it is a string every panel that wants the
+		/// drag has to spell. Declared here, next to the class it names, so those panels reference
+		/// one constant instead of five copies of the same literal — a typo in one of the copies
+		/// resolves nothing, and a panel whose TryGetTK misses simply stops seeing drags.
+		/// </remarks>
+		public const string CONTROL_NAME = "UIDragObject";
+
+		/// <summary>
 		/// Constant representing a null reference ID for drag objects.
 		/// </summary>
 		public const long NULL_REFERENCE_ID = -1;

@@ -473,12 +473,99 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Subscribes the focus handler to the panel root.
+		/// USS class marking an element as a SLOT — a place an item can be pressed into.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Purely a marker: no rule in any stylesheet names it, so adding it cannot change how
+		/// anything looks. It exists so a press can be classified, by
+		/// <see cref="OnRootPointerDownCancelDrag"/>.
+		/// </para>
+		/// <para>
+		/// Deliberately not <c>fish-slot</c>, which is the class the slots mostly already share. That
+		/// one carries the slot's whole appearance — background, border, radius, the hover and
+		/// active states — and the hotkey slots deliberately do not carry it, because the bar wants
+		/// its own look while still being a slot a carried ability can be pressed into. Reusing it
+		/// as the marker would mean either restyling every hotkey slot or teaching the rule two
+		/// different names for one thing.
+		/// </para>
+		/// </remarks>
+		public const string SLOT_MARKER_CLASS = "fish-slot-marker";
+
+		/// <summary>
+		/// Cancels a carried item when a press lands anywhere that is not a slot.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An item is picked up by pressing a slot and carried until something is done with it, so
+		/// there has to be a way to put it back down without moving it. Pressing anywhere that is
+		/// not a slot is that way — the panel's own background, a label, a button, another panel's
+		/// rows — and it is the only one, now that a release completes nothing.
+		/// </para>
+		/// <para>
+		/// This lives on the base class rather than in the item panels because it is a rule about
+		/// the whole interface: pressing the character sheet, the chat log or a dialog while
+		/// carrying something has to cancel it too, and neither of those panels knows what a slot
+		/// is. A rule each panel has to remember is a rule some panel will not have.
+		/// </para>
+		/// <para>
+		/// Trickle-down, so it runs before the pressed element's own handlers and cannot be lost to
+		/// a child that stops propagation. That ordering is safe on a slot because the classification
+		/// is the TARGET, not the order: a press that lands in a slot returns here and the slot's own
+		/// handler then starts or completes the drag, exactly as if this were not registered.
+		/// </para>
+		/// <para>
+		/// Left button only, matching the world-click cancel in <c>UITKDragObject.OnTick</c>. The
+		/// right button already means something wherever it lands — split, unequip, take back an
+		/// offer, clear a hotkey — and none of those is a cancel.
+		/// </para>
+		/// </remarks>
+		/// <param name="evt">The pointer press.</param>
+		private void OnRootPointerDownCancelDrag(PointerDownEvent evt)
+		{
+			if (evt.button != 0 || !(evt.target is VisualElement pressed))
+			{
+				return;
+			}
+
+			for (VisualElement element = pressed; element != null; element = element.parent)
+			{
+				if (element.ClassListContains(SLOT_MARKER_CLASS))
+				{
+					return;
+				}
+			}
+
+			if (UIManager.TryGetTK(UITKDragObject.CONTROL_NAME, out UITKDragObject dragObject) &&
+				dragObject.IsDragging)
+			{
+				dragObject.Clear();
+
+				/* The press is spent on the clear. Without this it carries on into whatever it
+				 * landed on, and the panels that can also act on a press act on it — pressing away
+				 * from a carried item to put it down would instead pick the next slot up, or open
+				 * the row it landed on. One press, one thing.
+				 *
+				 * Only on the branch that actually cleared something: a press with nothing in hand
+				 * is the ordinary press every panel's own handlers expect, and stopping it here
+				 * would make the whole interface inert whenever the drag object happened to be
+				 * empty.
+				 *
+				 * A press that lands INSIDE a slot returned above and never reaches this line — the
+				 * slot is what the player is aiming at, and its handler decides what the press
+				 * means. */
+				evt.StopPropagation();
+			}
+		}
+
+		/// <summary>
+		/// Subscribes the press rules that live on the panel root.
 		/// </summary>
 		/// <remarks>
 		/// Registered in the trickle-down phase so a press that lands on a button, a slot or a
 		/// text field still raises the panel. In the bubble phase a child that stops propagation —
 		/// which several controls do — would swallow the press and the window would stay behind.
+		/// The same phase is what lets the drag cancel above see every press in the panel.
 		/// </remarks>
 		private void AttachFocusHandler()
 		{
@@ -489,6 +576,13 @@ namespace FishMMO.Client
 			}
 			root.UnregisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
 			root.RegisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
+
+			/* Paired on every re-registration for the same reason the focus handler is: the tree is
+			 * cloned fresh on each show, and a root that accumulated a second copy of this would
+			 * cancel a drag twice — harmless today, since Clear is re-entrant-guarded, but only by
+			 * accident of that guard. */
+			root.UnregisterCallback<PointerDownEvent>(OnRootPointerDownCancelDrag, TrickleDown.TrickleDown);
+			root.RegisterCallback<PointerDownEvent>(OnRootPointerDownCancelDrag, TrickleDown.TrickleDown);
 		}
 
 		/// <summary>

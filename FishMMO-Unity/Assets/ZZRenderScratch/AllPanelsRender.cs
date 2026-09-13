@@ -97,11 +97,15 @@ namespace FishMMO.RenderScratch
 
 				/* Optional label filter. A single-panel fix needs its own before/after, and
 				 * re-rendering the whole set to get it would mean deleting every PNG on disk
-				 * first — which the resumable skip would otherwise refuse to redo. */
+				 * first — which the resumable skip would otherwise refuse to redo. Comma
+				 * separated, so a pair that belongs together costs one editor launch rather
+				 * than two: the launch is minutes and the captures are seconds. */
 				string only = Environment.GetEnvironmentVariable("FISHMMO_RENDER_ONLY");
 				if (!string.IsNullOrEmpty(only))
 				{
-					queue.RemoveAll(j => j.Label.IndexOf(only, StringComparison.OrdinalIgnoreCase) < 0);
+					string[] labels = only.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+					queue.RemoveAll(j => !labels.Any(l =>
+						j.Label.IndexOf(l.Trim(), StringComparison.OrdinalIgnoreCase) >= 0));
 				}
 
 				int total = queue.Count;
@@ -138,6 +142,7 @@ namespace FishMMO.RenderScratch
 				{ "UIChat",           Panels.Chat },
 				{ "UITooltip",        Panels.Tooltip },
 				{ "UIContextMenu",    Panels.ContextMenu },
+				{ "UIInspect",        Panels.Inspect },
 				{ "UIDropdown",       Panels.Dropdown },
 				{ "UIDialogBox",      Panels.DialogBox },
 				{ "UIColorPicker",    Panels.ColorPicker },

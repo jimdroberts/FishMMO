@@ -48,6 +48,7 @@ namespace FishMMO.UnitTests
 		private const string ContainerPath = "Assets/Scripts/Client/GUI/World/Container/UITKContainer.cs";
 		private const string SharedSetPath = "Assets/Scripts/Client/GUI/World/ItemContainers/ItemSlotPendingSet.cs";
 		private const string GuardPath = "Assets/Scripts/Client/GUI/Core/PendingReplyGuard.cs";
+		private const string MerchantPath = "Assets/Scripts/Client/GUI/World/Merchant/UITKMerchant.cs";
 		private const string GuiRoot = "Assets/Scripts/Client/GUI";
 
 		/// <summary>The scaled clock, and only it — <c>Time.timeScale</c> must not match.</summary>
@@ -60,6 +61,18 @@ namespace FishMMO.UnitTests
 		/// <summary>A dictionary field or local whose name says it tracks pending state.</summary>
 		private static readonly Regex PendingMapDeclaration =
 			new Regex(@"Dictionary\s*<[^>]*>\s+\w*[Pp]ending\w*", RegexOptions.Compiled);
+
+		/// <summary>
+		/// GUI files allowed to read the scaled clock, with the reason they are.
+		/// </summary>
+		/// <remarks>
+		/// Empty, and it should stay that way: nothing under the client GUI measures a server
+		/// deadline. The seam exists so that the one legitimate case — a purely cosmetic animation
+		/// that is entitled to slow down when the game does — is an entry somebody has to write and
+		/// justify, rather than a reason to narrow the scan back down and lose the discipline
+		/// everywhere else. An entry here is a sentence, not a hash set of exclusions.
+		/// </remarks>
+		private static readonly Dictionary<string, string> ScaledClockAllowed = new Dictionary<string, string>();
 
 		private static string ReadSource(string relativePath)
 		{
@@ -153,35 +166,48 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void EveryPendingWatchdogInTheGuiRunsOnTheUnscaledClock()
+		public void EveryDeadlineInTheGuiRunsOnTheUnscaledClock()
 		{
 			/* The bug, stated as a rule. A deadline on something the SERVER is doing cannot be
 			 * measured on a clock the client can stop: the server does not slow down when a player
 			 * opens the settings menu or dies behind a slow-motion effect.
 			 *
-			 * Scoped to files that mention pending state rather than banning Time.time from the
-			 * whole GUI tree, because a purely cosmetic animation is entitled to scale with the
-			 * game. A file that tracks a request in flight is not. */
+			 * TWO CHECKS, TWO SCOPES, and the difference is deliberate.
+			 *
+			 * The pending-dictionary check is scoped to files that mention pending state, because
+			 * what it is looking for is a type dressed up in a name — a declaration that has to SAY
+			 * it tracks pending work before it is worth reading. A dictionary of slot-to-timestamp
+			 * in a file with no pending anything in it is some other feature's business.
+			 *
+			 * The clock check is NOT scoped that way, because that scoping only ever tested a file's
+			 * vocabulary, and the file that started all this is the proof: the loot panel's watchdog
+			 * is a float compared against Time.time, and a hand-rolled sweep in a file that happened
+			 * never to write the word "pending" in its variable names would have walked straight past
+			 * this test. Worse, the fix already wrote the word into a comment, so the filter would
+			 * have gone on matching the files it was written about and stopping there. Time.time is
+			 * now banned across the whole client GUI tree, and any file that genuinely wants the
+			 * scaled clock goes in ScaledClockAllowed with a reason — which is a decision somebody
+			 * makes on purpose, not one this scan makes by looking for a keyword. */
 			List<string> offenders = new List<string>();
 			List<string> files = GuiSources();
 
 			for (int i = 0; i < files.Count; ++i)
 			{
+				string name = Path.GetFileName(files[i]);
 				string raw = File.ReadAllText(files[i]).Replace("\r\n", "\n");
-				if (raw.IndexOf("pending", StringComparison.OrdinalIgnoreCase) < 0)
-				{
-					continue;
-				}
-
 				string code = CodeOnly(raw);
-				if (ScaledClock.IsMatch(code))
+
+				if (ScaledClock.IsMatch(code) && !ScaledClockAllowed.ContainsKey(name))
 				{
-					offenders.Add($"{Path.GetFileName(files[i])} measures a pending wait against Time.time");
+					offenders.Add($"{name} reads Time.time (scaled); use Time.unscaledTime, or add it " +
+						"to ScaledClockAllowed with the reason it is entitled to pause");
 				}
 
-				if (PendingMapDeclaration.IsMatch(code))
+				/* The declaration check keeps its narrower scope: see the remark above. */
+				if (raw.IndexOf("pending", StringComparison.OrdinalIgnoreCase) >= 0 &&
+					PendingMapDeclaration.IsMatch(code))
 				{
-					offenders.Add($"{Path.GetFileName(files[i])} declares its own pending dictionary");
+					offenders.Add($"{name} declares its own pending dictionary");
 				}
 			}
 
@@ -219,12 +245,17 @@ namespace FishMMO.UnitTests
 		/// <summary>
 		/// Asserts one panel still declares a 5s timeout and hands it to every claim it makes.
 		/// </summary>
-		private static void AssertTimeoutIsPassedExplicitly(string relativePath)
+		/// <param name="relativePath">The panel to read.</param>
+		/// <param name="constant">The name of the constant that timeout must live in.</param>
+		private static void AssertTimeoutIsPassedExplicitly(string relativePath,
+			string constant = "PENDING_TIMEOUT_SECONDS")
 		{
 			string name = Path.GetFileName(relativePath);
 			string code = CodeOnly(ReadSource(relativePath));
 
-			LogAssert.IsTrue(Regex.IsMatch(code, @"PENDING_TIMEOUT_SECONDS\s*=\s*5f"),
+			/* 5f or 5.0f — the two panels write it one way and the merchant the other, and both are
+			 * five seconds. What this is checking is the VALUE, so it accepts either spelling. */
+			LogAssert.IsTrue(Regex.IsMatch(code, Regex.Escape(constant) + @"\s*=\s*5(?:\.0+)?f"),
 				$"{name} must still time a pending row out after 5 seconds");
 
 			/* Matched as a bare call rather than a whole statement: both panels claim inside an
@@ -236,9 +267,33 @@ namespace FishMMO.UnitTests
 
 			for (int i = 0; i < claims.Count; ++i)
 			{
-				LogAssert.IsTrue(claims[i].Groups[1].Value.Contains("PENDING_TIMEOUT_SECONDS"),
+				LogAssert.IsTrue(claims[i].Groups[1].Value.Contains(constant),
 					$"{name} must pass its own timeout rather than inherit a longer default: {claims[i].Value.Trim()}");
 			}
+		}
+
+		[Test]
+		public void BothMerchantGuardsWaitTheSameFiveSeconds()
+		{
+			/* The same trap as the two panels above, caught in the merchant's trade footer. Both
+			 * directions claim a PendingReplyGuard, and calling Begin with no argument silently
+			 * adopts DefaultTimeoutSeconds — thirty seconds, six times what this panel's own
+			 * constant says a trade should wait. Only the buy direction was written that way, so
+			 * the sell direction expired in 5s and the buy direction in 30s, and the only visible
+			 * symptom was a Confirm button that stayed dead for half a minute after a lost reply.
+			 *
+			 * Nothing distinguishes the two directions: both are answered by result broadcasts and
+			 * both are polled in the same OnTick. So the asymmetry was never a decision — it was the
+			 * default leaking in through a missing argument, which is exactly the kind of change a
+			 * one-word constant rename would hide. */
+			AssertTimeoutIsPassedExplicitly(MerchantPath, "TRANSACTION_TIMEOUT_SECONDS");
+
+			string code = CodeOnly(ReadSource(MerchantPath));
+			MatchCollection claims = Regex.Matches(code, @"(?:TryBegin|\.Begin)\s*\(([^()\n]*)\)");
+
+			LogAssert.IsTrue(claims.Count >= 2,
+				"both the buy and the sell direction must claim a wait; one guard serving both is a " +
+				"different bug, not this fix");
 		}
 
 		[Test]

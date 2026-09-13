@@ -453,9 +453,9 @@ namespace FishMMO.Client
 			}
 
 			// One request per slot at a time. A shared pile makes double-clicking a row the
-			// natural reaction to it not disappearing immediately. TryBegin refusing rather than
-			// re-arming is what lets a genuinely stuck row time out: re-arming would push the
-			// deadline out on every impatient click.
+			// natural reaction to it not disappearing immediately, and TryBegin answers a second
+			// click with a refusal — which is what lets a genuinely stuck row time out, since a
+			// reset of the clock on every impatient click would push its deadline out forever.
 			if (!pendingSlots.TryBegin(slot, PENDING_TIMEOUT_SECONDS))
 			{
 				return;
@@ -594,6 +594,11 @@ namespace FishMMO.Client
 			VisualElement rowRoot = new VisualElement();
 			rowRoot.AddToClassList(CSS_SLOT);
 			rowRoot.AddToClassList(CSS_ROW);
+
+			/* A press on a row is a press on a slot, so it does not cancel a carried item; the row's
+			 * own handler decides what the press means. See
+			 * UITKControl.OnRootPointerDownCancelDrag. */
+			rowRoot.AddToClassList(SLOT_MARKER_CLASS);
 
 			VisualElement icon = new VisualElement();
 			icon.AddToClassList(CSS_ICON);

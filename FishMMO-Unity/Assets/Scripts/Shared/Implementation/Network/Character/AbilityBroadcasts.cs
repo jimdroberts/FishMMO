@@ -329,6 +329,54 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Client → server. The player asked to forget one of their crafted abilities.
+	/// </summary>
+	/// <remarks>
+	/// Names the ability's row identity, never its template. The delete matches
+	/// <c>WHERE id = ?</c>, and a template id would either match nothing while reporting success or,
+	/// on a table holding several rows for one template, remove the wrong one.
+	/// </remarks>
+	public struct AbilityForgetBroadcast : IBroadcast
+	{
+		/// <summary>Unique instance ID of the ability to forget.</summary>
+		public long AbilityID;
+	}
+
+	/// <summary>
+	/// Why a forget request was refused.
+	/// </summary>
+	public enum AbilityForgetFailure : byte
+	{
+		/// <summary>The ability was forgotten.</summary>
+		None = 0,
+		/// <summary>The character does not know an ability with that instance ID.</summary>
+		Unknown = 1,
+		/// <summary>The database write failed; the ability is still known.</summary>
+		PersistFailed = 2,
+		/// <summary>A forget for this connection is already in flight.</summary>
+		Busy = 3,
+	}
+
+	/// <summary>
+	/// Server → owner. The answer to <see cref="AbilityForgetBroadcast"/>.
+	/// </summary>
+	/// <remarks>
+	/// The confirmation, not just the refusal. The panel removes the row on this message rather than
+	/// on the click, so a forget that was refused leaves the ability where it was and the player is
+	/// told why — the same contract the craft panel keeps with
+	/// <see cref="AbilityCraftResultBroadcast"/>.
+	/// </remarks>
+	public struct AbilityForgetResultBroadcast : IBroadcast
+	{
+		/// <summary>Unique instance ID the request named.</summary>
+		public long AbilityID;
+		/// <summary>True when the ability was forgotten.</summary>
+		public bool Success;
+		/// <summary>Why it was refused, or <see cref="AbilityForgetFailure.None"/>.</summary>
+		public AbilityForgetFailure Failure;
+	}
+
+	/// <summary>
 	/// Server → observers. One character started or stopped an activation.
 	/// </summary>
 	/// <remarks>
