@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: SceneServerSystem
   m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.World.SceneServer.SceneServerSystem
   maxMainThreadActionsPerFrame: 100
+  currencyTemplate: {fileID: 11400000, guid: 5f83904fcedd0864fbb6162f45fbeb9e, type: 2}
   pendingSceneTimeoutSeconds: 60
   pendingSceneSweepIntervalSeconds: 2
   pendingSceneSweepMaxRemovals: 64

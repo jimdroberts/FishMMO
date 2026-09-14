@@ -1589,7 +1589,9 @@ In-game commands, all requiring `AccessLevel.Admin` (3):
 | `/admin shutdownscene <seconds>` | Locks and shuts down that one scene server; its players are warned, disconnected, and can rejoin on another |
 | `/admin stopshutdownscene` | Cancels it, leaving the scene server locked |
 
-`lockworld` / `unlockworld` are accepted as aliases of `lockserver` / `unlockserver`.
+`lockworld` / `unlockworld` are accepted as aliases of `lockserver` / `unlockserver`. These are
+part of the wider operator command set described in [In-game operator commands and the staff
+console](#in-game-operator-commands-and-the-staff-console) below.
 
 #### Player commands for instanced content
 
@@ -1618,9 +1620,82 @@ enough that it cannot be confused with the gap while somebody walks through a te
 `leadershipAbsenceGraceSeconds` on the scene server's `PartySystem` asset, which must comfortably
 exceed the slowest scene load on the shard.
 
-Commands are refused silently to anyone below `AccessLevel.Admin` — the server gives no
+Operator commands are refused silently to anyone below their level — the server gives no
 indication the command exists, so an unprivileged player cannot probe for command names — but
-every refused attempt is logged at warning level with the character and account that tried it.
+every refused attempt is logged at warning level and written to the operator audit log with the
+character and account that tried it.
+
+### In-game operator commands and the staff console
+
+Two command sets, each registered **once** at its access level, with every sub-command in one
+table: `/gm` at `AccessLevel.GameMaster` (2) and `/admin` at `AccessLevel.Admin` (3). One
+registration means one access check, and the audit hook sits on that check, so **every command —
+including refusals — is written to `admin_audit_log`** before it runs. `/gm help` and
+`/admin help` list the commands by category; `help <command>` prints its usage.
+
+**Game masters cannot change the game.** Nothing under `/gm` creates currency or items, changes
+an attribute, heals, revives or kills: a game master account that could would be an exploit waiting
+for one stolen password. Those are `/admin`, and a test pins that no game master file calls
+anything an administrator file declares. Administrators hold every `/gm` command as well.
+
+| `/gm` command | Effect |
+|---|---|
+| `who` | Characters this scene server holds |
+| `where <character>` / `info <character>` | Scene and coordinates; account, level, dead / in combat / muted |
+| `seen <character>` | Database lookup, online or not, anywhere in the shard, with both mutes |
+| `chars <account>` / `account <account>` | An account's characters; its level, sign-in history, ban and mute (no email) |
+| `goto` / `summon` / `return <character>` | Move to a character, bring them to you, send a summoned character back. Same scene instance only |
+| `gotopos <x> <y> <z>` / `unstuck <character>` | Move yourself to coordinates; move a character to the nearest respawn point in their scene |
+| `msg` / `warn <character> <text>` | A private System-channel message or formal warning, signed with your character name |
+| `kick <character>` | Kick request for the account (every session) |
+| `mute` / `muteaccount <character> <duration> [reason]` | Chat mute on one character, or on every character of its account. Commands still work, so a muted player can `/helpme` |
+| `unmute` / `unmuteaccount <character>` | Lift one mute; the other, if any, stays |
+| `tempban <account> <duration> <reason>` | Ban that lifts itself. Revokes sessions and kicks. Never shortens a longer ban |
+| `unban <account>` | Lift a ban. Game masters may lift temporary bans only |
+| `tickets [unassigned\|mine\|all]` / `ticket <id>` | The support queue, and one ticket with its latest messages and staff notes |
+| `claim` / `unclaim <id>` | Take a ticket (moves it to InProgress), or hand it back |
+| `reply` / `note <id> <text>` / `resolve <id> <resolution>` | Player-visible reply, staff-only note, resolution. **The text is withheld from the audit row** — it lives on the ticket |
+| `console` | Opens the staff console (below) |
+
+Durations are `30m`, `2h`, `7d`, `1w` (a bare number is minutes). **A game master's mute or ban is
+capped at 30 days and always ends**; only an administrator may use `perm` for a mute, and
+permanent bans are `/admin ban`.
+
+| `/admin` command | Effect |
+|---|---|
+| `status`, `lockserver` … `stopshutdownscene`, `announce` | Server control, as above |
+| `access <account> <level>` | Set an access level below your own |
+| `ban <account> <reason>` | Permanent ban (replaces a temporary one) |
+| `gold [character]` | Currency balance |
+| `setgold` / `givegold` / `takegold [character] <amount>` | Change a balance. Written to the economy ledger as `AdminAdjustment` |
+| `giveitem [character] <amount> <item name or template id>` | Grant items through the normal reward path |
+| `heal` / `revive` / `kill` / `god [character]` | Full heal; revive in place; kill with no kill credit; toggle immortality until the next scene change |
+| `attr <character> <attribute>` / `setattr [character] <value> <attribute>` | Read or set an attribute's base value (currency is refused — use `setgold`) |
+
+`[character]` may be left out to act on yourself; a word in that position is always a character
+name, never silently yourself. Every `/admin` character and economy command acts only on
+characters this scene server holds, through the live controllers, so the change reaches the player
+at once and persists the normal way. The currency they use is `currencyTemplate` on the
+`SceneServerSystem` asset.
+
+**Mutes and temporary bans are database columns** — `accounts.muted`, `muted_until`, `muted_by`,
+`mute_reason`, `banned_until`, `banned_by`, `ban_reason`, and the four mute columns on
+`characters` — added by the `AddModerationColumns` migration. A mute is read when a character
+loads and applied at once on the scene server that set it; elsewhere it takes effect at the
+character's next load. An expired mute simply stops applying. A temporary ban is lifted at the
+first sign-in attempt after it ends. If the mute read fails (for example, the migration has not
+been applied) the character loads **unmuted** and a warning is logged, rather than locking every
+player out.
+
+**The staff console** (`/gm console`) is an in-game panel for all of the above: a roster of every
+character in your scene instance with per-row actions, the support ticket queue with ticket
+detail and actions, and a form for every command, with a log of the server's replies. **The client
+ships the console empty** — no command names, arguments or help text are in the build. The server
+sends the catalogue only to GameMaster and above, and only in answer to `/gm console`. Every action
+the console takes is an ordinary chat command, gated and audited as if typed. Its roster and ticket
+reads are separate requests, re-authorised on arrival against the level this server loaded; a
+refused read is audited like a refused command, and allowed reads are not audited (as in the
+Control Panel).
 
 > **Note on automatic restarts.** The AppHealthMonitor restarts server processes. A world server
 > deregisters itself on a graceful shutdown, so it comes back clean; a scene server clears its own

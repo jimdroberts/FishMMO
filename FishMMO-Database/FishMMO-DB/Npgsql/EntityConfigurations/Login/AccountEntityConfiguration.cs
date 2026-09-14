@@ -82,6 +82,26 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.VerificationEmailSentAt);
 
+			/* Moderation columns. Written only by operator actions and by the login fetch lifting an
+			 * expired temporary ban — never by the account-creation or save paths, which is why none
+			 * of those statements name them. The "by" columns carry no foreign key for the same
+			 * reason admin_audit_log has none: deleting an operator must not erase who acted. */
+			builder.Property(e => e.Muted)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			builder.Property(e => e.MutedBy)
+				.HasMaxLength(50);
+
+			builder.Property(e => e.MuteReason)
+				.HasMaxLength(256);
+
+			builder.Property(e => e.BannedBy)
+				.HasMaxLength(50);
+
+			builder.Property(e => e.BanReason)
+				.HasMaxLength(256);
+
 			builder.Property(e => e.LastLogin)
 				.IsRequired()
 				.HasDefaultValueSql("timezone('UTC', CURRENT_TIMESTAMP)");

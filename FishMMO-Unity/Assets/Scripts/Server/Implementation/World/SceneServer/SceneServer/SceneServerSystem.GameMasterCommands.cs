@@ -3,10 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using UnityEngine;
 using FishMMO.Auth.Core;
 using FishMMO.Database;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
 using FishMMO.Server.Core.World.SceneServer;
@@ -16,26 +16,30 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// The in-game <c>/gm</c> command set: finding players, moving to them, and removing them.
+	/// The in-game <c>/gm</c> command set: finding players, moving them, talking to them,
+	/// moderating them, and working the support queue.
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// Registered once, as <c>/gm</c>, at <see cref="AccessLevel.GameMaster"/>. The sub-command
-	/// is the first word of the remainder, so one registration and therefore one access check
+	/// is the first word of the remainder and is looked up in one table, so one access check
 	/// covers every operation — the same shape as <c>/admin</c>, and for the same reason: there
-	/// is no way to add a sub-command that forgets to be gated.
+	/// is no way to add a sub-command that forgets to be gated. See
+	/// <c>SceneServerSystem.OperatorCommands</c>.
 	/// </para>
 	/// <para>
 	/// Every command here is recorded in the operator audit log, including refusals, by the
-	/// chat system's subscription to the access gate. Nothing in this file writes an audit row,
-	/// and nothing in this file should: a command audited because its author remembered is a
-	/// command that stops being audited the day somebody forgets.
+	/// chat system's subscription to the access gate. Nothing in these files writes an audit row,
+	/// and nothing should: a command audited because its author remembered is a command that stops
+	/// being audited the day somebody forgets.
 	/// </para>
 	/// <para>
-	/// <b>What is deliberately not here.</b> Nothing that creates or destroys a character, and
-	/// nothing that grants access. Moving a player and disconnecting them are reversible;
-	/// deletion is not, and promotion belongs to <c>/admin</c> where the extra level is the
-	/// point.
+	/// <b>What is deliberately not here.</b> Nothing that creates items or currency, changes an
+	/// attribute, heals, revives or kills, or otherwise changes the game a player is playing — a
+	/// game master account that can do those is an exploit waiting for a compromised password, and
+	/// they belong to <c>/admin</c>. Nothing that grants access, and no permanent ban: a game
+	/// master's ban is capped and lapses on its own. A test pins that these files call nothing
+	/// declared in the administrator files.
 	/// </para>
 	/// </remarks>
 	public partial class SceneServerSystem
@@ -44,87 +48,160 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <remarks>
 		/// A populated scene server holds far more than a chat window can show, and a reply per
 		/// character would flood the operator out of their own log. The count is always reported
-		/// even when the list is cut.
+		/// even when the list is cut; the staff console lists everyone.
 		/// </remarks>
 		private const int MaxWhoListed = 20;
 
-		/// <summary>Registers the <c>/gm</c> command.</summary>
+		/// <summary>Largest coordinate <c>/gm gotopos</c> accepts on any axis.</summary>
+		private const float MaxTeleportCoordinate = 100000f;
+
+		/// <summary>Most summon return points kept before the stale ones are pruned.</summary>
+		private const int MaxSummonReturnPoints = 512;
+
+		/// <summary>Where a summoned character stood before they were summoned.</summary>
+		private struct SummonReturnPoint
+		{
+			/// <summary>The scene instance they were in, by handle.</summary>
+			public int SceneHandle;
+
+			/// <summary>Where they stood.</summary>
+			public Vector3 Position;
+
+			/// <summary>Which way they faced.</summary>
+			public Quaternion Rotation;
+		}
+
+		/// <summary>Pre-summon positions, by character id, for <c>/gm return</c>.</summary>
+		/// <remarks>
+		/// The FIRST summon's origin is kept across repeated summons. Summoning somebody twice and
+		/// then sending them back should send them home, not to wherever the first summon left them.
+		/// </remarks>
+		private readonly Dictionary<long, SummonReturnPoint> summonReturnPoints = new Dictionary<long, SummonReturnPoint>();
+
+		/// <summary>Registers the <c>/gm</c> command and the staff console requests.</summary>
 		private void RegisterGameMasterCommands()
 		{
+			gameMasterCommands = new OperatorCommandSet("/gm", AccessLevel.GameMaster, BuildGameMasterCommands());
+
 			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
 			{
 				{ "/gm", OnGameMasterCommand },
 			}, AccessLevel.GameMaster);
+
+			ChatHelper.SetAuditRedactor("/gm", RedactGameMasterAudit);
+
+			RegisterStaffConsoleBroadcasts();
 		}
 
-		/// <summary>Unregisters the <c>/gm</c> command.</summary>
+		/// <summary>Unregisters the <c>/gm</c> command and the staff console requests.</summary>
 		private void UnregisterGameMasterCommands()
 		{
+			UnregisterStaffConsoleBroadcasts();
 			ChatHelper.RemoveCommands(new[] { "/gm" });
+			summonReturnPoints.Clear();
 		}
 
-		/// <summary>
-		/// Dispatches a <c>/gm</c> sub-command.
-		/// </summary>
-		/// <remarks>
-		/// Access has already been checked by <see cref="ChatHelper.TryParseCommand"/> against
-		/// the registration above; reaching this method means the caller is at least a game
-		/// master.
-		/// </remarks>
+		/// <summary>Dispatches a <c>/gm</c> sub-command.</summary>
 		private bool OnGameMasterCommand(IPlayerCharacter character, ChatBroadcast msg)
 		{
-			if (character == null)
+			return DispatchOperatorCommand(gameMasterCommands, character, msg);
+		}
+
+		/// <summary>The whole <c>/gm</c> table, in presentation order.</summary>
+		private IEnumerable<OperatorCommand> BuildGameMasterCommands()
+		{
+			var commands = new List<OperatorCommand>()
 			{
-				return true;
-			}
+				new OperatorCommand
+				{
+					Name = "who", Aliases = new[] { "online" }, Category = "Players",
+					Summary = "Lists the characters this scene server holds.",
+					Run = (c, a) => ReportWho(c),
+				},
+				new OperatorCommand
+				{
+					Name = "where", Aliases = new[] { "find" }, Category = "Players",
+					Summary = "Shows the scene and coordinates of a character on this scene server.",
+					Arguments = "character:Character", RosterAction = true,
+					Run = ReportWhere,
+				},
+				new OperatorCommand
+				{
+					Name = "info", Category = "Players",
+					Summary = "Shows a character's account, access level, scene, and whether they are dead, fighting or muted.",
+					Arguments = "character:Character", RosterAction = true,
+					Run = ReportCharacterInfo,
+				},
+				new OperatorCommand
+				{
+					Name = "seen", Category = "Players",
+					Summary = "Looks a character up in the database whether or not they are online, anywhere in the shard.",
+					Arguments = "character:Character", RosterAction = true,
+					Run = ReportSeen,
+				},
+				new OperatorCommand
+				{
+					Name = "chars", Category = "Players",
+					Summary = "Lists the characters on an account.",
+					Arguments = "account:Account",
+					Run = ReportAccountCharacters,
+				},
+				new OperatorCommand
+				{
+					Name = "account", Category = "Players",
+					Summary = "Shows an account's standing: access level, sign-in history, ban and mute.",
+					Arguments = "account:Account",
+					Run = ReportAccount,
+				},
 
-			string remainder = msg.Text ?? string.Empty;
-			string subCommand = ChatHelper.GetWordAndTrimmed(remainder, out string arguments);
+				new OperatorCommand
+				{
+					Name = "goto", Aliases = new[] { "tp" }, Category = "Movement",
+					Summary = "Moves you to a character in your scene.",
+					Arguments = "character:Character", RosterAction = true,
+					Run = GoToCharacter,
+				},
+				new OperatorCommand
+				{
+					Name = "summon", Aliases = new[] { "bring" }, Category = "Movement",
+					Summary = "Moves a character in your scene to you. They are told who summoned them.",
+					Arguments = "character:Character", RosterAction = true,
+					Run = SummonCharacter,
+				},
+				new OperatorCommand
+				{
+					Name = "return", Category = "Movement",
+					Summary = "Sends a summoned character back to where they stood before the first summon.",
+					Arguments = "character:Character", RosterAction = true,
+					Run = ReturnSummonedCharacter,
+				},
+				new OperatorCommand
+				{
+					Name = "gotopos", Category = "Movement",
+					Summary = "Moves you to coordinates in the scene you are standing in.",
+					Arguments = "x:Number;y:Number;z:Number",
+					Run = GoToPosition,
+				},
+				new OperatorCommand
+				{
+					Name = "unstuck", Category = "Movement",
+					Summary = "Moves a character to the nearest respawn point in the scene they are in.",
+					Arguments = "character:Character", RosterAction = true,
+					Run = UnstickCharacter,
+				},
+			};
 
-			// A single-word sub-command leaves the whole remainder as the "trimmed" part.
-			if (string.IsNullOrWhiteSpace(subCommand))
+			commands.AddRange(BuildGameMasterModerationCommands());
+			commands.AddRange(BuildGameMasterSupportCommands());
+
+			commands.Add(new OperatorCommand
 			{
-				subCommand = arguments;
-				arguments = string.Empty;
-			}
+				Name = "console", Aliases = new[] { "panel" }, Category = "Console",
+				Summary = "Opens the staff console.",
+				Run = (c, a) => SendStaffConsoleCatalog(c, open: true),
+			});
 
-			switch (subCommand.Trim().ToLowerInvariant())
-			{
-				case "who":
-				case "online":
-					ReportWho(character);
-					return true;
-
-				case "where":
-				case "find":
-					ReportWhere(character, arguments);
-					return true;
-
-				case "info":
-					ReportCharacterInfo(character, arguments);
-					return true;
-
-				case "goto":
-				case "tp":
-					GoToCharacter(character, arguments);
-					return true;
-
-				case "summon":
-				case "bring":
-					SummonCharacter(character, arguments);
-					return true;
-
-				case "kick":
-					KickCharacter(character, arguments);
-					return true;
-
-				default:
-					/* Split across replies to stay inside ChatBroadcast.MaxTextLength (128), the
-					 * same constraint the admin help text is written to. */
-					Reply(character, "GM: /gm who | where <name> | info <name>");
-					Reply(character, "GM: /gm goto <name> | summon <name> | kick <name>");
-					return true;
-			}
+			return commands;
 		}
 
 		#region Lookups
@@ -152,13 +229,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			/* Batched into lines rather than one reply per name: twenty replies is twenty
 			 * broadcasts and scrolls the operator's own chat away. */
-			foreach (string line in BatchNames(names.Take(MaxWhoListed)))
-			{
-				Reply(character, line);
-			}
+			ReplyLines(character, OperatorCommandParsing.PackLines(names.Take(MaxWhoListed), string.Empty, ", ", OperatorLineLength));
 			if (names.Count > MaxWhoListed)
 			{
-				Reply(character, $"...and {names.Count - MaxWhoListed} more. Narrow it with /gm where <name>.");
+				Reply(character, $"...and {names.Count - MaxWhoListed} more. Narrow it with /gm where <name>, or open /gm console.");
 			}
 		}
 
@@ -171,7 +245,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Vector3 position = target.Transform != null ? target.Transform.position : Vector3.zero;
-			Reply(character, $"{target.CharacterName} is in '{target.SceneName}' at " +
+			Reply(character, $"{target.CharacterName} is in '{target.CurrentSceneName()}' at " +
 				$"{position.x.ToString("0.0", CultureInfo.InvariantCulture)}, " +
 				$"{position.y.ToString("0.0", CultureInfo.InvariantCulture)}, " +
 				$"{position.z.ToString("0.0", CultureInfo.InvariantCulture)}.");
@@ -179,8 +253,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>Reports a character's account and standing.</summary>
 		/// <remarks>
-		/// Account name and access level, and nothing else. A game master needs to know who they
-		/// are dealing with; they do not need the account's email address, and a command that
+		/// Account name, access level and state, and nothing else. A game master needs to know who
+		/// they are dealing with; they do not need the account's email address, and a command that
 		/// prints it makes every game master a place that address can leak from.
 		/// </remarks>
 		private void ReportCharacterInfo(IPlayerCharacter character, string arguments)
@@ -191,7 +265,157 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Reply(character, $"{target.CharacterName} (id {target.ID}) on account '{target.Account}'.");
-			Reply(character, $"Access {target.AccessLevel}, scene '{target.SceneName}', world {target.WorldServerID}.");
+			Reply(character, $"Access {target.AccessLevel}, scene '{target.CurrentSceneName()}', world {target.WorldServerID}.");
+			Reply(character, $"{(target.IsFlagged(CharacterFlags.IsDead) ? "Dead" : "Alive")}, " +
+				$"{(target.IsFlagged(CharacterFlags.IsInCombat) ? "in combat" : "not in combat")}, " +
+				$"{DescribeChatMute(target.ChatMutedUntilTicks)}.");
+		}
+
+		/// <summary>Looks a character up in the database, online or not.</summary>
+		private void ReportSeen(IPlayerCharacter character, string arguments)
+		{
+			string name = OperatorCommandParsing.SplitFirstWord(arguments, out _);
+			if (name.Length == 0)
+			{
+				ReplyUsage(character, gameMasterCommands, "seen");
+				return;
+			}
+
+			RunOperatorLines(character, async () =>
+			{
+				if (!TryGetDbService(out ICharacterService characterService))
+				{
+					return new[] { "The character service is unavailable." };
+				}
+
+				DatabaseResult<CharacterData?> found = await characterService.FetchAsync(name, null);
+				if (!found.IsSuccess)
+				{
+					return new[] { $"Could not look '{OperatorCommandParsing.Truncate(name, 32)}' up: {found.ErrorMessage}" };
+				}
+				if (found.Data == null)
+				{
+					return new[] { $"No character named '{OperatorCommandParsing.Truncate(name, 32)}'." };
+				}
+
+				CharacterData data = (CharacterData)found.Data;
+				var lines = new List<string>()
+				{
+					$"{data.Name} (id {data.ID}) on account '{data.Account}', {(data.Online ? "ONLINE" : "offline")}.",
+					$"World {data.WorldServerID}, scene '{data.SceneName}', last saved {DescribeSince(data.LastSaved)}.",
+				};
+
+				DatabaseResult<CharacterChatMuteState> mute = await characterService.FetchChatMuteAsync(data.ID);
+				if (mute.IsSuccess)
+				{
+					lines.Add(DescribeStoredMute("Character", mute.Data.Character));
+					lines.Add(DescribeStoredMute("Account", mute.Data.Account));
+				}
+				return lines;
+			});
+		}
+
+		/// <summary>Lists the characters on an account.</summary>
+		private void ReportAccountCharacters(IPlayerCharacter character, string arguments)
+		{
+			string account = OperatorCommandParsing.SplitFirstWord(arguments, out _);
+			if (account.Length == 0)
+			{
+				ReplyUsage(character, gameMasterCommands, "chars");
+				return;
+			}
+
+			RunOperatorLines(character, async () =>
+			{
+				if (!TryGetDbService(out ICharacterService characterService))
+				{
+					return new[] { "The character service is unavailable." };
+				}
+
+				DatabaseResult<IReadOnlyList<CharacterAdminData>> result =
+					await characterService.FetchAdminByAccountAsync(account, includeDeleted: false);
+				if (!result.IsSuccess)
+				{
+					return new[] { $"Could not read '{OperatorCommandParsing.Truncate(account, 32)}': {result.ErrorMessage}" };
+				}
+
+				IReadOnlyList<CharacterAdminData> rows = result.Data ?? Array.Empty<CharacterAdminData>();
+				if (rows.Count == 0)
+				{
+					return new[] { $"'{OperatorCommandParsing.Truncate(account, 32)}' has no characters, or does not exist." };
+				}
+
+				var lines = new List<string>() { $"'{account}' has {rows.Count} character(s):" };
+				lines.AddRange(OperatorCommandParsing.PackLines(
+					rows.Select(r => $"{r.Name} ({(r.SessionState != 0 ? "online" : "offline")}, {r.SceneName})"),
+					string.Empty, "; ", OperatorLineLength));
+				return lines;
+			});
+		}
+
+		/// <summary>Reports an account's standing.</summary>
+		/// <remarks>
+		/// No email address, for the same reason <c>info</c> prints none. Ban and mute are shown with
+		/// who applied them and why, because the game master reading this is usually answering a
+		/// player who wants to know exactly that.
+		/// </remarks>
+		private void ReportAccount(IPlayerCharacter character, string arguments)
+		{
+			string account = OperatorCommandParsing.SplitFirstWord(arguments, out _);
+			if (account.Length == 0)
+			{
+				ReplyUsage(character, gameMasterCommands, "account");
+				return;
+			}
+
+			RunOperatorLines(character, async () =>
+			{
+				if (!TryGetDbService(out IAccountService accountService))
+				{
+					return new[] { "The account service is unavailable." };
+				}
+
+				DatabaseResult<AccountAdminData> result = await accountService.FetchAdminAsync(account);
+				if (!result.IsSuccess || result.Data == null)
+				{
+					return new[] { $"No account named '{OperatorCommandParsing.Truncate(account, 32)}'." };
+				}
+
+				AccountAdminData data = result.Data;
+				var level = (AccessLevel)data.AccessLevel;
+				var lines = new List<string>()
+				{
+					$"'{data.Name}': {level}, created {data.Created:yyyy-MM-dd}, last signed in {DescribeSince(data.LastLogin)}.",
+					$"{data.CharacterCount} character(s), email {(data.Verified ? "verified" : "unverified")}, two-factor {(data.TotpEnabled ? "on" : "off")}.",
+				};
+
+				if (level == AccessLevel.Banned)
+				{
+					string span = data.BannedUntil == null
+						? "permanently"
+						: $"until {data.BannedUntil.Value:yyyy-MM-dd HH:mm} UTC";
+					lines.Add($"BANNED {span}{(string.IsNullOrEmpty(data.BannedBy) ? string.Empty : " by " + data.BannedBy)}: {data.BanReason ?? "no reason recorded"}");
+				}
+
+				lines.Add(DescribeStoredMute("Account", new ChatMuteData(data.Muted, data.MutedUntil, data.MutedBy, data.MuteReason)));
+				return lines;
+			});
+		}
+
+		/// <summary>Describes a stored mute in one line.</summary>
+		private static string DescribeStoredMute(string scope, ChatMuteData mute)
+		{
+			DateTime now = DateTime.UtcNow;
+			if (!mute.IsActiveAt(now))
+			{
+				return $"{scope}: not muted.";
+			}
+
+			string span = mute.MutedUntilUtc == null
+				? "with no end"
+				: "for " + OperatorCommandParsing.DescribeDuration(mute.MutedUntilUtc.Value - now);
+			string by = string.IsNullOrEmpty(mute.MutedBy) ? string.Empty : " by " + mute.MutedBy;
+			return $"{scope}: MUTED {span}{by}: {mute.Reason ?? "no reason recorded"}";
 		}
 
 		#endregion
@@ -235,40 +459,172 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Reply(character, "You cannot summon yourself.");
 				return;
 			}
+
+			bool hadReturnPoint = summonReturnPoints.ContainsKey(target.ID);
+			if (!hadReturnPoint && target.GameObject != null && target.Transform != null)
+			{
+				PruneSummonReturnPoints();
+				summonReturnPoints[target.ID] = new SummonReturnPoint()
+				{
+					SceneHandle = target.GameObject.scene.handle,
+					Position = target.Transform.position,
+					Rotation = target.Transform.rotation,
+				};
+			}
+
 			if (!TryMove(character, target, character, out string failure))
+			{
+				if (!hadReturnPoint)
+				{
+					summonReturnPoints.Remove(target.ID);
+				}
+				Reply(character, failure);
+				return;
+			}
+
+			Reply(character, $"Summoned {target.CharacterName}. /gm return {target.CharacterName} sends them back.");
+			Reply(target, $"You have been summoned by {character.CharacterName}.");
+		}
+
+		/// <summary>Sends a summoned character back to where the first summon found them.</summary>
+		private void ReturnSummonedCharacter(IPlayerCharacter character, string arguments)
+		{
+			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target))
+			{
+				return;
+			}
+			if (!summonReturnPoints.TryGetValue(target.ID, out SummonReturnPoint point))
+			{
+				Reply(character, $"No summon of {target.CharacterName} is recorded on this scene server.");
+				return;
+			}
+			if (target.GameObject == null || target.GameObject.scene.handle != point.SceneHandle)
+			{
+				/* Same rule as TryMove: coordinates from one scene instance written into another put
+				 * the player somewhere they are not loaded. The point is useless once they have left. */
+				summonReturnPoints.Remove(target.ID);
+				Reply(character, $"{target.CharacterName} has left the scene they were summoned from.");
+				return;
+			}
+			if (!TryMoveTo(character, target, point.Position, point.Rotation, out string failure))
 			{
 				Reply(character, failure);
 				return;
 			}
 
-			Reply(character, $"Summoned {target.CharacterName}.");
-			Reply(target, $"You have been summoned by {character.CharacterName}.");
+			summonReturnPoints.Remove(target.ID);
+			Reply(character, $"Returned {target.CharacterName}.");
+			if (target.ID != character.ID)
+			{
+				Reply(target, $"{character.CharacterName} has sent you back.");
+			}
+		}
+
+		/// <summary>Moves the caller to coordinates in their own scene.</summary>
+		private void GoToPosition(IPlayerCharacter character, string arguments)
+		{
+			string xText = OperatorCommandParsing.SplitFirstWord(arguments, out string rest);
+			string yText = OperatorCommandParsing.SplitFirstWord(rest, out rest);
+			string zText = OperatorCommandParsing.SplitFirstWord(rest, out _);
+
+			if (!TryParseCoordinate(xText, out float x) ||
+				!TryParseCoordinate(yText, out float y) ||
+				!TryParseCoordinate(zText, out float z))
+			{
+				ReplyUsage(character, gameMasterCommands, "gotopos");
+				return;
+			}
+
+			Quaternion rotation = character.Transform != null ? character.Transform.rotation : Quaternion.identity;
+			if (!TryMoveTo(character, character, new Vector3(x, y, z), rotation, out string failure))
+			{
+				Reply(character, failure);
+				return;
+			}
+			Reply(character, $"Moved to {x.ToString("0.0", CultureInfo.InvariantCulture)}, {y.ToString("0.0", CultureInfo.InvariantCulture)}, {z.ToString("0.0", CultureInfo.InvariantCulture)}.");
+		}
+
+		/// <summary>Parses one finite, bounded coordinate.</summary>
+		private static bool TryParseCoordinate(string text, out float value)
+		{
+			return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+				!float.IsNaN(value) && !float.IsInfinity(value) &&
+				Mathf.Abs(value) <= MaxTeleportCoordinate;
+		}
+
+		/// <summary>Moves a character to the nearest respawn point in the scene they are standing in.</summary>
+		/// <remarks>
+		/// The scene they are physically in — the instance, when they are in one — because a respawn
+		/// point from the open world written into a dungeon is exactly the fall-through-the-world
+		/// placement this command exists to fix.
+		/// </remarks>
+		private void UnstickCharacter(IPlayerCharacter character, string arguments)
+		{
+			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target))
+			{
+				return;
+			}
+
+			string scene = target.CurrentSceneName();
+			if (WorldSceneDetailsCache == null ||
+				string.IsNullOrEmpty(scene) ||
+				!WorldSceneDetailsCache.Scenes.TryGetValue(scene, out WorldSceneDetails details) ||
+				details.RespawnPositions == null ||
+				details.RespawnPositions.Count < 1 ||
+				target.Transform == null)
+			{
+				Reply(character, $"'{scene}' has no respawn point to move {target.CharacterName} to.");
+				return;
+			}
+
+			Vector3 from = target.Transform.position;
+			CharacterRespawnPositionDetails nearest = null;
+			float nearestDistance = float.MaxValue;
+			foreach (CharacterRespawnPositionDetails respawn in details.RespawnPositions.Values)
+			{
+				if (respawn == null)
+				{
+					continue;
+				}
+				float distance = (respawn.Position - from).sqrMagnitude;
+				if (distance < nearestDistance)
+				{
+					nearestDistance = distance;
+					nearest = respawn;
+				}
+			}
+
+			if (nearest == null || !TryMoveTo(character, target, nearest.Position, nearest.Rotation, out string failure))
+			{
+				Reply(character, $"{target.CharacterName} cannot be moved right now.");
+				return;
+			}
+
+			Reply(character, $"Moved {target.CharacterName} to the nearest respawn point in '{scene}'.");
+			if (target.ID != character.ID)
+			{
+				Reply(target, $"{character.CharacterName} has moved you to safety.");
+			}
 		}
 
 		/// <summary>
-		/// Places <paramref name="moved"/> at <paramref name="destination"/>.
+		/// Places <paramref name="moved"/> just behind <paramref name="destination"/>.
 		/// </summary>
 		/// <remarks>
-		/// <para>
-		/// Same scene only. Both characters are held by this scene server, but a scene server
-		/// runs several scenes: writing one character's position into another's scene would put
-		/// them at valid coordinates in a place they are not loaded into, which reads to the
-		/// player as falling through the world.
-		/// </para>
-		/// <para>
-		/// Moves through the motor rather than the transform. The motor is what the prediction
-		/// system reconciles against; setting the transform directly is corrected away on the
-		/// next tick, so the character snaps back and the command appears to have done nothing.
-		/// </para>
+		/// Same scene instance only. A scene server runs several scenes: writing one character's
+		/// position into another's scene would put them at valid coordinates in a place they are not
+		/// loaded into, which reads to the player as falling through the world. Compared by handle,
+		/// because scene stacking means two instances can share a name.
 		/// </remarks>
 		private bool TryMove(IPlayerCharacter actor, IPlayerCharacter moved, IPlayerCharacter destination, out string failure)
 		{
-			if (moved.SceneHandle != destination.SceneHandle)
+			if (moved.GameObject == null || destination.GameObject == null ||
+				moved.GameObject.scene.handle != destination.GameObject.scene.handle)
 			{
 				failure = $"{moved.CharacterName} and {destination.CharacterName} are in different scenes.";
 				return false;
 			}
-			if (moved.Motor == null || destination.Transform == null)
+			if (destination.Transform == null)
 			{
 				failure = "That character cannot be moved right now.";
 				return false;
@@ -277,140 +633,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Slightly behind the destination rather than inside it: two capsules at identical
 			// coordinates resolve by shoving each other apart, which looks like a bug.
 			Vector3 offset = destination.Transform.forward * -1.5f;
-			moved.Motor.SetPositionAndRotationAndVelocity(
-				destination.Transform.position + offset,
-				destination.Transform.rotation,
-				Vector3.zero);
+			return TryMoveTo(actor, moved, destination.Transform.position + offset, destination.Transform.rotation, out failure);
+		}
+
+		/// <summary>
+		/// Places a character at a position in the scene they are already in.
+		/// </summary>
+		/// <remarks>
+		/// Moves through the motor rather than the transform. The motor is what the prediction
+		/// system reconciles against; setting the transform directly is corrected away on the
+		/// next tick, so the character snaps back and the command appears to have done nothing.
+		/// </remarks>
+		private bool TryMoveTo(IPlayerCharacter actor, IPlayerCharacter moved, Vector3 position, Quaternion rotation, out string failure)
+		{
+			if (moved.Motor == null)
+			{
+				failure = "That character cannot be moved right now.";
+				return false;
+			}
+
+			moved.Motor.SetPositionAndRotationAndVelocity(position, rotation, Vector3.zero);
 
 			Log.Warning("SceneServerSystem",
-				$"'{actor.CharacterName}' ({actor.Account}) moved '{moved.CharacterName}' to '{destination.CharacterName}'.");
+				$"'{actor.CharacterName}' ({actor.Account}) moved '{moved.CharacterName}' to {position} in '{moved.CurrentSceneName()}'.");
 
 			failure = null;
 			return true;
 		}
 
-		#endregion
-
-		#region Removal
-
-		/// <summary>
-		/// Writes a kick request for a character's account.
-		/// </summary>
-		/// <remarks>
-		/// The account, not the connection. A kick request is the mechanism the login and scene
-		/// servers already poll, and it removes every session the account holds; severing one
-		/// connection here would leave the account's other characters logged in and would be
-		/// undone by a reconnect a second later.
-		/// </remarks>
-		private void KickCharacter(IPlayerCharacter character, string arguments)
+		/// <summary>Drops return points for characters no longer on this scene server, once there are many.</summary>
+		private void PruneSummonReturnPoints()
 		{
-			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target))
+			if (summonReturnPoints.Count < MaxSummonReturnPoints || !TryGetOnlineCharacters(out var mapping))
 			{
 				return;
 			}
-
-			/* An operator must not be able to remove somebody at or above their own level. Two
-			 * game masters kicking each other in a loop is the harmless version; the damaging
-			 * one is a compromised game master account removing the administrators who would
-			 * notice. */
-			if (target.AccessLevel >= character.AccessLevel && target.ID != character.ID)
+			foreach (long id in summonReturnPoints.Keys.Where(id => !mapping.CharactersByID.ContainsKey(id)).ToList())
 			{
-				Reply(character, $"{target.CharacterName} is {target.AccessLevel}; you cannot kick them.");
-				return;
-			}
-
-			string accountName = target.Account;
-			string targetName = target.CharacterName;
-			string actorName = character.CharacterName;
-
-			RunAdminAction(character, async () =>
-			{
-				if (!TryGetDbService(out IKickRequestService kickRequests))
-				{
-					return "The kick request service is unavailable.";
-				}
-
-				DatabaseResult result = await kickRequests.PersistAsync(accountName);
-				if (!result.IsSuccess)
-				{
-					return $"Could not write the kick request: {result.ErrorCode} - {result.ErrorMessage}";
-				}
-
-				await Log.Warning("SceneServerSystem",
-					$"Game master '{actorName}' requested a kick for account '{accountName}' ('{targetName}').");
-
-				return $"Kick request written for {targetName}. The servers act on it on their next poll.";
-			});
-		}
-
-		#endregion
-
-		#region Helpers
-
-		/// <summary>Resolves this scene server's online-character mapping.</summary>
-		private bool TryGetOnlineCharacters(out ICharacterMappingData<NetworkConnection> mapping)
-		{
-			return Server.DataContainerRegistry.TryGet(out mapping) && mapping != null;
-		}
-
-		/// <summary>
-		/// Resolves a character by name, answering the caller when it cannot.
-		/// </summary>
-		/// <remarks>
-		/// Only characters this scene server holds. A game master on one scene server cannot act
-		/// on a player held by another, and saying so is better than a lookup that reaches across
-		/// processes and acts on a character whose authoritative state lives elsewhere.
-		/// </remarks>
-		private bool TryResolveTarget(IPlayerCharacter character, string arguments, out IPlayerCharacter target)
-		{
-			target = null;
-
-			string name = (arguments ?? string.Empty).Trim();
-			if (string.IsNullOrWhiteSpace(name))
-			{
-				Reply(character, "Name a character.");
-				return false;
-			}
-			if (!TryGetOnlineCharacters(out var mapping))
-			{
-				Reply(character, "The character mapping is unavailable.");
-				return false;
-			}
-
-			if (!mapping.CharactersByLowerCaseName.TryGetValue(name.ToLowerInvariant(), out target) || target == null)
-			{
-				/* Echo a bounded prefix. This only goes back to the operator who typed it and the
-				 * text is already sanitized, but a reply whose length is driven by input still
-				 * pushes past ChatBroadcast.MaxTextLength. */
-				string shown = name.Length > 32 ? name.Substring(0, 32) + "..." : name;
-				Reply(character, $"'{shown}' is not on this scene server.");
-				return false;
-			}
-			return true;
-		}
-
-		/// <summary>Packs names into lines that stay inside the chat message limit.</summary>
-		private static IEnumerable<string> BatchNames(IEnumerable<string> names)
-		{
-			var line = new StringBuilder();
-			foreach (string name in names)
-			{
-				// 120, not MaxTextLength: leaves room for the separator and avoids a line that is
-				// exactly at the cap being truncated by a later prefix.
-				if (line.Length > 0 && line.Length + name.Length + 2 > 120)
-				{
-					yield return line.ToString();
-					line.Clear();
-				}
-				if (line.Length > 0)
-				{
-					line.Append(", ");
-				}
-				line.Append(name);
-			}
-			if (line.Length > 0)
-			{
-				yield return line.ToString();
+				summonReturnPoints.Remove(id);
 			}
 		}
 

@@ -238,6 +238,26 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid account credentials.");
 			}
 
+			/* A temporary ban ends here, at the first sign-in attempt after its instant, rather than
+			 * on a schedule. Nothing has to run for a ban to lift, so there is no job to fall behind
+			 * and no window in which a lapsed ban still refuses a player because a sweep has not
+			 * reached them. The UPDATE re-checks every condition itself, so two concurrent sign-ins
+			 * cannot both act on a row an operator re-banned permanently in between; only the one
+			 * whose statement actually matched restores the level it then proceeds with. */
+			if ((AccessLevel)accountEntity.AccessLevel == AccessLevel.Banned &&
+				accountEntity.BannedUntil != null &&
+				accountEntity.BannedUntil.Value <= DateTime.UtcNow)
+			{
+				DatabaseResult<bool> lifted = await LiftExpiredBanAsync(accountEntity.NameLowercase, cancellationToken).ConfigureAwait(false);
+				if (lifted.IsSuccess && lifted.Data)
+				{
+					accountEntity.AccessLevel = (byte)AccessLevel.Player;
+					accountEntity.BannedUntil = null;
+					accountEntity.BannedBy = null;
+					accountEntity.BanReason = null;
+				}
+			}
+
 			// Return generic error to prevent banned-account enumeration.
 			// Same message as null account above so attackers cannot distinguish
 			// a banned account from a non-existent one.
@@ -704,7 +724,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
 				var sql = $@"UPDATE {TableName}
-					SET access_level = {{1}}
+					SET access_level = {{1}},
+						banned_until = NULL,
+						banned_by = NULL,
+						ban_reason = NULL
 					WHERE name_lowercase = {{0}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { normalized, (short)accessLevel }, cancellationToken)
@@ -892,6 +915,13 @@ namespace FishMMO.Database.Npgsql.Services
 						TotpVerifiedAt = a.TotpVerifiedAt,
 						Created = a.TimeCreated,
 						LastLogin = a.LastLogin,
+						BannedUntil = a.BannedUntil,
+						BannedBy = a.BannedBy,
+						BanReason = a.BanReason,
+						Muted = a.Muted,
+						MutedUntil = a.MutedUntil,
+						MutedBy = a.MutedBy,
+						MuteReason = a.MuteReason,
 						// FirstOrDefault, not Single: an account with no characters has no group
 						// at all, and the default zero is the right answer for it.
 						CharacterCount = characterCounts
@@ -951,6 +981,13 @@ namespace FishMMO.Database.Npgsql.Services
 						TotpVerifiedAt = a.TotpVerifiedAt,
 						Created = a.TimeCreated,
 						LastLogin = a.LastLogin,
+						BannedUntil = a.BannedUntil,
+						BannedBy = a.BannedBy,
+						BanReason = a.BanReason,
+						Muted = a.Muted,
+						MutedUntil = a.MutedUntil,
+						MutedBy = a.MutedBy,
+						MuteReason = a.MuteReason,
 						// One row, so a correlated count is one indexed lookup and the grouped
 						// form the search needs would buy nothing here.
 						CharacterCount = dbContext.Characters.Count(c => c.Account == a.Name && !c.Deleted),
@@ -967,8 +1004,19 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public Task<DatabaseResult> BanAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			return BanAsync(accountName, null, null, null, cancellationToken);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> BanAsync(
 			string accountName,
+			DateTime? bannedUntilUtc,
+			string? bannedBy,
+			string? reason,
 			CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(accountName))
@@ -1020,11 +1068,24 @@ namespace FishMMO.Database.Npgsql.Services
 				// 1. The login gate. access_level is a byte in the model and smallint in
 				// PostgreSQL, so the parameter is a short — the same cast PersistAccessLevelAsync
 				// makes.
+				// The ban columns are written in the same statement as the level, so a ban can never
+				// exist without its expiry: a permanent ban explicitly clears a stale banned_until
+				// left behind by an earlier temporary one, which would otherwise lift it.
 				var accountSql = $@"UPDATE {TableName}
-					SET access_level = {{1}}
+					SET access_level = {{1}},
+						banned_until = {{2}},
+						banned_by = {{3}},
+						ban_reason = {{4}}
 					WHERE name_lowercase = {{0}}";
 				var accountRows = await dbContext.Database
-					.ExecuteSqlRawAsync(accountSql, new object[] { normalized, (short)(byte)AccessLevel.Banned }, cancellationToken)
+					.ExecuteSqlRawAsync(accountSql, new object[]
+					{
+						normalized,
+						(short)(byte)AccessLevel.Banned,
+						(object?)bannedUntilUtc ?? DBNull.Value,
+						(object?)Clip(bannedBy, ModerationActorMaxLength) ?? DBNull.Value,
+						(object?)Clip(reason, ModerationReasonMaxLength) ?? DBNull.Value,
+					}, cancellationToken)
 					.ConfigureAwait(false);
 				if (accountRows == 0)
 				{
@@ -1103,7 +1164,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
 				var sql = $@"UPDATE {TableName}
-					SET access_level = {{1}}
+					SET access_level = {{1}},
+						banned_until = NULL,
+						banned_by = NULL,
+						ban_reason = NULL
 					WHERE name_lowercase = {{0}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { normalized, (short)(byte)AccessLevel.Player }, cancellationToken)
@@ -1113,6 +1177,125 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Account", accountName);
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>Longest operator account name the moderation columns store.</summary>
+		private const int ModerationActorMaxLength = 50;
+
+		/// <summary>Longest reason the moderation columns store.</summary>
+		private const int ModerationReasonMaxLength = 256;
+
+		/// <summary>
+		/// Restores <c>Player</c> on a banned account whose temporary ban has lapsed.
+		/// </summary>
+		/// <returns>True when this call lifted the ban; false when the row no longer qualified.</returns>
+		private async Task<DatabaseResult<bool>> LiftExpiredBanAsync(string accountNameLowercase, CancellationToken cancellationToken)
+		{
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// Database time, not this process's clock, decides the lapse: the statement is the
+				// one place every login server agrees on what "now" is.
+				var sql = $@"UPDATE {TableName}
+					SET access_level = {{1}},
+						banned_until = NULL,
+						banned_by = NULL,
+						ban_reason = NULL
+					WHERE name_lowercase = {{0}}
+						AND access_level = {{2}}
+						AND banned_until IS NOT NULL
+						AND banned_until <= timezone('UTC', CURRENT_TIMESTAMP)";
+				int rows = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[]
+					{
+						accountNameLowercase,
+						(short)(byte)AccessLevel.Player,
+						(short)(byte)AccessLevel.Banned,
+					}, cancellationToken)
+					.ConfigureAwait(false);
+				return rows > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistMuteAsync(
+			string accountName,
+			DateTime? mutedUntilUtc,
+			string? mutedBy,
+			string? reason,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET muted = TRUE,
+						muted_until = {{1}},
+						muted_by = {{2}},
+						mute_reason = {{3}}
+					WHERE name_lowercase = {{0}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[]
+					{
+						normalized,
+						(object?)mutedUntilUtc ?? DBNull.Value,
+						(object?)Clip(mutedBy, ModerationActorMaxLength) ?? DBNull.Value,
+						(object?)Clip(reason, ModerationReasonMaxLength) ?? DBNull.Value,
+					}, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> ClearMuteAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET muted = FALSE,
+						muted_until = NULL,
+						muted_by = NULL,
+						mute_reason = NULL
+					WHERE name_lowercase = {{0}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>Cuts operator-supplied text to a column's length rather than failing the write on it.</summary>
+		private static string? Clip(string? text, int maxLength)
+		{
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				return null;
+			}
+			text = text.Trim();
+			return text.Length <= maxLength ? text : text.Substring(0, maxLength);
 		}
 	}
 }

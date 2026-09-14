@@ -106,6 +106,18 @@ namespace FishMMO.ControlPanel
 			=> InScopeAsync(s => s.UnbanAsync(accountName, cancellationToken));
 
 		/// <inheritdoc/>
+		public Task<DatabaseResult> BanAsync(string accountName, DateTime? bannedUntilUtc, string? bannedBy, string? reason, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.BanAsync(accountName, bannedUntilUtc, bannedBy, reason, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> PersistMuteAsync(string accountName, DateTime? mutedUntilUtc, string? mutedBy, string? reason, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.PersistMuteAsync(accountName, mutedUntilUtc, mutedBy, reason, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> ClearMuteAsync(string accountName, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.ClearMuteAsync(accountName, cancellationToken));
+
+		/// <inheritdoc/>
 		public Task<DatabaseResult> PersistAccessLevelAsync(string accountName, byte accessLevel, CancellationToken cancellationToken = default)
 			=> InScopeAsync(s => s.PersistAccessLevelAsync(accountName, accessLevel, cancellationToken));
 

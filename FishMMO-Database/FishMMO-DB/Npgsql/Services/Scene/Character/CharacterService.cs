@@ -1662,6 +1662,120 @@ namespace FishMMO.Database.Npgsql.Services
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
+		/// <summary>Longest operator account name the moderation columns store.</summary>
+		private const int ModerationActorMaxLength = 50;
+
+		/// <summary>Longest reason the moderation columns store.</summary>
+		private const int ModerationReasonMaxLength = 256;
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistMuteAsync(long characterId, DateTime? mutedUntilUtc, string? mutedBy, string? reason, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// Not version-gated: the save path never names these columns, so there is no
+				// gameplay write for a mute to race.
+				int rows = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName}
+					SET muted = TRUE,
+						muted_until = {{1}},
+						muted_by = {{2}},
+						mute_reason = {{3}}
+					WHERE id = {{0}} AND deleted = false",
+					new object[]
+					{
+						characterId,
+						(object?)mutedUntilUtc ?? DBNull.Value,
+						(object?)ClipModerationText(mutedBy, ModerationActorMaxLength) ?? DBNull.Value,
+						(object?)ClipModerationText(reason, ModerationReasonMaxLength) ?? DBNull.Value,
+					}, cancellationToken).ConfigureAwait(false);
+				if (rows == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", $"{characterId}");
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> ClearMuteAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				int rows = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName}
+					SET muted = FALSE,
+						muted_until = NULL,
+						muted_by = NULL,
+						mute_reason = NULL
+					WHERE id = {{0}} AND deleted = false",
+					new object[] { characterId }, cancellationToken).ConfigureAwait(false);
+				if (rows == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", $"{characterId}");
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterChatMuteState>> FetchChatMuteAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult<CharacterChatMuteState>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				var row = await (
+					from c in dbContext.Characters.AsNoTracking()
+					join a in dbContext.Accounts.AsNoTracking() on c.Account equals a.Name
+					where c.ID == characterId && !c.Deleted
+					select new
+					{
+						c.Muted,
+						c.MutedUntil,
+						c.MutedBy,
+						c.MuteReason,
+						AccountMuted = a.Muted,
+						AccountMutedUntil = a.MutedUntil,
+						AccountMutedBy = a.MutedBy,
+						AccountMuteReason = a.MuteReason,
+					})
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				if (row == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", $"{characterId}");
+				}
+
+				return new CharacterChatMuteState(
+					new ChatMuteData(row.AccountMuted, row.AccountMutedUntil, row.AccountMutedBy, row.AccountMuteReason),
+					new ChatMuteData(row.Muted, row.MutedUntil, row.MutedBy, row.MuteReason));
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>Cuts operator-supplied text to a column's length rather than failing the write on it.</summary>
+		private static string? ClipModerationText(string? text, int maxLength)
+		{
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				return null;
+			}
+			text = text.Trim();
+			return text.Length <= maxLength ? text : text.Substring(0, maxLength);
+		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<DateTime?>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default)
 		{

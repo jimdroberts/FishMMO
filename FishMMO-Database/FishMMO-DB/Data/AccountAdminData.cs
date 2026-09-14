@@ -79,6 +79,27 @@ namespace FishMMO.Database.Data
 		/// real, played account", and a row an operator already deleted is not evidence of that.
 		/// </remarks>
 		public int CharacterCount { get; set; }
+
+		/// <summary>When a temporary ban lifts (UTC); null for a permanent ban, or for no ban.</summary>
+		public DateTime? BannedUntil { get; set; }
+
+		/// <summary>Operator account that applied the ban, when recorded.</summary>
+		public string? BannedBy { get; set; }
+
+		/// <summary>The reason recorded with the ban.</summary>
+		public string? BanReason { get; set; }
+
+		/// <summary>Whether an account-wide chat mute is set. See <see cref="MutedUntil"/> for whether it still applies.</summary>
+		public bool Muted { get; set; }
+
+		/// <summary>When the account mute lifts (UTC), or null for no end.</summary>
+		public DateTime? MutedUntil { get; set; }
+
+		/// <summary>Operator account that applied the mute.</summary>
+		public string? MutedBy { get; set; }
+
+		/// <summary>The reason recorded with the mute.</summary>
+		public string? MuteReason { get; set; }
 	}
 
 	/// <summary>

@@ -2,7 +2,6 @@ using FishNet.Connection;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Threading.Tasks;
 using FishMMO.Auth.Core;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -15,22 +14,27 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// The in-game <c>/admin</c> command set for locking servers and scheduling maintenance
-	/// shutdowns.
+	/// The in-game <c>/admin</c> command set: server control, account access, and everything that
+	/// changes the game itself — currency, items, attributes, life and death.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Registered once, as <c>/admin</c>, at <see cref="AccessLevel.Admin"/>. The sub-command is
-	/// the first word of the remainder, so one registration and therefore one access check covers
-	/// every operation — there is no way to add a sub-command that forgets to be gated.
+	/// Registered once, as <c>/admin</c>, at <see cref="AccessLevel.Admin"/>, with its sub-commands
+	/// in one table. See <c>SceneServerSystem.OperatorCommands</c> for the shape and why it matters.
+	/// Administrators also hold every <c>/gm</c> command, which is registered at a lower level.
 	/// </para>
 	/// <para>
-	/// Every command writes the database row for the server it targets and returns; it never
+	/// Server control writes the database row for the server it targets and returns; it never
 	/// mutates a server's state directly, not even this one's. Each process adopts its own row on
 	/// its next pulse, which is what lets a command typed on one scene server reach the world
 	/// server and every other scene server under it. The cost is that changes take effect within
 	/// a pulse or two rather than instantly, which is why the acknowledgement says what was
 	/// written rather than claiming the server has already done it.
+	/// </para>
+	/// <para>
+	/// The game-changing commands live in <c>SceneServerSystem.AdminCommands.Economy</c> and
+	/// <c>SceneServerSystem.AdminCommands.Character</c>. They are administrator-only by design: a
+	/// game master who can mint currency or items is an exploit waiting for one stolen password.
 	/// </para>
 	/// </remarks>
 	public partial class SceneServerSystem
@@ -43,124 +47,125 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private const int MaxShutdownDelaySeconds = 86_400;
 
-		/// <summary>
-		/// Registers the <c>/admin</c> command. Called from the scene server's initialization.
-		/// </summary>
+		/// <summary>Longest announcement accepted, leaving room for nothing else on the line.</summary>
+		private const int MaxAnnouncementLength = 96;
+
+		/// <summary>Registers the <c>/admin</c> command. Called from the scene server's initialization.</summary>
 		private void RegisterAdminCommands()
 		{
+			adminCommands = new OperatorCommandSet("/admin", AccessLevel.Admin, BuildAdminCommands());
+
 			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
 			{
 				{ "/admin", OnAdminCommand },
 			}, AccessLevel.Admin);
 		}
 
-		/// <summary>
-		/// Unregisters the <c>/admin</c> command. Called from the scene server's teardown.
-		/// </summary>
+		/// <summary>Unregisters the <c>/admin</c> command. Called from the scene server's teardown.</summary>
 		private void UnregisterAdminCommands()
 		{
 			ChatHelper.RemoveCommands(new[] { "/admin" });
 		}
 
-		/// <summary>
-		/// Dispatches an <c>/admin</c> sub-command.
-		/// </summary>
-		/// <remarks>
-		/// Access has already been checked by <see cref="ChatHelper.TryParseCommand"/> against
-		/// the registration above; reaching this method means the caller is an administrator.
-		/// </remarks>
-		/// <param name="character">Administrator running the command.</param>
-		/// <param name="msg">Chat message whose text is the sub-command and its arguments.</param>
-		/// <returns>Always true: the command is consumed and never echoed to chat.</returns>
+		/// <summary>Dispatches an <c>/admin</c> sub-command.</summary>
 		private bool OnAdminCommand(IPlayerCharacter character, ChatBroadcast msg)
 		{
-			if (character == null)
+			return DispatchOperatorCommand(adminCommands, character, msg);
+		}
+
+		/// <summary>The whole <c>/admin</c> table, in presentation order.</summary>
+		private IEnumerable<OperatorCommand> BuildAdminCommands()
+		{
+			var commands = new List<OperatorCommand>()
 			{
-				return true;
-			}
+				new OperatorCommand
+				{
+					Name = "status", Aliases = new[] { "serverstatus" }, Category = "Server",
+					Summary = "Reports this scene server's lock and shutdown state, and that of its worlds.",
+					Run = (c, a) => ReportStatus(c),
+				},
+				new OperatorCommand
+				{
+					Name = "lockserver", Aliases = new[] { "lockworld" }, Category = "Server",
+					Summary = "Locks your world server: no new logins below GameMaster. Players online stay.",
+					Destructive = true,
+					Run = (c, a) => SetWorldLock(c, locked: true),
+				},
+				new OperatorCommand
+				{
+					Name = "unlockserver", Aliases = new[] { "unlockworld" }, Category = "Server",
+					Summary = "Reopens your world server to logins.",
+					Run = (c, a) => SetWorldLock(c, locked: false),
+				},
+				new OperatorCommand
+				{
+					Name = "shutdown", Category = "Server",
+					Summary = "Locks the world and shuts it down after a delay, warning players as it counts down.",
+					Arguments = "seconds:Integer", Destructive = true,
+					Run = ScheduleWorldShutdown,
+				},
+				new OperatorCommand
+				{
+					Name = "stopshutdown", Category = "Server",
+					Summary = "Cancels the world's shutdown. The world stays locked until unlockserver.",
+					Run = (c, a) => CancelWorldShutdown(c),
+				},
+				new OperatorCommand
+				{
+					Name = "lockscene", Category = "Server",
+					Summary = "Locks this scene server: no new players or scenes are routed here.",
+					Destructive = true,
+					Run = (c, a) => SetSceneLock(c, locked: true),
+				},
+				new OperatorCommand
+				{
+					Name = "unlockscene", Category = "Server",
+					Summary = "Reopens this scene server.",
+					Run = (c, a) => SetSceneLock(c, locked: false),
+				},
+				new OperatorCommand
+				{
+					Name = "shutdownscene", Category = "Server",
+					Summary = "Locks this scene server and shuts it down after a delay; its players are moved on.",
+					Arguments = "seconds:Integer", Destructive = true,
+					Run = ScheduleSceneShutdown,
+				},
+				new OperatorCommand
+				{
+					Name = "stopshutdownscene", Category = "Server",
+					Summary = "Cancels this scene server's shutdown. It stays locked until unlockscene.",
+					Run = (c, a) => CancelSceneShutdown(c),
+				},
+				new OperatorCommand
+				{
+					Name = "announce", Aliases = new[] { "broadcast" }, Category = "Server",
+					Summary = "Sends a system message to every character on this scene server.",
+					Arguments = "message:Text",
+					Run = Announce,
+				},
 
-			string remainder = msg.Text ?? string.Empty;
-			string subCommand = ChatHelper.GetWordAndTrimmed(remainder, out string arguments);
+				new OperatorCommand
+				{
+					Name = "access", Aliases = new[] { "setaccess" }, Category = "Accounts",
+					Summary = "Sets an account's access level, below your own. It applies when they next log in.",
+					Arguments = "account:Account;level:Choice=Banned,Player,GameMaster,Admin", Destructive = true,
+					Run = SetAccountAccessLevel,
+				},
+				new OperatorCommand
+				{
+					Name = "ban", Category = "Accounts",
+					Summary = "Bans an account permanently, revoking its sessions and kicking it. Game masters use /gm tempban.",
+					Arguments = "account:Account;reason:Text", Destructive = true,
+					Run = BanAccountPermanently,
+				},
+			};
 
-			// A single-word sub-command leaves the whole remainder as the "trimmed" part.
-			if (string.IsNullOrWhiteSpace(subCommand))
-			{
-				subCommand = arguments;
-				arguments = string.Empty;
-			}
-
-			switch (subCommand.Trim().ToLowerInvariant())
-			{
-				case "lockserver":
-				case "lockworld":
-					SetWorldLock(character, locked: true);
-					return true;
-
-				case "unlockserver":
-				case "unlockworld":
-					SetWorldLock(character, locked: false);
-					return true;
-
-				case "lockscene":
-					SetSceneLock(character, locked: true);
-					return true;
-
-				case "unlockscene":
-					SetSceneLock(character, locked: false);
-					return true;
-
-				case "shutdown":
-					ScheduleWorldShutdown(character, arguments);
-					return true;
-
-				case "stopshutdown":
-					CancelWorldShutdown(character);
-					return true;
-
-				case "shutdownscene":
-					ScheduleSceneShutdown(character, arguments);
-					return true;
-
-				case "stopshutdownscene":
-					CancelSceneShutdown(character);
-					return true;
-
-				case "status":
-				case "serverstatus":
-					ReportStatus(character);
-					return true;
-
-				case "announce":
-				case "broadcast":
-					Announce(character, arguments);
-					return true;
-
-				case "access":
-				case "setaccess":
-					SetAccountAccessLevel(character, arguments);
-					return true;
-
-				default:
-					/* Split across replies to stay inside ChatBroadcast.MaxTextLength (128).
-					 * Nothing enforces that constant today, but writing messages that exceed a
-					 * documented wire limit is how it stops being true quietly. */
-					Reply(character, "Admin: /admin status | lockserver | unlockserver | shutdown <seconds> | stopshutdown");
-					Reply(character, "Admin: /admin lockscene | unlockscene | shutdownscene <seconds> | stopshutdownscene");
-					Reply(character, "Admin: /admin announce <message> | access <account> <level>");
-					Reply(character, "Admin: game master commands are under /gm");
-					return true;
-			}
+			commands.AddRange(BuildAdminEconomyCommands());
+			commands.AddRange(BuildAdminCharacterCommands());
+			return commands;
 		}
 
 		#region Announcements
-
-		/// <summary>Longest announcement accepted, leaving room for the prefix.</summary>
-		/// <remarks>
-		/// <see cref="ChatBroadcast.MaxTextLength"/> is the wire limit and the prefix is part of
-		/// the message that has to fit inside it, so the text an operator may type is shorter
-		/// than the limit rather than equal to it.
-		/// </remarks>
-		private const int MaxAnnouncementLength = 96;
 
 		/// <summary>
 		/// Sends a system-channel message to every character on this scene server.
@@ -183,7 +188,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string text = (arguments ?? string.Empty).Trim();
 			if (string.IsNullOrWhiteSpace(text))
 			{
-				Reply(character, "Say what? /admin announce <message>");
+				ReplyUsage(character, adminCommands, "announce");
 				return;
 			}
 			if (text.Length > MaxAnnouncementLength)
@@ -192,8 +197,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mapping) ||
-				mapping == null)
+			if (!TryGetOnlineCharacters(out var mapping))
 			{
 				Reply(character, "The character mapping is unavailable.");
 				return;
@@ -225,7 +229,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		#endregion
 
-		#region Access Levels
+		#region Accounts
 
 		/// <summary>
 		/// Sets an account's access level.
@@ -239,11 +243,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// decorative.
 		/// </para>
 		/// <para>
-		/// The change is recorded in the operator audit log by the chat system's subscription to
-		/// the access gate, like every other elevated command. An access level that changed with
-		/// no record of who changed it is indistinguishable from a compromise.
-		/// </para>
-		/// <para>
 		/// Existing sessions are not severed here. The Control Panel revokes a session whose
 		/// account level has changed on that session's next request, and the game reads the level
 		/// from the character row at login; a player already in the world keeps the level they
@@ -252,18 +251,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void SetAccountAccessLevel(IPlayerCharacter character, string arguments)
 		{
-			string accountName = ChatHelper.GetWordAndTrimmed(arguments ?? string.Empty, out string levelText);
-			if (string.IsNullOrWhiteSpace(accountName) || string.IsNullOrWhiteSpace(levelText))
+			string accountName = OperatorCommandParsing.SplitFirstWord(arguments, out string levelText);
+			if (accountName.Length == 0 || levelText.Length == 0)
 			{
-				Reply(character, "Usage: /admin access <account> <Banned|Player|GameMaster|Admin>");
+				ReplyUsage(character, adminCommands, "access");
 				return;
 			}
 
-			levelText = levelText.Trim();
+			/* Enum.IsDefined is handed the parsed AccessLevel, whose underlying type is byte. Given
+			 * anything with a different underlying type it throws rather than returning false. */
 			if (!Enum.TryParse(levelText, ignoreCase: true, out AccessLevel level) ||
 				!Enum.IsDefined(typeof(AccessLevel), level))
 			{
-				Reply(character, $"'{(levelText.Length > 24 ? levelText.Substring(0, 24) : levelText)}' is not an access level.");
+				Reply(character, $"'{OperatorCommandParsing.Truncate(levelText, 24)}' is not an access level.");
 				return;
 			}
 
@@ -283,22 +283,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string actorAccount = character.Account;
 			AccessLevel actorLevel = character.AccessLevel;
 
-			RunAdminAction(character, async () =>
+			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out IAccountService accountService))
 				{
 					return "The account service is unavailable.";
 				}
 
-				/* The target's current level is read first so an operator cannot act on somebody
-				 * at or above them. Checked here rather than in the service because it depends on
-				 * the caller, which the database layer cannot see. */
-				DatabaseResult<AccountData> existing = await accountService.FetchForLoginAsync(accountName, false);
-				if (!existing.IsSuccess)
+				/* The target's current level is read first so an operator cannot act on somebody at
+				 * or above them. FetchAdminAsync, not the login fetch: the login fetch reports a
+				 * banned account as missing, which made this command unable to lift a ban. */
+				DatabaseResult<AccountAdminData> existing = await accountService.FetchAdminAsync(accountName);
+				if (!existing.IsSuccess || existing.Data == null)
 				{
-					// FetchForLoginAsync refuses a banned account as well as a missing one and
-					// deliberately does not say which. Neither is something to act on here.
-					return $"No account named '{accountName}' is available.";
+					return $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.";
 				}
 
 				var currentLevel = (AccessLevel)existing.Data.AccessLevel;
@@ -320,6 +318,67 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			});
 		}
 
+		/// <summary>
+		/// Bans an account with no end: level, tokens, panel sessions and a kick, in one transaction.
+		/// </summary>
+		/// <remarks>
+		/// Replaces a temporary ban already on the account, which is the usual way this is reached:
+		/// a game master's capped ban escalated by an administrator. Refuses an account already banned
+		/// permanently, so a second ban cannot quietly overwrite who banned it and why.
+		/// </remarks>
+		private void BanAccountPermanently(IPlayerCharacter character, string arguments)
+		{
+			string accountName = OperatorCommandParsing.SplitFirstWord(arguments, out string reason);
+			if (accountName.Length == 0 || reason.Length == 0)
+			{
+				ReplyUsage(character, adminCommands, "ban");
+				return;
+			}
+			if (string.Equals(accountName, character.Account, StringComparison.OrdinalIgnoreCase))
+			{
+				Reply(character, "You cannot ban your own account.");
+				return;
+			}
+
+			string actorAccount = character.Account;
+			AccessLevel actorLevel = character.AccessLevel;
+
+			RunOperatorAction(character, async () =>
+			{
+				if (!TryGetDbService(out IAccountService accountService))
+				{
+					return "The account service is unavailable.";
+				}
+
+				DatabaseResult<AccountAdminData> existing = await accountService.FetchAdminAsync(accountName);
+				if (!existing.IsSuccess || existing.Data == null)
+				{
+					return $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.";
+				}
+
+				var currentLevel = (AccessLevel)existing.Data.AccessLevel;
+				if (currentLevel >= actorLevel)
+				{
+					return $"'{accountName}' is {currentLevel}; you cannot ban them.";
+				}
+				if (currentLevel == AccessLevel.Banned && existing.Data.BannedUntil == null)
+				{
+					return $"'{accountName}' is already banned permanently.";
+				}
+
+				DatabaseResult result = await accountService.BanAsync(accountName, null, actorAccount, reason);
+				if (!result.IsSuccess)
+				{
+					return $"Could not ban '{accountName}': {result.ErrorMessage}";
+				}
+
+				await Log.Warning("SceneServerSystem",
+					$"Administrator '{actorAccount}' banned account '{accountName}' permanently: {reason}");
+
+				return $"'{accountName}' is banned permanently. Sessions revoked and a kick written.";
+			});
+		}
+
 		#endregion
 
 		#region World Commands
@@ -335,7 +394,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string adminName = character.CharacterName;
-			RunAdminAction(character, async () =>
+			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out IWorldServerService worldServerService))
 				{
@@ -352,8 +411,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					$"Administrator '{adminName}' {(locked ? "LOCKED" : "UNLOCKED")} world server {worldServerID}.");
 
 				return locked
-					? "World locked. New logins refused except above Player. Players already online are unaffected."
-					: "World unlocked. It is accepting logins again.";
+					? "World lock written. New logins refused except above Player once it is read. Players online are unaffected."
+					: "World unlock written. It accepts logins again once it is read.";
 			});
 		}
 
@@ -375,7 +434,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DateTime deadline = DateTime.UtcNow.AddSeconds(seconds);
 			string adminName = character.CharacterName;
 
-			RunAdminAction(character, async () =>
+			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out IWorldServerService worldServerService))
 				{
@@ -407,7 +466,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string adminName = character.CharacterName;
-			RunAdminAction(character, async () =>
+			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out IWorldServerService worldServerService))
 				{
@@ -423,7 +482,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await Log.Warning("SceneServerSystem",
 					$"Administrator '{adminName}' cancelled the scheduled shutdown of world server {worldServerID}.");
 
-				return "World shutdown cancelled. The world is still LOCKED — /admin unlockserver reopens it.";
+				return "World shutdown cancelled. A shutdown already under way cannot be recalled. The world is still LOCKED; /admin unlockserver reopens it.";
 			});
 		}
 
@@ -440,7 +499,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string adminName = character.CharacterName;
-			RunAdminAction(character, async () =>
+			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out ISceneServerService sceneServerService))
 				{
@@ -457,8 +516,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					$"Administrator '{adminName}' {(locked ? "LOCKED" : "UNLOCKED")} scene server {sceneServerID}.");
 
 				return locked
-					? $"Scene server {sceneServerID} locked. No new players will be routed here and no new scenes will load."
-					: $"Scene server {sceneServerID} unlocked.";
+					? $"Scene server {sceneServerID} lock written. Once read, no new players are routed here and no new scenes load."
+					: $"Scene server {sceneServerID} unlock written.";
 			});
 		}
 
@@ -474,7 +533,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DateTime deadline = DateTime.UtcNow.AddSeconds(seconds);
 			string adminName = character.CharacterName;
 
-			RunAdminAction(character, async () =>
+			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out ISceneServerService sceneServerService))
 				{
@@ -504,7 +563,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string adminName = character.CharacterName;
-			RunAdminAction(character, async () =>
+			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out ISceneServerService sceneServerService))
 				{
@@ -520,7 +579,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await Log.Warning("SceneServerSystem",
 					$"Administrator '{adminName}' cancelled the scheduled shutdown of scene server {sceneServerID}.");
 
-				return $"Scene server {sceneServerID} shutdown cancelled. Still LOCKED — /admin unlockscene reopens it.";
+				return $"Scene server {sceneServerID} shutdown cancelled. Still LOCKED; /admin unlockscene reopens it.";
 			});
 		}
 
@@ -579,18 +638,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string trimmed = (arguments ?? string.Empty).Trim();
 			if (trimmed.Length == 0)
 			{
-				Reply(character, "Usage: /admin shutdown <seconds>");
+				Reply(character, "Give a delay in seconds, for example 300. Use 0 to shut down immediately.");
 				return false;
 			}
 
 			if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out seconds))
 			{
-				/* Echo at most a short prefix of what was typed. The text has already been
-				 * stripped of rich-text tags on the way in, and this only ever goes back to the
-				 * administrator who typed it, but a reply whose length is driven by input is
-				 * still input-driven — and it would push past ChatBroadcast.MaxTextLength. */
-				string shown = trimmed.Length > 32 ? trimmed.Substring(0, 32) + "..." : trimmed;
-				Reply(character, $"'{shown}' is not a number of seconds.");
+				/* Echo at most a short prefix of what was typed: a reply whose length is driven by
+				 * input would push past ChatBroadcast.MaxTextLength. */
+				Reply(character, $"'{OperatorCommandParsing.Truncate(trimmed, 32)}' is not a number of seconds.");
 				return false;
 			}
 
@@ -624,77 +680,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			sceneServerID = runtimeData.ID;
 			return true;
-		}
-
-		/// <summary>
-		/// Runs an administrative database action and reports its outcome back to the caller.
-		/// </summary>
-		/// <remarks>
-		/// Every path answers. An operator command that appears to do nothing is worse than one
-		/// that fails loudly — they will run it again, and on a shutdown that means a second
-		/// deadline replacing the first. The reply is marshalled back to the main thread because
-		/// the broadcast is a network call.
-		/// </remarks>
-		/// <param name="character">Administrator to answer.</param>
-		/// <param name="action">Work to run; returns the message to send back.</param>
-		private void RunAdminAction(IPlayerCharacter character, Func<Task<string>> action)
-		{
-			long characterID = character.ID;
-
-			if (!TryEnqueueAsyncWork(async () =>
-			{
-				string reply;
-				try
-				{
-					reply = await action();
-				}
-				catch (Exception ex)
-				{
-					await Log.Error("SceneServerSystem", $"Admin command failed: {ex}");
-					reply = "The command failed. See the server log.";
-				}
-
-				string finalReply = reply;
-				TryEnqueueMainThread(() => ReplyByCharacterID(characterID, finalReply));
-			}, characterID))
-			{
-				Reply(character, "The server is busy and could not run that command. Try again in a moment.");
-			}
-		}
-
-		/// <summary>Sends a system-channel line to a character. Main thread only.</summary>
-		private void Reply(IPlayerCharacter character, string text)
-		{
-			NetworkConnection conn = character?.Owner;
-			if (conn == null || !conn.IsActive || Server?.NetworkWrapper == null)
-			{
-				return;
-			}
-
-			Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
-			{
-				Channel = ChatChannel.System,
-				Text = text,
-			}, true, FishNet.Transporting.Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Sends a system-channel line to a character resolved by id.
-		/// </summary>
-		/// <remarks>
-		/// Resolved by id rather than by holding the character reference across the await: the
-		/// administrator may have logged out, changed scene server or been despawned while the
-		/// database work ran, and the object would then be a stale reference to a pooled
-		/// instance now belonging to somebody else.
-		/// </remarks>
-		private void ReplyByCharacterID(long characterID, string text)
-		{
-			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping) ||
-				!charMapping.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character))
-			{
-				return;
-			}
-			Reply(character, text);
 		}
 
 		#endregion

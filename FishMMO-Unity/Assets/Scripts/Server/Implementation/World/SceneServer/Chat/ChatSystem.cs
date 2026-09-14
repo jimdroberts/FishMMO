@@ -783,6 +783,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* A mute silences chat and nothing else, so it is tested here: after commands, before any
+			 * channel. A muted player must still be able to /report, /helpme and read /tickets — the
+			 * support channel is how a mute is appealed — and every channel prefix, /w and /tell and /g
+			 * alike, is chat that arrives past this point and is refused. The state is held in memory,
+			 * so the hot path is one comparison. */
+			if (sender.ChatMutedUntilTicks > receivedTicks)
+			{
+				OnSendSystemMessage(conn, ChatMutePolicy.DescribeForPlayer(sender.ChatMutedUntilTicks, sender.ChatMuteReason, receivedTicks));
+				return;
+			}
+
 			/* Not a registered command after all, so the duplicate filter still applies. A
 			 * channel prefix such as "/w" arrives here with the prefix already stripped, so the
 			 * comparison is against the message body — which is what a player repeating

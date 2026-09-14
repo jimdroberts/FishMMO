@@ -1,0 +1,492 @@
+/*
+    UIStaffConsole.uss
+    Layout for the staff console. Colours come from FishMMO-Theme.uss tokens only.
+
+    Sized against the 1200x800 reference resolution. It is a working tool rather than a
+    glance-at window, so it is larger than most panels: 720x520, centred, draggable by its
+    header like any other window.
+
+    Unity's default runtime theme puts padding and margin on every Label; every dense row
+    below zeroes both on its own labels so a line of text costs its line height and no more.
+*/
+
+.staff-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 720px;
+    height: 520px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.staff-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.staff-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.staff-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    width: 200px;
+    flex-shrink: 0;
+}
+
+.staff-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.staff-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.staff-tabs {
+    flex-direction: row;
+    flex-grow: 1;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.staff-tab {
+    height: 26px;
+    min-width: 76px;
+    margin-left: 4px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.staff-close-btn {
+    margin-left: 10px;
+}
+
+/* ── Pages ──────────────────────────────────────────────── */
+
+.staff-pages {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.staff-page {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: stretch;
+    overflow: hidden;
+}
+
+.staff-page--stacked {
+    flex-direction: column;
+}
+
+.staff-split {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: stretch;
+    overflow: hidden;
+}
+
+.staff-column {
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.staff-column--list {
+    width: 290px;
+    flex-shrink: 0;
+}
+
+.staff-column--detail {
+    flex-grow: 1;
+    flex-shrink: 1;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* The theme's divider is a horizontal rule; stood on its side here. */
+.staff-divider {
+    width: 1px;
+    height: auto;
+    align-self: stretch;
+    flex-shrink: 0;
+}
+
+.staff-caption {
+    height: 20px;
+    flex-shrink: 0;
+    padding: 0 8px;
+    margin: 0;
+    -unity-text-align: middle-left;
+}
+
+.staff-list-scroll {
+    flex-grow: 1;
+}
+
+.staff-detail-scroll {
+    flex-grow: 1;
+}
+
+.staff-list {
+    flex-direction: column;
+}
+
+.staff-empty {
+    margin-top: 18px;
+    margin-bottom: 18px;
+}
+
+.staff-detail-title {
+    flex-shrink: 0;
+    padding: 0;
+    margin: 0 0 2px 0;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.staff-detail-meta {
+    flex-shrink: 0;
+    padding: 0;
+    margin: 0 0 6px 0;
+    white-space: normal;
+}
+
+/* ── Rows ───────────────────────────────────────────────── */
+
+.staff-row {
+    flex-direction: column;
+    flex-shrink: 0;
+    padding-left: 10px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.staff-row Label {
+    padding: 0;
+    margin: 0;
+}
+
+.staff-row__line {
+    flex-direction: row;
+    align-items: center;
+    height: 16px;
+}
+
+.staff-row__name {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.staff-row__meta {
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.staff-row__trail {
+    flex-shrink: 0;
+    margin-left: 6px;
+    -unity-text-align: middle-right;
+}
+
+.staff-row .staff-badge {
+    height: 14px;
+    padding: 0 4px;
+    margin: 0 0 0 4px;
+    flex-shrink: 0;
+}
+
+.staff-category {
+    height: 20px;
+    flex-shrink: 0;
+    padding: 0 8px;
+    margin: 6px 0 2px 0;
+}
+
+/* ── Actions and forms ──────────────────────────────────── */
+
+.staff-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.staff-action {
+    height: 24px;
+    margin: 0 6px 6px 0;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.staff-form {
+    flex-direction: column;
+}
+
+.staff-field {
+    flex-direction: column;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+}
+
+.staff-field Label {
+    padding: 0;
+    margin: 0;
+}
+
+.staff-field__label {
+    height: 14px;
+    margin-bottom: 2px;
+}
+
+.staff-field__inputs {
+    flex-direction: row;
+    align-items: center;
+    height: 24px;
+}
+
+.staff-field__text {
+    flex-grow: 1;
+    flex-shrink: 1;
+    height: 24px;
+    margin: 0;
+}
+
+.staff-field__dropdown {
+    flex-grow: 1;
+    flex-shrink: 1;
+    height: 24px;
+    margin: 0;
+}
+
+.staff-field__pick {
+    width: 130px;
+    flex-shrink: 0;
+    height: 24px;
+    margin: 0 0 0 6px;
+}
+
+.staff-field__hint {
+    height: 12px;
+    margin-top: 2px;
+    -unity-text-align: middle-left;
+}
+
+.staff-preview {
+    flex-shrink: 0;
+    padding: 4px 0 0 0;
+    margin: 0;
+    white-space: normal;
+    color: var(--abyss-100);
+    font-size: 11px;
+}
+
+.staff-run-row {
+    flex-direction: row;
+    align-items: center;
+    height: 32px;
+    flex-shrink: 0;
+}
+
+.staff-status {
+    flex-grow: 1;
+    flex-shrink: 1;
+    padding: 0;
+    margin: 0 8px 0 0;
+    white-space: normal;
+    font-size: 10px;
+    color: var(--abyss-300);
+}
+
+.staff-status--error {
+    color: var(--danger);
+}
+
+.staff-run {
+    width: 150px;
+    height: 26px;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+/* ── Tickets ────────────────────────────────────────────── */
+
+.staff-toolbar {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.staff-chip {
+    height: 24px;
+    min-width: 70px;
+    margin-right: 4px;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.staff-toolbar__spacer {
+    flex-grow: 1;
+}
+
+.staff-toolbar-btn {
+    height: 24px;
+    margin-left: 4px;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.staff-pager-label {
+    min-width: 70px;
+    padding: 0;
+    margin: 0 4px;
+    -unity-text-align: middle-center;
+}
+
+.staff-ticket-detail {
+    flex-direction: column;
+}
+
+.staff-ticket-detail Label {
+    padding: 0;
+    margin: 0;
+}
+
+.staff-section {
+    height: 18px;
+    flex-shrink: 0;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.staff-kv {
+    flex-direction: row;
+    flex-shrink: 0;
+    min-height: 15px;
+}
+
+.staff-kv__key {
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.staff-kv__value {
+    flex-grow: 1;
+    flex-shrink: 1;
+    white-space: normal;
+}
+
+.staff-body-text {
+    white-space: normal;
+    color: var(--abyss-100);
+    font-size: 11px;
+}
+
+.staff-message {
+    flex-direction: column;
+    flex-shrink: 0;
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    border-left-width: 2px;
+    border-left-color: var(--abyss-400);
+    background-color: var(--abyss-850);
+}
+
+.staff-message--internal {
+    border-left-width: 3px;
+    border-left-color: var(--warn);
+    background-color: var(--abyss-700);
+}
+
+.staff-message__head {
+    font-size: 10px;
+    color: var(--abyss-300);
+}
+
+.staff-message__tag {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: var(--warn);
+}
+
+/* ── Output ─────────────────────────────────────────────── */
+
+.staff-output {
+    height: 126px;
+    flex-shrink: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-bottom: 8px;
+    border-top-width: 1px;
+    border-top-color: var(--abyss-400);
+}
+
+.staff-output__head {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.staff-output__title {
+    flex-grow: 1;
+    padding: 0;
+    margin: 0;
+}
+
+.staff-output__clear {
+    height: 20px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin: 0;
+}
+
+.staff-output__scroll {
+    flex-grow: 1;
+}
+
+.staff-output__list {
+    flex-direction: column;
+    padding: 2px 6px;
+}
+
+.staff-output__line {
+    padding: 0;
+    margin: 0;
+    font-size: 11px;
+    white-space: normal;
+    color: var(--abyss-100);
+}
+
+.staff-output__line--sent {
+    color: var(--brand-300);
+}
+
+.staff-output__line--notice {
+    color: var(--abyss-300);
+}
+
+.staff-output__line--error {
+    color: var(--danger);
+}

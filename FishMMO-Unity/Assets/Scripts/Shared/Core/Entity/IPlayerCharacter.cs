@@ -267,6 +267,19 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		long ChatTokenLastRefillTicks { get; set; }
 		/// <summary>
+		/// UTC ticks until which this character's chat is muted: 0 when not muted, <c>long.MaxValue</c>
+		/// for a mute with no end.
+		/// </summary>
+		/// <remarks>
+		/// Server-side state, never written to the spawn payload. Resolved from the character's own mute
+		/// and its account's when the character loads, and refreshed by the operator command that
+		/// changes either. Held as ticks so the chat path's test is one comparison against the tick
+		/// stamp the message already carries.
+		/// </remarks>
+		long ChatMutedUntilTicks { get; set; }
+		/// <summary>The reason recorded with the mute in force, shown to the muted player. Server-side.</summary>
+		string ChatMuteReason { get; set; }
+		/// <summary>
 		/// The next time the character is allowed to interact with objects.
 		/// </summary>
 		DateTime NextInteractTime { get; set; }

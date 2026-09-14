@@ -258,6 +258,10 @@ namespace FishMMO.Shared
 		/// UTC ticks of the last token bucket refill.
 		/// </summary>
 		public long ChatTokenLastRefillTicks { get; set; }
+		/// <inheritdoc/>
+		public long ChatMutedUntilTicks { get; set; }
+		/// <inheritdoc/>
+		public string ChatMuteReason { get; set; }
 		/// <summary>
 		/// The next UTC time the character can interact.
 		/// </summary>
@@ -497,6 +501,9 @@ namespace FishMMO.Shared
 			ChatTokens = 0;
 			IsChatTokensFull = true;
 			ChatTokenLastRefillTicks = nowTicks;
+			// A pooled character must not carry the last occupant's mute into its next spawn.
+			ChatMutedUntilTicks = 0;
+			ChatMuteReason = null;
 			NextInteractTime = DateTime.UtcNow;
 			InstanceSceneName = null;
 			InstanceSceneHandle = 0;

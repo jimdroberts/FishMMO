@@ -134,6 +134,22 @@ namespace FishMMO.Database.Npgsql.Entities
 		public bool Deleted { get; set; }
 		/// <summary>Timestamp when the character was soft-deleted (UTC), or null if not deleted.</summary>
 		public DateTime? TimeDeleted { get; set; }
+		/// <summary>
+		/// Whether this one character is muted in chat.
+		/// </summary>
+		/// <remarks>
+		/// Beside the account's own mute rather than instead of it: a character mute leaves the
+		/// player's other characters able to talk, which is the proportionate answer when only one
+		/// of them was the problem. <see cref="MutedUntil"/> null with this set means no end.
+		/// Never written by the save path, whose UPDATE names its columns explicitly.
+		/// </remarks>
+		public bool Muted { get; set; }
+		/// <summary>When the character's mute lifts (UTC), or null for a mute with no end.</summary>
+		public DateTime? MutedUntil { get; set; }
+		/// <summary>Account of the operator who applied the mute. Not a foreign key, deliberately.</summary>
+		public string? MutedBy { get; set; }
+		/// <summary>What the operator gave as the reason for the mute.</summary>
+		public string? MuteReason { get; set; }
 
 		// foreign keys
 		/// <summary>Navigation collection of character ability entries.</summary>

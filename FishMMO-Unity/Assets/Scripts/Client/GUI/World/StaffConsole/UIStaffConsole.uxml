@@ -1,0 +1,118 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        UIStaffConsole.uxml
+
+        An empty shell. Every command, label and action in this window is built at runtime
+        from the catalogue the server sends; nothing here names one. The tabs are shown only
+        when the catalogue lists the matching view, and the Commands tab whenever a
+        catalogue exists at all.
+
+        Class naming: fish-* classes come from FishMMO-Theme.uss, staff-* classes from
+        UIStaffConsole.uss (layout only).
+    -->
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIStaffConsole.uss" />
+    <ui:VisualElement name="staff-root" class="fish-panel staff-panel">
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header staff-header">
+            <ui:VisualElement class="fish-panel__icon staff-header__icon" />
+            <ui:VisualElement class="staff-header__titles">
+                <ui:Label text="STAFF CONSOLE" class="fish-panel__title" />
+                <ui:Label name="staff-subtitle" text="" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:VisualElement name="staff-tabs" class="staff-tabs">
+                <ui:Button name="staff-tab-players" text="Players" class="fish-tab staff-tab" />
+                <ui:Button name="staff-tab-tickets" text="Tickets" class="fish-tab staff-tab" />
+                <ui:Button name="staff-tab-commands" text="Commands" class="fish-tab staff-tab" />
+            </ui:VisualElement>
+            <ui:Button name="close-button" class="fish-close-btn staff-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="staff-pages" class="staff-pages">
+
+            <!-- Players: the roster on the left, the selected character's actions on the right. -->
+            <ui:VisualElement name="staff-page-players" class="staff-page">
+                <ui:VisualElement class="staff-column staff-column--list">
+                    <ui:Label name="staff-roster-summary" text="" class="fish-label--caption staff-caption" />
+                    <ui:ScrollView name="staff-roster-scroll" class="fish-scroll staff-list-scroll" horizontal-scroller-visibility="Hidden">
+                        <ui:VisualElement name="staff-roster-list" class="staff-list" />
+                        <ui:Label name="staff-roster-empty" text="Nobody to list yet." class="fish-empty staff-empty" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+                <ui:VisualElement class="fish-divider staff-divider" />
+                <ui:VisualElement class="staff-column staff-column--detail">
+                    <ui:Label name="staff-roster-selected" text="" class="fish-label--title staff-detail-title" />
+                    <ui:Label name="staff-roster-selected-meta" text="" class="fish-label--secondary staff-detail-meta" />
+                    <ui:ScrollView name="staff-roster-actions-scroll" class="fish-scroll staff-detail-scroll" horizontal-scroller-visibility="Hidden">
+                        <ui:VisualElement name="staff-roster-actions" class="staff-actions" />
+                        <ui:Label name="staff-roster-hint" text="Select a character to act on." class="fish-empty staff-empty" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- Tickets: filter and paging along the top, the queue and the open ticket below. -->
+            <ui:VisualElement name="staff-page-tickets" class="staff-page staff-page--stacked">
+                <ui:VisualElement class="staff-toolbar">
+                    <ui:Button name="staff-filter-unassigned" text="Unassigned" class="fish-tab staff-chip" />
+                    <ui:Button name="staff-filter-mine" text="Mine" class="fish-tab staff-chip" />
+                    <ui:Button name="staff-filter-all" text="All open" class="fish-tab staff-chip" />
+                    <ui:VisualElement class="staff-toolbar__spacer" />
+                    <ui:Button name="staff-pager-prev" text="Prev" class="fish-button staff-toolbar-btn" />
+                    <ui:Label name="staff-pager-label" text="" class="fish-label--caption staff-pager-label" />
+                    <ui:Button name="staff-pager-next" text="Next" class="fish-button staff-toolbar-btn" />
+                    <ui:Button name="staff-tickets-refresh" text="Refresh" class="fish-button staff-toolbar-btn" />
+                </ui:VisualElement>
+                <ui:VisualElement class="staff-split">
+                    <ui:VisualElement class="staff-column staff-column--list">
+                        <ui:ScrollView name="staff-ticket-scroll" class="fish-scroll staff-list-scroll" horizontal-scroller-visibility="Hidden">
+                            <ui:VisualElement name="staff-ticket-list" class="staff-list" />
+                            <ui:Label name="staff-ticket-empty" text="No tickets." class="fish-empty staff-empty" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="fish-divider staff-divider" />
+                    <ui:VisualElement class="staff-column staff-column--detail">
+                        <ui:ScrollView name="staff-ticket-detail-scroll" class="fish-scroll staff-detail-scroll" horizontal-scroller-visibility="Hidden">
+                            <ui:VisualElement name="staff-ticket-detail" class="staff-ticket-detail" />
+                            <ui:Label name="staff-ticket-hint" text="Select a ticket to read it." class="fish-empty staff-empty" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- Commands: grouped list on the left, the selected command's form on the right. -->
+            <ui:VisualElement name="staff-page-commands" class="staff-page">
+                <ui:VisualElement class="staff-column staff-column--list">
+                    <ui:ScrollView name="staff-command-scroll" class="fish-scroll staff-list-scroll" horizontal-scroller-visibility="Hidden">
+                        <ui:VisualElement name="staff-command-list" class="staff-list" />
+                        <ui:Label name="staff-command-empty" text="No commands." class="fish-empty staff-empty" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+                <ui:VisualElement class="fish-divider staff-divider" />
+                <ui:VisualElement class="staff-column staff-column--detail">
+                    <ui:Label name="staff-command-title" text="" class="fish-label--title staff-detail-title" />
+                    <ui:Label name="staff-command-summary" text="Select a command." class="fish-label--secondary staff-detail-meta" />
+                    <ui:ScrollView name="staff-form-scroll" class="fish-scroll staff-detail-scroll" horizontal-scroller-visibility="Hidden">
+                        <ui:VisualElement name="staff-form" class="staff-form" />
+                    </ui:ScrollView>
+                    <ui:Label name="staff-command-preview" text="" class="staff-preview" />
+                    <ui:VisualElement class="staff-run-row">
+                        <ui:Label name="staff-command-status" text="" class="staff-status" />
+                        <ui:Button name="staff-run" text="Run" class="fish-button fish-button--primary staff-run" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <ui:VisualElement name="staff-output" class="staff-output">
+            <ui:VisualElement class="staff-output__head">
+                <ui:Label text="OUTPUT" class="fish-section staff-output__title" />
+                <ui:Button name="staff-output-clear" text="Clear" class="fish-button fish-button--ghost staff-output__clear" />
+            </ui:VisualElement>
+            <ui:ScrollView name="staff-output-scroll" class="fish-well fish-scroll staff-output__scroll" horizontal-scroller-visibility="Hidden">
+                <ui:VisualElement name="staff-output-list" class="staff-output__list" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

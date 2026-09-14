@@ -114,6 +114,43 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime? VerificationEmailSentAt { get; set; }
 
 		/// <summary>
+		/// Whether the account is muted in chat.
+		/// </summary>
+		/// <remarks>
+		/// An account mute silences every character on the account, which is what makes it the
+		/// answer to a player who simply switches character. <see cref="MutedUntil"/> null with this
+		/// set is a mute with no end; a past <see cref="MutedUntil"/> is an expired one, and nothing
+		/// has to clear the row for it to stop applying.
+		/// </remarks>
+		public bool Muted { get; set; }
+
+		/// <summary>When the account's mute lifts (UTC), or null for a mute with no end.</summary>
+		public DateTime? MutedUntil { get; set; }
+
+		/// <summary>Account of the operator who applied the mute. Not a foreign key, deliberately.</summary>
+		public string? MutedBy { get; set; }
+
+		/// <summary>What the operator gave as the reason for the mute.</summary>
+		public string? MuteReason { get; set; }
+
+		/// <summary>
+		/// When a temporary ban lifts (UTC), or null for a permanent ban or no ban.
+		/// </summary>
+		/// <remarks>
+		/// Meaningful only while <see cref="AccessLevel"/> is <c>Banned</c>. The login fetch restores
+		/// <c>Player</c> the first time it reads a banned account whose instant has passed, so a
+		/// temporary ban needs no scheduler to end — and an account nobody tries to sign in to stays
+		/// banned on the row, harmlessly, until somebody does.
+		/// </remarks>
+		public DateTime? BannedUntil { get; set; }
+
+		/// <summary>Account of the operator who applied the ban. Not a foreign key, deliberately.</summary>
+		public string? BannedBy { get; set; }
+
+		/// <summary>What the operator gave as the reason for the ban.</summary>
+		public string? BanReason { get; set; }
+
+		/// <summary>
 		/// Account creation timestamp (UTC).
 		/// </summary>
 		public DateTime TimeCreated { get; set; }

@@ -155,6 +155,60 @@ namespace FishMMO.Shared
 		public static event Action<IPlayerCharacter, string, string, AccessLevel> OnElevatedCommand;
 
 		/// <summary>
+		/// Per-command rewrites applied to the argument text before it reaches <see cref="OnElevatedCommand"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The audit row carries what the operator typed, which is right for almost every command and
+		/// wrong for a few: a staff reply on a support ticket can contain a player's personal
+		/// details, and the audit log is read by more people and kept longer than the ticket that
+		/// already stores the text. The Control Panel withholds reply bodies from its audit rows for
+		/// exactly that reason, and the same reply typed in game must not be the way around it.
+		/// </para>
+		/// <para>
+		/// A redactor narrows what is recorded; it cannot stop the record. The row is still written,
+		/// before the handler runs, and a redactor that throws withholds the whole argument text
+		/// rather than letting the unredacted text through.
+		/// </para>
+		/// </remarks>
+		private static readonly Dictionary<string, Func<string, string>> auditRedactors =
+			new Dictionary<string, Func<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>Installs, or with null removes, the audit redactor for a registered command.</summary>
+		/// <param name="command">The command, including its leading slash.</param>
+		/// <param name="redactor">Receives the argument text and returns what the audit row should carry.</param>
+		public static void SetAuditRedactor(string command, Func<string, string> redactor)
+		{
+			if (string.IsNullOrEmpty(command))
+			{
+				return;
+			}
+			if (redactor == null)
+			{
+				auditRedactors.Remove(command);
+				return;
+			}
+			auditRedactors[command] = redactor;
+		}
+
+		/// <summary>
+		/// Reports a privileged request refused for want of access, through the same event a refused command raises.
+		/// </summary>
+		/// <remarks>
+		/// For privileged requests that do not arrive as chat — the staff console's read requests.
+		/// Routing them through <see cref="OnCommandRefused"/> means they are logged and audited by
+		/// the subscribers that already record refused commands, rather than by a second copy of that
+		/// bookkeeping that could drift from the first.
+		/// </remarks>
+		/// <param name="sender">The character that made the request.</param>
+		/// <param name="request">A stable name for what was requested.</param>
+		/// <param name="required">The access level the request needs.</param>
+		public static void ReportRefused(IPlayerCharacter sender, string request, AccessLevel required)
+		{
+			OnCommandRefused?.Invoke(sender, request, required);
+		}
+
+		/// <summary>
 		/// Initializes chat channel commands once, mapping each channel to its command function.
 		/// </summary>
 		/// <param name="onGetChannelCommand">Function to get the command delegate for each channel.</param>
@@ -227,6 +281,7 @@ namespace FishMMO.Shared
 			foreach (string command in commands)
 			{
 				Commands.Remove(command);
+				auditRedactors.Remove(command);
 			}
 		}
 
@@ -332,7 +387,21 @@ namespace FishMMO.Shared
 			 * reading about. The handler's own outcome is reported separately by the server. */
 			if (registration.MinimumAccessLevel > AccessLevel.Player)
 			{
-				OnElevatedCommand?.Invoke(sender, cmd, msg.Text ?? string.Empty, registration.MinimumAccessLevel);
+				string audited = msg.Text ?? string.Empty;
+				if (auditRedactors.TryGetValue(cmd, out Func<string, string> redactor) && redactor != null)
+				{
+					try
+					{
+						audited = redactor(audited) ?? string.Empty;
+					}
+					catch (Exception ex)
+					{
+						// Fail closed: the row is still written, without the text the redactor was guarding.
+						Log.Error("ChatHelper", $"Audit redactor for {cmd} threw; the arguments were withheld. {ex}");
+						audited = "[arguments withheld]";
+					}
+				}
+				OnElevatedCommand?.Invoke(sender, cmd, audited, registration.MinimumAccessLevel);
 			}
 
 			registration.Func?.Invoke(sender, msg);

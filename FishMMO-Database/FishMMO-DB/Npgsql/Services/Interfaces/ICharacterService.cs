@@ -262,6 +262,42 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> ClearCombatLoggedAsync(long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Mutes one character in chat, leaving the account's other characters able to talk.
+		/// </summary>
+		/// <remarks>
+		/// Replaces any mute already on the character. Not version-gated and not refused while a
+		/// session lease is live: the save path's UPDATE never names the mute columns, so a mute
+		/// written under a live session is not overwritten by the next save, and refusing it would
+		/// leave operators unable to mute exactly the players who are online misbehaving.
+		/// </remarks>
+		/// <param name="characterId">Character to mute.</param>
+		/// <param name="mutedUntilUtc">When the mute lifts, or null for no end.</param>
+		/// <param name="mutedBy">Operator account applying the mute.</param>
+		/// <param name="reason">The reason recorded with it.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or DB_NOT_FOUND when no such character exists.</returns>
+		Task<DatabaseResult> PersistMuteAsync(long characterId, DateTime? mutedUntilUtc, string? mutedBy, string? reason, CancellationToken cancellationToken = default);
+
+		/// <summary>Lifts one character's chat mute.</summary>
+		/// <param name="characterId">Character to unmute.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or DB_NOT_FOUND when no such character exists.</returns>
+		Task<DatabaseResult> ClearMuteAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Reads both mutes that apply to a character: its own and its account's.
+		/// </summary>
+		/// <remarks>
+		/// One statement joining the two rows, because either mute silences the character; a caller
+		/// that read only the character's would let a muted account talk through a new character.
+		/// Deleted characters are excluded.
+		/// </remarks>
+		/// <param name="characterId">Character to read.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Both mutes, or DB_NOT_FOUND when no such character exists.</returns>
+		Task<DatabaseResult<CharacterChatMuteState>> FetchChatMuteAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Atomically claims a character's channel-switch cooldown window: succeeds and stamps
 		/// the character only if it has not switched within <paramref name="cooldown"/>.
 		/// </summary>

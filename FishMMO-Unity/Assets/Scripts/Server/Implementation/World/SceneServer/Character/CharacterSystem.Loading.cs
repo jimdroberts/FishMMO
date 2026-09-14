@@ -496,6 +496,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterQuestData> questData = null;
 				IReadOnlyList<CharacterWaypointData> waypointData = null;
 				IReadOnlyList<CharacterArchetypeData> archetypeData = null;
+				CharacterChatMuteState? chatMute = null;
 
 				// --- Fetch the character row and claim its session BEFORE the Unit of Work ---
 				// The claim is the gate: if another server already owns this character we fail
@@ -886,6 +887,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						questData = result.Data;
 					}
+					/* The chat mute — the character's own and its account's, in one read, and LAST in the
+					 * unit of work so a failure cannot poison the reads before it. It fails OPEN: a
+					 * character whose mute cannot be read loads unmuted rather than not at all, because
+					 * refusing a whole login over a chat restriction would lock every player out the moment
+					 * the read broke — a database not yet migrated, say. The warning is the trace. */
+					if (serviceRegistry.TryGet<ICharacterService>(out var muteCharacterService))
+					{
+						var result = await muteCharacterService.FetchChatMuteAsync(characterID);
+						if (result.IsSuccess)
+						{
+							chatMute = result.Data;
+						}
+						else
+						{
+							await Log.Warning("CharacterSystem", $"LoadCharacterAsync: the chat mute for character {characterID} could not be read; loading unmuted. {result.ErrorCode} - {result.ErrorMessage}");
+						}
+					}
 
 					// Read-only: commit to cleanly close the transaction
 					DatabaseResult commitResult = await uow.CommitAsync();
@@ -903,7 +921,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					attributeData, abilityData, knownAbilityData,
 					achievementData, friendData,
 					guildData, partyData,
-					hotkeyData, buffData, factionData, questData, waypointData, archetypeData);
+					hotkeyData, buffData, factionData, questData, waypointData, archetypeData, chatMute);
 				/* The main-thread queue is bounded and drops work when it is saturated, and this
 				 * hand-off is the only thing that installs the claim in SessionTokens. A dropped
 				 * item therefore left the character Online with nothing left holding its token —
@@ -1359,6 +1377,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			character.Version = charData.Version;
 			character.WorldServerID = charData.WorldServerID;
 			character.AccessLevel = (AccessLevel)(int)charData.AccessLevel;
+			if (ctx.ChatMute.HasValue)
+			{
+				character.ChatMutedUntilTicks = ChatMutePolicy.ResolveUntilTicks(ctx.ChatMute.Value, DateTime.UtcNow, out string muteReason);
+				character.ChatMuteReason = muteReason;
+			}
+			else
+			{
+				character.ChatMutedUntilTicks = 0;
+				character.ChatMuteReason = null;
+			}
 			character.TimeCreated = charData.TimeCreated;
 			character.RaceID = charData.RaceID;
 			character.ModelIndex = charData.ModelIndex;
@@ -2180,6 +2208,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly IReadOnlyList<CharacterWaypointData> WaypointData;
 			/// <summary>Pre-fetched archetype rows.</summary>
 			public readonly IReadOnlyList<CharacterArchetypeData> ArchetypeData;
+			/// <summary>Pre-fetched chat mutes, or null when they could not be read (the load fails open).</summary>
+			public readonly CharacterChatMuteState? ChatMute;
 
 			/// <summary>
 			/// Initializes a new CharacterLoadContext with all pre-fetched character data.
@@ -2220,7 +2250,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterFactionData> factionData,
 				IReadOnlyList<CharacterQuestData> questData,
 				IReadOnlyList<CharacterWaypointData> waypointData,
-				IReadOnlyList<CharacterArchetypeData> archetypeData)
+				IReadOnlyList<CharacterArchetypeData> archetypeData,
+				CharacterChatMuteState? chatMute)
 			{
 				Connection = connection;
 				CharacterData = characterData;
@@ -2242,6 +2273,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				QuestData = questData;
 				WaypointData = waypointData;
 				ArchetypeData = archetypeData;
+				ChatMute = chatMute;
 			}
 		}
 		/// <summary>

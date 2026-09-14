@@ -186,9 +186,12 @@ namespace FishMMO.UnitTests
 			AssertOrdered(single, "CharacterStateValidation.CanAct(playerCharacter)", "AcknowledgeHotkey(conn, playerCharacter, msg.HotkeyData.Slot)",
 				"...and answers the refusal with the authoritative slot");
 
+			/* Ended at the acknowledgement helpers, which are declared directly after the bulk handler.
+			 * It used to end at TryApplyHotkey, which now sits earlier in the file, so the slice could no
+			 * longer find its end and the pin failed against a handler that still did the right thing. */
 			string multiple = MethodBody(source,
 				"public void OnServerHotkeySetMultipleBroadcastReceived(",
-				"private bool TryApplyHotkey(");
+				"private void AcknowledgeHotkey(");
 			LogAssert.IsTrue(multiple.Contains("PlayerRequestGate.SkipCanAct"),
 				"the bulk handler applies the state gate itself so it can answer");
 			AssertOrdered(multiple, "CharacterStateValidation.CanAct(playerCharacter)", "AcknowledgeAllHotkeys(conn, playerCharacter)",

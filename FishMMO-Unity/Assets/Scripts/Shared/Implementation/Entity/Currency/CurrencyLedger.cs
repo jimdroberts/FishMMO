@@ -98,5 +98,16 @@
 		/// see them apart.
 		/// </remarks>
 		AbilityPurchase = 10,
+
+		/// <summary>
+		/// An administrator setting, granting or taking a character's currency by command.
+		/// </summary>
+		/// <remarks>
+		/// Its own reason so operator adjustments can be read apart from every sink the game itself
+		/// runs. A balance that moved with no gameplay explanation is the first thing an economy
+		/// investigation looks for, and this is the row that answers it. The command that caused it is
+		/// in the operator audit log.
+		/// </remarks>
+		AdminAdjustment = 11,
 	}
 }

@@ -49,6 +49,17 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(DateTime.UnixEpoch);
 
+			// Moderation columns, written only by operator actions. See AccountEntityConfiguration.
+			builder.Property(e => e.Muted)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			builder.Property(e => e.MutedBy)
+				.HasMaxLength(50);
+
+			builder.Property(e => e.MuteReason)
+				.HasMaxLength(256);
+
 			builder.Property(e => e.NameLowercase)
 				.HasComputedColumnSql("LOWER(name)", stored: true);
 

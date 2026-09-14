@@ -453,5 +453,64 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> UnbanAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Bans an account, recording who banned it, why, and when the ban lifts.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The same four writes as <see cref="BanAsync(string, CancellationToken)"/>, in the same
+		/// transaction, plus the three ban columns. A null <paramref name="bannedUntilUtc"/> is a
+		/// permanent ban. A temporary one is lifted by <see cref="FetchForLoginAsync"/> at the
+		/// first sign-in attempt after the instant passes, which restores <c>Player</c>.
+		/// </para>
+		/// <para>
+		/// No policy checking, as with the plain ban: who may ban whom, and for how long, is the
+		/// caller's decision, and every caller must record the ban in the audit log.
+		/// </para>
+		/// </remarks>
+		/// <param name="accountName">Account to ban. Matched case-insensitively.</param>
+		/// <param name="bannedUntilUtc">When the ban lifts, or null for a permanent ban.</param>
+		/// <param name="bannedBy">Operator account applying the ban, or null when not recorded.</param>
+		/// <param name="reason">The reason, or null when not recorded.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or DB_NOT_FOUND when no such account exists.</returns>
+		Task<DatabaseResult> BanAsync(
+			string accountName,
+			DateTime? bannedUntilUtc,
+			string? bannedBy,
+			string? reason,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Mutes an account in chat, silencing every character it owns.
+		/// </summary>
+		/// <remarks>
+		/// Replaces any mute already on the account rather than extending it: the operator applying
+		/// the mute has just decided how long it should be, and quietly keeping a longer earlier one
+		/// would contradict the acknowledgement they are shown. Game servers read the mute when a
+		/// character loads; a character already in the world is silenced by the server that applied
+		/// it and by any other only when it next loads there.
+		/// </remarks>
+		/// <param name="accountName">Account to mute. Matched case-insensitively.</param>
+		/// <param name="mutedUntilUtc">When the mute lifts, or null for no end.</param>
+		/// <param name="mutedBy">Operator account applying the mute.</param>
+		/// <param name="reason">The reason recorded with it.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or DB_NOT_FOUND when no such account exists.</returns>
+		Task<DatabaseResult> PersistMuteAsync(
+			string accountName,
+			DateTime? mutedUntilUtc,
+			string? mutedBy,
+			string? reason,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>Lifts an account's chat mute, clearing who set it and why.</summary>
+		/// <param name="accountName">Account to unmute. Matched case-insensitively.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or DB_NOT_FOUND when no such account exists.</returns>
+		Task<DatabaseResult> ClearMuteAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
 	}
 }
