@@ -155,6 +155,71 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public DateTime TimeCreated { get; set; }
 
+		/* ── Contact and identity (issue #252) ────────────────────────────────────────────────
+		 * Optional, player-supplied, and shown only to staff and to the player. Used to establish
+		 * who owns an account when everything else about it is lost; never an input to signing in. */
+
+		/// <summary>Phone number in E.164 form (<c>+</c> and up to 15 digits), or null.</summary>
+		public string? Phone { get; set; }
+
+		/// <summary>Whether <see cref="Phone"/> has been proven by an SMS code. Cleared when the number changes.</summary>
+		public bool PhoneVerified { get; set; }
+
+		/// <summary>The outstanding SMS verification code, or 0 when none is pending.</summary>
+		public int PhoneVerifyCode { get; set; }
+
+		/// <summary>When <see cref="PhoneVerifyCode"/> stops being accepted.</summary>
+		public DateTime? PhoneVerifyCodeExpiresUtc { get; set; }
+
+		/// <summary>Whether the email address has been proven by its code.</summary>
+		/// <remarks>
+		/// Per channel. <see cref="Verified"/> remains the one flag sign-in reads, and is true once
+		/// every channel in <see cref="VerificationChannels"/> is satisfied.
+		/// </remarks>
+		public bool EmailVerified { get; set; }
+
+		/// <summary>
+		/// Which channels the player chose to verify with, as <c>AccountVerificationChannels</c> flags:
+		/// 1 email, 2 SMS.
+		/// </summary>
+		public byte VerificationChannels { get; set; } = 1;
+
+		/// <summary>The account holder's real name, as they gave it, or null.</summary>
+		public string? RealName { get; set; }
+
+		/// <summary>Country or region, as they gave it, or null.</summary>
+		public string? Country { get; set; }
+
+		/// <summary>Postal address, as they gave it, or null.</summary>
+		public string? Address { get; set; }
+
+		/// <summary>The account that referred this one, as typed at registration, or null. No foreign key.</summary>
+		public string? ReferralAccount { get; set; }
+
+		/* ── Sign-in lockout (issue #252) ─────────────────────────────────────────────────────
+		 * Counted in the database, not in a process, so the game's login servers and the panel
+		 * share one count: an attacker cannot reset it by switching surface or by waiting for a
+		 * restart. Passwords and authenticator codes are counted apart, because they are guessed
+		 * apart — a player who fat-fingers the code must not burn the password budget. */
+
+		/// <summary>Failed password proofs in the current window.</summary>
+		public int FailedLoginCount { get; set; }
+
+		/// <summary>When the current password-failure window began, or null.</summary>
+		public DateTime? FailedLoginSinceUtc { get; set; }
+
+		/// <summary>Until when password sign-in is refused, or null.</summary>
+		public DateTime? LoginLockedUntilUtc { get; set; }
+
+		/// <summary>Failed authenticator or recovery codes in the current window.</summary>
+		public int FailedTwoFactorCount { get; set; }
+
+		/// <summary>When the current code-failure window began, or null.</summary>
+		public DateTime? FailedTwoFactorSinceUtc { get; set; }
+
+		/// <summary>Until when the second step is refused, or null.</summary>
+		public DateTime? TwoFactorLockedUntilUtc { get; set; }
+
 		/// <summary>
 		/// Last successful login timestamp (UTC).
 		/// </summary>

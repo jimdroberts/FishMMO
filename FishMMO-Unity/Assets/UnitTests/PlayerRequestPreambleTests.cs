@@ -208,15 +208,42 @@ namespace FishMMO.UnitTests
 				"the opt-out must exist: at least one request is deliberately not gated on character state");
 		}
 
+		/// <summary>
+		/// Requests that skip the state gate because they are not actions and lead to none.
+		/// </summary>
+		/// <remarks>
+		/// Named here, one by one, rather than let through by a phrase in their own comments: a
+		/// comment is what a forgotten gate would grow to pass the scan. Every entry must still opt
+		/// out (see <see cref="EveryOptOutSaysWhichLaterGateCoversIt"/>), so the list cannot outlive
+		/// the reason for it.
+		/// </remarks>
+		private static readonly Dictionary<string, string> NonActionOptOuts =
+			new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+			{
+				/* Filing a player report changes no game state, and the reporter is often dead or
+				 * stunned by the person they are reporting (issue #252). */
+				{ "Implementation/World/SceneServer/Chat/ChatSystem.ReportPlayer.cs", "files a support ticket" },
+			};
+
 		[Test]
 		public void EveryOptOutSaysWhichLaterGateCoversIt()
 		{
 			/* An ungated request is indistinguishable from a forgotten gate unless it says so.
 			 * TryResolveArenaBoard was exactly that: no CanAct, no explanation, alongside a
 			 * group-finder handler whose identical omission is documented in full. */
-			foreach (KeyValuePair<string, string> entry in ServerSources())
+			Dictionary<string, string> sources = ServerSources();
+
+			foreach (KeyValuePair<string, string> exempt in NonActionOptOuts)
+			{
+				LogAssert.IsTrue(sources.TryGetValue(exempt.Key, out string exemptSource) &&
+					exemptSource.Contains("PlayerRequestGate.SkipCanAct"),
+					$"{exempt.Key} is listed as a non-action opt-out ({exempt.Value}) but no longer opts out; remove it from the list");
+			}
+
+			foreach (KeyValuePair<string, string> entry in sources)
 			{
 				if (entry.Key == EntryPointKey ||
+					NonActionOptOuts.ContainsKey(entry.Key) ||
 					!entry.Value.Contains("PlayerRequestGate.SkipCanAct"))
 				{
 					continue;

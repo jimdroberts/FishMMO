@@ -59,8 +59,10 @@ export async function render(host, ctx) {
 	let readAt = 0;
 	let refreshError = null;
 
-	async function read() {
-		data = await api.getPlatformHealth();
+	/* `source` is `api` for a read somebody asked for, and `api.auto` for the timer's: staff
+	 * reads are audited, but a background poll is marked and not recorded. */
+	async function read(source = api) {
+		data = await source.getPlatformHealth();
 		readAt = Date.now();
 		refreshError = null;
 		paint();
@@ -70,9 +72,9 @@ export async function render(host, ctx) {
 	 * is better served by the last good read than by an error page where the numbers were —
 	 * and on this page in particular, a failed poll is itself a symptom worth seeing beside
 	 * the figures that were true a moment ago. */
-	async function pollOnce() {
+	async function pollOnce(source = api) {
 		try {
-			await read();
+			await read(source);
 		} catch (err) {
 			refreshError = err.message || 'This page could not be refreshed.';
 			if (data) paint();
@@ -80,8 +82,9 @@ export async function render(host, ctx) {
 	}
 
 	/* Started before the first read so the page heals itself: if the first read fails the
-	 * router renders the failure, and the first poll that succeeds paints over it. */
-	poll = setInterval(pollOnce, REFRESH_MS);
+	 * router renders the failure, and the first poll that succeeds paints over it. Only this
+	 * timer marks its reads as automatic. */
+	poll = setInterval(() => pollOnce(api.auto), REFRESH_MS);
 
 	// The first read is allowed to throw — the router turns it into a visible failure.
 	await read();

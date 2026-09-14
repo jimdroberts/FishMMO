@@ -254,6 +254,19 @@ input[type="radio"] {
 }
 
 .grow { flex: 1 1 auto; min-width: 0; }
+
+/*
+ * The descriptive half of a .row-between whose other half is a control. A basis of zero, not
+ * auto: .row-between wraps, and wrapping is decided on each item's base size, so a paragraph
+ * with basis auto measures its whole unbroken line, never fits beside the button, and pushes
+ * the button onto a line of its own at any width. Zero lets the button keep its place and the
+ * text take what is left; only on a narrow screen does the text claim the full line.
+ */
+.row-between > .row-text { flex: 1 1 0; min-width: 0; }
+
+@media (max-width: 480px) {
+	.row-between > .row-text { flex-basis: 100%; }
+}
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .visually-hidden {

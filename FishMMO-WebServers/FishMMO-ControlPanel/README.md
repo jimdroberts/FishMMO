@@ -18,6 +18,17 @@
 > in the game alike. On the HTTP side an action filter records every privileged write
 > whether or not its author added anything, and the panel refuses to start outside
 > production if a privileged endpoint does not declare what it records.
+>
+> **Staff reads are recorded too, except automatic refreshes** (2026-09-14). The first load of
+> a page and every refresh somebody asked for — Refresh, a filter, a page, the re-read after an
+> action — write a `view.<controller>.<action>` row. A page re-reading itself on a timer (the
+> server board, maintenance, daemon hosts, platform health and queues, the character editor's
+> kick-and-wait) sends `X-Panel-Refresh: auto` through `api.auto.*` in `js/api.js`, and a GET or
+> HEAD carrying it is not recorded. The header is trusted for reads only: a write is recorded
+> whatever it carries, and a **refused** request is recorded even when marked, a refused poll
+> being a probe. The in-game staff console follows the same rule with `AutoRefresh` on its roster
+> request. The mark is the client's word: an operator who edits the page's script to mark every
+> read would go unrecorded, which is the accepted cost of a client-side mark.
 
 The Game Control Panel and Admin Dashboard for a FishMMO shard: account self-service,
 character management, live server monitoring and per-server lifecycle control, gated on
@@ -36,6 +47,7 @@ inventory, the schema additions and the phase plan live in
 - [The mock and how to remove it](#the-mock-and-how-to-remove-it)
 - [What the mock demonstrates](#what-the-mock-demonstrates)
 - [SRP](#srp)
+- [Account security (issue #252)](#account-security-issue-252)
 - [Design system](#design-system)
 - [Configuration](#configuration)
 - [Deployment](#deployment)
@@ -225,6 +237,158 @@ means the wire protocol moved and every stored verifier is invalid.
 The full conventions are tabulated in
 [CONTROL_PANEL_DESIGN.md §5.5](../../CONTROL_PANEL_DESIGN.md).
 
+## Account security (issue #252)
+
+The panel side of registration fields, verification channels, the beta gate, the registration
+honeypot, sign-in lockout and the delayed self-service two-factor reset. The database layer
+(`IAccountService`, `IBetaCodeService`, `ITwoFactorResetRequestService`, `ISmsQueueService`) holds
+the state and the concurrency control; the panel holds the policy described here.
+
+### Registration fields and verification
+
+Registration accepts, beyond name, email, password and age: an optional **phone number** (E.164,
+with its country code), an optional **beta code** (required while the gate is on), optional
+**real name**, **country or region**, **address** and **referring account**, and a choice of
+**verification channels** — email and/or SMS, SMS needing a phone. The optional fields are
+validated by `AccountProfileRules.TryValidate`, the one rule set the game and the panel share, and
+its messages come back as field errors (`{ error, field }`). They are written with
+`PersistProfileAsync` immediately after the account row is created and before anything else,
+following the same best-effort discipline as the rest of `AccountRegistrationService`: once the
+row exists, a failed follow-on step is logged and the account is kept. The referring account is
+not checked for existence — an anonymous form that said "no such account" would be an oracle.
+
+`Verification:Email` and `Verification:Sms` say which channels the server verifies:
+
+- A chosen channel whose switch is **on** gets a six-digit code with a 24-hour expiry (the same
+  shape for both), sent by email or queued on `sms_queue`.
+- A chosen channel whose switch is **off** is marked proven with `PersistChannelsVerifiedAsync`,
+  which recomputes `verified`. Sign-in does the same for an existing account the moment its
+  password is proven, so turning a switch off never strands anyone waiting for a code nobody sends.
+- **Both off** takes the existing auto-verify path (`PersistAutoVerifiedAsync`) — the same path the
+  development-only `Panel:AutoVerifyAccounts` takes. There is one mechanism, reachable two ways, and
+  the panel logs a warning at startup when a server verifies nothing.
+
+`POST verify` (email) and `POST verify-phone` (SMS) each answer with what is still `outstanding`, so
+the browser shows one code form per owed channel, in either order. `POST verify/resend` sends a new
+code for one channel with a two-minute per-account cooldown, never replaces a code still waiting in
+its queue, and answers identically whether or not anything was sent.
+
+At sign-in, an unverified account past its grace period used to get a fake salt and fail as a
+"wrong password". It now gets its real salt; a wrong password still fails exactly as before, and a
+**correct** one is answered `403` with stage `verification-required` and the outstanding channels.
+That answer exists only after a correct proof, so it tells nothing to anyone without the password.
+
+**SMS delivery.** There is no SMS gateway. `LoggingSmsSender` writes each message to the panel log.
+It is configured by default outside Production; in Production only when `Sms:Provider` is `log`
+explicitly (it then logs verification codes, and says so at startup). Otherwise `SmsQueueDrainService`
+logs once and idles, as the email drain does with no SMTP host. The drain mirrors the email drain —
+claim identity, batch size, backoff — and stamps `verification_email_sent_at` after delivering a
+*verification* SMS, because that column is the end of the unverified grace period and the database has
+no SMS-specific one; an SMS-only account would otherwise keep its grace forever.
+
+### Beta gate
+
+With `Beta:Enabled`, registration requires a code. `CheckRedeemableAsync(code, Beta:Programs)` runs
+**before** the account exists — redeeming first would attach a use to a name the insert may then find
+taken — and every failure (unknown, revoked, expired, used up, malformed, wrong program) answers with
+one message, "That beta code is not valid.". Then the account is created, then `RedeemAsync`. If the
+redeem loses a race for the code's last use, the account exists without access and the response says so
+and points at **My account → Beta access**, where `POST api/account/beta/redeem` redeems a code later.
+Panel sign-in is never gated on beta access, precisely so that path exists. `GET api/account/policy`
+publishes `betaRequired` so the form marks the field required.
+
+Administrators mint and revoke codes under **Administration → Beta codes**. A minted batch is shown
+once, with copy-all and a plain-text download. The `beta.mint` audit row records the program, count,
+uses and expiry — **never the codes**: the audit log is read by more people than that page, and a live
+code in it is a code anyone reading the log can redeem.
+
+### Registration honeypot
+
+`GET api/account/register/form` issues a token, `base64url(json).base64url(HMAC-SHA256)` under a
+random per-process key, binding the issue time and two or three decoy field names drawn at random from
+names autofill and form-filling bots fill (`website`, `company`, `fax`, `middle_name`, `url`,
+`homepage`, `nickname`...). The page renders the decoys as ordinary labelled text inputs, positioned
+off-screen (not `display:none`), `aria-hidden`, `tabindex=-1`, `autocomplete=off`, and posts them back
+under their own names with the token. Registration is refused when:
+
+| Check | Why it exists |
+|---|---|
+| Token missing, malformed or its MAC does not verify | A script posting straight to `register` never fetched a form. A forged or edited token cannot name different decoys or an older issue time. A panel restart changes the key, so a form opened before it is refused once — the cost is a reload |
+| Submitted less than 3 s after issue | Nobody types a name, an address, two matching passwords and picks an age in three seconds; a script does it in milliseconds |
+| Token older than 1 hour | A harvested token is not good forever |
+| Any decoy has a value | A person never sees them. A bot fills every field it finds, and because the names are random per form it cannot learn one fixed list to leave empty |
+
+Every refusal answers with **exactly** the body a genuine creation failure gets — `400`,
+"That account could not be created." — plus a warning in the panel log naming the check. Nothing in
+the response says which check tripped: a bot told why it was refused passes next time.
+
+**The in-game client gets no honeypot.** Bots there speak the LoginServer's protocol, not a page;
+there is no form for them to fill and nothing a decoy field could catch. The game's defences are its
+own rate limits and the same lockout counters described below.
+
+### Sign-in lockout
+
+Failures are counted in the database with `RecordAuthFailureAsync`, in the same columns the
+LoginServer counts into, so the panel and the game share one count per account. The thresholds are
+`Auth:Lockout:*` and must match the game's: 5 failed passwords in 15 minutes lock password sign-in for
+15 minutes; 5 failed authenticator or recovery codes in 15 minutes lock the second step for 30.
+
+- **Password step** (`srp/proof`). A locked account is refused **without evaluating the proof**. The
+  refusal is the one generic message every password failure gets — "That username and password do
+  not match an account, or sign-in is temporarily locked after repeated failures. Try again later." —
+  so a lock can never confirm that a name exists or that a guess was right. The lookup and the count
+  run for unknown and banned names too, so the paths cost the same. A good proof clears the count.
+  The failure that starts a lock queues one `SecurityNotice` email to the account.
+- **Two-factor step** (`2fa/verify`, `step-up`, `2fa/reset/confirm`). The session has already proven
+  the password, so a lock is stated plainly: `423` with `lockedUntilUtc`. The lock that starts also
+  emails the holder, warning that somebody knows the password.
+- **Staff** see both locks on the account page and can clear them with `clear-lockout`
+  (step-up, reason required, audited `account.clear-lockout`).
+
+### Self-service two-factor reset
+
+For an account holder who has lost the authenticator **and** every recovery code. The owner chose
+self-service with a waiting period, which staff may shorten or cancel.
+
+1. At the two-factor step of sign-in — the password is proven — **Lost your authenticator AND your
+   recovery codes?** leads to `POST api/auth/2fa/reset/request`. It opens a request effective in
+   `TwoFactorReset:DelayDays` (7) and emails the account: when it takes effect, and that signing in with
+   the authenticator or a recovery code before then cancels it. Asking again returns the same request;
+   the clock never restarts and never shortens.
+2. **Any** successful two-factor verification — `2fa/verify` with a TOTP or recovery code, and
+   `step-up` — cancels a pending request and emails that it was cancelled. Passing the real factor
+   proves the owner still has it, which is the case the waiting period exists to catch.
+3. Once effective, the password-proven session calls `2fa/reset/complete`. `CompleteAsync` spends the
+   request in one conditional update. The account page's own enrolment code
+   (`SelfServiceService.BeginTwoFactorSetupAsync`) then overwrites the secret and replaces the recovery
+   codes **while `totp_enabled` stays on**. Every other panel session and every game token is revoked,
+   a `SecurityNotice` is sent, and the new otpauth URI and codes go to the same handover screen
+   registration uses (QR, manual key, "I have saved them").
+4. Nothing is signed in until `2fa/reset/confirm` receives a code from the **new** authenticator;
+   recovery codes are refused there.
+
+The rules this keeps:
+
+- **A reset never immediately satisfies two-factor.** Completion issues a fresh session that has
+  proven only the password.
+- **The account is never left with two-factor cleared.** Clearing first and enrolling second would
+  leave a window — or, after a failed write, an account — guarded by the password alone. The game
+  demands the new authenticator from the moment the reset completes. The KEK is checked before the
+  request is spent, so a server that cannot encrypt a new secret does not use up the player's week.
+- **A password reset never satisfies two-factor, and a recovery code never resets a password.**
+  Nothing here touches the SRP credentials, and `PasswordResetService` touches nothing here.
+
+Staff see a pending reset on the account page, in the account history's **Standing**, and in a list of
+every pending reset on **Support → Accounts**. They can **Shorten** it to now or a chosen earlier time,
+or **Cancel** it. Both are step-up with a reason, audited (`account.2fa-reset-shorten`,
+`account.2fa-reset-cancel`), refused against one's own or a peer's account, and emailed to the holder.
+
+**Platform → Queues** shows the SMS queue beside the email queue: the same states, counts,
+oldest-pending alarm and step-up retry (`IQueueBoardService.FetchSmsQueueAsync` / `RetrySmsAsync`).
+The phone number is masked by the server to its last four digits (`+44•••••0123`) before it reaches
+the browser, the search matches a number only whole so a masked one cannot be recovered a digit at a
+time, and neither the number nor the message body is read into an audit row or the log.
+
 ## Design system
 
 Every colour, radius, spacing step and font size resolves through a token in
@@ -262,6 +426,13 @@ those.
 | `Cors:AllowedOrigins` | Empty by design — the app is served same-origin |
 | `Npgsql:*` | Database settings, per the shared database template |
 | `ConnectionStrings:NpgsqlConnection` | Read only by the Production SSL-mode guard; supply via `ConnectionStrings__NpgsqlConnection` |
+| `Verification:Email` / `Verification:Sms` | Which channels are verified with a code. Off marks a chosen channel proven; both off verifies every account on creation. Default `true` / `true` |
+| `Beta:Enabled` / `Beta:Programs` | Registration requires a beta code of one of these program keys (empty list: any program). Default off |
+| `Auth:Lockout:PasswordThreshold` / `PasswordWindowMinutes` / `PasswordLockMinutes` | 5 failed passwords in 15 minutes lock password sign-in for 15. Shared with the LoginServer; keep equal |
+| `Auth:Lockout:TwoFactorThreshold` / `TwoFactorWindowMinutes` / `TwoFactorLockMinutes` | 5 failed codes in 15 minutes lock the second step for 30. Shared with the LoginServer; keep equal |
+| `TwoFactorReset:DelayDays` | Waiting period before a self-service two-factor reset may be completed. Default 7 (clamped 1–90) |
+| `Sms:Provider` | `log` writes messages to the panel log. Empty: `log` outside Production, idle in Production. Nothing else exists yet |
+| `Sms:DrainIntervalSeconds` / `Sms:MaxPerPass` | The SMS drain's pace, as `Email:*` is the email drain's. Defaults 2 / 5 |
 
 Database credentials are resolved at runtime from `FISHMMO_DB_USERNAME` /
 `FISHMMO_DB_PASSWORD` or `/etc/fishmmo/db-secrets.env`. They never live in a committed file.
@@ -292,21 +463,68 @@ This is an intentional divergence from the other three web hosts.
 |---|---|---|
 | POST | `srp/challenge` | Username in; salt, server ephemeral and an exchange handle out. **Never takes a password** |
 | POST | `srp/proof` | Client ephemeral and proof in; server proof and a session out |
-| POST | `2fa/verify` | A TOTP code or a recovery code; promotes a pending session |
-| POST | `step-up` | Re-prove the authenticator for a destructive action |
+| POST | `2fa/verify` | A TOTP code or a recovery code; promotes a pending session. Counted and locked (`423`); cancels a pending two-factor reset |
+| POST | `step-up` | Re-prove the authenticator for a destructive action. Counted and locked like `2fa/verify` |
+| GET | `2fa/reset` | TwoFactorPending. The pending self-service reset: requested and effective times, `delayDays` |
+| POST | `2fa/reset/request` | TwoFactorPending. Opens a delayed reset, or returns the pending one unchanged; emails the account |
+| POST | `2fa/reset/complete` | TwoFactorPending. Uses an effective reset: new secret and recovery codes for the handover, other sessions and game tokens revoked, a fresh password-only session. Does NOT sign in |
+| POST | `2fa/reset/confirm` | TwoFactorPending. A code from the NEW authenticator (no recovery codes); promotes the session |
 | GET | `session` | The current identity, or nothing |
 | POST | `logout` | Revoke this session |
 
+`srp/proof` answers every failure — wrong password, unknown or banned account, locked sign-in — with
+one `401` and one message. Its only other refusal, `403` with `stage: "verification-required"` and
+`outstanding`, is given only after a correct proof. None of these endpoints is audited: they are
+anonymous or `TwoFactorPending`, an account authenticating as itself.
+
 ### `api/account` — player self-service
 
-| Method | Route | Purpose |
-|---|---|---|
-| POST | `register` | Create an account from a browser-computed salt and verifier |
-| POST | `verify` | Confirm with the code emailed at registration |
-| GET | `policy` | The account rules, so the browser validates locally. Takes no input |
-| GET | (root) | The signed-in account's profile |
-| GET | `sessions` | The signed-in account's live panel sessions |
-| DELETE | `sessions/{id}` | Revoke one of them |
+| Method | Route | Policy | Purpose |
+|---|---|---|---|
+| GET | `register/form` | Anonymous, `Register` rate limit | A signed form token and 2–3 randomised decoy field names (the honeypot) |
+| POST | `register` | Anonymous, `Register` | Create an account from a browser-computed salt and verifier, plus the optional profile, channels and beta code. Errors carry `field` |
+| POST | `verify` | Anonymous, `Register` | The emailed code; answers with what is still `outstanding` |
+| POST | `verify-phone` | Anonymous, `Register` | The texted code; answers with what is still `outstanding` |
+| POST | `verify/resend` | Anonymous, `Register` | A new code for `email` or `sms`, two-minute cooldown; always the same answer |
+| GET | `policy` | Anonymous | The account rules, `betaRequired`, the verification switches and profile limits. Takes no input |
+| GET | (root) | Self | The signed-in account's profile, including phone and verification state |
+| GET | `beta` | Self | The beta codes this account has redeemed |
+| POST | `beta/redeem` | Self, `Auth` rate limit | Redeem a beta code later |
+| GET | `sessions` | Self | The signed-in account's live panel sessions |
+| DELETE | `sessions/{id}` | Self | Revoke one of them |
+
+### `api/support/accounts` — account security (issue #252)
+
+| Method | Route | Policy | Audit action | Purpose |
+|---|---|---|---|---|
+| GET | `{username}` | Support | `view.supportaccounts.get` | The detail projection: the list fields plus phone, verification state, real name, country, address, referral, both lockouts, the pending reset and beta codes. The search projection carries none of these |
+| GET | `2fa-resets` | Support | `view.supportaccounts.pendingtwofactorresets` | Every pending self-service reset, soonest first |
+| POST | `{username}/clear-lockout` | SupportStepUp | `account.clear-lockout` | Lift both sign-in locks. Reason required |
+| POST | `{username}/2fa-reset/shorten` | SupportStepUp | `account.2fa-reset-shorten` | Bring a pending reset forward to `effectiveUtc` (null: now). Earlier only. Reason required; holder emailed |
+| POST | `{username}/2fa-reset/cancel` | SupportStepUp | `account.2fa-reset-cancel` | Cancel a pending reset. Reason required; holder emailed |
+
+The writes apply `ModerationGuards.Check`: not one's own account, not a peer or superior.
+
+### `api/admin/beta` — beta codes
+
+| Method | Route | Policy | Audit action | Purpose |
+|---|---|---|---|---|
+| GET | `programs` | Operator | `view.adminbeta.programs` | Program totals and the registration gate's configuration |
+| GET | `codes?program=&includeRevoked=&page=&pageSize=` | Operator | `view.adminbeta.codes` | Codes, newest first |
+| POST | `mint` | OperatorStepUp | `beta.mint` | Mint `count` codes of `program` with `maxUses` and optional `expiresUtc` and `note`. Reason required. The codes are in the response only; the audit row holds program, count, uses and expiry |
+| POST | `{id}/revoke` | OperatorStepUp | `beta.revoke` | Revoke a code, ending the access of every account that redeemed it. Reason required |
+
+### `api/platform/queues` — outbound messages and the group finder
+
+| Method | Route | Policy | Audit action | Purpose |
+|---|---|---|---|---|
+| GET | `email?state=&search=&page=&pageSize=` | Operator | `view.platformqueues.emailqueue` | Email queue page, whole-table counts and the oldest pending/unsent ages. Never the body |
+| POST | `email/{id}/retry` | OperatorStepUp | `platform.email-retry` | Release the claim on a claimed or failed email. Reason required. Sends nothing; attempts and error kept |
+| GET | `sms?state=&search=&page=&pageSize=` | Operator | `view.platformqueues.smsqueue` | SMS queue page, the same shape. `recipientPhone` masked to the last four digits; `search` is an account substring or a whole number. Never the body |
+| POST | `sms/{id}/retry` | OperatorStepUp | `platform.sms-retry` | Release the claim on a claimed or failed SMS. Reason required. The audit row names the account, never the number |
+| GET | `group-finder?status=&page=&pageSize=` | Operator | `view.platformqueues.groupfinderqueue` | Group finder rows with heartbeat staleness. Read-only |
+
+There is no purge or delete for any queue. Retry only ever puts a message back in line.
 
 ### `api/Admin` — operator actions
 

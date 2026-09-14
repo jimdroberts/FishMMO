@@ -10,7 +10,58 @@
 }
 
 .register-panel {
-    width: 360px;
+    width: 640px;
+}
+
+/* Two columns: the account on the left, the optional details on the right. One column of fourteen
+   fields would not fit the 800-unit reference height. */
+.register-columns {
+    flex-direction: row;
+}
+
+.register-column {
+    flex-grow: 1;
+    flex-basis: 0;
+    flex-direction: column;
+}
+
+.register-column--account {
+    margin-right: 16px;
+}
+
+/*
+    Both columns open with a caption of the same height, so the rows beside each other line up.
+    Only the right column used to carry one, which pushed every optional row 30 units below the
+    account row it sits next to.
+
+    Type-qualified: Label.fish-label in the theme sets font-size, and a bare class selector loses
+    that specificity fight, so the 12px here never applied. The caption's padding and margin are
+    zeroed because the default Label box would otherwise decide its height.
+*/
+Label.register-section-caption {
+    font-size: 12px;
+    -unity-font-style: bold;
+    letter-spacing: 1.2px;
+    margin-top: 6px;
+    margin-bottom: 0;
+    margin-left: 4px;
+    margin-right: 4px;
+    padding-top: 0;
+    padding-bottom: 4px;
+    padding-left: 0;
+    padding-right: 0;
+    height: 20px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--abyss-400);
+}
+
+.register-toggle {
+    margin-top: 4px;
+}
+
+/* The toggle's text sat 1 unit from its checkbox. */
+.register-toggle .unity-toggle__text {
+    margin-left: 6px;
 }
 
 .register-header {
@@ -38,9 +89,20 @@
     margin-bottom: 4px;
 }
 
-.register-status {
+/* The popup's box was inset 4 units from the field, so its left edge missed the text inputs above
+   and below it. */
+.register-dropdown > .unity-base-popup-field__input,
+DropdownField.register-dropdown > .unity-base-popup-field__input {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* Type-qualified for the same reason as the caption: Label.fish-label's middle-left alignment
+   otherwise wins, and the status line rendered flush left instead of centred. */
+Label.register-status {
     font-size: 12px;
     -unity-text-align: middle-center;
+    white-space: normal;
     min-height: 16px;
     margin-top: 6px;
     margin-bottom: 6px;
@@ -51,8 +113,19 @@
     margin-top: 4px;
 }
 
+/*
+    Equal halves that share the columns' edges: each button keeps the fields' 4-unit side margin,
+    and the first adds the 16-unit column gap. With a content-sized basis the two widths followed
+    their labels (310 and 288) and neither edge met a column.
+*/
 .register-btn {
     flex-grow: 1;
+    flex-basis: 0;
+    margin-left: 4px;
     margin-right: 4px;
     height: 32px;
+}
+
+#register-submit-btn.register-btn {
+    margin-right: 20px;
 }

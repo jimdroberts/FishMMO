@@ -447,5 +447,265 @@ namespace FishMMO.UnitTests
 				await AuthTestTrace.LogTestEnd(nameof(Login_WithStaleTokenHeld_AuthenticatesWithCredentials));
 			}
 		}
+
+		// ───────────── issue #252: database-backed lockout, beta gate, verification channels ─────────────
+
+		/// <summary>
+		/// A password step locked in the shared store refuses the CORRECT password with the
+		/// wrong-password answer, and never evaluates the proof.
+		/// </summary>
+		/// <remarks>
+		/// "Not evaluated" is observable through the hooks: an evaluated wrong proof records a failure
+		/// and an evaluated correct one clears the count. A locked attempt must do neither — the lock
+		/// is consulted and the attempt ends there.
+		/// </remarks>
+		[Test]
+		public async Task Login_DatabaseLockedPasswordStep_AnswersLikeAWrongPasswordWithoutEvaluatingTheProof()
+		{
+			await AuthTestTrace.LogTestStart(nameof(Login_DatabaseLockedPasswordStep_AnswersLikeAWrongPasswordWithoutEvaluatingTheProof),
+				"Test: a database lockout refuses a correct password as InvalidUsernameOrPassword, without evaluating the proof.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				// Several attempts from one address would trip the per-IP debounce (ServerBusy) before the gate under test.
+				SpreadAttemptsAcrossDistinctIps(h);
+				h.Store.SeedAccount("lockedout", "correct horse battery staple");
+				h.Store.SetLoginLocked("lockedout", true);
+
+				ClientAuthenticationResult locked = await h.Client.AttemptLogin("lockedout", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, locked,
+					$"A locked account must be answered exactly like a wrong password, got {locked}.");
+				LogAssert.IsFalse(h.Client.ReceivedSuccess, "A locked account must not sign in.");
+				LogAssert.IsTrue(h.Store.LoginLockCheckCount("lockedout") >= 1, "The shared lock was never consulted.");
+				LogAssert.AreEqual(0, h.Store.LoginFailureRecordCount("lockedout"),
+					"A failure was recorded, so the proof was evaluated (as wrong) while the account was locked.");
+				LogAssert.AreEqual(0, h.Store.LoginFailureClearCount("lockedout"),
+					"The failure count was cleared, so the proof was evaluated (as correct) while the account was locked.");
+
+				// Control: the same password signs in once the lock lifts, so the refusal above was the lock.
+				h.Store.SetLoginLocked("lockedout", false);
+				ClientAuthenticationResult unlocked = await h.Client.AttemptLogin("lockedout", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, unlocked, $"Expected LoginSuccess once unlocked, got {unlocked}.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_DatabaseLockedPasswordStep_AnswersLikeAWrongPasswordWithoutEvaluatingTheProof));
+			}
+		}
+
+		/// <summary>Wrong proofs are counted against the shared lockout; a correct one clears the count.</summary>
+		[Test]
+		public async Task Login_DatabaseLockout_CountsWrongProofsAndClearsOnSuccess()
+		{
+			await AuthTestTrace.LogTestStart(nameof(Login_DatabaseLockout_CountsWrongProofsAndClearsOnSuccess),
+				"Test: each wrong password records one shared failure; a correct password clears the count.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				// Several attempts from one address would trip the per-IP debounce (ServerBusy) before the gate under test.
+				SpreadAttemptsAcrossDistinctIps(h);
+				h.Store.SeedAccount("counted", "correct horse battery staple");
+
+				await h.Client.AttemptLogin("counted", "wrong-1");
+				await h.Client.AttemptLogin("counted", "wrong-2");
+				LogAssert.AreEqual(2, h.Store.LoginFailureRecordCount("counted"), "Each wrong proof must record one failure.");
+				LogAssert.AreEqual(0, h.Store.LoginFailureClearCount("counted"), "A wrong proof must not clear the count.");
+
+				ClientAuthenticationResult ok = await h.Client.AttemptLogin("counted", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, ok, $"Expected LoginSuccess, got {ok}.");
+				LogAssert.AreEqual(1, h.Store.LoginFailureClearCount("counted"), "A correct proof must clear the shared count.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_DatabaseLockout_CountsWrongProofsAndClearsOnSuccess));
+			}
+		}
+
+		/// <summary>
+		/// The beta gate is asked only after a correct proof. Asking before would tell anyone who can
+		/// type a name whether that account has beta access.
+		/// </summary>
+		[Test]
+		public async Task Login_BetaGate_RefusesAfterACorrectProofAndNeverBefore()
+		{
+			await AuthTestTrace.LogTestStart(nameof(Login_BetaGate_RefusesAfterACorrectProofAndNeverBefore),
+				"Test: in beta mode a wrong password is InvalidUsernameOrPassword with no access check; a correct one is BetaAccessRequired.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				// Several attempts from one address would trip the per-IP debounce (ServerBusy) before the gate under test.
+				SpreadAttemptsAcrossDistinctIps(h);
+				h.Store.BetaMode = true;
+				h.Store.SeedAccount("tester", "correct horse battery staple");
+
+				ClientAuthenticationResult wrong = await h.Client.AttemptLogin("tester", "wrong-password");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, wrong,
+					$"A wrong password must be refused as a wrong password even in beta mode, got {wrong}.");
+				LogAssert.AreEqual(0, h.Store.AccessCheckCount("tester"),
+					"The beta gate was consulted before the password was proven.");
+
+				ClientAuthenticationResult ghost = await h.Client.AttemptLogin("nosuchaccount", "any-password");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, ghost,
+					$"A non-existent account must be refused as a wrong password, got {ghost}.");
+				LogAssert.AreEqual(0, h.Store.AccessCheckCount("nosuchaccount"),
+					"The beta gate was consulted for an account that never proved a password.");
+
+				ClientAuthenticationResult refused = await h.Client.AttemptLogin("tester", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.BetaAccessRequired, refused,
+					$"A proven account without beta access must be refused with BetaAccessRequired, got {refused}.");
+				LogAssert.AreEqual(1, h.Store.AccessCheckCount("tester"), "The beta gate must be consulted exactly once after the proof.");
+				LogAssert.IsFalse(h.Client.ReceivedSuccess, "An account without beta access must not sign in.");
+
+				h.Store.SetBetaAccess("tester", true);
+				ClientAuthenticationResult admitted = await h.Client.AttemptLogin("tester", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, admitted, $"An account with beta access must sign in, got {admitted}.");
+
+				h.Store.SeedAccount("staffer", "correct horse battery staple");
+				h.Store.SetAccessLevel("staffer", AccessLevel.GameMaster);
+				ClientAuthenticationResult staff = await h.Client.AttemptLogin("staffer", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, staff, $"Staff must bypass the beta gate, got {staff}.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_BetaGate_RefusesAfterACorrectProofAndNeverBefore));
+			}
+		}
+
+		/// <summary>A locked two-factor step is named after the password proof, with the time left, instead of prompting.</summary>
+		[Test]
+		public async Task Login_TwoFactorLocked_IsReportedWithTheWaitInsteadOfPrompting()
+		{
+			await AuthTestTrace.LogTestStart(nameof(Login_TwoFactorLocked_IsReportedWithTheWaitInsteadOfPrompting),
+				"Test: a 2FA account whose second step is locked gets TwoFactorLocked with a retry-after, not TwoFactorRequired.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				// Several attempts from one address would trip the per-IP debounce (ServerBusy) before the gate under test.
+				SpreadAttemptsAcrossDistinctIps(h);
+				h.Store.SeedAccount("twofa", "correct horse battery staple", totpEnabled: true, totpSecret: "JBSWY3DPEHPK3PXP");
+				h.Store.SetTwoFactorLockedUntil("twofa", DateTime.UtcNow.AddMinutes(30));
+
+				ClientAuthenticationResult result = await h.Client.AttemptLogin("twofa", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.TwoFactorLocked, result, $"Expected TwoFactorLocked, got {result}.");
+				int wait = h.Client.LastRetryAfterSeconds;
+				LogAssert.IsTrue(wait > 29 * 60 && wait <= 30 * 60, $"Expected a retry-after of about 30 minutes, got {wait}s.");
+
+				// A wrong password on the same account is still only a wrong password: the lock is never shown before the proof.
+				ClientAuthenticationResult wrong = await h.Client.AttemptLogin("twofa", "wrong-password");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, wrong, $"Expected InvalidUsernameOrPassword, got {wrong}.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_TwoFactorLocked_IsReportedWithTheWaitInsteadOfPrompting));
+			}
+		}
+
+		/// <summary>An unverified account is asked for whichever code is outstanding: email first, SMS when only SMS is owed.</summary>
+		[Test]
+		public async Task Login_UnverifiedAccount_ReportsWhichCodeIsOutstanding()
+		{
+			await AuthTestTrace.LogTestStart(nameof(Login_UnverifiedAccount_ReportsWhichCodeIsOutstanding),
+				"Test: phone-only outstanding gives PhoneUnverified; email outstanding (alone or with SMS) gives AccountUnverified.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				// Several attempts from one address would trip the per-IP debounce (ServerBusy) before the gate under test.
+				SpreadAttemptsAcrossDistinctIps(h);
+				h.Store.SeedAccount("smsonly", "correct horse battery staple", isVerified: false);
+				h.Store.SetPendingVerification("smsonly", email: false, phone: true);
+				h.Store.SeedAccount("bothowed", "correct horse battery staple", isVerified: false);
+				h.Store.SetPendingVerification("bothowed", email: true, phone: true);
+
+				ClientAuthenticationResult sms = await h.Client.AttemptLogin("smsonly", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.PhoneUnverified, sms, $"Expected PhoneUnverified, got {sms}.");
+
+				ClientAuthenticationResult both = await h.Client.AttemptLogin("bothowed", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, both, $"Expected AccountUnverified (email first), got {both}.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_UnverifiedAccount_ReportsWhichCodeIsOutstanding));
+			}
+		}
+
+		/// <summary>
+		/// The SMS twin of the sign-in email resend: the core asks for a fresh SMS code only after a
+		/// correct proof, only when the SMS code is the one outstanding, and passes the stored expiry.
+		/// The due-or-not decision on that expiry is pinned separately.
+		/// </summary>
+		[Test]
+		public async Task Login_PhoneOnlyUnverified_AsksForAnSmsResendOnlyAfterACorrectProof()
+		{
+			await AuthTestTrace.LogTestStart(nameof(Login_PhoneOnlyUnverified_AsksForAnSmsResendOnlyAfterACorrectProof),
+				"Test: wrong password asks for nothing; correct password on a phone-only account asks once with the stored expiry; an email-first account does not ask.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				SpreadAttemptsAcrossDistinctIps(h);
+				DateTime expired = DateTime.UtcNow.AddHours(-1);
+				h.Store.SeedAccount("smsexpired", "correct horse battery staple", isVerified: false);
+				h.Store.SetPendingVerification("smsexpired", email: false, phone: true);
+				h.Store.SetPhoneVerifyCodeExpiry("smsexpired", expired);
+				h.Store.SeedAccount("emailfirst", "correct horse battery staple", isVerified: false);
+				h.Store.SetPendingVerification("emailfirst", email: true, phone: true);
+				h.Store.SetPhoneVerifyCodeExpiry("emailfirst", expired);
+
+				ClientAuthenticationResult wrong = await h.Client.AttemptLogin("smsexpired", "wrong-password");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, wrong, $"Expected InvalidUsernameOrPassword, got {wrong}.");
+				LogAssert.AreEqual(0, h.Store.SmsResendRequests.Count, "A wrong password must never trigger an SMS (cost and enumeration).");
+
+				ClientAuthenticationResult sms = await h.Client.AttemptLogin("smsexpired", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.PhoneUnverified, sms, $"Expected PhoneUnverified, got {sms}.");
+				LogAssert.AreEqual(1, h.Store.SmsResendRequests.Count, "A correct proof on a phone-only account must ask for exactly one SMS resend.");
+				LogAssert.IsTrue(h.Store.SmsResendRequests.TryPeek(out var request), "The resend request was not recorded.");
+				LogAssert.AreEqual("smsexpired", request.Username, "The resend must name the signing-in account.");
+				LogAssert.AreEqual((DateTime?)expired, request.PhoneVerifyCodeExpiresUtc, "The resend must carry the stored SMS code expiry.");
+
+				ClientAuthenticationResult both = await h.Client.AttemptLogin("emailfirst", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, both, $"Expected AccountUnverified, got {both}.");
+				LogAssert.AreEqual(1, h.Store.SmsResendRequests.Count, "While the email code is asked for first, no SMS resend is requested.");
+
+				DateTime now = DateTime.UtcNow;
+				LogAssert.IsTrue(FishMMO.Server.Implementation.AccountVerificationPolicy.IsSmsCodeResendDue(null, now), "A missing SMS code is due.");
+				LogAssert.IsTrue(FishMMO.Server.Implementation.AccountVerificationPolicy.IsSmsCodeResendDue(now.AddSeconds(-1), now), "An expired SMS code is due.");
+				LogAssert.IsFalse(FishMMO.Server.Implementation.AccountVerificationPolicy.IsSmsCodeResendDue(now.AddHours(23), now), "A live SMS code is not replaced.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_PhoneOnlyUnverified_AsksForAnSmsResendOnlyAfterACorrectProof));
+			}
+		}
+
+		/// <summary>
+		/// A verification-only connection sends the code as soon as the handshake completes, on the
+		/// requested channel, and starts no sign-in.
+		/// </summary>
+		[Test]
+		public async Task VerificationRequest_OnANewConnection_SendsTheCodeInsteadOfSigningIn()
+		{
+			await AuthTestTrace.LogTestStart(nameof(VerificationRequest_OnANewConnection_SendsTheCodeInsteadOfSigningIn),
+				"Test: SetVerificationRequest makes the next handshake send AccountVerify (SMS channel) and no SrpVerify.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				LogAssert.IsTrue(h.Client.SetVerificationRequest("pat", "123456", VerificationCodeChannel.Sms),
+					"SetVerificationRequest refused a valid account name and code.");
+				LogAssert.IsFalse(h.Client.SetVerificationRequest("ab", "123456", VerificationCodeChannel.Email),
+					"SetVerificationRequest accepted an account name shorter than three characters.");
+				LogAssert.IsTrue(h.Client.SetVerificationRequest("pat", "123456", VerificationCodeChannel.Sms), "Re-arming the request failed.");
+
+				h.Client.OnConnected();
+				await Task.Yield();
+
+				LogAssert.AreEqual(1, h.Client.AccountVerifySends.Count, "Exactly one AccountVerify must be sent.");
+				LogAssert.AreEqual(VerificationCodeChannel.Sms, h.Client.AccountVerifySends[0].Channel, "The code must travel on the requested channel.");
+				LogAssert.AreEqual(0, h.Client.SrpVerifySends.Count, "A verification-only connection must not start a sign-in.");
+				LogAssert.IsFalse(h.Client.WasDisconnected, "The client must stay connected to hear the answer.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(VerificationRequest_OnANewConnection_SendsTheCodeInsteadOfSigningIn));
+			}
+		}
 	}
 }

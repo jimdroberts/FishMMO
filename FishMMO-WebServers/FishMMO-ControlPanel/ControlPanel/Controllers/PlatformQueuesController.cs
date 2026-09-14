@@ -8,8 +8,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace FishMMO.ControlPanel.Controllers
 {
 	/// <summary>
-	/// The two queues players wait in: outbound email, and the group finder.
+	/// The queues players wait in: outbound email, outbound SMS, and the group finder.
 	/// </summary>
+	/// <remarks>
+	/// The SMS endpoints are the email endpoints' twins in every respect below — the silent
+	/// outage, the age as the alarm, no purge, retry as the only write — with one addition: the
+	/// phone number is personal data and leaves this controller masked.
+	/// </remarks>
 	/// <remarks>
 	/// <para>
 	/// <b>The email queue is how account verification reaches a player, and when it stops
@@ -182,6 +187,84 @@ namespace FishMMO.ControlPanel.Controllers
 			});
 		}
 
+		/// <summary>One page of the outbound SMS queue, with the counts and the ages.</summary>
+		/// <remarks>
+		/// <para>
+		/// The email read's twin. A player who chose verify-by-SMS finishes registering through
+		/// this table, and the same thresholds apply: the drain is the email drain's twin and
+		/// polls on the same kind of interval.
+		/// </para>
+		/// <para>
+		/// <b>The phone number never leaves this method whole.</b> It is personal data and the
+		/// page has no use for the full number, so it is masked here, to the last four digits,
+		/// rather than sent and hidden by the browser. The body is not read at all.
+		/// </para>
+		/// </remarks>
+		/// <param name="state">One of <c>pending</c>, <c>claimed</c>, <c>failed</c>, <c>sent</c>. Omit for any.</param>
+		/// <param name="search">Account-name substring, or a whole phone number. Omit for all.</param>
+		/// <param name="page">1-based page number.</param>
+		/// <param name="pageSize">Rows per page. Clamped by the service to 200.</param>
+		[HttpGet("sms")]
+		[Authorize(Policy = PanelPolicies.Operator)]
+		public async Task<IActionResult> SmsQueue(
+			[FromQuery] string state,
+			[FromQuery] string search,
+			[FromQuery] int page = 1,
+			[FromQuery] int pageSize = 25)
+		{
+			if (!TryParseState(state, out EmailQueueState? parsed))
+			{
+				return BadRequest(new { error = "State must be one of pending, claimed, failed or sent." });
+			}
+
+			var result = await queues.FetchSmsQueueAsync(parsed, search, page, pageSize, HttpContext.RequestAborted);
+			if (!result.IsSuccess)
+			{
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The SMS queue could not be read." });
+			}
+
+			var data = result.Data;
+			DateTime now = data.ReadAtUtc;
+
+			return Ok(new
+			{
+				pendingWarnSeconds = PendingWarnSeconds,
+				pendingDangerSeconds = PendingDangerSeconds,
+				readAtUtc = now,
+				counts = new
+				{
+					pending = data.Counts.Pending,
+					claimed = data.Counts.Claimed,
+					failed = data.Counts.Failed,
+					sent = data.Counts.Sent,
+					total = data.Counts.Total,
+				},
+				oldestPendingCreatedUtc = data.OldestPendingCreatedAt,
+				oldestPendingAgeSeconds = AgeSeconds(data.OldestPendingCreatedAt, now),
+				oldestUnsentCreatedUtc = data.OldestUnsentCreatedAt,
+				oldestUnsentAgeSeconds = AgeSeconds(data.OldestUnsentCreatedAt, now),
+				items = data.Items.Select(s => new
+				{
+					id = s.ID,
+					recipientPhone = MaskPhone(s.RecipientPhone),
+					recipientUsername = s.RecipientUsername,
+					kind = SmsKindName(s.Kind),
+					state = StateName(s.State),
+					attempts = s.Attempts,
+					claimedBy = s.ClaimedBy,
+					claimedAtUtc = s.ClaimedAt,
+					queuedUtc = s.CreatedAt,
+					sentUtc = s.SentAt,
+					lastError = s.LastError,
+					ageSeconds = AgeSeconds(s.CreatedAt, now),
+					canRetry = s.State == EmailQueueState.Claimed || s.State == EmailQueueState.Failed,
+				}),
+				page = data.Page,
+				pageSize = data.PageSize,
+				totalCount = data.TotalCount,
+			});
+		}
+
 		/// <summary>One page of the group finder queue.</summary>
 		/// <param name="status">0 waiting, 1 matched. Omit for any.</param>
 		/// <param name="page">1-based page number.</param>
@@ -319,6 +402,104 @@ namespace FishMMO.ControlPanel.Controllers
 		}
 
 		/// <summary>
+		/// Releases the claim on a stuck text message so the SMS drain can pick it up again.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The email retry's twin: it sends nothing, it keeps <c>attempts</c> and
+		/// <c>last_error</c>, and it is step-up with a mandatory reason because it touches the
+		/// verification path. A row reading as failed is one the drain gave up on after its
+		/// attempt limit, so a release grants exactly one more attempt.
+		/// </para>
+		/// <para>
+		/// <b>The audit row names the account and nothing else personal.</b> Neither the phone
+		/// number nor the message body is put in Details or the log line; the service does not
+		/// even return the number.
+		/// </para>
+		/// </remarks>
+		[HttpPost("sms/{id:long}/retry")]
+		[Authorize(Policy = PanelPolicies.OperatorStepUp)]
+		[Audited(AuditActions.SmsRetry, TargetType = "sms", TargetRouteValue = "id")]
+		public async Task<IActionResult> RetrySms(long id, [FromBody] ReasonRequest request)
+		{
+			if (string.IsNullOrWhiteSpace(request?.Reason))
+			{
+				return BadRequest(new { error = "A reason is required." });
+			}
+
+			var result = await queues.RetrySmsAsync(id, HttpContext.RequestAborted);
+			if (!result.IsSuccess)
+			{
+				audit.Outcome = result.ErrorMessage;
+				if (string.Equals(result.ErrorCode, FishMMO.Database.DatabaseErrorCodes.NotFound, StringComparison.Ordinal))
+				{
+					return NotFound(new { error = "There is no such message in the SMS queue." });
+				}
+				return BadRequest(new { error = result.ErrorMessage ?? "That message could not be re-queued." });
+			}
+
+			var outcome = result.Data;
+
+			audit.TargetName = outcome.RecipientUsername;
+			audit.Details = new { retried = outcome.Retried, attempts = outcome.Attempts, claimedBy = outcome.ClaimedBy };
+
+			if (!outcome.Retried)
+			{
+				audit.Outcome = outcome.Refusal;
+				return BadRequest(new { error = outcome.Refusal });
+			}
+
+			log.LogWarning("SMS queue row {Id} for '{Account}' re-queued by '{Actor}' after {Attempts} attempt(s). Reason: {Reason}",
+				id, outcome.RecipientUsername, User.Identity?.Name, outcome.Attempts, request.Reason);
+
+			return Ok(new
+			{
+				id,
+				recipientUsername = outcome.RecipientUsername,
+				attempts = outcome.Attempts,
+				message = "Claim released — the message is back in the queue. It goes out when the SMS drain next claims it, " +
+					"so if nothing is claiming, it will sit there and the pending age will keep climbing.",
+			});
+		}
+
+		/// <summary>
+		/// A phone number reduced to what an operator needs to tell two apart: the country prefix
+		/// on a long number, and the last four digits.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>+447700900123</c> becomes <c>+44•••••0123</c>. The bullet run is a fixed five so the
+		/// mask does not leak the number's length. The two-digit prefix is shown only on numbers
+		/// of ten digits or more, so at most six of them are ever visible; a number of four digits
+		/// or fewer shows none.
+		/// </para>
+		/// <para>
+		/// Done here rather than in the browser so the whole number never reaches it. The page
+		/// applies the same mask to anything that arrives unmasked, as a second line, and passes
+		/// through anything already carrying the bullet.
+		/// </para>
+		/// </remarks>
+		internal static string MaskPhone(string phone)
+		{
+			if (string.IsNullOrEmpty(phone))
+			{
+				return phone;
+			}
+			string digits = new string(phone.Where(char.IsDigit).ToArray());
+			string prefix = digits.Length >= 10 ? digits.Substring(0, 2) : "";
+			string tail = digits.Length > 4 ? digits.Substring(digits.Length - 4) : "";
+			return "+" + prefix + "•••••" + tail;
+		}
+
+		/// <summary>Names an <see cref="SmsKind"/> for the browser; unrecognised is said, not guessed.</summary>
+		private static string SmsKindName(SmsKind kind) => kind switch
+		{
+			SmsKind.Verification => "verification",
+			SmsKind.Notification => "notification",
+			_ => "unknown",
+		};
+
+		/// <summary>
 		/// Parses the state filter, treating absent as "any" and anything unrecognised as an
 		/// error.
 		/// </summary>
@@ -355,6 +536,7 @@ namespace FishMMO.ControlPanel.Controllers
 		{
 			EmailKind.Verification => "verification",
 			EmailKind.PasswordReset => "password-reset",
+			EmailKind.SecurityNotice => "security-notice",
 			_ => "unknown",
 		};
 

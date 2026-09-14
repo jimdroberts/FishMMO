@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 		public override void BuildTooltip(TooltipContent content, bool describingInstance)
 		{
 			base.BuildTooltip(content, describingInstance);
-			content.AddSubtitle(Slot.ToString());
+			content.AddSubtitle(ItemSlotNames.DisplayName(Slot));
 		}
 
 		/// <summary>

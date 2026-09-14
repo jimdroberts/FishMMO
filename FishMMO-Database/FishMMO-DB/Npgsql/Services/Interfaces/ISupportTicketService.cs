@@ -66,6 +66,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="authorIsStaff">Whether they were acting as staff.</param>
 		/// <param name="internalNote">Whether the player must never see it.</param>
 		/// <param name="body">The text.</param>
+		/// <param name="actorAccessLevel">
+		/// The staff author's access level, checked against the ticket's tier. Ignored for a player's
+		/// reply, which is never tier-gated.
+		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		Task<DatabaseResult<long>> AppendMessageAsync(
 			long ticketId,
@@ -73,6 +77,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			bool authorIsStaff,
 			bool internalNote,
 			string body,
+			byte actorAccessLevel,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
@@ -84,7 +89,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// ticket and saying you are working on it are the same act, and a queue where those
 		/// are two clicks is a queue full of assigned tickets still marked open.
 		/// </remarks>
-		Task<DatabaseResult> AssignAsync(long ticketId, string staffAccount, CancellationToken cancellationToken = default);
+		/// <param name="ticketId">The ticket.</param>
+		/// <param name="staffAccount">The new assignee, or null to return it to the queue.</param>
+		/// <param name="actorAccessLevel">The acting staff member's level, checked against the ticket's tier.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> AssignAsync(long ticketId, string staffAccount, byte actorAccessLevel, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Sets the status, and the resolution when finishing.
@@ -99,10 +108,41 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			SupportTicketStatus status,
 			string staffAccount,
 			string resolution,
+			byte actorAccessLevel,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>Sets the staff priority.</summary>
-		Task<DatabaseResult> SetPriorityAsync(long ticketId, int priority, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SetPriorityAsync(long ticketId, int priority, byte actorAccessLevel, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Moves a ticket to another support tier, clearing its assignee.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A tier is the lowest access level that may see and work the ticket: <c>GameMaster</c> or
+		/// <c>Admin</c>. Every staff write on this service refuses an actor below the ticket's tier
+		/// with <c>Forbidden</c>, so a promoted ticket cannot be worked through a typed ticket number.
+		/// </para>
+		/// <para>
+		/// The actor must be allowed to work the ticket at its current tier. A game master may
+		/// therefore promote a first-tier ticket, and only an administrator may hand one back down.
+		/// The assignee is cleared and an in-progress ticket returns to open, because whoever held
+		/// it is handing it on. The activity clock is not moved.
+		/// </para>
+		/// </remarks>
+		/// <param name="ticketId">The ticket.</param>
+		/// <param name="requiredAccessLevel">The new tier, as an access level.</param>
+		/// <param name="staffAccount">Who is moving it.</param>
+		/// <param name="reason">Why. Required, and written onto the ticket as an internal note in the same transaction.</param>
+		/// <param name="actorAccessLevel">Their access level.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> SetTierAsync(
+			long ticketId,
+			byte requiredAccessLevel,
+			string staffAccount,
+			string reason,
+			byte actorAccessLevel,
+			CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Counts a player's unfinished tickets, for showing them why they cannot file another.

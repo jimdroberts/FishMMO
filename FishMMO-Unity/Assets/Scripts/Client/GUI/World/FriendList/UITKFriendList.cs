@@ -564,6 +564,8 @@ namespace FishMMO.Client
 			}
 			));
 
+			entries.Add(("Report", () => UITKReportPlayer.TryOpen(friendID, displayName)));
+
 			entries.Add(("Remove Friend", () => OnButtonRemoveFriend(friendID)));
 
 			contextMenu.Open(entries);

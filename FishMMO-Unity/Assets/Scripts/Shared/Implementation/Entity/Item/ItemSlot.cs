@@ -64,4 +64,50 @@ namespace FishMMO.Shared
 		/// </summary>
 		Accessory = 9,
 	}
+
+	/// <summary>
+	/// The names players see for <see cref="ItemSlot"/> values.
+	/// </summary>
+	/// <remarks>
+	/// One spelling for every place a slot is named on screen — the equipment sockets, the item
+	/// tooltip and the wrong-socket toast — written out in full (issue #257). The enum's own
+	/// names are an authoring contract and are not player-facing: <c>Primary</c> and
+	/// <c>Secondary</c> read as ranks, not hands.
+	/// </remarks>
+	public static class ItemSlotNames
+	{
+		/// <summary>
+		/// The full, unabbreviated name of a slot.
+		/// </summary>
+		/// <param name="slot">The slot being named.</param>
+		/// <returns>The name shown to players.</returns>
+		public static string DisplayName(ItemSlot slot)
+		{
+			switch (slot)
+			{
+				case ItemSlot.Head:
+					return "Head";
+				case ItemSlot.Chest:
+					return "Chest";
+				case ItemSlot.Shoulders:
+					return "Shoulders";
+				case ItemSlot.Hands:
+					return "Hands";
+				case ItemSlot.Legs:
+					return "Legs";
+				case ItemSlot.Feet:
+					return "Feet";
+				case ItemSlot.Back:
+					return "Back";
+				case ItemSlot.Primary:
+					return "Main Hand";
+				case ItemSlot.Secondary:
+					return "Off Hand";
+				case ItemSlot.Accessory:
+					return "Accessory";
+				default:
+					return slot.ToString();
+			}
+		}
+	}
 }

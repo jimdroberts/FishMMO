@@ -16,7 +16,13 @@
  * surface: the row an operator clicks and the ticket it opens.
  */
 
+import { historyBody } from './account-history.js';
+
 const CATEGORY_LABELS = ['Bug', 'Player report', 'Help', 'Appeal', 'Other'];
+
+/* A ticket's tier is the lowest access level that may work it. Tier 2 (Game Master) is the
+ * first tier and the default; tier 3 means it was promoted to the administrators. */
+const ADMIN_TIER = 3;
 const STATUS_LABELS = ['Open', 'In progress', 'Awaiting player', 'Resolved', 'Closed'];
 const STATUS_TONES = ['info', 'accent', 'warn', 'ok', ''];
 const PRIORITY_LABELS = ['Low', 'Normal', 'High', 'Urgent'];
@@ -140,7 +146,7 @@ async function renderQueue(host, ctx) {
 									: ''}</div>`,
 					},
 					{ label: 'Category', cell: (t) => ui.badge(labelFor(CATEGORY_LABELS, t.category, t.categoryName)) },
-					{ label: 'Status', cell: (t) => statusBadge(ui, t) },
+					{ label: 'Status', cell: (t) => `${statusBadge(ui, t)}${t.requiredAccessLevel >= ADMIN_TIER ? ' ' + ui.badge('admin tier', 'warn') : ''}` },
 					{
 						label: 'Assignee',
 						cell: (t) => t.assignedTo
@@ -251,11 +257,12 @@ async function renderDetail(host, ctx, param) {
 				</div>
 				<h1 style="overflow-wrap:anywhere">${ui.esc(ticket.subject)}</h1>
 				<div class="page-head-sub">
-					Ticket ${ui.num(ticket.id)} · raised ${ui.esc(ui.dateTime(ticket.createdUtc))} by
+					Ticket ${ui.esc(ticket.id)} · raised ${ui.esc(ui.dateTime(ticket.createdUtc))} by
 					<a href="#/support/accounts/${encodeURIComponent(ticket.reporterAccount)}">${ui.esc(ticket.reporterAccount)}</a>
 				</div>
 			</div>
 			<div class="page-head-actions">
+				${ticket.requiredAccessLevel >= ADMIN_TIER ? ui.badge('admin tier', 'warn') : ''}
 				${priorityBadge(ui, ticket.priority)}
 				${statusBadge(ui, ticket)}
 				${ticket.assignedTo ? ui.badge(`assigned to ${ticket.assignedTo}`, mine ? 'accent' : '') : ui.badge('unassigned', 'warn')}
@@ -285,7 +292,7 @@ async function renderDetail(host, ctx, param) {
 						body: conversation(ui, ticket.messages ?? [], { showInternal: true }),
 					})}
 
-					${actionsCard(ui, { ticket, mine, closed })}
+					${actionsCard(ui, { ticket, mine, closed, isAdmin: ctx.session.accessLevel >= ADMIN_TIER })}
 				</div>
 
 				<div class="stack">
@@ -311,6 +318,9 @@ async function renderDetail(host, ctx, param) {
 										: '<span class="faint">—</span>'}</dd>
 									<dt>Character</dt><dd>${characterLink(ui, ticket.targetCharacterName, ticket.targetCharacterId)}</dd>
 								</dl>
+								${ticket.targetAccount
+									? `<div id="accused-history" style="margin-top:var(--sp-3)">${ui.loading()}</div>`
+									: '<p class="small muted">The name did not match an account when this was filed, so there is no history to show.</p>'}
 								${isReport ? `
 									<div style="margin-top:var(--sp-3)">
 										<a class="btn btn-sm btn-block" href="${chatHref(ticket)}">Chat log around the incident</a>
@@ -330,6 +340,8 @@ async function renderDetail(host, ctx, param) {
 							<dl class="dl">
 								<dt>Status</dt><dd>${statusBadge(ui, ticket)}</dd>
 								<dt>Priority</dt><dd>${priorityBadge(ui, ticket.priority)}</dd>
+								<dt>Tier</dt><dd>${ticket.requiredAccessLevel >= ADMIN_TIER ? ui.badge('administrators', 'warn') : ui.badge('game masters')}${
+									ticket.escalatedBy ? `<div class="cell-sub">moved by ${ui.esc(ticket.escalatedBy)} ${ui.ago(ticket.escalatedUtc)}</div>` : ''}</dd>
 								<dt>Category</dt><dd>${ui.esc(labelFor(CATEGORY_LABELS, ticket.category, ticket.categoryName))}</dd>
 								<dt>Assignee</dt><dd>${ticket.assignedTo
 									? `<a href="#/support/accounts/${encodeURIComponent(ticket.assignedTo)}">${ui.esc(ticket.assignedTo)}</a>`
@@ -344,6 +356,20 @@ async function renderDetail(host, ctx, param) {
 		</div>`;
 
 	wireActions(host, ctx, ticket, me);
+
+	/* Loaded after the page rather than before it: the history is several reads, and the report
+	 * itself is what the operator came for. A failure here says so in place and leaves the
+	 * ticket usable. */
+	if (ticket.targetAccount) {
+		const box = host.querySelector('#accused-history');
+		api.getAccountHistory(ticket.targetAccount, ticket.id)
+			.then((history) => {
+				if (box?.isConnected) box.innerHTML = historyBody(ui, history, ticket.id);
+			})
+			.catch((err) => {
+				if (box?.isConnected) box.innerHTML = `<p class="small muted">The account's history could not be loaded: ${ui.esc(err?.message ?? 'unknown error')}</p>`;
+			});
+	}
 }
 
 function characterLink(ui, name, id) {
@@ -449,7 +475,7 @@ function messageBlock(ui, m, showInternal) {
 function actionRow(ui, { act, label, tone = '', title, text, hint = '' }) {
 	return `
 		<div class="row-between">
-			<div>
+			<div class="row-text">
 				<strong>${ui.esc(title)}</strong>
 				<div class="small muted">${ui.esc(text)}</div>
 				${hint ? `<div class="field-hint">${ui.esc(hint)}</div>` : ''}
@@ -458,7 +484,7 @@ function actionRow(ui, { act, label, tone = '', title, text, hint = '' }) {
 		</div>`;
 }
 
-function actionsCard(ui, { ticket, mine, closed }) {
+function actionsCard(ui, { ticket, mine, closed, isAdmin }) {
 	return ui.card({
 		title: 'Actions',
 		sub: 'Each one asks for a reason, and the reason is what lands in the audit log.',
@@ -517,6 +543,22 @@ function actionsCard(ui, { ticket, mine, closed }) {
 					title: 'Change the priority',
 					text: 'Orders the queue. Urgent is for something happening to a player right now.',
 				})}
+
+				${ticket.requiredAccessLevel >= ADMIN_TIER
+					? (isAdmin
+						? actionRow(ui, {
+							act: 'demote',
+							label: 'Hand back',
+							title: 'Hand back to the game masters',
+							text: 'Returns the ticket to the first tier, unassigned, with your reason written onto it as a staff note.',
+						})
+						: '')
+					: actionRow(ui, {
+						act: 'promote',
+						label: 'Promote',
+						title: 'Promote to the administrators',
+						text: 'Moves the ticket to the administrators, unassigned, with your reason written onto it as a staff note. Game masters can no longer see or act on it.',
+					})}
 			</div>`,
 	});
 }
@@ -678,6 +720,32 @@ function wireActions(host, ctx, ticket, me) {
 		const status = Number(v.status);
 		const resolution = String(v.resolution ?? '').trim() || null;
 		if (await ctx.attempt(() => api.setTicketStatus(ticket.id, status, resolution, v.reason), 'Status changed', `Now ${STATUS_LABELS[status] ?? status}.`)) {
+			ctx.refresh();
+		}
+	});
+
+	on('promote', async () => {
+		const v = await askReason(
+			'Promote to the administrators',
+			'The ticket leaves the game masters\' queue, unassigned. Your reason is written onto it as a staff note — it is all the administrator picking it up has to go on.',
+			'Promote',
+		);
+		if (!v) return;
+		const done = await ctx.attempt(() => api.setTicketTier(ticket.id, ADMIN_TIER, v.reason), 'Ticket promoted', 'It is with the administrators now.');
+		if (!done) return;
+		// A game master cannot open a ticket above their tier, so they go back to the queue.
+		if (ctx.session.accessLevel >= ADMIN_TIER) ctx.refresh();
+		else ctx.go('support/tickets');
+	});
+
+	on('demote', async () => {
+		const v = await askReason(
+			'Hand back to the game masters',
+			'The ticket returns to the first tier, unassigned. Your reason is written onto it as a staff note.',
+			'Hand back',
+		);
+		if (!v) return;
+		if (await ctx.attempt(() => api.setTicketTier(ticket.id, 2, v.reason), 'Handed back', 'The game masters can pick it up again.')) {
 			ctx.refresh();
 		}
 	});

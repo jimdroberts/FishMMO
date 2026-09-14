@@ -17,6 +17,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
+using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Auth.Core;
@@ -443,7 +444,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 				msg.Email == null || msg.Email.Length > MaxEncryptedFieldSize ||
 				msg.Age == null || msg.Age.Length > MaxEncryptedFieldSize ||
 				msg.Salt == null || msg.Salt.Length > MaxEncryptedFieldSize ||
-				msg.Verifier == null || msg.Verifier.Length > MaxEncryptedFieldSize)
+				msg.Verifier == null || msg.Verifier.Length > MaxEncryptedFieldSize ||
+				msg.Profile == null || msg.Profile.Length > AuthSizeLimits.MaxRegistrationProfileSize)
 			{
 				conn.Disconnect(true);
 				return;
@@ -467,6 +469,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				msg.Age,                   // Still encrypted!
 				msg.Salt,                  // Still encrypted!
 				msg.Verifier,              // Still encrypted!
+				msg.Profile,               // Still encrypted!
 				encryptionData,
 				ipAddress,
 				msg.Seq
@@ -689,64 +692,40 @@ namespace FishMMO.Server.Implementation.LoginServer
 					byte[] decryptedAge;
 					byte[] decryptedSalt;
 					byte[] decryptedVerifier;
+					RegistrationProfile submittedProfile;
 					try
 					{
-						uint seq = request.Seq;
-						// Guard: ValidateSequenceRange ensures seq is large enough for the 5-field
-						// protocol encoding (seq-4..seq) without uint underflow.
-						if (!CryptoHelper.ValidateSequenceRange(seq, 5))
+						/* Six fields on six consecutive sequences — username, email, age, salt, verifier,
+						 * profile — consumed atomically. The arithmetic lives in SrpService, beside the
+						 * client-side encryption it has to mirror, rather than being counted out here. */
+						SrpService.ServerDecryptRegistrationFields(
+							request.EncryptionData,
+							request.Seq,
+							request.EncryptedUsername,
+							request.EncryptedEmail,
+							request.EncryptedAge,
+							request.EncryptedSalt,
+							request.EncryptedVerifier,
+							request.EncryptedProfile,
+							out decryptedUsername,
+							out decryptedEmail,
+							out decryptedAge,
+							out decryptedSalt,
+							out decryptedVerifier,
+							out byte[] decryptedProfile);
+
+						// Parsed at once so the personal details spend as little time as possible in a buffer.
+						bool profileParsed = RegistrationProfile.TryDeserialize(decryptedProfile, out submittedProfile);
+						CryptographicOperationsCompat.ZeroMemory(decryptedProfile);
+						if (!profileParsed)
 						{
-							NetworkConnection failConn = request.Connection;
-							TryEnqueueMainThread(() =>
-							{
-								if (failConn != null && failConn.IsActive)
-									failConn.Disconnect(false);
-							});
-							return;
+							CryptographicOperationsCompat.ZeroMemory(decryptedUsername);
+							CryptographicOperationsCompat.ZeroMemory(decryptedEmail);
+							CryptographicOperationsCompat.ZeroMemory(decryptedAge);
+							CryptographicOperationsCompat.ZeroMemory(decryptedSalt);
+							CryptographicOperationsCompat.ZeroMemory(decryptedVerifier);
+							throw new CryptographicException("Malformed registration profile.");
 						}
-
-						// Expected order: username (seq-4), email (seq-3), age (seq-2), salt (seq-1), verifier (seq)
-						uint seqUsername = seq - 4;
-						uint seqEmail = seq - 3;
-						uint seqAge = seq - 2;
-						uint seqSalt = seq - 1;
-						uint seqVerifier = seq;
-
-						// Atomic 5-sequence consume. Either all five
-						// receive slots advance or none do; we never leave the counter
-						// mid-burst on a partial decrypt failure.
-						if (!request.EncryptionData.TryConsumeReceiveSequenceRange(seqUsername, 5))
-							throw new CryptographicException("Account creation sequence range out-of-order or duplicate.");
-
-						// Decrypt username
-						byte[] nonceU = request.EncryptionData.BuildReceiveNonce(seqUsername);
-						byte[] aadU = new byte[CryptoHelper.AadLength];
-						CryptoHelper.WriteAad(aadU, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqUsername);
-						decryptedUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceU, request.EncryptedUsername, aadU);
-
-						// Decrypt email
-						byte[] nonceE = request.EncryptionData.BuildReceiveNonce(seqEmail);
-						byte[] aadE = new byte[CryptoHelper.AadLength];
-						CryptoHelper.WriteAad(aadE, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqEmail);
-						decryptedEmail = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceE, request.EncryptedEmail, aadE);
-
-						// Decrypt age
-						byte[] nonceA = request.EncryptionData.BuildReceiveNonce(seqAge);
-						byte[] aadA = new byte[CryptoHelper.AadLength];
-						CryptoHelper.WriteAad(aadA, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqAge);
-						decryptedAge = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceA, request.EncryptedAge, aadA);
-
-						// Decrypt salt
-						byte[] nonceS = request.EncryptionData.BuildReceiveNonce(seqSalt);
-						byte[] aadS = new byte[CryptoHelper.AadLength];
-						CryptoHelper.WriteAad(aadS, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqSalt);
-						decryptedSalt = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceS, request.EncryptedSalt, aadS);
-
-						// Decrypt verifier
-						byte[] nonceV = request.EncryptionData.BuildReceiveNonce(seqVerifier);
-						byte[] aadV = new byte[CryptoHelper.AadLength];
-						CryptoHelper.WriteAad(aadV, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqVerifier);
-						decryptedVerifier = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceV, request.EncryptedVerifier, aadV);
 					}
 					catch (CryptographicException)
 					{
@@ -900,6 +879,53 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					#endregion
 
+					#region Profile & Beta Gate
+					/* The optional details are validated by the database's own rules BEFORE the account row
+					 * exists: refusing afterwards would leave an account behind that the player was told
+					 * was not created. The client checks the same rules first, so this is a backstop. */
+					AccountVerificationChannels chosenChannels = (AccountVerificationChannels)(byte)(submittedProfile.VerificationChannels &
+						(RegistrationVerificationChannels.Email | RegistrationVerificationChannels.Sms));
+					if (chosenChannels == AccountVerificationChannels.None)
+					{
+						// Email is mandatory at registration anyway; "neither" means the default.
+						chosenChannels = AccountVerificationChannels.Email;
+					}
+					var submittedDetails = new AccountProfileData
+					{
+						Phone = submittedProfile.Phone,
+						RealName = submittedProfile.RealName,
+						Country = submittedProfile.Country,
+						Address = submittedProfile.Address,
+						ReferralAccount = submittedProfile.ReferralAccount,
+						VerificationChannels = chosenChannels,
+					};
+					if (!AccountProfileRules.TryValidate(submittedDetails, out AccountProfileData cleanProfile, out string _))
+					{
+						// The reason is not logged: it quotes nothing, but it is about personal data.
+						await Log.Debug("AccountCreationSystem", "Refused account creation: an optional detail failed the profile rules.");
+						BroadcastEarlyResult(request.Connection, ClientAuthenticationResult.AccountDetailsInvalid);
+						return;
+					}
+
+					string betaCode = string.IsNullOrWhiteSpace(submittedProfile.BetaCode) ? null : submittedProfile.BetaCode.Trim();
+					bool betaMode = LoginSecurityPolicy.IsBetaModeEnabled(Server.Configuration);
+					if (betaMode)
+					{
+						ClientAuthenticationResult? betaRefusal = await CheckRegistrationBetaCodeAsync(betaCode);
+						if (betaRefusal.HasValue)
+						{
+							if (betaRefusal.Value == ClientAuthenticationResult.BetaCodeInvalid &&
+								Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var betaMappingData))
+							{
+								// A wrong code is a guess; the per-IP failure counter is what blocks guessing.
+								TryTrackIpFailure(betaMappingData, request.IpAddress);
+							}
+							BroadcastEarlyResult(request.Connection, betaRefusal.Value);
+							return;
+						}
+					}
+					#endregion
+
 					#region Persist & PostCreate
 					// Database operation via registry-resolved service (BaseService handles context lifecycle)
 					DatabaseResult dbResult = await accountService.PersistAsync(username, salt, verifier, email, age);
@@ -921,6 +947,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// Clear failure tracker on success
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 
+							/* The optional details, then the beta code. Both after the row exists and neither
+							 * able to undo it: the account is real now. A profile that failed to write leaves
+							 * the database's default channel (email), so verification falls back to email
+							 * rather than asking for an SMS code to a number that was never stored. */
+							DatabaseResult profileResult = await accountService.PersistProfileAsync(username, cleanProfile);
+							if (!profileResult.IsSuccess)
+							{
+								await Log.Warning("AccountCreationSystem", $"PersistProfileAsync DB error for user '{username}': {profileResult.ErrorCode} - {profileResult.ErrorMessage}");
+								chosenChannels = AccountVerificationChannels.Email;
+							}
+							if (betaCode != null)
+							{
+								await RedeemRegistrationBetaCodeAsync(username, betaCode, betaMode);
+							}
+
 							// Determine whether to auto-verify (skip 2FA/email).
 							// Controlled by a compile-time guard AND a runtime AutoVerifyAccounts config flag;
 							// see AccountVerificationPolicy, which the login path consults with the same rules.
@@ -941,44 +982,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 							}
 							else
 							{
-							// Release mode: full 2FA setup + verification code delivered in-band.
-							// Generate and store a verification code.
-							int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
-							// 24 hour TTL: long enough for users to act, short enough that an
-							// exposed code cannot be re-used indefinitely.
-							DateTime verifyExpiresUtc = DateTime.UtcNow.AddHours(24);
-							DatabaseResult verifyResult = await accountService.PersistVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
-							if (!verifyResult.IsSuccess)
-							{
-								await Log.Warning("AccountCreationSystem", $"PersistVerifyCodeAsync DB error for user '{username}': {verifyResult.ErrorCode} - {verifyResult.ErrorMessage}");
-							}
-
-
-							// Enqueue verification email for SMTP delivery.
-							// The background processor will pick this up and send via the configured SMTP server.
-							if (Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
-							{
-								// Prevent duplicate emails: skip if a pending email already exists for this user.
-								var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
-								if (dupCheck.IsSuccess && dupCheck.Data)
-								{
-									await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification email for '{username}' — a pending email already exists.");
-								}
-								else
-								{
-									string emailSubject = "FishMMO - Verify Your Account";
-									string emailBody = BuildVerificationEmailBody(username, verifyCode);
-									DatabaseResult emailResult = await emailQueueService.EnqueueAsync(email, username, emailSubject, emailBody);
-									if (!emailResult.IsSuccess)
-									{
-										await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification email for '{username}': {emailResult.ErrorCode} - {emailResult.ErrorMessage}");
-									}
-								}
-							}
-							else
-							{
-								await Log.Warning("AccountCreationSystem", $"IEmailQueueService not registered — verification email for '{username}' not enqueued.");
-							}
+							// Release mode: a code on every chosen channel that is switched on, then the mandatory
+							// 2FA setup below. AccountVerificationPolicy documents the precedence.
+							result = await DeliverVerificationCodesAsync(accountService, username, email, profileResult.IsSuccess ? cleanProfile.Phone : null, chosenChannels);
 							// Generate and store mandatory 2FA setup.
 							// Snapshot TotpMasterKey to prevent a TOCTOU race.
 							byte[] totpMasterKeySnapshot = TotpMasterKey;
@@ -1541,9 +1547,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			// Reject oversized payloads before any allocation or decryption.
+			// Reject oversized payloads, and a channel no client sends, before any allocation or decryption.
 			if (msg.Username == null || msg.Username.Length > MaxEncryptedFieldSize ||
-				msg.VerifyCode == null || msg.VerifyCode.Length > MaxEncryptedFieldSize)
+				msg.VerifyCode == null || msg.VerifyCode.Length > MaxEncryptedFieldSize ||
+				(msg.Channel != VerificationCodeChannel.Email && msg.Channel != VerificationCodeChannel.Sms))
 			{
 				conn.Disconnect(true);
 				return;
@@ -1583,7 +1590,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// ProcessAccountVerifyAsync after decryption. The gate here only checks
 			// the IP-based limit; the username-based check runs asynchronously.
 
-			if (TryEnqueueAsyncWork(() => ProcessAccountVerifyAsync(conn, msg.Username, msg.VerifyCode, encryptionData, ipAddress, msg.Seq), conn.ClientId))
+			VerificationCodeChannel verifyChannel = msg.Channel;
+			if (TryEnqueueAsyncWork(() => ProcessAccountVerifyAsync(conn, msg.Username, msg.VerifyCode, encryptionData, ipAddress, msg.Seq, verifyChannel), conn.ClientId))
 			{
 				return;
 			}
@@ -1612,7 +1620,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			byte[] encryptedVerifyCode,
 			ConnectionEncryptionData encryptionData,
 			string ipAddress,
-			uint seq)
+			uint seq,
+			VerificationCodeChannel channel)
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 			if (ipAddress == null)
@@ -1752,15 +1761,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 							}
 						}
 
-						DatabaseResult dbResult = await accountService.PersistVerifiedAsync(username, verifyCode);
+						/* Each channel's code is stored and redeemed apart, in one conditional update each.
+						 * A correct code may still leave the account owing the other channel's, so the
+						 * answer is whatever is outstanding next, not a flat AccountVerified. */
+						DatabaseResult dbResult = channel == VerificationCodeChannel.Sms
+							? await accountService.PersistPhoneVerifiedAsync(username, verifyCode)
+							: await accountService.PersistVerifiedAsync(username, verifyCode);
 						result = dbResult.IsSuccess
-							? ClientAuthenticationResult.AccountVerified
+							? await ResolveVerificationProgressAsync(accountService, username)
 							: ClientAuthenticationResult.InvalidUsernameOrPassword;
 					}
 
 				trackFailure:
-					// Track failures for rate limiting.
-					if (result != ClientAuthenticationResult.AccountVerified)
+					// Track failures for rate limiting. Every accepted code answers with something other
+					// than InvalidUsernameOrPassword — including the result asking for the next code.
+					if (result == ClientAuthenticationResult.InvalidUsernameOrPassword)
 					{
 						// Per-IP failure tracking. Fail-closed: when the tracker is at
 						// capacity, disconnect the offender immediately so they cannot stay
@@ -1880,6 +1895,286 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				}
 			}
+		}
+
+		/// <summary>Broadcasts a terminal result for a request refused before any account was written.</summary>
+		private void BroadcastEarlyResult(NetworkConnection conn, ClientAuthenticationResult earlyResult)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn != null && conn.IsActive)
+				{
+					Server.NetworkWrapper.Broadcast(conn,
+						new ClientAuthResultBroadcast() { Result = earlyResult },
+						false, Channel.Reliable);
+				}
+			});
+		}
+
+		/// <summary>
+		/// The closed-test gate at registration: is this code redeemable for an active program?
+		/// </summary>
+		/// <remarks>
+		/// Checked BEFORE the account exists and redeemed after, because redeeming first would attach a
+		/// use to a name the insert may then find taken. Every bad-code case — missing, malformed,
+		/// unknown, revoked, expired, used up — is the one <see cref="ClientAuthenticationResult.BetaCodeInvalid"/>,
+		/// so the answer cannot tell a real code from a guess. Only a gate that cannot be evaluated says
+		/// something different (ServerBusy), and it refuses rather than admits.
+		/// </remarks>
+		/// <returns>Null when the code may be redeemed; otherwise the refusal.</returns>
+		private async Task<ClientAuthenticationResult?> CheckRegistrationBetaCodeAsync(string betaCode)
+		{
+			if (string.IsNullOrEmpty(betaCode))
+			{
+				return ClientAuthenticationResult.BetaCodeInvalid;
+			}
+
+			IReadOnlyList<string> programs = LoginSecurityPolicy.GetBetaPrograms(Server.Configuration, out int rejected);
+			if (programs.Count == 0)
+			{
+				// The service reads an empty list as "any program", which would admit registrations the
+				// sign-in gate then refuses forever. Fail closed, loudly.
+				await Log.Error("AccountCreationSystem", $"BetaMode is on but BetaPrograms lists no valid program ({rejected} invalid name(s)); refusing every beta code.");
+				return ClientAuthenticationResult.BetaCodeInvalid;
+			}
+
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IBetaCodeService>(out var betaService))
+			{
+				await Log.Error("AccountCreationSystem", "BetaMode is on but IBetaCodeService is not registered; refusing account creation.");
+				return ClientAuthenticationResult.ServerBusy;
+			}
+
+			DatabaseResult<bool> check = await betaService.CheckRedeemableAsync(betaCode, programs);
+			if (!check.IsSuccess)
+			{
+				await Log.Warning("AccountCreationSystem", $"CheckRedeemableAsync failed: {check.ErrorCode} - {check.ErrorMessage}");
+				return ClientAuthenticationResult.ServerBusy;
+			}
+			return check.Data ? (ClientAuthenticationResult?)null : ClientAuthenticationResult.BetaCodeInvalid;
+		}
+
+		/// <summary>
+		/// Redeems the registration beta code for the new account: always attempted when a code was
+		/// given, so a code entered while no test is running is still on the account when one starts.
+		/// </summary>
+		private async Task RedeemRegistrationBetaCodeAsync(string username, string betaCode, bool betaMode)
+		{
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IBetaCodeService>(out var betaService))
+			{
+				return;
+			}
+
+			var redeemed = await betaService.RedeemAsync(username, betaCode);
+			if (!redeemed.IsSuccess)
+			{
+				/* Checked a moment ago, so in beta mode this is a lost race for the code's last use: the
+				 * account exists without access and can redeem another code in the Control Panel. */
+				string message = $"Beta code redemption for new account '{username}' failed: {redeemed.ErrorCode} - {redeemed.ErrorMessage}";
+				if (betaMode)
+				{
+					await Log.Warning("AccountCreationSystem", message);
+				}
+				else
+				{
+					await Log.Debug("AccountCreationSystem", message);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Sends a verification code on every channel the player chose that this server has switched
+		/// on, marks the chosen channels it has switched off as proven, and says what the client should
+		/// ask for next.
+		/// </summary>
+		/// <remarks>
+		/// Precedence is <see cref="AccountVerificationPolicy"/>'s. This runs only when the development
+		/// <c>AutoVerifyAccounts</c> bypass is off. With both switches off every account is verified at
+		/// creation through the same database write the bypass uses — but the caller still enrols it in
+		/// two-factor authentication, because unlike the bypass these switches are legal in production.
+		/// </remarks>
+		/// <returns>
+		/// <see cref="ClientAuthenticationResult.AccountCreated"/> when the email code is outstanding (it is
+		/// asked for first), <see cref="ClientAuthenticationResult.PhoneUnverified"/> when only the SMS code
+		/// is, and <see cref="ClientAuthenticationResult.AccountVerified"/> when nothing is.
+		/// </returns>
+		private async Task<ClientAuthenticationResult> DeliverVerificationCodesAsync(
+			IAccountService accountService,
+			string username,
+			string email,
+			string phone,
+			AccountVerificationChannels chosen)
+		{
+			bool emailOn = AccountVerificationPolicy.IsEmailVerificationEnabled(Server.Configuration);
+			bool smsOn = AccountVerificationPolicy.IsSmsVerificationEnabled(Server.Configuration);
+
+			if (!emailOn && !smsOn)
+			{
+				DatabaseResult verified = await accountService.PersistAutoVerifiedAsync(username);
+				if (!verified.IsSuccess)
+				{
+					await Log.Warning("AccountCreationSystem", $"PersistAutoVerifiedAsync DB error for user '{username}': {verified.ErrorCode} - {verified.ErrorMessage}");
+				}
+				return ClientAuthenticationResult.AccountVerified;
+			}
+
+			AccountVerificationChannels enabled =
+				(emailOn ? AccountVerificationChannels.Email : AccountVerificationChannels.None) |
+				(smsOn ? AccountVerificationChannels.Sms : AccountVerificationChannels.None);
+			AccountVerificationChannels outstanding = chosen & enabled;
+			AccountVerificationChannels waived = chosen & ~enabled;
+
+			if (waived != AccountVerificationChannels.None)
+			{
+				DatabaseResult waiveResult = await accountService.PersistChannelsVerifiedAsync(username, waived);
+				if (!waiveResult.IsSuccess)
+				{
+					await Log.Warning("AccountCreationSystem", $"PersistChannelsVerifiedAsync DB error for user '{username}': {waiveResult.ErrorCode} - {waiveResult.ErrorMessage}");
+				}
+			}
+
+			if ((outstanding & AccountVerificationChannels.Email) != 0)
+			{
+				await SendEmailVerificationCodeAsync(accountService, username, email);
+			}
+			if ((outstanding & AccountVerificationChannels.Sms) != 0)
+			{
+				await SendSmsVerificationCodeAsync(accountService, username, phone);
+			}
+
+			if ((outstanding & AccountVerificationChannels.Email) != 0)
+			{
+				return ClientAuthenticationResult.AccountCreated;
+			}
+			if ((outstanding & AccountVerificationChannels.Sms) != 0)
+			{
+				return ClientAuthenticationResult.PhoneUnverified;
+			}
+			return ClientAuthenticationResult.AccountVerified;
+		}
+
+		/// <summary>Generates, stores and queues the email verification code.</summary>
+		private async Task SendEmailVerificationCodeAsync(IAccountService accountService, string username, string email)
+		{
+			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
+			// 24 hour TTL: long enough for users to act, short enough that an
+			// exposed code cannot be re-used indefinitely.
+			DateTime verifyExpiresUtc = DateTime.UtcNow.AddHours(24);
+			DatabaseResult verifyResult = await accountService.PersistVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
+			if (!verifyResult.IsSuccess)
+			{
+				await Log.Warning("AccountCreationSystem", $"PersistVerifyCodeAsync DB error for user '{username}': {verifyResult.ErrorCode} - {verifyResult.ErrorMessage}");
+			}
+
+			// Enqueue verification email for SMTP delivery.
+			// The background processor will pick this up and send via the configured SMTP server.
+			if (Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+			{
+				// Prevent duplicate emails: skip if a pending email already exists for this user.
+				var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
+				if (dupCheck.IsSuccess && dupCheck.Data)
+				{
+					await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification email for '{username}' — a pending email already exists.");
+				}
+				else
+				{
+					string emailSubject = "FishMMO - Verify Your Account";
+					string emailBody = BuildVerificationEmailBody(username, verifyCode);
+					DatabaseResult emailResult = await emailQueueService.EnqueueAsync(email, username, emailSubject, emailBody);
+					if (!emailResult.IsSuccess)
+					{
+						await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification email for '{username}': {emailResult.ErrorCode} - {emailResult.ErrorMessage}");
+					}
+				}
+			}
+			else
+			{
+				await Log.Warning("AccountCreationSystem", $"IEmailQueueService not registered — verification email for '{username}' not enqueued.");
+			}
+		}
+
+		/// <summary>
+		/// Generates, stores and queues the SMS verification code — the same six-digit, 24-hour shape as
+		/// the email code. The login server only enqueues; the Control Panel drains the SMS queue.
+		/// </summary>
+		private async Task SendSmsVerificationCodeAsync(IAccountService accountService, string username, string phone)
+		{
+			if (string.IsNullOrEmpty(phone))
+			{
+				await Log.Error("AccountCreationSystem", $"SMS verification was chosen for '{username}' but no phone number is on record; no SMS code was sent.");
+				return;
+			}
+
+			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
+			DateTime verifyExpiresUtc = DateTime.UtcNow.AddHours(24);
+			DatabaseResult codeResult = await accountService.PersistPhoneVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
+			if (!codeResult.IsSuccess)
+			{
+				await Log.Error("AccountCreationSystem", $"PersistPhoneVerifyCodeAsync DB error for user '{username}': {codeResult.ErrorCode} - {codeResult.ErrorMessage}");
+				return;
+			}
+
+			if (!Server.Database.ServiceRegistry.TryGet<ISmsQueueService>(out var smsQueueService))
+			{
+				await Log.Warning("AccountCreationSystem", $"ISmsQueueService not registered — verification SMS for '{username}' not enqueued.");
+				return;
+			}
+
+			var dupCheck = await smsQueueService.HasPendingForUserAsync(username, SmsKind.Verification);
+			if (dupCheck.IsSuccess && dupCheck.Data)
+			{
+				await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification SMS for '{username}' — a pending message already exists.");
+				return;
+			}
+
+			DatabaseResult smsResult = await smsQueueService.EnqueueAsync(phone, username, BuildVerificationSmsBody(verifyCode), SmsKind.Verification);
+			if (!smsResult.IsSuccess)
+			{
+				await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification SMS for '{username}': {smsResult.ErrorCode} - {smsResult.ErrorMessage}");
+			}
+		}
+
+		/// <summary>
+		/// After an accepted verification code, what the account still owes under this server's switches.
+		/// </summary>
+		/// <remarks>
+		/// No email grace period here, unlike sign-in: the player is already in the verification flow
+		/// and holding codes, so an outstanding email code is simply the next thing to ask for.
+		/// </remarks>
+		private async Task<ClientAuthenticationResult> ResolveVerificationProgressAsync(IAccountService accountService, string username)
+		{
+			var fetched = await accountService.FetchForLoginAsync(username);
+			if (!fetched.IsSuccess)
+			{
+				// The code was accepted; sign-in will make any remaining demand itself.
+				return ClientAuthenticationResult.AccountVerified;
+			}
+
+			var account = fetched.Data;
+			if (account.Verified)
+			{
+				return ClientAuthenticationResult.AccountVerified;
+			}
+
+			var channels = (AccountVerificationChannels)account.VerificationChannels;
+			if (AccountVerificationPolicy.IsEmailVerificationEnabled(Server.Configuration) &&
+				(channels & AccountVerificationChannels.Email) != 0 && !account.EmailVerified)
+			{
+				return ClientAuthenticationResult.AccountUnverified;
+			}
+			if (AccountVerificationPolicy.IsSmsVerificationEnabled(Server.Configuration) &&
+				(channels & AccountVerificationChannels.Sms) != 0 && !account.PhoneVerified)
+			{
+				return ClientAuthenticationResult.PhoneUnverified;
+			}
+			return ClientAuthenticationResult.AccountVerified;
+		}
+
+		/// <summary>Builds the verification SMS. Plain text, well under the queue's 480-character limit.</summary>
+		private static string BuildVerificationSmsBody(int verifyCode)
+		{
+			return $"FishMMO verification code: {verifyCode:D6}. It expires in 24 hours. If you did not create a FishMMO account, ignore this message.";
 		}
 
 		/// <summary>

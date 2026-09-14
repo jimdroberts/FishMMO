@@ -445,7 +445,10 @@ namespace FishMMO.Client
 
 			if (IsTabAvailable(ConsoleTab.Players) && now >= nextRosterRequestTime)
 			{
-				RequestRoster();
+				/* The timer's refresh, so it is marked automatic and the server does not audit it —
+				 * but only once a roster has arrived: until then this may be the first load, which
+				 * is recorded. Every other roster request is somebody asking, and stays unmarked. */
+				RequestRoster(autoRefresh: hasRoster);
 			}
 
 			if (pendingRefreshTime >= 0f && now >= pendingRefreshTime)
@@ -934,14 +937,19 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		private void RequestRoster()
+		/// <summary>Requests the roster of the scene the staff member is in.</summary>
+		/// <param name="autoRefresh">True only for the refresh timer's request, which the server does not audit.</param>
+		private void RequestRoster(bool autoRefresh = false)
 		{
 			if (!IsTabAvailable(ConsoleTab.Players))
 			{
 				return;
 			}
 			nextRosterRequestTime = Time.unscaledTime + RosterRefreshSeconds;
-			SendRequest(new StaffRosterRequestBroadcast());
+			SendRequest(new StaffRosterRequestBroadcast()
+			{
+				AutoRefresh = autoRefresh,
+			});
 		}
 
 		private void RequestTicketQueue()

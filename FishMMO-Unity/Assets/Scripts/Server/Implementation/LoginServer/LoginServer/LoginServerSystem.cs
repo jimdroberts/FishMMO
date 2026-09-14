@@ -121,7 +121,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-			if (Server.Configuration.TryGetBool("AutoVerifyAccounts", out bool autoVerify) && autoVerify)
+			// IServerConfiguration has no boolean accessor (the TryGetBool this used to call does not
+			// exist, which broke every production server build); AccountVerificationPolicy parses it.
+			if (AccountVerificationPolicy.TryReadBool(Server.Configuration, AccountVerificationPolicy.AutoVerifyAccountsKey, out bool autoVerify) && autoVerify)
 			{
 				_ = Log.Error("LoginServerSystem",
 					"FATAL: AutoVerifyAccounts=true is not allowed in production builds. " +

@@ -23,12 +23,28 @@ const BASE = '/api';
 
 /* ── Real HTTP backend ───────────────────────────────────────── */
 
+/* The header that marks a read as a background poll, and its one value. The server's
+ * AuditActionFilter does not record a GET or HEAD that carries it (unless it was refused);
+ * it never skips anything else, whatever the header says. */
+export const REFRESH_HEADER = 'X-Panel-Refresh';
+export const REFRESH_AUTO = 'auto';
+
+/* True only while a method of `api.auto` is running. Read synchronously at the top of
+ * `request`, before its first await — which is why every method below must call `request`
+ * directly and synchronously. If one ever stops doing so, its polls simply arrive unmarked
+ * and are recorded: the failure mode is an extra audit row, never a missing one. */
+let automatic = false;
+
 async function request(method, path, body) {
 	const init = {
 		method,
 		headers: { Accept: 'application/json' },
 		credentials: 'same-origin',
 	};
+	/* Reads only. A write is never an automatic refresh, and the server would record it anyway. */
+	if (automatic && (method === 'GET' || method === 'HEAD')) {
+		init.headers[REFRESH_HEADER] = REFRESH_AUTO;
+	}
 	if (body !== undefined) {
 		init.headers['Content-Type'] = 'application/json';
 		init.body = JSON.stringify(body);
@@ -52,6 +68,10 @@ async function request(method, path, body) {
 		const error = new Error(payload?.detail || payload?.error || response.statusText);
 		error.status = response.status;
 		error.needsStepUp = response.status === 428;
+		/* The body, for the few refusals that carry more than a message: which verification code a
+		 * proven-password sign-in still owes, the form field a registration error belongs to, when a
+		 * two-factor lock ends. */
+		error.payload = payload;
 		throw error;
 	}
 	return payload;
@@ -88,10 +108,23 @@ export const api = {
 	stepUp: (code) => request('POST', '/auth/step-up', { code }),
 	getSession: () => request('GET', '/auth/session'),
 	signOut: () => request('POST', '/auth/logout'),
+	/* The delayed self-service two-factor reset, reached from the two-factor step of sign-in by a
+	 * session that has proven the password. Completing it hands over a NEW authenticator and does not
+	 * sign in; confirming with a code from that new authenticator does. */
+	getTwoFactorReset: () => request('GET', '/auth/2fa/reset'),
+	requestTwoFactorReset: () => request('POST', '/auth/2fa/reset/request'),
+	completeTwoFactorReset: () => request('POST', '/auth/2fa/reset/complete'),
+	confirmTwoFactorReset: (code) => request('POST', '/auth/2fa/reset/confirm', { code }),
 
 	// registration
+	/* A signed token plus two or three decoy field names chosen at random per form. The decoys are
+	 * rendered, left empty, and posted back under their own names; see register.js. */
+	getRegistrationForm: () => request('GET', '/account/register/form'),
 	register: (body) => request('POST', '/account/register', body),
 	verifyAccount: (username, code) => request('POST', '/account/verify', { username, code }),
+	verifyPhone: (username, code) => request('POST', '/account/verify-phone', { username, code }),
+	// Always answers the same way, whether or not anything was sent.
+	resendVerification: (username, channel) => request('POST', '/account/verify/resend', { username, channel }),
 	// Takes nothing: the browser applies the rules locally so the password it is
 	// checking never has to be transmitted.
 	getAccountPolicy: () => request('GET', '/account/policy'),
@@ -125,14 +158,24 @@ export const api = {
 	confirmTwoFactorSetup: (code) => request('POST', '/account/2fa/confirm', { code }),
 	disableTwoFactor: () => request('DELETE', '/account/2fa'),
 	regenerateRecoveryCodes: () => request('POST', '/account/2fa/recovery-codes'),
+	getMyBetaCodes: () => request('GET', '/account/beta'),
+	redeemBetaCode: (code) => request('POST', '/account/beta/redeem', { code }),
 	getMyCharacters: () => request('GET', '/characters'),
 	getMyCharacter: (id) => request('GET', `/characters/${id}`),
 
 	// support
 	searchAccounts: (opts) => request('GET', `/support/accounts${q(opts)}`),
 	getAccount: (name) => request('GET', `/support/accounts/${encodeURIComponent(name)}`),
+	// Standing, reports against, reports filed and staff actions, for weighing a report.
+	// excludeTicketId: the ticket being read, which the server leaves out of "other reports".
+	getAccountHistory: (name, excludeTicketId) => request('GET',
+		`/support/accounts/${encodeURIComponent(name)}/history${excludeTicketId ? `?excludeTicketId=${encodeURIComponent(excludeTicketId)}` : ''}`),
 	searchCharacters: (opts) => request('GET', `/support/characters${q(opts)}`),
 	getCharacter: (id) => request('GET', `/support/characters/${id}`),
+	/* The staff character lock. Step-up writes: a lock always has an end, in minutes, and a
+	 * character in the world is kicked with its account. */
+	lockCharacter: (id, minutes, reason) => request('POST', `/support/characters/${id}/lock`, { minutes, reason }),
+	unlockCharacter: (id, reason) => request('POST', `/support/characters/${id}/unlock`, { reason }),
 	/* Kick is the only one of these that needs no step-up: it disconnects a session and
 	 * takes nothing away. The rest change what an account may do, so the server answers
 	 * them with a 428 until the operator has proved who they are again. */
@@ -141,6 +184,14 @@ export const api = {
 	unbanAccount: (name, reason) => request('POST', `/support/accounts/${encodeURIComponent(name)}/unban`, { reason }),
 	revokeTokens: (name, reason) => request('POST', `/support/accounts/${encodeURIComponent(name)}/revoke-tokens`, { reason }),
 	resetTwoFactor: (name, reason) => request('POST', `/support/accounts/${encodeURIComponent(name)}/reset-2fa`, { reason }),
+	// Lifts both sign-in lockouts. Step-up.
+	clearLockout: (name, reason) => request('POST', `/support/accounts/${encodeURIComponent(name)}/clear-lockout`, { reason }),
+	/* A player's own pending two-factor reset. Staff may bring it forward (a null time is "now") or
+	 * cancel it, never extend it. Both step-up. */
+	shortenTwoFactorReset: (name, effectiveUtc, reason) =>
+		request('POST', `/support/accounts/${encodeURIComponent(name)}/2fa-reset/shorten`, { effectiveUtc, reason }),
+	cancelTwoFactorReset: (name, reason) => request('POST', `/support/accounts/${encodeURIComponent(name)}/2fa-reset/cancel`, { reason }),
+	getPendingTwoFactorResets: (opts) => request('GET', `/support/accounts/2fa-resets${q(opts)}`),
 	getChatLog: (opts) => request('GET', `/support/chat${q(opts)}`),
 	/* Support tickets. `status` is repeated rather than joined when the queue asks for more
 	 * than one; see the query builder above. This detail route returns the internal staff
@@ -152,6 +203,8 @@ export const api = {
 	replyToTicket: (id, body, internal, reason) => request('POST', `/support/tickets/${id}/reply`, { body, internal, reason }),
 	setTicketStatus: (id, status, resolution, reason) => request('POST', `/support/tickets/${id}/status`, { status, resolution, reason }),
 	setTicketPriority: (id, priority, reason) => request('POST', `/support/tickets/${id}/priority`, { priority, reason }),
+	// Tier is an access level: 2 hands a ticket to the game masters, 3 promotes it to the administrators.
+	setTicketTier: (id, tier, reason) => request('POST', `/support/tickets/${id}/tier`, { tier, reason }),
 	/* The player's own tickets. These are scoped by the session rather than by a parameter,
 	 * and the server strips internal notes from what they return — which is why the player's
 	 * view calls these and never the operator routes above. */
@@ -256,6 +309,12 @@ export const api = {
 	setAccessLevel: (name, level, reason) => request('POST', `/admin/accounts/${encodeURIComponent(name)}/access-level`, { level, reason }),
 	getAudit: (opts) => request('GET', `/admin/audit${q(opts)}`),
 	getAuditActions: () => request('GET', '/admin/audit/actions'),
+	/* Beta codes. Minting answers with the new codes exactly once; the audit row records the batch,
+	 * never the codes. Mint and revoke are step-up writes. */
+	getBetaPrograms: () => request('GET', '/admin/beta/programs'),
+	getBetaCodes: (opts) => request('GET', `/admin/beta/codes${q(opts)}`),
+	mintBetaCodes: (body) => request('POST', '/admin/beta/mint', body),
+	revokeBetaCode: (id, reason) => request('POST', `/admin/beta/${encodeURIComponent(id)}/revoke`, { reason }),
 
 	// platform
 	getPlatformHealth: () => request('GET', '/platform/health'),
@@ -272,5 +331,31 @@ export const api = {
 	 * A retry is a real send to a real address, so it is a step-up write and it is audited. */
 	getEmailQueue: (opts) => request('GET', `/platform/queues/email${q(opts)}`),
 	retryEmail: (id, reason) => request('POST', `/platform/queues/email/${id}/retry`, { reason }),
+	/* The SMS queue: the same states and the same retry. `recipientPhone` arrives masked to its
+	 * last four digits, and `search` matches a phone number only whole. */
+	getSmsQueue: (opts) => request('GET', `/platform/queues/sms${q(opts)}`),
+	retrySms: (id, reason) => request('POST', `/platform/queues/sms/${id}/retry`, { reason }),
 	getGroupFinderQueue: (opts) => request('GET', `/platform/queues/group-finder${q(opts)}`),
 };
+
+/* The same methods, each marking its request as an automatic refresh.
+ *
+ * Staff reads are audited, and the owner's rule is that the first load of a page and every
+ * refresh somebody asked for are recorded, but a page re-reading itself on a timer is not —
+ * a board polled every five seconds would otherwise bury every row that matters. So ONLY a
+ * timer-driven reload calls through here: `api.auto.getServerBoard()`. The initial render, a
+ * Refresh button, a filter change, a page click and the re-read after an action all call
+ * `api` itself and stay recorded. Every existing call signature is unchanged. */
+api.auto = Object.freeze(Object.fromEntries(
+	Object.entries(api)
+		.filter(([, fn]) => typeof fn === 'function')
+		.map(([name, fn]) => [name, (...args) => {
+			const was = automatic;
+			automatic = true;
+			try {
+				return fn(...args);
+			} finally {
+				automatic = was;
+			}
+		}]),
+));

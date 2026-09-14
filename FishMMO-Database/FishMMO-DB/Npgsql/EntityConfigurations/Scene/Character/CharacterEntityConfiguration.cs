@@ -60,6 +60,19 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.MuteReason)
 				.HasMaxLength(256);
 
+			/* Staff character lock. Like the mute columns, written only by staff actions; the save
+			 * path never names them, so a live scene server's persistence pass cannot clear a lock
+			 * placed while it held the character. */
+			builder.Property(e => e.LockedUntil);
+
+			builder.Property(e => e.LockedAt);
+
+			builder.Property(e => e.LockedBy)
+				.HasMaxLength(50);
+
+			builder.Property(e => e.LockReason)
+				.HasMaxLength(256);
+
 			builder.Property(e => e.NameLowercase)
 				.HasComputedColumnSql("LOWER(name)", stored: true);
 

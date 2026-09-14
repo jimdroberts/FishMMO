@@ -1,0 +1,45 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        UIReportPlayer.uxml
+
+        The report a player form: a reason, a description with its character counter, Submit
+        and Cancel. The title, the counter and the status line are written by UITKReportPlayer
+        on every open; the reason list comes from PlayerReportReasons so the names match the
+        ticket subject staff read.
+
+        Class naming: fish-* classes come from FishMMO-Theme.uss, report-* classes from
+        UIReportPlayer.uss (layout only).
+    -->
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIReportPlayer.uss" />
+    <ui:VisualElement name="report-root" class="report-root">
+        <ui:VisualElement name="report-panel" class="fish-panel report-panel">
+
+            <ui:VisualElement name="panel-header" class="fish-panel__header report-header">
+                <ui:VisualElement class="fish-panel__icon report-header__icon" />
+                <ui:Label name="report-title" text="Report player" class="fish-panel__title report-title" />
+                <ui:Button name="close-button" class="fish-close-btn report-close-btn" text="✕" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="report-body" class="report-body">
+                <ui:Label text="Reason" class="fish-label fish-label--caption report-caption" />
+                <ui:DropdownField name="report-reason" class="fish-dropdown report-reason" />
+
+                <ui:VisualElement class="report-caption-row">
+                    <ui:Label text="What happened" class="fish-label fish-label--caption report-caption" />
+                    <ui:Label name="report-counter" text="0 / 512" class="fish-label fish-label--caption fish-label--numeric report-counter" />
+                </ui:VisualElement>
+                <ui:TextField name="report-description" class="fish-input report-description" multiline="true" />
+
+                <ui:Label name="report-hint" text="Staff receive this with your character name. Say when and where it happened." class="fish-label fish-label--muted report-hint" />
+                <ui:Label name="report-status" text="" class="fish-label report-status" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="panel-footer" class="fish-panel__footer report-buttons">
+                <ui:Button name="report-cancel" text="Cancel" class="fish-button report-button" />
+                <ui:Button name="report-submit" text="Submit" class="fish-button fish-button--primary report-button" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

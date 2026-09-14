@@ -75,8 +75,10 @@ export async function render(host, ctx) {
 	let readAt = 0;
 	let refreshError = null;
 
-	async function read() {
-		board = await api.getServerBoard();
+	/* `source` is `api` for a read somebody asked for, and `api.auto` for the timer's: staff
+	 * reads are audited, but a background poll is marked and not recorded. */
+	async function read(source = api) {
+		board = await source.getServerBoard();
 		readAt = Date.now();
 		refreshError = null;
 		paint();
@@ -85,9 +87,9 @@ export async function render(host, ctx) {
 	/* A failed poll keeps the board that is on screen rather than blanking it: the last good
 	 * read, clearly labelled as stale, is more use to somebody mid-incident than an error
 	 * page where the numbers were. */
-	async function pollOnce() {
+	async function pollOnce(source = api) {
 		try {
-			await read();
+			await read(source);
 		} catch (err) {
 			refreshError = err.message || 'The board could not be refreshed.';
 			if (board) paint();
@@ -96,8 +98,8 @@ export async function render(host, ctx) {
 
 	/* Started before the first read so the page heals itself: if the first read fails the
 	 * router renders the failure, and the first poll that succeeds paints the board over
-	 * the top of it. */
-	poll = setInterval(pollOnce, REFRESH_MS);
+	 * the top of it. Only this timer marks its reads as automatic. */
+	poll = setInterval(() => pollOnce(api.auto), REFRESH_MS);
 	countdown = setInterval(() => tickCountdowns(ui, host), COUNTDOWN_MS);
 
 	// The first read is allowed to throw — the router turns it into a visible failure.

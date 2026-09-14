@@ -41,6 +41,11 @@ namespace FishMMO.Server.Core.LoginServer
 		public readonly byte[] EncryptedVerifier;
 
 		/// <summary>
+		/// Encrypted registration profile (AES encrypted); see <c>FishMMO.Auth.Core.RegistrationProfile</c>.
+		/// </summary>
+		public readonly byte[] EncryptedProfile;
+
+		/// <summary>
 		/// Per-connection encryption state holding the symmetric key, session prefix, and counters
 		/// for deriving unique GCM nonces on the worker thread.
 		/// </summary>
@@ -49,7 +54,7 @@ namespace FishMMO.Server.Core.LoginServer
 		/// <summary>
 		/// Explicit client-sent sequence number for this create-account message. This
 		/// represents the last sequence used when encrypting multi-field payloads
-		/// (e.g., username, email, age, salt, verifier) and is used to derive nonces for each field.
+		/// (username, email, age, salt, verifier, profile) and is used to derive nonces for each field.
 		/// </summary>
 		public readonly uint Seq;
 
@@ -67,13 +72,15 @@ namespace FishMMO.Server.Core.LoginServer
 		/// <param name="encryptedAge">Encrypted age bytes.</param>
 		/// <param name="encryptedSalt">Encrypted salt bytes.</param>
 		/// <param name="encryptedVerifier">Encrypted verifier bytes.</param>
+		/// <param name="encryptedProfile">Encrypted registration profile bytes.</param>
 		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		/// <param name="ipAddress">IP address of the client.</param>
 		/// <param name="seq">Explicit sequence number.</param>
 		public AccountCreationRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedEmail,
 			byte[] encryptedAge, byte[] encryptedSalt,
-			byte[] encryptedVerifier, ConnectionEncryptionData encryptionData, string ipAddress, uint seq)
+			byte[] encryptedVerifier, byte[] encryptedProfile, ConnectionEncryptionData encryptionData, string ipAddress, uint seq)
 		{
+			EncryptedProfile = encryptedProfile;
 			Connection = connection;
 			EncryptedUsername = encryptedUsername;
 			EncryptedEmail = encryptedEmail;

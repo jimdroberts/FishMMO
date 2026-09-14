@@ -100,6 +100,12 @@ namespace FishMMO.Shared
 		/// per-connection cooldown. Retrying is the only useful advice.
 		/// </summary>
 		Failed = 2,
+		/// <summary>
+		/// Staff have locked this character out of the world while they work on it. The lock lapses
+		/// at <see cref="CharacterSelectResultBroadcast.LockedUntilUtcTicks"/>; the other characters on
+		/// the account are unaffected.
+		/// </summary>
+		CharacterLocked = 3,
 	}
 
 	/// <summary>
@@ -119,5 +125,10 @@ namespace FishMMO.Shared
 		public CharacterSelectResult Result;
 		/// <summary>Name of the character responsible for the refusal, when applicable.</summary>
 		public string CharacterName;
+		/// <summary>
+		/// For <see cref="CharacterSelectResult.CharacterLocked"/>: when the lock lapses, as UTC ticks.
+		/// Zero otherwise. Ticks rather than a <c>DateTime</c> so the wire carries one plain number.
+		/// </summary>
+		public long LockedUntilUtcTicks;
 	}
 }

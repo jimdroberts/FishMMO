@@ -357,7 +357,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				int affected = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"UPDATE {TableName} SET backfill_until_utc = {{1}} WHERE id = {{0}} AND status < {{2}}",
-					new object[] { matchId, (object)untilUtc ?? DBNull.Value, (int)ArenaMatchStatus.Ended },
+					new object[] { matchId, (object)untilUtc, (int)ArenaMatchStatus.Ended },
 					cancellationToken).ConfigureAwait(false);
 				return affected > 0;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);

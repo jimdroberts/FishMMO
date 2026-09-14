@@ -95,6 +95,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Arguments = "ticket:Ticket;resolution:Text", TicketAction = true,
 					Run = ResolveTicket,
 				},
+				new OperatorCommand
+				{
+					Name = "escalate", Category = "Support",
+					Summary = "Promotes a ticket to the administrators, unassigned, with your reason as a staff note.",
+					Arguments = "ticket:Ticket;reason:Text", TicketAction = true,
+					Run = EscalateTicket,
+				},
 			};
 		}
 
@@ -107,7 +114,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string word = OperatorCommandParsing.SplitFirstWord(arguments, out string rest);
 			if (word.Equals("reply", StringComparison.OrdinalIgnoreCase) ||
 				word.Equals("note", StringComparison.OrdinalIgnoreCase) ||
-				word.Equals("resolve", StringComparison.OrdinalIgnoreCase))
+				word.Equals("resolve", StringComparison.OrdinalIgnoreCase) ||
+				word.Equals("escalate", StringComparison.OrdinalIgnoreCase))
 			{
 				string ticket = OperatorCommandParsing.SplitFirstWord(rest, out string body);
 				return $"{word} {ticket} [text withheld, {body.Length} characters]";
@@ -132,6 +140,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string account = character.Account;
+			byte level = (byte)character.AccessLevel;
 			RunOperatorLines(character, async () =>
 			{
 				if (!TryGetDbService(out ISupportTicketService tickets))
@@ -139,7 +148,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return new[] { "Support tickets are unavailable." };
 				}
 
-				DatabaseResult<SupportTicketPage> result = await tickets.SearchAsync(BuildStaffTicketQuery(filter, account, 1, MaxTicketsListedInChat));
+				DatabaseResult<SupportTicketPage> result = await tickets.SearchAsync(BuildStaffTicketQuery(filter, account, level, 1, MaxTicketsListedInChat));
 				if (!result.IsSuccess || result.Data == null)
 				{
 					return new[] { $"The ticket queue could not be read: {result.ErrorMessage}" };
@@ -169,6 +178,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			byte level = (byte)character.AccessLevel;
 			RunOperatorLines(character, async () =>
 			{
 				if (!TryGetDbService(out ISupportTicketService tickets))
@@ -180,6 +190,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!result.IsSuccess || result.Data == null)
 				{
 					return new[] { $"No ticket #{ticketID}." };
+				}
+				if (result.Data.RequiredAccessLevel > level)
+				{
+					return new[] { $"Ticket #{ticketID} has been escalated to a higher tier." };
 				}
 
 				SupportTicketData ticket = result.Data;
@@ -223,6 +237,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string account = character.Account;
+			byte level = (byte)character.AccessLevel;
 			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out ISupportTicketService tickets))
@@ -230,7 +245,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return "Support tickets are unavailable.";
 				}
 
-				DatabaseResult result = await tickets.AssignAsync(ticketID, claim ? account : null);
+				DatabaseResult result = await tickets.AssignAsync(ticketID, claim ? account : null, level);
 				if (!result.IsSuccess)
 				{
 					return $"Ticket #{ticketID} could not be {(claim ? "assigned" : "returned")}: {result.ErrorMessage}";
@@ -255,6 +270,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string account = character.Account;
+			byte level = (byte)character.AccessLevel;
 			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out ISupportTicketService tickets))
@@ -262,7 +278,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return "Support tickets are unavailable.";
 				}
 
-				DatabaseResult<long> result = await tickets.AppendMessageAsync(ticketID, account, authorIsStaff: true, internalNote: internalNote, body);
+				DatabaseResult<long> result = await tickets.AppendMessageAsync(ticketID, account, authorIsStaff: true, internalNote: internalNote, body, level);
 				if (!result.IsSuccess)
 				{
 					return $"Ticket #{ticketID} could not be written to: {result.ErrorMessage}";
@@ -288,6 +304,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string account = character.Account;
+			byte level = (byte)character.AccessLevel;
 			RunOperatorAction(character, async () =>
 			{
 				if (!TryGetDbService(out ISupportTicketService tickets))
@@ -295,7 +312,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return "Support tickets are unavailable.";
 				}
 
-				DatabaseResult result = await tickets.SetStatusAsync(ticketID, SupportTicketStatus.Resolved, account, resolution);
+				DatabaseResult result = await tickets.SetStatusAsync(ticketID, SupportTicketStatus.Resolved, account, resolution, level);
 				if (!result.IsSuccess)
 				{
 					return $"Ticket #{ticketID} could not be resolved: {result.ErrorMessage}";
@@ -303,6 +320,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				await Log.Info("SceneServerSystem", $"Ticket {ticketID} resolved by '{account}'.");
 				return $"Ticket #{ticketID} is resolved.";
+			});
+		}
+
+		/// <summary>
+		/// Promotes a ticket to the administrators' tier.
+		/// </summary>
+		/// <remarks>
+		/// The service clears the assignee, reopens an in-progress ticket and writes the reason onto it
+		/// as a staff note, all in one transaction; once it is there, the game master who sent it can
+		/// no longer act on it. Only ever upward from here: handing a ticket back down is an
+		/// administrator's call, made from the panel.
+		/// </remarks>
+		private void EscalateTicket(IPlayerCharacter character, string arguments)
+		{
+			if (!TryParseTicketArgument(character, arguments, "escalate", out long ticketID, out string reason))
+			{
+				return;
+			}
+			if (reason.Length == 0)
+			{
+				ReplyUsage(character, gameMasterCommands, "escalate");
+				return;
+			}
+
+			string account = character.Account;
+			byte level = (byte)character.AccessLevel;
+			RunOperatorAction(character, async () =>
+			{
+				if (!TryGetDbService(out ISupportTicketService tickets))
+				{
+					return "Support tickets are unavailable.";
+				}
+
+				DatabaseResult result = await tickets.SetTierAsync(ticketID, (byte)FishMMO.Database.Data.Enums.AccessLevel.Admin, account, reason, level);
+				if (!result.IsSuccess)
+				{
+					return $"Ticket #{ticketID} could not be escalated: {result.ErrorMessage}";
+				}
+
+				await Log.Info("SceneServerSystem", $"Ticket {ticketID} escalated to the administrators by '{account}'.");
+				return $"Ticket #{ticketID} is with the administrators now.";
 			});
 		}
 
@@ -319,10 +377,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>The ticket search a staff filter stands for.</summary>
-		private static SupportTicketQuery BuildStaffTicketQuery(StaffTicketFilter filter, string account, int page, int pageSize)
+		private static SupportTicketQuery BuildStaffTicketQuery(StaffTicketFilter filter, string account, byte accessLevel, int page, int pageSize)
 		{
 			return new SupportTicketQuery()
 			{
+				// Their own tier and below, filtered in the query: a promoted ticket leaves a game
+				// master's queue rather than sitting in it refusing every action.
+				MaxRequiredAccessLevel = accessLevel,
 				Statuses = StaffUnfinishedTicketStatuses,
 				UnassignedOnly = filter == StaffTicketFilter.Unassigned,
 				AssignedTo = filter == StaffTicketFilter.Mine ? account : null,

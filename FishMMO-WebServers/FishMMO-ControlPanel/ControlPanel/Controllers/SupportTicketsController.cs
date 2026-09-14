@@ -30,15 +30,22 @@ namespace FishMMO.ControlPanel.Controllers
 	public sealed class SupportTicketsController : ControllerBase
 	{
 		private readonly ISupportTicketService tickets;
+		private readonly IAccountService accounts;
 		private readonly AuditScope audit;
 		private readonly ILogger<SupportTicketsController> log;
 
-		public SupportTicketsController(ISupportTicketService tickets, AuditScope audit, ILogger<SupportTicketsController> log)
+		public SupportTicketsController(ISupportTicketService tickets, IAccountService accounts, AuditScope audit, ILogger<SupportTicketsController> log)
 		{
 			this.tickets = tickets;
+			this.accounts = accounts;
 			this.audit = audit;
 			this.log = log;
 		}
+
+		/// <summary>
+		/// The signed-in staff member's access level, which is also the highest support tier they work.
+		/// </summary>
+		private byte ActorTier => (byte)ModerationGuards.ActorLevel(this);
 
 		/// <summary>The queue.</summary>
 		[HttpGet]
@@ -52,7 +59,8 @@ namespace FishMMO.ControlPanel.Controllers
 			[FromQuery] string target = null,
 			[FromQuery] string subject = null,
 			[FromQuery] int page = 1,
-			[FromQuery] int pageSize = 25)
+			[FromQuery] int pageSize = 25,
+			[FromQuery] int? tier = null)
 		{
 			var query = new SupportTicketQuery
 			{
@@ -66,6 +74,10 @@ namespace FishMMO.ControlPanel.Controllers
 				ReporterAccount = reporter,
 				TargetAccount = target,
 				Subject = subject,
+				// Their own tier and below, in the query. A ticket promoted past them leaves their
+				// queue rather than sitting in it refusing every action.
+				MaxRequiredAccessLevel = ActorTier,
+				RequiredAccessLevel = tier is 2 or 3 ? (byte)tier.Value : null,
 				Page = page,
 				PageSize = pageSize,
 			};
@@ -97,6 +109,10 @@ namespace FishMMO.ControlPanel.Controllers
 			{
 				return NotFound(new { error = "No such ticket." });
 			}
+			if (result.Data.RequiredAccessLevel > ActorTier)
+			{
+				return StatusCode(StatusCodes.Status403Forbidden, new { error = "That ticket has been escalated beyond your tier." });
+			}
 			return Ok(Project(result.Data, includeMessages: true));
 		}
 
@@ -117,7 +133,44 @@ namespace FishMMO.ControlPanel.Controllers
 			string assignee = string.IsNullOrWhiteSpace(request.Assignee) ? null : request.Assignee.Trim();
 			audit.Details = new { assignee };
 
-			var result = await tickets.AssignAsync(id, assignee, HttpContext.RequestAborted);
+			/* The assignee must be able to work the ticket at its tier. The service checks the ACTOR
+			 * against the tier on every write; it cannot check the person named, so this does. A
+			 * promoted ticket assigned back to a game master would sit in a list they cannot open. */
+			var current = await tickets.FetchAsync(id, includeInternal: false, HttpContext.RequestAborted);
+			if (!current.IsSuccess)
+			{
+				return NotFound(new { error = "No such ticket." });
+			}
+
+			/* The tier first, before anything is looked up about the named assignee: a refusal must not
+			 * tell a game master whether an account exists or what tier it works on a ticket they may not
+			 * see at all. Same answer as Get. */
+			if (current.Data.RequiredAccessLevel > ActorTier)
+			{
+				audit.Outcome = "Refused: ticket above the operator's tier.";
+				return StatusCode(StatusCodes.Status403Forbidden, new { error = "That ticket has been escalated beyond your tier." });
+			}
+
+			if (assignee != null)
+			{
+
+				var staff = await accounts.FetchAdminAsync(assignee, HttpContext.RequestAborted);
+				if (!staff.IsSuccess)
+				{
+					audit.Outcome = "Refused: no such account.";
+					return BadRequest(new { error = $"There is no account called {assignee}." });
+				}
+
+				byte needed = Math.Max((byte)FishMMO.Auth.Core.AccessLevel.GameMaster, current.Data.RequiredAccessLevel);
+				if (staff.Data.AccessLevel < needed)
+				{
+					audit.Outcome = "Refused: assignee below the ticket's tier.";
+					return BadRequest(new { error = $"{staff.Data.Name} cannot work tickets at this tier." });
+				}
+				assignee = staff.Data.Name;
+			}
+
+			var result = await tickets.AssignAsync(id, assignee, ActorTier, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
 				audit.Outcome = result.ErrorMessage;
@@ -150,6 +203,7 @@ namespace FishMMO.ControlPanel.Controllers
 				authorIsStaff: true,
 				internalNote: request.Internal,
 				request.Body,
+				ActorTier,
 				HttpContext.RequestAborted);
 
 			if (!result.IsSuccess)
@@ -180,7 +234,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var status = (SupportTicketStatus)request.Status.Value;
 			audit.Details = new { status = status.ToString() };
 
-			var result = await tickets.SetStatusAsync(id, status, User.Identity?.Name, request.Resolution, HttpContext.RequestAborted);
+			var result = await tickets.SetStatusAsync(id, status, User.Identity?.Name, request.Resolution, ActorTier, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
 				audit.Outcome = result.ErrorMessage;
@@ -208,13 +262,55 @@ namespace FishMMO.ControlPanel.Controllers
 
 			audit.Details = new { priority = request.Priority };
 
-			var result = await tickets.SetPriorityAsync(id, request.Priority.Value, HttpContext.RequestAborted);
+			var result = await tickets.SetPriorityAsync(id, request.Priority.Value, ActorTier, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
 				audit.Outcome = result.ErrorMessage;
 				return BadRequest(new { error = result.ErrorMessage ?? "That priority could not be set." });
 			}
 			return Ok(new { message = $"Priority set to {request.Priority}." });
+		}
+
+		/// <summary>
+		/// Moves a ticket to another support tier: promotes it to the administrators, or hands it back.
+		/// </summary>
+		/// <remarks>
+		/// Tiers are access levels — <c>GameMaster</c> (2) and <c>Admin</c> (3). The service clears the
+		/// assignee and writes the reason onto the ticket as a staff note in one transaction. A game
+		/// master may promote; only an administrator may hand a ticket back down, because only they
+		/// can act on it once it is there.
+		/// </remarks>
+		[HttpPost("{id:long}/tier")]
+		[Authorize(Policy = PanelPolicies.Support)]
+		[Audited(AuditActions.TicketTier, TargetType = "ticket", TargetRouteValue = "id")]
+		public async Task<IActionResult> SetTier(long id, [FromBody] TierRequest request)
+		{
+			if (string.IsNullOrWhiteSpace(request?.Reason))
+			{
+				return BadRequest(new { error = "A reason is required." });
+			}
+			if (request.Tier is not (2 or 3))
+			{
+				audit.Outcome = "Refused: not a support tier.";
+				return BadRequest(new { error = "A ticket's tier is Game Master (2) or Admin (3)." });
+			}
+
+			audit.Details = new { tier = request.Tier };
+
+			var result = await tickets.SetTierAsync(id, (byte)request.Tier, User.Identity?.Name, request.Reason, ActorTier, HttpContext.RequestAborted);
+			if (!result.IsSuccess)
+			{
+				audit.Outcome = result.ErrorMessage;
+				return BadRequest(new { error = result.ErrorMessage ?? "That ticket could not be moved." });
+			}
+
+			log.LogInformation("Ticket {Id} moved to tier {Tier} by '{Actor}'.", id, request.Tier, User.Identity?.Name);
+			return Ok(new
+			{
+				message = request.Tier == 3
+					? "Promoted to the administrators. It is in their queue, unassigned."
+					: "Handed back to the game masters. It is in their queue, unassigned.",
+			});
 		}
 
 		/// <summary>
@@ -252,6 +348,9 @@ namespace FishMMO.ControlPanel.Controllers
 				["resolution"] = t.Resolution,
 				["closedUtc"] = t.ClosedUtc,
 				["closedBy"] = t.ClosedBy,
+				["requiredAccessLevel"] = t.RequiredAccessLevel,
+				["escalatedBy"] = t.EscalatedBy,
+				["escalatedUtc"] = t.EscalatedUtc,
 				["messageCount"] = t.MessageCount,
 			};
 
@@ -268,6 +367,16 @@ namespace FishMMO.ControlPanel.Controllers
 				});
 			}
 			return projected;
+		}
+
+		/// <summary>A move to another support tier.</summary>
+		public sealed class TierRequest
+		{
+			/// <summary>The new tier, as an access level: 2 for Game Master, 3 for Admin.</summary>
+			public int? Tier { get; set; }
+
+			/// <summary>Why. Recorded, and written onto the ticket as a staff note.</summary>
+			public string Reason { get; set; } = "";
 		}
 
 		/// <summary>An assignment.</summary>

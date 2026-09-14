@@ -660,7 +660,7 @@ namespace FishMMO.Client
 				 * whole bug report. Issue #268. */
 				if (sourceItem.Template is EquippableItemTemplate equippable && (ItemSlot)slotIndex != equippable.Slot)
 				{
-					Notify($"{sourceItem.Name} goes in the {equippable.Slot} socket.", ToastSeverity.Warning);
+					Notify($"{sourceItem.Name} goes in the {ItemSlotNames.DisplayName(equippable.Slot)} socket.", ToastSeverity.Warning);
 				}
 			}
 

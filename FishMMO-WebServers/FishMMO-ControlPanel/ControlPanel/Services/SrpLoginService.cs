@@ -3,7 +3,10 @@ using System.Security.Cryptography;
 using SecureRemotePassword;
 using FishMMO.Auth.Core;
 using FishMMO.Auth.Implementation;
+using FishMMO.Database.Data;
+using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using AccessLevel = FishMMO.Auth.Core.AccessLevel;
 
 namespace FishMMO.ControlPanel.Services
 {
@@ -22,9 +25,24 @@ namespace FishMMO.ControlPanel.Services
 	/// it is worthless after ten seconds and worthless to anyone but the one browser that started
 	/// it; the trade is that a panel restart mid-login makes the browser start again.
 	/// </para>
+	/// <para>
+	/// <b>Lockout.</b> The password step is counted in the database, in the same columns the
+	/// LoginServer counts into, under <see cref="AuthLockoutOptions"/>. A locked account is refused
+	/// before its proof is evaluated, and the refusal is <see cref="GenericFailure"/> — word for word
+	/// the answer to a wrong password — so the lock never becomes a way to learn a name exists or a
+	/// guess was right. The lookup and the count run for unknown and banned names too, so the two
+	/// paths also cost the same round trips.
+	/// </para>
 	/// </remarks>
 	public sealed class SrpLoginService
 	{
+		/// <summary>
+		/// The one answer to every failed password step: wrong password, unknown account, banned
+		/// account, expired exchange, and a sign-in that is locked.
+		/// </summary>
+		public const string GenericFailure =
+			"That username and password do not match an account, or sign-in is temporarily locked after repeated failures. Try again later.";
+
 		/// <summary>How long a half-finished exchange is kept before it is swept.</summary>
 		private static readonly TimeSpan ExchangeLifetime = TimeSpan.FromMinutes(2);
 
@@ -37,6 +55,9 @@ namespace FishMMO.ControlPanel.Services
 		private readonly ConcurrentDictionary<string, Exchange> exchanges = new();
 		private readonly IAccountService accounts;
 		private readonly PanelRegistrationOptions options;
+		private readonly VerificationOptions verification;
+		private readonly AuthLockoutOptions lockout;
+		private readonly IServiceScopeFactory scopes;
 		private readonly ILogger<SrpLoginService> log;
 
 		/// <summary>
@@ -53,10 +74,19 @@ namespace FishMMO.ControlPanel.Services
 		/// </remarks>
 		private readonly byte[] fakeSaltKey = CryptoHelper.GenerateKey(CryptoHelper.HmacSha512KeyLength);
 
-		public SrpLoginService(IAccountService accounts, PanelRegistrationOptions options, ILogger<SrpLoginService> log)
+		public SrpLoginService(
+			IAccountService accounts,
+			PanelRegistrationOptions options,
+			VerificationOptions verification,
+			AuthLockoutOptions lockout,
+			IServiceScopeFactory scopes,
+			ILogger<SrpLoginService> log)
 		{
 			this.accounts = accounts;
 			this.options = options;
+			this.verification = verification;
+			this.lockout = lockout;
+			this.scopes = scopes;
 			this.log = log;
 		}
 
@@ -68,28 +98,47 @@ namespace FishMMO.ControlPanel.Services
 			byte AccessLevel,
 			bool TotpEnabled,
 			bool IsReal,
+			bool VerificationRequired,
+			AccountVerificationChannels Outstanding,
 			DateTime CreatedUtc);
 
 		/// <summary>Result of the challenge step.</summary>
 		public sealed record ChallengeResult(string Handle, string Salt, string ServerPublicEphemeral);
 
 		/// <summary>Result of the proof step.</summary>
+		/// <param name="VerificationRequired">
+		/// The password was proven, but the account still owes a verification code. Only ever set
+		/// after a correct proof, so it tells nobody anything they could not already sign in with.
+		/// </param>
 		public sealed record ProofResult(
 			bool Ok,
 			string Error,
 			string ServerProof,
 			string Username,
 			byte AccessLevel,
-			bool TotpEnabled);
+			bool TotpEnabled,
+			bool VerificationRequired = false,
+			AccountVerificationChannels Outstanding = AccountVerificationChannels.None);
+
+		private static ProofResult Failed() => new(false, GenericFailure, null, null, 0, false);
 
 		/// <summary>
 		/// Message one: look the account up and answer with its salt and a server ephemeral.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// An account that does not exist, or that is banned, gets a plausible fake salt and a
 		/// fake verifier. The exchange proceeds normally and fails at the proof, so the two cases
 		/// are indistinguishable in both timing shape and response shape. This is the same
 		/// property <c>SrpService.DerivePerUsernameFakeSalt</c> gives the game path.
+		/// </para>
+		/// <para>
+		/// An unverified account past its grace period gets its REAL salt and verifier, and is
+		/// marked. A wrong password still fails exactly as it would for anyone; a right one is told
+		/// which verification code is outstanding instead of being handed a session. Before this, the
+		/// unverified account was faked, and a player who had simply not typed their code was told
+		/// their password was wrong.
+		/// </para>
 		/// </remarks>
 		public async Task<ChallengeResult> ChallengeAsync(string username, CancellationToken cancellationToken = default)
 		{
@@ -100,35 +149,35 @@ namespace FishMMO.ControlPanel.Services
 			byte accessLevel = (byte)AccessLevel.Player;
 			bool totpEnabled = false;
 			bool isReal = false;
+			bool verificationRequired = false;
+			AccountVerificationChannels outstanding = AccountVerificationChannels.None;
 
 			var lookup = await accounts.FetchForLoginAsync(username, false, cancellationToken);
-			if (lookup.IsSuccess)
+			if (lookup.IsSuccess && lookup.Data.AccessLevel != (byte)AccessLevel.Banned)
 			{
 				var data = lookup.Data;
+				salt = data.Salt;
+				verifier = data.Verifier;
+				accessLevel = data.AccessLevel;
+				totpEnabled = data.TotpEnabled;
+				isReal = true;
 
 				// The same verification gate the LoginServer applies: an unverified account may
-				// sign in until its verification email has actually gone out, and the development
-				// auto-verify policy bypasses the gate outright.
+				// sign in until its verification code has actually gone out, and the development
+				// auto-verify policy — or a server that verifies nothing — bypasses the gate outright.
 				bool verified = data.Verified ||
 								data.VerificationEmailSentAt == null ||
-								options.AutoVerifyAccounts;
-
-				if (verified && data.AccessLevel != (byte)AccessLevel.Banned)
+								options.AutoVerifyAccounts ||
+								verification.VerifiesNothing;
+				if (!verified)
 				{
-					salt = data.Salt;
-					verifier = data.Verifier;
-					accessLevel = data.AccessLevel;
-					totpEnabled = data.TotpEnabled;
-					isReal = true;
-				}
-				else
-				{
-					(salt, verifier) = BuildFake(username);
+					verificationRequired = true;
+					outstanding = AccountRegistrationService.Outstanding(data);
 				}
 			}
 			else
 			{
-				// Covers both a missing account and a banned one: FetchForLoginAsync deliberately
+				// Covers a missing account and a banned one alike: FetchForLoginAsync deliberately
 				// does not distinguish them.
 				(salt, verifier) = BuildFake(username);
 			}
@@ -143,7 +192,8 @@ namespace FishMMO.ControlPanel.Services
 			SrpEphemeral ephemeral = server.GenerateEphemeral(verifier);
 
 			string handle = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
-			var exchange = new Exchange(username, salt, verifier, ephemeral.Secret, accessLevel, totpEnabled, isReal, DateTime.UtcNow);
+			var exchange = new Exchange(username, salt, verifier, ephemeral.Secret, accessLevel, totpEnabled,
+				isReal, verificationRequired, outstanding, DateTime.UtcNow);
 
 			if (exchanges.Count >= MaxExchanges)
 			{
@@ -157,7 +207,110 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>
-		/// Message two: verify the client's proof and answer with the server's.
+		/// Message two for SIGN-IN: the lockout, the proof, the failure count, and the verification gate.
+		/// </summary>
+		/// <remarks>
+		/// <list type="number">
+		/// <item><description>The exchange is removed before anything else, so a handle is single-use.</description></item>
+		/// <item><description>A locked password step is refused WITHOUT evaluating the proof, with <see cref="GenericFailure"/>.</description></item>
+		/// <item><description>A failed proof is counted; the failure that starts a lock queues one security notice.</description></item>
+		/// <item><description>A good proof clears the count.</description></item>
+		/// <item><description>A proven, unverified account has any channel the server no longer verifies marked proven, and is then either let through or told which code is outstanding.</description></item>
+		/// </list>
+		/// </remarks>
+		public async Task<ProofResult> SignInProofAsync(string handle, string clientPublicEphemeral, string clientProof, CancellationToken cancellationToken = default)
+		{
+			if (string.IsNullOrWhiteSpace(handle) || !exchanges.TryRemove(handle, out Exchange exchange))
+			{
+				return Failed();
+			}
+			if (DateTime.UtcNow - exchange.CreatedUtc > ExchangeLifetime)
+			{
+				return Failed();
+			}
+
+			// Unknown and banned names are looked up too, so a real account costs no extra round trip.
+			DateTime now = DateTime.UtcNow;
+			var state = await accounts.FetchAuthLockoutAsync(exchange.Username, cancellationToken);
+			if (state.IsSuccess && state.Data.IsLocked(AuthFailureKind.Password, now))
+			{
+				log.LogInformation("Refused a panel sign-in for '{User}': the password step is locked until {Until:o}.",
+					exchange.Username, state.Data.LoginLockedUntilUtc);
+				return Failed();
+			}
+
+			ProofResult evaluated = Evaluate(exchange, clientPublicEphemeral, clientProof);
+			if (!evaluated.Ok)
+			{
+				var recorded = await accounts.RecordAuthFailureAsync(
+					exchange.Username, AuthFailureKind.Password,
+					lockout.PasswordThreshold,
+					TimeSpan.FromMinutes(lockout.PasswordWindowMinutes),
+					TimeSpan.FromMinutes(lockout.PasswordLockMinutes),
+					cancellationToken);
+
+				if (!recorded.IsSuccess)
+				{
+					log.LogWarning("Could not count a failed panel sign-in for '{User}': [{Code}] {Message}",
+						exchange.Username, recorded.ErrorCode, recorded.ErrorMessage);
+				}
+				else if (recorded.Data.HasValue && recorded.Data.Value > now)
+				{
+					// Unlocked a moment ago, locked now: this failure started the lock.
+					log.LogWarning("Password sign-in for '{User}' locked until {Until:o} after repeated failures.",
+						exchange.Username, recorded.Data.Value);
+					await NotifyLockedAsync(exchange.Username, recorded.Data.Value, cancellationToken);
+				}
+				return Failed();
+			}
+
+			var cleared = await accounts.ClearAuthFailuresAsync(exchange.Username, AuthFailureKind.Password, cancellationToken);
+			if (!cleared.IsSuccess)
+			{
+				log.LogWarning("Could not clear the password failure count for '{User}': [{Code}] {Message}",
+					exchange.Username, cleared.ErrorCode, cleared.ErrorMessage);
+			}
+
+			if (exchange.VerificationRequired)
+			{
+				/* The password is proven, so this is the account holder. A channel this server has
+				 * since stopped verifying can never be proven with a code nobody will send, so it is
+				 * marked proven here — the database recomputes `verified` — rather than leaving the
+				 * player waiting for a message that does not exist. */
+				AccountVerificationChannels outstanding = exchange.Outstanding;
+				AccountVerificationChannels switchedOff = outstanding & ~verification.Enabled;
+				if (switchedOff != AccountVerificationChannels.None)
+				{
+					var marked = await accounts.PersistChannelsVerifiedAsync(exchange.Username, switchedOff, cancellationToken);
+					if (marked.IsSuccess)
+					{
+						outstanding &= verification.Enabled;
+					}
+					else
+					{
+						log.LogWarning("PersistChannelsVerifiedAsync({Channels}) failed for '{User}': [{Code}] {Message}",
+							switchedOff, exchange.Username, marked.ErrorCode, marked.ErrorMessage);
+					}
+				}
+
+				if (outstanding != AccountVerificationChannels.None)
+				{
+					return evaluated with
+					{
+						Ok = false,
+						Error = VerificationRequiredMessage(outstanding),
+						VerificationRequired = true,
+						Outstanding = outstanding,
+					};
+				}
+			}
+
+			return evaluated;
+		}
+
+		/// <summary>
+		/// Message two, with no lockout and no verification gate: a proof of the CURRENT password by a
+		/// session that is already signed in (the password change).
 		/// </summary>
 		/// <remarks>
 		/// The exchange is removed before it is evaluated, so a handle is single-use and a wrong
@@ -165,21 +318,33 @@ namespace FishMMO.ControlPanel.Services
 		/// </remarks>
 		public ProofResult Proof(string handle, string clientPublicEphemeral, string clientProof)
 		{
-			const string genericFailure = "That username and password do not match an account.";
-
 			if (string.IsNullOrWhiteSpace(handle) || !exchanges.TryRemove(handle, out Exchange exchange))
 			{
-				return new ProofResult(false, genericFailure, null, null, 0, false);
+				return Failed();
 			}
-
 			if (DateTime.UtcNow - exchange.CreatedUtc > ExchangeLifetime)
 			{
-				return new ProofResult(false, genericFailure, null, null, 0, false);
+				return Failed();
 			}
+			return Evaluate(exchange, clientPublicEphemeral, clientProof);
+		}
 
+		/// <summary>The one message naming which code an account still owes.</summary>
+		public static string VerificationRequiredMessage(AccountVerificationChannels outstanding)
+		{
+			bool email = (outstanding & AccountVerificationChannels.Email) != 0;
+			bool sms = (outstanding & AccountVerificationChannels.Sms) != 0;
+			string which = email && sms
+				? "the code sent to your email address and the code sent to your phone"
+				: sms ? "the code sent to your phone" : "the code sent to your email address";
+			return $"This account is not verified yet. Enter {which} to finish verifying it, then sign in.";
+		}
+
+		private ProofResult Evaluate(Exchange exchange, string clientPublicEphemeral, string clientProof)
+		{
 			if (string.IsNullOrWhiteSpace(clientPublicEphemeral) || string.IsNullOrWhiteSpace(clientProof))
 			{
-				return new ProofResult(false, genericFailure, null, null, 0, false);
+				return Failed();
 			}
 
 			try
@@ -194,24 +359,30 @@ namespace FishMMO.ControlPanel.Services
 					exchange.Username,
 					exchange.Verifier,
 					clientProof);
-				string serverProof = session.Proof;
 
 				if (!exchange.IsReal)
 				{
 					// Should be unreachable: nobody knows a password for a fake verifier. Belt
 					// and braces, so a future change to the fake path cannot become a bypass.
 					log.LogWarning("An SRP proof verified against a FAKE verifier. This should be impossible.");
-					return new ProofResult(false, genericFailure, null, null, 0, false);
+					return Failed();
 				}
 
-				return new ProofResult(true, null, serverProof, exchange.Username, exchange.AccessLevel, exchange.TotpEnabled);
+				return new ProofResult(true, null, session.Proof, exchange.Username, exchange.AccessLevel, exchange.TotpEnabled);
 			}
 			catch (Exception ex)
 			{
 				// A malformed ephemeral throws out of the SRP library rather than returning false.
 				log.LogDebug(ex, "SRP proof evaluation threw.");
-				return new ProofResult(false, genericFailure, null, null, 0, false);
+				return Failed();
 			}
+		}
+
+		private async Task NotifyLockedAsync(string username, DateTime lockedUntilUtc, CancellationToken cancellationToken)
+		{
+			using var scope = scopes.CreateScope();
+			var notices = scope.ServiceProvider.GetRequiredService<SecurityNoticeService>();
+			await notices.SignInLockedAsync(username, AuthFailureKind.Password, lockedUntilUtc, cancellationToken);
 		}
 
 		private (string Salt, string Verifier) BuildFake(string username)
@@ -240,5 +411,4 @@ namespace FishMMO.ControlPanel.Services
 			}
 		}
 	}
-
 }

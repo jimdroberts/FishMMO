@@ -82,6 +82,9 @@ builder.Services.AddScoped<ISocialBoardService, SocialBoardService>();
 builder.Services.AddScoped<IMaintenanceService, MaintenanceService>();
 builder.Services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<IBetaCodeService, BetaCodeService>();
+builder.Services.AddScoped<ITwoFactorResetRequestService, TwoFactorResetRequestService>();
+builder.Services.AddScoped<ISmsQueueService, SmsQueueService>();
 /* Advances maintenance windows without a viewer. A window's actuation is finished the moment
  * it starts — the deadline is on each server's own row — but the retry of any write the start
  * did not manage, and every status after it, happen only when something reads. */
@@ -93,6 +96,11 @@ builder.Services.AddHostedService<MaintenanceAdvanceService>();
  * default (Smtp:DrainQueue) so there is exactly one sender. */
 builder.Services.AddSingleton<ISmtpSender, SmtpSender>();
 builder.Services.AddHostedService<EmailQueueDrainService>();
+/* Outbound SMS, the email drain's twin. There is no SMS gateway yet: the only sender writes the
+ * message to this log, is on by default outside Production, and in Production only when
+ * Sms:Provider is "log" explicitly — otherwise the drain logs once and idles. */
+builder.Services.AddSingleton<ISmsSender, LoggingSmsSender>();
+builder.Services.AddHostedService<SmsQueueDrainService>();
 builder.Services.AddScoped<IDaemonService, DaemonService>();
 builder.Services.AddScoped<IWorldServerService, WorldServerService>();
 builder.Services.AddScoped<ISceneServerService, SceneServerService>();
@@ -116,6 +124,34 @@ var registrationOptions = new PanelRegistrationOptions
 };
 builder.Services.AddSingleton(registrationOptions);
 
+/* Account security policy (issue #252). Each is read once at startup; see the README's
+ * Configuration table for what every key does. */
+var verificationOptions = new VerificationOptions
+{
+	Email = builder.Configuration.GetValue("Verification:Email", true),
+	Sms = builder.Configuration.GetValue("Verification:Sms", true),
+};
+builder.Services.AddSingleton(verificationOptions);
+builder.Services.AddSingleton(new BetaOptions
+{
+	Enabled = builder.Configuration.GetValue("Beta:Enabled", false),
+	Programs = (builder.Configuration.GetSection("Beta:Programs").Get<string[]>() ?? Array.Empty<string>())
+		.Select(FishMMO.Database.Data.BetaCodeFormat.NormalizeProgram)
+		.Where(FishMMO.Database.Data.BetaCodeFormat.IsValidProgram)
+		.Distinct()
+		.ToArray(),
+});
+builder.Services.AddSingleton(AuthLockoutOptions.From(builder.Configuration));
+builder.Services.AddSingleton(new TwoFactorResetOptions
+{
+	DelayDays = builder.Configuration.GetValue("TwoFactorReset:DelayDays", 7),
+});
+// The registration form's signed honeypot token. Per-process key: a restart invalidates open forms, nothing more.
+builder.Services.AddSingleton<RegistrationFormTokenService>();
+builder.Services.AddSingleton<VerificationResendThrottle>();
+builder.Services.AddScoped<SecurityNoticeService>();
+builder.Services.AddScoped<TwoFactorResetFlow>();
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<TotpKeyProvider>();
 builder.Services.AddScoped<AuditWriter>();
@@ -132,6 +168,9 @@ builder.Services.AddScoped<PanelSessionManager>();
 builder.Services.AddSingleton(sp => new SrpLoginService(
 	new ScopedAccountService(sp),
 	sp.GetRequiredService<PanelRegistrationOptions>(),
+	sp.GetRequiredService<VerificationOptions>(),
+	sp.GetRequiredService<AuthLockoutOptions>(),
+	sp.GetRequiredService<IServiceScopeFactory>(),
 	sp.GetRequiredService<ILogger<SrpLoginService>>()));
 
 // ── Authentication and authorization ────────────────────────────────────────
@@ -257,6 +296,13 @@ var app = builder.Build();
  * it being recorded under a stable name, and about the omission surfacing at the first run
  * rather than as a gap noticed months later. */
 AuditCoverage.Verify(app.Services, app.Environment, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AuditCoverage"));
+
+if (verificationOptions.VerifiesNothing)
+{
+	/* Legal, and sometimes intended — but it means every new account is verified on creation and
+	 * every unverified account is let in, so it is said once, loudly, rather than discovered. */
+	app.Logger.LogWarning("Verification:Email and Verification:Sms are both off: accounts are verified on creation and no verification code is ever sent.");
+}
 
 /* The TOTP master KEK, loaded once before the host serves anything. It is the same
  * deployment secret the LoginServer loads under the same row key, which is what makes

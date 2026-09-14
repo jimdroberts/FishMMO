@@ -37,5 +37,11 @@ namespace FishMMO.Database.Data
 		/// state.
 		/// </summary>
 		PasswordReset = 1,
+		/// <summary>
+		/// A security notice to the account holder: a two-factor reset was requested, cancelled or
+		/// completed, or sign-in was locked after repeated failures. Delivering one changes nothing
+		/// about the account's verification state, for the same reason a password reset does not.
+		/// </summary>
+		SecurityNotice = 2,
 	}
 }

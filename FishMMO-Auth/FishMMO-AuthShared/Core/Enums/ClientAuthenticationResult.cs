@@ -104,5 +104,45 @@ namespace FishMMO.Auth.Core
 		/// player one.
 		/// </remarks>
 		ServerLocked = 21,
+		/// <summary>
+		/// The password was proven, but the phone number the account chose to verify with has not
+		/// been. The client must enter the code sent to the phone by SMS.
+		/// </summary>
+		/// <remarks>
+		/// The SMS counterpart of <see cref="AccountUnverified"/>, which keeps meaning "the email
+		/// code is outstanding". An account that chose both channels is asked for the email code
+		/// first; a correct email code then answers with this value rather than
+		/// <see cref="AccountVerified"/>, so the client knows to ask for the second code. Like
+		/// <see cref="AccountUnverified"/>, it is only ever sent after a correct SRP proof or a
+		/// correct verification code, so it reveals nothing to someone who has neither.
+		/// </remarks>
+		PhoneUnverified = 22,
+		/// <summary>
+		/// The server is in a closed test and this account holds no beta access. Sent only after a
+		/// correct SRP proof, never before, so it cannot be used to learn which accounts exist.
+		/// </summary>
+		/// <remarks>
+		/// Staff accounts (GameMaster and above) are never refused this way. A player can redeem a
+		/// beta code in the Control Panel and sign in again.
+		/// </remarks>
+		BetaAccessRequired = 23,
+		/// <summary>
+		/// Two-factor sign-in for this account is locked after repeated wrong codes. The password
+		/// was already proven, so the lock is reported explicitly; the broadcast carries how long
+		/// it has left. The client must end the attempt rather than prompt for another code.
+		/// </summary>
+		TwoFactorLocked = 24,
+		/// <summary>
+		/// Account creation was refused because the server is in a closed test and the beta code
+		/// was missing or could not be redeemed. One answer for every bad-code case — unknown,
+		/// revoked, expired, used up, malformed — so a script cannot tell a real code from a guess.
+		/// </summary>
+		BetaCodeInvalid = 25,
+		/// <summary>
+		/// Account creation was refused because an optional detail (phone number, real name,
+		/// country, address, referral account or the verification choice) failed the server's
+		/// rules. The client validates the same rules first, so this is normally unreachable.
+		/// </summary>
+		AccountDetailsInvalid = 26,
 	}
 }

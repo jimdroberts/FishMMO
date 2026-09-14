@@ -522,6 +522,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				charData = fetchResult.Data.Value;
 				long characterID = charData.ID;
 
+				/* A staff lock keeps the character out of the world. Character select refuses a locked
+				 * character, but this load can be reached without passing select again: a kicked client
+				 * reconnecting with the token it already holds, or a lock placed between the selection and
+				 * this load. So the load checks too, before the claim, and fails closed — a lock that a
+				 * database hiccup waves through is not a lock. */
+				DatabaseResult<CharacterLockState> lockResult = await characterService.FetchLockAsync(characterID);
+				if (!lockResult.IsSuccess || lockResult.Data.IsLocked(DateTime.UtcNow))
+				{
+					if (!lockResult.IsSuccess)
+					{
+						await Log.Error("CharacterSystem",
+							$"FetchLockAsync failed for character {characterID}: [{lockResult.ErrorCode}] {lockResult.ErrorMessage}. Refusing the load (fail-closed).");
+					}
+					else
+					{
+						await Log.Info("CharacterSystem",
+							$"Character {characterID} ('{charData.Name}') is locked by staff until {lockResult.Data.LockedUntil:u}; refusing the load.");
+					}
+
+					await ReleaseHeldSessionAsync();
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
+						}
+					});
+					return;
+				}
+
 				if (sessionToken != Guid.Empty)
 				{
 					/* Reclaiming our own combat-logout body: the claim never left this server.

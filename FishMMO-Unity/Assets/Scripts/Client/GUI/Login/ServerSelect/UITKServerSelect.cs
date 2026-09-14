@@ -364,6 +364,11 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.AccountVerified:
 				case ClientAuthenticationResult.TwoFactorRequired:
 				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.PhoneUnverified:
+				case ClientAuthenticationResult.BetaAccessRequired:
+				case ClientAuthenticationResult.TwoFactorLocked:
+				case ClientAuthenticationResult.BetaCodeInvalid:
+				case ClientAuthenticationResult.AccountDetailsInvalid:
 					break;
 			}
 		}

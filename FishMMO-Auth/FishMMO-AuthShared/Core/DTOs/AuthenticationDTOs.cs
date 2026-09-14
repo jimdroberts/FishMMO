@@ -21,7 +21,9 @@ namespace FishMMO.Auth.Core
 		public byte[] Salt;
 		/// <summary>SRP verifier for password authentication.</summary>
 		public byte[] Verifier;
-		/// <summary>Explicit message sequence number (client->server).</summary>
+		/// <summary>Encrypted <see cref="RegistrationProfile"/> serialisation (AES-GCM). Always present; an empty profile is still a valid serialisation.</summary>
+		public byte[] Profile;
+		/// <summary>Explicit message sequence number (client->server): the sequence of <see cref="Profile"/>, the last field encrypted.</summary>
 		public uint Seq;
 	}
 
@@ -109,6 +111,8 @@ namespace FishMMO.Auth.Core
 	{
 		/// <summary>Result of client authentication.</summary>
 		public ClientAuthenticationResult Result;
+		/// <summary>Seconds until the refused step may be retried, or 0 when not applicable. Set for <see cref="ClientAuthenticationResult.TwoFactorLocked"/>.</summary>
+		public int RetryAfterSeconds;
 	}
 
 	/// <summary>
@@ -135,6 +139,8 @@ namespace FishMMO.Auth.Core
 		public byte[] VerifyCode;
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
+		/// <summary>Which channel's code this is. Zero is email, what a verification meant before SMS existed.</summary>
+		public VerificationCodeChannel Channel;
 	}
 
 	/// <summary>

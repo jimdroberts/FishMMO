@@ -77,8 +77,10 @@ async function renderList(host, ctx) {
 	let board = null;
 	let refreshError = null;
 
-	async function read() {
-		const [windows, servers] = await Promise.all([api.listMaintenance(), api.getServerBoard()]);
+	/* `source` is `api` for a read somebody asked for, and `api.auto` for the timer's: staff
+	 * reads are audited, but a background poll is marked and not recorded. */
+	async function read(source = api) {
+		const [windows, servers] = await Promise.all([source.listMaintenance(), source.getServerBoard()]);
 		payload = windows;
 		board = servers;
 		refreshError = null;
@@ -87,16 +89,17 @@ async function renderList(host, ctx) {
 
 	/* A failed poll keeps what is on screen rather than blanking it: the last good read,
 	 * labelled as stale, is more use mid-incident than an error page where the numbers were. */
-	async function pollOnce() {
+	async function pollOnce(source = api) {
 		try {
-			await read();
+			await read(source);
 		} catch (err) {
 			refreshError = err.message || 'The maintenance windows could not be refreshed.';
 			if (payload) paint();
 		}
 	}
 
-	poll = setInterval(pollOnce, REFRESH_MS);
+	// Only this timer marks its reads as automatic.
+	poll = setInterval(() => pollOnce(api.auto), REFRESH_MS);
 	countdown = setInterval(() => tickCountdowns(host), COUNTDOWN_MS);
 
 	// The first read is allowed to throw — the router turns it into a visible failure.
@@ -316,12 +319,14 @@ async function renderOperation(host, ctx, id) {
 	let operation = null;
 	let refreshError = null;
 
-	async function read() {
-		operation = await api.getMaintenance(id);
+	async function read(source = api) {
+		operation = await source.getMaintenance(id);
 		refreshError = null;
 		paint();
 	}
 
+	/* Only ever driven by the timer, so its reads are always marked automatic; the first read
+	 * and the re-reads after an action call `read()` and are recorded. */
 	async function pollOnce() {
 		// Once every target has finished nothing else can change, so the poll stops rather
 		// than asking the same question of the database forever.
@@ -331,7 +336,7 @@ async function renderOperation(host, ctx, id) {
 			return;
 		}
 		try {
-			await read();
+			await read(api.auto);
 		} catch (err) {
 			refreshError = err.message || 'This window could not be refreshed.';
 			if (operation) paint();

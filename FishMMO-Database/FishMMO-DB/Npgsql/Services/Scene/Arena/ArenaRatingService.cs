@@ -87,7 +87,7 @@ namespace FishMMO.Database.Npgsql.Services
 						$@"INSERT INTO {seasonTable} (name, starts_utc, ends_utc, active, time_created)
 						VALUES ({{0}}, {{1}}, {{2}}, TRUE, {{1}})
 						RETURNING *",
-						name.Trim(), now, (object)endsUtc ?? DBNull.Value)
+						name.Trim(), now, (object)endsUtc)
 					.AsNoTracking()
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);

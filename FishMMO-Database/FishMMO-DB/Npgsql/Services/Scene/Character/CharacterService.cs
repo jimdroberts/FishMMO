@@ -919,6 +919,10 @@ namespace FishMMO.Database.Npgsql.Services
 			Version = entity.Version,
 			TimeCreated = entity.TimeCreated,
 			LastSaved = entity.LastSaved,
+			LockedUntil = entity.LockedUntil,
+			LockedAt = entity.LockedAt,
+			LockedBy = entity.LockedBy,
+			LockReason = entity.LockReason,
 		};
 
 		/// <inheritdoc/>
@@ -1690,15 +1694,104 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[]
 					{
 						characterId,
-						(object?)mutedUntilUtc ?? DBNull.Value,
-						(object?)ClipModerationText(mutedBy, ModerationActorMaxLength) ?? DBNull.Value,
-						(object?)ClipModerationText(reason, ModerationReasonMaxLength) ?? DBNull.Value,
+						(object?)mutedUntilUtc,
+						(object?)ClipModerationText(mutedBy, ModerationActorMaxLength),
+						(object?)ClipModerationText(reason, ModerationReasonMaxLength),
 					}, cancellationToken).ConfigureAwait(false);
 				if (rows == 0)
 				{
 					throw new DatabaseEntityNotFoundException("Character", $"{characterId}");
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> LockAsync(long characterId, DateTime lockedUntilUtc, string lockedBy, string reason, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+			if (lockedUntilUtc <= DateTime.UtcNow)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "A lock must end in the future.");
+			}
+			if (string.IsNullOrWhiteSpace(lockedBy) || string.IsNullOrWhiteSpace(reason))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "A lock needs the staff account and a reason.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* Not version-gated, like the mute: the save path never names these columns, so no
+				 * gameplay write can race it. Placing a lock over an existing one replaces it — an
+				 * operator extending or shortening a lock is the normal case, and the audit log holds
+				 * the history the row does not. */
+				int rows = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName}
+					SET locked_until = {{1}},
+						locked_at = timezone('UTC', CURRENT_TIMESTAMP),
+						locked_by = {{2}},
+						lock_reason = {{3}}
+					WHERE id = {{0}} AND deleted = false",
+					new object[]
+					{
+						characterId,
+						lockedUntilUtc,
+						ClipModerationText(lockedBy, ModerationActorMaxLength),
+						ClipModerationText(reason, ModerationReasonMaxLength),
+					}, cancellationToken).ConfigureAwait(false);
+				if (rows == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", $"{characterId}");
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> UnlockAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				int rows = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName}
+					SET locked_until = NULL,
+						locked_at = NULL,
+						locked_by = NULL,
+						lock_reason = NULL
+					WHERE id = {{0}} AND locked_until IS NOT NULL",
+					new object[] { characterId }, cancellationToken).ConfigureAwait(false);
+				return rows > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterLockState>> FetchLockAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult<CharacterLockState>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				var row = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => c.ID == characterId)
+					.Select(c => new { c.LockedUntil, c.LockedBy, c.LockReason })
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+				if (row == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", $"{characterId}");
+				}
+				return new CharacterLockState(row.LockedUntil, row.LockedBy, row.LockReason);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

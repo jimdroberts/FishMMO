@@ -285,6 +285,23 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> ClearMuteAsync(long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Places a staff lock that keeps the character out of the world until <paramref name="lockedUntilUtc"/>.
+		/// </summary>
+		/// <remarks>
+		/// An end is required: a forgotten lock with none strands a player behind a refusal they cannot
+		/// act on. A lock over an existing one replaces it. The lock is enforced where a character
+		/// enters the world — character select refuses it, and a scene server holding it is told to
+		/// kick — not by this write, which only records it.
+		/// </remarks>
+		Task<DatabaseResult> LockAsync(long characterId, DateTime lockedUntilUtc, string lockedBy, string reason, CancellationToken cancellationToken = default);
+
+		/// <summary>Releases a staff lock. True when there was one to release, lapsed or not.</summary>
+		Task<DatabaseResult<bool>> UnlockAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>Reads a character's staff lock.</summary>
+		Task<DatabaseResult<CharacterLockState>> FetchLockAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Reads both mutes that apply to a character: its own and its account's.
 		/// </summary>
 		/// <remarks>

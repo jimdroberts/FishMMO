@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using FishMMO.Auth.Core;
 using FishMMO.ControlPanel.Auth;
@@ -9,20 +10,31 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace FishMMO.ControlPanel.Controllers
 {
 	/// <summary>
-	/// Sign-in, two-factor, step-up and sign-out.
+	/// Sign-in, two-factor, step-up, the self-service two-factor reset, and sign-out.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// The password never reaches this controller. The browser runs SRP-6a against the same
 	/// parameters the game client uses and sends a public ephemeral and a proof; the challenge
 	/// endpoint takes a username and nothing else.
+	/// </para>
+	/// <para>
+	/// Nothing here is audited: it is a player (or an operator) authenticating as themselves, on
+	/// anonymous or <see cref="PanelPolicies.TwoFactorPending"/> endpoints the audit filter excludes.
+	/// </para>
 	/// </remarks>
 	[ApiController]
 	[Route("api/auth")]
 	[EnableRateLimiting("Auth")]
 	public sealed class AuthController : ControllerBase
 	{
+		/// <summary>Status for a two-factor step that is locked. 423, so the browser never mistakes it for a step-up 428.</summary>
+		private const int LockedStatus = StatusCodes.Status423Locked;
+
 		private readonly SrpLoginService srp;
 		private readonly TwoFactorService twoFactor;
+		private readonly TwoFactorResetFlow reset;
+		private readonly TwoFactorResetOptions resetOptions;
 		private readonly PanelSessionManager sessions;
 		private readonly IWebHostEnvironment environment;
 		private readonly ILogger<AuthController> log;
@@ -30,12 +42,16 @@ namespace FishMMO.ControlPanel.Controllers
 		public AuthController(
 			SrpLoginService srp,
 			TwoFactorService twoFactor,
+			TwoFactorResetFlow reset,
+			TwoFactorResetOptions resetOptions,
 			PanelSessionManager sessions,
 			IWebHostEnvironment environment,
 			ILogger<AuthController> log)
 		{
 			this.srp = srp;
 			this.twoFactor = twoFactor;
+			this.reset = reset;
+			this.resetOptions = resetOptions;
 			this.sessions = sessions;
 			this.environment = environment;
 			this.log = log;
@@ -66,18 +82,34 @@ namespace FishMMO.ControlPanel.Controllers
 		}
 
 		/// <summary>SRP message two.</summary>
+		/// <remarks>
+		/// A locked account, a wrong password, an unknown account and a banned one all answer 401 with
+		/// <see cref="SrpLoginService.GenericFailure"/>. The one different answer — 403, stage
+		/// <c>verification-required</c> — is given only after a CORRECT proof, so it reveals nothing to
+		/// anyone who does not already hold the password.
+		/// </remarks>
 		[HttpPost("srp/proof")]
 		[AllowAnonymous]
 		public async Task<IActionResult> Proof([FromBody] ProofRequest request)
 		{
 			if (request == null)
 			{
-				return Unauthorized(new { error = "That username and password do not match an account." });
+				return Unauthorized(new { error = SrpLoginService.GenericFailure });
 			}
 
-			var result = srp.Proof(request.Handle, request.ClientPublicEphemeral, request.ClientProof);
+			var result = await srp.SignInProofAsync(request.Handle, request.ClientPublicEphemeral, request.ClientProof, HttpContext.RequestAborted);
 			if (!result.Ok)
 			{
+				if (result.VerificationRequired)
+				{
+					return StatusCode(StatusCodes.Status403Forbidden, new
+					{
+						error = result.Error,
+						stage = "verification-required",
+						username = result.Username,
+						outstanding = AccountRegistrationService.ChannelNames(result.Outstanding),
+					});
+				}
 				return Unauthorized(new { error = result.Error });
 			}
 
@@ -111,6 +143,10 @@ namespace FishMMO.ControlPanel.Controllers
 		}
 
 		/// <summary>Completes a pending sign-in with a TOTP or recovery code.</summary>
+		/// <remarks>
+		/// Counted and locked under <see cref="AuthLockoutOptions"/>. A good code also cancels any
+		/// pending self-service two-factor reset, and the holder is emailed that it was.
+		/// </remarks>
 		[HttpPost("2fa/verify")]
 		[Authorize(Policy = PanelPolicies.TwoFactorPending)]
 		public async Task<IActionResult> VerifyTwoFactor([FromBody] CodeRequest request)
@@ -123,17 +159,231 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = "A code is required." });
 			}
 
-			if (User.FindFirstValue(PanelClaims.TwoFactorSatisfied) == "true")
+			if (IsTwoFactorSatisfied())
 			{
 				return BadRequest(new { error = "This session has already completed two-factor." });
 			}
 
-			if (!await twoFactor.VerifyAsync(username, request.Code, HttpContext.RequestAborted))
+			var check = await twoFactor.VerifyForSignInAsync(username, request.Code, authenticatorOnly: false, HttpContext.RequestAborted);
+			if (check.Verdict == TwoFactorService.Verdict.Locked)
+			{
+				return StatusCode(LockedStatus, LockedBody(check.LockedUntilUtc));
+			}
+			if (check.Verdict != TwoFactorService.Verdict.Ok)
 			{
 				// One message for a wrong code, a used recovery code and a replayed window alike.
 				return Unauthorized(new { error = "That code is not valid." });
 			}
 
+			return await PromoteAsync(username, hash);
+		}
+
+		/// <summary>Re-proves the authenticator for a destructive action.</summary>
+		[HttpPost("step-up")]
+		[Authorize(Policy = PanelPolicies.Self)]
+		public async Task<IActionResult> StepUp([FromBody] CodeRequest request)
+		{
+			string username = User.Identity?.Name;
+			string hash = User.FindFirstValue(PanelClaims.SessionHash);
+
+			if (request == null || string.IsNullOrWhiteSpace(request.Code) || username == null || hash == null)
+			{
+				return BadRequest(new { error = "A code is required." });
+			}
+
+			var check = await twoFactor.VerifyForSignInAsync(username, request.Code, authenticatorOnly: false, HttpContext.RequestAborted);
+			if (check.Verdict == TwoFactorService.Verdict.Locked)
+			{
+				return StatusCode(LockedStatus, LockedBody(check.LockedUntilUtc));
+			}
+			if (check.Verdict != TwoFactorService.Verdict.Ok)
+			{
+				return Unauthorized(new { error = "That code is not valid." });
+			}
+
+			if (!await sessions.StepUpAsync(hash, HttpContext.RequestAborted))
+			{
+				log.LogError("Could not record a step-up for '{User}' after a valid code.", username);
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Try again shortly." });
+			}
+			return Ok(new { ok = true, until = DateTime.UtcNow + PanelPolicies.StepUpWindow });
+		}
+
+		// ── Self-service two-factor reset ───────────────────────────────────────
+		/* For the holder who has lost the authenticator AND every recovery code. Only a session that
+		 * has proven the password reaches these. The rules — the waiting period, cancellation by any
+		 * normal sign-in, never satisfying two-factor on completion, never leaving the account with
+		 * two-factor cleared — are kept in TwoFactorResetFlow, not here. */
+
+		/// <summary>The pending reset for this signed-in-by-password session's account, if any.</summary>
+		[HttpGet("2fa/reset")]
+		[Authorize(Policy = PanelPolicies.TwoFactorPending)]
+		public async Task<IActionResult> GetTwoFactorReset()
+		{
+			string username = User.Identity?.Name;
+			var pending = await reset.PendingAsync(username, HttpContext.RequestAborted);
+			return Ok(TwoFactorResetFlow.Describe(pending, resetOptions));
+		}
+
+		/// <summary>
+		/// Asks for a delayed two-factor reset. Asking again returns the same request; the clock never restarts.
+		/// </summary>
+		[HttpPost("2fa/reset/request")]
+		[Authorize(Policy = PanelPolicies.TwoFactorPending)]
+		public async Task<IActionResult> RequestTwoFactorReset()
+		{
+			string username = User.Identity?.Name;
+			if (IsTwoFactorSatisfied())
+			{
+				return BadRequest(new { error = "This session has already completed two-factor, so the authenticator is not lost." });
+			}
+
+			var (request, error) = await reset.RequestAsync(username, HttpContext.Connection.RemoteIpAddress?.ToString(), HttpContext.RequestAborted);
+			if (request == null)
+			{
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error });
+			}
+
+			return Ok(new
+			{
+				message = "Two-factor reset requested. It takes effect after the waiting period. An email has been sent to the address on the account; " +
+						  "signing in with the authenticator or a recovery code before then cancels it.",
+				reset = TwoFactorResetFlow.Describe(request, resetOptions),
+			});
+		}
+
+		/// <summary>
+		/// Uses an effective reset: the old factor is replaced and the new one handed over. Does NOT sign in.
+		/// </summary>
+		/// <remarks>
+		/// Every panel session on the account is revoked, this one included, and this browser is given a
+		/// fresh session that has proven the password only. It becomes a signed-in session through
+		/// <c>2fa/reset/confirm</c> with a code from the new authenticator, and not before.
+		/// </remarks>
+		[HttpPost("2fa/reset/complete")]
+		[Authorize(Policy = PanelPolicies.TwoFactorPending)]
+		public async Task<IActionResult> CompleteTwoFactorReset()
+		{
+			string username = User.Identity?.Name;
+			if (IsTwoFactorSatisfied())
+			{
+				return BadRequest(new { error = "This session has already completed two-factor." });
+			}
+
+			var outcome = await reset.CompleteAsync(username, HttpContext.RequestAborted);
+			switch (outcome.Status)
+			{
+				case TwoFactorResetFlow.CompletionStatus.NoRequest:
+					return NotFound(new { error = outcome.Error });
+				case TwoFactorResetFlow.CompletionStatus.NotYetEffective:
+					return Conflict(new { error = outcome.Error, effectiveUtc = outcome.EffectiveUtc });
+				case TwoFactorResetFlow.CompletionStatus.Failed:
+					return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = outcome.Error });
+			}
+
+			var reissued = await sessions.IssueAsync(
+				username, GetAccessLevel(), twoFactorSatisfied: false,
+				HttpContext.Connection.RemoteIpAddress?.ToString(),
+				Request.Headers.UserAgent.ToString(), HttpContext.RequestAborted);
+			if (reissued.Ok)
+			{
+				SetSessionCookie(reissued.SessionId, reissued.Session.ExpiresUtc);
+			}
+			else
+			{
+				log.LogWarning("Two-factor reset completed for '{User}' but a pending session could not be reissued.", username);
+				Response.Cookies.Delete(PanelSessionManager.CookieName);
+			}
+
+			// Shown once, exactly as registration shows them. Nothing here is retrievable again.
+			return Ok(new
+			{
+				stage = "two-factor-reset",
+				username,
+				otpauthUri = outcome.OtpauthUri,
+				recoveryCodes = outcome.RecoveryCodes,
+				// When true the browser must sign in again (with the password) and confirm from there.
+				signedOut = !reissued.Ok,
+			});
+		}
+
+		/// <summary>
+		/// Finishes a completed reset with a code from the NEW authenticator, and only then signs in.
+		/// </summary>
+		/// <remarks>
+		/// Recovery codes are refused here: the point of this step is proving the new authenticator
+		/// was actually saved, and a recovery code shown on the same screen proves nothing about that.
+		/// </remarks>
+		[HttpPost("2fa/reset/confirm")]
+		[Authorize(Policy = PanelPolicies.TwoFactorPending)]
+		public async Task<IActionResult> ConfirmTwoFactorReset([FromBody] CodeRequest request)
+		{
+			string username = User.Identity?.Name;
+			string hash = User.FindFirstValue(PanelClaims.SessionHash);
+			if (request == null || string.IsNullOrWhiteSpace(request.Code) || username == null || hash == null)
+			{
+				return BadRequest(new { error = "A code is required." });
+			}
+			if (IsTwoFactorSatisfied())
+			{
+				return BadRequest(new { error = "This session has already completed two-factor." });
+			}
+
+			var check = await twoFactor.VerifyForSignInAsync(username, request.Code, authenticatorOnly: true, HttpContext.RequestAborted);
+			if (check.Verdict == TwoFactorService.Verdict.Locked)
+			{
+				return StatusCode(LockedStatus, LockedBody(check.LockedUntilUtc));
+			}
+			if (check.Verdict != TwoFactorService.Verdict.Ok)
+			{
+				return Unauthorized(new { error = "That code is not valid. Enter the six-digit code your NEW authenticator shows." });
+			}
+
+			return await PromoteAsync(username, hash);
+		}
+
+		/// <summary>Describes the current session, or null when there is none.</summary>
+		[HttpGet("session")]
+		[AllowAnonymous]
+		public IActionResult Session()
+		{
+			if (User.Identity?.IsAuthenticated != true)
+			{
+				return Ok((object)null);
+			}
+
+			byte accessLevel = GetAccessLevel();
+			bool twoFactorSatisfied = IsTwoFactorSatisfied();
+			bool totpEnrolled = User.FindFirstValue(PanelClaims.TotpEnrolled) == "true";
+
+			DateTime? lastStepUp = null;
+			if (DateTime.TryParse(User.FindFirstValue(PanelClaims.LastStepUp), null,
+					DateTimeStyles.RoundtripKind, out DateTime parsed))
+			{
+				lastStepUp = parsed;
+			}
+
+			return Ok(Describe(
+				User.Identity.Name, accessLevel, twoFactorSatisfied, totpEnrolled,
+				lastStepUp, null));
+		}
+
+		/// <summary>Ends this session.</summary>
+		[HttpPost("logout")]
+		[AllowAnonymous]
+		public async Task<IActionResult> Logout()
+		{
+			string hash = User.FindFirstValue(PanelClaims.SessionHash);
+			if (hash != null)
+			{
+				await sessions.RevokeAsync(hash, HttpContext.RequestAborted);
+			}
+			Response.Cookies.Delete(PanelSessionManager.CookieName);
+			return Ok(new { ok = true });
+		}
+
+		private async Task<IActionResult> PromoteAsync(string username, string hash)
+		{
 			byte accessLevel = GetAccessLevel();
 			if (!await sessions.PromoteAsync(hash, accessLevel, HttpContext.RequestAborted))
 			{
@@ -157,71 +407,20 @@ namespace FishMMO.ControlPanel.Controllers
 			});
 		}
 
-		/// <summary>Re-proves the authenticator for a destructive action.</summary>
-		[HttpPost("step-up")]
-		[Authorize(Policy = PanelPolicies.Self)]
-		public async Task<IActionResult> StepUp([FromBody] CodeRequest request)
+		/// <summary>
+		/// A locked two-factor step, stated plainly. The session has proven the password, so there is
+		/// no account-existence secret left to keep.
+		/// </summary>
+		private static object LockedBody(DateTime? lockedUntilUtc) => new
 		{
-			string username = User.Identity?.Name;
-			string hash = User.FindFirstValue(PanelClaims.SessionHash);
+			error = lockedUntilUtc.HasValue
+				? $"Two-factor sign-in is locked after repeated wrong codes, until {DateTime.SpecifyKind(lockedUntilUtc.Value, DateTimeKind.Utc).ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)}."
+				: "Two-factor sign-in is locked after repeated wrong codes. Try again later.",
+			locked = true,
+			lockedUntilUtc,
+		};
 
-			if (request == null || string.IsNullOrWhiteSpace(request.Code) || username == null || hash == null)
-			{
-				return BadRequest(new { error = "A code is required." });
-			}
-
-			if (!await twoFactor.VerifyAsync(username, request.Code, HttpContext.RequestAborted))
-			{
-				return Unauthorized(new { error = "That code is not valid." });
-			}
-
-			if (!await sessions.StepUpAsync(hash, HttpContext.RequestAborted))
-			{
-				log.LogError("Could not record a step-up for '{User}' after a valid code.", username);
-				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Try again shortly." });
-			}
-			return Ok(new { ok = true, until = DateTime.UtcNow + PanelPolicies.StepUpWindow });
-		}
-
-		/// <summary>Describes the current session, or null when there is none.</summary>
-		[HttpGet("session")]
-		[AllowAnonymous]
-		public IActionResult Session()
-		{
-			if (User.Identity?.IsAuthenticated != true)
-			{
-				return Ok((object)null);
-			}
-
-			byte accessLevel = GetAccessLevel();
-			bool twoFactorSatisfied = User.FindFirstValue(PanelClaims.TwoFactorSatisfied) == "true";
-			bool totpEnrolled = User.FindFirstValue(PanelClaims.TotpEnrolled) == "true";
-
-			DateTime? lastStepUp = null;
-			if (DateTime.TryParse(User.FindFirstValue(PanelClaims.LastStepUp), null,
-					System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsed))
-			{
-				lastStepUp = parsed;
-			}
-
-			return Ok(Describe(
-				User.Identity.Name, accessLevel, twoFactorSatisfied, totpEnrolled,
-				lastStepUp, null));
-		}
-
-		/// <summary>Ends this session.</summary>
-		[HttpPost("logout")]
-		[AllowAnonymous]
-		public async Task<IActionResult> Logout()
-		{
-			string hash = User.FindFirstValue(PanelClaims.SessionHash);
-			if (hash != null)
-			{
-				await sessions.RevokeAsync(hash, HttpContext.RequestAborted);
-			}
-			Response.Cookies.Delete(PanelSessionManager.CookieName);
-			return Ok(new { ok = true });
-		}
+		private bool IsTwoFactorSatisfied() => User.FindFirstValue(PanelClaims.TwoFactorSatisfied) == "true";
 
 		private byte GetAccessLevel()
 		{

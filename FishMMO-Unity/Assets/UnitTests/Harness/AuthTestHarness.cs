@@ -15,6 +15,9 @@ namespace FishMMO.UnitTests.Harness
 		public TestServerCore Server { get; }
 		public InMemoryAccountStore Store { get; }
 
+		/// <summary>The server's account manager, for tests that need a connection's server-side encryption data.</summary>
+		public SrpAccountManager<int> AccountManager => accountManager;
+
 		private readonly CancellationTokenSource cts = new CancellationTokenSource();
 		private readonly SrpAccountManager<int> accountManager;
 		private bool disposed;

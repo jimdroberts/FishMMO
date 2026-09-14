@@ -189,6 +189,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Arguments = "character:Character", RosterAction = true,
 					Run = UnstickCharacter,
 				},
+				new OperatorCommand
+				{
+					Name = "rescue", Category = "Movement",
+					Summary = "Moves a character to a respawn point, spawn point or waypoint in their scene. Nearest if none is named.",
+					Arguments = "character:Character;to:Choice=respawn,spawn,waypoint;point:Text?", RosterAction = true,
+					Run = RescueCharacter,
+				},
+				new OperatorCommand
+				{
+					Name = "points", Category = "Movement",
+					Summary = "Lists the respawn points, spawn points and waypoints a rescue can use in a character's scene.",
+					Arguments = "character:Character?",
+					Run = ListRescuePoints,
+				},
 			};
 
 			commands.AddRange(BuildGameMasterModerationCommands());
@@ -556,7 +570,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <remarks>
 		/// The scene they are physically in — the instance, when they are in one — because a respawn
 		/// point from the open world written into a dungeon is exactly the fall-through-the-world
-		/// placement this command exists to fix.
+		/// placement this command exists to fix. <c>rescue</c> with no point named does the same.
 		/// </remarks>
 		private void UnstickCharacter(IPlayerCharacter character, string arguments)
 		{
@@ -564,47 +578,115 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+			RescueTo(character, target, RescuePointKind.Respawn, null);
+		}
 
-			string scene = target.CurrentSceneName();
-			if (WorldSceneDetailsCache == null ||
-				string.IsNullOrEmpty(scene) ||
-				!WorldSceneDetailsCache.Scenes.TryGetValue(scene, out WorldSceneDetails details) ||
-				details.RespawnPositions == null ||
-				details.RespawnPositions.Count < 1 ||
-				target.Transform == null)
+		/// <summary>
+		/// <c>rescue &lt;character&gt; &lt;respawn|spawn|waypoint&gt; [point]</c> — moves a character to an
+		/// authored place in the scene they are in.
+		/// </summary>
+		/// <remarks>
+		/// The places come from the world scene details cache for the character's own scene, never the
+		/// operator's: the operator may be standing somewhere else entirely, and only a point in the
+		/// scene the character is loaded into is a place they can be put. <c>points</c> lists the names.
+		/// </remarks>
+		private void RescueCharacter(IPlayerCharacter character, string arguments)
+		{
+			string name = OperatorCommandParsing.SplitFirstWord(arguments, out string afterName);
+			string kindWord = OperatorCommandParsing.SplitFirstWord(afterName, out string pointName);
+
+			if (name.Length == 0 || !RescuePoints.TryParseKind(kindWord, out RescuePointKind kind))
 			{
-				Reply(character, $"'{scene}' has no respawn point to move {target.CharacterName} to.");
+				ReplyUsage(character, gameMasterCommands, "rescue");
+				return;
+			}
+			if (!TryResolveTarget(character, name, out IPlayerCharacter target))
+			{
+				return;
+			}
+			RescueTo(character, target, kind, pointName);
+		}
+
+		/// <summary>The shared body of <c>unstuck</c> and <c>rescue</c>.</summary>
+		private void RescueTo(IPlayerCharacter character, IPlayerCharacter target, RescuePointKind kind, string pointName)
+		{
+			string scene = target.CurrentSceneName();
+			string kindWord = RescuePoints.KindWords[(int)kind];
+
+			if (!TryGetSceneDetails(scene, out WorldSceneDetails details) || target.Transform == null)
+			{
+				Reply(character, $"'{scene}' has no scene details to rescue {target.CharacterName} with.");
 				return;
 			}
 
-			Vector3 from = target.Transform.position;
-			CharacterRespawnPositionDetails nearest = null;
-			float nearestDistance = float.MaxValue;
-			foreach (CharacterRespawnPositionDetails respawn in details.RespawnPositions.Values)
+			if (!RescuePoints.TryFind(details, kind, pointName, target.Transform.position, out RescuePoint point))
 			{
-				if (respawn == null)
-				{
-					continue;
-				}
-				float distance = (respawn.Position - from).sqrMagnitude;
-				if (distance < nearestDistance)
-				{
-					nearestDistance = distance;
-					nearest = respawn;
-				}
+				Reply(character, string.IsNullOrWhiteSpace(pointName)
+					? $"'{scene}' has no {kindWord} point. See /gm points {target.CharacterName}."
+					: $"'{scene}' has no {kindWord} called '{OperatorCommandParsing.Truncate(pointName.Trim(), 32)}'. See /gm points.");
+				return;
 			}
 
-			if (nearest == null || !TryMoveTo(character, target, nearest.Position, nearest.Rotation, out string failure))
+			// A waypoint is a map marker with no facing; keep the character's own.
+			Quaternion rotation = point.HasRotation ? point.Rotation : target.Transform.rotation;
+			if (!TryMoveTo(character, target, point.Position, rotation, out _))
 			{
 				Reply(character, $"{target.CharacterName} cannot be moved right now.");
 				return;
 			}
 
-			Reply(character, $"Moved {target.CharacterName} to the nearest respawn point in '{scene}'.");
+			Reply(character, $"Moved {target.CharacterName} to {kindWord} '{point.Name}' in '{scene}'.");
 			if (target.ID != character.ID)
 			{
 				Reply(target, $"{character.CharacterName} has moved you to safety.");
 			}
+		}
+
+		/// <summary>
+		/// <c>points [character]</c> — lists the places <c>rescue</c> can use in a character's scene,
+		/// the operator's own when none is named.
+		/// </summary>
+		private void ListRescuePoints(IPlayerCharacter character, string arguments)
+		{
+			if (!TryResolveOptionalTarget(character, arguments, out IPlayerCharacter target, out _))
+			{
+				return;
+			}
+
+			string scene = target.CurrentSceneName();
+			if (!TryGetSceneDetails(scene, out WorldSceneDetails details))
+			{
+				Reply(character, $"'{scene}' has no scene details.");
+				return;
+			}
+
+			List<string> lines = new List<string> { $"Rescue points in '{scene}':" };
+			for (int i = 0; i < RescuePoints.KindWords.Length; ++i)
+			{
+				List<RescuePoint> points = RescuePoints.List(details, (RescuePointKind)i);
+				List<string> names = new List<string>(points.Count);
+				for (int j = 0; j < points.Count; ++j)
+				{
+					names.Add(points[j].Name);
+				}
+				if (names.Count < 1)
+				{
+					lines.Add($"{RescuePoints.KindWords[i]}: none");
+					continue;
+				}
+				lines.AddRange(OperatorCommandParsing.PackLines(names, $"{RescuePoints.KindWords[i]}: ", ", ", ChatBroadcast.MaxTextLength));
+			}
+			ReplyLines(character, lines);
+		}
+
+		/// <summary>Reads a scene's cached details, when the cache has any.</summary>
+		private bool TryGetSceneDetails(string scene, out WorldSceneDetails details)
+		{
+			details = null;
+			return WorldSceneDetailsCache != null &&
+				!string.IsNullOrEmpty(scene) &&
+				WorldSceneDetailsCache.Scenes.TryGetValue(scene, out details) &&
+				details != null;
 		}
 
 		/// <summary>

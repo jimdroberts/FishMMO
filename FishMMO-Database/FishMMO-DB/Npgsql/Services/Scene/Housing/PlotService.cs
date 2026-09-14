@@ -181,7 +181,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { plotID, ownerCharacterID, ownerGuildID, now, (object)taxDueUtc ?? DBNull.Value, claimedState },
+					new object[] { plotID, ownerCharacterID, ownerGuildID, now, (object)taxDueUtc, claimedState },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}

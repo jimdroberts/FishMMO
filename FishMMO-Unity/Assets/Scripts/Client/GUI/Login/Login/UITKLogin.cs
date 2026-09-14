@@ -88,6 +88,27 @@ namespace FishMMO.Client
 		/// </summary>
 		private string pendingVerifyUsername;
 
+		/// <summary>Which code <see cref="pendingVerifyUsername"/> is waiting for.</summary>
+		private VerificationCodeChannel pendingVerifyChannel;
+
+		/// <summary>
+		/// The identifier the current sign-in was started with. Not a secret — it is still in the
+		/// username field — and kept because the authenticator drops its own copy the moment the SRP
+		/// proof is sent, which is before the server can answer that the account is unverified.
+		/// </summary>
+		private string signInIdentifier;
+
+		/// <summary>True while a verification-code prompt is on screen.</summary>
+		/// <remarks>
+		/// The server closes the connection right after reporting an unverified account, so the Stopped
+		/// handler runs while the player is still reading the prompt; it must not throw away the account
+		/// name the prompt will need.
+		/// </remarks>
+		private bool verificationPromptOpen;
+
+		/// <summary>True once a verification code has been sent and not yet answered.</summary>
+		private bool verificationSubmitted;
+
 		/// <summary>
 		/// True when this panel owns the active authentication flow (login, account
 		/// verification, or TOTP). Gates auth-result handling so results belonging to
@@ -98,7 +119,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// Panel visibility cannot serve this purpose, even though it looks equivalent. Both
 		/// multi-step flows hide this panel while a modal dialog collects the next input:
-		/// <see cref="OnAccountUnverified"/> and <see cref="OnTwoFactorRequired"/> call
+		/// <see cref="OnVerificationCodeRequired"/> and <see cref="OnTwoFactorRequired"/> call
 		/// <see cref="Hide"/> before opening theirs. Gating on <c>Visible</c> therefore dropped
 		/// every result that arrived after that point — the <c>AccountVerified</c> that follows
 		/// a correct verification code, and the <c>LoginSuccess</c> or <c>TwoFactorInvalid</c>
@@ -332,7 +353,10 @@ namespace FishMMO.Client
 					handshakeMessage.text = "";
 				}
 				SetSignInLocked(false);
-				pendingVerifyUsername = null;
+				if (!verificationPromptOpen)
+				{
+					pendingVerifyUsername = null;
+				}
 
 				if (droppedWithoutExplanation)
 				{
@@ -397,7 +421,9 @@ namespace FishMMO.Client
 					OnLoginAuthenticationDialog("Your account has been created!");
 					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
-					OnLoginAuthenticationDialog("Invalid Username or Password.");
+					OnLoginAuthenticationDialog(verificationSubmitted
+						? "That verification code was not accepted.\n\nCheck the code and sign in again to enter it. Codes expire after 24 hours."
+						: "Invalid Username or Password.");
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
 					OnLoginAuthenticationDialog("Account is already online.");
@@ -406,7 +432,17 @@ namespace FishMMO.Client
 					OnLoginAuthenticationDialog("Account is banned. Please contact the system administrator.");
 					break;
 				case ClientAuthenticationResult.AccountUnverified:
-					OnAccountUnverified();
+					OnVerificationCodeRequired(VerificationCodeChannel.Email);
+					break;
+				case ClientAuthenticationResult.PhoneUnverified:
+					OnVerificationCodeRequired(VerificationCodeChannel.Sms);
+					break;
+				case ClientAuthenticationResult.BetaAccessRequired:
+					OnLoginAuthenticationDialog("This server is running a closed test, and your account does not have beta access.\n\n" +
+						"If you have a beta code, redeem it in the Control Panel, then sign in again.");
+					break;
+				case ClientAuthenticationResult.TwoFactorLocked:
+					OnLoginAuthenticationDialog(DescribeTwoFactorLock(Client.LoginAuthenticator.LastRetryAfterSeconds));
 					break;
 				case ClientAuthenticationResult.AccountVerified:
 					OnAccountVerified();
@@ -447,54 +483,103 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.WorldLoginSuccess:
 				case ClientAuthenticationResult.SceneLoginSuccess:
 				case ClientAuthenticationResult.NoCharacterSelected:
+				// Registration-only answers; UITKRegister owns those.
+				case ClientAuthenticationResult.BetaCodeInvalid:
+				case ClientAuthenticationResult.AccountDetailsInvalid:
 					break;
 			}
 		}
 
 		/// <summary>
-		/// Handles AccountUnverified: stays connected and opens the verification code input dialog.
-		/// Sets <see cref="pendingVerifyUsername"/> only now — not eagerly in OnClick_Login —
-		/// so the identifier doesn't linger in memory if the connection drops before this point.
+		/// The message for a locked two-factor step, with the wait the server reported.
 		/// </summary>
-		private void OnAccountUnverified()
+		/// <param name="retryAfterSeconds">Seconds left on the lock, or 0 when not given.</param>
+		private static string DescribeTwoFactorLock(int retryAfterSeconds)
 		{
-			// Capture identifier from authenticator (still set at this point; cleared only after SRP proof).
-			string identifier = Client.LoginAuthenticator.PendingLoginIdentifier;
-			if (string.IsNullOrEmpty(identifier))
+			string wait;
+			if (retryAfterSeconds <= 0)
 			{
-				// Identifier already cleared — can't verify. Return to login.
-				Client.ForceDisconnect();
-				SetSignInLocked(false);
+				wait = "for a while";
+			}
+			else if (retryAfterSeconds < 90)
+			{
+				wait = "for about a minute";
+			}
+			else
+			{
+				wait = $"for about {(int)Math.Ceiling(retryAfterSeconds / 60.0)} minutes";
+			}
+			return "Too many incorrect authenticator or recovery codes.\n\n" +
+				$"Two-factor sign-in for this account is locked {wait}. Please try again later.";
+		}
+
+		/// <summary>Digits in an account verification code; a complete one submits itself.</summary>
+		private const int VerificationCodeLength = 6;
+
+		/// <summary>
+		/// Handles AccountUnverified (the email code is outstanding) and PhoneUnverified (the SMS code
+		/// is): asks for that code, then sends it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This prompt could never work before. It read the identifier back from the authenticator,
+		/// which drops it the moment the SRP proof is sent — always before this result arrives — so it
+		/// found nothing, disconnected and said nothing. And the server closes the connection right after
+		/// reporting an unverified account, so a code typed into the prompt had no connection to travel
+		/// on. The identifier is now kept from the click, and the code goes out on a fresh
+		/// verification-only connection when the one that reported the result has gone.
+		/// </para>
+		/// <para>
+		/// An account that chose both channels is asked for the email code first. A correct one is
+		/// answered with PhoneUnverified on the same connection, which lands back here for the SMS code.
+		/// </para>
+		/// </remarks>
+		private void OnVerificationCodeRequired(VerificationCodeChannel channel)
+		{
+			string identifier = !string.IsNullOrEmpty(pendingVerifyUsername) ? pendingVerifyUsername : signInIdentifier;
+			if (string.IsNullOrEmpty(identifier) || !Authentication.IsAllowedUsername(identifier))
+			{
+				// Verification is by account name; the server never reports this for an email sign-in.
+				OnLoginAuthenticationDialog(channel == VerificationCodeChannel.Sms
+					? "Your phone number has not been verified yet. Sign in with your account name to enter the code sent to you by SMS."
+					: "Your account has not been verified yet. Sign in with your account name to enter the code sent to your email.");
 				return;
 			}
+
 			pendingVerifyUsername = identifier;
+			pendingVerifyChannel = channel;
+			verificationSubmitted = false;
 			SetSignInLocked(true);
 			Hide();
 
-			/* Stop the reply clock. SetSignInLocked arms it, but from here the client is waiting
-			 * on a person going to fetch a code out of their email — which routinely takes longer
-			 * than the thirty seconds the watchdog allows. Leaving it running meant the watchdog
-			 * fired mid-typing and, before this, wrote its explanation into the panel it had just
-			 * hidden. It is re-armed the instant a code is actually sent. */
+			/* Stop the reply clock. SetSignInLocked arms it, but from here the client is waiting on a
+			 * person fetching a code from their email or phone, which routinely takes longer than the
+			 * watchdog allows. It is re-armed the instant a code is actually sent. */
 			replyGuard.Clear();
+
+			string prompt = channel == VerificationCodeChannel.Sms
+				? "Your phone number has not been verified. Please enter the verification code sent to your phone by SMS."
+				: "Your account has not been verified. Please enter the verification code sent to your email.";
 
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
-				uiDialogInputBox.Open(
-					"Your account has not been verified. Please enter the verification code sent to your email.",
+				verificationPromptOpen = true;
+				uiDialogInputBox.OpenCode(
+					prompt,
+					VerificationCodeLength,
 					(code) =>
 					{
+						verificationPromptOpen = false;
 						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))
 						{
-							Client.LoginAuthenticator.SendVerifyCode(pendingVerifyUsername, code.Trim());
-
-							// A request is outstanding again; restart the clock.
-							replyGuard.Begin();
+							SubmitVerificationCode(pendingVerifyUsername, code.Trim(), pendingVerifyChannel);
 						}
 					},
 					() =>
 					{
+						verificationPromptOpen = false;
 						pendingVerifyUsername = null;
+						verificationSubmitted = false;
 						Client.ForceDisconnect();
 						SetSignInLocked(false);
 						Show();
@@ -503,11 +588,76 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Sends a verification code: on the live connection when there is one (the second code of an
+		/// email-then-SMS pair), otherwise on a new verification-only connection.
+		/// </summary>
+		private void SubmitVerificationCode(string accountName, string code, VerificationCodeChannel channel)
+		{
+			verificationSubmitted = true;
+			authResultSeen = false;
+			SetSignInLocked(true);
+
+			if (!Client.IsConnectionReady(LocalConnectionState.Stopped))
+			{
+				Client.LoginAuthenticator.SendVerifyCode(accountName, code, channel);
+				return;
+			}
+
+			/* Put this panel back on screen, locked, for the round trip. Nothing else is visible while the
+			 * login-server list is fetched on a stopped connection, and TickVisiblePanelInvariant would
+			 * restore the form after two seconds and unlock sign-in — clearing isAuthFlowActive, so the
+			 * answer to this very code would then be ignored. Signing in keeps the panel up for the same
+			 * wait; this does the same. */
+			Show();
+			if (handshakeMessage != null)
+			{
+				handshakeMessage.text = "Verifying...";
+			}
+
+			// A new connection needs a connection token, exactly as signing in does: the login server
+			// refuses verification from a connection whose real address it could not establish.
+			StartCoroutine(Client.GetLoginServerList((e) =>
+			{
+				verificationSubmitted = false;
+				LoginNotice.Show(e);
+				Log.Warning("UITKLogin", e);
+				SetSignInLocked(false);
+				Show();
+			},
+			(servers, token) =>
+			{
+				if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
+
+				if (!Client.IsConnectionReady(LocalConnectionState.Stopped) ||
+					!Client.TryGetRandomLoginServerPort(out ushort serverPort) ||
+					!Client.LoginAuthenticator.SetVerificationRequest(accountName, code, channel))
+				{
+					verificationSubmitted = false;
+					Log.Warning("UITKLogin", "Could not open a connection to send the verification code.");
+					SetSignInLocked(false);
+					Show();
+					if (handshakeMessage != null)
+					{
+						handshakeMessage.text = "Could not reach the login server to verify. Please try again.";
+					}
+					return;
+				}
+
+				if (handshakeMessage != null)
+				{
+					handshakeMessage.text = "Verifying...";
+				}
+				Client.ConnectToServer(serverPort);
+			}));
+		}
+
+		/// <summary>
 		/// Handles successful account verification: disconnects and returns to the login screen.
 		/// </summary>
 		private void OnAccountVerified()
 		{
 			pendingVerifyUsername = null;
+			verificationSubmitted = false;
 			Client.ForceDisconnect();
 			SetSignInLocked(false);
 
@@ -540,6 +690,9 @@ namespace FishMMO.Client
 			OpenTotpDialog("Invalid code. Please try again.");
 		}
 
+		/// <summary>Digits in an authenticator code; a complete one submits itself.</summary>
+		private const int TotpCodeLength = 6;
+
 		/// <summary>
 		/// Opens the TOTP code input dialog with the specified prompt.
 		/// </summary>
@@ -547,13 +700,15 @@ namespace FishMMO.Client
 		private void OpenTotpDialog(string message)
 		{
 			// Waiting on the player and their authenticator app, not on the server.
-			// See OnAccountUnverified.
+			// See OnVerificationCodeRequired.
 			replyGuard.Clear();
 
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
-				uiDialogInputBox.Open(
+				// Six digits submit themselves; a recovery code still takes Enter.
+				uiDialogInputBox.OpenCode(
 					message,
+					TotpCodeLength,
 					(code) =>
 					{
 						if (!string.IsNullOrWhiteSpace(code))
@@ -596,6 +751,7 @@ namespace FishMMO.Client
 			/// <param name="errorMsg">The error message to display.</param>
 			private void OnLoginAuthenticationDialog(string errorMsg)
 		{
+			verificationSubmitted = false;
 			LoginNotice.Show(errorMsg);
 			Client.ForceDisconnect();
 
@@ -770,6 +926,9 @@ namespace FishMMO.Client
 			}
 
 			authResultSeen = false;
+			verificationSubmitted = false;
+			pendingVerifyUsername = null;
+			signInIdentifier = identifier;
 			SetSignInLocked(true);
 
 			/* The credentials are handed over in a holder the closures below can empty, rather

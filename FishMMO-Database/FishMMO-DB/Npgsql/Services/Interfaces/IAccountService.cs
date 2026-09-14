@@ -512,5 +512,58 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> ClearMuteAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Writes the optional contact and identity details, and the verification channels chosen.
+		/// </summary>
+		/// <remarks>
+		/// Validated by <see cref="AccountProfileRules"/>. A changed phone number loses its verification
+		/// and any outstanding SMS code; <c>verified</c> is not touched, so editing a number never locks a
+		/// player out of signing in.
+		/// </remarks>
+		Task<DatabaseResult> PersistProfileAsync(string accountName, AccountProfileData profile, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Marks channels proven without a code, for a server that has switched their verification off,
+		/// and recomputes <c>verified</c>. The SMS channel is only marked when a number is on record.
+		/// </summary>
+		Task<DatabaseResult> PersistChannelsVerifiedAsync(string accountName, FishMMO.Database.Data.Enums.AccountVerificationChannels channels, CancellationToken cancellationToken = default);
+
+		/// <summary>Records an outstanding SMS verification code. Refused when the account has no number.</summary>
+		Task<DatabaseResult> PersistPhoneVerifyCodeAsync(string accountName, int verifyCode, DateTime expiresUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Redeems an SMS verification code in one conditional update, proving the phone channel and
+		/// setting <c>verified</c> once every chosen channel is proven.
+		/// </summary>
+		Task<DatabaseResult> PersistPhoneVerifiedAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Counts one failed sign-in step and locks that step once <paramref name="threshold"/> failures
+		/// land inside <paramref name="window"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// In the database, in one statement, so every login server and the panel share the count and
+		/// concurrent failures cannot lose an increment. Passwords and authenticator codes are counted
+		/// apart.
+		/// </para>
+		/// <para>
+		/// An unknown or malformed account name succeeds with null. The caller must answer a locked
+		/// account and a wrong password identically to the client, or the lockout becomes a way to learn
+		/// which accounts exist.
+		/// </para>
+		/// </remarks>
+		/// <returns>When the step is now locked until, or null when it is not locked.</returns>
+		Task<DatabaseResult<DateTime?>> RecordAuthFailureAsync(string accountName, AuthFailureKind kind, int threshold, TimeSpan window, TimeSpan lockout, CancellationToken cancellationToken = default);
+
+		/// <summary>Clears one step's failure count after it succeeds.</summary>
+		Task<DatabaseResult> ClearAuthFailuresAsync(string accountName, AuthFailureKind kind, CancellationToken cancellationToken = default);
+
+		/// <summary>Lifts both sign-in lockouts: the staff action. True when one was in force.</summary>
+		Task<DatabaseResult<bool>> ClearAuthLockoutAsync(string accountName, CancellationToken cancellationToken = default);
+
+		/// <summary>Reads an account's sign-in lockouts. An unknown account reads as locked out of nothing.</summary>
+		Task<DatabaseResult<AuthLockoutState>> FetchAuthLockoutAsync(string accountName, CancellationToken cancellationToken = default);
 	}
 }

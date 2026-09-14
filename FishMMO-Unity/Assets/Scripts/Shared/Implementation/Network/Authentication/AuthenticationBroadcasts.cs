@@ -66,6 +66,13 @@ namespace FishMMO.Shared
 		public const int CreateAccountMaxFieldSize = 2048;
 
 		/// <summary>
+		/// Maximum allowed size in bytes for the encrypted Profile field in CreateAccountBroadcast.
+		/// Larger than the other fields because it carries every optional detail at once; bounded by
+		/// the largest serialisation a valid profile can produce.
+		/// </summary>
+		public const int MaxRegistrationProfileSize = RegistrationProfile.MaxEncryptedBytes;
+
+		/// <summary>
 		/// Maximum allowed size in bytes for the encrypted Username field in SrpVerifyRequestBroadcast.
 		/// AES-GCM overhead (~28 bytes) + encrypted username (max 128 bytes plaintext) = generous cap at 512.
 		/// </summary>
@@ -136,8 +143,17 @@ namespace FishMMO.Shared
 		/// <summary>SRP verifier for password authentication.</summary>
 		public byte[] Verifier;
 
-		/// <summary>Explicit message sequence number (client->server).</summary>
+		/// <summary>Explicit message sequence number (client->server): the sequence of <see cref="Profile"/>,
+		/// the last of the six encrypted fields. See <c>SrpService.ServerDecryptRegistrationFields</c>.</summary>
 		public uint Seq;
+
+		/// <summary>
+		/// Encrypted <see cref="RegistrationProfile"/> serialisation (AES-GCM): phone, beta code, country,
+		/// real name, address, referral account and the verification choice, as ONE field. Always sent —
+		/// an empty profile is still a serialisation — so the sequence arithmetic never depends on what
+		/// the player filled in.
+		/// </summary>
+		public byte[] Profile;
 	}
 
 	/// <summary>
@@ -304,6 +320,13 @@ namespace FishMMO.Shared
 	{
 		/// <summary>Result of client authentication.</summary>
 		public ClientAuthenticationResult Result;
+
+		/// <summary>
+		/// Seconds until the refused step may be tried again, or 0 when the result carries no wait.
+		/// Set for <see cref="ClientAuthenticationResult.TwoFactorLocked"/>. Relative, not an instant,
+		/// so a client with a wrong clock still reports the right wait.
+		/// </summary>
+		public int RetryAfterSeconds;
 	}
 
 	/// <summary>
@@ -359,6 +382,16 @@ namespace FishMMO.Shared
 
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
+
+		/// <summary>
+		/// Which channel's code this is: email (0, the value every verification had before SMS) or SMS.
+		/// </summary>
+		/// <remarks>
+		/// In the clear, outside the AEAD. Flipping it gains nothing: each channel's code is stored
+		/// and redeemed separately, so a code sent against the wrong channel simply does not match, and
+		/// both channels count against the same per-IP and per-username verification lockouts.
+		/// </remarks>
+		public VerificationCodeChannel Channel;
 	}
 
 	/// <summary>

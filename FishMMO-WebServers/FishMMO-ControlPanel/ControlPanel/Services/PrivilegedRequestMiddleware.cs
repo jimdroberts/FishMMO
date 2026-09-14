@@ -26,8 +26,17 @@ namespace FishMMO.ControlPanel.Services
 	/// already what the in-game command gate records.
 	/// </para>
 	/// <para>
-	/// Writes only, matching the rule elsewhere that reads are not recorded. A refused GET is a
-	/// failed look, it is frequent, and recording it would bury the refusals that matter.
+	/// Reads as well as writes, since 2026-09-14: every Game Master and Admin action is tracked, and
+	/// a refused look at something above one's level is as much a probe as a refused write.
+	/// </para>
+	/// <para>
+	/// <b>A refusal is recorded even when the browser marked the request as an automatic refresh</b>
+	/// (<c>X-Panel-Refresh: auto</c>, see <see cref="AuditActionFilter.RefreshHeader"/>). The action
+	/// filter skips a marked read that it answered, because a page polling itself every few seconds
+	/// would bury the log; this middleware never consults the header. A refused poll is a probe like
+	/// any other refused request, the mark is the client's word and so worth nothing as an excuse,
+	/// and refusals are rare enough that recording every one costs nothing. The header is only ever
+	/// trusted for a read that was allowed; a write is recorded whatever it carries.
 	/// </para>
 	/// </remarks>
 	public sealed class PrivilegedRequestMiddleware
@@ -59,10 +68,13 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>
-		/// Records a privileged write that authorization refused before the action could run.
+		/// Records a privileged request — a read or a write, marked as an automatic refresh or not —
+		/// that authorization refused before the action could run.
 		/// </summary>
 		private static async Task RecordAuthorizationRefusalAsync(HttpContext context, AuditWriter audit)
 		{
+			/* Deliberately no X-Panel-Refresh test anywhere below: a refused automatic refresh is
+			 * recorded like any other refusal. See the remarks. */
 			// The action ran, so the filter already recorded it.
 			if (context.Items.ContainsKey(HandledKey))
 			{
@@ -78,7 +90,7 @@ namespace FishMMO.ControlPanel.Services
 			}
 
 			string method = context.Request.Method;
-			if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method))
+			if (HttpMethods.IsOptions(method))
 			{
 				return;
 			}
@@ -98,7 +110,7 @@ namespace FishMMO.ControlPanel.Services
 			}
 
 			string action = descriptor.MethodInfo.GetCustomAttribute<AuditedAttribute>()?.Action
-				?? $"{descriptor.ControllerName.ToLowerInvariant()}.{descriptor.ActionName.ToLowerInvariant()}";
+				?? AuditActionFilter.DeriveAction(method, descriptor);
 
 			string target = null;
 			foreach (string key in new[] { "id", "username", "name" })

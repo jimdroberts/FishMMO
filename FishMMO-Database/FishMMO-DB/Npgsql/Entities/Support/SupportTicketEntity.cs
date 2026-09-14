@@ -85,6 +85,29 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>The staff account working it, or null if nobody has taken it.</summary>
 		public string AssignedTo { get; set; }
 
+		/// <summary>
+		/// The lowest access level that may see and work this ticket: its support tier.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Tiers are access levels, not a parallel ladder: <c>GameMaster</c> (2) is the first tier
+		/// and <c>Admin</c> (3) the second. A separate tier number would be one more thing for an
+		/// operator to keep in step with the access level that actually decides what they can do,
+		/// and a ticket escalated to "tier 2" that a tier-2 game master can still act on is a
+		/// promotion that promotes nothing.
+		/// </para>
+		/// <para>
+		/// Stored as the byte value of <c>AccessLevel</c>, like <c>accounts.access_level</c>.
+		/// </para>
+		/// </remarks>
+		public byte RequiredAccessLevel { get; set; } = 2;
+
+		/// <summary>The staff account that last moved the ticket to another tier.</summary>
+		public string EscalatedBy { get; set; }
+
+		/// <summary>When the ticket last moved to another tier.</summary>
+		public DateTime? EscalatedUtc { get; set; }
+
 		/// <summary>What staff decided, written when it is resolved or closed.</summary>
 		public string Resolution { get; set; }
 

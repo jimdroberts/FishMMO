@@ -28,9 +28,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// <b>Every read request is re-authorised on arrival</b>, against the character this server
 	/// loaded for the connection. A request from an account below GameMaster is answered with
 	/// nothing and reported through <see cref="ChatHelper.ReportRefused"/>, which logs and audits it
-	/// exactly as a refused command. A request that is allowed is not audited, matching the Control
-	/// Panel's reads; every ACTION the console takes arrives as a chat command and is audited at the
-	/// gate.
+	/// exactly as a refused command. A request that is allowed is audited through
+	/// <see cref="ChatHelper.ReportElevatedRequest"/>, matching the Control Panel's reads, unless it
+	/// is an automatic refresh (<see cref="StaffRosterRequestBroadcast.AutoRefresh"/>): the first
+	/// read and every read somebody asked for are recorded, the console's timer is not. Every ACTION
+	/// the console takes arrives as a chat command and is audited at the gate.
 	/// </para>
 	/// </remarks>
 	public partial class SceneServerSystem
@@ -128,9 +130,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="conn">The connection the request arrived on.</param>
 		/// <param name="request">A stable name for the request, recorded on refusal.</param>
 		/// <param name="kind">Which request, for the rate limit.</param>
+		/// <param name="detail">What was asked for, recorded with an allowed read.</param>
+		/// <param name="autoRefresh">
+		/// True when the client marked the request as a timer-driven refresh. An allowed automatic
+		/// refresh is answered without an audit row; a refusal is recorded whatever this says, and
+		/// the throttle applies either way.
+		/// </param>
 		/// <param name="character">The authorised staff member.</param>
 		/// <returns>True when the request should be answered.</returns>
-		private bool TryAuthorizeStaffRequest(NetworkConnection conn, string request, int kind, out IPlayerCharacter character)
+		private bool TryAuthorizeStaffRequest(NetworkConnection conn, string request, int kind, string detail, bool autoRefresh, out IPlayerCharacter character)
 		{
 			character = null;
 			if (conn == null ||
@@ -160,13 +168,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				staffRequestNextTicks.Clear();
 			}
 			staffRequestNextTicks[key] = now + StaffRequestIntervalTicks;
+
+			/* An allowed read is recorded, like every other staff action. After the throttle, so a
+			 * request that is dropped unanswered is not recorded as having been answered. Not for an
+			 * automatic refresh (the owner's decision, 2026-09-14): the flag is the client's word, and
+			 * it is trusted because this is a read and the refusal above never consults it. */
+			if (!autoRefresh)
+			{
+				ChatHelper.ReportElevatedRequest(character, "staffconsole." + request, detail, AccessLevel.GameMaster);
+			}
 			return true;
 		}
 
 		/// <summary>Answers a roster request with every character in the requester's scene instance.</summary>
 		private void OnStaffRosterRequest(NetworkConnection conn, StaffRosterRequestBroadcast msg, Channel channel)
 		{
-			if (!TryAuthorizeStaffRequest(conn, "roster", 0, out IPlayerCharacter staff) ||
+			if (!TryAuthorizeStaffRequest(conn, "roster", 0, string.Empty, msg.AutoRefresh, out IPlayerCharacter staff) ||
 				!TryGetOnlineCharacters(out var mapping) ||
 				staff.GameObject == null)
 			{
@@ -218,7 +235,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Answers a ticket queue request with one page.</summary>
 		private void OnStaffTicketQueueRequest(NetworkConnection conn, StaffTicketQueueRequestBroadcast msg, Channel channel)
 		{
-			if (!TryAuthorizeStaffRequest(conn, "tickets", 1, out IPlayerCharacter staff))
+			if (!TryAuthorizeStaffRequest(conn, "tickets", 1, $"filter {msg.Filter} page {msg.Page}", autoRefresh: false, out IPlayerCharacter staff))
 			{
 				return;
 			}
@@ -226,6 +243,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			StaffTicketFilter filter = Enum.IsDefined(typeof(StaffTicketFilter), msg.Filter) ? msg.Filter : StaffTicketFilter.Unassigned;
 			int page = Mathf.Clamp(msg.Page, 1, 10_000);
 			string account = staff.Account;
+			byte level = (byte)staff.AccessLevel;
 			long staffID = staff.ID;
 
 			TryEnqueueAsyncWork(async () =>
@@ -247,7 +265,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					else
 					{
 						DatabaseResult<SupportTicketPage> result = await tickets.SearchAsync(
-							BuildStaffTicketQuery(filter, account, page, StaffTicketQueueBroadcast.PageSize));
+							BuildStaffTicketQuery(filter, account, level, page, StaffTicketQueueBroadcast.PageSize));
 						if (!result.IsSuccess || result.Data == null)
 						{
 							failure = "The ticket queue could not be read.";
@@ -275,13 +293,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Answers a ticket detail request, internal notes included.</summary>
 		private void OnStaffTicketDetailRequest(NetworkConnection conn, StaffTicketDetailRequestBroadcast msg, Channel channel)
 		{
-			if (!TryAuthorizeStaffRequest(conn, "ticket", 2, out IPlayerCharacter staff) || msg.TicketID <= 0)
+			if (!TryAuthorizeStaffRequest(conn, "ticket", 2, $"#{msg.TicketID}", autoRefresh: false, out IPlayerCharacter staff) || msg.TicketID <= 0)
 			{
 				return;
 			}
 
 			long ticketID = msg.TicketID;
 			string account = staff.Account;
+			byte level = (byte)staff.AccessLevel;
 			long staffID = staff.ID;
 
 			TryEnqueueAsyncWork(async () =>
@@ -303,7 +322,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					else
 					{
 						DatabaseResult<SupportTicketData> result = await tickets.FetchAsync(ticketID, includeInternal: true);
-						if (result.IsSuccess && result.Data != null)
+						if (result.IsSuccess && result.Data != null && result.Data.RequiredAccessLevel > level)
+						{
+							failure = $"Ticket #{ticketID} has been escalated to a higher tier.";
+						}
+						else if (result.IsSuccess && result.Data != null)
 						{
 							SupportTicketData ticket = result.Data;
 							var messages = (ticket.Messages ?? Array.Empty<SupportTicketMessageData>())

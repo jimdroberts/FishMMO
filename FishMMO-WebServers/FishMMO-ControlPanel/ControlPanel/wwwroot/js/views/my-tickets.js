@@ -194,7 +194,7 @@ async function renderDetail(host, ctx, param) {
 				</div>
 				<h1 style="overflow-wrap:anywhere">${ui.esc(ticket.subject)}</h1>
 				<div class="page-head-sub">
-					Ticket ${ui.num(ticket.id)} · raised ${ui.esc(ui.dateTime(ticket.createdUtc))}
+					Ticket ${ui.esc(ticket.id)} · raised ${ui.esc(ui.dateTime(ticket.createdUtc))}
 				</div>
 			</div>
 			<div class="page-head-actions">
@@ -229,7 +229,7 @@ async function renderDetail(host, ctx, param) {
 						<textarea id="reply" rows="6" placeholder="Anything else the team should know?"></textarea>
 					</div>
 					<div class="row-between">
-						<span class="small muted">The team reads this and answers on this ticket.</span>
+						<span class="small muted row-text">The team reads this and answers on this ticket.</span>
 						<button class="btn btn-primary" type="button" id="send">Send</button>
 					</div>`,
 			})}

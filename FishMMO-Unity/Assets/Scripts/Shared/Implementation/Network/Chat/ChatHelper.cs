@@ -209,6 +209,25 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Reports a privileged request that was allowed, through the same event an allowed elevated command raises.
+		/// </summary>
+		/// <remarks>
+		/// The counterpart of <see cref="ReportRefused"/>, for the staff console's read requests. Every
+		/// Game Master and Admin action is recorded, reads included, and a roster or ticket read that
+		/// arrives as a broadcast rather than as chat must not be the way around that. Routed through
+		/// <see cref="OnElevatedCommand"/> so the subscriber that already audits commands records it,
+		/// with no second copy of that bookkeeping.
+		/// </remarks>
+		/// <param name="sender">The character that made the request.</param>
+		/// <param name="request">A stable name for what was requested.</param>
+		/// <param name="arguments">What was asked for: a filter, a page, a ticket number.</param>
+		/// <param name="required">The access level the request needs.</param>
+		public static void ReportElevatedRequest(IPlayerCharacter sender, string request, string arguments, AccessLevel required)
+		{
+			OnElevatedCommand?.Invoke(sender, request, arguments ?? string.Empty, required);
+		}
+
+		/// <summary>
 		/// Initializes chat channel commands once, mapping each channel to its command function.
 		/// </summary>
 		/// <param name="onGetChannelCommand">Function to get the command delegate for each channel.</param>

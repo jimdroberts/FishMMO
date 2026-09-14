@@ -20,8 +20,11 @@ namespace FishMMO.Shared
 	 * exists to show. The empty shell keeps the command surface out of the build; the gate is what
 	 * keeps it closed.
 	 *
-	 * Reads are not audited when they succeed, matching the Control Panel: a roster that refreshes
-	 * every few seconds would otherwise bury every row that matters.
+	 * Allowed reads are audited too, matching the Control Panel, except an automatic refresh: the
+	 * roster the console re-reads on a timer sets StaffRosterRequestBroadcast.AutoRefresh, and that
+	 * request is answered without a row, since a roster refreshed every few seconds would otherwise
+	 * bury every row that matters. The first read and every read somebody asked for are recorded,
+	 * and a refused request is recorded whatever the flag says.
 	 */
 
 	/// <summary>
@@ -132,6 +135,15 @@ namespace FishMMO.Shared
 	/// <summary>Staff client to server: send the roster of the scene I am standing in.</summary>
 	public struct StaffRosterRequestBroadcast : IBroadcast
 	{
+		/// <summary>
+		/// True when the console sent this on its refresh timer rather than because somebody opened
+		/// the view or asked. An allowed automatic refresh is not audited; a refusal always is.
+		/// </summary>
+		/// <remarks>
+		/// The client's word, trusted only because this is a read: it can hide no more than a client
+		/// that simply stopped polling, and nothing a staff member DOES arrives through this request.
+		/// </remarks>
+		public bool AutoRefresh;
 	}
 
 	/// <summary>One character on a staff roster.</summary>

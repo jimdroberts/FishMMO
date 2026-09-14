@@ -79,6 +79,18 @@ namespace FishMMO.Client
 		private bool pendingMasked;
 
 		/// <summary>
+		/// When positive, the request submits itself the moment the field holds exactly this many digits.
+		/// </summary>
+		/// <remarks>
+		/// For codes a player reads off another device. A six-digit authenticator code is complete the
+		/// instant the sixth digit lands, and making them find Enter afterwards is a step that exists
+		/// only to be forgotten. Digits only, and exactly the length: a recovery code
+		/// (<c>XXXX-XXXX-XXXX-XXXX</c>) carries letters and hyphens, so typing one never trips it
+		/// halfway. Request state like the mask, and cleared with it.
+		/// </remarks>
+		private int pendingAutoSubmitLength;
+
+		/// <summary>
 		/// Resolves cached elements and wires button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -97,6 +109,7 @@ namespace FishMMO.Client
 			{
 				acceptButton.clicked += OnClick_Accept;
 			}
+			inputField?.RegisterValueChangedCallback(OnInputChanged);
 			if (cancelButton != null)
 			{
 				cancelButton.clicked += OnClick_Cancel;
@@ -141,6 +154,26 @@ namespace FishMMO.Client
 		/// </remarks>
 		public bool Open(string text, bool masked, Action<string> onAccept = null, Action onCancel = null)
 		{
+			return OpenRequest(text, masked, 0, onAccept, onCancel);
+		}
+
+		/// <summary>
+		/// Opens the prompt for a numeric code that submits itself once <paramref name="autoSubmitLength"/>
+		/// digits are typed. Anything else — a recovery code — is submitted with Enter as usual.
+		/// </summary>
+		/// <param name="text">The message shown above the field.</param>
+		/// <param name="autoSubmitLength">How many digits make a complete code.</param>
+		/// <param name="onAccept">Optional callback invoked with the entered text when accepted.</param>
+		/// <param name="onCancel">Optional callback invoked when cancelled.</param>
+		/// <returns>False when a prompt was already on screen and this one was refused.</returns>
+		public bool OpenCode(string text, int autoSubmitLength, Action<string> onAccept = null, Action onCancel = null)
+		{
+			return OpenRequest(text, false, autoSubmitLength, onAccept, onCancel);
+		}
+
+		/// <summary>The one place a request is claimed and its state recorded.</summary>
+		private bool OpenRequest(string text, bool masked, int autoSubmitLength, Action<string> onAccept, Action onCancel)
+		{
 			if (!TryClaim())
 			{
 				onCancel?.Invoke();
@@ -149,6 +182,7 @@ namespace FishMMO.Client
 
 			pendingText = text ?? string.Empty;
 			pendingMasked = masked;
+			pendingAutoSubmitLength = autoSubmitLength > 0 ? autoSubmitLength : 0;
 			onAcceptCallback = onAccept;
 			onCancelCallback = onCancel;
 
@@ -200,6 +234,31 @@ namespace FishMMO.Client
 				inputField.isPasswordField = false;
 			}
 			pendingMasked = false;
+			pendingAutoSubmitLength = 0;
+		}
+
+		/// <summary>Submits a numeric code the moment it is complete. See <see cref="pendingAutoSubmitLength"/>.</summary>
+		private void OnInputChanged(ChangeEvent<string> evt)
+		{
+			if (pendingAutoSubmitLength <= 0 || onAcceptCallback == null)
+			{
+				return;
+			}
+
+			string value = evt.newValue?.Trim() ?? string.Empty;
+			if (value.Length != pendingAutoSubmitLength)
+			{
+				return;
+			}
+			for (int i = 0; i < value.Length; ++i)
+			{
+				if (value[i] < '0' || value[i] > '9')
+				{
+					return;
+				}
+			}
+
+			OnClick_Accept();
 		}
 
 		/// <summary>

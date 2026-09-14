@@ -145,6 +145,22 @@ namespace FishMMO.ControlPanel.Services
 		/// <summary>An account's access level was changed.</summary>
 		public const string AccountAccessLevel = "account.access-level";
 
+		/// <summary>An account's sign-in lockouts (password and two-factor) were lifted by staff.</summary>
+		public const string AccountClearLockout = "account.clear-lockout";
+
+		/// <summary>A pending self-service two-factor reset was brought forward by staff.</summary>
+		/// <remarks>Its own action because it removes the protection the waiting period gives.</remarks>
+		public const string AccountTwoFactorResetShorten = "account.2fa-reset-shorten";
+
+		/// <summary>A pending self-service two-factor reset was cancelled by staff.</summary>
+		public const string AccountTwoFactorResetCancel = "account.2fa-reset-cancel";
+
+		/// <summary>A batch of beta codes was minted. The row carries the program, count, uses and expiry — never the codes.</summary>
+		public const string BetaMint = "beta.mint";
+
+		/// <summary>A beta code was revoked, ending the access of every account that redeemed it.</summary>
+		public const string BetaRevoke = "beta.revoke";
+
 		/// <summary>A support ticket was taken or handed back.</summary>
 		public const string TicketAssign = "ticket.assign";
 
@@ -156,6 +172,15 @@ namespace FishMMO.ControlPanel.Services
 
 		/// <summary>A ticket's priority changed.</summary>
 		public const string TicketPriority = "ticket.priority";
+
+		/// <summary>A ticket was promoted to another support tier, or handed back down.</summary>
+		public const string TicketTier = "ticket.tier";
+
+		/// <summary>A character was locked out of the world while staff work on it.</summary>
+		public const string CharacterLock = "character.lock";
+
+		/// <summary>A character lock was released before it lapsed.</summary>
+		public const string CharacterUnlock = "character.unlock";
 
 		/// <summary>A server was locked against new logins.</summary>
 		public const string ServerLock = "server.lock";
@@ -180,6 +205,10 @@ namespace FishMMO.ControlPanel.Services
 
 		/// <summary>A failed verification email was queued for another attempt.</summary>
 		public const string EmailRetry = "platform.email-retry";
+
+		/// <summary>A stuck or failed text message was queued for another attempt.</summary>
+		/// <remarks>The row names the account, never the phone number or the message.</remarks>
+		public const string SmsRetry = "platform.sms-retry";
 
 		/// <summary>A sequenced maintenance was started across a set of servers.</summary>
 		public const string MaintenanceStart = "maintenance.start";

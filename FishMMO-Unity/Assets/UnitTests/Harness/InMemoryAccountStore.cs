@@ -38,7 +38,26 @@ namespace FishMMO.UnitTests.Harness
 			public bool HasPendingKick;
 			public string? LastTokenHash;
 			public int LastTokenExpirationMinutes;
+			public bool LoginLocked;
+			public DateTime? TwoFactorLockedUntil;
+			public bool HasBetaAccess;
+			public bool EmailVerificationPending;
+			public bool PhoneVerificationPending;
+			public DateTime? PhoneVerifyCodeExpiresUtc;
 		}
+
+		/// <summary>Every SMS resend the core asked for, in order: the account and the expiry it passed.</summary>
+		public readonly ConcurrentQueue<(string Username, DateTime? PhoneVerifyCodeExpiresUtc)> SmsResendRequests =
+			new ConcurrentQueue<(string Username, DateTime? PhoneVerifyCodeExpiresUtc)>();
+
+		/// <summary>Per-key hook counters, keyed exactly as the core passed the key (existing account or not).</summary>
+		private readonly ConcurrentDictionary<string, int> loginLockChecks = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		private readonly ConcurrentDictionary<string, int> loginFailuresRecorded = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		private readonly ConcurrentDictionary<string, int> loginFailuresCleared = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		private readonly ConcurrentDictionary<string, int> accessChecks = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>Stands in for <c>BetaMode=true</c>: accounts below GameMaster need <see cref="SetBetaAccess"/>.</summary>
+		public bool BetaMode { get; set; }
 
 		private readonly ConcurrentDictionary<string, Record> byUsername =
 			new ConcurrentDictionary<string, Record>(System.StringComparer.OrdinalIgnoreCase);
@@ -82,9 +101,17 @@ namespace FishMMO.UnitTests.Harness
 			public readonly string Verifier;
 			public readonly AccessLevel AccessLevel;
 			public readonly bool TotpEnabled;
-			public Lookup(bool isVerified, string salt, string verifier, AccessLevel accessLevel, bool totpEnabled)
+			public readonly string Username;
+			public readonly bool EmailVerificationPending;
+			public readonly bool PhoneVerificationPending;
+			public readonly DateTime? PhoneVerifyCodeExpiresUtc;
+			public Lookup(bool isVerified, string salt, string verifier, AccessLevel accessLevel, bool totpEnabled,
+				string username = "", bool emailVerificationPending = false, bool phoneVerificationPending = false,
+				DateTime? phoneVerifyCodeExpiresUtc = null)
 			{
 				IsVerified = isVerified; Salt = salt; Verifier = verifier; AccessLevel = accessLevel; TotpEnabled = totpEnabled;
+				Username = username; EmailVerificationPending = emailVerificationPending; PhoneVerificationPending = phoneVerificationPending;
+				PhoneVerifyCodeExpiresUtc = phoneVerifyCodeExpiresUtc;
 			}
 		}
 
@@ -92,7 +119,8 @@ namespace FishMMO.UnitTests.Harness
 		{
 			if (byUsername.TryGetValue(username, out Record? rec))
 			{
-				result = new Lookup(rec.IsVerified, rec.Salt, rec.Verifier, rec.AccessLevel, rec.TotpEnabled);
+				result = new Lookup(rec.IsVerified, rec.Salt, rec.Verifier, rec.AccessLevel, rec.TotpEnabled,
+					rec.Username, rec.EmailVerificationPending, rec.PhoneVerificationPending, rec.PhoneVerifyCodeExpiresUtc);
 				return true;
 			}
 			result = default;
@@ -118,6 +146,79 @@ namespace FishMMO.UnitTests.Harness
 		{
 			if (byUsername.TryGetValue(username, out Record? r)) r.IsVerified = value;
 		}
+
+		#region Database-backed lockout and beta gate stand-ins
+
+		/// <summary>Locks or unlocks password sign-in, as the shared lockout would.</summary>
+		public void SetLoginLocked(string username, bool locked)
+		{
+			if (byUsername.TryGetValue(username, out Record? r)) r.LoginLocked = locked;
+		}
+
+		/// <summary>Locks the two-factor step until the given instant, or unlocks it with null.</summary>
+		public void SetTwoFactorLockedUntil(string username, DateTime? until)
+		{
+			if (byUsername.TryGetValue(username, out Record? r)) r.TwoFactorLockedUntil = until;
+		}
+
+		/// <summary>Grants or revokes beta access.</summary>
+		public void SetBetaAccess(string username, bool hasAccess)
+		{
+			if (byUsername.TryGetValue(username, out Record? r)) r.HasBetaAccess = hasAccess;
+		}
+
+		/// <summary>Sets the account's access level.</summary>
+		public void SetAccessLevel(string username, AccessLevel level)
+		{
+			if (byUsername.TryGetValue(username, out Record? r)) r.AccessLevel = level;
+		}
+
+		/// <summary>Which verification codes an unverified account still owes.</summary>
+		public void SetPendingVerification(string username, bool email, bool phone)
+		{
+			if (byUsername.TryGetValue(username, out Record? r))
+			{
+				r.EmailVerificationPending = email;
+				r.PhoneVerificationPending = phone;
+			}
+		}
+
+		/// <summary>Sets the stored SMS verification code expiry; null means no SMS code was issued.</summary>
+		public void SetPhoneVerifyCodeExpiry(string username, DateTime? expiresUtc)
+		{
+			if (byUsername.TryGetValue(username, out Record? r)) r.PhoneVerifyCodeExpiresUtc = expiresUtc;
+		}
+
+		/// <summary>The core's lock check. Counted, then answered.</summary>
+		public bool IsLoginLocked(string key)
+		{
+			loginLockChecks.AddOrUpdate(key, 1, (_, n) => n + 1);
+			return byUsername.TryGetValue(key, out Record? r) && r.LoginLocked;
+		}
+
+		/// <summary>The core's failure record. Counted only.</summary>
+		public void RecordLoginFailure(string key) => loginFailuresRecorded.AddOrUpdate(key, 1, (_, n) => n + 1);
+
+		/// <summary>The core's failure clear. Counted only.</summary>
+		public void ClearLoginFailures(string key) => loginFailuresCleared.AddOrUpdate(key, 1, (_, n) => n + 1);
+
+		/// <summary>The two-factor lock instant, or null.</summary>
+		public DateTime? GetTwoFactorLockedUntil(string key) =>
+			byUsername.TryGetValue(key, out Record? r) ? r.TwoFactorLockedUntil : null;
+
+		/// <summary>The core's beta access check. Counted, then answered.</summary>
+		public bool HasBetaAccess(string key)
+		{
+			accessChecks.AddOrUpdate(key, 1, (_, n) => n + 1);
+			return byUsername.TryGetValue(key, out Record? r) && r.HasBetaAccess;
+		}
+
+		public int LoginLockCheckCount(string key) => loginLockChecks.TryGetValue(key, out int n) ? n : 0;
+		public int LoginFailureRecordCount(string key) => loginFailuresRecorded.TryGetValue(key, out int n) ? n : 0;
+		public int LoginFailureClearCount(string key) => loginFailuresCleared.TryGetValue(key, out int n) ? n : 0;
+		public int AccessCheckCount(string key) => accessChecks.TryGetValue(key, out int n) ? n : 0;
+
+		#endregion
 
 		public string? GetTotpSecret(string username) =>
 			byUsername.TryGetValue(username, out Record? r) ? r.TotpSecret : null;

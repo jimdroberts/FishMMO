@@ -173,7 +173,7 @@
 	padding: 1px 6px;
 	border-radius: var(--radius-pill);
 	background: var(--danger);
-	color: #fff;
+	color: var(--text-on-danger);
 	font-size: var(--fs-xs);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;

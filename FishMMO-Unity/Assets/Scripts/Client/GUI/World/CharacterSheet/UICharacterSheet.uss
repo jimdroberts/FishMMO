@@ -231,12 +231,28 @@
     bottom: 14px;
 }
 
-/* Slot name label pinned to bottom */
+/* Slot name label pinned to bottom.
+   The names are written out in full (issue #257). Unity's default theme puts a box on every
+   Label that nothing here contradicted: measured on these sockets it made the label 18px tall
+   for a 10px line, which lifted the text to y 37..47 across an icon that ends at y 41, and its
+   uneven side margins (2px / 4px) pulled the text 1.5px left of centre. Zeroing the box puts
+   the line at y 43..53, below the icon, centred on the socket. Width was never the constraint:
+   the longest name, "Main Hand", measures 41px against 54px. */
 .eq-slot__label {
     position: absolute;
     bottom: 2px;
     left: 0;
     right: 0;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    letter-spacing: 0;
+    white-space: nowrap;
 }
 
 /* Stack count badge — bottom-right corner */

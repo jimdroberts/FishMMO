@@ -108,8 +108,33 @@ namespace FishMMO.Database.Npgsql
 		/// </summary>
 		public DbSet<PasswordResetTokenEntity> PasswordResetTokens { get; set; }
 
+		/// <summary>
+		/// Delayed two-factor reset requests, for accounts that lost both their authenticator and
+		/// their recovery codes. Completing one never satisfies two-factor by itself — see
+		/// <see cref="TwoFactorResetRequestEntity"/>.
+		/// </summary>
+		public DbSet<TwoFactorResetRequestEntity> TwoFactorResetRequests { get; set; }
+
+		/// <summary>
+		/// Beta codes, minted in batches per test program. Revoked, never deleted — see
+		/// <see cref="BetaCodeEntity"/>.
+		/// </summary>
+		public DbSet<BetaCodeEntity> BetaCodes { get; set; }
+
+		/// <summary>
+		/// Which account redeemed which beta code. Permanent, and deliberately without foreign
+		/// keys — see <see cref="AccountBetaCodeEntity"/>.
+		/// </summary>
+		public DbSet<AccountBetaCodeEntity> AccountBetaCodes { get; set; }
+
 		/// <summary>Email queue.</summary>
 		public DbSet<EmailQueueEntity> EmailQueue { get; set; }
+
+		/// <summary>
+		/// Outbound SMS queue, shaped like <see cref="EmailQueue"/>. No provider is wired yet; the
+		/// drain only logs.
+		/// </summary>
+		public DbSet<SmsQueueEntity> SmsQueue { get; set; }
 		/// <summary>Connection token verification keys (per-region HMAC keys).</summary>
 		public DbSet<ConnectionTokenKeyEntity> ConnectionTokenKeys { get; set; }
 		/// <summary>Deployment-global secrets (loaded at startup instead of env files).</summary>

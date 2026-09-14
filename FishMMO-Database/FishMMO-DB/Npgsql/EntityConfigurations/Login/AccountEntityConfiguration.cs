@@ -102,6 +102,60 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.BanReason)
 				.HasMaxLength(256);
 
+			/* Contact and identity. All optional; lengths generous enough for real addresses and names
+			 * in any script, and bounded so a registration form cannot store a novel. */
+			builder.Property(e => e.Phone)
+				.HasMaxLength(16);
+
+			builder.Property(e => e.PhoneVerified)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			builder.Property(e => e.PhoneVerifyCode)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			builder.Property(e => e.PhoneVerifyCodeExpiresUtc);
+
+			// Existing rows are backfilled from `verified` by the migration, not by this default.
+			builder.Property(e => e.EmailVerified)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			// Email only: what every account meant before there was a choice.
+			builder.Property(e => e.VerificationChannels)
+				.IsRequired()
+				.HasDefaultValue((byte)1);
+
+			builder.Property(e => e.RealName)
+				.HasMaxLength(128);
+
+			builder.Property(e => e.Country)
+				.HasMaxLength(64);
+
+			builder.Property(e => e.Address)
+				.HasMaxLength(512);
+
+			builder.Property(e => e.ReferralAccount)
+				.HasMaxLength(50);
+
+			// Sign-in lockout counters. See the entity.
+			builder.Property(e => e.FailedLoginCount)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			builder.Property(e => e.FailedLoginSinceUtc);
+
+			builder.Property(e => e.LoginLockedUntilUtc);
+
+			builder.Property(e => e.FailedTwoFactorCount)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			builder.Property(e => e.FailedTwoFactorSinceUtc);
+
+			builder.Property(e => e.TwoFactorLockedUntilUtc);
+
 			builder.Property(e => e.LastLogin)
 				.IsRequired()
 				.HasDefaultValueSql("timezone('UTC', CURRENT_TIMESTAMP)");

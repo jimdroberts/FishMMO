@@ -15,6 +15,8 @@
  * into a URL.
  */
 
+import { historyBody } from './account-history.js';
+
 export async function render(host, ctx) {
 	if (ctx.param) return renderDetail(host, ctx, ctx.param);
 	return renderList(host, ctx);
@@ -36,6 +38,8 @@ async function renderList(host, ctx) {
 				</p>
 			</div>
 		</div>
+
+		<div id="pending-resets"></div>
 
 		<section class="card">
 			<div class="toolbar">
@@ -129,6 +133,34 @@ async function renderList(host, ctx) {
 	});
 
 	await load();
+
+	/* Players' own two-factor resets that are waiting to take effect, soonest first. Shown only when
+	 * there are some. A reset about to take effect on an account whose holder did not ask for it is
+	 * the case staff cancelling it is the last defence against; it does not belong behind a search. */
+	const pendingHost = host.querySelector('#pending-resets');
+	api.getPendingTwoFactorResets({ page: 1, pageSize: 10 })
+		.then((pending) => {
+			if (!pendingHost?.isConnected || !pending?.totalCount) return;
+			pendingHost.innerHTML = ui.card({
+				title: `Pending two-factor resets (${ui.num(pending.totalCount)})`,
+				sub: 'Requested by the account holder after losing their authenticator and recovery codes. Soonest to take effect first.',
+				flush: true,
+				body: ui.table({
+					columns: [
+						{ label: 'Account', cell: (r) => `<a href="#/support/accounts/${encodeURIComponent(r.accountName)}">${ui.esc(r.accountName)}</a>` },
+						{ label: 'Requested', cell: (r) => `<span class="nowrap" title="${ui.esc(ui.dateTime(r.requestedUtc))}">${ui.esc(ui.ago(r.requestedUtc))}</span>` },
+						{
+							label: 'Takes effect',
+							cell: (r) => r.isEffective
+								? ui.badge('in effect now', 'danger')
+								: `<span class="nowrap" title="${ui.esc(ui.dateTime(r.effectiveUtc))}">${ui.esc(ui.ago(r.effectiveUtc))}</span>`,
+						},
+					],
+					rows: pending.items ?? [],
+				}),
+			});
+		})
+		.catch(() => { /* a side panel; the search above is the page */ });
 }
 
 /* ── Detail ──────────────────────────────────────────────────── */
@@ -189,7 +221,7 @@ async function renderDetail(host, ctx, name) {
 												<span class="avatar avatar-sm ${ui.avatarClass(c.name)}">${ui.esc(ui.initials(c.name))}</span>
 												<span>
 													<span class="cell-primary">${ui.esc(c.name)}</span>
-													<span class="cell-sub" style="display:block">race ${ui.num(c.raceId)}</span>
+													<span class="cell-sub" style="display:block">race ${ui.esc(c.raceId)}</span>
 												</span>
 											</div>`,
 									},
@@ -224,8 +256,18 @@ async function renderDetail(host, ctx, name) {
 						body: `
 							<dl class="dl">
 								<dt>Account</dt><dd>${ui.esc(account.name)}</dd>
-								<dt>Email</dt><dd>${ui.esc(account.email)}</dd>
-								<dt>Verified</dt><dd>${account.verified ? ui.badge('yes', 'ok') : ui.badge('no', 'warn')}</dd>
+								<dt>Email</dt><dd>${ui.esc(account.email)} ${account.emailVerified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}</dd>
+								<dt>Phone</dt><dd>${account.phone
+									? `${ui.esc(account.phone)} ${account.phoneVerified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}`
+									: '<span class="faint">—</span>'}</dd>
+								<dt>Verified</dt><dd>${account.verified ? ui.badge('yes', 'ok') : ui.badge('no', 'warn')}
+									${(account.verificationChannels ?? []).length ? `<div class="cell-sub">by ${ui.esc(account.verificationChannels.join(' and '))}</div>` : ''}</dd>
+								<dt>Real name</dt><dd>${optional(ui, account.realName)}</dd>
+								<dt>Country</dt><dd>${optional(ui, account.country)}</dd>
+								<dt>Address</dt><dd style="white-space:pre-line;overflow-wrap:anywhere">${optional(ui, account.address)}</dd>
+								<dt>Referred by</dt><dd>${account.referralAccount
+									? `<a href="#/support/accounts/${encodeURIComponent(account.referralAccount)}">${ui.esc(account.referralAccount)}</a>`
+									: '<span class="faint">—</span>'}</dd>
 								<dt>Age</dt><dd class="tnum">${account.age === null || account.age === undefined ? '<span class="faint">—</span>' : ui.num(account.age)}</dd>
 								<dt>Access level</dt><dd>${ui.levelBadge(account.accessLevel)}</dd>
 								<dt>Two-factor</dt><dd>${account.totpEnabled ? ui.badge('enrolled', 'ok') : ui.badge('not enrolled', 'warn')}</dd>
@@ -234,13 +276,44 @@ async function renderDetail(host, ctx, name) {
 								<dt>Last sign-in</dt><dd>${ui.dateTime(account.lastLogin)}</dd>
 								<dt>Characters</dt><dd class="tnum">${ui.num(account.characterCount ?? characters.length)}</dd>
 							</dl>`,
-						foot: 'The SRP salt and verifier are never returned to this page, and neither is the authenticator secret.',
+						foot: 'Real name, address and phone are personal data the player chose to give; opening this page is recorded in the audit log. The SRP salt and verifier are never returned to this page, and neither is the authenticator secret.',
+					})}
+
+					${securityCard(ui, { account, isSelf, selfHint })}
+
+					${ui.card({
+						title: `Beta codes (${ui.num((account.betaCodes ?? []).length)})`,
+						sub: 'Codes this account has redeemed. A revoked code no longer admits it.',
+						body: (account.betaCodes ?? []).length
+							? `<ul class="stack" style="list-style:none;padding:0;margin:0">${account.betaCodes.map((c) => `
+								<li>
+									<code>${ui.esc(c.code)}</code> ${ui.esc(c.program)}
+									${c.revoked ? ui.badge('revoked', 'danger') : ui.badge('active', 'ok')}
+									<div class="cell-sub">redeemed ${ui.esc(ui.dateTime(c.redeemedUtc))}</div>
+								</li>`).join('')}</ul>`
+							: '<p class="small muted">No beta code redeemed.</p>',
+					})}
+
+					${ui.card({
+						title: 'History',
+						sub: 'Reports about this account, tickets it filed, and every recorded staff action on it and its characters.',
+						body: `<div id="account-history">${ui.loading()}</div>`,
 					})}
 				</div>
 			</div>
 		</div>`;
 
 	wireActions(host, ctx, account);
+
+	// After the page: several reads, and a failure here must not take the account view with it.
+	const historyBox = host.querySelector('#account-history');
+	api.getAccountHistory(account.name)
+		.then((history) => {
+			if (historyBox?.isConnected) historyBox.innerHTML = historyBody(ui, history);
+		})
+		.catch((err) => {
+			if (historyBox?.isConnected) historyBox.innerHTML = `<p class="small muted">The history could not be loaded: ${ui.esc(err?.message ?? 'unknown error')}</p>`;
+		});
 }
 
 /**
@@ -253,7 +326,7 @@ async function renderDetail(host, ctx, name) {
 function actionRow(ui, { act, label, tone = '', title, text, disabled = false, hint = '' }) {
 	return `
 		<div class="row-between">
-			<div>
+			<div class="row-text">
 				<strong>${ui.esc(title)}</strong>
 				<div class="small muted">${ui.esc(text)}</div>
 				${hint ? `<div class="field-hint">${ui.esc(hint)}</div>` : ''}
@@ -322,6 +395,79 @@ function actionsCard(ui, { account, banned, isSelf, online, selfHint }) {
 				})}
 			</div>`,
 		foot: 'Everything except Kick needs a fresh code from your authenticator before it is applied.',
+	});
+}
+
+/** An optional personal detail, or a faint dash. */
+function optional(ui, value) {
+	return value ? ui.esc(value) : '<span class="faint">—</span>';
+}
+
+/**
+ * Sign-in lockouts and the player's own pending two-factor reset.
+ *
+ * Both are the account holder's security rather than moderation, which is why they sit apart from
+ * the Actions card: clearing a lock lets whoever was guessing resume, and bringing a reset forward
+ * removes the week the real owner has to notice somebody else asked for it. Each says so beside
+ * its button, and each asks for a reason and a fresh code.
+ */
+function securityCard(ui, { account, isSelf, selfHint }) {
+	const lock = (locked, until) => locked
+		? ui.badge(`locked until ${ui.dateTime(until)}`, 'danger')
+		: ui.badge('not locked', 'ok');
+	const reset = account.pendingTwoFactorReset;
+
+	return ui.card({
+		title: 'Sign-in security',
+		sub: 'Lockouts after repeated failures, and any two-factor reset the player has asked for.',
+		body: `
+			<div class="stack">
+				<dl class="dl">
+					<dt>Password step</dt><dd>${lock(account.loginLocked, account.loginLockedUntilUtc)}</dd>
+					<dt>Two-factor step</dt><dd>${lock(account.twoFactorLocked, account.twoFactorLockedUntilUtc)}</dd>
+				</dl>
+				${actionRow(ui, {
+					act: 'clear-lockout',
+					label: 'Clear lockout',
+					title: 'Clear sign-in lockout',
+					text: 'Lifts both locks now. If the failures were somebody else guessing at this account, they can resume too.',
+					disabled: isSelf || !(account.loginLocked || account.twoFactorLocked),
+					hint: isSelf ? selfHint : !(account.loginLocked || account.twoFactorLocked) ? 'Nothing is locked right now.' : '',
+				})}
+
+				<div class="stack">
+					<strong>Two-factor reset</strong>
+					${reset
+						? `
+							<dl class="dl" style="margin-top:var(--sp-2)">
+								<dt>Requested</dt><dd>${ui.esc(ui.dateTime(reset.requestedUtc))}${reset.requestedIp ? `<div class="cell-sub">from ${ui.esc(reset.requestedIp)}</div>` : ''}</dd>
+								<dt>Takes effect</dt><dd>${reset.isEffective
+									? ui.badge('in effect now', 'danger')
+									: `${ui.esc(ui.dateTime(reset.effectiveUtc))} <span class="cell-sub">(${ui.esc(ui.ago(reset.effectiveUtc))})</span>`}</dd>
+								${reset.shortenedBy ? `<dt>Brought forward</dt><dd>by ${ui.esc(reset.shortenedBy)} ${ui.esc(ui.ago(reset.shortenedUtc))}
+									${reset.staffReason ? `<div class="cell-sub" style="overflow-wrap:anywhere">${ui.esc(reset.staffReason)}</div>` : ''}</dd>` : ''}
+							</dl>
+							${actionRow(ui, {
+								act: 'reset-shorten',
+								label: 'Shorten',
+								tone: 'danger',
+								title: 'Bring the reset forward',
+								text: 'Removes waiting time the real owner has to notice and cancel. Only when you have confirmed out of band that the request is theirs.',
+								disabled: isSelf || reset.isEffective,
+								hint: isSelf ? selfHint : reset.isEffective ? 'It is already in effect.' : '',
+							})}
+							${actionRow(ui, {
+								act: 'reset-cancel',
+								label: 'Cancel',
+								title: 'Cancel the reset',
+								text: 'The account keeps its current authenticator. The holder is emailed; they can ask again.',
+								disabled: isSelf,
+								hint: isSelf ? selfHint : '',
+							})}`
+						: '<p class="small muted">No two-factor reset is pending.</p>'}
+				</div>
+			</div>`,
+		foot: 'Every action here needs a fresh code from your authenticator and a reason.',
 	});
 }
 
@@ -436,6 +582,49 @@ function wireActions(host, ctx, account) {
 			ui.toast('Two-factor reset', done.message ?? 'The player must enrol again on their next sign-in.', 'ok');
 			ctx.refresh();
 		}
+	});
+
+	on('clear-lockout', async () => {
+		const v = await askReason(
+			'Clear sign-in lockout',
+			`Lifts the password and two-factor locks on "${account.name}" now. If the failures were somebody else guessing, they can resume as well.`,
+			'Clear lockout',
+		);
+		if (!v) return;
+		if (await ctx.attempt(() => api.clearLockout(account.name, v.reason), 'Lockout cleared')) ctx.refresh();
+	});
+
+	on('reset-shorten', async () => {
+		const v = await ui.modal({
+			title: 'Bring the two-factor reset forward',
+			sub: `"${account.name}" asked to reset two-factor. Bringing it forward removes waiting time the real owner has to notice and cancel it. The holder is emailed.`,
+			confirmLabel: 'Bring forward',
+			confirmTone: 'danger',
+			body: `
+				<div class="field">
+					<label for="shorten-at">New effective time (your local time)</label>
+					<input id="shorten-at" name="at" type="datetime-local" />
+					<div class="field-hint">Leave it empty to make the reset take effect now. It can only ever move earlier.</div>
+				</div>
+				<div class="field">
+					<label for="reason">Reason (recorded in the audit log and on the request)</label>
+					<textarea id="reason" name="reason" required maxlength="256" placeholder="How was the request confirmed as the owner's?"></textarea>
+				</div>`,
+			onSubmit: (values) => (String(values.reason ?? '').trim() ? values : false),
+		});
+		if (!v) return;
+		const at = v.at ? new Date(v.at).toISOString() : null;
+		if (await ctx.attempt(() => api.shortenTwoFactorReset(account.name, at, v.reason), 'Reset brought forward')) ctx.refresh();
+	});
+
+	on('reset-cancel', async () => {
+		const v = await askReason(
+			'Cancel the two-factor reset',
+			`"${account.name}" keeps its current authenticator and recovery codes. The holder is emailed and can ask again.`,
+			'Cancel reset',
+		);
+		if (!v) return;
+		if (await ctx.attempt(() => api.cancelTwoFactorReset(account.name, v.reason), 'Reset cancelled')) ctx.refresh();
 	});
 
 	on('level', async () => {

@@ -180,8 +180,10 @@ async function renderEditor(host, ctx, id) {
 			if (!v) return;
 			if (await ctx.attempt(() => api.kickAccount(c.account, v.reason), 'Kick request written', 'Waiting for the lease to lapse.')) {
 				clearInterval(waiting);
+				/* A timer waiting on the lease, so its reads are marked automatic and not audited; the
+				 * kick that started it is recorded, and so is the character read that follows. */
 				waiting = setInterval(async () => {
-					const state = await api.getCharacterEditLock(id);
+					const state = await api.auto.getCharacterEditLock(id);
 					if (state.editable) {
 						clearInterval(waiting);
 						ui.toast('The character is free', 'Its lease has lapsed and it can be edited.', 'ok');
@@ -283,7 +285,7 @@ function identityTab(ui, c, lock) {
 			`),
 		foot: `
 			<div class="row-between">
-				<div>
+				<div class="row-text">
 					<strong>${ui.esc(c.name)}</strong>
 					<div class="small muted">
 						The name carries a unique index, so renaming is its own action: a collision

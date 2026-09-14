@@ -109,7 +109,7 @@ namespace FishMMO.Client
 			/// </summary>
 			protected override void SendCreateAccount(
 				byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
-				byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
+				byte[] encryptedSalt, byte[] encryptedVerifier, byte[] encryptedProfile, uint seq)
 			{
 				Client.Broadcast(new CreateAccountBroadcast()
 				{
@@ -118,6 +118,7 @@ namespace FishMMO.Client
 					Age = encryptedAge,
 					Salt = encryptedSalt,
 					Verifier = encryptedVerifier,
+					Profile = encryptedProfile,
 					Seq = seq,
 				}, Channel.Reliable);
 			}
@@ -125,13 +126,14 @@ namespace FishMMO.Client
 			/// <summary>
 			/// Sends an account email-verification code (encrypted) as an <see cref="AccountVerifyBroadcast"/>.
 			/// </summary>
-			protected override void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq)
+			protected override void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq, VerificationCodeChannel channel)
 			{
 				Client.Broadcast(new AccountVerifyBroadcast()
 				{
 					Username = encryptedUsername,
 					VerifyCode = encryptedCode,
 					Seq = seq,
+					Channel = channel,
 				}, Channel.Reliable);
 			}
 
@@ -247,6 +249,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public bool HasAuthToken => core?.HasAuthToken ?? false;
 
+		/// <summary>
+		/// Seconds the server said to wait before retrying, from the most recent auth result, or 0.
+		/// Read it inside an <see cref="OnClientAuthenticationResult"/> handler, e.g. for
+		/// <see cref="ClientAuthenticationResult.TwoFactorLocked"/>.
+		/// </summary>
+		public int LastRetryAfterSeconds => core?.LastRetryAfterSeconds ?? 0;
+
 	/// <summary>
 	/// Resets the authentication state and re-initiates the handshake on the
 	/// current connection after a randomized jitter delay (0-1s). The jitter
@@ -346,11 +355,12 @@ namespace FishMMO.Client
 		/// <param name="register">True to register a new account; false to login.</param>
 		/// <param name="email">The email address for multi-factor identification.</param>
 		/// <param name="age">The age for multi-factor identification.</param>
+		/// <param name="profile">Optional registration details; registration only.</param>
 		/// <returns><c>true</c> if credentials were accepted; <c>false</c> if rejected.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0)
+		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0, RegistrationProfile profile = null)
 		{
-			return core.SetLoginCredentials(username, password, register, email, age);
+			return core.SetLoginCredentials(username, password, register, email, age, profile);
 		}
 
 		/// <summary>
@@ -362,6 +372,29 @@ namespace FishMMO.Client
 		public void SendVerifyCode(string username, string verifyCode)
 		{
 			core.SendVerifyCode(username, verifyCode);
+		}
+
+		/// <summary>
+		/// Makes the next connection a verification-only one, which sends this code once the handshake
+		/// completes instead of signing in. See <see cref="ClientAuthenticatorCore.SetVerificationRequest"/>.
+		/// </summary>
+		/// <returns>False when the account name or code is not acceptable.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool SetVerificationRequest(string username, string verifyCode, VerificationCodeChannel channel)
+		{
+			return core.SetVerificationRequest(username, verifyCode, channel);
+		}
+
+		/// <summary>
+		/// Encrypts and sends a verification code for a specific channel (email or SMS).
+		/// </summary>
+		/// <param name="username">The account username to verify.</param>
+		/// <param name="verifyCode">The verification code entered by the user.</param>
+		/// <param name="channel">Which channel the code arrived on.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void SendVerifyCode(string username, string verifyCode, VerificationCodeChannel channel)
+		{
+			core.SendVerifyCode(username, verifyCode, channel);
 		}
 
 		/// <summary>
@@ -508,7 +541,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg, Channel channel)
 		{
-			core.OnAuthResultReceived(msg.Result);
+			core.OnAuthResultReceived(msg.Result, msg.RetryAfterSeconds);
 		}
 
 		/// <summary>

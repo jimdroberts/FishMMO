@@ -302,6 +302,11 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.AccountVerified:
 				case ClientAuthenticationResult.TwoFactorRequired:
 				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.PhoneUnverified:
+				case ClientAuthenticationResult.BetaAccessRequired:
+				case ClientAuthenticationResult.TwoFactorLocked:
+				case ClientAuthenticationResult.BetaCodeInvalid:
+				case ClientAuthenticationResult.AccountDetailsInvalid:
 					break;
 			}
 			SetConnectButtonLocked(false);
@@ -543,9 +548,23 @@ namespace FishMMO.Client
 			 * back once the dialog below was dismissed. */
 			Show();
 
-			string message = msg.Result == CharacterSelectResult.OtherCharacterInWorld
-				? $"'{msg.CharacterName}' is still in the world. Select that character to rejoin it, or wait for it to leave combat."
-				: "Character selection failed. Please try again.";
+			string message;
+			switch (msg.Result)
+			{
+				case CharacterSelectResult.OtherCharacterInWorld:
+					message = $"'{msg.CharacterName}' is still in the world. Select that character to rejoin it, or wait for it to leave combat.";
+					break;
+				case CharacterSelectResult.CharacterLocked:
+					// Local time: the player reads this against their own clock.
+					string until = msg.LockedUntilUtcTicks > 0
+						? new DateTime(msg.LockedUntilUtcTicks, DateTimeKind.Utc).ToLocalTime().ToString("g")
+						: "further notice";
+					message = $"'{msg.CharacterName}' has been locked by staff until {until}. Your other characters are unaffected. Use /tickets or the Control Panel if you need help.";
+					break;
+				default:
+					message = "Character selection failed. Please try again.";
+					break;
+			}
 
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox))
 			{

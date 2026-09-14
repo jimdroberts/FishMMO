@@ -307,6 +307,215 @@ namespace FishMMO.Database.Npgsql.Services
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<SmsQueuePage>> FetchSmsQueueAsync(
+			EmailQueueState? state,
+			string search,
+			int page,
+			int pageSize,
+			CancellationToken cancellationToken = default)
+		{
+			ClampPaging(ref page, ref pageSize);
+			string term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLowerInvariant();
+
+			/* A phone is matched whole, never by substring — see the interface. Separators an
+			 * operator might paste are dropped so "+44 7700 900123" finds the stored E.164 form. */
+			string phoneTerm = null;
+			if (term != null)
+			{
+				string compact = new string(term.Where(c => c != ' ' && c != '-' && c != '.' && c != '(' && c != ')').ToArray());
+				if (compact.Length > 0 && compact.All(c => char.IsDigit(c) || c == '+'))
+				{
+					phoneTerm = compact.StartsWith("+", StringComparison.Ordinal) ? compact : "+" + compact;
+				}
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				IQueryable<SmsQueueEntity> all = dbContext.SmsQueue.AsNoTracking();
+
+				// Over the whole table, before any filter. See FetchEmailQueueAsync.
+				var counts = new EmailQueueCounts
+				{
+					Pending = await all.CountAsync(e => e.SentAt == null && e.ClaimedAt == null, cancellationToken).ConfigureAwait(false),
+					Claimed = await all.CountAsync(e => e.SentAt == null && e.ClaimedAt != null && e.LastError == null, cancellationToken).ConfigureAwait(false),
+					Failed = await all.CountAsync(e => e.SentAt == null && e.ClaimedAt != null && e.LastError != null, cancellationToken).ConfigureAwait(false),
+					Sent = await all.CountAsync(e => e.SentAt != null, cancellationToken).ConfigureAwait(false),
+				};
+
+				DateTime? oldestPending = await all
+					.Where(e => e.SentAt == null && e.ClaimedAt == null)
+					.Select(e => (DateTime?)e.CreatedAt)
+					.MinAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				DateTime? oldestUnsent = await all
+					.Where(e => e.SentAt == null)
+					.Select(e => (DateTime?)e.CreatedAt)
+					.MinAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				IQueryable<SmsQueueEntity> q = all;
+
+				if (state.HasValue)
+				{
+					// The same predicates as the counts above, kept beside them on purpose.
+					switch (state.Value)
+					{
+						case EmailQueueState.Pending:
+							q = q.Where(e => e.SentAt == null && e.ClaimedAt == null);
+							break;
+						case EmailQueueState.Claimed:
+							q = q.Where(e => e.SentAt == null && e.ClaimedAt != null && e.LastError == null);
+							break;
+						case EmailQueueState.Failed:
+							q = q.Where(e => e.SentAt == null && e.ClaimedAt != null && e.LastError != null);
+							break;
+						case EmailQueueState.Sent:
+							q = q.Where(e => e.SentAt != null);
+							break;
+						default:
+							throw new DatabaseException(
+								"That is not an SMS queue state.",
+								errorCode: DatabaseErrorCodes.ValidationError);
+					}
+				}
+
+				if (term != null)
+				{
+					// Contains translates to strpos(), so a search cannot smuggle in a wildcard.
+					q = phoneTerm != null
+						? q.Where(e => e.RecipientUsername.ToLower().Contains(term) || e.RecipientPhone == phoneTerm)
+						: q.Where(e => e.RecipientUsername.ToLower().Contains(term));
+				}
+
+				int total = await q.CountAsync(cancellationToken).ConfigureAwait(false);
+
+				var rows = await q
+					.OrderBy(e => e.SentAt != null ? 1 : 0)
+					.ThenBy(e => e.CreatedAt)
+					.ThenBy(e => e.ID)
+					.Skip((page - 1) * pageSize)
+					.Take(pageSize)
+					/* The body column is deliberately not named: a verification text is a
+					 * one-time code, and it never enters the panel process. */
+					.Select(e => new SmsQueueAdminData
+					{
+						ID = e.ID,
+						RecipientPhone = e.RecipientPhone,
+						RecipientUsername = e.RecipientUsername,
+						Kind = e.Kind,
+						CreatedAt = e.CreatedAt,
+						SentAt = e.SentAt,
+						Attempts = e.Attempts,
+						ClaimedBy = e.ClaimedBy,
+						ClaimedAt = e.ClaimedAt,
+						LastError = e.LastError,
+					})
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				foreach (var row in rows)
+				{
+					row.State = ClassifyEmail(row.SentAt, row.ClaimedAt, row.LastError);
+				}
+
+				return new SmsQueuePage
+				{
+					Items = rows,
+					Page = page,
+					PageSize = pageSize,
+					TotalCount = total,
+					Counts = counts,
+					OldestPendingCreatedAt = oldestPending,
+					OldestUnsentCreatedAt = oldestUnsent,
+					ReadAtUtc = DateTime.UtcNow,
+				};
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<SmsRetryResult>> RetrySmsAsync(
+			long id,
+			CancellationToken cancellationToken = default)
+		{
+			if (id <= 0)
+			{
+				return DatabaseResult<SmsRetryResult>.Failure(DatabaseErrorCodes.ValidationError, "An SMS id is required.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* The email retry's statement, against sms_queue. One statement for the reason
+				 * given there: the drain's DequeueNextAsync is a FOR UPDATE SKIP LOCKED claim, and
+				 * a separate read and write here could release the claim of a send already in
+				 * flight. This service's own TableName is email_queue, so the SMS table is
+				 * resolved from the model rather than written out. The phone is not selected:
+				 * nothing downstream of this may carry it. */
+				string table = dbContext.GetTableName<SmsQueueEntity>();
+				string sql = $@"WITH target AS (
+						SELECT id, version, sent_at, claimed_at, claimed_by, attempts, recipient_username
+						FROM {table}
+						WHERE id = {{0}}
+						FOR UPDATE
+					),
+					released AS (
+						UPDATE {table} AS s
+						SET claimed_by = NULL,
+						    claimed_at = NULL,
+						    version = s.version + 1
+						FROM target AS t
+						WHERE s.id = t.id
+						  AND t.sent_at IS NULL
+						  AND t.claimed_at IS NOT NULL
+						RETURNING s.id
+					)
+					SELECT t.recipient_username, t.attempts,
+					       t.sent_at, t.claimed_at, t.claimed_by,
+					       EXISTS (SELECT 1 FROM released) AS retried
+					FROM target AS t";
+
+				var outcome = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					new object[] { id },
+					reader => new RetryRow
+					{
+						RecipientUsername = reader.IsDBNull(0) ? null : reader.GetString(0),
+						Attempts = reader.GetInt32(1),
+						SentAt = reader.IsDBNull(2) ? (DateTime?)null : reader.GetDateTime(2),
+						ClaimedAt = reader.IsDBNull(3) ? (DateTime?)null : reader.GetDateTime(3),
+						ClaimedBy = reader.IsDBNull(4) ? null : reader.GetString(4),
+						Retried = reader.GetBoolean(5),
+					},
+					cancellationToken).ConfigureAwait(false);
+
+				if (outcome == null)
+				{
+					throw new DatabaseEntityNotFoundException("SmsQueue", id.ToString());
+				}
+
+				var result = new SmsRetryResult
+				{
+					ID = id,
+					Retried = outcome.Retried,
+					RecipientUsername = outcome.RecipientUsername,
+					Attempts = outcome.Attempts,
+					ClaimedBy = outcome.ClaimedBy,
+				};
+
+				if (!outcome.Retried)
+				{
+					// Opposite meanings, never collapsed. See RetryEmailAsync.
+					result.Refusal = outcome.SentAt != null
+						? $"That message was already delivered at {outcome.SentAt:u}. Retrying it would send it a second time."
+						: "That message has not been claimed by the SMS drain, so it is already in line and there is nothing to release. What it is waiting for is a drain that claims and sends it.";
+				}
+
+				return result;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
 		/// <summary>The shape the retry statement returns. Never leaves this class.</summary>
 		private sealed class RetryRow
 		{

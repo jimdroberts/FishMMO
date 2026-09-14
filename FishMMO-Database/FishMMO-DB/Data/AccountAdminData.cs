@@ -100,6 +100,28 @@ namespace FishMMO.Database.Data
 
 		/// <summary>The reason recorded with the mute.</summary>
 		public string? MuteReason { get; set; }
+		/// <summary>Phone number in E.164 form, or null.</summary>
+		public string? Phone { get; set; }
+		/// <summary>Whether the phone number has been proven by SMS.</summary>
+		public bool PhoneVerified { get; set; }
+		/// <summary>Whether the email address has been proven.</summary>
+		public bool EmailVerified { get; set; }
+		/// <summary>The verification channels the player chose, as <c>AccountVerificationChannels</c> flags.</summary>
+		public byte VerificationChannels { get; set; }
+		/// <summary>The account holder's real name, as they gave it.</summary>
+		/// <remarks>Personal data. Shown to staff for establishing ownership; every staff read is audited.</remarks>
+		public string? RealName { get; set; }
+		/// <summary>Country or region, as they gave it.</summary>
+		public string? Country { get; set; }
+		/// <summary>Postal address, as they gave it.</summary>
+		/// <remarks>Personal data, like <see cref="RealName"/>.</remarks>
+		public string? Address { get; set; }
+		/// <summary>The referring account, as typed at registration.</summary>
+		public string? ReferralAccount { get; set; }
+		/// <summary>Until when password sign-in is refused, or null.</summary>
+		public DateTime? LoginLockedUntilUtc { get; set; }
+		/// <summary>Until when the authenticator step is refused, or null.</summary>
+		public DateTime? TwoFactorLockedUntilUtc { get; set; }
 	}
 
 	/// <summary>

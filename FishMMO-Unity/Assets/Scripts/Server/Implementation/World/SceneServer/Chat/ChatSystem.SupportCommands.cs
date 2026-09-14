@@ -110,6 +110,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{ "/helpme", OnSupportHelpCommand },
 				{ "/tickets", OnSupportTicketsCommand },
 			}, AccessLevel.Player);
+
+			/* The report panel's broadcast rides on the same registration: it is the same filing
+			 * with a form in front of it, and registering it anywhere else would be a second
+			 * lifetime to keep in step with these commands. See ChatSystem.ReportPlayer.cs. */
+			RegisterReportPlayerBroadcast();
 		}
 
 		/// <summary>Unregisters the player support commands.</summary>
@@ -121,6 +126,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void UnregisterSupportCommands()
 		{
 			ChatHelper.RemoveCommands(new[] { "/report", "/bug", "/helpme", "/tickets" });
+			UnregisterReportPlayerBroadcast();
 		}
 
 		#region Filing
@@ -264,13 +270,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// about it — and inventing a second wording here would mean a player told one thing by
 		/// the game and another by the panel.
 		/// </para>
+		/// <para>
+		/// <b>Where the answer goes is the caller's choice; what it says is not.</b> The chat
+		/// commands leave <paramref name="answer"/> null and are replied to on the System channel;
+		/// the report panel passes its own delivery and receives the very same text, with the
+		/// outcome and ticket number alongside it. The busy-queue refusal goes the same way, so a
+		/// panel is never left waiting on a reply that was sent to chat instead.
+		/// </para>
 		/// </remarks>
-		private void SubmitTicket(
+		/// <param name="answer">
+		/// Delivers the outcome on the main thread, or null to reply in chat.
+		/// </param>
+		/// <returns>
+		/// False when the work could not be queued at all (the busy refusal was answered), so a caller
+		/// that throttles filings can give the attempt back.
+		/// </returns>
+		private bool SubmitTicket(
 			IPlayerCharacter character, SupportTicketCategory category, string subject, string body,
-			string targetAccount, string targetCharacterName, long targetCharacterID)
+			string targetAccount, string targetCharacterName, long targetCharacterID,
+			SupportTicketAnswer answer = null)
 		{
 			long characterID = character.ID;
 			string account = character.Account;
+			SupportTicketAnswer deliver = answer ?? AnswerSupportInChat;
 
 			SupportTicketCreate ticket = new SupportTicketCreate()
 			{
@@ -289,6 +311,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!TryEnqueueAsyncWork(async () =>
 			{
 				string reply;
+				bool filed = false;
+				long ticketID = 0;
 				try
 				{
 					if (!TryGetDbService(out ISupportTicketService ticketService))
@@ -308,6 +332,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						else
 						{
+							filed = true;
+							ticketID = result.Data;
 							reply = $"Ticket #{result.Data} filed. Staff will reply in game; check it with /tickets.";
 						}
 					}
@@ -319,15 +345,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				string finalReply = reply;
-				if (!TryEnqueueMainThread(() => ReplySupportByCharacterID(characterID, finalReply)))
+				bool finalFiled = filed;
+				long finalTicketID = ticketID;
+				if (!TryEnqueueMainThread(() => deliver(characterID, finalFiled, finalTicketID, finalReply)))
 				{
 					await Log.Warning("ChatSystem",
 						$"Support ticket ({category}) for '{account}' completed but the reply could not be queued.");
 				}
 			}, characterID))
 			{
-				ReplySupport(character, "The server is busy. Please try that again in a moment.");
+				const string busy = "The server is busy. Please try that again in a moment.";
+				if (answer == null)
+				{
+					ReplySupport(character, busy);
+				}
+				else
+				{
+					answer(characterID, false, 0, busy);
+				}
+				return false;
 			}
+			return true;
+		}
+
+		/// <summary>Delivers the outcome of a ticket filing to whoever asked for it. Main thread only.</summary>
+		/// <param name="characterID">The reporter, resolved again by id because they may have gone.</param>
+		/// <param name="filed">True when a ticket was created.</param>
+		/// <param name="ticketID">The new ticket's number when filed; otherwise 0.</param>
+		/// <param name="message">The player-facing text.</param>
+		private delegate void SupportTicketAnswer(long characterID, bool filed, long ticketID, string message);
+
+		/// <summary>The chat commands' delivery: the message on the System channel, and nothing else.</summary>
+		private void AnswerSupportInChat(long characterID, bool filed, long ticketID, string message)
+		{
+			ReplySupportByCharacterID(characterID, message);
 		}
 
 		#endregion

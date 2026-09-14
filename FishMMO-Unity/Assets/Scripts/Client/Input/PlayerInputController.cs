@@ -645,6 +645,13 @@ namespace FishMMO.Client
 					uiTrade.RequestTrade(targetCharacterID);
 				}
 			})));
+			/* The name is read now, while the menu is built. By the time the entry is clicked the
+			 * character may have despawned and its pooled instance belong to somebody else. */
+			string targetCharacterName = capturedTarget.CharacterName;
+			entries.Add(("Report", new Action(() =>
+			{
+				UITKReportPlayer.TryOpen(targetCharacterID, targetCharacterName);
+			})));
 
 			contextMenu.Open(entries);
 		}

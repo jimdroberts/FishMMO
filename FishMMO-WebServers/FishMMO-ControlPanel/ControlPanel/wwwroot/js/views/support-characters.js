@@ -153,6 +153,10 @@ async function renderDetail(host, ctx, id) {
 			${!c.editLock.editable && !c.deleted
 				? ui.banner('warn', 'Held by a live session', c.editLock.message)
 				: ''}
+			${c.staffLock?.locked
+				? ui.banner('warn', 'Locked by staff',
+					`Kept out of the world until ${ui.dateTime(c.staffLock.lockedUntilUtc)} by ${c.staffLock.lockedBy ?? 'staff'}. ${c.staffLock.reason ?? ''}`)
+				: ''}
 
 			<div class="grid grid-3">
 				${ui.stat({ label: 'Access level', value: ui.levelName(c.accessLevel) })}
@@ -162,6 +166,28 @@ async function renderDetail(host, ctx, id) {
 
 			<div class="split">
 				<div class="stack">
+					${c.deleted ? '' : ui.card({
+						title: 'Staff lock',
+						sub: 'Keeps this character out of the world while staff work on it. A lock always has an end.',
+						body: c.staffLock?.locked
+							? `
+								<dl class="dl">
+									<dt>Locked until</dt><dd>${ui.esc(ui.dateTime(c.staffLock.lockedUntilUtc))}</dd>
+									<dt>Locked by</dt><dd>${ui.esc(c.staffLock.lockedBy ?? '—')}</dd>
+									<dt>Reason</dt><dd style="overflow-wrap:anywhere">${ui.esc(c.staffLock.reason ?? '')}</dd>
+								</dl>
+								<div style="margin-top:var(--sp-3)">
+									<button class="btn btn-sm" type="button" data-act="unlock">Release lock</button>
+								</div>`
+							: `
+								<p class="small muted">
+									Character select refuses a locked character. One already in the world is
+									disconnected — kicks are account-wide, so its whole account is.
+								</p>
+								<div><button class="btn btn-sm btn-danger" type="button" data-act="lock">Lock character</button></div>`,
+						foot: 'Both need a fresh authenticator code, and both are recorded in the audit log.',
+					})}
+
 					${ui.card({
 						title: 'Attributes, items and guild are not loaded',
 						body: `
@@ -212,4 +238,69 @@ async function renderDetail(host, ctx, id) {
 				</div>
 			</div>
 		</div>`;
+
+	wireLock(host, ctx, c);
 }
+
+/* Lock lengths offered. The server caps a lock at thirty days and refuses one with no end, so
+ * the choices are the whole range an operator may pick from, not a suggestion. */
+const LOCK_LENGTHS = [
+	[60, '1 hour'],
+	[360, '6 hours'],
+	[1440, '1 day'],
+	[4320, '3 days'],
+	[10080, '7 days'],
+	[43200, '30 days'],
+];
+
+function wireLock(host, ctx, c) {
+	const { api, ui } = ctx;
+	const reasonField = `
+		<div class="field">
+			<label for="lk-reason">Reason (recorded in the audit log)</label>
+			<textarea id="lk-reason" name="reason" required placeholder="Why?"></textarea>
+		</div>`;
+
+	host.querySelector('[data-act="lock"]')?.addEventListener('click', async () => {
+		const done = await ui.modal({
+			title: 'Lock this character',
+			sub: c.online
+				? `${c.name} is in the world now. Its account is kicked, and the character cannot come back until the lock lapses or is released.`
+				: `${c.name} cannot enter the world until the lock lapses or is released.`,
+			confirmLabel: 'Lock character',
+			confirmTone: 'danger',
+			body: `
+				<div class="field">
+					<label for="lk-minutes">For</label>
+					<select id="lk-minutes" name="minutes">
+						${LOCK_LENGTHS.map(([m, label]) => `<option value="${m}"${m === 1440 ? ' selected' : ''}>${ui.esc(label)}</option>`).join('')}
+					</select>
+				</div>
+				${reasonField}`,
+			onSubmit: (v) => (String(v.reason).trim()
+				? ctx.withStepUp(() => api.lockCharacter(c.id, Number(v.minutes), v.reason))
+				: false),
+		});
+		if (done) {
+			ui.toast('Character locked', done.message ?? '', 'ok');
+			ctx.refresh();
+		}
+	});
+
+	host.querySelector('[data-act="unlock"]')?.addEventListener('click', async () => {
+		const done = await ui.modal({
+			title: 'Release the lock',
+			sub: `${c.name} can enter the world again as soon as the lock is released.`,
+			confirmLabel: 'Release lock',
+			body: reasonField,
+			onSubmit: (v) => (String(v.reason).trim()
+				? ctx.withStepUp(() => api.unlockCharacter(c.id, v.reason))
+				: false),
+		});
+		if (done) {
+			ui.toast('Lock released', done.message ?? '', 'ok');
+			ctx.refresh();
+		}
+	});
+}
+

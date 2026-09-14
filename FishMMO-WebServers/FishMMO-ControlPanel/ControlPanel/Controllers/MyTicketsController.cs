@@ -176,6 +176,8 @@ namespace FishMMO.ControlPanel.Controllers
 				authorIsStaff: false,
 				internalNote: false,
 				request.Body,
+				// A player's reply is never tier-gated; the level is only read for staff.
+				actorAccessLevel: 0,
 				HttpContext.RequestAborted);
 
 			if (!result.IsSuccess)

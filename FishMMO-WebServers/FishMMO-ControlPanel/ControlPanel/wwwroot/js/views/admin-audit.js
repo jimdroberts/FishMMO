@@ -216,11 +216,11 @@ function detailPanel(ui, a) {
 			<div>
 				<div class="small muted" style="margin-bottom:var(--sp-2)">Provenance</div>
 				<dl class="dl">
-					<dt>Entry</dt><dd class="tnum">${ui.num(a.id)}</dd>
+					<dt>Entry</dt><dd class="tnum">${ui.esc(a.id)}</dd>
 					<dt>Occurred</dt><dd>${ui.dateTime(a.occurredUtc)}</dd>
 					<dt>IP address</dt><dd class="mono">${a.ipAddress ? ui.esc(a.ipAddress) : '<span class="faint">—</span>'}</dd>
 					<dt>Session</dt><dd class="tnum">${a.sessionId
-						? ui.num(a.sessionId)
+						? ui.esc(a.sessionId)
 						: `<span class="faint">${a.source === 'game' ? 'none — typed in the world' : 'none'}</span>`}</dd>
 				</dl>
 			</div>

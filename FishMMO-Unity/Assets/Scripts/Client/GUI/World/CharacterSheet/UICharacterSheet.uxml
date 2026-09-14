@@ -179,7 +179,7 @@
                     <!-- ItemSlot.Accessory = 9 — rings, amulets and trinkets all land here. -->
                     <ui:VisualElement name="slot-accessory" class="fish-slot eq-slot">
                         <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
-                        <ui:Label         class="fish-slot__label eq-slot__label" text="Acc" />
+                        <ui:Label         class="fish-slot__label eq-slot__label" text="Accessory" />
                         <ui:Label         name="amount-accessory"
                                           class="fish-slot__amount eq-slot__amount eq-hidden" />
                         <ui:Label         name="cooldown-accessory"
@@ -198,7 +198,7 @@
 
                 <ui:VisualElement name="slot-shoulders" class="fish-slot eq-slot">
                     <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
-                    <ui:Label         class="fish-slot__label eq-slot__label" text="Shldr" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Shoulders" />
                     <ui:Label         name="amount-shoulders"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
                     <ui:Label         name="cooldown-shoulders"
@@ -220,7 +220,7 @@
 
                 <ui:VisualElement name="slot-mainhand" class="fish-slot eq-slot">
                     <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
-                    <ui:Label         class="fish-slot__label eq-slot__label" text="Main" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Main Hand" />
                     <ui:Label         name="amount-mainhand"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
                     <ui:Label         name="cooldown-mainhand"
@@ -231,7 +231,7 @@
 
                 <ui:VisualElement name="slot-offhand" class="fish-slot eq-slot">
                     <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
-                    <ui:Label         class="fish-slot__label eq-slot__label" text="Off" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Off Hand" />
                     <ui:Label         name="amount-offhand"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
                     <ui:Label         name="cooldown-offhand"

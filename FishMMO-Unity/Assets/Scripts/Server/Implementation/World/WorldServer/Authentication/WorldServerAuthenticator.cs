@@ -144,6 +144,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (fetchResult.Data.HasValue)
 			{
+				/* A staff character lock. Character select refuses a locked character, but a client
+				 * that already holds a token can come straight here — a kicked client reconnecting —
+				 * and the account's selection still points at the locked character. Fail closed on a
+				 * failed read. A locked character answers NoCharacterSelected: the client goes back to
+				 * character select, whose own refusal says who locked it and until when. */
+				DatabaseResult<CharacterLockState> lockResult = await characterService.FetchLockAsync(fetchResult.Data.Value.ID);
+				if (!lockResult.IsSuccess)
+				{
+					loginAttemptByAccount.Remove(username);
+					return ClientAuthenticationResult.ServerBusy;
+				}
+				if (lockResult.Data.IsLocked(DateTime.UtcNow))
+				{
+					loginAttemptByAccount.Remove(username);
+					await Log.Info("WorldServerAuthenticator", $"Account '{username}' tried to enter the world with a character locked by staff; refusing.");
+					return ClientAuthenticationResult.NoCharacterSelected;
+				}
+
 				/* The lock check happens here, after the character is known, because a lock is
 				 * not absolute: it closes the world to players while leaving it open to the
 				 * people who have to go in and work on it. Locking a world for maintenance and

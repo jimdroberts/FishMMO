@@ -132,5 +132,37 @@ namespace FishMMO.ControlPanel
 		/// <inheritdoc/>
 		public Task<DatabaseResult> PersistVerificationEmailSentAsync(string accountName, CancellationToken cancellationToken = default)
 			=> InScopeAsync(s => s.PersistVerificationEmailSentAsync(accountName, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> PersistProfileAsync(string accountName, AccountProfileData profile, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.PersistProfileAsync(accountName, profile, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> PersistChannelsVerifiedAsync(string accountName, FishMMO.Database.Data.Enums.AccountVerificationChannels channels, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.PersistChannelsVerifiedAsync(accountName, channels, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> PersistPhoneVerifyCodeAsync(string accountName, int verifyCode, DateTime expiresUtc, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.PersistPhoneVerifyCodeAsync(accountName, verifyCode, expiresUtc, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> PersistPhoneVerifiedAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.PersistPhoneVerifiedAsync(accountName, verifyCode, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<DateTime?>> RecordAuthFailureAsync(string accountName, AuthFailureKind kind, int threshold, TimeSpan window, TimeSpan lockout, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.RecordAuthFailureAsync(accountName, kind, threshold, window, lockout, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> ClearAuthFailuresAsync(string accountName, AuthFailureKind kind, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.ClearAuthFailuresAsync(accountName, kind, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<bool>> ClearAuthLockoutAsync(string accountName, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.ClearAuthLockoutAsync(accountName, cancellationToken));
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<AuthLockoutState>> FetchAuthLockoutAsync(string accountName, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.FetchAuthLockoutAsync(accountName, cancellationToken));
 	}
 }

@@ -1903,6 +1903,8 @@ namespace FishMMO.Client
 			}
 			));
 
+			entries.Add(("Report", () => UITKReportPlayer.TryOpen(characterID, displayName)));
+
 			/* Drawing decisions only. The server re-derives both ranks from its own state before
 			 * it acts, so an entry a client should not have offered is refused, not obeyed. */
 			if (model.Rank < partyController.Rank)

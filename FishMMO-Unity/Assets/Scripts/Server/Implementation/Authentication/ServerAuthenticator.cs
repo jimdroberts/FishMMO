@@ -10,10 +10,13 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
 using FishMMO.Database.Data;
+using AccountVerificationChannels = FishMMO.Database.Data.Enums.AccountVerificationChannels;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.LoginServer;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
@@ -282,18 +285,35 @@ namespace FishMMO.Server.Implementation
 				return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult { IsSuccess = false };
 
 			var d = result.Data;
+
+			/* Which codes this account still owes, under THIS server's switches. A channel counts only
+			 * when the player chose it, it is switched on, and it has not been proven.
+			 *
+			 * Email keeps its grace period: an unverified account may sign in until the verification
+			 * email is actually sent (VerificationEmailSentAt), so an undeliverable mail never locks a
+			 * player out. SMS has no delivery stamp to wait for, so an outstanding phone code blocks
+			 * from the start — which is why the Production template ships VerifySms=false until an SMS
+			 * provider exists. AutoVerifyAccounts (development builds only) bypasses the gate outright
+			 * so accounts created before the flag was set are not locked out of a local server. */
+			IServerConfiguration configuration = Server?.Configuration;
+			var channels = (AccountVerificationChannels)d.VerificationChannels;
+			bool emailPending = AccountVerificationPolicy.IsEmailVerificationEnabled(configuration) &&
+				(channels & AccountVerificationChannels.Email) != 0 &&
+				!d.EmailVerified &&
+				d.VerificationEmailSentAt != null;
+			bool phonePending = AccountVerificationPolicy.IsSmsVerificationEnabled(configuration) &&
+				(channels & AccountVerificationChannels.Sms) != 0 &&
+				!d.PhoneVerified;
+
 			return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult
 			{
 				IsSuccess = true,
-				// Grace period: unverified accounts can log in until the verification
-				// email is actually sent. Once sent, login is blocked until verified.
-				// AutoVerifyAccounts (development builds only) bypasses the gate outright so
-				// that accounts already stamped with VerificationEmailSentAt — created before
-				// the flag was set, or against a production build — are not permanently
-				// locked out of a local server.
 				IsVerified = d.Verified ||
-					d.VerificationEmailSentAt == null ||
-					AccountVerificationPolicy.IsAutoVerifyEnabled(Server?.Configuration),
+					AccountVerificationPolicy.IsAutoVerifyEnabled(configuration) ||
+					(!emailPending && !phonePending),
+				AccountName = d.Name,
+				EmailVerificationPending = emailPending,
+				PhoneVerificationPending = phonePending,
 				Salt = d.Salt,
 				Verifier = d.Verifier,
 				AccessLevel = (AccessLevel)d.AccessLevel,
@@ -301,6 +321,8 @@ namespace FishMMO.Server.Implementation
 				// Required by the core's expired-verify-code resend. Leaving this unset left it
 				// null for every account, which silently disabled the resend entirely.
 				VerifyCodeExpiresUtc = d.VerifyCodeExpiresUtc,
+				// Required by the core's expired-or-missing SMS code resend, for the same reason.
+				PhoneVerifyCodeExpiresUtc = d.PhoneVerifyCodeExpiresUtc,
 			};
 		}
 
@@ -410,6 +432,10 @@ namespace FishMMO.Server.Implementation
 				}
 				if (matchedHash == null) return false;
 				var consumeResult = await rcSvc.ConsumeCodeAsync(username, matchedHash);
+				if (consumeResult.IsSuccess)
+				{
+					await CancelPendingTwoFactorResetAsync(accountResult.Data.Name, accountResult.Data.Email);
+				}
 				return consumeResult.IsSuccess;
 			}
 			else
@@ -423,6 +449,10 @@ namespace FishMMO.Server.Implementation
 					var persistResult = accountResult.Data.TotpVerifiedAt == null
 						? await accountService.PersistTotpVerifiedAtAsync(username, windowUsed)
 						: await accountService.PersistLastTotpWindowAsync(username, windowUsed);
+					if (persistResult.IsSuccess)
+					{
+						await CancelPendingTwoFactorResetAsync(accountResult.Data.Name, accountResult.Data.Email);
+					}
 					return persistResult.IsSuccess;
 				}
 				finally
@@ -430,6 +460,212 @@ namespace FishMMO.Server.Implementation
 					if (plaintextSecret != null) CryptographicOperationsCompat.ZeroMemory(plaintextSecret);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Cancels the account's pending self-service two-factor reset, if any, and tells the owner.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A reset exists for someone who has lost their authenticator AND their recovery codes, and it
+		/// waits before taking effect precisely so that the real owner — who still has a factor — can
+		/// stop one they did not ask for. Passing two-factor here proves exactly that, so the reset is
+		/// cancelled. Nothing in the game completes a reset; that is the Control Panel's flow.
+		/// </para>
+		/// <para>
+		/// Best effort and never fatal to the sign-in: the player has just proven both factors, and a
+		/// queue that is briefly unavailable must not turn that into a refusal. A notice is queued only
+		/// when a request was actually cancelled.
+		/// </para>
+		/// </remarks>
+		private async Task CancelPendingTwoFactorResetAsync(string accountName, string email)
+		{
+			try
+			{
+				if (string.IsNullOrEmpty(accountName) ||
+					Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ITwoFactorResetRequestService>(out var resetService))
+				{
+					return;
+				}
+
+				var cancelResult = await resetService.CancelAsync(accountName, "owner", null);
+				if (!cancelResult.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"Could not cancel a pending two-factor reset for '{accountName}': [{cancelResult.ErrorCode}] {cancelResult.ErrorMessage}");
+					return;
+				}
+				if (!cancelResult.Data)
+				{
+					return;
+				}
+
+				await Log.Info(LogPrefix, $"Cancelled a pending two-factor reset for '{accountName}': the owner passed two-factor in game.");
+
+				if (string.IsNullOrWhiteSpace(email) ||
+					!Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueue))
+				{
+					await Log.Warning(LogPrefix, $"No email address or email queue; the reset-cancelled notice for '{accountName}' was not sent.");
+					return;
+				}
+
+				var enqueueResult = await emailQueue.EnqueueAsync(
+					email,
+					accountName,
+					"FishMMO - Two-factor reset cancelled",
+					BuildTwoFactorResetCancelledEmailBody(accountName),
+					EmailKind.SecurityNotice);
+				if (!enqueueResult.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"Failed to queue the reset-cancelled notice for '{accountName}': [{enqueueResult.ErrorCode}] {enqueueResult.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error(LogPrefix, $"Cancelling a pending two-factor reset failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>Builds the HTML body telling the owner their pending two-factor reset was cancelled.</summary>
+		private static string BuildTwoFactorResetCancelledEmailBody(string accountName)
+		{
+			return $@"<html><body style='font-family: Arial, sans-serif; color: #333;'>
+				<h2>FishMMO — Two-factor reset cancelled</h2>
+				<p>A request to reset two-factor authentication on your account <b>{System.Net.WebUtility.HtmlEncode(accountName)}</b> was waiting to take effect.</p>
+				<p>It has been cancelled, because your account just signed in to the game with its authenticator or a recovery code.</p>
+				<p>If you asked for that reset yourself and still need it, you can request it again from the Control Panel. If you did not, someone may know your password: change it now.</p>
+				<hr/>
+				<p style='font-size: 12px; color: #999;'>— The FishMMO Team</p>
+			</body></html>";
+		}
+
+		/// <summary>Reads whether password sign-in is locked in the database. Fails open (logged); see the core's hook wrappers.</summary>
+		private async Task<bool> IsLoginLockedCoreAsync(string accountName)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var svc))
+				return false;
+			var r = await svc.FetchAuthLockoutAsync(accountName);
+			if (!r.IsSuccess)
+			{
+				await Log.Warning(LogPrefix, $"FetchAuthLockoutAsync failed: [{r.ErrorCode}] {r.ErrorMessage}. The database lockout is not applied to this attempt.");
+				return false;
+			}
+			return r.Data.IsLocked(AuthFailureKind.Password, DateTime.UtcNow);
+		}
+
+		/// <summary>Counts one failed SRP proof against the shared lockout.</summary>
+		private async Task RecordLoginFailureCoreAsync(string accountName)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var svc))
+				return;
+			AuthLockoutSettings settings = LoginSecurityPolicy.GetPasswordLockout(Server.Configuration);
+			var r = await svc.RecordAuthFailureAsync(accountName, AuthFailureKind.Password, settings.Threshold, settings.Window, settings.Lockout);
+			if (!r.IsSuccess)
+			{
+				await Log.Warning(LogPrefix, $"RecordAuthFailureAsync (password) failed: [{r.ErrorCode}] {r.ErrorMessage}");
+			}
+			else if (r.Data.HasValue)
+			{
+				await Log.Warning(LogPrefix, $"Password sign-in for '{accountName}' is locked until {r.Data.Value:u} after repeated failures.");
+			}
+		}
+
+		/// <summary>Clears the shared password failure count after a correct proof.</summary>
+		private async Task ClearLoginFailuresCoreAsync(string accountName)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var svc))
+				return;
+			var r = await svc.ClearAuthFailuresAsync(accountName, AuthFailureKind.Password);
+			if (!r.IsSuccess)
+			{
+				await Log.Warning(LogPrefix, $"ClearAuthFailuresAsync (password) failed: [{r.ErrorCode}] {r.ErrorMessage}");
+			}
+		}
+
+		/// <summary>Until when the two-factor step is locked, or null.</summary>
+		private async Task<DateTime?> GetTwoFactorLockedUntilCoreAsync(string accountName)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var svc))
+				return null;
+			var r = await svc.FetchAuthLockoutAsync(accountName);
+			if (!r.IsSuccess)
+			{
+				await Log.Warning(LogPrefix, $"FetchAuthLockoutAsync failed: [{r.ErrorCode}] {r.ErrorMessage}. The two-factor lockout is not applied to this attempt.");
+				return null;
+			}
+			return r.Data.IsLocked(AuthFailureKind.TwoFactor, DateTime.UtcNow) ? r.Data.TwoFactorLockedUntilUtc : null;
+		}
+
+		/// <summary>Counts one wrong second-factor code; returns the lock instant when this trips it.</summary>
+		private async Task<DateTime?> RecordTwoFactorFailureCoreAsync(string accountName)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var svc))
+				return null;
+			AuthLockoutSettings settings = LoginSecurityPolicy.GetTwoFactorLockout(Server.Configuration);
+			var r = await svc.RecordAuthFailureAsync(accountName, AuthFailureKind.TwoFactor, settings.Threshold, settings.Window, settings.Lockout);
+			if (!r.IsSuccess)
+			{
+				await Log.Warning(LogPrefix, $"RecordAuthFailureAsync (two-factor) failed: [{r.ErrorCode}] {r.ErrorMessage}");
+				return null;
+			}
+			if (r.Data.HasValue)
+			{
+				await Log.Warning(LogPrefix, $"Two-factor sign-in for '{accountName}' is locked until {r.Data.Value:u} after repeated wrong codes.");
+			}
+			return r.Data;
+		}
+
+		/// <summary>Clears the shared two-factor failure count after a correct code.</summary>
+		private async Task ClearTwoFactorFailuresCoreAsync(string accountName)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var svc))
+				return;
+			var r = await svc.ClearAuthFailuresAsync(accountName, AuthFailureKind.TwoFactor);
+			if (!r.IsSuccess)
+			{
+				await Log.Warning(LogPrefix, $"ClearAuthFailuresAsync (two-factor) failed: [{r.ErrorCode}] {r.ErrorMessage}");
+			}
+		}
+
+		/// <summary>
+		/// The closed-test gate, run by the core only after a correct SRP proof. Staff always pass;
+		/// everyone else needs an un-revoked code of an active program. A gate that cannot be evaluated
+		/// refuses with ServerBusy rather than admitting.
+		/// </summary>
+		private async Task<ClientAuthenticationResult?> CheckSignInAccessCoreAsync(string accountName, AccessLevel accessLevel)
+		{
+			IServerConfiguration configuration = Server?.Configuration;
+			if (!LoginSecurityPolicy.IsBetaModeEnabled(configuration) || accessLevel >= AccessLevel.GameMaster)
+			{
+				return null;
+			}
+
+			IReadOnlyList<string> programs = LoginSecurityPolicy.GetBetaPrograms(configuration, out int rejected);
+			if (rejected > 0 || programs.Count == 0)
+			{
+				await Log.Error(LogPrefix, $"BetaMode is on with {programs.Count} valid program(s) and {rejected} invalid name(s) in BetaPrograms. With no valid program nobody below GameMaster can sign in.");
+			}
+
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IBetaCodeService>(out var betaService))
+			{
+				await Log.Error(LogPrefix, "BetaMode is on but IBetaCodeService is not registered; refusing sign-in rather than admitting untested accounts.");
+				return ClientAuthenticationResult.ServerBusy;
+			}
+
+			var r = await betaService.HasAccessAsync(accountName, programs);
+			if (!r.IsSuccess)
+			{
+				await Log.Error(LogPrefix, $"HasAccessAsync failed: [{r.ErrorCode}] {r.ErrorMessage}. Refusing sign-in (fail-closed).");
+				return ClientAuthenticationResult.ServerBusy;
+			}
+			return r.Data ? (ClientAuthenticationResult?)null : ClientAuthenticationResult.BetaAccessRequired;
 		}
 
 		#endregion
@@ -551,6 +787,12 @@ namespace FishMMO.Server.Implementation
 					reliable ? Channel.Reliable : Channel.Unreliable);
 
 			/// <inheritdoc/>
+			protected override void BroadcastAuthResult(NetworkConnection conn, ClientAuthenticationResult result, bool reliable, int retryAfterSeconds) =>
+				outer.NetworkManager.ServerManager.Broadcast(conn,
+					new ClientAuthResultBroadcast { Result = result, RetryAfterSeconds = retryAfterSeconds }, false,
+					reliable ? Channel.Reliable : Channel.Unreliable);
+
+			/// <inheritdoc/>
 			protected override void BroadcastSrpVerifyResponse(NetworkConnection conn, byte[] encSalt, byte[] encServerEphemeral) =>
 				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new SrpVerifyResponseBroadcast { Salt = encSalt, PublicEphemeral = encServerEphemeral }, false, Channel.Reliable);
@@ -601,6 +843,35 @@ namespace FishMMO.Server.Implementation
 			protected override Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey) =>
 				outer.VerifyTotpCodeCoreAsync(username, totpCode, totpMasterKey);
 
+			// ── Database-backed lockout and closed-test gate ─────────────────
+			/// <inheritdoc/>
+			protected override Task<bool> IsLoginLockedAsync(string accountName) =>
+				outer.IsLoginLockedCoreAsync(accountName);
+
+			/// <inheritdoc/>
+			protected override Task RecordLoginFailureAsync(string accountName) =>
+				outer.RecordLoginFailureCoreAsync(accountName);
+
+			/// <inheritdoc/>
+			protected override Task ClearLoginFailuresAsync(string accountName) =>
+				outer.ClearLoginFailuresCoreAsync(accountName);
+
+			/// <inheritdoc/>
+			protected override Task<DateTime?> GetTwoFactorLockedUntilAsync(string accountName) =>
+				outer.GetTwoFactorLockedUntilCoreAsync(accountName);
+
+			/// <inheritdoc/>
+			protected override Task<DateTime?> RecordTwoFactorFailureAsync(string accountName) =>
+				outer.RecordTwoFactorFailureCoreAsync(accountName);
+
+			/// <inheritdoc/>
+			protected override Task ClearTwoFactorFailuresAsync(string accountName) =>
+				outer.ClearTwoFactorFailuresCoreAsync(accountName);
+
+			/// <inheritdoc/>
+			protected override Task<ClientAuthenticationResult?> CheckSignInAccessAsync(string accountName, AccessLevel accessLevel) =>
+				outer.CheckSignInAccessCoreAsync(accountName, accessLevel);
+
 			/// <inheritdoc/>
 			protected override async Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc)
 			{
@@ -613,24 +884,31 @@ namespace FishMMO.Server.Implementation
 				if (outer.Server?.Database?.ServiceRegistry == null) return false;
 				if (!outer.Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService)) return false;
 
+				/* No queue, no new code. Storing a code that nothing will deliver replaces the one the
+				 * player may still hold and gives them nothing in its place. */
+				if (!outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+				{
+					await Log.Warning(outer.LogPrefix, $"IEmailQueueService not registered -- verification email resend skipped for '{username}'.");
+					return false;
+				}
+
 				var persistResult = await accountService.PersistVerifyCodeAsync(username, newCode, newExpires);
 				if (!persistResult.IsSuccess) return false;
 
-				if (outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+				/* The new code is always mailed. This used to skip the mail when a verification email was
+				 * already queued — after the new code had been stored — so the queued mail carried the old
+				 * code, which the store had just replaced, and the new code looked valid for a day, so no
+				 * later sign-in resent either: the player was stuck until it lapsed. Any mail still queued
+				 * here carries a code that has already expired (that is why this ran), so it is not worth
+				 * protecting; the cost is at most one extra mail per expiry, and an expiry takes a day. */
+				var accountResult = await accountService.FetchForLoginAsync(username, false);
+				string recipientEmail = accountResult.IsSuccess ? (accountResult.Data.Email ?? username) : username;
+				string subject = "FishMMO - Verify Your Account";
+				string body = outer.BuildLoginVerificationEmailBody(username, newCode);
+				var enqueueResult = await emailQueueService.EnqueueAsync(recipientEmail, username, subject, body);
+				if (!enqueueResult.IsSuccess)
 				{
-					var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
-					if (!dupCheck.IsSuccess || !dupCheck.Data)
-					{
-						var accountResult = await accountService.FetchForLoginAsync(username, false);
-						string recipientEmail = accountResult.IsSuccess ? (accountResult.Data.Email ?? username) : username;
-						string subject = "FishMMO - Verify Your Account";
-						string body = outer.BuildLoginVerificationEmailBody(username, newCode);
-						await emailQueueService.EnqueueAsync(recipientEmail, username, subject, body);
-					}
-				}
-				else
-				{
-					await Log.Warning(outer.LogPrefix, $"IEmailQueueService not registered -- verification email resend skipped for '{username}'.");
+					await Log.Warning(outer.LogPrefix, $"Failed to enqueue verification email resend for '{username}': [{enqueueResult.ErrorCode}] {enqueueResult.ErrorMessage}");
 				}
 
 				// VerificationEmailSentAt is deliberately NOT stamped here. Queueing an email
@@ -640,10 +918,115 @@ namespace FishMMO.Server.Implementation
 				// attempt locked the account out permanently.
 				return true;
 			}
+
+			/// <inheritdoc/>
+			protected override Task<bool> TryResendVerificationSmsIfExpiredAsync(string username, DateTime? phoneVerifyCodeExpiresUtc) =>
+				outer.TryResendVerificationSmsIfDueCoreAsync(username, phoneVerifyCodeExpiresUtc);
 		}
 
 		#endregion
 
+
+		/// <summary>
+		/// Usernames with a sign-in SMS resend in flight on this server, so two proofs racing for the
+		/// same account cannot both generate a code (the second would invalidate the first message).
+		/// </summary>
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> smsResendsInFlight =
+			new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// The SMS twin of the sign-in email resend: when an unverified account's outstanding SMS code is
+		/// missing or expired, issue a new one (same six-digit, 24-hour shape as registration) and queue it.
+		/// </summary>
+		/// <remarks>
+		/// <para>Rate limiting matches the email path: it runs only after a correct password proof, only
+		/// when no live code exists (a fresh code is good for 24 hours, so this fires at most once a day
+		/// per account), and never while a verification message is still waiting in the queue.</para>
+		/// <para>Two deliberate differences, both because a text costs money and a code rotation strands
+		/// the message already on its way. The queue check comes BEFORE the new code is generated, so a
+		/// queued message is never made worthless by the rotation — the email path rotates first. And the
+		/// expiry is re-read from the database rather than trusted from the verify step, so a code another
+		/// login server or the Control Panel issued a moment ago is not replaced.</para>
+		/// <para>Fire-and-forget from the core: never throws.</para>
+		/// </remarks>
+		private async Task<bool> TryResendVerificationSmsIfDueCoreAsync(string username, DateTime? phoneVerifyCodeExpiresUtc)
+		{
+			if (!AccountVerificationPolicy.IsSmsCodeResendDue(phoneVerifyCodeExpiresUtc, DateTime.UtcNow) ||
+				string.IsNullOrEmpty(username) ||
+				!smsResendsInFlight.TryAdd(username, 0))
+			{
+				return false;
+			}
+
+			try
+			{
+				var registry = Server?.Database?.ServiceRegistry;
+				if (registry == null || !registry.TryGet<IAccountService>(out var accountService))
+				{
+					return false;
+				}
+				if (!registry.TryGet<ISmsQueueService>(out var smsQueueService))
+				{
+					await Log.Warning(LogPrefix, $"ISmsQueueService not registered -- verification SMS resend skipped for '{username}'.");
+					return false;
+				}
+
+				var pending = await smsQueueService.HasPendingForUserAsync(username, SmsKind.Verification);
+				if (!pending.IsSuccess || pending.Data)
+				{
+					return false;
+				}
+
+				var fetched = await accountService.FetchForLoginAsync(username, false);
+				if (!fetched.IsSuccess)
+				{
+					return false;
+				}
+				var account = fetched.Data;
+				if (account.Verified || account.PhoneVerified ||
+					!AccountVerificationPolicy.IsSmsCodeResendDue(account.PhoneVerifyCodeExpiresUtc, DateTime.UtcNow))
+				{
+					return false;
+				}
+				if (string.IsNullOrEmpty(account.Phone))
+				{
+					await Log.Warning(LogPrefix, $"SMS verification is outstanding for '{username}' but no phone number is on record; no SMS code was re-sent.");
+					return false;
+				}
+
+				int newCode = RandomNumberGenerator.GetInt32(100000, 1000000);
+				DateTime newExpires = DateTime.UtcNow.AddHours(24);
+				DatabaseResult persistResult = await accountService.PersistPhoneVerifyCodeAsync(account.Name, newCode, newExpires);
+				if (!persistResult.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"PersistPhoneVerifyCodeAsync DB error for '{username}': [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+					return false;
+				}
+
+				DatabaseResult enqueueResult = await smsQueueService.EnqueueAsync(account.Phone, account.Name, BuildLoginVerificationSmsBody(newCode), SmsKind.Verification);
+				if (!enqueueResult.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"Failed to enqueue verification SMS resend for '{username}': [{enqueueResult.ErrorCode}] {enqueueResult.ErrorMessage}");
+					return false;
+				}
+				return true;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error(LogPrefix, $"Verification SMS resend for '{username}' failed: {ex}");
+				return false;
+			}
+			finally
+			{
+				smsResendsInFlight.TryRemove(username, out _);
+			}
+		}
+
+		/// <summary>Builds the login-triggered verification SMS. Matches registration's wording and shape.</summary>
+		private static string BuildLoginVerificationSmsBody(int verifyCode)
+		{
+			return $"FishMMO verification code: {verifyCode:D6}. It expires in 24 hours. If you did not create a FishMMO account, ignore this message.";
+		}
 
 		/// <summary>
 		/// Builds the HTML body for a login-triggered verification email resend.

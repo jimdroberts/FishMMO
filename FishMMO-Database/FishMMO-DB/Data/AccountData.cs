@@ -91,6 +91,26 @@ namespace FishMMO.Database.Data
 		/// Last login timestamp (UTC).
 		/// </summary>
 		public readonly DateTime LastLogin;
+		/// <summary>
+		/// The verification channels the player chose, as <c>AccountVerificationChannels</c> flags.
+		/// <see cref="Verified"/> is true once every one of them has been proven.
+		/// </summary>
+		public readonly byte VerificationChannels;
+		/// <summary>Whether the email channel has been proven.</summary>
+		public readonly bool EmailVerified;
+		/// <summary>Whether the SMS channel has been proven.</summary>
+		public readonly bool PhoneVerified;
+		/// <summary>Phone number in E.164 form, or null. Where an SMS code is sent.</summary>
+		public readonly string? Phone;
+		/// <summary>Until when password sign-in is refused, or null. Shared by every login server and the panel.</summary>
+		public readonly DateTime? LoginLockedUntilUtc;
+		/// <summary>Until when the authenticator step is refused, or null.</summary>
+		public readonly DateTime? TwoFactorLockedUntilUtc;
+		/// <summary>
+		/// UTC expiry for the SMS verification code, or null when no SMS code has been issued. The
+		/// login server reads it to re-send an expired or missing SMS code at sign-in.
+		/// </summary>
+		public readonly DateTime? PhoneVerifyCodeExpiresUtc;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AccountData"/> struct.
@@ -112,7 +132,14 @@ namespace FishMMO.Database.Data
 			DateTime? verifyCodeExpiresUtc,
 			DateTime? verificationEmailSentAt,
 			DateTime created,
-			DateTime lastLogin)
+			DateTime lastLogin,
+			byte verificationChannels = 1,
+			bool emailVerified = false,
+			bool phoneVerified = false,
+			string? phone = null,
+			DateTime? loginLockedUntilUtc = null,
+			DateTime? twoFactorLockedUntilUtc = null,
+			DateTime? phoneVerifyCodeExpiresUtc = null)
 		{
 			Name = name;
 			Salt = salt;
@@ -131,6 +158,13 @@ namespace FishMMO.Database.Data
 			VerificationEmailSentAt = verificationEmailSentAt;
 			Created = created;
 			LastLogin = lastLogin;
+			VerificationChannels = verificationChannels;
+			EmailVerified = emailVerified;
+			PhoneVerified = phoneVerified;
+			Phone = phone;
+			LoginLockedUntilUtc = loginLockedUntilUtc;
+			TwoFactorLockedUntilUtc = twoFactorLockedUntilUtc;
+			PhoneVerifyCodeExpiresUtc = phoneVerifyCodeExpiresUtc;
 		}
 	}
 }

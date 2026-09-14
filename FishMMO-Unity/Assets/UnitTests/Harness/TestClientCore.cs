@@ -215,16 +215,16 @@ namespace FishMMO.UnitTests.Harness
 		}
 
 		protected override void SendCreateAccount(byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
-			byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
+			byte[] encryptedSalt, byte[] encryptedVerifier, byte[] encryptedProfile, uint seq)
 		{
 			_ = AuthTestTrace.Log("Client", "SendCreateAccount", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} email={AuthTestTrace.Hex(encryptedEmail)} age={AuthTestTrace.Hex(encryptedAge)} salt={AuthTestTrace.Hex(encryptedSalt)} v={AuthTestTrace.Hex(encryptedVerifier)}");
-			CreateAccountSends.Add(new CreateAccountCapture(encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, seq));
+			CreateAccountSends.Add(new CreateAccountCapture(encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, encryptedProfile, seq));
 		}
 
-		protected override void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq)
+		protected override void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq, VerificationCodeChannel channel)
 		{
-			_ = AuthTestTrace.Log("Client", "SendAccountVerify", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} code={AuthTestTrace.Hex(encryptedCode)}");
-			AccountVerifySends.Add(new AccountVerifyCapture(encryptedUsername, encryptedCode, seq));
+			_ = AuthTestTrace.Log("Client", "SendAccountVerify", $"seq={seq} channel={channel} user={AuthTestTrace.Hex(encryptedUsername)} code={AuthTestTrace.Hex(encryptedCode)}");
+			AccountVerifySends.Add(new AccountVerifyCapture(encryptedUsername, encryptedCode, seq, channel));
 		}
 
 		protected override void SendTwoFactorVerify(byte[] encryptedCode, uint seq)
@@ -277,11 +277,12 @@ namespace FishMMO.UnitTests.Harness
 			public readonly byte[] EncryptedAge;
 			public readonly byte[] EncryptedSalt;
 			public readonly byte[] EncryptedVerifier;
+			public readonly byte[] EncryptedProfile;
 			public readonly uint Sequence;
-			public CreateAccountCapture(byte[] u, byte[] e, byte[] a, byte[] s, byte[] v, uint seq)
+			public CreateAccountCapture(byte[] u, byte[] e, byte[] a, byte[] s, byte[] v, byte[] p, uint seq)
 			{
 				EncryptedUsername = u; EncryptedEmail = e; EncryptedAge = a;
-				EncryptedSalt = s; EncryptedVerifier = v; Sequence = seq;
+				EncryptedSalt = s; EncryptedVerifier = v; EncryptedProfile = p; Sequence = seq;
 			}
 		}
 
@@ -290,7 +291,8 @@ namespace FishMMO.UnitTests.Harness
 			public readonly byte[] EncryptedUsername;
 			public readonly byte[] EncryptedCode;
 			public readonly uint Sequence;
-			public AccountVerifyCapture(byte[] u, byte[] c, uint seq) { EncryptedUsername = u; EncryptedCode = c; Sequence = seq; }
+			public readonly VerificationCodeChannel Channel;
+			public AccountVerifyCapture(byte[] u, byte[] c, uint seq, VerificationCodeChannel channel) { EncryptedUsername = u; EncryptedCode = c; Sequence = seq; Channel = channel; }
 		}
 
 		public readonly struct TwoFactorSetupCapture

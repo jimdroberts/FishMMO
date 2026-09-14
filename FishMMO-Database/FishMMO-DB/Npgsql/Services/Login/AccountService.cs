@@ -340,7 +340,14 @@ namespace FishMMO.Database.Npgsql.Services
 				verifyCodeExpiresUtc: entity.VerifyCodeExpiresUtc,
 				verificationEmailSentAt: entity.VerificationEmailSentAt,
 				created: entity.TimeCreated,
-				lastLogin: entity.LastLogin
+				lastLogin: entity.LastLogin,
+				verificationChannels: entity.VerificationChannels,
+				emailVerified: entity.EmailVerified,
+				phoneVerified: entity.PhoneVerified,
+				phone: entity.Phone,
+				loginLockedUntilUtc: entity.LoginLockedUntilUtc,
+				twoFactorLockedUntilUtc: entity.TwoFactorLockedUntilUtc,
+				phoneVerifyCodeExpiresUtc: entity.PhoneVerifyCodeExpiresUtc
 			);
 		}
 
@@ -412,7 +419,7 @@ namespace FishMMO.Database.Npgsql.Services
 				 * code it belonged to. */
 				var sql = $@"UPDATE {TableName} SET email = {{0}}, verified = FALSE, verify_code = 0, verify_code_expires_utc = NULL WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { (object?)email ?? DBNull.Value, accountName.ToLowerInvariant() }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { (object?)email, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -615,7 +622,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var sql = $@"UPDATE {TableName} SET discord_link_code = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { (object?)linkCode ?? DBNull.Value, accountName.ToLowerInvariant() }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { (object?)linkCode, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -677,12 +684,18 @@ namespace FishMMO.Database.Npgsql.Services
 				// rejects the sentinel column-default value defensively even though the caller
 				// also pre-screens it above.
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				/* Proves the email channel. `verified` — the flag sign-in reads — follows only when every
+				 * channel the player chose is proven: an account that chose SMS as well stays unverified
+				 * until its phone code arrives too. Choosing two channels is stricter, never looser. */
 				var sql = $@"UPDATE {TableName}
-					SET verified = true, verify_code = 0, verify_code_expires_utc = NULL
+					SET email_verified = true,
+						verified = ((verification_channels & 2) = 0 OR phone_verified),
+						verify_code = 0,
+						verify_code_expires_utc = NULL
 					WHERE name_lowercase = {{0}}
 						AND verify_code = {{1}}
 						AND verify_code <> 0
-						AND verified = false
+						AND email_verified = false
 						AND (verify_code_expires_utc IS NULL OR verify_code_expires_utc > timezone('UTC', CURRENT_TIMESTAMP))";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
@@ -756,8 +769,15 @@ namespace FishMMO.Database.Npgsql.Services
 				// redeeming a code. Any pending code is cleared so a stale one cannot be
 				// replayed later against an already-verified account.
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				// Every channel at once: the server verifies nothing, so nothing is waiting to be proven.
 				var sql = $@"UPDATE {TableName}
-					SET verified = true, verify_code = 0, verify_code_expires_utc = NULL
+					SET verified = true,
+						email_verified = true,
+						phone_verified = CASE WHEN phone IS NOT NULL THEN true ELSE phone_verified END,
+						verify_code = 0,
+						verify_code_expires_utc = NULL,
+						phone_verify_code = 0,
+						phone_verify_code_expires_utc = NULL
 					WHERE name_lowercase = {{0}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { normalized }, cancellationToken)
@@ -922,6 +942,16 @@ namespace FishMMO.Database.Npgsql.Services
 						MutedUntil = a.MutedUntil,
 						MutedBy = a.MutedBy,
 						MuteReason = a.MuteReason,
+						Phone = a.Phone,
+						PhoneVerified = a.PhoneVerified,
+						EmailVerified = a.EmailVerified,
+						VerificationChannels = a.VerificationChannels,
+						RealName = a.RealName,
+						Country = a.Country,
+						Address = a.Address,
+						ReferralAccount = a.ReferralAccount,
+						LoginLockedUntilUtc = a.LoginLockedUntilUtc,
+						TwoFactorLockedUntilUtc = a.TwoFactorLockedUntilUtc,
 						// FirstOrDefault, not Single: an account with no characters has no group
 						// at all, and the default zero is the right answer for it.
 						CharacterCount = characterCounts
@@ -988,6 +1018,16 @@ namespace FishMMO.Database.Npgsql.Services
 						MutedUntil = a.MutedUntil,
 						MutedBy = a.MutedBy,
 						MuteReason = a.MuteReason,
+						Phone = a.Phone,
+						PhoneVerified = a.PhoneVerified,
+						EmailVerified = a.EmailVerified,
+						VerificationChannels = a.VerificationChannels,
+						RealName = a.RealName,
+						Country = a.Country,
+						Address = a.Address,
+						ReferralAccount = a.ReferralAccount,
+						LoginLockedUntilUtc = a.LoginLockedUntilUtc,
+						TwoFactorLockedUntilUtc = a.TwoFactorLockedUntilUtc,
 						// One row, so a correlated count is one indexed lookup and the grouped
 						// form the search needs would buy nothing here.
 						CharacterCount = dbContext.Characters.Count(c => c.Account == a.Name && !c.Deleted),
@@ -1082,9 +1122,9 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						normalized,
 						(short)(byte)AccessLevel.Banned,
-						(object?)bannedUntilUtc ?? DBNull.Value,
-						(object?)Clip(bannedBy, ModerationActorMaxLength) ?? DBNull.Value,
-						(object?)Clip(reason, ModerationReasonMaxLength) ?? DBNull.Value,
+						(object?)bannedUntilUtc,
+						(object?)Clip(bannedBy, ModerationActorMaxLength),
+						(object?)Clip(reason, ModerationReasonMaxLength),
 					}, cancellationToken)
 					.ConfigureAwait(false);
 				if (accountRows == 0)
@@ -1244,9 +1284,9 @@ namespace FishMMO.Database.Npgsql.Services
 					.ExecuteSqlRawAsync(sql, new object[]
 					{
 						normalized,
-						(object?)mutedUntilUtc ?? DBNull.Value,
-						(object?)Clip(mutedBy, ModerationActorMaxLength) ?? DBNull.Value,
-						(object?)Clip(reason, ModerationReasonMaxLength) ?? DBNull.Value,
+						(object?)mutedUntilUtc,
+						(object?)Clip(mutedBy, ModerationActorMaxLength),
+						(object?)Clip(reason, ModerationReasonMaxLength),
 					}, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
@@ -1286,6 +1326,303 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistProfileAsync(
+			string accountName,
+			AccountProfileData profile,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+			if (profile == null)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "A profile is required.");
+			}
+			if (!AccountProfileRules.TryValidate(profile, out AccountProfileData clean, out string error))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, error);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* A changed number is an unproven number: its verification and any outstanding code go
+				 * with the old one. `verified` is deliberately left alone — changing a phone number must
+				 * not lock a player out of signing in; what a changed number costs is the channel's
+				 * own proof, and the caller decides whether to send a new code. */
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET phone_verified = CASE WHEN phone IS DISTINCT FROM {{1}} THEN false ELSE phone_verified END,
+						phone_verify_code = CASE WHEN phone IS DISTINCT FROM {{1}} THEN 0 ELSE phone_verify_code END,
+						phone_verify_code_expires_utc = CASE WHEN phone IS DISTINCT FROM {{1}} THEN NULL ELSE phone_verify_code_expires_utc END,
+						phone = {{1}},
+						real_name = {{2}},
+						country = {{3}},
+						address = {{4}},
+						referral_account = {{5}},
+						verification_channels = {{6}}
+					WHERE name_lowercase = {{0}}";
+				/* A null is passed as null, never as DBNull.Value. EF Core 5's raw-SQL parameters look up
+				 * a type mapping for the CLR type of each value, and there is none for DBNull: the call
+				 * throws before anything is sent. A plain null becomes a database NULL on its own. That
+				 * pattern made every profile with a blank field unwritable, and permanent bans and
+				 * mute clears with it, until 2026-09-14. */
+				int rows = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[]
+				{
+					normalized,
+					(object?)clean.Phone,
+					(object?)clean.RealName,
+					(object?)clean.Country,
+					(object?)clean.Address,
+					(object?)clean.ReferralAccount,
+					(short)(byte)clean.VerificationChannels,
+				}, cancellationToken).ConfigureAwait(false);
+				if (rows == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistChannelsVerifiedAsync(
+			string accountName,
+			AccountVerificationChannels channels,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* Marks channels proven without a code, for a server that has switched that channel's
+				 * verification off. The SMS channel is only marked when there is a number, so switching
+				 * SMS off cannot make an account look as if it proved a phone it never gave. */
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET verified = ((verification_channels & 1) = 0 OR email_verified OR ({{1}} & 1) <> 0)
+							AND ((verification_channels & 2) = 0 OR phone_verified OR (({{1}} & 2) <> 0 AND phone IS NOT NULL)),
+						email_verified = (email_verified OR ({{1}} & 1) <> 0),
+						phone_verified = (phone_verified OR (({{1}} & 2) <> 0 AND phone IS NOT NULL))
+					WHERE name_lowercase = {{0}}";
+				int rows = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized, (int)channels }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rows == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistPhoneVerifyCodeAsync(
+			string accountName,
+			int verifyCode,
+			DateTime expiresUtc,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+			if (verifyCode == 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "A verification code cannot be zero.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET phone_verify_code = {{1}}, phone_verify_code_expires_utc = {{2}}
+					WHERE name_lowercase = {{0}} AND phone IS NOT NULL";
+				int rows = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode, expiresUtc }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rows == 0)
+				{
+					throw new DatabaseException("That account has no phone number to verify.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistPhoneVerifiedAsync(
+			string accountName,
+			int verifyCode,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+			// The sentinel: a zero would "verify" every account that never had a code sent.
+			if (verifyCode == 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid verification code or phone already verified.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// One statement is the check and the write, like the email code. See PersistVerifiedAsync.
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET phone_verified = true,
+						verified = ((verification_channels & 1) = 0 OR email_verified),
+						phone_verify_code = 0,
+						phone_verify_code_expires_utc = NULL
+					WHERE name_lowercase = {{0}}
+						AND phone IS NOT NULL
+						AND phone_verify_code = {{1}}
+						AND phone_verify_code <> 0
+						AND phone_verified = false
+						AND (phone_verify_code_expires_utc IS NULL OR phone_verify_code_expires_utc > timezone('UTC', CURRENT_TIMESTAMP))";
+				int rows = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rows == 0)
+				{
+					throw new DatabaseException("Invalid verification code or phone already verified.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<DateTime?>> RecordAuthFailureAsync(
+			string accountName,
+			AuthFailureKind kind,
+			int threshold,
+			TimeSpan window,
+			TimeSpan lockout,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				// Not a failure the caller should surface: an unknown or malformed name is locked out of
+				// nothing, and answering differently would say which names exist.
+				return DatabaseResult<DateTime?>.Success(null);
+			}
+			if (threshold < 1 || window <= TimeSpan.Zero || lockout <= TimeSpan.Zero)
+			{
+				return DatabaseResult<DateTime?>.Failure(DatabaseErrorCodes.ValidationError, "A lockout needs a threshold, a window and a length.");
+			}
+
+			(string count, string since, string until) = LockoutColumns(kind);
+			DateTime now = DateTime.UtcNow;
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* One statement counts, windows and locks, so two login servers failing the same account
+				 * at once cannot both read a count of four and both write five. A failure after the
+				 * window has passed starts a new window at one. Reaching the threshold locks, and resets
+				 * the count, so the next window after the lockout starts from nothing rather than
+				 * relocking on the first wrong guess. SET expressions read the row as it was before the
+				 * statement, which is what lets `next` be written out three times and mean one value. */
+				string fresh = $"({since} IS NULL OR {since} < {{2}})";
+				string next = $"(CASE WHEN {fresh} THEN 1 ELSE {count} + 1 END)";
+				var sql = $@"UPDATE {TableName}
+					SET {count} = CASE WHEN {next} >= {{3}} THEN 0 ELSE {next} END,
+						{since} = CASE WHEN {next} >= {{3}} THEN NULL WHEN {fresh} THEN {{1}} ELSE {since} END,
+						{until} = CASE WHEN {next} >= {{3}} THEN {{4}} ELSE {until} END
+					WHERE name_lowercase = {{0}}
+					RETURNING {until}";
+
+				return await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					new object[] { Authentication.NormalizeAccountLookup(accountName), now, now - window, threshold, now + lockout },
+					reader => reader.IsDBNull(0) ? (DateTime?)null : reader.GetDateTime(0),
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> ClearAuthFailuresAsync(
+			string accountName,
+			AuthFailureKind kind,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Success();
+			}
+
+			(string count, string since, string until) = LockoutColumns(kind);
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName}
+					SET {count} = 0, {since} = NULL, {until} = NULL
+					WHERE name_lowercase = {{0}} AND ({count} <> 0 OR {until} IS NOT NULL)";
+				await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { Authentication.NormalizeAccountLookup(accountName) }, cancellationToken)
+					.ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> ClearAuthLockoutAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET failed_login_count = 0, failed_login_since_utc = NULL, login_locked_until_utc = NULL,
+						failed_two_factor_count = 0, failed_two_factor_since_utc = NULL, two_factor_locked_until_utc = NULL
+					WHERE name_lowercase = {{0}}
+						AND (login_locked_until_utc > timezone('UTC', CURRENT_TIMESTAMP)
+							OR two_factor_locked_until_utc > timezone('UTC', CURRENT_TIMESTAMP))";
+				int rows = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized }, cancellationToken)
+					.ConfigureAwait(false);
+				return rows > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<AuthLockoutState>> FetchAuthLockoutAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<AuthLockoutState>.Success(default);
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				string normalized = Authentication.NormalizeAccountLookup(accountName);
+				var row = await dbContext.Accounts
+					.AsNoTracking()
+					.Where(a => a.NameLowercase == normalized)
+					.Select(a => new { a.LoginLockedUntilUtc, a.TwoFactorLockedUntilUtc })
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+				// An unknown account is locked out of nothing; see RecordAuthFailureAsync.
+				return row == null
+					? default
+					: new AuthLockoutState(row.LoginLockedUntilUtc, row.TwoFactorLockedUntilUtc);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>The counter, window and lock columns for one kind of failure.</summary>
+		/// <remarks>Column names from a closed switch, never from input, so interpolating them into SQL is safe.</remarks>
+		private static (string Count, string Since, string Until) LockoutColumns(AuthFailureKind kind) => kind switch
+		{
+			AuthFailureKind.TwoFactor => ("failed_two_factor_count", "failed_two_factor_since_utc", "two_factor_locked_until_utc"),
+			_ => ("failed_login_count", "failed_login_since_utc", "login_locked_until_utc"),
+		};
 
 		/// <summary>Cuts operator-supplied text to a column's length rather than failing the write on it.</summary>
 		private static string? Clip(string? text, int maxLength)

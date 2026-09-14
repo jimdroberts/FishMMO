@@ -101,11 +101,13 @@ export async function render(host, ctx) {
 	let readAt = 0;
 	let refreshError = null;
 
-	async function read() {
+	/* `source` is `api` for a read somebody asked for, and `api.auto` for the timer's: staff
+	 * reads are audited, but a background poll is marked and not recorded. */
+	async function read(source = api) {
 		/* Both reads go out together so the hosts and the commands queued against them describe
 		 * the same instant — a command shown as waiting beside a host read five seconds earlier
 		 * is a pair of facts that never coexisted. */
-		const [hosts, recent] = await Promise.all([api.getDaemonHosts(), readCommands()]);
+		const [hosts, recent] = await Promise.all([source.getDaemonHosts(), readCommands(source)]);
 		payload = hosts;
 		commands = recent;
 		readAt = Date.now();
@@ -116,9 +118,9 @@ export async function render(host, ctx) {
 	/* The command strip is secondary: if that route fails the hosts and their controls are
 	 * still worth showing, so it swallows its own failure and says so in its own card rather
 	 * than taking the page down with it. */
-	async function readCommands() {
+	async function readCommands(source) {
 		try {
-			const page = await api.getDaemonCommands({ page: 1, pageSize: RECENT_COMMANDS });
+			const page = await source.getDaemonCommands({ page: 1, pageSize: RECENT_COMMANDS });
 			commandsError = null;
 			return page?.items ?? [];
 		} catch (err) {
@@ -130,9 +132,9 @@ export async function render(host, ctx) {
 	/* A failed poll keeps what is on screen rather than blanking it: the last good read,
 	 * labelled as not refreshing, is more use mid-incident than an error page where the hosts
 	 * were. */
-	async function pollOnce() {
+	async function pollOnce(source = api) {
 		try {
-			await read();
+			await read(source);
 		} catch (err) {
 			refreshError = err.message || 'The host list could not be refreshed.';
 			if (payload) paint();
@@ -140,8 +142,9 @@ export async function render(host, ctx) {
 	}
 
 	/* Started before the first read so the page heals itself: if the first read fails the
-	 * router renders that failure, and the first poll that succeeds paints over it. */
-	poll = setInterval(pollOnce, REFRESH_MS);
+	 * router renders that failure, and the first poll that succeeds paints over it. Only this
+	 * timer marks its reads as automatic. */
+	poll = setInterval(() => pollOnce(api.auto), REFRESH_MS);
 
 	// The first read is allowed to throw — the router turns it into a visible failure.
 	await read();

@@ -91,6 +91,14 @@ namespace FishMMO.Auth.Implementation
 		private int age;
 		/// <summary>True when the current flow is account registration rather than login.</summary>
 		private bool register;
+		/// <summary>Optional registration details, sent as one encrypted field. Cleared after the create-account broadcast is sent.</summary>
+		private RegistrationProfile? registrationProfile;
+		/// <summary>Account name of a pending verification-only connection; see <see cref="SetVerificationRequest"/>.</summary>
+		private string? verifyRequestUsername;
+		/// <summary>Code of a pending verification-only connection. Cleared the moment it is sent.</summary>
+		private string? verifyRequestCode;
+		/// <summary>Channel of a pending verification-only connection.</summary>
+		private VerificationCodeChannel verifyRequestChannel;
 		/// <summary>Client game version string (e.g. "0.1.0"), sent during handshake for server validation.</summary>
 		private string gameVersion = "";
 
@@ -126,6 +134,16 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Log source tag for all log messages.</summary>
 		protected virtual string LogPrefix => GetType().Name;
 
+		/// <summary>
+		/// Seconds the server said to wait before retrying, from the most recent auth result, or 0.
+		/// </summary>
+		/// <remarks>
+		/// Set before <see cref="OnAuthResultCallback"/> fires, so a handler for
+		/// <see cref="ClientAuthenticationResult.TwoFactorLocked"/> can read it. Relative seconds rather
+		/// than an instant, so a client whose clock is wrong still reports the right wait.
+		/// </remarks>
+		public int LastRetryAfterSeconds { get; private set; }
+
 		#endregion
 
 		#region Credential Setup
@@ -138,8 +156,12 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="register">True to register a new account; false to login.</param>
 		/// <param name="email">Email address (required for registration).</param>
 		/// <param name="age">User age (required for registration).</param>
+		/// <param name="profile">
+		/// Optional registration details (phone, beta code, country, real name, address, referral,
+		/// verification choice). Registration only; ignored for login. Null sends an empty profile.
+		/// </param>
 		/// <returns>True if credentials were accepted; false if rejected by validation rules.</returns>
-		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0)
+		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0, RegistrationProfile? profile = null)
 		{
 			if (!IsAllowedUsername(username) || !IsAllowedPassword(password))
 				return false;
@@ -147,11 +169,61 @@ namespace FishMMO.Auth.Implementation
 			if (register && (string.IsNullOrWhiteSpace(email) || !IsAllowedEmailUsername(email)))
 				return false;
 
+			if (register && profile != null)
+			{
+				// Refuse now, while the caller can still say why, rather than at send time.
+				try
+				{
+					byte[] probe = profile.Serialize();
+					CryptographicOperations.ZeroMemory(probe);
+				}
+				catch (System.ArgumentException)
+				{
+					return false;
+				}
+			}
+
 			this.username = username;
 			this.password = password;
 			this.register = register;
 			this.email = email;
 			this.age = age;
+			this.registrationProfile = register ? profile : null;
+			return true;
+		}
+
+		/// <summary>
+		/// Makes the next connection a verification-only one: once the handshake completes, the code is
+		/// sent as an account-verify message instead of starting a sign-in or a registration.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The server reports an unverified account only after a correct password proof, and then
+		/// closes that connection — and the credentials are gone by then, dropped the moment the proof
+		/// was sent. A code typed afterwards therefore needs a connection of its own. Verifying needs
+		/// only the handshake's session keys, never the password, so none is asked for again.
+		/// </para>
+		/// <para>Replaces any credentials that were set: a connection is for one thing.</para>
+		/// </remarks>
+		/// <param name="username">The account name (not an email address).</param>
+		/// <param name="verifyCode">The code the player entered.</param>
+		/// <param name="channel">Whether it came by email or SMS.</param>
+		/// <returns>False when the account name or the code is not acceptable.</returns>
+		public bool SetVerificationRequest(string username, string verifyCode, VerificationCodeChannel channel)
+		{
+			if (!IsAllowedUsername(username) || string.IsNullOrWhiteSpace(verifyCode) || verifyCode.Length > 32)
+				return false;
+
+			this.username = null;
+			this.password = null;
+			this.email = null;
+			this.register = false;
+			this.age = 0;
+			this.registrationProfile = null;
+
+			verifyRequestUsername = username;
+			verifyRequestCode = verifyCode;
+			verifyRequestChannel = channel;
 			return true;
 		}
 
@@ -225,14 +297,23 @@ namespace FishMMO.Auth.Implementation
 			string? keepEmail = email;
 			bool keepRegister = register;
 			int keepAge = age;
+			RegistrationProfile? keepProfile = registrationProfile;
+			string? keepVerifyUsername = verifyRequestUsername;
+			string? keepVerifyCode = verifyRequestCode;
+			VerificationCodeChannel keepVerifyChannel = verifyRequestChannel;
 
 			ClearKeyMaterial();
+
+			verifyRequestUsername = keepVerifyUsername;
+			verifyRequestCode = keepVerifyCode;
+			verifyRequestChannel = keepVerifyChannel;
 
 			username = keepUsername;
 			password = keepPassword;
 			email = keepEmail;
 			register = keepRegister;
 			age = keepAge;
+			registrationProfile = keepProfile;
 		}
 
 		/// <summary>
@@ -331,6 +412,20 @@ namespace FishMMO.Auth.Implementation
 				_ = Log.Warning(LogPrefix, $"X25519 handshake failed: {ex.Message}");
 				ClearKeyMaterial();
 				Disconnect();
+				return;
+			}
+
+			/* A verification-only connection: send the code and stop. It needs the session keys just
+			 * derived and nothing else — no SRP state, no token — and it outranks a held token for the
+			 * same reason credentials do: it states what this connection is for. */
+			if (verifyRequestUsername != null && verifyRequestCode != null)
+			{
+				string verifyUser = verifyRequestUsername;
+				string verifyCode = verifyRequestCode;
+				VerificationCodeChannel verifyChannel = verifyRequestChannel;
+				verifyRequestUsername = null;
+				verifyRequestCode = null;
+				SendVerifyCode(verifyUser, verifyCode, verifyChannel);
 				return;
 			}
 
@@ -439,13 +534,23 @@ namespace FishMMO.Auth.Implementation
 				byte[] encryptedAge;
 				byte[] encryptedSalt;
 				byte[] encryptedVerifier;
+				byte[] encryptedProfile;
 				uint createAccountSeq;
 				try
 				{
+					// Always sent, empty or not: the server counts six fields back from Seq.
+					byte[] profileBytes = (registrationProfile ?? new RegistrationProfile()).Serialize();
 					SrpService.ClientEncryptRegistrationFields(
-						this.email!, this.age, salt, verifier,
+						this.email!, this.age, salt, verifier, profileBytes,
 						clientToServerKey, sendNonceCtx, this.agreedVersion,
-						out encryptedEmail, out encryptedAge, out encryptedSalt, out encryptedVerifier, out createAccountSeq);
+						out encryptedEmail, out encryptedAge, out encryptedSalt, out encryptedVerifier, out encryptedProfile, out createAccountSeq);
+				}
+				catch (System.ArgumentException ex)
+				{
+					_ = Log.Error(LogPrefix, $"Registration profile could not be serialised: {ex.Message}");
+					ClearKeyMaterial();
+					Disconnect();
+					return;
 				}
 				catch (CryptographicException ex)
 				{
@@ -455,7 +560,10 @@ namespace FishMMO.Auth.Implementation
 					return;
 				}
 
-				SendCreateAccount(encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, createAccountSeq);
+				// Personal data; it has done its one job.
+				registrationProfile = null;
+
+				SendCreateAccount(encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, encryptedProfile, createAccountSeq);
 			}
 			else
 			{
@@ -638,6 +746,18 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="result">The auth result code.</param>
 		public void OnAuthResultReceived(ClientAuthenticationResult result)
 		{
+			OnAuthResultReceived(result, 0);
+		}
+
+		/// <summary>
+		/// Handles a generic auth result broadcast that carries a retry-after hint.
+		/// </summary>
+		/// <param name="result">The auth result code.</param>
+		/// <param name="retryAfterSeconds">Seconds until the refused step may be retried, or 0. Exposed as <see cref="LastRetryAfterSeconds"/>.</param>
+		public void OnAuthResultReceived(ClientAuthenticationResult result, int retryAfterSeconds)
+		{
+			LastRetryAfterSeconds = retryAfterSeconds > 0 ? retryAfterSeconds : 0;
+
 			if (result == ClientAuthenticationResult.TokenInvalid ||
 				result == ClientAuthenticationResult.TokenExpired ||
 				result == ClientAuthenticationResult.TokenRevoked)
@@ -687,6 +807,17 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="verifyCode">The verification code received by the user.</param>
 		public void SendVerifyCode(string username, string verifyCode)
 		{
+			SendVerifyCode(username, verifyCode, VerificationCodeChannel.Email);
+		}
+
+		/// <summary>
+		/// Encrypts and sends an account verification code for a specific channel.
+		/// </summary>
+		/// <param name="username">Account username to verify.</param>
+		/// <param name="verifyCode">The verification code received by the user.</param>
+		/// <param name="channel">Whether the code came by email or by SMS.</param>
+		public void SendVerifyCode(string username, string verifyCode, VerificationCodeChannel channel)
+		{
 			if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(verifyCode)) return;
 			if (sendNonceCtx == null || clientToServerKey == null)
 			{
@@ -709,7 +840,7 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			SendAccountVerify(encryptedUsername, encryptedCode, accountVerifySeq);
+			SendAccountVerify(encryptedUsername, encryptedCode, accountVerifySeq, channel);
 		}
 
 		/// <summary>
@@ -776,6 +907,9 @@ namespace FishMMO.Auth.Implementation
 			email = null;
 			register = false;
 			age = 0;
+			registrationProfile = null;
+			verifyRequestUsername = null;
+			verifyRequestCode = null;
 		}
 
 		/// <summary>
@@ -907,10 +1041,11 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptedAge">AES-GCM encrypted age value.</param>
 		/// <param name="encryptedSalt">AES-GCM encrypted SRP salt.</param>
 		/// <param name="encryptedVerifier">AES-GCM encrypted SRP verifier.</param>
-		/// <param name="seq">Message sequence number.</param>
+		/// <param name="encryptedProfile">AES-GCM encrypted <see cref="RegistrationProfile"/> serialisation.</param>
+		/// <param name="seq">Message sequence number: the profile's, the last of the six fields.</param>
 		protected abstract void SendCreateAccount(
 			byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
-			byte[] encryptedSalt, byte[] encryptedVerifier, uint seq);
+			byte[] encryptedSalt, byte[] encryptedVerifier, byte[] encryptedProfile, uint seq);
 
 		/// <summary>
 		/// Sends an account verification code broadcast.
@@ -918,7 +1053,8 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptedUsername">AES-GCM encrypted username.</param>
 		/// <param name="encryptedCode">AES-GCM encrypted verification code.</param>
 		/// <param name="seq">Message sequence number.</param>
-		protected abstract void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq);
+		/// <param name="channel">Which channel's code this is; carried in the clear, see <c>AccountVerifyBroadcast.Channel</c>.</param>
+		protected abstract void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq, VerificationCodeChannel channel);
 
 		/// <summary>
 		/// Sends a TOTP verify broadcast.

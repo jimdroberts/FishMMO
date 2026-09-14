@@ -65,6 +65,18 @@ namespace FishMMO.Database.Data
 		public string ClosedBy { get; set; }
 
 		/// <summary>
+		/// The lowest access level that may see and work it: its support tier. <c>GameMaster</c> (2)
+		/// is the first tier, <c>Admin</c> (3) the second.
+		/// </summary>
+		public byte RequiredAccessLevel { get; set; }
+
+		/// <summary>The staff account that last moved it to another tier.</summary>
+		public string EscalatedBy { get; set; }
+
+		/// <summary>When it last moved to another tier.</summary>
+		public DateTime? EscalatedUtc { get; set; }
+
+		/// <summary>
 		/// The conversation. Empty on a list result; filled on a fetch.
 		/// </summary>
 		/// <remarks>
@@ -122,6 +134,18 @@ namespace FishMMO.Database.Data
 
 		/// <summary>Only tickets naming this account as the target.</summary>
 		public string TargetAccount { get; set; }
+
+		/// <summary>
+		/// Only tickets a staff member at this access level may work: their own tier and below.
+		/// </summary>
+		/// <remarks>
+		/// Applied in the query, like the internal-note filter, so a list never loads a ticket the
+		/// reader may not see and trims it afterwards.
+		/// </remarks>
+		public byte? MaxRequiredAccessLevel { get; set; }
+
+		/// <summary>Only tickets at exactly this tier.</summary>
+		public byte? RequiredAccessLevel { get; set; }
 
 		/// <summary>Substring of the subject.</summary>
 		public string Subject { get; set; }

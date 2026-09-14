@@ -103,8 +103,13 @@ namespace FishMMO.Client
 			if (root != null)
 			{
 				/* The root holds focus when the panel opens (see Attach) but must not be a Tab
-				 * stop of its own, or the first press goes nowhere visible. */
-				root.tabIndex = 0;
+				 * stop of its own, or a press goes nowhere visible. A negative index is what takes
+				 * it out of the ring: UI Toolkit's focus ring admits every element with
+				 * tabIndex >= 0, so the 0 this used to assign put the root at the END of the
+				 * order — measured on the register panel, Tab from Back landed on the panel root
+				 * before wrapping to Username. A negative index still leaves the root focusable
+				 * by Focus(). */
+				root.tabIndex = -1;
 			}
 		}
 

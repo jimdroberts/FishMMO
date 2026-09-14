@@ -1,10 +1,14 @@
 using System.Security.Claims;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using FishMMO.Auth.Core;
 using FishMMO.ControlPanel.Auth;
 using FishMMO.ControlPanel.Services;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Database.Data;
+using FishMMO.Database.Data.Enums;
 using FishMMO.Shared;
+using AccessLevel = FishMMO.Auth.Core.AccessLevel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -33,6 +37,10 @@ namespace FishMMO.ControlPanel.Controllers
 		private readonly IWebSessionService webSessions;
 		private readonly PanelSessionManager sessions;
 		private readonly IWebHostEnvironment environment;
+		private readonly RegistrationFormTokenService formTokens;
+		private readonly IBetaCodeService betaCodes;
+		private readonly VerificationOptions verification;
+		private readonly BetaOptions beta;
 		private readonly ILogger<AccountController> log;
 
 		public AccountController(
@@ -46,8 +54,16 @@ namespace FishMMO.ControlPanel.Controllers
 			IWebSessionService webSessions,
 			PanelSessionManager sessions,
 			IWebHostEnvironment environment,
+			RegistrationFormTokenService formTokens,
+			IBetaCodeService betaCodes,
+			VerificationOptions verification,
+			BetaOptions beta,
 			ILogger<AccountController> log)
 		{
+			this.formTokens = formTokens;
+			this.betaCodes = betaCodes;
+			this.verification = verification;
+			this.beta = beta;
 			this.registration = registration;
 			this.selfService = selfService;
 			this.passwordReset = passwordReset;
@@ -84,32 +100,111 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = "A registration body is required." });
 			}
 
-			var result = await registration.RegisterAsync(
+			/* The honeypot. A missing, forged or expired form token, a form submitted faster than a
+			 * person can fill one in, or a value in any decoy field is refused with EXACTLY the answer a
+			 * genuine creation failure gets, and a line in the log. Nothing in the response says why;
+			 * a bot told which check tripped is a bot that passes it next time. See
+			 * RegistrationFormTokenService and the README. */
+			string refusal = formTokens.Check(request.FormToken, DecoyValues(request.Extra));
+			if (refusal != null)
+			{
+				log.LogWarning("Registration refused by the form check from {Ip}: {Reason}.",
+					HttpContext.Connection.RemoteIpAddress?.ToString(), refusal);
+				return BadRequest(new { error = AccountRegistrationService.CouldNotCreateError, field = (string)null });
+			}
+
+			var channels = AccountVerificationChannels.None;
+			if (request.VerifyEmail) channels |= AccountVerificationChannels.Email;
+			if (request.VerifySms) channels |= AccountVerificationChannels.Sms;
+
+			var result = await registration.RegisterAsync(new AccountRegistrationService.RegistrationInput(
 				request.Username,
 				request.Salt,
 				request.Verifier,
 				request.Email,
 				request.Age,
-				HttpContext.RequestAborted);
+				new AccountProfileData
+				{
+					Phone = request.Phone,
+					RealName = request.RealName,
+					Country = request.Country,
+					Address = request.Address,
+					ReferralAccount = request.ReferralAccount,
+					VerificationChannels = channels,
+				},
+				request.BetaCode), HttpContext.RequestAborted);
 
 			if (!result.Ok)
 			{
-				return BadRequest(new { error = result.Error });
+				// `field` names the input the message belongs beside, when it belongs to one.
+				return BadRequest(new { error = result.Error, field = result.Field });
 			}
+
+			string[] pending = AccountRegistrationService.ChannelNames(result.VerificationPending);
+			string message = result.AutoVerified
+				? "Account created and verified."
+				: pending.Length == 2
+					? "Account created. Enter the codes sent to your email address and your phone."
+					: pending.Contains("sms")
+						? "Account created. Enter the code sent to your phone."
+						: "Account created. Check your email for the verification code.";
 
 			// The otpauth URI and the recovery codes are returned exactly once, here, and are
 			// never retrievable again — the same contract the in-game TwoFactorSetup broadcast
 			// has. If the player loses them they re-enrol.
 			return Ok(new
 			{
-				message = result.AutoVerified
-					? "Account created and verified."
-					: "Account created. Check your email for the verification code.",
+				message,
 				autoVerified = result.AutoVerified,
 				requiresVerification = !result.AutoVerified,
+				verificationPending = pending,
 				otpauthUri = result.OtpauthUri,
 				recoveryCodes = result.RecoveryCodes,
+				betaRedeemed = result.BetaRedeemed,
+				betaWarning = result.BetaWarning,
 			});
+		}
+
+		/// <summary>
+		/// Issues a registration form: a signed token and the randomised decoy fields to render.
+		/// </summary>
+		/// <remarks>
+		/// Rate-limited under the registration bucket, because a token is only ever wanted by
+		/// somebody about to register. The in-game client gets nothing like it — bots there speak the
+		/// protocol, not the page — see the README.
+		/// </remarks>
+		[HttpGet("register/form")]
+		[AllowAnonymous]
+		[EnableRateLimiting("Register")]
+		public IActionResult RegistrationForm()
+		{
+			var form = formTokens.Issue();
+			return Ok(new
+			{
+				token = form.Token,
+				decoys = form.Decoys.Select(d => new { name = d.Name, label = d.Label }),
+			});
+		}
+
+		/// <summary>The decoy values out of the unmatched body properties, as text.</summary>
+		private static Dictionary<string, string> DecoyValues(Dictionary<string, JsonElement> extra)
+		{
+			var values = new Dictionary<string, string>(StringComparer.Ordinal);
+			if (extra == null)
+			{
+				return values;
+			}
+			foreach (var pair in extra)
+			{
+				values[pair.Key] = pair.Value.ValueKind switch
+				{
+					JsonValueKind.String => pair.Value.GetString(),
+					JsonValueKind.Null or JsonValueKind.Undefined => "",
+					// A decoy is a text box; anything that is not a string or null was put there by something that is not one.
+					_ => pair.Value.GetRawText(),
+				};
+			}
+			return values;
 		}
 
 		/// <summary>Redeems the code emailed at registration.</summary>
@@ -123,12 +218,72 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = "A username and verification code are required." });
 			}
 
-			var (ok, error) = await registration.VerifyAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
+			var (ok, error, outstanding) = await registration.VerifyAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
 			if (!ok)
 			{
 				return BadRequest(new { error });
 			}
-			return Ok(new { message = "Account verified." });
+			return VerifiedResponse("Email address verified.", outstanding);
+		}
+
+		/// <summary>Redeems the code texted at registration.</summary>
+		/// <remarks>
+		/// The phone twin of <c>verify</c>, rate-limited the same way. What is still outstanding is
+		/// returned only after a correct code, which already proves control of the account's channel.
+		/// </remarks>
+		[HttpPost("verify-phone")]
+		[AllowAnonymous]
+		[EnableRateLimiting("Register")]
+		public async Task<IActionResult> VerifyPhone([FromBody] VerifyRequest request)
+		{
+			if (request == null || string.IsNullOrWhiteSpace(request.Username) || request.Code <= 0)
+			{
+				return BadRequest(new { error = "A username and verification code are required." });
+			}
+
+			var (ok, error, outstanding) = await registration.VerifyPhoneAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
+			if (!ok)
+			{
+				return BadRequest(new { error });
+			}
+			return VerifiedResponse("Phone number verified.", outstanding);
+		}
+
+		/// <summary>
+		/// Sends a fresh verification code for one channel, if the account is owed one.
+		/// </summary>
+		/// <remarks>
+		/// Always the same 200 and the same words: unknown account, verified account, a channel it
+		/// never chose, or a cooldown still running. Anything else would say which names exist.
+		/// </remarks>
+		[HttpPost("verify/resend")]
+		[AllowAnonymous]
+		[EnableRateLimiting("Register")]
+		public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationRequest request)
+		{
+			var channel = AccountRegistrationService.ParseChannel(request?.Channel);
+			if (request == null || string.IsNullOrWhiteSpace(request.Username) || channel == AccountVerificationChannels.None)
+			{
+				return BadRequest(new { error = "A username and a channel (email or sms) are required." });
+			}
+
+			await registration.ResendAsync(request.Username.Trim(), channel, HttpContext.RequestAborted);
+			return Ok(new
+			{
+				message = $"If that account is waiting for a {(channel == AccountVerificationChannels.Sms ? "phone" : "email")} code, a new one is on its way. " +
+						  $"Codes can be resent every {VerificationResendThrottle.Cooldown.TotalMinutes:0} minutes; the newest code is the one that works.",
+			});
+		}
+
+		private IActionResult VerifiedResponse(string what, AccountVerificationChannels outstanding)
+		{
+			string[] remaining = AccountRegistrationService.ChannelNames(outstanding);
+			return Ok(new
+			{
+				message = remaining.Length == 0 ? "Account verified." : $"{what} One more code is still needed.",
+				verified = remaining.Length == 0,
+				outstanding = remaining,
+			});
 		}
 
 		// ── Password recovery ───────────────────────────────────────────────────
@@ -285,6 +440,23 @@ namespace FishMMO.ControlPanel.Controllers
 					error = Authentication.InvalidCharacterNameError,
 				},
 				minimumAge = 13,
+				/* Registration's optional fields and gates. The browser marks the beta code required from
+				 * this, and offers only the verification channels this server actually verifies. */
+				betaRequired = beta.Enabled,
+				betaCode = new { length = BetaCodeFormat.DisplayLength, hint = "XXXX-XXXX-XXXX" },
+				verification = new
+				{
+					email = verification.Email,
+					sms = verification.Sms,
+					autoVerify = options.AutoVerifyAccounts || verification.VerifiesNothing,
+				},
+				profile = new
+				{
+					realNameMaxLength = AccountProfileRules.MaxRealNameLength,
+					countryMaxLength = AccountProfileRules.MaxCountryLength,
+					addressMaxLength = AccountProfileRules.MaxAddressLength,
+					phoneHint = "+44 7700 900123",
+				},
 			});
 		}
 
@@ -311,10 +483,65 @@ namespace FishMMO.ControlPanel.Controllers
 				accessLevel = data.AccessLevel,
 				levelName = ((AccessLevel)data.AccessLevel).ToString(),
 				verified = data.Verified,
+				emailVerified = data.EmailVerified,
+				phone = data.Phone,
+				phoneVerified = data.PhoneVerified,
+				verificationChannels = AccountRegistrationService.ChannelNames((AccountVerificationChannels)data.VerificationChannels),
 				totpEnabled = data.TotpEnabled,
 				totpVerifiedAtUtc = data.TotpVerifiedAt,
 				lastLoginUtc = data.LastLogin,
 			});
+		}
+
+		/// <summary>The beta codes the signed-in account has redeemed.</summary>
+		[HttpGet("beta")]
+		[Authorize(Policy = PanelPolicies.Self)]
+		public async Task<IActionResult> MyBetaCodes()
+		{
+			string username = User.Identity?.Name;
+			var result = await betaCodes.FetchForAccountAsync(username, HttpContext.RequestAborted);
+			if (!result.IsSuccess)
+			{
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Your beta codes could not be loaded." });
+			}
+			return Ok(new
+			{
+				gateEnabled = beta.Enabled,
+				codes = result.Data.Select(c => new
+				{
+					code = c.Code,
+					program = c.Program,
+					redeemedUtc = c.RedeemedUtc,
+					revoked = c.CodeRevoked,
+				}),
+			});
+		}
+
+		/// <summary>
+		/// Redeems a beta code for the signed-in account.
+		/// </summary>
+		/// <remarks>
+		/// For an account made before the gate went up, or whose redemption at registration lost a race
+		/// for a code's last use. The service's refusal is passed through unaltered: it deliberately
+		/// gives one message for every kind of bad code.
+		/// </remarks>
+		[HttpPost("beta/redeem")]
+		[Authorize(Policy = PanelPolicies.Self)]
+		[EnableRateLimiting("Auth")]
+		public async Task<IActionResult> RedeemBetaCode([FromBody] RedeemBetaCodeRequest request)
+		{
+			string username = User.Identity?.Name;
+			if (string.IsNullOrWhiteSpace(request?.Code))
+			{
+				return BadRequest(new { error = "A beta code is required." });
+			}
+
+			var result = await betaCodes.RedeemAsync(username, request.Code.Trim(), HttpContext.RequestAborted);
+			if (!result.IsSuccess)
+			{
+				return BadRequest(new { error = result.ErrorMessage ?? AccountRegistrationService.InvalidBetaCodeError });
+			}
+			return Ok(new { message = $"Beta code redeemed for {result.Data.Program}.", program = result.Data.Program });
 		}
 
 		/// <summary>The signed-in account's live panel sessions.</summary>
@@ -666,6 +893,57 @@ namespace FishMMO.ControlPanel.Controllers
 
 			/// <summary>Account holder age, for compliance.</summary>
 			public int Age { get; set; }
+
+			/// <summary>Optional phone number, with its country code. Required when verifying by SMS.</summary>
+			public string Phone { get; set; }
+
+			/// <summary>Optional beta code. Required while the beta gate is on.</summary>
+			public string BetaCode { get; set; }
+
+			/// <summary>Optional country or region.</summary>
+			public string Country { get; set; }
+
+			/// <summary>Optional real name.</summary>
+			public string RealName { get; set; }
+
+			/// <summary>Optional postal address.</summary>
+			public string Address { get; set; }
+
+			/// <summary>Optional name of the account that referred this one.</summary>
+			public string ReferralAccount { get; set; }
+
+			/// <summary>Verify with an emailed code. Choosing neither channel means email.</summary>
+			public bool VerifyEmail { get; set; }
+
+			/// <summary>Verify with a texted code. Needs <see cref="Phone"/>.</summary>
+			public bool VerifySms { get; set; }
+
+			/// <summary>The signed token from <c>register/form</c>.</summary>
+			public string FormToken { get; set; }
+
+			/// <summary>
+			/// Every body property this model does not name — which is where the randomised decoy fields
+			/// arrive, under names only the token knows.
+			/// </summary>
+			[JsonExtensionData]
+			public Dictionary<string, JsonElement> Extra { get; set; }
+		}
+
+		/// <summary>A resend request: which account, and which channel.</summary>
+		public sealed class ResendVerificationRequest
+		{
+			/// <summary>Account name.</summary>
+			public string Username { get; set; } = "";
+
+			/// <summary><c>email</c> or <c>sms</c>.</summary>
+			public string Channel { get; set; } = "";
+		}
+
+		/// <summary>A beta code to redeem.</summary>
+		public sealed class RedeemBetaCodeRequest
+		{
+			/// <summary>The code, in any spacing or case.</summary>
+			public string Code { get; set; } = "";
 		}
 
 		/// <summary>Password reset request. Carries an address and nothing else.</summary>

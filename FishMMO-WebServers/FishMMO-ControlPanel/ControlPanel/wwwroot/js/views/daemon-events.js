@@ -285,7 +285,7 @@ function detailPanel(ui, c) {
 			<div>
 				<div class="small muted" style="margin-bottom:var(--sp-2)">Timing</div>
 				<dl class="dl">
-					<dt>Command</dt><dd class="tnum">${ui.num(c.id)}</dd>
+					<dt>Command</dt><dd class="tnum">${ui.esc(c.id)}</dd>
 					<dt>Queued</dt><dd>${ui.dateTime(c.requestedUtc)}</dd>
 					<dt>Asked by</dt><dd>${c.requestedBy ? ui.esc(c.requestedBy) : '<span class="faint">—</span>'}</dd>
 					<dt>Deadline</dt><dd>${c.expiresUtc ? ui.dateTime(c.expiresUtc) : '<span class="faint">none</span>'}</dd>

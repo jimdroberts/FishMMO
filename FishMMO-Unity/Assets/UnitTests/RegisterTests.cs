@@ -1,5 +1,10 @@
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
+using FishMMO.Database.Data;
 using FishMMO.UnitTests.Harness;
 using NUnit.Framework;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -244,6 +249,165 @@ namespace FishMMO.UnitTests
 			{
 				await AuthTestTrace.LogTestEnd(nameof(Register_SameCredentialsTwoAttempts_ProduceDifferentSalts));
 			}
+		}
+
+		// ───────────────────── issue #252: the registration profile field ─────────────────────
+
+		/// <summary>
+		/// Every optional detail survives the trip: client serialisation and encryption, then the
+		/// server's six-field sequence arithmetic and decryption, then parsing.
+		/// </summary>
+		/// <remarks>
+		/// Decrypts with <c>SrpService.ServerDecryptRegistrationFields</c> — the method
+		/// <c>AccountCreationSystem</c> calls — against the server core's own connection keys, so a
+		/// disagreement between the client's field order and the server's offsets fails here.
+		/// </remarks>
+		[Test]
+		public async Task Register_ProfileRoundTripsThroughRegistrationEncryption()
+		{
+			await AuthTestTrace.LogTestStart(nameof(Register_ProfileRoundTripsThroughRegistrationEncryption),
+				"Test: the registration profile is encrypted by the client, decrypted by the server path, and parses back unchanged.");
+			try
+			{
+				using AuthTestHarness h = new AuthTestHarness();
+				RegistrationProfile sentProfile = new RegistrationProfile
+				{
+					Phone = "+44 7700 900123",
+					BetaCode = "ABCD-EFGH-JKMN",
+					Country = "United Kingdom",
+					RealName = "Zoë Ångström",
+					Address = "1 High Street\nLondon",
+					ReferralAccount = "old_friend",
+					VerificationChannels = RegistrationVerificationChannels.Email | RegistrationVerificationChannels.Sms,
+				};
+
+				LogAssert.IsTrue(h.Client.SetLoginCredentials("frank", "p@ssword1!", register: true, email: "frank@example.test", age: 21, profile: sentProfile),
+					"SetLoginCredentials refused a valid registration with a profile.");
+				h.Client.OnConnected();
+				await Task.Yield();
+
+				LogAssert.AreEqual(1, h.Client.CreateAccountSends.Count, "Exactly one CreateAccount broadcast should be emitted.");
+				TestClientCore.CreateAccountCapture sent = h.Client.CreateAccountSends[0];
+				LogAssert.IsTrue(sent.EncryptedProfile != null && sent.EncryptedProfile.Length > 0, "Encrypted profile payload was empty.");
+				LogAssert.IsTrue(sent.EncryptedProfile.Length <= RegistrationProfile.MaxEncryptedBytes, "Encrypted profile exceeds the server's size cap.");
+
+				LogAssert.IsTrue(h.AccountManager.GetConnectionEncryptionData(1, out ConnectionEncryptionData serverKeys) && serverKeys != null,
+					"The server holds no encryption data for the connection.");
+
+				SrpService.ServerDecryptRegistrationFields(serverKeys, sent.Sequence,
+					sent.EncryptedUsername, sent.EncryptedEmail, sent.EncryptedAge, sent.EncryptedSalt, sent.EncryptedVerifier, sent.EncryptedProfile,
+					out byte[] username, out byte[] email, out byte[] age, out byte[] salt, out byte[] verifier, out byte[] profileBytes);
+
+				LogAssert.AreEqual("frank", Encoding.UTF8.GetString(username), "Username did not survive the round trip.");
+				LogAssert.AreEqual("frank@example.test", Encoding.UTF8.GetString(email), "Email did not survive the round trip.");
+				LogAssert.AreEqual("21", Encoding.UTF8.GetString(age), "Age did not survive the round trip.");
+				LogAssert.IsTrue(salt.Length > 0 && verifier.Length > 0, "Salt or verifier decrypted empty.");
+
+				LogAssert.IsTrue(RegistrationProfile.TryDeserialize(profileBytes, out RegistrationProfile received), "The decrypted profile did not parse.");
+				LogAssert.AreEqual(sentProfile.Phone, received.Phone, "Phone");
+				LogAssert.AreEqual(sentProfile.BetaCode, received.BetaCode, "BetaCode");
+				LogAssert.AreEqual(sentProfile.Country, received.Country, "Country");
+				LogAssert.AreEqual(sentProfile.RealName, received.RealName, "RealName (non-ASCII)");
+				LogAssert.AreEqual(sentProfile.Address, received.Address, "Address (with a line break)");
+				LogAssert.AreEqual(sentProfile.ReferralAccount, received.ReferralAccount, "ReferralAccount");
+				LogAssert.AreEqual(sentProfile.VerificationChannels, received.VerificationChannels, "VerificationChannels");
+
+				// The six sequences were consumed: replaying the same message must fail, not decrypt twice.
+				bool replayRefused = false;
+				try
+				{
+					SrpService.ServerDecryptRegistrationFields(serverKeys, sent.Sequence,
+						sent.EncryptedUsername, sent.EncryptedEmail, sent.EncryptedAge, sent.EncryptedSalt, sent.EncryptedVerifier, sent.EncryptedProfile,
+						out _, out _, out _, out _, out _, out _);
+				}
+				catch (CryptographicException)
+				{
+					replayRefused = true;
+				}
+				LogAssert.IsTrue(replayRefused, "A replayed create-account message decrypted a second time.");
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Register_ProfileRoundTripsThroughRegistrationEncryption));
+			}
+		}
+
+		/// <summary>A registration with no profile still sends one (empty), so the server's field count never varies.</summary>
+		[Test]
+		public async Task Register_WithoutAProfile_StillSendsAnEmptyProfileField()
+		{
+			using AuthTestHarness h = new AuthTestHarness();
+			await DriveHandshakeAndCapture(h, "noprofile", "p@ssword1!", "noprofile@example.test", age: 30);
+			LogAssert.AreEqual(1, h.Client.CreateAccountSends.Count, "Exactly one CreateAccount broadcast should be emitted.");
+			TestClientCore.CreateAccountCapture sent = h.Client.CreateAccountSends[0];
+			LogAssert.IsTrue(h.AccountManager.GetConnectionEncryptionData(1, out ConnectionEncryptionData serverKeys), "No server keys.");
+			SrpService.ServerDecryptRegistrationFields(serverKeys, sent.Sequence,
+				sent.EncryptedUsername, sent.EncryptedEmail, sent.EncryptedAge, sent.EncryptedSalt, sent.EncryptedVerifier, sent.EncryptedProfile,
+				out _, out _, out _, out _, out _, out byte[] profileBytes);
+			LogAssert.IsTrue(RegistrationProfile.TryDeserialize(profileBytes, out RegistrationProfile received), "The empty profile did not parse.");
+			LogAssert.IsNull(received.Phone);
+			LogAssert.IsNull(received.BetaCode);
+			LogAssert.AreEqual(RegistrationVerificationChannels.Email, received.VerificationChannels, "An absent profile must mean email verification.");
+		}
+
+		/// <summary>
+		/// The client's mirror of the profile rules agrees with the database's — the authority the login
+		/// server applies — on the limits and on phone normalisation.
+		/// </summary>
+		[Test]
+		public void RegistrationProfile_MirrorsTheDatabaseProfileRules()
+		{
+			LogAssert.AreEqual(AccountProfileRules.MaxRealNameLength, RegistrationProfile.MaxRealNameLength, "Real name limit drifted.");
+			LogAssert.AreEqual(AccountProfileRules.MaxCountryLength, RegistrationProfile.MaxCountryLength, "Country limit drifted.");
+			LogAssert.AreEqual(AccountProfileRules.MaxAddressLength, RegistrationProfile.MaxAddressLength, "Address limit drifted.");
+			LogAssert.AreEqual((byte)FishMMO.Database.Data.Enums.AccountVerificationChannels.Email, (byte)RegistrationVerificationChannels.Email, "Email flag drifted.");
+			LogAssert.AreEqual((byte)FishMMO.Database.Data.Enums.AccountVerificationChannels.Sms, (byte)RegistrationVerificationChannels.Sms, "SMS flag drifted.");
+
+			string[] phones =
+			{
+				"+44 7700 900123", "0044 (7700) 900-123", "+1.555.010.9999", "07700900123", "+0123456789",
+				"+1234567", "+12345678", "+123456789012345", "+1234567890123456", "+44 7700 900123x", "", "   ",
+			};
+			foreach (string input in phones)
+			{
+				LogAssert.AreEqual(AccountProfileRules.NormalizePhone(input), RegistrationProfile.NormalizePhone(input),
+					$"Phone normalisation disagrees with the database for '{input}'.");
+			}
+
+			RegistrationProfile smsWithoutPhone = new RegistrationProfile { VerificationChannels = RegistrationVerificationChannels.Sms };
+			LogAssert.IsFalse(smsWithoutPhone.TryValidate(out _), "SMS verification without a phone number must be refused.");
+			bool dbAccepts = AccountProfileRules.TryValidate(new AccountProfileData { VerificationChannels = FishMMO.Database.Data.Enums.AccountVerificationChannels.Sms }, out _, out _);
+			LogAssert.IsFalse(dbAccepts, "Control: the database refuses SMS without a phone too.");
+
+			RegistrationProfile tooLong = new RegistrationProfile { RealName = new string('a', RegistrationProfile.MaxRealNameLength + 1) };
+			LogAssert.IsFalse(tooLong.TryValidate(out _), "An over-long real name must be refused.");
+		}
+
+		/// <summary>The decoder refuses anything the encoder could not have produced.</summary>
+		[Test]
+		public void RegistrationProfile_RefusesMalformedSerialisations()
+		{
+			byte[] good = new RegistrationProfile { Phone = "+447700900123" }.Serialize();
+			LogAssert.IsTrue(RegistrationProfile.TryDeserialize(good, out _), "Control: a well-formed profile must parse.");
+
+			byte[] trailing = new byte[good.Length + 1];
+			Buffer.BlockCopy(good, 0, trailing, 0, good.Length);
+			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(trailing, out _), "Trailing bytes must be refused.");
+
+			byte[] wrongVersion = (byte[])good.Clone();
+			wrongVersion[0] = (byte)(RegistrationProfile.FormatVersion + 1);
+			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(wrongVersion, out _), "An unknown version must be refused.");
+
+			byte[] truncated = new byte[good.Length - 1];
+			Buffer.BlockCopy(good, 0, truncated, 0, truncated.Length);
+			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(truncated, out _), "A truncated profile must be refused.");
+
+			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(null, out _), "Null must be refused.");
+
+			bool threw = false;
+			try { new RegistrationProfile { Address = new string('x', RegistrationProfile.MaxAddressLength + 1) }.Serialize(); }
+			catch (ArgumentException) { threw = true; }
+			LogAssert.IsTrue(threw, "Serialising an over-long field must throw rather than produce an unparseable profile.");
 		}
 	}
 }

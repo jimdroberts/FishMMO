@@ -133,6 +133,30 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Tracks whether TOTP is enabled for each active connection (by client ID), populated during SRP verify.</summary>
 		private readonly ConcurrentDictionary<int, bool> totpEnabledByClientId = new ConcurrentDictionary<int, bool>();
 		private readonly ConcurrentDictionary<int, DateTime?> verifyCodeExpiryByClientId = new ConcurrentDictionary<int, DateTime?>();
+		/// <summary>
+		/// Per-client-ID SMS verification code expiry, recorded at the verify step for an unverified
+		/// account. Null means no SMS code has been issued. Read after the proof to decide whether a
+		/// fresh SMS code is owed.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, DateTime?> phoneVerifyCodeExpiryByClientId = new ConcurrentDictionary<int, DateTime?>();
+
+		/// <summary>
+		/// The canonical account name behind each connection's sign-in, recorded at the verify step.
+		/// </summary>
+		/// <remarks>
+		/// The client may sign in with an email address, and the database-backed lockout, the beta
+		/// gate and the two-factor lockout are all keyed by account NAME. Resolved from the lookup when
+		/// the account exists; otherwise the identifier as supplied, so a non-existent account is
+		/// asked about exactly like a real one (the database answers "not locked" for both).
+		/// </remarks>
+		private readonly ConcurrentDictionary<int, string> accountKeyByClientId = new ConcurrentDictionary<int, string>();
+
+		/// <summary>
+		/// For an unverified sign-in, whether the only outstanding code is the SMS one. Decides between
+		/// <see cref="ClientAuthenticationResult.AccountUnverified"/> and
+		/// <see cref="ClientAuthenticationResult.PhoneUnverified"/> after the proof.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, bool> phoneOnlyPendingByClientId = new ConcurrentDictionary<int, bool>();
 
 		/// <summary>Tracks per-username TOTP failure counts and first-failure timestamps for lockout enforcement.</summary>
 		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> totpUsernameFailures
@@ -357,6 +381,9 @@ namespace FishMMO.Auth.Implementation
 			totpPendingStates.Clear();
 			totpEnabledByClientId.Clear();
 			verifyCodeExpiryByClientId.Clear();
+			phoneVerifyCodeExpiryByClientId.Clear();
+			accountKeyByClientId.Clear();
+			phoneOnlyPendingByClientId.Clear();
 			totpUsernameFailures.Clear();
 			loginUsernameFailures.Clear();
 			totpSemaphore?.Dispose();
@@ -501,6 +528,9 @@ namespace FishMMO.Auth.Implementation
 			totpPendingStates.TryRemove(clientId, out _);
 			totpEnabledByClientId.TryRemove(clientId, out _);
 			verifyCodeExpiryByClientId.TryRemove(clientId, out _);
+			phoneVerifyCodeExpiryByClientId.TryRemove(clientId, out _);
+			accountKeyByClientId.TryRemove(clientId, out _);
+			phoneOnlyPendingByClientId.TryRemove(clientId, out _);
 			connectionIpCache.Remove(clientId);
 		}
 
@@ -865,6 +895,9 @@ namespace FishMMO.Auth.Implementation
 						"This is a fatal configuration error. Ensure the authenticator's InitializeWorkers is called during server startup.");
 				}
 
+				accountKeyByClientId[GetConnectionClientId(conn)] =
+					lookupResult.IsSuccess && !string.IsNullOrEmpty(lookupResult.AccountName) ? lookupResult.AccountName! : username!;
+
 				if (!lookupResult.IsSuccess)
 				{
 					salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey);
@@ -903,6 +936,9 @@ namespace FishMMO.Auth.Implementation
 							// solely on the verified branch below left the lookup permanently empty,
 							// so an expired code could never be refreshed by attempting to log in.
 							verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
+							phoneVerifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.PhoneVerifyCodeExpiresUtc;
+							phoneOnlyPendingByClientId[GetConnectionClientId(conn)] =
+								!lookupResult.EmailVerificationPending && lookupResult.PhoneVerificationPending;
 							await Log.Debug(LogPrefix, "Carrying real SRP state for unverified username-based login; AccountUnverified deferred until after M1.");
 						}
 					}
@@ -1042,6 +1078,10 @@ namespace FishMMO.Auth.Implementation
 			username = accountData.SrpData.UserName;
 			accessLevel = accountData.AccessLevel;
 			isUnverified = accountData.IsUnverified;
+			int proofClientId = GetConnectionClientId(conn);
+			string accountKey = accountKeyByClientId.TryGetValue(proofClientId, out string? resolvedKey) && !string.IsNullOrEmpty(resolvedKey)
+				? resolvedKey
+				: username;
 
 			/* Per-account password lockout. Checked here, at the proof, rather than at the verify
 			 * step: verify is where the fake-salt timing equalisation lives, and refusing early
@@ -1057,6 +1097,18 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
+			/* The shared, database-backed lockout: the one every login server and the Control Panel
+			 * count against together. Same place and same answer as the in-memory lock above — the
+			 * proof is NOT evaluated, so a locked account learns nothing about whether this guess
+			 * was right, and the refusal is the wrong-password refusal byte for byte. A locked
+			 * attempt is not counted again: the lock already says everything a count would. */
+			if (await IsLoginLockedSafeAsync(accountKey))
+			{
+				await Log.Warning(LogPrefix, "Refused an SRP proof for an account whose sign-in is locked in the database.");
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+
 			// Phase 2: Compute the SRP proof OUTSIDE the lock.
 			// SrpData is per-connection and only one proof verification runs per
 			// connection at a time (enforced by the ProofPending → SrpSuccess
@@ -1068,6 +1120,9 @@ namespace FishMMO.Auth.Implementation
 				// The one branch that means "that password was wrong" — for a real account and,
 				// identically, for a fake one. See loginUsernameFailures.
 				TrackLoginUsernameFailure(username);
+				// Recorded before the refusal goes out, so the count is settled by the time the
+				// client can try again.
+				await RecordLoginFailureSafeAsync(accountKey);
 				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
@@ -1075,6 +1130,7 @@ namespace FishMMO.Auth.Implementation
 
 			// Correct password: the owner is here, so the counter goes back to zero.
 			ClearLoginUsernameFailures(username);
+			await ClearLoginFailuresSafeAsync(accountKey);
 
 			// Phase 3: Atomically advance the auth state under the lock.
 			// The callback is now a trivial validation — no CPU-bound work.
@@ -1102,11 +1158,19 @@ namespace FishMMO.Auth.Implementation
 			{
 				// If the verification code has expired, auto-generate a fresh one.
 				// Only triggers when the user actively attempts login after expiry.
-				if (verifyCodeExpiryByClientId.TryGetValue(GetConnectionClientId(conn), out var expiry))
+				bool phoneOnly = phoneOnlyPendingByClientId.TryGetValue(proofClientId, out bool pendingPhoneOnly) && pendingPhoneOnly;
+				if (!phoneOnly && verifyCodeExpiryByClientId.TryGetValue(proofClientId, out var expiry))
 				{
 					_ = TryResendVerificationEmailIfExpiredAsync(username!, expiry);
 				}
-				RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
+				// The SMS twin. Only when the SMS code is the one being asked for: while an email code
+				// is outstanding the player is sent to the email step first, and the SMS code is
+				// refreshed on the sign-in that follows it. A missing SMS code counts as expired.
+				if (phoneOnly && phoneVerifyCodeExpiryByClientId.TryGetValue(proofClientId, out var phoneExpiry))
+				{
+					_ = TryResendVerificationSmsIfExpiredAsync(username!, phoneExpiry);
+				}
+				RejectAndPurge(conn, phoneOnly ? ClientAuthenticationResult.PhoneUnverified : ClientAuthenticationResult.AccountUnverified);
 				return;
 			}
 
@@ -1116,6 +1180,17 @@ namespace FishMMO.Auth.Implementation
 			if (accessLevel == AccessLevel.Banned)
 			{
 				RejectAndPurge(conn, ClientAuthenticationResult.Banned);
+				return;
+			}
+
+			/* Closed-test gate. After the proof, never before: asking earlier would answer "this
+			 * account has no beta access" to anyone who can type a name, which is an enumeration
+			 * oracle. Before the online check and the kick request, so an account that is not
+			 * admitted cannot knock an existing session offline either. */
+			ClientAuthenticationResult? accessRefusal = await CheckSignInAccessSafeAsync(accountKey, accessLevel);
+			if (accessRefusal.HasValue)
+			{
+				RejectAndPurge(conn, accessRefusal.Value);
 				return;
 			}
 
@@ -1169,12 +1244,23 @@ namespace FishMMO.Auth.Implementation
 
 					if (totpRequired)
 					{
+						/* The password is proven, so a two-factor lock can be named outright — and
+						 * should be, before the player is asked for a code that would be refused
+						 * unread. */
+						DateTime? twoFactorLockedUntil = await GetTwoFactorLockedUntilSafeAsync(accountKey);
+						if (twoFactorLockedUntil.HasValue)
+						{
+							RejectAndPurge(conn, ClientAuthenticationResult.TwoFactorLocked, RetryAfterSecondsUntil(twoFactorLockedUntil.Value));
+							return;
+						}
+
 						totpPendingStates[GetConnectionClientId(conn)] = new TotpPendingState
 						{
 							Connection = conn,
 							EncryptionData = request.EncryptionData,
 							ServerProof = serverProof,
 							Username = username,
+							AccountKey = accountKey,
 							AccessLevel = accessLevel,
 							IsEmail = username != null && username.Contains('@'),
 							Attempts = 0,
@@ -1244,6 +1330,20 @@ namespace FishMMO.Auth.Implementation
 				totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
 				return;
 			}
+
+			string twoFactorKey = !string.IsNullOrEmpty(pendingState.AccountKey) ? pendingState.AccountKey! : pendingState.Username!;
+
+			/* Checked before the code is even decrypted, and above all before VerifyTotpCodeAsync,
+			 * which consumes a recovery code when one matches: a locked account must not be able to
+			 * burn its recovery codes, and must not learn whether the one it sent was good. */
+			DateTime? lockedUntil = await GetTwoFactorLockedUntilSafeAsync(twoFactorKey);
+			if (lockedUntil.HasValue)
+			{
+				totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
+				RejectAndPurge(conn, ClientAuthenticationResult.TwoFactorLocked, RetryAfterSecondsUntil(lockedUntil.Value));
+				return;
+			}
+
 			string totpCode;
 			try
 			{
@@ -1257,6 +1357,10 @@ namespace FishMMO.Auth.Implementation
 			{
 				await Log.Warning(LogPrefix, "AES decryption failed for TOTP code.");
 				TrackTotpUsernameFailure(pendingState.Username);
+				if (await TryLockAfterTwoFactorFailureAsync(conn, twoFactorKey))
+				{
+					return;
+				}
 
 				if (pendingState.Attempts > MaxTotpAttempts)
 				{
@@ -1277,6 +1381,10 @@ namespace FishMMO.Auth.Implementation
 			if (!totpValid)
 			{
 				TrackTotpUsernameFailure(pendingState.Username);
+				if (await TryLockAfterTwoFactorFailureAsync(conn, twoFactorKey))
+				{
+					return;
+				}
 
 				if (pendingState.Attempts > MaxTotpAttempts)
 				{
@@ -1292,6 +1400,7 @@ namespace FishMMO.Auth.Implementation
 			}
 
 			// TOTP success — complete login
+			await ClearTwoFactorFailuresSafeAsync(twoFactorKey);
 			totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
 			totpEnabledByClientId.TryRemove(GetConnectionClientId(conn), out _);
 			verifyCodeExpiryByClientId.TryRemove(GetConnectionClientId(conn), out _);
@@ -1512,6 +1621,151 @@ namespace FishMMO.Auth.Implementation
 			PurgeConnectionAuthState(conn, disconnect: false);
 		}
 
+		/// <summary>
+		/// <see cref="RejectAndPurge(TConnection, ClientAuthenticationResult)"/> with a retry-after hint.
+		/// </summary>
+		private void RejectAndPurge(TConnection conn, ClientAuthenticationResult result, int retryAfterSeconds)
+		{
+			EnqueueMainThread(conn, () =>
+			{
+				if (IsConnectionActive(conn))
+				{
+					BroadcastAuthResult(conn, result, reliable: true, retryAfterSeconds);
+					DisconnectConnection(conn, graceful: false);
+				}
+			});
+			PurgeConnectionAuthState(conn, disconnect: false);
+		}
+
+		/// <summary>Whole seconds until <paramref name="untilUtc"/>, at least 1.</summary>
+		private static int RetryAfterSecondsUntil(DateTime untilUtc)
+		{
+			double seconds = Math.Ceiling((untilUtc - DateTime.UtcNow).TotalSeconds);
+			if (seconds < 1d) return 1;
+			return seconds > int.MaxValue ? int.MaxValue : (int)seconds;
+		}
+
+		/// <summary>
+		/// Counts one wrong second-factor code and, when that trips the database lock, ends the attempt
+		/// with <see cref="ClientAuthenticationResult.TwoFactorLocked"/>.
+		/// </summary>
+		/// <returns>True when the attempt was ended here.</returns>
+		private async Task<bool> TryLockAfterTwoFactorFailureAsync(TConnection conn, string twoFactorKey)
+		{
+			DateTime? lockedUntil = await RecordTwoFactorFailureSafeAsync(twoFactorKey);
+			if (!lockedUntil.HasValue || lockedUntil.Value <= DateTime.UtcNow)
+			{
+				return false;
+			}
+			totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
+			RejectAndPurge(conn, ClientAuthenticationResult.TwoFactorLocked, RetryAfterSecondsUntil(lockedUntil.Value));
+			return true;
+		}
+
+		/* The hook wrappers. A hook that throws must not take the worker down or leave a connection
+		 * half-processed, so each is caught here and given the answer that keeps the sign-in path
+		 * sound: a lockout that cannot be read is treated as absent (the in-memory limits above still
+		 * apply, and refusing every sign-in during a database hiccup is its own outage), a counter
+		 * that cannot be written is skipped, and an access check that cannot be made refuses with
+		 * ServerBusy rather than admitting an account the gate exists to keep out. */
+
+		private async Task<bool> IsLoginLockedSafeAsync(string accountName)
+		{
+			try { return await IsLoginLockedAsync(accountName); }
+			catch (Exception ex) { await Log.Error(LogPrefix, $"IsLoginLockedAsync failed: {ex.Message}"); return false; }
+		}
+
+		private async Task RecordLoginFailureSafeAsync(string accountName)
+		{
+			try { await RecordLoginFailureAsync(accountName); }
+			catch (Exception ex) { await Log.Error(LogPrefix, $"RecordLoginFailureAsync failed: {ex.Message}"); }
+		}
+
+		private async Task ClearLoginFailuresSafeAsync(string accountName)
+		{
+			try { await ClearLoginFailuresAsync(accountName); }
+			catch (Exception ex) { await Log.Error(LogPrefix, $"ClearLoginFailuresAsync failed: {ex.Message}"); }
+		}
+
+		private async Task<DateTime?> GetTwoFactorLockedUntilSafeAsync(string accountName)
+		{
+			try
+			{
+				DateTime? until = await GetTwoFactorLockedUntilAsync(accountName);
+				return until.HasValue && until.Value > DateTime.UtcNow ? until : null;
+			}
+			catch (Exception ex) { await Log.Error(LogPrefix, $"GetTwoFactorLockedUntilAsync failed: {ex.Message}"); return null; }
+		}
+
+		private async Task<DateTime?> RecordTwoFactorFailureSafeAsync(string accountName)
+		{
+			try { return await RecordTwoFactorFailureAsync(accountName); }
+			catch (Exception ex) { await Log.Error(LogPrefix, $"RecordTwoFactorFailureAsync failed: {ex.Message}"); return null; }
+		}
+
+		private async Task ClearTwoFactorFailuresSafeAsync(string accountName)
+		{
+			try { await ClearTwoFactorFailuresAsync(accountName); }
+			catch (Exception ex) { await Log.Error(LogPrefix, $"ClearTwoFactorFailuresAsync failed: {ex.Message}"); }
+		}
+
+		private async Task<ClientAuthenticationResult?> CheckSignInAccessSafeAsync(string accountName, AccessLevel accessLevel)
+		{
+			try { return await CheckSignInAccessAsync(accountName, accessLevel); }
+			catch (Exception ex) { await Log.Error(LogPrefix, $"CheckSignInAccessAsync failed: {ex.Message}"); return ClientAuthenticationResult.ServerBusy; }
+		}
+
+		#endregion
+
+		#region Database-Backed Lockout and Access Hooks
+
+		/// <summary>
+		/// Whether password sign-in for the account is locked in shared storage. Checked before the SRP
+		/// proof is evaluated; a locked account is refused exactly like a wrong password.
+		/// </summary>
+		/// <remarks>
+		/// Default: never locked, so a subclass with no shared store (the unit-test harness) keeps the
+		/// in-memory lockout only. <paramref name="accountName"/> is the canonical account name when the
+		/// account exists, and the identifier as typed when it does not — answer both identically.
+		/// </remarks>
+		protected virtual Task<bool> IsLoginLockedAsync(string accountName) => Task.FromResult(false);
+
+		/// <summary>Counts one failed SRP proof towards the shared lockout. Default: no-op.</summary>
+		protected virtual Task RecordLoginFailureAsync(string accountName) => Task.CompletedTask;
+
+		/// <summary>Clears the shared password failure count after a correct proof. Default: no-op.</summary>
+		protected virtual Task ClearLoginFailuresAsync(string accountName) => Task.CompletedTask;
+
+		/// <summary>
+		/// Until when the second step is locked, or null. Only consulted after a correct password, so the
+		/// lock may be reported to the client. Default: never locked.
+		/// </summary>
+		protected virtual Task<DateTime?> GetTwoFactorLockedUntilAsync(string accountName) => Task.FromResult<DateTime?>(null);
+
+		/// <summary>
+		/// Counts one wrong authenticator or recovery code. Returns when the step is now locked until, or
+		/// null when it is not locked. Default: no-op, never locks.
+		/// </summary>
+		protected virtual Task<DateTime?> RecordTwoFactorFailureAsync(string accountName) => Task.FromResult<DateTime?>(null);
+
+		/// <summary>Clears the shared two-factor failure count after a correct code. Default: no-op.</summary>
+		protected virtual Task ClearTwoFactorFailuresAsync(string accountName) => Task.CompletedTask;
+
+		/// <summary>
+		/// Decides whether a proven account may sign in at all — the closed-test (beta) gate. Called only
+		/// after a correct SRP proof and after the unverified and banned checks.
+		/// </summary>
+		/// <returns>Null to admit; otherwise the result to refuse with, normally <see cref="ClientAuthenticationResult.BetaAccessRequired"/>.</returns>
+		protected virtual Task<ClientAuthenticationResult?> CheckSignInAccessAsync(string accountName, AccessLevel accessLevel) =>
+			Task.FromResult<ClientAuthenticationResult?>(null);
+
+		/// <summary>
+		/// Broadcasts an auth result together with a retry-after hint. The default drops the hint; a
+		/// transport whose result message can carry it overrides this.
+		/// </summary>
+		protected virtual void BroadcastAuthResult(TConnection conn, ClientAuthenticationResult result, bool reliable, int retryAfterSeconds) =>
+			BroadcastAuthResult(conn, result, reliable);
+
 		#endregion
 
 		#region Abstract / Virtual Transport Callbacks
@@ -1647,6 +1901,21 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>True if a new code was generated and the email was enqueued.</returns>
 		protected abstract Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc);
 
+		/// <summary>
+		/// The SMS twin of <see cref="TryResendVerificationEmailIfExpiredAsync"/>. Called after a correct
+		/// proof when the only outstanding code is the SMS one. The implementation should, when the SMS
+		/// code is missing or expired, generate a new code, store it and enqueue a fresh message.
+		/// </summary>
+		/// <remarks>
+		/// Fire-and-forget: the caller does not await it, so an implementation must not throw.
+		/// Virtual with a no-op default so a subclass without an SMS queue need not override it.
+		/// </remarks>
+		/// <param name="username">The account username.</param>
+		/// <param name="phoneVerifyCodeExpiresUtc">UTC expiry of the current SMS code, or null when none was issued.</param>
+		/// <returns>True if a new code was generated and the message was enqueued.</returns>
+		protected virtual Task<bool> TryResendVerificationSmsIfExpiredAsync(string username, DateTime? phoneVerifyCodeExpiresUtc) =>
+			Task.FromResult(false);
+
 		#endregion
 
 		#region Nested Types
@@ -1670,6 +1939,17 @@ namespace FishMMO.Auth.Implementation
 			public bool TotpEnabled;
 			/// <summary>UTC expiry for the verification code (null if not applicable).</summary>
 			public DateTime? VerifyCodeExpiresUtc;
+			/// <summary>
+			/// The canonical account name, when the lookup was by email or case differs. Keys the
+			/// database-backed lockout and the beta gate. Null means "use the identifier".
+			/// </summary>
+			public string? AccountName;
+			/// <summary>For an unverified account: whether the email code is outstanding.</summary>
+			public bool EmailVerificationPending;
+			/// <summary>For an unverified account: whether the SMS code is outstanding.</summary>
+			public bool PhoneVerificationPending;
+			/// <summary>UTC expiry for the SMS verification code; null when none has been issued.</summary>
+			public DateTime? PhoneVerifyCodeExpiresUtc;
 		}
 
 		/// <summary>Holds transient state for a connection that has passed SRP proof and is awaiting TOTP confirmation.</summary>
@@ -1683,6 +1963,8 @@ namespace FishMMO.Auth.Implementation
 			public string? ServerProof;
 			/// <summary>Account name associated with the pending TOTP verification.</summary>
 			public string? Username;
+			/// <summary>Canonical account name keying the database-backed two-factor lockout.</summary>
+			public string? AccountKey;
 			/// <summary>Access level resolved during SRP proof, forwarded to the token on TOTP success.</summary>
 			public AccessLevel AccessLevel;
 			/// <summary>True if <see cref="Username"/> is an email-format identifier.</summary>

@@ -88,6 +88,18 @@ namespace FishMMO.Database.Data
 
 		/// <summary>When the row was last written.</summary>
 		public DateTime LastSaved { get; set; }
+
+		/// <summary>When the staff lock lapses (UTC), or null when none was placed. Past means not in force.</summary>
+		public DateTime? LockedUntil { get; set; }
+
+		/// <summary>When the lock was placed.</summary>
+		public DateTime? LockedAt { get; set; }
+
+		/// <summary>The staff account that placed the lock.</summary>
+		public string? LockedBy { get; set; }
+
+		/// <summary>Why it was locked.</summary>
+		public string? LockReason { get; set; }
 	}
 
 	/// <summary>

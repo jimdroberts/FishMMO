@@ -232,6 +232,16 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					q = q.Where(t => t.TargetAccount == target);
 				}
+				if (query.MaxRequiredAccessLevel.HasValue)
+				{
+					byte maxLevel = query.MaxRequiredAccessLevel.Value;
+					q = q.Where(t => t.RequiredAccessLevel <= maxLevel);
+				}
+				if (query.RequiredAccessLevel.HasValue)
+				{
+					byte exactLevel = query.RequiredAccessLevel.Value;
+					q = q.Where(t => t.RequiredAccessLevel == exactLevel);
+				}
 				if (subject != null)
 				{
 					// A contains, which no index can serve. The subject list is small and always
@@ -286,6 +296,7 @@ namespace FishMMO.Database.Npgsql.Services
 			bool authorIsStaff,
 			bool internalNote,
 			string body,
+			byte actorAccessLevel,
 			CancellationToken cancellationToken = default)
 		{
 			if (ticketId <= 0)
@@ -325,6 +336,12 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseException("That ticket is closed.", errorCode: DatabaseErrorCodes.ValidationError);
 				}
 
+				// The player's own reply is never tier-gated: it is their ticket, whatever tier works it.
+				if (authorIsStaff)
+				{
+					EnsureTier(ticket, actorAccessLevel);
+				}
+
 				var message = new SupportTicketMessageEntity
 				{
 					TicketID = ticketId,
@@ -358,13 +375,23 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 				}
 
+				/* The first staff member to act on an unassigned ticket takes it — a note included.
+				 * Somebody who has started writing about a ticket is working it, and leaving it
+				 * unassigned is how a second person picks up the same report and duplicates the
+				 * work. Never over an existing assignee: taking a ticket from a colleague is an
+				 * explicit reassignment, not a side effect of replying. */
+				if (authorIsStaff)
+				{
+					ClaimIfUnassigned(ticket, authorAccount);
+				}
+
 				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 				return message.ID;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> AssignAsync(long ticketId, string staffAccount, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> AssignAsync(long ticketId, string staffAccount, byte actorAccessLevel, CancellationToken cancellationToken = default)
 		{
 			if (ticketId <= 0)
 			{
@@ -386,6 +413,8 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseException("That ticket is closed.", errorCode: DatabaseErrorCodes.ValidationError);
 				}
 
+				EnsureTier(ticket, actorAccessLevel);
+
 				ticket.AssignedTo = string.IsNullOrWhiteSpace(staffAccount) ? null : staffAccount.Trim();
 
 				// Taking a ticket and saying you are working on it are one act.
@@ -405,6 +434,7 @@ namespace FishMMO.Database.Npgsql.Services
 			SupportTicketStatus status,
 			string staffAccount,
 			string resolution,
+			byte actorAccessLevel,
 			CancellationToken cancellationToken = default)
 		{
 			if (ticketId <= 0)
@@ -442,8 +472,16 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseException("That ticket is closed.", errorCode: DatabaseErrorCodes.ValidationError);
 				}
 
+				EnsureTier(ticket, actorAccessLevel);
+
 				ticket.Status = status;
 				ticket.LastActivityUtc = DateTime.UtcNow;
+
+				// Changing a ticket's state is acting on it. Reopening one is not taking it.
+				if (status != SupportTicketStatus.Open)
+				{
+					ClaimIfUnassigned(ticket, staffAccount);
+				}
 
 				if (finishing)
 				{
@@ -463,7 +501,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SetPriorityAsync(long ticketId, int priority, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SetPriorityAsync(long ticketId, int priority, byte actorAccessLevel, CancellationToken cancellationToken = default)
 		{
 			if (ticketId <= 0)
 			{
@@ -485,6 +523,8 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("SupportTicket", ticketId.ToString());
 				}
 
+				EnsureTier(ticket, actorAccessLevel);
+
 				ticket.Priority = priority;
 				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -503,6 +543,135 @@ namespace FishMMO.Database.Npgsql.Services
 				.CountAsync(t => t.ReporterAccount == accountName && UnfinishedStatuses.Contains(t.Status), cancellationToken)
 				.ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> SetTierAsync(
+			long ticketId,
+			byte requiredAccessLevel,
+			string staffAccount,
+			string reason,
+			byte actorAccessLevel,
+			CancellationToken cancellationToken = default)
+		{
+			if (ticketId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Ticket ID must be greater than 0.");
+			}
+			if (requiredAccessLevel < MinTierAccessLevel || requiredAccessLevel > MaxTierAccessLevel)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "A ticket's tier is Game Master or Admin.");
+			}
+			if (string.IsNullOrWhiteSpace(staffAccount))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "A staff account is required.");
+			}
+			if (string.IsNullOrWhiteSpace(reason))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError,
+					"Say why. The next tier picks this up cold, and the reason is all they have.");
+			}
+
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				var ticket = await dbContext.SupportTickets
+					.FirstOrDefaultAsync(t => t.ID == ticketId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (ticket == null)
+				{
+					throw new DatabaseEntityNotFoundException("SupportTicket", ticketId.ToString());
+				}
+				if (ticket.Status == SupportTicketStatus.Closed)
+				{
+					throw new DatabaseException("That ticket is closed.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+
+				/* Only somebody who may work the ticket at its current tier may move it. A game
+				 * master may promote a first-tier ticket to the administrators — that is the point —
+				 * but once it is there only an administrator can hand it back down. */
+				EnsureTier(ticket, actorAccessLevel);
+
+				if (ticket.RequiredAccessLevel == requiredAccessLevel)
+				{
+					throw new DatabaseException("The ticket is already at that tier.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+
+				ticket.RequiredAccessLevel = requiredAccessLevel;
+				ticket.EscalatedBy = Clamp(staffAccount.Trim(), 100);
+				ticket.EscalatedUtc = DateTime.UtcNow;
+
+				/* The assignee is removed. Whoever held it is handing it on, and a ticket promoted to
+				 * the administrators but still assigned to the game master who promoted it sits in
+				 * that game master's list, which they can no longer see — it would be worked by
+				 * nobody. With nobody assigned it is not in progress either.
+				 *
+				 * The activity clock does not move. The queue sorts by it to find who has waited
+				 * longest, and a report that waited two days at the first tier has still waited two
+				 * days when it reaches the second. */
+				ticket.AssignedTo = null;
+				if (ticket.Status == SupportTicketStatus.InProgress)
+				{
+					ticket.Status = SupportTicketStatus.Open;
+				}
+
+				/* The reason is written onto the ticket as an internal note, in the same transaction.
+				 * The audit log records it too, but the people who pick the ticket up read the ticket,
+				 * not the audit log. Internal, so the player never sees staff discussing where their
+				 * report went; and, like every internal note, it does not move the activity clock. */
+				string tierName = requiredAccessLevel >= MaxTierAccessLevel ? "the administrators" : "the game masters";
+				await dbContext.SupportTicketMessages.AddAsync(new SupportTicketMessageEntity
+				{
+					TicketID = ticketId,
+					CreatedUtc = ticket.EscalatedUtc.Value,
+					AuthorAccount = ticket.EscalatedBy,
+					AuthorIsStaff = true,
+					Internal = true,
+					Body = Clamp($"Moved to {tierName}: {reason.Trim()}", 4000),
+				}, cancellationToken).ConfigureAwait(false);
+
+				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>The first support tier: <c>AccessLevel.GameMaster</c>.</summary>
+		private const byte MinTierAccessLevel = (byte)AccessLevel.GameMaster;
+
+		/// <summary>The last support tier: <c>AccessLevel.Admin</c>.</summary>
+		private const byte MaxTierAccessLevel = (byte)AccessLevel.Admin;
+
+		/// <summary>
+		/// Refuses a staff write to a ticket above the actor's tier.
+		/// </summary>
+		/// <remarks>
+		/// Enforced here, in every staff write, rather than only by the callers that list tickets.
+		/// The panel and the in-game commands both filter what they show, but a ticket number can
+		/// be typed, and a tier that only hides the ticket is a tier a game master can still act
+		/// through.
+		/// </remarks>
+		private static void EnsureTier(SupportTicketEntity ticket, byte actorAccessLevel)
+		{
+			if (actorAccessLevel < ticket.RequiredAccessLevel)
+			{
+				throw new DatabaseException(
+					"That ticket has been escalated to a higher tier.",
+					errorCode: DatabaseErrorCodes.Forbidden);
+			}
+		}
+
+		/// <summary>Assigns the ticket to <paramref name="staffAccount"/> when nobody holds it.</summary>
+		private static void ClaimIfUnassigned(SupportTicketEntity ticket, string staffAccount)
+		{
+			if (ticket.AssignedTo != null || string.IsNullOrWhiteSpace(staffAccount))
+			{
+				return;
+			}
+
+			ticket.AssignedTo = Clamp(staffAccount.Trim(), 100);
+			if (ticket.Status == SupportTicketStatus.Open)
+			{
+				ticket.Status = SupportTicketStatus.InProgress;
+			}
 		}
 
 		private static string Clamp(string value, int max) =>
@@ -529,6 +698,9 @@ namespace FishMMO.Database.Npgsql.Services
 			Resolution = e.Resolution,
 			ClosedUtc = e.ClosedUtc,
 			ClosedBy = e.ClosedBy,
+			RequiredAccessLevel = e.RequiredAccessLevel,
+			EscalatedBy = e.EscalatedBy,
+			EscalatedUtc = e.EscalatedUtc,
 		};
 
 		private static SupportTicketMessageData MapMessage(SupportTicketMessageEntity e) => new SupportTicketMessageData

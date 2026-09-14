@@ -124,6 +124,58 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// One page of the outbound SMS queue, with per-state counts and the age of the oldest
+		/// message nothing has picked up. The twin of <see cref="FetchEmailQueueAsync"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The counts and ages are over the whole table, as the email read's are. The body is
+		/// never projected: a verification text is a one-time code.
+		/// </para>
+		/// <para>
+		/// <b>The search matches a phone number whole, never in part.</b> The account name is a
+		/// substring match as on the email board, but the number is compared after stripping
+		/// spaces, dashes, dots and brackets, and only for equality. The page shows numbers
+		/// masked to their last four digits; a substring search would let anyone with the page
+		/// recover a masked number a digit at a time. An operator who already holds the number
+		/// can still ask "did a code go to this phone".
+		/// </para>
+		/// </remarks>
+		/// <param name="state">Filter to one state, or null for any.</param>
+		/// <param name="search">Account-name substring, or a whole phone number. Null for all.</param>
+		/// <param name="page">1-based page number. Values below 1 are treated as 1.</param>
+		/// <param name="pageSize">Rows per page. Clamped by the service.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult<SmsQueuePage>> FetchSmsQueueAsync(
+			EmailQueueState? state,
+			string search,
+			int page,
+			int pageSize,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Puts a claimed text message back in the queue by releasing the claim on it. The twin
+		/// of <see cref="RetryEmailAsync"/>, with the same single-statement guard and the same two
+		/// refusals (already sent; never claimed).
+		/// </summary>
+		/// <remarks>
+		/// <c>SmsQueueService.MarkFailedAsync</c> releases the claim itself while attempts remain
+		/// and keeps it once they are spent, so a row that reads as failed is one the drain has
+		/// given up on. Releasing it grants exactly one more attempt: <c>attempts</c> is not reset,
+		/// so a further failure gives up again. A claimed row with no error — a drain that died
+		/// mid-send — is retryable too.
+		/// </remarks>
+		/// <param name="id">The SMS queue row.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// What happened, including a refusal. A failure result with
+		/// <see cref="DatabaseErrorCodes.NotFound"/> when no such row exists.
+		/// </returns>
+		Task<DatabaseResult<SmsRetryResult>> RetrySmsAsync(
+			long id,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// One page of the group finder queue, with per-state counts.
 		/// </summary>
 		/// <remarks>

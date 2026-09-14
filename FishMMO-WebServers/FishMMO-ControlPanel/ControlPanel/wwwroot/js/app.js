@@ -10,7 +10,7 @@ import { api } from './api.js';
 import * as srp from './srp.js';
 import * as ui from './ui.js';
 import { ROUTES, NAV_ROUTES, GROUPS, resolve, defaultRouteFor } from './routes.js';
-import { renderRegister, renderRegistered } from './register.js';
+import { renderRegister, renderRegistered, renderVerification, handoverMarkup, wireHandover } from './register.js';
 import { renderResetPassword } from './reset-password.js';
 
 const VIEWS = {
@@ -38,6 +38,7 @@ const VIEWS = {
 	'admin/characters': () => import('./views/admin-characters.js'),
 	'admin/characters/': () => import('./views/admin-characters.js'),
 	'admin/audit': () => import('./views/admin-audit.js'),
+	'admin/beta': () => import('./views/admin-beta.js'),
 	'platform/health': () => import('./views/platform-health.js'),
 	'platform/secrets': () => import('./views/platform-secrets.js'),
 	'platform/queues': () => import('./views/platform-queues.js'),
@@ -139,6 +140,7 @@ export async function withStepUp(action) {
 					<input id="su-code" name="code" autocomplete="one-time-code"
 						maxlength="${RECOVERY_CODE_LENGTH}" required placeholder="000000" />
 				</div>`,
+			onReady: (form) => autoSubmitCode(form, form.querySelector('#su-code')),
 			onSubmit: async (values) => {
 				await api.stepUp(values.code);
 				return true;
@@ -147,6 +149,21 @@ export async function withStepUp(action) {
 		if (!done) return null;
 		return await action();
 	}
+}
+
+/**
+ * Submits a code field's form the moment it holds a complete authenticator code.
+ *
+ * Six digits is a whole TOTP code, and making somebody reach for the button after the sixth is a
+ * step that exists only to be forgotten. Digits only and exactly six: a recovery code carries
+ * letters and hyphens, so typing one never trips this halfway and still takes the button. Pasting
+ * a code counts, because paste fires `input` too.
+ */
+export function autoSubmitCode(form, input) {
+	if (!form || !input) return;
+	input.addEventListener('input', () => {
+		if (/^\d{6}$/.test(input.value.trim()) && !input.disabled) form.requestSubmit();
+	});
 }
 
 /** Runs an API call, showing a toast on failure. Returns null if it failed. */
@@ -246,6 +263,7 @@ function renderSignIn(stage = 'credentials', context = {}) {
 						</div>
 						<button class="btn btn-primary btn-block" type="submit">Verify</button>
 						<button class="btn btn-ghost btn-block" type="button" id="use-recovery">Use a recovery code instead</button>
+						<button class="btn btn-ghost btn-block btn-sm" type="button" id="lost-factor">Lost your authenticator AND your recovery codes?</button>
 					`}
 				</form>
 
@@ -293,10 +311,19 @@ function renderSignIn(stage = 'credentials', context = {}) {
 			}
 			await onSignedIn(result.session);
 		} catch (err) {
+			/* The one refusal that is not "try again": the password was RIGHT and the account still
+			 * owes a verification code. The server only says so after a correct proof, so the screen
+			 * that follows reveals nothing to anyone who did not already know the password. */
+			if (err.status === 403 && err.payload?.stage === 'verification-required') {
+				renderVerifyScreen(err.payload);
+				return;
+			}
 			submitting(false);
 			showError(err.message || 'Sign-in failed.');
 		}
 	});
+
+	root.querySelector('#lost-factor')?.addEventListener('click', () => renderTwoFactorReset(context));
 
 	/* The button is a hint, not a mode: the field and the endpoint behind it take either kind
 	 * of code, so this only points the label and placeholder at the recovery-code shape and
@@ -314,10 +341,201 @@ function renderSignIn(stage = 'credentials', context = {}) {
 		}
 	});
 
+	// A complete authenticator code submits itself; the recovery-code mode keeps its button.
+	if (stage !== 'credentials' && !context.recovery) {
+		autoSubmitCode(form, form.querySelector('#code'));
+	}
+
 	root.querySelector('#go-register')?.addEventListener('click', () => renderRegisterScreen());
 	root.querySelector('#go-reset')?.addEventListener('click', () => renderResetScreen());
 
 	document.querySelector('#username, #code')?.focus();
+}
+
+/** A sign-in card shell with a brand line, for the screens that are not the sign-in form itself. */
+function signinCard(title, sub, wide = false) {
+	const root = document.getElementById('root');
+	root.innerHTML = `
+		<div class="signin">
+			<div class="signin-card"${wide ? ' style="max-width:560px"' : ''}>
+				<div class="signin-brand">
+					<span style="color:var(--accent)">${ui.icon('shield', 26)}</span>
+					<div>
+						<div style="font-size:var(--fs-lg);font-weight:600;color:var(--text-strong)">${ui.esc(title)}</div>
+						<div class="xsmall muted">${ui.esc(sub ?? '')}</div>
+					</div>
+				</div>
+				<div class="stack" id="card-body" style="margin-top:var(--sp-4)"></div>
+			</div>
+		</div>`;
+	return root.querySelector('#card-body');
+}
+
+/**
+ * The account's password was right, but it still owes a verification code (email, phone, or both).
+ * The same per-channel forms registration shows, each with its own resend.
+ */
+function renderVerifyScreen(payload) {
+	const body = signinCard('Verify your account', payload.username);
+	body.innerHTML = `
+		${ui.banner('warn', payload.error || 'This account is not verified yet.')}
+		<div id="verify-host"></div>
+		<button class="btn btn-ghost btn-block" type="button" id="verify-back">Back to sign in</button>`;
+	renderVerification(body.querySelector('#verify-host'), {
+		username: payload.username,
+		pending: payload.outstanding ?? ['email'],
+	});
+	body.querySelector('#verify-back').addEventListener('click', () => renderSignIn());
+}
+
+/**
+ * The self-service two-factor reset, from the two-factor step of sign-in.
+ *
+ * For somebody who has lost BOTH the authenticator and every recovery code. The password is already
+ * proven — this is only reachable from the second step. Asking starts a waiting period and emails the
+ * account; any sign-in with the real factor in the meantime cancels it. Once it takes effect, completing
+ * it hands over a NEW authenticator on the same screen registration uses, and nothing is signed in until
+ * a code from that new authenticator is typed. A reset never counts as having passed two-factor.
+ */
+async function renderTwoFactorReset(context) {
+	const body = signinCard('Reset two-factor', context.username);
+	body.innerHTML = ui.loading();
+
+	const showFailure = (err) => {
+		/* The half-finished sign-in this screen rides on lasts minutes. When it has gone, the honest
+		 * answer is to start again from the password, not to show a generic error. */
+		const expired = err?.status === 401;
+		body.innerHTML = `
+			${ui.banner('danger', expired ? 'This sign-in has expired' : 'That did not work',
+				expired ? 'Sign in again with your password, then come back here from the two-factor step.' : (err?.message || ''))}
+			<button class="btn btn-ghost btn-block" type="button" id="reset-restart">Back to sign in</button>`;
+		body.querySelector('#reset-restart').addEventListener('click', () => renderSignIn());
+	};
+
+	let reset;
+	try {
+		reset = await api.getTwoFactorReset();
+	} catch (err) {
+		showFailure(err);
+		return;
+	}
+
+	const back = `<button class="btn btn-ghost btn-block" type="button" id="reset-back">Back to the code prompt</button>`;
+	const wireBack = () => body.querySelector('#reset-back')?.addEventListener('click', () => renderSignIn('two-factor', context));
+
+	if (!reset?.pending) {
+		body.innerHTML = `
+			${ui.banner('info', 'Only if both are gone',
+				'If you still have your authenticator or any recovery code, go back and use it. A reset replaces your authenticator, and it cannot be hurried from here.')}
+			<p class="small">
+				Asking for a reset starts a <strong>${ui.esc(reset?.delayDays ?? 7)}-day waiting period</strong>.
+				An email goes to the address on the account straight away. If anybody signs in with the
+				authenticator or a recovery code before the period ends, the reset is cancelled — so if this is
+				not really you, the real owner has days to stop it. When the period is over, sign in with your
+				password again and complete the reset from this screen.
+			</p>
+			<label class="check-row">
+				<input type="checkbox" id="reset-understand" />
+				<span>I have lost my authenticator and every one of my recovery codes.</span>
+			</label>
+			<div id="reset-result"></div>
+			<button class="btn btn-danger btn-block" type="button" id="reset-request" disabled>Request a two-factor reset</button>
+			${back}`;
+		const request = body.querySelector('#reset-request');
+		body.querySelector('#reset-understand').addEventListener('change', (e) => { request.disabled = !e.target.checked; });
+		request.addEventListener('click', async () => {
+			request.disabled = true;
+			try {
+				await api.requestTwoFactorReset();
+				await renderTwoFactorReset(context);
+			} catch (err) {
+				if (err.status === 401) return showFailure(err);
+				request.disabled = false;
+				body.querySelector('#reset-result').innerHTML = ui.banner('danger', err.message || 'The reset could not be requested.');
+			}
+		});
+		wireBack();
+		return;
+	}
+
+	if (!reset.isEffective) {
+		body.innerHTML = `
+			${ui.banner('warn', 'A reset is waiting',
+				`It takes effect ${ui.dateTime(reset.effectiveUtc)} (${ui.ago(reset.effectiveUtc)}). Asking again does not change that date.`)}
+			<p class="small muted">
+				Come back after that: sign in with your password, and complete the reset from the two-factor step.
+				If you find your authenticator or a recovery code before then, just sign in with it — that cancels the reset.
+			</p>
+			${back}`;
+		wireBack();
+		return;
+	}
+
+	body.innerHTML = `
+		${ui.banner('ok', 'Your reset has taken effect',
+			'Completing it removes your old authenticator and every old recovery code, signs out every other browser and game client, and gives you a new authenticator to enrol right here.')}
+		<div id="reset-result"></div>
+		<button class="btn btn-primary btn-block" type="button" id="reset-complete">Complete the reset</button>
+		${back}`;
+	wireBack();
+	body.querySelector('#reset-complete').addEventListener('click', async (e) => {
+		e.target.disabled = true;
+		try {
+			const result = await api.completeTwoFactorReset();
+			renderResetHandover(result);
+		} catch (err) {
+			if (err.status === 401) return showFailure(err);
+			e.target.disabled = false;
+			body.querySelector('#reset-result').innerHTML = ui.banner('danger', err.message || 'The reset could not be completed.');
+		}
+	});
+}
+
+/**
+ * The new authenticator, shown once, and the code from it that finally signs in. The confirm button
+ * stays disabled until the person says they have saved the key and codes.
+ */
+function renderResetHandover(result) {
+	const body = signinCard('Enrol your new authenticator', result.username, true);
+	body.innerHTML = `
+		${handoverMarkup(result)}
+		${result.signedOut
+			? ui.banner('warn', 'Sign in again to finish',
+				'Save everything above, then sign in with your password and enter a code from the NEW authenticator.')
+			: `
+				<form id="reset-confirm-form" class="stack">
+					<div class="field">
+						<label for="reset-code">Code from your NEW authenticator</label>
+						<input id="reset-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
+							placeholder="000000" required disabled />
+					</div>
+					<div id="reset-confirm-error"></div>
+					<button class="btn btn-primary btn-block" type="submit" disabled>Confirm and sign in</button>
+				</form>`}
+		<button class="btn btn-ghost btn-block" type="button" id="reset-signin">Back to sign in</button>`;
+
+	const formEl = body.querySelector('#reset-confirm-form');
+	const acknowledge = (checked) => formEl?.querySelectorAll('input, button').forEach((el) => { el.disabled = !checked; });
+	const mustAcknowledge = wireHandover(body, {
+		username: result.username,
+		otpauthUri: result.otpauthUri,
+		recoveryCodes: result.recoveryCodes,
+		onAcknowledged: acknowledge,
+	});
+	if (!mustAcknowledge) acknowledge(true);
+
+	body.querySelector('#reset-signin').addEventListener('click', () => renderSignIn());
+	formEl?.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		const errorHost = body.querySelector('#reset-confirm-error');
+		errorHost.innerHTML = '';
+		try {
+			const signed = await api.confirmTwoFactorReset(new FormData(formEl).get('code'));
+			await onSignedIn(signed.session);
+		} catch (err) {
+			errorHost.innerHTML = ui.banner('danger', err.message || 'That code is not valid.');
+		}
+	});
 }
 
 /** Shows the registration form, and then what registration produced. */

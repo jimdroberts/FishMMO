@@ -488,13 +488,26 @@ namespace FishMMO.Auth.Implementation
 		#region Registration Encryption
 
 		/// <summary>
-		/// Encrypts registration fields (email, age, salt, verifier) for transmission.
+		/// Number of encrypted fields in a create-account message: username, email, age, salt,
+		/// verifier and profile, in that order, on consecutive sequence numbers.
+		/// </summary>
+		public const uint RegistrationFieldCount = 6;
+
+		/// <summary>
+		/// Encrypts registration fields (email, age, salt, verifier, profile) for transmission.
 		/// Uses the CreateAccount AAD type for all fields.
 		/// </summary>
+		/// <remarks>
+		/// The username is encrypted immediately before this call (see <see cref="ClientEncryptUsername"/>),
+		/// so the six fields occupy <c>lastSeq - 5</c> .. <c>lastSeq</c>. The profile is last, which makes
+		/// <paramref name="lastSeq"/> its sequence; <see cref="ServerDecryptRegistrationFields"/> is the
+		/// one place that counts back from it.
+		/// </remarks>
 		/// <param name="email">Email address string.</param>
 		/// <param name="age">Age value.</param>
 		/// <param name="salt">SRP salt string.</param>
 		/// <param name="verifier">SRP verifier string.</param>
+		/// <param name="profile">A <see cref="RegistrationProfile"/> serialisation. Zeroed by this method.</param>
 		/// <param name="clientToServerKey">AES-256 key for client→server direction.</param>
 		/// <param name="sendNonceCtx">Client's send nonce context.</param>
 		/// <param name="agreedVersion">Negotiated protocol version.</param>
@@ -502,12 +515,14 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptedAge">Encrypted age output.</param>
 		/// <param name="encryptedSalt">Encrypted salt output.</param>
 		/// <param name="encryptedVerifier">Encrypted verifier output.</param>
-		/// <param name="verifierSeq">Sequence number of the verifier (used as broadcast Seq).</param>
+		/// <param name="encryptedProfile">Encrypted profile output.</param>
+		/// <param name="lastSeq">Sequence number of the profile, the last field (used as broadcast Seq).</param>
 		public static void ClientEncryptRegistrationFields(
 			string email,
 			int age,
 			string salt,
 			string verifier,
+			byte[] profile,
 			byte[] clientToServerKey,
 			CryptoHelper.GcmNonceContext sendNonceCtx,
 			ushort agreedVersion,
@@ -515,12 +530,14 @@ namespace FishMMO.Auth.Implementation
 			out byte[] encryptedAge,
 			out byte[] encryptedSalt,
 			out byte[] encryptedVerifier,
-			out uint verifierSeq)
+			out byte[] encryptedProfile,
+			out uint lastSeq)
 		{
 			byte[] emailBytes = Encoding.UTF8.GetBytes(email ?? "");
 			byte[] ageBytes = Encoding.UTF8.GetBytes(age.ToString(CultureInfo.InvariantCulture));
 			byte[] saltBytes = Encoding.UTF8.GetBytes(salt);
 			byte[] verifierBytes = Encoding.UTF8.GetBytes(verifier);
+			byte[] profileBytes = profile ?? throw new ArgumentNullException(nameof(profile));
 
 			try
 			{
@@ -537,9 +554,13 @@ namespace FishMMO.Auth.Implementation
 				encryptedSalt = CryptoHelper.EncryptAES(clientToServerKey, nonce1, saltBytes, aad1);
 
 				var (nonce2, seq2) = sendNonceCtx.NextNonce();
-				verifierSeq = seq2;
-				byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, verifierSeq);
+				byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, seq2);
 				encryptedVerifier = CryptoHelper.EncryptAES(clientToServerKey, nonce2, verifierBytes, aad2);
+
+				var (nonce3, seq3) = sendNonceCtx.NextNonce();
+				lastSeq = seq3;
+				byte[] aad3 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, seq3);
+				encryptedProfile = CryptoHelper.EncryptAES(clientToServerKey, nonce3, profileBytes, aad3);
 			}
 			finally
 			{
@@ -547,7 +568,74 @@ namespace FishMMO.Auth.Implementation
 				CryptographicOperations.ZeroMemory(ageBytes);
 				CryptographicOperations.ZeroMemory(saltBytes);
 				CryptographicOperations.ZeroMemory(verifierBytes);
+				CryptographicOperations.ZeroMemory(profileBytes);
 			}
+		}
+
+		/// <summary>
+		/// Server side of <see cref="ClientEncryptUsername"/> + <see cref="ClientEncryptRegistrationFields"/>:
+		/// consumes the six create-account sequences atomically and decrypts every field.
+		/// </summary>
+		/// <remarks>
+		/// Expected order: username (<c>seq - 5</c>), email, age, salt, verifier, profile (<c>seq</c>).
+		/// Either all six receive slots advance or none do. On any failure every plaintext already
+		/// produced is zeroed before the exception leaves, so a caller that catches it holds nothing.
+		/// The caller owns and must zero the six outputs.
+		/// </remarks>
+		/// <exception cref="CryptographicException">The sequence range is invalid, a duplicate or a gap, or any field fails authentication.</exception>
+		public static void ServerDecryptRegistrationFields(
+			ConnectionEncryptionData encryptionData,
+			uint seq,
+			byte[] encryptedUsername,
+			byte[] encryptedEmail,
+			byte[] encryptedAge,
+			byte[] encryptedSalt,
+			byte[] encryptedVerifier,
+			byte[] encryptedProfile,
+			out byte[] username,
+			out byte[] email,
+			out byte[] age,
+			out byte[] salt,
+			out byte[] verifier,
+			out byte[] profile)
+		{
+			if (encryptionData == null)
+				throw new CryptographicException("No encryption data for account creation.");
+			if (!CryptoHelper.ValidateSequenceRange(seq, RegistrationFieldCount))
+				throw new CryptographicException("Account creation sequence is below the field count.");
+
+			uint baseSeq = seq - (RegistrationFieldCount - 1);
+			if (!encryptionData.TryConsumeReceiveSequenceRange(baseSeq, RegistrationFieldCount))
+				throw new CryptographicException("Account creation sequence range out-of-order or duplicate.");
+
+			byte[][] inputs = { encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, encryptedProfile };
+			byte[]?[] outputs = new byte[inputs.Length][];
+			try
+			{
+				for (int i = 0; i < inputs.Length; ++i)
+				{
+					uint fieldSeq = baseSeq + (uint)i;
+					byte[] nonce = encryptionData.BuildReceiveNonce(fieldSeq);
+					byte[] aad = new byte[CryptoHelper.AadLength];
+					CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.CreateAccount, encryptionData.AgreedVersion, fieldSeq);
+					outputs[i] = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey!, nonce, inputs[i], aad);
+				}
+			}
+			catch
+			{
+				foreach (byte[]? plain in outputs)
+				{
+					if (plain != null) CryptographicOperations.ZeroMemory(plain);
+				}
+				throw;
+			}
+
+			username = outputs[0]!;
+			email = outputs[1]!;
+			age = outputs[2]!;
+			salt = outputs[3]!;
+			verifier = outputs[4]!;
+			profile = outputs[5]!;
 		}
 
 		#endregion

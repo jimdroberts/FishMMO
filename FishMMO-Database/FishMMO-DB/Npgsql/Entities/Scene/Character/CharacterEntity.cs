@@ -151,6 +151,31 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>What the operator gave as the reason for the mute.</summary>
 		public string? MuteReason { get; set; }
 
+		/// <summary>
+		/// When a staff character lock lapses (UTC), or null when the character is not locked.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A lock keeps the character out of the world while staff work on it: character select
+		/// refuses it and a scene server that holds it kicks it. The lock is in force only while
+		/// this instant is in the future, so an expired lock needs nothing to clear it.
+		/// </para>
+		/// <para>
+		/// There is deliberately no lock without an end. A forgotten permanent lock strands a player
+		/// with no message they can act on; an operator who needs longer extends it on purpose.
+		/// </para>
+		/// </remarks>
+		public DateTime? LockedUntil { get; set; }
+
+		/// <summary>When the current lock was placed.</summary>
+		public DateTime? LockedAt { get; set; }
+
+		/// <summary>The staff account that placed the lock.</summary>
+		public string? LockedBy { get; set; }
+
+		/// <summary>Why it was locked, as staff wrote it.</summary>
+		public string? LockReason { get; set; }
+
 		// foreign keys
 		/// <summary>Navigation collection of character ability entries.</summary>
 		public ICollection<CharacterAbilityEntity> Abilities { get; set; }

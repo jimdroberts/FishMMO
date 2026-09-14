@@ -222,6 +222,126 @@ namespace FishMMO.Database.Data
 		public string ClaimedBy { get; set; }
 	}
 
+	/// <summary>
+	/// One outbound text message, as an operator needs to see it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The SMS twin of <see cref="EmailQueueAdminData"/>. <c>sms_queue</c> has the same three
+	/// delivery columns as <c>email_queue</c>, so its state is the same combination and is
+	/// classified by the same <see cref="EmailQueueState"/> rather than a copy of it that could
+	/// drift: a filter, a count and a badge must mean one thing across both queues.
+	/// </para>
+	/// <para>
+	/// <b>The body is deliberately absent</b>, for the reason the email body is: a verification
+	/// text is a one-time code, and whoever reads it can prove a phone number they do not hold.
+	/// The projection never names the column.
+	/// </para>
+	/// <para>
+	/// <b><see cref="RecipientPhone"/> is the full number</b> and is personal data. It stops at
+	/// the panel's controller, which sends the browser a masked form only; nothing on the page
+	/// needs the whole number to answer "did this player's code go out".
+	/// </para>
+	/// </remarks>
+	public sealed class SmsQueueAdminData
+	{
+		/// <summary>Primary key.</summary>
+		public long ID { get; set; }
+
+		/// <summary>The recipient number in E.164 form. Mask before it leaves the server.</summary>
+		public string RecipientPhone { get; set; }
+
+		/// <summary>The account it belongs to.</summary>
+		public string RecipientUsername { get; set; }
+
+		/// <summary>What the message is for, as stored on the row.</summary>
+		public SmsKind Kind { get; set; }
+
+		/// <summary>When it was enqueued (UTC).</summary>
+		public DateTime CreatedAt { get; set; }
+
+		/// <summary>When it went out (UTC), or null.</summary>
+		public DateTime? SentAt { get; set; }
+
+		/// <summary>Delivery attempts recorded so far.</summary>
+		public int Attempts { get; set; }
+
+		/// <summary>The drain holding it, or null.</summary>
+		public string ClaimedBy { get; set; }
+
+		/// <summary>When it was claimed (UTC), or null.</summary>
+		public DateTime? ClaimedAt { get; set; }
+
+		/// <summary>The error from the most recent failed attempt, or null.</summary>
+		public string LastError { get; set; }
+
+		/// <summary>The state the delivery columns add up to. See <see cref="EmailQueueState"/>.</summary>
+		public EmailQueueState State { get; set; }
+	}
+
+	/// <summary>
+	/// One page of the SMS queue, with the numbers that say whether it is moving.
+	/// </summary>
+	/// <remarks>
+	/// Shaped as <see cref="EmailQueuePage"/> is, for the same reasons: the counts and both
+	/// oldest-row ages are over the whole table, and the age of the oldest unclaimed row is the
+	/// alarm. A player who chose verify-by-SMS is as stuck by a dead SMS drain as an email player
+	/// is by a dead mail drain, and just as silently.
+	/// </remarks>
+	public sealed class SmsQueuePage
+	{
+		/// <summary>The rows on this page.</summary>
+		public IReadOnlyList<SmsQueueAdminData> Items { get; set; } = Array.Empty<SmsQueueAdminData>();
+
+		/// <summary>1-based page number.</summary>
+		public int Page { get; set; }
+
+		/// <summary>Rows per page, after clamping.</summary>
+		public int PageSize { get; set; }
+
+		/// <summary>Rows matching the filter, across every page.</summary>
+		public int TotalCount { get; set; }
+
+		/// <summary>How many rows are in each state, over the whole table.</summary>
+		public EmailQueueCounts Counts { get; set; } = new EmailQueueCounts();
+
+		/// <summary>When the oldest pending row was enqueued (UTC), or null when nothing waits.</summary>
+		public DateTime? OldestPendingCreatedAt { get; set; }
+
+		/// <summary>When the oldest undelivered row was enqueued (UTC), or null when all went out.</summary>
+		public DateTime? OldestUnsentCreatedAt { get; set; }
+
+		/// <summary>When the read was taken (UTC). See <see cref="EmailQueuePage.ReadAtUtc"/>.</summary>
+		public DateTime ReadAtUtc { get; set; }
+	}
+
+	/// <summary>What an SMS retry did, or why it did nothing.</summary>
+	/// <remarks>
+	/// The twin of <see cref="EmailRetryResult"/>, <b>without the recipient</b>: the only consumer
+	/// writes an audit row, and the account name identifies the account without putting a phone
+	/// number into a log read by more people than the queue page is.
+	/// </remarks>
+	public sealed class SmsRetryResult
+	{
+		/// <summary>The row acted on.</summary>
+		public long ID { get; set; }
+
+		/// <summary>Whether the claim was released and the row put back in line.</summary>
+		public bool Retried { get; set; }
+
+		/// <summary>Why nothing was done, when <see cref="Retried"/> is false. Null otherwise.</summary>
+		public string Refusal { get; set; }
+
+		/// <summary>The account the message belongs to.</summary>
+		public string RecipientUsername { get; set; }
+
+		/// <summary>Attempts recorded on the row. Not reset by a retry: it is the evidence.</summary>
+		public int Attempts { get; set; }
+
+		/// <summary>The drain whose claim was released, when there was one.</summary>
+		public string ClaimedBy { get; set; }
+	}
+
 	/// <summary>One character waiting in, or matched out of, the group finder queue.</summary>
 	public sealed class GroupFinderQueueAdminData
 	{

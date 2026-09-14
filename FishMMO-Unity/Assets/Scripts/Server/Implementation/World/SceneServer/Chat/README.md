@@ -274,6 +274,13 @@ Registered in `InitializeOnce` via `RegisterSupportCommands` and removed in `OnD
 - On refusal: the service's own `ErrorMessage`, which is written to be shown to the player (`"You already have 5 tickets open..."`, `"You have just filed a ticket..."`).
 - Every path answers, including the busy-queue path — a support command that appears to do nothing gets typed again, which is how four identical tickets happen.
 
+**Report panel** (`ChatSystem.ReportPlayer.cs`, issue #252 item 7):
+- `ReportPlayerBroadcast` (target id, target name, `PlayerReportReason`, description) is registered and unregistered alongside the support commands, and answered with `ReportPlayerResultBroadcast` (`Filed`, `TicketID`, `Message`) on every path.
+- Opened with `PlayerRequestGate.SkipCanAct`: a dead or stunned player must be able to report whoever did it, and nothing the request leads to changes game state.
+- Files through the same `SubmitTicket` as `/report`; its optional `SupportTicketAnswer` delivers the outcome to the panel instead of chat, with the same text. There is one `CreateAsync` call, and `ReportPlayerPanelTests` pins that.
+- Target resolved by id against `CharactersByID`, then by name, then filed by typed name with id 0. Self-reports are refused. Subject is `Report: <name> (<reason>)`, with the name truncated so the reason survives.
+- A 60 s per-account throttle stops a repeating client from reaching the database; the service's own cooldown is still the real limit.
+
 **Listing** (`/tickets`):
 - Searches by the caller's own **account**, taken from the server-loaded character, filtered to `Open`, `InProgress` and `AwaitingPlayer` — the same three statuses the service's flood limit counts, so a player who cannot file another ticket can see exactly what is blocking them.
 - One line per ticket: `#<id> [<status>] <subject> - <age>`, with the subject truncated against what the rest of the line costs so the line stays inside `ChatBroadcast.MaxTextLength`. The age is relative (`just now`, `12m ago`, `3h ago`, `2d ago`), because a UTC timestamp answers nothing a player is asking.

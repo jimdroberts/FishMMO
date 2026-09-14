@@ -527,6 +527,43 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 
+					/* A staff lock keeps this character out of the world while staff work on it.
+					 *
+					 * Checked here, at the one door every world entry passes through: a login token
+					 * reaches a world server only with a selected character, and selection is this
+					 * method. A character already in the world when the lock is placed is kicked by the
+					 * panel, and this is what stops it walking straight back in. Fail closed, like the
+					 * in-world read below — a lock that a database hiccup waves through is not a lock. */
+					DatabaseResult<CharacterLockState> lockResult = await characterService.FetchLockAsync(character.ID);
+					if (!lockResult.IsSuccess)
+					{
+						await Log.Error("CharacterSelectSystem",
+							$"FetchLockAsync DB error for character '{characterName}': [{lockResult.ErrorCode}] {lockResult.ErrorMessage}. Refusing selection (fail-closed).");
+						SendSelectFailure(conn);
+						return;
+					}
+					if (lockResult.Data.IsLocked(DateTime.UtcNow))
+					{
+						DateTime lockedUntil = lockResult.Data.LockedUntil.Value;
+						string lockedName = character.Name;
+						await Log.Info("CharacterSelectSystem",
+							$"Account '{accountName}' tried to select '{characterName}', which is locked by staff until {lockedUntil:u}; refusing.");
+
+						TryEnqueueMainThread(() =>
+						{
+							if (conn != null && conn.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(conn, new CharacterSelectResultBroadcast()
+								{
+									Result = CharacterSelectResult.CharacterLocked,
+									CharacterName = lockedName,
+									LockedUntilUtcTicks = lockedUntil.Ticks,
+								}, true, Channel.Reliable);
+							}
+						});
+						return;
+					}
+
 					/* Refuse to switch characters while one is still in the world.
 					 *
 					 * SetSelectedAsync below rewrites `selected` across the whole account, so

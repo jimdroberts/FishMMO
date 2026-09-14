@@ -54,6 +54,7 @@ export const ROUTES = [
 
 	{ path: 'admin/characters', group: 'Administration', label: 'Character editor', icon: 'edit', level: 3, title: 'Character editor', crumb: 'Administration', built: true },
 	{ path: 'admin/audit', group: 'Administration', label: 'Audit log', icon: 'flag', level: 3, title: 'Audit log', crumb: 'Administration', built: true },
+	{ path: 'admin/beta', group: 'Administration', label: 'Beta codes', icon: 'shield', level: 3, title: 'Beta codes', crumb: 'Administration', built: true },
 
 	{ path: 'platform/health', group: 'Platform', label: 'Health', icon: 'heart', level: 3, title: 'Platform health', crumb: 'Platform', built: true },
 	{ path: 'platform/secrets', group: 'Platform', label: 'Secrets', icon: 'key', level: 3, title: 'Secrets', crumb: 'Platform', built: true },

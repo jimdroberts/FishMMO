@@ -94,7 +94,12 @@ export async function render(host, ctx) {
 							<dl class="dl">
 								<dt>Account name</dt><dd>${ui.esc(account.name)}</dd>
 								<dt>Access level</dt><dd>${ui.levelBadge(account.accessLevel)}</dd>
-								<dt>Email</dt><dd>${ui.esc(account.email ?? '—')} ${account.verified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}</dd>
+								<dt>Email</dt><dd>${ui.esc(account.email ?? '—')} ${(account.emailVerified ?? account.verified) ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}</dd>
+								<dt>Phone</dt><dd>${account.phone
+									? `${ui.esc(account.phone)} ${account.phoneVerified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}`
+									: '<span class="faint">—</span>'}</dd>
+								<dt>Account</dt><dd>${account.verified ? ui.badge('verified', 'ok') : ui.badge('not verified yet', 'warn')}
+									${(account.verificationChannels ?? []).length ? `<div class="cell-sub">verifies by ${ui.esc(account.verificationChannels.map((c) => (c === 'sms' ? 'SMS' : 'email')).join(' and '))}</div>` : ''}</dd>
 								<dt>Age</dt><dd>${account.age || '—'}</dd>
 								<dt>Two-factor</dt><dd>${account.totpEnabled ? ui.badge('enabled', 'ok') : ui.badge('not set up', 'warn')}</dd>
 								<dt>Enrolled</dt><dd>${account.totpVerifiedAtUtc ? ui.dateTime(account.totpVerifiedAtUtc) : '<span class="faint">—</span>'}</dd>
@@ -129,8 +134,60 @@ export async function render(host, ctx) {
 								<li class="${account.accessLevel >= 3 ? 'is-ok' : ''}"><div class="timeline-title">Admin</div><div class="timeline-meta">Servers, supervisor, editing, platform</div></li>
 							</ul>`,
 					})}
+					${ui.card({
+						title: 'Beta access',
+						sub: 'Beta codes this account has redeemed. A revoked code no longer admits the account.',
+						body: `<div id="beta-host">${ui.loading()}</div>`,
+					})}
 				</div>
 			</div>`;
+
+		/* Loaded after the page, and a failure here must not take the profile with it. Redeeming is
+		 * here rather than at sign-in because panel sign-in is never gated on beta access: this is how
+		 * an account that registered before the gate, or lost a race for a code's last use, gets in. */
+		const betaHost = body.querySelector('#beta-host');
+		const drawBeta = async () => {
+			let beta;
+			try {
+				beta = await api.getMyBetaCodes();
+			} catch (err) {
+				if (betaHost.isConnected) betaHost.innerHTML = `<p class="small muted">Beta access could not be loaded: ${ui.esc(err?.message ?? 'unknown error')}</p>`;
+				return;
+			}
+			if (!betaHost.isConnected) return;
+			const codes = beta.codes ?? [];
+			betaHost.innerHTML = `
+				${codes.length
+					? `<ul class="stack" style="list-style:none;padding:0;margin:0">${codes.map((c) => `
+						<li>
+							<code>${ui.esc(c.code)}</code> ${ui.esc(c.program)}
+							${c.revoked ? ui.badge('revoked', 'danger') : ui.badge('active', 'ok')}
+							<div class="cell-sub">redeemed ${ui.esc(ui.dateTime(c.redeemedUtc))}</div>
+						</li>`).join('')}</ul>`
+					: `<p class="small muted">${beta.gateEnabled ? 'This shard is in closed beta and this account has not redeemed a code yet.' : 'No beta code redeemed.'}</p>`}
+				<form id="beta-form" class="stack" style="margin-top:var(--sp-3)">
+					<div class="field">
+						<label for="beta-code">Redeem a beta code</label>
+						<input id="beta-code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false"
+							maxlength="18" placeholder="XXXX-XXXX-XXXX" required />
+					</div>
+					<div id="beta-result"></div>
+					<div><button class="btn" type="submit">Redeem</button></div>
+				</form>`;
+			betaHost.querySelector('#beta-form').addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const resultHost = betaHost.querySelector('#beta-result');
+				resultHost.innerHTML = '';
+				try {
+					const result = await api.redeemBetaCode(new FormData(e.target).get('code'));
+					ui.toast('Beta code redeemed', result.message ?? '', 'ok');
+					await drawBeta();
+				} catch (err) {
+					resultHost.innerHTML = ui.banner('danger', err.message || 'That beta code is not valid.');
+				}
+			});
+		};
+		drawBeta();
 
 		body.querySelector('#email-form').addEventListener('submit', async (e) => {
 			e.preventDefault();

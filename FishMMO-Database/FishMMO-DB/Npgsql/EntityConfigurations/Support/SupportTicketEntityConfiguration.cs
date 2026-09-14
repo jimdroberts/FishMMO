@@ -55,6 +55,18 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasMaxLength(4000);
 
+			/* Every existing ticket is first tier: the default is what the queue meant before tiers
+			 * existed, when any game master could work anything. */
+			builder.Property(e => e.RequiredAccessLevel)
+				.IsRequired()
+				.HasDefaultValue((byte)2);
+
+			builder.Property(e => e.EscalatedBy)
+				.IsRequired(false)
+				.HasMaxLength(100);
+
+			builder.Property(e => e.EscalatedUtc);
+
 			builder.Property(e => e.TargetAccount)
 				.IsRequired(false)
 				.HasMaxLength(100);

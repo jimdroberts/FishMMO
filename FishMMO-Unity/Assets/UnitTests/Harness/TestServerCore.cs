@@ -172,6 +172,14 @@ namespace FishMMO.UnitTests.Harness
 			client!.OnAuthResultReceived(result);
 		}
 
+		/// <summary>Results that carry a retry-after hint (TwoFactorLocked) reach the client with it.</summary>
+		protected override void BroadcastAuthResult(int conn, ClientAuthenticationResult result, bool reliable, int retryAfterSeconds)
+		{
+			_ = AuthTestTrace.Log("Server", "BroadcastAuthResult", $"conn={conn} result={result} reliable={reliable} retryAfter={retryAfterSeconds}");
+			AuthResultBroadcastCount++;
+			client!.OnAuthResultReceived(result, retryAfterSeconds);
+		}
+
 		protected override void BroadcastSrpVerifyResponse(int conn, byte[] encryptedSalt, byte[] encryptedPublicServerEphemeral)
 		{
 			_ = AuthTestTrace.Log("Server", "BroadcastSrpVerifyResponse", $"conn={conn} salt={AuthTestTrace.Hex(encryptedSalt)} pkB={AuthTestTrace.Hex(encryptedPublicServerEphemeral)}");
@@ -210,6 +218,10 @@ namespace FishMMO.UnitTests.Harness
 					Verifier = row.Verifier,
 					AccessLevel = row.AccessLevel,
 					TotpEnabled = row.TotpEnabled,
+					AccountName = row.Username,
+					EmailVerificationPending = row.EmailVerificationPending,
+					PhoneVerificationPending = row.PhoneVerificationPending,
+					PhoneVerifyCodeExpiresUtc = row.PhoneVerifyCodeExpiresUtc,
 				});
 			}
 			return Task.FromResult(new SrpAccountLookupResult { IsSuccess = false });
@@ -245,6 +257,45 @@ namespace FishMMO.UnitTests.Harness
 		{
 			// Test harness: no email infrastructure.
 			return Task.FromResult(false);
+		}
+
+		protected override Task<bool> TryResendVerificationSmsIfExpiredAsync(string username, DateTime? phoneVerifyCodeExpiresUtc)
+		{
+			// Test harness: no SMS queue. Record the request so tests can pin when the core asks.
+			store.SmsResendRequests.Enqueue((username, phoneVerifyCodeExpiresUtc));
+			return Task.FromResult(true);
+		}
+
+		// The database-backed lockout and the beta gate, answered by the in-memory store. With nothing
+		// set on the store these answer exactly like the core's no-op defaults.
+
+		protected override Task<bool> IsLoginLockedAsync(string accountName) =>
+			Task.FromResult(store.IsLoginLocked(accountName));
+
+		protected override Task RecordLoginFailureAsync(string accountName)
+		{
+			store.RecordLoginFailure(accountName);
+			return Task.CompletedTask;
+		}
+
+		protected override Task ClearLoginFailuresAsync(string accountName)
+		{
+			store.ClearLoginFailures(accountName);
+			return Task.CompletedTask;
+		}
+
+		protected override Task<DateTime?> GetTwoFactorLockedUntilAsync(string accountName) =>
+			Task.FromResult(store.GetTwoFactorLockedUntil(accountName));
+
+		protected override Task<ClientAuthenticationResult?> CheckSignInAccessAsync(string accountName, AccessLevel accessLevel)
+		{
+			// Mirrors ServerAuthenticator: only a closed test refuses, and never staff.
+			if (!store.BetaMode || accessLevel >= AccessLevel.GameMaster)
+			{
+				return Task.FromResult<ClientAuthenticationResult?>(null);
+			}
+			return Task.FromResult<ClientAuthenticationResult?>(
+				store.HasBetaAccess(accountName) ? (ClientAuthenticationResult?)null : ClientAuthenticationResult.BetaAccessRequired);
 		}
 
 		#endregion

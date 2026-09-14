@@ -198,6 +198,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				{ "/leaveinstance", OnLeaveInstanceCommand },
 				{ "/exitinstance", OnLeaveInstanceCommand },
+				{ "/unstuck", OnUnstuckCommand },
+				{ "/stuck", OnUnstuckCommand },
 			});
 
 			// Scene manager events
@@ -285,6 +287,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Static registry: a command left behind outlives this ScriptableObject and would
 			// run against a destroyed instance. See ChatHelper.RemoveCommands.
 			ChatHelper.RemoveCommands(new[] { "/leaveinstance", "/exitinstance" });
+			ChatHelper.RemoveCommands(UnstuckCommandWords);
+			nextUnstuckUtc.Clear();
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)

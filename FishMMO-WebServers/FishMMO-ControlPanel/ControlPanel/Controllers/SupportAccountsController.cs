@@ -4,6 +4,7 @@ using FishMMO.ControlPanel.Services;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Shared;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,8 +42,22 @@ namespace FishMMO.ControlPanel.Controllers
 		private readonly IWebSessionService webSessions;
 		private readonly ITwoFactorRecoveryCodeService recoveryCodes;
 		private readonly IKickRequestService kickRequests;
+		private readonly IAdminAuditService auditLog;
+		private readonly ISupportTicketService tickets;
+		private readonly ITwoFactorResetRequestService resetRequests;
+		private readonly IBetaCodeService betaCodes;
+		private readonly SecurityNoticeService notices;
 		private readonly AuditScope audit;
 		private readonly ILogger<SupportAccountsController> log;
+
+		/// <summary>Most tickets each history list carries; the total is always reported.</summary>
+		private const int HistoryTicketCount = 10;
+
+		/// <summary>Most moderation rows the history carries, newest first.</summary>
+		private const int HistoryAuditCount = 25;
+
+		/// <summary>Most characters whose own moderation rows are read into the history.</summary>
+		private const int HistoryCharacterLimit = 12;
 
 		public SupportAccountsController(
 			IAccountService accounts,
@@ -51,9 +66,19 @@ namespace FishMMO.ControlPanel.Controllers
 			IWebSessionService webSessions,
 			ITwoFactorRecoveryCodeService recoveryCodes,
 			IKickRequestService kickRequests,
+			IAdminAuditService auditLog,
+			ISupportTicketService tickets,
+			ITwoFactorResetRequestService resetRequests,
+			IBetaCodeService betaCodes,
+			SecurityNoticeService notices,
 			AuditScope audit,
 			ILogger<SupportAccountsController> log)
 		{
+			this.resetRequests = resetRequests;
+			this.betaCodes = betaCodes;
+			this.notices = notices;
+			this.auditLog = auditLog;
+			this.tickets = tickets;
 			this.accounts = accounts;
 			this.characters = characters;
 			this.authTokens = authTokens;
@@ -116,13 +141,336 @@ namespace FishMMO.ControlPanel.Controllers
 			 * one that fails. */
 			var characterResult = await characters.FetchAdminByAccountAsync(username, true, HttpContext.RequestAborted);
 
-			var account = Summarise(result.Data);
-			return Ok(Flatten(account, characterResult.IsSuccess
-				// An empty list rather than an error: an account with no characters is ordinary,
-				// and failing the page over it would hide the account the operator asked for.
-				? characterResult.Data.Select(SupportCharactersController.Summarise)
-				: Enumerable.Empty<object>()));
+			/* The detail page, and only the detail page, carries the personal data and the security
+			 * state: a lookup of one named account is a deliberate read, recorded by the audit filter.
+			 * Search results are skimmed by the page, and the list projection stays free of it. */
+			var reset = await resetRequests.FetchPendingAsync(result.Data.Name, HttpContext.RequestAborted);
+			var beta = await betaCodes.FetchForAccountAsync(result.Data.Name, HttpContext.RequestAborted);
+
+			return Ok(Flatten(
+				new[]
+				{
+					Summarise(result.Data),
+					Detail(result.Data, reset.IsSuccess ? reset.Data : null, beta.IsSuccess ? beta.Data : null),
+				},
+				characterResult.IsSuccess
+					// An empty list rather than an error: an account with no characters is ordinary,
+					// and failing the page over it would hide the account the operator asked for.
+					? characterResult.Data.Select(SupportCharactersController.Summarise)
+					: Enumerable.Empty<object>()));
 		}
+
+		/// <summary>
+		/// Pending self-service two-factor resets across every account, soonest to take effect first.
+		/// </summary>
+		/// <remarks>
+		/// A reset about to take effect is the moment somebody should look: if the account holder did not
+		/// ask for it, staff cancelling it is the last line. Game master readable; recorded like every read.
+		/// </remarks>
+		[HttpGet("2fa-resets")]
+		[Authorize(Policy = PanelPolicies.Support)]
+		public async Task<IActionResult> PendingTwoFactorResets([FromQuery] int page = 1, [FromQuery] int pageSize = 25)
+		{
+			var result = await resetRequests.SearchPendingAsync(Math.Max(1, page), pageSize, HttpContext.RequestAborted);
+			if (!result.IsSuccess)
+			{
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The pending two-factor resets could not be read." });
+			}
+			return Ok(new
+			{
+				items = result.Data.Items.Select(r => ProjectReset(r)),
+				page = result.Data.Page,
+				pageSize = result.Data.PageSize,
+				totalCount = result.Data.TotalCount,
+			});
+		}
+
+		/// <summary>Lifts both sign-in lockouts on an account.</summary>
+		/// <remarks>
+		/// For a player locked out by somebody else guessing at their account. Step-up, like every
+		/// moderation write, because lifting a lock also lifts the brake on whoever was guessing.
+		/// </remarks>
+		[HttpPost("{username}/clear-lockout")]
+		[Authorize(Policy = PanelPolicies.SupportStepUp)]
+		[Audited(AuditActions.AccountClearLockout, TargetType = "account", TargetRouteValue = "username")]
+		public async Task<IActionResult> ClearLockout(string username, [FromBody] ReasonRequest request)
+		{
+			var (target, failure) = await ResolveAsync(username, request);
+			if (failure != null)
+			{
+				return failure;
+			}
+
+			audit.Details = new
+			{
+				loginLockedUntilUtc = target.LoginLockedUntilUtc,
+				twoFactorLockedUntilUtc = target.TwoFactorLockedUntilUtc,
+			};
+
+			var cleared = await accounts.ClearAuthLockoutAsync(username, HttpContext.RequestAborted);
+			if (!cleared.IsSuccess)
+			{
+				audit.Outcome = cleared.ErrorMessage;
+				return BadRequest(new { error = cleared.ErrorMessage ?? "The lockout could not be cleared." });
+			}
+
+			log.LogWarning("Sign-in lockout cleared for '{Account}' by '{Actor}' (was locked: {Locked}). Reason: {Reason}",
+				username, User.Identity?.Name, cleared.Data, request.Reason);
+			return Ok(new
+			{
+				message = cleared.Data
+					? "Sign-in lockout cleared. The player can try again now."
+					: "Nothing was locked on this account.",
+				wasLocked = cleared.Data,
+			});
+		}
+
+		/// <summary>Brings a pending self-service two-factor reset forward, to now or a chosen earlier time.</summary>
+		/// <remarks>
+		/// Removes the protection the waiting period gives, so it is a step-up write with a mandatory
+		/// reason, and the holder is emailed. Only ever earlier: a longer wait is a cancel and a new request.
+		/// </remarks>
+		[HttpPost("{username}/2fa-reset/shorten")]
+		[Authorize(Policy = PanelPolicies.SupportStepUp)]
+		[Audited(AuditActions.AccountTwoFactorResetShorten, TargetType = "account", TargetRouteValue = "username")]
+		public async Task<IActionResult> ShortenTwoFactorReset(string username, [FromBody] ShortenResetRequest request)
+		{
+			var (target, failure) = await ResolveAsync(username, request == null ? null : new ReasonRequest { Reason = request.Reason });
+			if (failure != null)
+			{
+				return failure;
+			}
+			if (request.Reason.Trim().Length > 256)
+			{
+				return BadRequest(new { error = "The reason must be 256 characters or fewer." });
+			}
+
+			var pending = await resetRequests.FetchPendingAsync(target.Name, HttpContext.RequestAborted);
+			if (!pending.IsSuccess)
+			{
+				audit.Outcome = pending.ErrorMessage;
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The pending reset could not be read." });
+			}
+			if (pending.Data == null)
+			{
+				audit.Outcome = "Refused: no pending two-factor reset.";
+				return NotFound(new { error = "There is no pending two-factor reset on this account." });
+			}
+
+			DateTime now = DateTime.UtcNow;
+			DateTime effective = request.EffectiveUtc.HasValue ? AsUtc(request.EffectiveUtc.Value) : now;
+			if (effective < now)
+			{
+				effective = now;
+			}
+			if (effective >= pending.Data.EffectiveUtc)
+			{
+				audit.Outcome = "Refused: not earlier than the current effective time.";
+				return BadRequest(new { error = "A reset can only be brought forward. Choose a time before it currently takes effect." });
+			}
+
+			audit.Details = new { requestId = pending.Data.ID, previousEffectiveUtc = pending.Data.EffectiveUtc, newEffectiveUtc = effective };
+
+			var shortened = await resetRequests.ShortenAsync(pending.Data.ID, effective, User.Identity?.Name, request.Reason.Trim(), HttpContext.RequestAborted);
+			if (!shortened.IsSuccess)
+			{
+				audit.Outcome = shortened.ErrorMessage;
+				return BadRequest(new { error = shortened.ErrorMessage ?? "The reset could not be brought forward." });
+			}
+
+			log.LogWarning("Two-factor reset for '{Account}' brought forward to {Effective:o} by '{Actor}'. Reason: {Reason}",
+				username, effective, User.Identity?.Name, request.Reason);
+			await notices.ResetShortenedAsync(target.Name, effective, HttpContext.RequestAborted);
+			return Ok(new { message = "Reset brought forward. The account holder has been emailed.", effectiveUtc = effective });
+		}
+
+		/// <summary>Cancels a pending self-service two-factor reset.</summary>
+		[HttpPost("{username}/2fa-reset/cancel")]
+		[Authorize(Policy = PanelPolicies.SupportStepUp)]
+		[Audited(AuditActions.AccountTwoFactorResetCancel, TargetType = "account", TargetRouteValue = "username")]
+		public async Task<IActionResult> CancelTwoFactorReset(string username, [FromBody] ReasonRequest request)
+		{
+			var (target, failure) = await ResolveAsync(username, request);
+			if (failure != null)
+			{
+				return failure;
+			}
+			if (request.Reason.Trim().Length > 256)
+			{
+				return BadRequest(new { error = "The reason must be 256 characters or fewer." });
+			}
+
+			var pending = await resetRequests.FetchPendingAsync(target.Name, HttpContext.RequestAborted);
+			if (pending.IsSuccess && pending.Data != null)
+			{
+				audit.Details = new { requestId = pending.Data.ID, effectiveUtc = pending.Data.EffectiveUtc };
+			}
+
+			var cancelled = await resetRequests.CancelAsync(target.Name, User.Identity?.Name, request.Reason.Trim(), HttpContext.RequestAborted);
+			if (!cancelled.IsSuccess)
+			{
+				audit.Outcome = cancelled.ErrorMessage;
+				return BadRequest(new { error = cancelled.ErrorMessage ?? "The reset could not be cancelled." });
+			}
+			if (!cancelled.Data)
+			{
+				audit.Outcome = "Refused: no pending two-factor reset.";
+				return NotFound(new { error = "There is no pending two-factor reset on this account." });
+			}
+
+			log.LogWarning("Two-factor reset for '{Account}' cancelled by '{Actor}'. Reason: {Reason}",
+				username, User.Identity?.Name, request.Reason);
+			await notices.ResetCancelledAsync(target.Name, byStaff: true, HttpContext.RequestAborted);
+			return Ok(new { message = "Reset cancelled. The account's two-factor is unchanged, and the account holder has been emailed." });
+		}
+
+		/// <summary>
+		/// What staff need to weigh a report against an account: its standing, what has been reported
+		/// about it, what it has reported, and what staff have already done to it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A report read in isolation is how the fifth complaint about the same player gets the same
+		/// warning as the first. This puts the pattern beside the report.
+		/// </para>
+		/// <para>
+		/// <b>The moderation rows are the audit log, narrowed to this account and its characters.</b>
+		/// The full log stays Operator-only; a game master reading who banned this player before is
+		/// doing the job, and reading everyone's actions is not. The actor's address, session and the
+		/// free-form details are left out for the same reason. Tickets above the reader's tier are
+		/// filtered in the query, as they are in the queue. Recorded in the audit log, like every staff read.
+		/// </para>
+		/// </remarks>
+		[HttpGet("{username}/history")]
+		[Authorize(Policy = PanelPolicies.Support)]
+		public async Task<IActionResult> History(string username, [FromQuery] long? excludeTicketId = null)
+		{
+			if (!Authentication.IsAllowedUsername(username))
+			{
+				return BadRequest(new { error = Authentication.InvalidUsernameError });
+			}
+
+			var cancellation = HttpContext.RequestAborted;
+			var account = await accounts.FetchAdminAsync(username, cancellation);
+			if (!account.IsSuccess)
+			{
+				return NotFound(new { error = "No such account." });
+			}
+
+			// The stored name: tickets and audit rows copy it in, and match it exactly.
+			string name = account.Data.Name;
+			byte tier = (byte)ModerationGuards.ActorLevel(this);
+
+			var against = await tickets.SearchAsync(new SupportTicketQuery
+			{
+				TargetAccount = name,
+				MaxRequiredAccessLevel = tier,
+				Page = 1,
+				PageSize = HistoryTicketCount,
+			}, cancellation);
+
+			/* The ticket being read is not "another report". Excluded here, where the total is known:
+			 * the page is ten rows sorted by priority, so a client could only subtract a ticket that
+			 * happened to land on it. Only a ticket that really is about this account, at a tier the
+			 * reader may see, is subtracted — the parameter cannot be used to shave a count. */
+			int excluded = 0;
+			if (excludeTicketId is long exclude && exclude > 0)
+			{
+				var current = await tickets.FetchAsync(exclude, includeInternal: false, cancellation);
+				if (current.IsSuccess &&
+					current.Data.RequiredAccessLevel <= tier &&
+					string.Equals(current.Data.TargetAccount, name, StringComparison.Ordinal))
+				{
+					excluded = 1;
+				}
+			}
+
+			var filed = await tickets.SearchAsync(new SupportTicketQuery
+			{
+				ReporterAccount = name,
+				MaxRequiredAccessLevel = tier,
+				Page = 1,
+				PageSize = HistoryTicketCount,
+			}, cancellation);
+
+			var characterResult = await characters.FetchAdminByAccountAsync(name, true, cancellation);
+			IReadOnlyList<CharacterAdminData> owned = characterResult.IsSuccess
+				? characterResult.Data
+				: Array.Empty<CharacterAdminData>();
+
+			/* The account's own rows, then each character's. Characters are audited under their id,
+			 * so "everything staff did about this player" is one query per target; bounded, because
+			 * an account holds a handful of characters. */
+			var moderation = new List<AdminAuditData>();
+			var accountRows = await auditLog.SearchAsync(new AdminAuditQuery
+			{
+				TargetType = "account",
+				TargetID = name,
+				Page = 1,
+				PageSize = HistoryAuditCount,
+			}, cancellation);
+			if (accountRows.IsSuccess)
+			{
+				moderation.AddRange(accountRows.Data.Items);
+			}
+			foreach (CharacterAdminData character in owned.Take(HistoryCharacterLimit))
+			{
+				var rows = await auditLog.SearchAsync(new AdminAuditQuery
+				{
+					TargetType = "character",
+					TargetID = character.ID.ToString(CultureInfo.InvariantCulture),
+					Page = 1,
+					PageSize = HistoryAuditCount,
+				}, cancellation);
+				if (rows.IsSuccess)
+				{
+					moderation.AddRange(rows.Data.Items);
+				}
+			}
+
+			// Cheap, and the one piece of account security a report is most often really about.
+			var pendingReset = await resetRequests.FetchPendingAsync(name, cancellation);
+
+			return Ok(new
+			{
+				account = Summarise(account.Data),
+				pendingTwoFactorReset = pendingReset.IsSuccess ? ProjectReset(pendingReset.Data) : null,
+				reportsAgainst = TicketList(against, excludeTicketId, excluded),
+				filed = TicketList(filed, excludeTicketId, 0),
+				moderation = moderation
+					.OrderByDescending(e => e.OccurredUtc)
+					.Take(HistoryAuditCount)
+					.Select(e => new
+					{
+						occurredUtc = e.OccurredUtc,
+						actor = e.ActorName,
+						action = e.Action,
+						targetType = e.TargetType,
+						targetId = e.TargetID,
+						targetName = e.TargetName,
+						reason = e.Reason,
+						succeeded = e.Succeeded,
+						outcome = e.Outcome,
+						source = e.Source,
+					}),
+				characters = owned.Select(SupportCharactersController.Summarise),
+			});
+		}
+
+		/// <summary>A ticket search as the history shows it: the rows, and how many there are in all.</summary>
+		private static object TicketList(Database.DatabaseResult<SupportTicketPage> result, long? excludeId, int excludedFromTotal) => result.IsSuccess
+			? new
+			{
+				totalCount = Math.Max(0, result.Data.TotalCount - excludedFromTotal),
+				items = result.Data.Items
+					.Where(t => excludeId == null || t.ID != excludeId.Value)
+					.Select(t => SupportTicketsController.Project(t, includeMessages: false)),
+			}
+			: new
+			{
+				totalCount = 0,
+				items = Enumerable.Empty<object>(),
+			};
 
 		/// <summary>Asks the game servers to disconnect an account.</summary>
 		/// <remarks>
@@ -360,12 +708,86 @@ namespace FishMMO.ControlPanel.Controllers
 		/// response plus one field. A client that has rendered an account from the list can
 		/// render it from the detail without a second shape to learn.
 		/// </remarks>
-		private static object Flatten(object account, IEnumerable<object> characters)
+		private static object Flatten(IEnumerable<object> parts, IEnumerable<object> characters)
 		{
-			var fields = account.GetType().GetProperties()
-				.ToDictionary(p => p.Name, p => p.GetValue(account));
+			var fields = new Dictionary<string, object>();
+			foreach (object part in parts)
+			{
+				foreach (var property in part.GetType().GetProperties())
+				{
+					fields[property.Name] = property.GetValue(part);
+				}
+			}
 			fields["characters"] = characters;
 			return fields;
+		}
+
+		/// <summary>
+		/// The detail-only projection: personal data and security state.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="Summarise"/> on purpose. That projection feeds search results and
+		/// the history panel, which list accounts; a phone number or an address has no business in a
+		/// list. These fields are read when one account is opened, and that read is recorded.
+		/// </remarks>
+		private static object Detail(AccountAdminData a, TwoFactorResetRequestData reset, IReadOnlyList<AccountBetaCodeData> beta)
+		{
+			DateTime now = DateTime.UtcNow;
+			return new
+			{
+				phone = a.Phone,
+				phoneVerified = a.PhoneVerified,
+				emailVerified = a.EmailVerified,
+				verificationChannels = AccountRegistrationService.ChannelNames((FishMMO.Database.Data.Enums.AccountVerificationChannels)a.VerificationChannels),
+				realName = a.RealName,
+				country = a.Country,
+				address = a.Address,
+				referralAccount = a.ReferralAccount,
+				loginLockedUntilUtc = a.LoginLockedUntilUtc,
+				loginLocked = a.LoginLockedUntilUtc.HasValue && a.LoginLockedUntilUtc.Value > now,
+				twoFactorLockedUntilUtc = a.TwoFactorLockedUntilUtc,
+				twoFactorLocked = a.TwoFactorLockedUntilUtc.HasValue && a.TwoFactorLockedUntilUtc.Value > now,
+				pendingTwoFactorReset = ProjectReset(reset),
+				betaCodes = (beta ?? Array.Empty<AccountBetaCodeData>()).Select(c => new
+				{
+					code = c.Code,
+					program = c.Program,
+					redeemedUtc = c.RedeemedUtc,
+					revoked = c.CodeRevoked,
+				}),
+			};
+		}
+
+		/// <summary>A reset request as staff see it, or null.</summary>
+		private static object ProjectReset(TwoFactorResetRequestData r) => r == null ? null : new
+		{
+			id = r.ID,
+			accountName = r.AccountName,
+			status = r.Status.ToString(),
+			requestedUtc = r.RequestedUtc,
+			effectiveUtc = r.EffectiveUtc,
+			isEffective = r.EffectiveUtc <= DateTime.UtcNow,
+			requestedIp = r.RequestedIp,
+			shortenedUtc = r.ShortenedUtc,
+			shortenedBy = r.ShortenedBy,
+			staffReason = r.StaffReason,
+		};
+
+		private static DateTime AsUtc(DateTime value) => value.Kind switch
+		{
+			DateTimeKind.Utc => value,
+			DateTimeKind.Local => value.ToUniversalTime(),
+			_ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+		};
+
+		/// <summary>A shorten request: the reason, and the new effective time (null for now).</summary>
+		public sealed class ShortenResetRequest
+		{
+			/// <summary>Why. Recorded, and stored on the request.</summary>
+			public string Reason { get; set; } = "";
+
+			/// <summary>The new, earlier, effective time in UTC. Null or past means now.</summary>
+			public DateTime? EffectiveUtc { get; set; }
 		}
 
 		/// <summary>
@@ -390,6 +812,13 @@ namespace FishMMO.ControlPanel.Controllers
 			created = a.Created,
 			lastLogin = a.LastLogin,
 			characterCount = a.CharacterCount,
+			bannedUntil = a.BannedUntil,
+			bannedBy = a.BannedBy,
+			banReason = a.BanReason,
+			muted = a.Muted,
+			mutedUntil = a.MutedUntil,
+			mutedBy = a.MutedBy,
+			muteReason = a.MuteReason,
 		};
 
 		/// <summary>A request carrying only the audit reason.</summary>

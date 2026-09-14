@@ -1,8 +1,11 @@
+using System.Collections;
 using UnityEngine;
+using UnityEngine.TestTools;
 using UnityEngine.UIElements;
 using UnityEditor;
 using NUnit.Framework;
 using FishMMO.Client;
+using FishMMO.Shared;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -116,6 +119,73 @@ namespace FishMMO.UnitTests
 			{
 				LogAssert.IsNotNull(Live.Q(slot), $"{slot} is in the tree");
 			}
+		}
+
+		/// <summary>
+		/// Every socket is named in full, unclipped, below its icon and centred (issue #257).
+		/// </summary>
+		/// <remarks>
+		/// The labels were "Shldr", "Acc", "Main" and "Off". Checking only the text would let a
+		/// longer name come back clipped, so each name's natural width is measured against the
+		/// width its label resolved to. The placement checks pin the defect the full names made
+		/// visible: Unity's default Label box lifted the text across the icon's bottom edge and
+		/// its uneven margins pulled it off centre — a control run with that box restored fails
+		/// both, while every name still fits.
+		/// </remarks>
+		[UnityTest]
+		public IEnumerator EverySocketLabelIsTheFullSlotNameAndFits()
+		{
+			// Yoga has not placed a freshly mounted tree; every width reads NaN until it has.
+			for (int frame = 0; frame < 10; ++frame)
+			{
+				yield return null;
+			}
+
+			string[] names = CharacterSheetView.SlotElementNames;
+			LogAssert.AreEqual(System.Enum.GetValues(typeof(ItemSlot)).Length, names.Length, "one socket per slot");
+
+			for (int i = 0; i < names.Length; ++i)
+			{
+				ItemSlot slot = (ItemSlot)i;
+				VisualElement socket = Live.Q(names[i]);
+				LogAssert.IsNotNull(socket, $"{names[i]} is in the tree");
+
+				Label label = socket.Q<Label>(className: "eq-slot__label");
+				LogAssert.IsNotNull(label, $"{names[i]} carries a name label");
+				LogAssert.AreEqual(ItemSlotNames.DisplayName(slot), label.text, $"{names[i]} names {slot} in full");
+
+				float available = label.contentRect.width;
+				Vector2 natural = label.MeasureTextSize(label.text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
+				LogAssert.IsTrue(available > 0, $"{names[i]}'s label resolved a width (got {available})");
+				LogAssert.IsTrue(natural.x <= available,
+					$"\"{label.text}\" needs {natural.x}px but {names[i]}'s label has {available}px");
+
+				// Label and icon share the socket as parent, so their layouts are comparable.
+				VisualElement icon = socket.Q(className: "eq-slot__icon");
+				LogAssert.IsNotNull(icon, $"{names[i]} carries an icon");
+				float textTop = label.layout.y + label.contentRect.y;
+				LogAssert.IsTrue(textTop >= icon.layout.yMax,
+					$"\"{label.text}\" starts at y {textTop}, inside the icon that ends at y {icon.layout.yMax}");
+
+				float textCentre = label.layout.x + label.contentRect.x + label.contentRect.width * 0.5f;
+				float socketCentre = socket.layout.width * 0.5f;
+				LogAssert.IsTrue(Mathf.Abs(textCentre - socketCentre) <= 0.5f,
+					$"\"{label.text}\" is centred at x {textCentre}, the socket at x {socketCentre}");
+			}
+		}
+
+		[Test]
+		public void SlotDisplayNamesAreUnabbreviatedAndDistinct()
+		{
+			System.Collections.Generic.HashSet<string> seen = new System.Collections.Generic.HashSet<string>();
+			foreach (ItemSlot slot in System.Enum.GetValues(typeof(ItemSlot)))
+			{
+				string name = ItemSlotNames.DisplayName(slot);
+				LogAssert.IsTrue(seen.Add(name), $"{slot}'s name \"{name}\" is not shared with another slot");
+			}
+
+			LogAssert.AreEqual("Main Hand", ItemSlotNames.DisplayName(ItemSlot.Primary), "the primary slot is named for the hand");
+			LogAssert.AreEqual("Off Hand", ItemSlotNames.DisplayName(ItemSlot.Secondary), "the secondary slot is named for the hand");
 		}
 	}
 }
