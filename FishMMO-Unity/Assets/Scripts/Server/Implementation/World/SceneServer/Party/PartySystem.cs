@@ -481,6 +481,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{ "/pi", OnPartyInvite },
 				{ "/invite", OnPartyInvite },
 			});
+			ChatHelper.SetCommandHelp("/invite", new ChatCommandHelp()
+			{
+				Category = "Social",
+				Arguments = "<character>",
+				Summary = "Invites a character to your party.",
+				Aliases = new[] { "/pi" },
+			});
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);

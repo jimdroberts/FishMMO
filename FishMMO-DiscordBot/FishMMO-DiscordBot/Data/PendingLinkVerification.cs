@@ -17,6 +17,12 @@ namespace FishMMO.DiscordBot.Data
 		/// <summary>The 6-character verification code the user must type in-game.</summary>
 		public string VerificationCode { get; set; } = string.Empty;
 
+		/// <summary>
+		/// The requester's Discord username as Discord reports it (<c>name</c>, or <c>name#1234</c> for a
+		/// real discriminator), recorded on the account when the link is made. Null when unknown.
+		/// </summary>
+		public string? DiscordUsername { get; set; }
+
 		/// <summary>When this verification request expires.</summary>
 		public DateTime ExpiresAtUtc { get; set; }
 	}

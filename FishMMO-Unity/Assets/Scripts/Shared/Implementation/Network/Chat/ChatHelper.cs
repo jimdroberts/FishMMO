@@ -40,6 +40,29 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// What <c>/help</c> says about a command: its group, its arguments and one line describing it.
+	/// </summary>
+	/// <remarks>
+	/// Help text only. It grants nothing and is never consulted by the access gate: whether a
+	/// caller may see a command in <c>/help</c> is decided from the command's registration, the
+	/// same <see cref="ChatCommandRegistration.MinimumAccessLevel"/> that decides whether it runs.
+	/// </remarks>
+	public sealed class ChatCommandHelp
+	{
+		/// <summary>The group the command is listed under, such as <c>Support</c>.</summary>
+		public string Category;
+
+		/// <summary>Argument text shown after the command, such as <c>&lt;character&gt; [reason]</c>.</summary>
+		public string Arguments = string.Empty;
+
+		/// <summary>One line saying what the command does.</summary>
+		public string Summary;
+
+		/// <summary>Other registered words that run the same command, shown beside it rather than as entries of their own.</summary>
+		public string[] Aliases = Array.Empty<string>();
+	}
+
+	/// <summary>
 	/// Struct containing details for a chat command, including the channel and the command function.
 	/// </summary>
 	public struct ChatCommandDetails
@@ -115,6 +138,63 @@ namespace FishMMO.Shared
 		   { ChatChannel.Say, new List<string>() { "/s", "/say", } },
 		   { ChatChannel.Team, new List<string>() { "/team", "/tm", } },
 	   };
+
+		/// <summary>
+		/// What <c>/help</c> says about each channel command in <see cref="ChannelCommandMap"/>.
+		/// </summary>
+		/// <remarks>
+		/// Kept beside the map because the map is where channel commands are registered. The words
+		/// come from the map, so an alias added there is listed without an edit here; only
+		/// <see cref="ChatCommandHelp.Arguments"/> and <see cref="ChatCommandHelp.Summary"/> are read.
+		/// </remarks>
+		public static IReadOnlyDictionary<ChatChannel, ChatCommandHelp> ChannelCommandHelp { get; } = new Dictionary<ChatChannel, ChatCommandHelp>()
+		{
+			{ ChatChannel.World, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to everyone on your world." } },
+			{ ChatChannel.Region, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to everyone in your region." } },
+			{ ChatChannel.Party, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to your party." } },
+			{ ChatChannel.Guild, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to your guild." } },
+			{ ChatChannel.Tell, new ChatCommandHelp() { Category = "Chat", Arguments = "<character> <message>", Summary = "Sends a private message to one character." } },
+			{ ChatChannel.Trade, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks in the trade channel." } },
+			{ ChatChannel.Say, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to everyone nearby." } },
+			{ ChatChannel.Team, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to your arena team." } },
+		};
+
+		/// <summary>Help text for registered slash commands, keyed by the command's main word.</summary>
+		private static readonly Dictionary<string, ChatCommandHelp> commandHelp =
+			new Dictionary<string, ChatCommandHelp>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Help text for registered slash commands, keyed by the command's main word including its slash.
+		/// </summary>
+		/// <remarks>
+		/// Aliases are named inside each entry. An entry for a word that is no longer registered is
+		/// ignored by <c>/help</c>, and <see cref="RemoveCommands"/> removes the entry with the word.
+		/// </remarks>
+		public static IReadOnlyDictionary<string, ChatCommandHelp> CommandHelp => commandHelp;
+
+		/// <summary>
+		/// Attaches, or with null removes, the <c>/help</c> text for a registered command.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="AddCommands(Dictionary{string, ChatCommand}, AccessLevel)"/> so
+		/// every existing registration keeps compiling; call it beside the registration it describes.
+		/// Describing a command does not decide who sees it — the registration's level does.
+		/// </remarks>
+		/// <param name="command">The command's main word, including its leading slash.</param>
+		/// <param name="help">Its group, arguments, summary and aliases.</param>
+		public static void SetCommandHelp(string command, ChatCommandHelp help)
+		{
+			if (string.IsNullOrEmpty(command))
+			{
+				return;
+			}
+			if (help == null)
+			{
+				commandHelp.Remove(command);
+				return;
+			}
+			commandHelp[command] = help;
+		}
 
 		/// <summary>
 		/// Static constructor initializes command dictionaries.
@@ -301,6 +381,7 @@ namespace FishMMO.Shared
 			{
 				Commands.Remove(command);
 				auditRedactors.Remove(command);
+				commandHelp.Remove(command);
 			}
 		}
 

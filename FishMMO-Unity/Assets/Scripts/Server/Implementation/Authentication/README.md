@@ -149,6 +149,7 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 - **Per-connection TOTP attempt cap** — Each connection is limited to 5 TOTP attempts via `TotpPendingState.Attempts`. Exceeding the cap disconnects the client.
 - **TOTP concurrency limiter** — A semaphore (`MaxConcurrentTotpVerifications = 4`) limits parallel TOTP/recovery code verifications to bound CPU cost from PBKDF2 operations.
 - **Email enumeration prevention** — For email-based login, unverified accounts receive the same fake SRP flow as non-existent accounts, preventing account-existence disclosure via the `AccountUnverified` response code. Username-based login still returns `AccountUnverified` for user-friendly UX.
+- **Unverified sign-in** — after a correct proof an unverified account is answered `AccountUnverified` whatever it owes, because any one code verifies it (`PhoneUnverified` is legacy and no longer sent). Before answering, the core keeps every owed channel alive: an expired or missing email code (`TryResendVerificationEmailIfExpiredAsync`), an expired or missing SMS code (`TryResendVerificationSmsIfExpiredAsync`), and a Discord code the account chose but was never issued (`TryIssueDiscordVerificationCodeAsync`; never re-issued). A wrong password triggers none of them. What is owed comes from `AccountVerificationRules` in `ServerAuthenticator.FetchAccountForLoginCoreAsync`; there is no grace period.
 
 ## Prerequisites
 

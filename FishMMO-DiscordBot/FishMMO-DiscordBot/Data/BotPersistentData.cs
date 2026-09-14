@@ -8,7 +8,15 @@ namespace FishMMO.DiscordBot.Data
 	/// </summary>
 	public class BotPersistentData
 	{
-		/// <summary>Discord user ID -> linked game account.</summary>
+		/// <summary>
+		/// Discord user ID -> linked game account, from before links moved into the database.
+		/// </summary>
+		/// <remarks>
+		/// An import source only: nothing reads it for a link any more. On startup
+		/// <see cref="FishMMO.DiscordBot.Services.AccountLinkingService.ImportLegacyLinksAsync"/> writes each
+		/// entry to the database and removes the ones that are done, keeping only entries that failed
+		/// transiently so the next start retries them. Kept so existing botdata.json files still load.
+		/// </remarks>
 		public Dictionary<ulong, LinkedAccount> LinkedAccounts { get; set; } = new Dictionary<ulong, LinkedAccount>();
 
 		/// <summary>Lowercased name -> bridge ban entry.</summary>

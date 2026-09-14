@@ -4,6 +4,7 @@ using FishMMO.Auth.Implementation;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
+using FishMMO.Database.Npgsql.Services;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Shared;
 
@@ -31,7 +32,7 @@ namespace FishMMO.ControlPanel.Services
 	///   <item><description>(panel) With the beta gate on, or a code given, check the code is redeemable — BEFORE the account exists.</description></item>
 	///   <item><description>Persist the account with <c>IAccountService.PersistAsync</c>.</description></item>
 	///   <item><description>(panel) Persist the profile and chosen channels, then redeem the beta code.</description></item>
-	///   <item><description>Auto-verify when the development policy says so or the server verifies nothing; otherwise mark switched-off channels proven, and send a code for each remaining chosen channel.</description></item>
+	///   <item><description>Auto-verify when the development policy says so or the server verifies nothing; otherwise send a code on every channel <see cref="AccountVerificationRules.Effective"/> names, or verify without one when it names none.</description></item>
 	///   <item><description>Generate a TOTP secret, encrypt it under the deployment master KEK, persist it, then enable TOTP.</description></item>
 	///   <item><description>Generate recovery codes, hash them, persist them best-effort.</description></item>
 	///   <item><description>Return the otpauth URI and the plaintext recovery codes once.</description></item>
@@ -53,6 +54,18 @@ namespace FishMMO.ControlPanel.Services
 		/// <summary>Matches the in-game 24-hour verification code lifetime. Email and SMS codes alike.</summary>
 		private static readonly TimeSpan VerifyCodeLifetime = TimeSpan.FromHours(24);
 
+		/// <summary>
+		/// The one answer to every code that does not verify: a wrong one, an expired one, an unknown
+		/// account, an account already verified, and the third wrong code that opens a ticket.
+		/// </summary>
+		/// <remarks>
+		/// The verify endpoint is anonymous, so anything that differed between those cases would say
+		/// which names exist, which are verified, and how many guesses an account has had. Saying up front
+		/// what three wrong codes do costs nothing, because it is true of every account.
+		/// </remarks>
+		public const string InvalidCodeError =
+			"That verification code is not valid. After three incorrect codes a support ticket is opened for the account, and staff will contact you by email.";
+
 		/// <summary>The one refusal for any beta code problem. Passed through from the service's own wording.</summary>
 		public const string InvalidBetaCodeError = "That beta code is not valid.";
 
@@ -64,6 +77,7 @@ namespace FishMMO.ControlPanel.Services
 		private readonly ISmsQueueService smsQueue;
 		private readonly IBetaCodeService betaCodes;
 		private readonly ITwoFactorRecoveryCodeService recoveryCodes;
+		private readonly ISupportTicketService supportTickets;
 		private readonly TotpKeyProvider totpKeys;
 		private readonly PanelRegistrationOptions options;
 		private readonly VerificationOptions verification;
@@ -77,6 +91,7 @@ namespace FishMMO.ControlPanel.Services
 			ISmsQueueService smsQueue,
 			IBetaCodeService betaCodes,
 			ITwoFactorRecoveryCodeService recoveryCodes,
+			ISupportTicketService supportTickets,
 			TotpKeyProvider totpKeys,
 			PanelRegistrationOptions options,
 			VerificationOptions verification,
@@ -89,6 +104,7 @@ namespace FishMMO.ControlPanel.Services
 			this.smsQueue = smsQueue;
 			this.betaCodes = betaCodes;
 			this.recoveryCodes = recoveryCodes;
+			this.supportTickets = supportTickets;
 			this.totpKeys = totpKeys;
 			this.options = options;
 			this.verification = verification;
@@ -109,7 +125,7 @@ namespace FishMMO.ControlPanel.Services
 
 		/// <summary>Outcome of a registration attempt.</summary>
 		/// <param name="Field">The form field an error belongs to, when it belongs to one.</param>
-		/// <param name="VerificationPending">Channels a code was sent for and still has to be entered.</param>
+		/// <param name="VerificationPending">Channels a code was sent on; any one of them verifies the account.</param>
 		/// <param name="BetaWarning">Set when the account exists but the beta code could not be attached to it.</param>
 		public sealed record RegistrationResult(
 			bool Ok,
@@ -170,6 +186,20 @@ namespace FishMMO.ControlPanel.Services
 			if (profileError != null)
 			{
 				return Refuse(profileError, profileField);
+			}
+
+			// ── Reachable: a server that verifies must be able to send this account a code ──
+			/* Email is always given, so this refuses only when email verification is off and the player gave
+			 * nothing an enabled channel can use (a Discord-only server and no Discord username). The game's
+			 * account creation refuses the same case. An existing account in that position is let in at sign-in
+			 * instead (AccountVerificationRules.IsWaived), because it cannot be asked; a new one need not be made so. */
+			if (!options.AutoVerifyAccounts && !verification.VerifiesNothing &&
+				AccountVerificationRules.Effective(profile.VerificationChannels, verification.Enabled,
+					AccountVerificationRules.Receivable(email, profile.Phone, profile.DiscordUsername)) == AccountVerificationChannels.None)
+			{
+				return (verification.Enabled & AccountVerificationChannels.Discord) != 0
+					? Refuse("This server verifies accounts by Discord: enter your Discord username.", "discordUsername")
+					: Refuse("This server verifies accounts by SMS: enter your phone number.", "phone");
 			}
 
 			// ── Beta gate: refuse a bad code BEFORE the account exists ──────────
@@ -235,7 +265,6 @@ namespace FishMMO.ControlPanel.Services
 			}
 
 			// ── Verification ────────────────────────────────────────────────────
-			AccountVerificationChannels chosen = profile.VerificationChannels;
 			AccountVerificationChannels pending = AccountVerificationChannels.None;
 
 			/* One auto-verify mechanism, reached two ways: the development bypass, or a server that
@@ -254,31 +283,51 @@ namespace FishMMO.ControlPanel.Services
 			}
 			else
 			{
-				AccountVerificationChannels switchedOff = chosen & ~verification.Enabled;
-				if (switchedOff != AccountVerificationChannels.None)
+				/* Which codes go out is the shared rule's answer, computed from what the database row
+				 * will actually say — so a failed profile write counts as the row it left behind: email
+				 * chosen, no phone, no Discord username. Computing it from the form instead would send
+				 * an SMS or a Discord code the account then has no record of. */
+				AccountVerificationChannels effective = profileResult.IsSuccess
+					? AccountVerificationRules.Effective(
+						profile.VerificationChannels,
+						verification.Enabled,
+						AccountVerificationRules.Receivable(email, profile.Phone, profile.DiscordUsername))
+					: AccountVerificationRules.Effective(
+						AccountVerificationChannels.Email,
+						verification.Enabled,
+						AccountVerificationRules.Receivable(email, null, null));
+
+				if (effective == AccountVerificationChannels.None)
 				{
-					var marked = await accounts.PersistChannelsVerifiedAsync(username, switchedOff, cancellationToken);
-					if (!marked.IsSuccess)
+					/* Verification is on, but no enabled channel can reach this account — say, SMS alone
+					 * is switched on and no phone was given. No code could ever arrive, so the account is
+					 * verified without one rather than created unable to sign in. */
+					var waived = await accounts.PersistChannelsVerifiedAsync(username, AccountVerificationChannels.None, cancellationToken);
+					if (!waived.IsSuccess)
 					{
-						log.LogWarning("PersistChannelsVerifiedAsync({Channels}) failed for '{User}': [{Code}] {Message}",
-							switchedOff, username, marked.ErrorCode, marked.ErrorMessage);
+						log.LogWarning("PersistChannelsVerifiedAsync(None) failed for '{User}': [{Code}] {Message}",
+							username, waived.ErrorCode, waived.ErrorMessage);
+					}
+					autoVerified = true;
+				}
+				else
+				{
+					pending = effective;
+					if ((pending & AccountVerificationChannels.Email) != 0)
+					{
+						await SendEmailCodeAsync(username, email, cancellationToken);
+						throttle.TryAcquire(username, AccountVerificationChannels.Email);
+					}
+					if ((pending & AccountVerificationChannels.Sms) != 0)
+					{
+						await SendPhoneCodeAsync(username, profile.Phone, cancellationToken);
+						throttle.TryAcquire(username, AccountVerificationChannels.Sms);
+					}
+					if ((pending & AccountVerificationChannels.Discord) != 0)
+					{
+						await SendDiscordCodeAsync(username, cancellationToken);
 					}
 				}
-
-				pending = chosen & verification.Enabled;
-				if ((pending & AccountVerificationChannels.Email) != 0)
-				{
-					await SendEmailCodeAsync(username, email, cancellationToken);
-					throttle.TryAcquire(username, AccountVerificationChannels.Email);
-				}
-				if ((pending & AccountVerificationChannels.Sms) != 0)
-				{
-					await SendPhoneCodeAsync(username, profile.Phone, cancellationToken);
-					throttle.TryAcquire(username, AccountVerificationChannels.Sms);
-				}
-
-				// Every chosen channel was switched off: the recompute above verified the account.
-				autoVerified = pending == AccountVerificationChannels.None;
 			}
 
 			RegistrationResult Done(string otpauthUri, IReadOnlyList<string> codes) =>
@@ -363,7 +412,7 @@ namespace FishMMO.ControlPanel.Services
 		{
 			input ??= new AccountProfileData();
 			// Choosing nothing means email, the channel every account has always had.
-			if ((input.VerificationChannels & (AccountVerificationChannels.Email | AccountVerificationChannels.Sms)) == 0)
+			if ((input.VerificationChannels & AccountVerificationRules.All) == 0)
 			{
 				input.VerificationChannels = AccountVerificationChannels.Email;
 			}
@@ -380,6 +429,7 @@ namespace FishMMO.ControlPanel.Services
 				("country", new AccountProfileData { Country = input.Country }),
 				("address", new AccountProfileData { Address = input.Address }),
 				("referralAccount", new AccountProfileData { ReferralAccount = input.ReferralAccount }),
+				("discordUsername", new AccountProfileData { DiscordUsername = input.DiscordUsername }),
 			};
 			foreach (var (field, probe) in probes)
 			{
@@ -388,53 +438,67 @@ namespace FishMMO.ControlPanel.Services
 					return (null, fieldError, field);
 				}
 			}
+
+			/* Every field is valid on its own, so what failed is a channel chosen without what it needs.
+			 * A probe carrying only the Discord choice and the Discord username tells the two apart
+			 * without restating either rule here. */
+			var discordProbe = new AccountProfileData
+			{
+				DiscordUsername = input.DiscordUsername,
+				VerificationChannels = input.VerificationChannels & AccountVerificationChannels.Discord,
+			};
+			if (!AccountProfileRules.TryValidate(discordProbe, out _, out _))
+			{
+				return (null, error, "discordUsername");
+			}
 			return (null, error, "verifySms");
 		}
 
 		/// <summary>
-		/// Redeems an emailed verification code.
+		/// Redeems a verification code from any channel.
 		/// </summary>
 		/// <remarks>
-		/// <c>PersistVerifiedAsync</c> checks the code and the expiry atomically in the database, proves
-		/// the email channel, and sets <c>verified</c> only once every chosen channel is proven.
+		/// <para>
+		/// <c>PersistVerifiedByCodeAsync</c> matches the code against every code the account holds —
+		/// email, SMS and Discord — and checks the expiry, in one statement. Any one match verifies the
+		/// account outright; there is no second code to ask for afterwards.
+		/// </para>
+		/// <para>
+		/// Every failure is counted through <see cref="VerificationFailureTicket.RecordAsync"/>, in the
+		/// database the login server counts into, and the third in a row opens a support ticket. What that
+		/// did is logged and never returned: the answer is <see cref="InvalidCodeError"/> whatever
+		/// happened, so the endpoint cannot be used to learn anything about an account.
+		/// </para>
 		/// </remarks>
-		/// <returns>Whether it worked, and the channels still outstanding afterwards.</returns>
-		public async Task<(bool Ok, string Error, AccountVerificationChannels Outstanding)> VerifyAsync(
+		public async Task<(bool Ok, string Error)> VerifyAsync(
 			string username,
 			int code,
 			CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(username))
 			{
-				return (false, "That verification code is not valid.", AccountVerificationChannels.None);
+				// No account can have this name, so there is nothing to count against.
+				return (false, InvalidCodeError);
 			}
 
-			var result = await accounts.PersistVerifiedAsync(username, code, cancellationToken);
-			if (!result.IsSuccess)
+			var result = await accounts.PersistVerifiedByCodeAsync(username, code, cancellationToken);
+			if (result.IsSuccess)
 			{
-				// One message for a wrong code, an unknown account and an expired code alike.
-				return (false, "That verification code is not valid.", AccountVerificationChannels.None);
-			}
-			return (true, null, await OutstandingAfterAsync(username, cancellationToken));
-		}
-
-		/// <summary>Redeems a texted verification code. The phone twin of <see cref="VerifyAsync"/>.</summary>
-		public async Task<(bool Ok, string Error, AccountVerificationChannels Outstanding)> VerifyPhoneAsync(
-			string username,
-			int code,
-			CancellationToken cancellationToken = default)
-		{
-			if (!Authentication.IsAllowedUsername(username))
-			{
-				return (false, "That verification code is not valid.", AccountVerificationChannels.None);
+				return (true, null);
 			}
 
-			var result = await accounts.PersistPhoneVerifiedAsync(username, code, cancellationToken);
-			if (!result.IsSuccess)
+			VerificationFailureTicket.Outcome outcome = await VerificationFailureTicket.RecordAsync(accounts, supportTickets, username, cancellationToken);
+			if (outcome.TicketOpened)
 			{
-				return (false, "That verification code is not valid.", AccountVerificationChannels.None);
+				log.LogWarning("Opened support ticket {Ticket} for '{User}' after {Failures} incorrect verification codes.",
+					outcome.TicketId, username, outcome.Failures);
 			}
-			return (true, null, await OutstandingAfterAsync(username, cancellationToken));
+			else if (outcome.TicketError != null)
+			{
+				log.LogWarning("A support ticket was due for '{User}' after {Failures} incorrect verification codes but could not be opened: {Error}",
+					username, outcome.Failures, outcome.TicketError);
+			}
+			return (false, InvalidCodeError);
 		}
 
 		/// <summary>
@@ -449,6 +513,11 @@ namespace FishMMO.ControlPanel.Services
 		/// <para>
 		/// A code still waiting in the queue is not replaced: generating a new one would invalidate the
 		/// code in the message that is about to arrive.
+		/// </para>
+		/// <para>
+		/// Email and SMS only. The Discord code is delivered once, as one DM, and is never replaced —
+		/// a second code would strand the first DM, and the bot never sends another — so the endpoint
+		/// refuses a Discord resend before it gets here.
 		/// </para>
 		/// </remarks>
 		public async Task ResendAsync(string username, AccountVerificationChannels channel, CancellationToken cancellationToken = default)
@@ -470,8 +539,8 @@ namespace FishMMO.ControlPanel.Services
 				return;
 			}
 			var data = account.Data;
-			AccountVerificationChannels outstanding = Outstanding(data);
-			if ((outstanding & channel) == 0 || (verification.Enabled & channel) == 0)
+			// Only a channel the shared rule still asks this account for; that already excludes a switched-off one.
+			if ((AccountVerificationRules.Outstanding(data, verification.Enabled) & channel) == 0)
 			{
 				return;
 			}
@@ -504,38 +573,13 @@ namespace FishMMO.ControlPanel.Services
 			}
 		}
 
-		/// <summary>
-		/// The channels an unverified account still has to prove.
-		/// </summary>
-		/// <remarks>
-		/// An account written before channels existed has chosen nothing, which means email. An
-		/// account whose flag says unverified but whose chosen channels all read proven is asked for
-		/// what it chose rather than told nothing, so the player is never shown a blank requirement.
-		/// </remarks>
-		public static AccountVerificationChannels Outstanding(FishMMO.Database.Data.AccountData data)
-		{
-			if (data.Verified)
-			{
-				return AccountVerificationChannels.None;
-			}
-			var chosen = (AccountVerificationChannels)data.VerificationChannels &
-						 (AccountVerificationChannels.Email | AccountVerificationChannels.Sms);
-			if (chosen == AccountVerificationChannels.None)
-			{
-				chosen = AccountVerificationChannels.Email;
-			}
-			var outstanding = AccountVerificationChannels.None;
-			if ((chosen & AccountVerificationChannels.Email) != 0 && !data.EmailVerified) outstanding |= AccountVerificationChannels.Email;
-			if ((chosen & AccountVerificationChannels.Sms) != 0 && !data.PhoneVerified) outstanding |= AccountVerificationChannels.Sms;
-			return outstanding == AccountVerificationChannels.None ? chosen : outstanding;
-		}
-
-		/// <summary>Wire names for a set of channels: "email", "sms".</summary>
+		/// <summary>Wire names for a set of channels: "email", "sms", "discord".</summary>
 		public static string[] ChannelNames(AccountVerificationChannels channels)
 		{
-			var names = new List<string>(2);
+			var names = new List<string>(3);
 			if ((channels & AccountVerificationChannels.Email) != 0) names.Add("email");
 			if ((channels & AccountVerificationChannels.Sms) != 0) names.Add("sms");
+			if ((channels & AccountVerificationChannels.Discord) != 0) names.Add("discord");
 			return names.ToArray();
 		}
 
@@ -544,14 +588,9 @@ namespace FishMMO.ControlPanel.Services
 		{
 			"email" => AccountVerificationChannels.Email,
 			"sms" or "phone" => AccountVerificationChannels.Sms,
+			"discord" => AccountVerificationChannels.Discord,
 			_ => AccountVerificationChannels.None,
 		};
-
-		private async Task<AccountVerificationChannels> OutstandingAfterAsync(string username, CancellationToken cancellationToken)
-		{
-			var account = await accounts.FetchForLoginAsync(username, false, cancellationToken);
-			return account.IsSuccess ? Outstanding(account.Data) : AccountVerificationChannels.None;
-		}
 
 		private async Task SendEmailCodeAsync(string username, string email, CancellationToken cancellationToken)
 		{
@@ -606,6 +645,29 @@ namespace FishMMO.ControlPanel.Services
 			{
 				log.LogWarning("Failed to enqueue verification SMS for '{User}': [{Code}] {Message}",
 					username, enqueue.ErrorCode, enqueue.ErrorMessage);
+			}
+		}
+
+		/// <summary>
+		/// Issues the account's one Discord code. The Discord bot is woken by the database and sends the DM.
+		/// </summary>
+		/// <remarks>
+		/// Nothing is sent from here: the bot owns delivery, including waiting for a player who has not
+		/// joined the Discord server yet. The database issues a code once per account and refuses a
+		/// second, so a false result is not a failure to report — the one DM already carries a code.
+		/// </remarks>
+		private async Task SendDiscordCodeAsync(string username, CancellationToken cancellationToken)
+		{
+			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
+			var issued = await accounts.PersistDiscordVerifyCodeAsync(username, verifyCode, cancellationToken);
+			if (!issued.IsSuccess)
+			{
+				log.LogWarning("PersistDiscordVerifyCodeAsync failed for '{User}': [{Code}] {Message}",
+					username, issued.ErrorCode, issued.ErrorMessage);
+			}
+			else if (!issued.Data)
+			{
+				log.LogDebug("No Discord verification code issued for '{User}': one already exists.", username);
 			}
 		}
 
@@ -692,7 +754,7 @@ namespace FishMMO.ControlPanel.Services
 		/// that one it must never be reachable in production: it is honoured only outside the
 		/// Production environment, so a development configuration file that reaches a production
 		/// host cannot re-enable the bypass. A server whose <see cref="VerificationOptions"/> turn
-		/// both channels off reaches the same auto-verify path by a different, production-legal road.
+		/// every channel off reaches the same auto-verify path by a different, production-legal road.
 		/// </remarks>
 		public bool AutoVerifyAccounts { get; init; }
 

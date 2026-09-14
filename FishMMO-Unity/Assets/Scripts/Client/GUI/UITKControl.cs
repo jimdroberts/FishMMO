@@ -1568,6 +1568,21 @@ namespace FishMMO.Client
 		private bool positionRestored;
 
 		/// <summary>
+		/// True when the player, not the stylesheet, decides where this panel sits: a position has
+		/// been applied to the tree on screen, or one is stored and about to be restored.
+		/// </summary>
+		/// <remarks>
+		/// For panels whose DEFAULT placement depends on the live panel size and so is written from
+		/// C# (the resource bars, the party frame). That placement must stand down whenever this is
+		/// true or it overwrites the position the player chose. It cannot be moved into the
+		/// stylesheet as a centring translate or margin instead: a stored position is the element's
+		/// own left/top, so an offset added to the stylesheet shifts every position already saved.
+		/// </remarks>
+		protected bool HasPlayerPosition =>
+			this.appliedPosition.HasValue ||
+			(!this.positionRestored && CanDrag && UITKPanelPositions.TryLoad(Name, out _));
+
+		/// <summary>
 		/// Wires pointer handling for dragging, replacing any handlers on a previous tree.
 		/// </summary>
 		/// <remarks>

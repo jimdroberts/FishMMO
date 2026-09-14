@@ -96,6 +96,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{ "/spectatearena", OnSpectateArenaCommand },
 				{ "/spectateteam", OnSpectateTeamCommand },
 			}, FishMMO.Auth.Core.AccessLevel.GameMaster);
+			ChatHelper.SetCommandHelp("/spectatearena", new ChatCommandHelp()
+			{
+				Category = "Arena",
+				Arguments = "<match id>",
+				Summary = "Joins a live arena match as a spectator.",
+			});
+			ChatHelper.SetCommandHelp("/spectateteam", new ChatCommandHelp()
+			{
+				Category = "Arena",
+				Arguments = "<team>",
+				Summary = "Moves you to a team's spawn in the match you are watching.",
+			});
 
 			InitializeArenaMatches();
 		}

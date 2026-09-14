@@ -739,6 +739,17 @@ namespace FishMMO.ControlPanel.Controllers
 				phoneVerified = a.PhoneVerified,
 				emailVerified = a.EmailVerified,
 				verificationChannels = AccountRegistrationService.ChannelNames((FishMMO.Database.Data.Enums.AccountVerificationChannels)a.VerificationChannels),
+				verificationEmailSentAt = a.VerificationEmailSentAt,
+				verifyFailedCount = a.VerifyFailedCount,
+				/* Where the one Discord DM stands, so staff answering a verification ticket can see
+				 * whether the bot reached the player without asking the bot's operator. The linked
+				 * Discord user's id is reduced to a yes/no: nothing on this page shows raw platform ids. */
+				discordUsername = a.DiscordUsername,
+				discordVerified = a.DiscordVerified,
+				discordLinked = a.DiscordUserId.HasValue,
+				discordDmSentAt = a.DiscordDmSentAt,
+				discordDmClaimedAt = a.DiscordDmClaimedAt,
+				discordDmLastError = a.DiscordDmLastError,
 				realName = a.RealName,
 				country = a.Country,
 				address = a.Address,

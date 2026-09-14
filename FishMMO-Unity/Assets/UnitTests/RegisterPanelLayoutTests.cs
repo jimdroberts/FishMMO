@@ -41,7 +41,7 @@ namespace FishMMO.UnitTests
 		/// <summary>Every text field the form has, in reading order.</summary>
 		private static readonly string[] TextFieldNames =
 		{
-			"register-username", "register-email", "register-password",
+			"register-username", "register-email", "register-password", "register-discord",
 			"register-phone", "register-country", "register-realname",
 			"register-address", "register-referral", "register-betacode",
 		};
@@ -50,7 +50,7 @@ namespace FishMMO.UnitTests
 		private static readonly string[] ReadingOrder =
 		{
 			"register-username", "register-email", "register-password", "register-age",
-			"register-verify-email", "register-verify-sms",
+			"register-verify-email", "register-verify-sms", "register-verify-discord", "register-discord",
 			"register-phone", "register-country", "register-realname", "register-address",
 			"register-referral", "register-betacode",
 			"register-submit-btn", "register-quit-btn",

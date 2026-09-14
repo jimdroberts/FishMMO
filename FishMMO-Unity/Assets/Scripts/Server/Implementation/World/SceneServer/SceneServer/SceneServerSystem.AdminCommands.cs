@@ -59,6 +59,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				{ "/admin", OnAdminCommand },
 			}, AccessLevel.Admin);
+
+			ChatHelper.SetCommandHelp("/admin", new ChatCommandHelp()
+			{
+				Category = "Staff",
+				Arguments = "<command>",
+				Summary = "Administrator commands. /admin help lists them.",
+			});
 		}
 
 		/// <summary>Unregisters the <c>/admin</c> command. Called from the scene server's teardown.</summary>

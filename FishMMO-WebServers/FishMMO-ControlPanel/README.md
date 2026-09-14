@@ -247,44 +247,84 @@ the state and the concurrency control; the panel holds the policy described here
 ### Registration fields and verification
 
 Registration accepts, beyond name, email, password and age: an optional **phone number** (E.164,
-with its country code), an optional **beta code** (required while the gate is on), optional
-**real name**, **country or region**, **address** and **referring account**, and a choice of
-**verification channels** — email and/or SMS, SMS needing a phone. The optional fields are
-validated by `AccountProfileRules.TryValidate`, the one rule set the game and the panel share, and
-its messages come back as field errors (`{ error, field }`). They are written with
-`PersistProfileAsync` immediately after the account row is created and before anything else,
-following the same best-effort discipline as the rest of `AccountRegistrationService`: once the
-row exists, a failed follow-on step is logged and the account is kept. The referring account is
-not checked for existence — an anonymous form that said "no such account" would be an oracle.
+with its country code), an optional **Discord username** (`fishfan`, or the older `FishFan#1234`), an
+optional **beta code** (required while the gate is on), optional **real name**, **country or region**,
+**address** and **referring account**, and a choice of **verification channels** — email, SMS and a
+Discord DM, SMS needing a phone and Discord a username. The optional fields are validated by
+`AccountProfileRules.TryValidate`, the one rule set the game and the panel share, and its messages come
+back as field errors (`{ error, field }`). They are written with `PersistProfileAsync` immediately after
+the account row is created and before anything else, following the same best-effort discipline as the
+rest of `AccountRegistrationService`: once the row exists, a failed follow-on step is logged and the
+account is kept. The referring account is not checked for existence — an anonymous form that said "no
+such account" would be an oracle.
 
-`Verification:Email` and `Verification:Sms` say which channels the server verifies:
+**Any one code verifies the account.** A player who chooses several channels is sent a code on each,
+and whichever arrives first can be typed. More channels are more ways to receive a code, never more
+codes to enter — the earlier rule, where every chosen channel had to be proven, turned a slow SMS
+gateway into a locked account for somebody whose email code had arrived long before.
 
-- A chosen channel whose switch is **on** gets a six-digit code with a 24-hour expiry (the same
-  shape for both), sent by email or queued on `sms_queue`.
-- A chosen channel whose switch is **off** is marked proven with `PersistChannelsVerifiedAsync`,
-  which recomputes `verified`. Sign-in does the same for an existing account the moment its
-  password is proven, so turning a switch off never strands anyone waiting for a code nobody sends.
-- **Both off** takes the existing auto-verify path (`PersistAutoVerifiedAsync`) — the same path the
+`Verification:Email`, `Verification:Sms` and `Verification:Discord` say which channels the server
+switches on, and **`AccountVerificationRules`** (in the database layer, shared with the login server)
+decides which codes an account is sent and asked for. The panel never re-implements it:
+
+- A chosen channel that is switched on, and that the account can receive, gets a six-digit code. Email
+  and SMS codes expire after 24 hours and go out through `email_queue` / `sms_queue`.
+- When **nothing the player chose** is switched on, the account falls back to the first channel that is
+  — email, then SMS, then Discord. Every account has an email address, so switching a channel off
+  never lets an account in without a code; it moves the code to another channel.
+- An account **no enabled channel can reach** (SMS alone switched on, no phone given) is verified
+  without a code with `PersistChannelsVerifiedAsync`, because no code could ever arrive.
+- **All three off** takes the auto-verify path (`PersistAutoVerifiedAsync`) — the same path the
   development-only `Panel:AutoVerifyAccounts` takes. There is one mechanism, reachable two ways, and
   the panel logs a warning at startup when a server verifies nothing.
 
-`POST verify` (email) and `POST verify-phone` (SMS) each answer with what is still `outstanding`, so
-the browser shows one code form per owed channel, in either order. `POST verify/resend` sends a new
-code for one channel with a two-minute per-account cooldown, never replaces a code still waiting in
-its queue, and answers identically whether or not anything was sent.
+The switches must equal the login server's `VerifyEmail` / `VerifySms` / `VerifyDiscord`: both read the
+same rule over the same row, and different switches would let an account into one and not the other.
 
-At sign-in, an unverified account past its grace period used to get a fake salt and fail as a
-"wrong password". It now gets its real salt; a wrong password still fails exactly as before, and a
-**correct** one is answered `403` with stage `verification-required` and the outstanding channels.
-That answer exists only after a correct proof, so it tells nothing to anyone without the password.
+**Discord.** The panel does not talk to Discord. It issues the code with `PersistDiscordVerifyCodeAsync`,
+which wakes the Discord bot (`FishMMO-DiscordBot`), and the bot sends it as a direct message. A bot can
+only message someone who shares a server with it, so the form shows `Verification:DiscordInviteUrl`
+beside the username field and asks the player to join first; the bot waits for them if they have not.
+The code is sent **exactly once, ever**: the database refuses to issue a second one, and there is no
+resend button, because a new code would make the DM the player already has worthless and the bot never
+sends another. An account that chose Discord and has no code yet — one made in-game before the bot was
+running — is issued one after its next **correct** password at panel sign-in, never before, so a wrong
+password cannot make the bot message a stranger. One Discord account can be linked to only one game
+account; a code that would link a Discord user already linked elsewhere does not match.
+
+`POST verify` takes a code from any channel; the database matches it against every code the account
+holds in one statement. A correct code answers `{ verified: true, outstanding: [] }` — nothing is ever
+still owed after one. The old `verify-phone` twin is gone with the every-channel rule.
+
+**Three wrong codes open a support ticket.** Each wrong code is counted in the database, in the same
+column the login server counts into, through `VerificationFailureTicket.RecordAsync`, and the third in a
+row opens a ticket filed as the account, which the player can follow from **My tickets**. It is for the
+player who never receives a code: with no grace period, staff are their only way in. What recording
+did — a count, a ticket, a ticket that could not be opened — is logged and never returned. Every wrong
+answer is the same `400` with the same words (wrong code, unknown account, verified account, the
+ticket-opening third), because the endpoint is anonymous; the words say what three wrong codes do,
+which is true of every account and so tells nobody anything.
+
+`POST verify/resend` sends a new `email` or `sms` code with a two-minute per-account cooldown, never
+replaces a code still waiting in its queue, and answers identically whether or not anything was sent.
+`discord` is refused with a `400` for every account alike, which is not an oracle for the same reason.
+
+**No grace period.** An unverified account used to be allowed to sign in until its first code had been
+delivered (`verification_email_sent_at` still null). That made a broken mail relay indistinguishable
+from "this shard does not verify", for as long as the relay stayed broken. Now an account owes a code
+from the moment it exists. At sign-in it gets its real salt; a wrong password still fails exactly as
+before, and a **correct** one is answered `403` with stage `verification-required` and the `outstanding`
+channels, whose message names every place a code went. That answer exists only after a correct proof,
+so it tells nothing to anyone without the password.
 
 **SMS delivery.** There is no SMS gateway. `LoggingSmsSender` writes each message to the panel log.
 It is configured by default outside Production; in Production only when `Sms:Provider` is `log`
 explicitly (it then logs verification codes, and says so at startup). Otherwise `SmsQueueDrainService`
 logs once and idles, as the email drain does with no SMTP host. The drain mirrors the email drain —
 claim identity, batch size, backoff — and stamps `verification_email_sent_at` after delivering a
-*verification* SMS, because that column is the end of the unverified grace period and the database has
-no SMS-specific one; an SMS-only account would otherwise keep its grace forever.
+*verification* SMS. Sign-in no longer reads that column; it records when a code last reached the player,
+which is what staff need to know about an account that cannot verify, and the database has no
+SMS-specific one.
 
 ### Beta gate
 
@@ -426,7 +466,8 @@ those.
 | `Cors:AllowedOrigins` | Empty by design — the app is served same-origin |
 | `Npgsql:*` | Database settings, per the shared database template |
 | `ConnectionStrings:NpgsqlConnection` | Read only by the Production SSL-mode guard; supply via `ConnectionStrings__NpgsqlConnection` |
-| `Verification:Email` / `Verification:Sms` | Which channels are verified with a code. Off marks a chosen channel proven; both off verifies every account on creation. Default `true` / `true` |
+| `Verification:Email` / `Verification:Sms` / `Verification:Discord` | Which channels a code can be sent on; any one code verifies. A player whose choices are all off is sent a code on one that is on; all three off verifies every account on creation. Must match the login server's `VerifyEmail` / `VerifySms` / `VerifyDiscord`. Discord needs the Discord bot running. Default `true` / `true` / `true` (Production template: Discord `false`) |
+| `Verification:DiscordInviteUrl` | The `https://` invite to the game's Discord server, shown beside the Discord username field — the bot can only message members. Anything not `https://` is ignored with a startup warning. Default empty |
 | `Beta:Enabled` / `Beta:Programs` | Registration requires a beta code of one of these program keys (empty list: any program). Default off |
 | `Auth:Lockout:PasswordThreshold` / `PasswordWindowMinutes` / `PasswordLockMinutes` | 5 failed passwords in 15 minutes lock password sign-in for 15. Shared with the LoginServer; keep equal |
 | `Auth:Lockout:TwoFactorThreshold` / `TwoFactorWindowMinutes` / `TwoFactorLockMinutes` | 5 failed codes in 15 minutes lock the second step for 30. Shared with the LoginServer; keep equal |
@@ -483,10 +524,9 @@ anonymous or `TwoFactorPending`, an account authenticating as itself.
 |---|---|---|---|
 | GET | `register/form` | Anonymous, `Register` rate limit | A signed form token and 2–3 randomised decoy field names (the honeypot) |
 | POST | `register` | Anonymous, `Register` | Create an account from a browser-computed salt and verifier, plus the optional profile, channels and beta code. Errors carry `field` |
-| POST | `verify` | Anonymous, `Register` | The emailed code; answers with what is still `outstanding` |
-| POST | `verify-phone` | Anonymous, `Register` | The texted code; answers with what is still `outstanding` |
-| POST | `verify/resend` | Anonymous, `Register` | A new code for `email` or `sms`, two-minute cooldown; always the same answer |
-| GET | `policy` | Anonymous | The account rules, `betaRequired`, the verification switches and profile limits. Takes no input |
+| POST | `verify` | Anonymous, `Register` | A code from any channel; one correct code verifies. Every failure is one message; the third wrong code in a row opens a support ticket |
+| POST | `verify/resend` | Anonymous, `Register` | A new code for `email` or `sms`, two-minute cooldown; always the same answer. `discord` is refused: that code is sent once |
+| GET | `policy` | Anonymous | The account rules, `betaRequired`, the verification switches with the Discord invite, and profile limits. Takes no input |
 | GET | (root) | Self | The signed-in account's profile, including phone and verification state |
 | GET | `beta` | Self | The beta codes this account has redeemed |
 | POST | `beta/redeem` | Self, `Auth` rate limit | Redeem a beta code later |
@@ -497,7 +537,7 @@ anonymous or `TwoFactorPending`, an account authenticating as itself.
 
 | Method | Route | Policy | Audit action | Purpose |
 |---|---|---|---|---|
-| GET | `{username}` | Support | `view.supportaccounts.get` | The detail projection: the list fields plus phone, verification state, real name, country, address, referral, both lockouts, the pending reset and beta codes. The search projection carries none of these |
+| GET | `{username}` | Support | `view.supportaccounts.get` | The detail projection: the list fields plus phone, Discord username and where its one DM stands, verification state with the wrong-code count and last delivery, real name, country, address, referral, both lockouts, the pending reset and beta codes. The search projection carries none of these |
 | GET | `2fa-resets` | Support | `view.supportaccounts.pendingtwofactorresets` | Every pending self-service reset, soonest first |
 | POST | `{username}/clear-lockout` | SupportStepUp | `account.clear-lockout` | Lift both sign-in locks. Reason required |
 | POST | `{username}/2fa-reset/shorten` | SupportStepUp | `account.2fa-reset-shorten` | Bring a pending reset forward to `effectiveUtc` (null: now). Earlier only. Reason required; holder emailed |

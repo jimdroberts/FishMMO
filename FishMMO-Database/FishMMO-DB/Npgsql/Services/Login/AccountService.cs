@@ -334,7 +334,6 @@ namespace FishMMO.Database.Npgsql.Services
 				totpSecret: entity.TotpSecret,
 				totpVerifiedAt: entity.TotpVerifiedAt,
 				lastTotpWindow: entity.LastTotpWindow,
-				discordLinkCode: entity.DiscordLinkCode,
 				verified: entity.Verified,
 				verifyCode: entity.VerifyCode,
 				verifyCodeExpiresUtc: entity.VerifyCodeExpiresUtc,
@@ -347,7 +346,11 @@ namespace FishMMO.Database.Npgsql.Services
 				phone: entity.Phone,
 				loginLockedUntilUtc: entity.LoginLockedUntilUtc,
 				twoFactorLockedUntilUtc: entity.TwoFactorLockedUntilUtc,
-				phoneVerifyCodeExpiresUtc: entity.PhoneVerifyCodeExpiresUtc
+				phoneVerifyCodeExpiresUtc: entity.PhoneVerifyCodeExpiresUtc,
+				discordUsername: entity.DiscordUsername,
+				discordVerified: entity.DiscordVerified,
+				discordVerifyCodeIssued: entity.DiscordVerifyCode != 0,
+				discordDmSentAt: entity.DiscordDmSentAt
 			);
 		}
 
@@ -598,112 +601,153 @@ namespace FishMMO.Database.Npgsql.Services
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
-		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistDiscordLinkCodeAsync(
-			string accountName,
-			string? linkCode,
-			CancellationToken cancellationToken = default)
-		{
-			if (!Authentication.IsAllowedUsername(accountName))
-			{
-				return DatabaseResult.Failure(
-					DatabaseErrorCodes.ValidationError,
-					Authentication.InvalidUsernameError);
-			}
+		/// <summary>The one refusal for a verification code that did not verify anything.</summary>
+		private const string InvalidVerificationCodeError = "Invalid verification code or account already verified.";
 
-			if (linkCode != null && linkCode.Length > 64)
-			{
-				return DatabaseResult.Failure(
-					DatabaseErrorCodes.ValidationError,
-					"Discord link code must not exceed 64 characters.");
-			}
-
-			return await ExecuteWriteAsync(async dbContext =>
-			{
-				var sql = $@"UPDATE {TableName} SET discord_link_code = {{0}} WHERE name_lowercase = {{1}}";
-				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { (object?)linkCode, accountName.ToLowerInvariant() }, cancellationToken)
-					.ConfigureAwait(false);
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Account", accountName);
-				}
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-		}
+		/// <summary>Every verification code is six digits; zero is every code column's "none issued".</summary>
+		private static bool IsVerificationCodeShape(int verifyCode) => verifyCode >= 100000 && verifyCode <= 999999;
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<AccountData?>> FetchByDiscordLinkCodeAsync(
-			string linkCode,
-			CancellationToken cancellationToken = default)
-		{
-			if (string.IsNullOrWhiteSpace(linkCode) || linkCode.Length > 64)
-			{
-				return DatabaseResult<AccountData?>.Failure(
-					DatabaseErrorCodes.ValidationError,
-					"Discord link code must be a non-empty string of at most 64 characters.");
-			}
-
-			return await ExecuteReadAsync(async dbContext =>
-			{
-				var account = await dbContext.Accounts
-					.AsNoTracking()
-					.FirstOrDefaultAsync(a => a.DiscordLinkCode == linkCode, cancellationToken)
-					.ConfigureAwait(false);
-
-				return account != null ? (AccountData?)MapEntityToDto(account) : null;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-		}
-
-		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistVerifiedAsync(
+		public async Task<DatabaseResult<bool>> PersistDiscordVerifyCodeAsync(
 			string accountName,
 			int verifyCode,
 			CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(accountName))
 			{
-				return DatabaseResult.Failure(
-					DatabaseErrorCodes.ValidationError,
-					Authentication.InvalidUsernameError);
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
 			}
-
-			// Reject the sentinel verify_code=0 early. Allowing it through would let a caller
-			// "verify" any account whose VerifyCode column still defaults to 0 (i.e. never had a
-			// code generated, or was already verified previously).
-			if (verifyCode == 0)
+			if (!IsVerificationCodeShape(verifyCode))
 			{
-				return DatabaseResult.Failure(
-					DatabaseErrorCodes.ValidationError,
-					"Invalid verification code or account already verified.");
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "A verification code is six digits.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				// Single atomic check-and-update: succeed only if the supplied code matches a
-				// pending, unexpired verification request for this account. verify_code <> 0
-				// rejects the sentinel column-default value defensively even though the caller
-				// also pre-screens it above.
+				/* Issued once. The WHERE is the whole of the once-only rule: a code already issued, a DM
+				 * already sent or taken, or an account that verified some other way all match nothing. */
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
-				/* Proves the email channel. `verified` — the flag sign-in reads — follows only when every
-				 * channel the player chose is proven: an account that chose SMS as well stays unverified
-				 * until its phone code arrives too. Choosing two channels is stricter, never looser. */
 				var sql = $@"UPDATE {TableName}
-					SET email_verified = true,
-						verified = ((verification_channels & 2) = 0 OR phone_verified),
-						verify_code = 0,
-						verify_code_expires_utc = NULL
+					SET discord_verify_code = {{1}}
 					WHERE name_lowercase = {{0}}
-						AND verify_code = {{1}}
-						AND verify_code <> 0
-						AND email_verified = false
-						AND (verify_code_expires_utc IS NULL OR verify_code_expires_utc > timezone('UTC', CURRENT_TIMESTAMP))";
-				var rowsAffected = await dbContext.Database
+						AND verified = false
+						AND discord_username IS NOT NULL
+						AND discord_verify_code = 0
+						AND discord_dm_sent_at IS NULL
+						AND discord_dm_claimed_at IS NULL";
+				int rows = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
 					.ConfigureAwait(false);
-				if (rowsAffected == 0)
+				if (rows == 0)
 				{
-					throw new DatabaseException("Invalid verification code or account already verified.", errorCode: DatabaseErrorCodes.ValidationError);
+					return false;
 				}
+
+				/* pg_notify rather than NOTIFY, because NOTIFY takes no bind parameters. No payload: the bot
+				 * re-reads what is owed, so a notification lost to a bot restart costs nothing but the wait for
+				 * its next sweep. */
+				await dbContext.Database
+					.ExecuteSqlRawAsync("SELECT pg_notify({0}, '')", new object[] { DiscordVerification.NotifyChannel }, cancellationToken)
+					.ConfigureAwait(false);
+				return true;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<AccountVerificationChannels>> PersistVerifiedByCodeAsync(
+			string accountName,
+			int verifyCode,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<AccountVerificationChannels>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+			// Refused before the database is asked, so a stored 0 ("no code") can never be matched.
+			if (!IsVerificationCodeShape(verifyCode))
+			{
+				return DatabaseResult<AccountVerificationChannels>.Failure(DatabaseErrorCodes.ValidationError, InvalidVerificationCodeError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* One statement is the check and the write. The CTE locks the row and records which code
+				 * matched against the values BEFORE the update, because RETURNING sees the codes already
+				 * zeroed. Any one match verifies the account and clears every outstanding code.
+				 *
+				 * A Discord code only counts once its DM has been delivered (discord_dm_user_id is set), and
+				 * not when the Discord user it reached has since been linked to a different account: the
+				 * unique index on discord_user_id would otherwise fail the whole statement, email match
+				 * and all. */
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"WITH matched AS (
+						SELECT acc.name_lowercase,
+							(acc.verify_code = {{1}}
+								AND (acc.verify_code_expires_utc IS NULL OR acc.verify_code_expires_utc > timezone('UTC', CURRENT_TIMESTAMP))) AS by_email,
+							(acc.phone IS NOT NULL AND acc.phone_verify_code = {{1}}
+								AND (acc.phone_verify_code_expires_utc IS NULL OR acc.phone_verify_code_expires_utc > timezone('UTC', CURRENT_TIMESTAMP))) AS by_phone,
+							(acc.discord_verify_code = {{1}} AND acc.discord_dm_user_id IS NOT NULL
+								AND NOT EXISTS (
+									SELECT 1 FROM {TableName} other
+									WHERE other.discord_user_id = acc.discord_dm_user_id
+										AND other.name_lowercase <> acc.name_lowercase)) AS by_discord
+						FROM {TableName} acc
+						WHERE acc.name_lowercase = {{0}} AND acc.verified = false
+						FOR UPDATE OF acc
+					)
+					UPDATE {TableName} AS a
+					SET verified = true,
+						email_verified = a.email_verified OR m.by_email,
+						phone_verified = a.phone_verified OR m.by_phone,
+						discord_verified = a.discord_verified OR m.by_discord,
+						discord_user_id = CASE WHEN m.by_discord THEN a.discord_dm_user_id ELSE a.discord_user_id END,
+						discord_linked_at = CASE WHEN m.by_discord THEN timezone('UTC', CURRENT_TIMESTAMP) ELSE a.discord_linked_at END,
+						verify_failed_count = 0,
+						verify_code = 0,
+						verify_code_expires_utc = NULL,
+						phone_verify_code = 0,
+						phone_verify_code_expires_utc = NULL,
+						discord_verify_code = 0
+					FROM matched m
+					WHERE a.name_lowercase = m.name_lowercase
+						AND (m.by_email OR m.by_phone OR m.by_discord)
+					RETURNING (CASE WHEN m.by_email THEN 1 ELSE 0 END)
+						| (CASE WHEN m.by_phone THEN 2 ELSE 0 END)
+						| (CASE WHEN m.by_discord THEN 4 ELSE 0 END)";
+				int proven = await ExecuteReturningOrDefaultAsync(
+					dbContext, sql, new object[] { normalized, verifyCode },
+					reader => reader.GetInt32(0),
+					cancellationToken).ConfigureAwait(false);
+				if (proven == 0)
+				{
+					throw new DatabaseException(InvalidVerificationCodeError, errorCode: DatabaseErrorCodes.ValidationError);
+				}
+				return (AccountVerificationChannels)(byte)proven;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> RecordVerificationFailureAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				// Counted against nothing, and not an error: the caller answers every wrong code the same way.
+				return DatabaseResult<int>.Success(0);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET verify_failed_count = verify_failed_count + 1
+					WHERE name_lowercase = {{0}} AND verified = false
+					RETURNING verify_failed_count";
+				return await ExecuteReturningOrDefaultAsync(
+					dbContext, sql, new object[] { normalized },
+					reader => reader.GetInt32(0),
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -777,7 +821,9 @@ namespace FishMMO.Database.Npgsql.Services
 						verify_code = 0,
 						verify_code_expires_utc = NULL,
 						phone_verify_code = 0,
-						phone_verify_code_expires_utc = NULL
+						phone_verify_code_expires_utc = NULL,
+						discord_verify_code = 0,
+						verify_failed_count = 0
 					WHERE name_lowercase = {{0}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { normalized }, cancellationToken)
@@ -1028,6 +1074,14 @@ namespace FishMMO.Database.Npgsql.Services
 						ReferralAccount = a.ReferralAccount,
 						LoginLockedUntilUtc = a.LoginLockedUntilUtc,
 						TwoFactorLockedUntilUtc = a.TwoFactorLockedUntilUtc,
+						VerificationEmailSentAt = a.VerificationEmailSentAt,
+						VerifyFailedCount = a.VerifyFailedCount,
+						DiscordUsername = a.DiscordUsername,
+						DiscordVerified = a.DiscordVerified,
+						DiscordUserId = a.DiscordUserId,
+						DiscordDmSentAt = a.DiscordDmSentAt,
+						DiscordDmClaimedAt = a.DiscordDmClaimedAt,
+						DiscordDmLastError = a.DiscordDmLastError,
 						// One row, so a correlated count is one indexed lookup and the grouped
 						// form the search needs would buy nothing here.
 						CharacterCount = dbContext.Characters.Count(c => c.Account == a.Name && !c.Deleted),
@@ -1362,6 +1416,7 @@ namespace FishMMO.Database.Npgsql.Services
 						country = {{3}},
 						address = {{4}},
 						referral_account = {{5}},
+						discord_username = {{7}},
 						verification_channels = {{6}}
 					WHERE name_lowercase = {{0}}";
 				/* A null is passed as null, never as DBNull.Value. EF Core 5's raw-SQL parameters look up
@@ -1378,6 +1433,7 @@ namespace FishMMO.Database.Npgsql.Services
 					(object?)clean.Address,
 					(object?)clean.ReferralAccount,
 					(short)(byte)clean.VerificationChannels,
+					(object?)clean.DiscordUsername,
 				}, cancellationToken).ConfigureAwait(false);
 				if (rows == 0)
 				{
@@ -1399,13 +1455,13 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				/* Marks channels proven without a code, for a server that has switched that channel's
-				 * verification off. The SMS channel is only marked when there is a number, so switching
-				 * SMS off cannot make an account look as if it proved a phone it never gave. */
+				/* Verifies without a code, for an account no enabled channel can reach (see
+				 * AccountVerificationRules.IsWaived). The SMS channel is only marked when there is a number,
+				 * so a waiver cannot make an account look as if it proved a phone it never gave. */
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
 				var sql = $@"UPDATE {TableName}
-					SET verified = ((verification_channels & 1) = 0 OR email_verified OR ({{1}} & 1) <> 0)
-							AND ((verification_channels & 2) = 0 OR phone_verified OR (({{1}} & 2) <> 0 AND phone IS NOT NULL)),
+					SET verified = true,
+						verify_failed_count = 0,
 						email_verified = (email_verified OR ({{1}} & 1) <> 0),
 						phone_verified = (phone_verified OR (({{1}} & 2) <> 0 AND phone IS NOT NULL))
 					WHERE name_lowercase = {{0}}";
@@ -1447,47 +1503,6 @@ namespace FishMMO.Database.Npgsql.Services
 				if (rows == 0)
 				{
 					throw new DatabaseException("That account has no phone number to verify.", errorCode: DatabaseErrorCodes.ValidationError);
-				}
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-		}
-
-		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistPhoneVerifiedAsync(
-			string accountName,
-			int verifyCode,
-			CancellationToken cancellationToken = default)
-		{
-			if (!Authentication.IsAllowedUsername(accountName))
-			{
-				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
-			}
-			// The sentinel: a zero would "verify" every account that never had a code sent.
-			if (verifyCode == 0)
-			{
-				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid verification code or phone already verified.");
-			}
-
-			return await ExecuteWriteAsync(async dbContext =>
-			{
-				// One statement is the check and the write, like the email code. See PersistVerifiedAsync.
-				var normalized = Authentication.NormalizeAccountLookup(accountName);
-				var sql = $@"UPDATE {TableName}
-					SET phone_verified = true,
-						verified = ((verification_channels & 1) = 0 OR email_verified),
-						phone_verify_code = 0,
-						phone_verify_code_expires_utc = NULL
-					WHERE name_lowercase = {{0}}
-						AND phone IS NOT NULL
-						AND phone_verify_code = {{1}}
-						AND phone_verify_code <> 0
-						AND phone_verified = false
-						AND (phone_verify_code_expires_utc IS NULL OR phone_verify_code_expires_utc > timezone('UTC', CURRENT_TIMESTAMP))";
-				int rows = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
-					.ConfigureAwait(false);
-				if (rows == 0)
-				{
-					throw new DatabaseException("Invalid verification code or phone already verified.", errorCode: DatabaseErrorCodes.ValidationError);
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}

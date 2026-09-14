@@ -85,6 +85,17 @@ namespace FishMMO.Client
 		/// </remarks>
 		protected abstract string RootModifierClass { get; }
 
+		/// <summary>
+		/// This bar's place in the default row: -1 left of centre, 0 centred, +1 right of centre.
+		/// </summary>
+		protected abstract int RowSlot { get; }
+
+		/// <summary>Gap between neighbouring bars in the default row, in panel points.</summary>
+		private const float ROW_GAP = 6.0f;
+
+		/// <summary>Cached reference to this bar's positioned root element.</summary>
+		private VisualElement barRoot;
+
 		/// <summary>Cached reference to the bar fill element.</summary>
 		private VisualElement fill;
 		/// <summary>Cached reference to the bar value label.</summary>
@@ -129,12 +140,82 @@ namespace FishMMO.Client
 
 			// Applied to the bar root itself rather than the panel root, which belongs to the
 			// UIDocument and is shared with nothing.
-			VisualElement barRoot = root.Q(BAR_ROOT_NAME);
+			barRoot = root.Q(BAR_ROOT_NAME);
 			if (barRoot != null && !string.IsNullOrEmpty(RootModifierClass))
 			{
 				barRoot.AddToClassList(RootModifierClass);
 			}
+
+			/* Both, because they resize independently: the root when the screen or interface scale
+			 * changes, the bar when a reset hands its left back to the stylesheet. Unregistered
+			 * first because OnStarting re-runs against a rebuilt tree. */
+			root.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
+			root.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
+			barRoot?.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
+			barRoot?.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 		}
+
+		/// <summary>Re-centres the default row whenever the panel or the bar changes size.</summary>
+		private void OnPlacementGeometryChanged(GeometryChangedEvent evt)
+		{
+			PlaceInRow();
+		}
+
+		/// <summary>
+		/// Places this bar in the default row, centred on the panel, unless the player has put it
+		/// somewhere.
+		/// </summary>
+		/// <remarks>
+		/// The row used to be fixed lefts in UIResourceBar.uss (x294/500/706), which are centred
+		/// only in a panel exactly 1200 units wide. The panel stops being that the moment the
+		/// Interface Scale setting moves the reference resolution — 1500 wide at 0.8, 960 at 1.25 —
+		/// and the row sat 150 units left of centre, or 120 right of it. Each bar is its own
+		/// UIDocument, so no shared container can centre the three, and a centring translate or
+		/// margin in USS would shift every position players have already dragged a bar to (see
+		/// <see cref="UITKControl.HasPlayerPosition"/>). So the default left is derived here from
+		/// the live panel width, and stands down for a player position.
+		/// </remarks>
+		private void PlaceInRow()
+		{
+			VisualElement root = Root;
+			if (root == null || barRoot == null || HasPlayerPosition)
+			{
+				return;
+			}
+
+			float panelWidth = root.layout.width;
+
+			/* Rounded to whole units. The laid-out width is snapped to device pixels and the snap
+			 * depends on where the bar sits: at 2.13 px/pt the same 200-unit bar measured 199.7 at
+			 * one left and 200.2 at the next. A left derived from the raw width therefore moved the
+			 * width, which moved the left — a layout loop Unity reports as "struggling to process
+			 * current layout". Authored widths are whole units, so rounding recovers the authored
+			 * value and the target stops depending on its own result. */
+			float barWidth = Mathf.Round(barRoot.layout.width);
+			if (float.IsNaN(panelWidth) || float.IsNaN(barWidth) || panelWidth <= 0.0f || barWidth <= 0.0f)
+			{
+				return;
+			}
+
+			float left = (panelWidth - barWidth) * 0.5f + RowSlot * (barWidth + ROW_GAP);
+
+			/* Compared against the value last WRITTEN, not against resolvedStyle.left. The resolved
+			 * value is snapped to device pixels, so at a fractional pixels-per-point it never equals
+			 * the unsnapped target: every write dirtied layout, the geometry event came back, and
+			 * the bar was rewritten forever ("Layout update is struggling to process current
+			 * layout", measured at 2560x1080). A left handed back to the stylesheet (a reset clears
+			 * the inline value) is always rewritten. */
+			if (barRoot.style.left.keyword != StyleKeyword.Null && Mathf.Abs(placedLeft - left) <= 0.01f)
+			{
+				return;
+			}
+
+			placedLeft = left;
+			barRoot.style.left = left;
+		}
+
+		/// <summary>The left last written by <see cref="PlaceInRow"/>.</summary>
+		private float placedLeft = float.NaN;
 
 		/// <summary>
 		/// Unsubscribes from the resource attribute and refreshes once before the character changes.

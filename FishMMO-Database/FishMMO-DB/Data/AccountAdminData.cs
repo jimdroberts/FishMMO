@@ -122,6 +122,22 @@ namespace FishMMO.Database.Data
 		public DateTime? LoginLockedUntilUtc { get; set; }
 		/// <summary>Until when the authenticator step is refused, or null.</summary>
 		public DateTime? TwoFactorLockedUntilUtc { get; set; }
+		/// <summary>When a verification email or text was last delivered, or null.</summary>
+		public DateTime? VerificationEmailSentAt { get; set; }
+		/// <summary>Incorrect verification codes entered since the last correct one.</summary>
+		public int VerifyFailedCount { get; set; }
+		/// <summary>The Discord username the player gave, lowercase, or null.</summary>
+		public string? DiscordUsername { get; set; }
+		/// <summary>Whether the Discord channel has been proven.</summary>
+		public bool DiscordVerified { get; set; }
+		/// <summary>The Discord user the account is linked to, or null.</summary>
+		public long? DiscordUserId { get; set; }
+		/// <summary>When the one verification DM was delivered, or null.</summary>
+		public DateTime? DiscordDmSentAt { get; set; }
+		/// <summary>When the bot took the DM to send it, or null. Set with no sent time means it never confirmed.</summary>
+		public DateTime? DiscordDmClaimedAt { get; set; }
+		/// <summary>Why the DM has not gone out yet, as the bot last recorded it, or null.</summary>
+		public string? DiscordDmLastError { get; set; }
 	}
 
 	/// <summary>

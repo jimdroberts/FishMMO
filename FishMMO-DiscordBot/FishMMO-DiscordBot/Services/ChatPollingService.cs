@@ -26,7 +26,6 @@ namespace FishMMO.DiscordBot.Services
 		private readonly DynamicChannelManagerService dynamicChannelManager;
 		private readonly BridgeBanService bridgeBanService;
 		private readonly AccountLinkingService accountLinkingService;
-		private readonly BotConfigurationService botConfigService;
 		private readonly ChatRelayPolicy relayPolicy;
 		private readonly SemaphoreSlim pollLock = new SemaphoreSlim(1, 1);
 		private Timer? timer;
@@ -52,7 +51,6 @@ namespace FishMMO.DiscordBot.Services
 			DynamicChannelManagerService dynamicChannelManager,
 			BridgeBanService bridgeBanService,
 			AccountLinkingService accountLinkingService,
-			BotConfigurationService botConfigService,
 			ChatRelayPolicy relayPolicy)
 		{
 			this.discordClient = discordClient;
@@ -61,7 +59,6 @@ namespace FishMMO.DiscordBot.Services
 			this.dynamicChannelManager = dynamicChannelManager;
 			this.bridgeBanService = bridgeBanService;
 			this.accountLinkingService = accountLinkingService;
-			this.botConfigService = botConfigService;
 			this.relayPolicy = relayPolicy;
 
 			if (!int.TryParse(configuration["ChatPollingIntervalSeconds"], out int parsedInterval) || parsedInterval <= 0)
@@ -173,32 +170,12 @@ namespace FishMMO.DiscordBot.Services
 			{
 				if (!string.IsNullOrEmpty(msg.CharacterName) && !string.IsNullOrEmpty(msg.Message))
 				{
-					ulong? verifiedUserId = accountLinkingService.TryVerifyFromChat(
+					var verification = await accountLinkingService.TryVerifyFromChatAsync(
 						msg.CharacterName, msg.AccountName ?? string.Empty, msg.Message);
 
-					if (verifiedUserId.HasValue)
+					if (verification != null)
 					{
-						logger.LogInformation(
-							"Account link verified from game chat: Discord user {UserId} linked via character '{CharacterName}'.",
-							verifiedUserId.Value, msg.CharacterName);
-
-						await botConfigService.SavePersistentDataAsync();
-
-						// Try to notify the Discord user
-						try
-						{
-							var discordUser = discordClient.GetUser(verifiedUserId.Value);
-							if (discordUser != null)
-							{
-								var dmChannel = await discordUser.CreateDMChannelAsync();
-								await dmChannel.SendMessageAsync(
-									$"Your Discord account has been successfully linked to **{msg.CharacterName}**!");
-							}
-						}
-						catch (Exception ex)
-						{
-							logger.LogWarning(ex, "Could not DM Discord user {UserId} about successful link.", verifiedUserId.Value);
-						}
+						await NotifyLinkOutcomeAsync(verification);
 					}
 				}
 			}
@@ -370,6 +347,38 @@ namespace FishMMO.DiscordBot.Services
 						"Discord channel ID {ChannelId} for World {WorldId}/Scene {SceneId} not found or not a message channel.",
 						channelState.DiscordChannelId, chatMessage.WorldServerID, chatMessage.SceneServerID);
 				}
+			}
+		}
+
+		/// <summary>
+		/// Tells the Discord user how their chat-code link ended. The link itself is already in the database.
+		/// </summary>
+		private async Task NotifyLinkOutcomeAsync(ChatLinkVerification verification)
+		{
+			string text = verification.Outcome switch
+			{
+				ChatLinkOutcome.Linked =>
+					$"Your Discord account has been successfully linked to **{verification.CharacterName}**!",
+				ChatLinkOutcome.LinkedToAnotherAccount =>
+					$"Your code was typed by **{verification.CharacterName}**, but this Discord account is already linked to another game account, so nothing was changed. " +
+					"Use `/unlink` first if you want to link it to a different account.",
+				_ =>
+					"Your code was received, but the link could not be saved. Please run `/link` again.",
+			};
+
+			try
+			{
+				var discordUser = discordClient.GetUser(verification.DiscordUserId);
+				if (discordUser != null)
+				{
+					var dmChannel = await discordUser.CreateDMChannelAsync();
+					await dmChannel.SendMessageAsync(text, allowedMentions: AllowedMentions.None);
+				}
+			}
+			catch (Exception ex)
+			{
+				logger.LogWarning(ex, "Could not DM Discord user {UserId} about their account link ({Outcome}).",
+					verification.DiscordUserId, verification.Outcome);
 			}
 		}
 

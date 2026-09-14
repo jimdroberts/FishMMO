@@ -96,7 +96,10 @@ namespace FishMMO.RenderScratch
 			new Mount { Name = "UICrosshair",  Uxml = ROOT + "Crosshair/UICrosshair.uxml",      Selector = "crosshair-icon",  PanelType = typeof(UITKCrosshair), LayoutOnly = true, IgnoreOverlap = true },
 			new Mount { Name = "UITarget",     Uxml = ROOT + "Target/UITarget.uxml",            Selector = "target-root",     PanelType = typeof(UITKTarget) },
 			new Mount { Name = "UIToast",      Uxml = ROOT + "Toast/UIToast.uxml",              Selector = "toast-stack",     PanelType = typeof(UITKToast) },
-			new Mount { Name = "UIParty",      Uxml = ROOT + "Party/UIParty.uxml",              Selector = "party-root",      PanelType = typeof(UITKParty) },
+			/* IgnoreOverlap: the party frame must show EVERY member at full height and is allowed
+			 * to overlap other panels to do it. It is judged on that instead — see the roster
+			 * section of the log — with a full six-member party mounted. */
+			new Mount { Name = "UIParty",      Uxml = ROOT + "Party/UIParty.uxml",              Selector = "party-root",      PanelType = typeof(UITKParty), IgnoreOverlap = true },
 			new Mount { Name = "UIChat",       Uxml = ROOT + "Chat/UIChat.uxml",                Selector = "chat-root",       PanelType = typeof(UITKChat) },
 			new Mount { Name = "UIArenaHud",   Uxml = ROOT + "Arena/UIArenaHud.uxml",           Selector = "arenahud-root",   PanelType = typeof(UITKArenaHud) },
 		};
@@ -119,6 +122,7 @@ namespace FishMMO.RenderScratch
 			{
 				ReadArguments();
 				Directory.CreateDirectory(OUT_DIR);
+				Seed.All();
 
 				texture = new RenderTexture(WIDTH, height, 24, RenderTextureFormat.ARGB32);
 				texture.Create();
@@ -182,6 +186,15 @@ namespace FishMMO.RenderScratch
 				if (!mount.LayoutOnly)
 				{
 					control.OnStarting();
+				}
+
+				// The largest party the server allows (PartySystem.maxPartySize).
+				if (control is UITKParty party)
+				{
+					for (int i = 0; i < 6; ++i)
+					{
+						party.OnPartyAddMember(Seed.People[i].id, i == 0 ? FishMMO.Shared.PartyRank.Leader : FishMMO.Shared.PartyRank.Member, 1.0f);
+					}
 				}
 
 				panel.Root = document.rootVisualElement;
@@ -360,7 +373,7 @@ namespace FishMMO.RenderScratch
 			log.AppendLine("-- centring (panels exempt from the overlap matrix) --");
 			foreach (Panel panel in panels)
 			{
-				if (!panel.IgnoreOverlap || panel.Failed) { continue; }
+				if (!panel.IgnoreOverlap || panel.Failed || panel.Name == "UIParty") { continue; }
 
 				Rect rect = RectOf(panel);
 				float dx = rect.center.x - (WIDTH * 0.5f);
@@ -368,6 +381,43 @@ namespace FishMMO.RenderScratch
 				log.AppendLine(string.Format(CultureInfo.InvariantCulture,
 					"  {0}: centre ({1:0.#}, {2:0.#}) vs viewport centre ({3:0.#}, {4:0.#})  offset ({5:+0.#;-0.#;0}, {6:+0.#;-0.#;0})",
 					panel.Name, rect.center.x, rect.center.y, WIDTH * 0.5f, height * 0.5f, dx, dy));
+			}
+
+			/* The party frame is exempt from the matrix and judged on its roster: every member row
+			 * whole, at full height, inside the frame and inside the screen. */
+			log.AppendLine();
+			log.AppendLine("-- party frame (exempt from the overlap matrix; overlaps listed are acceptable) --");
+			foreach (Panel panel in panels)
+			{
+				if (panel.Name != "UIParty" || panel.Failed || panel.Root == null) { continue; }
+
+				Rect frame = RectOf(panel);
+				log.AppendLine($"  frame {Format(frame)}");
+				int rows = 0;
+				int whole = 0;
+				panel.Root.Query(className: "party-member").ForEach(row =>
+				{
+					++rows;
+					Rect r = row.worldBound;
+					bool ok = r.height >= 52.5f &&
+						r.yMin >= frame.yMin - 0.5f && r.yMax <= frame.yMax + 0.5f &&
+						r.yMin >= -0.5f && r.yMax <= height + 0.5f;
+					if (ok) { ++whole; }
+					log.AppendLine($"    row {rows} {Format(r)} {(ok ? "whole" : "CLIPPED")}");
+				});
+				log.AppendLine($"  ROSTER {(rows == 6 && whole == 6 ? "PASS" : "FAIL")}: {whole}/{rows} member rows whole (6 expected)");
+
+				foreach (Panel other in panels)
+				{
+					if (ReferenceEquals(other, panel) || other.IgnoreOverlap) { continue; }
+					Rect b = RectOf(other);
+					if (!Drawn(b)) { continue; }
+					string overlap = Overlap(frame, b);
+					if (overlap != "clear")
+					{
+						log.AppendLine($"  (acceptable) UIParty vs {other.Name}: {overlap}");
+					}
+				}
 			}
 
 			log.AppendLine();

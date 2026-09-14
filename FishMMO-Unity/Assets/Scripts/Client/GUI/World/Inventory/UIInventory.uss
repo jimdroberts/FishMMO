@@ -88,9 +88,22 @@
    BODY : scrollable wrapping slot grid
    ═══════════════════════════════════════════════════════════ */
 
+/*
+    padding-right 0, and the 10 units it frees are load-bearing (the scrollbar still separates the
+    grid from the right edge). Five 50-unit slots (44 + 3 + 3) filled the 250-unit grid EXACTLY.
+    Layout is snapped to device pixels, and at any screen whose pixels-per-point is not a whole
+    number (1920x1080 is 1.6, 3440x1440 is 2.87) the slots came out wider than the row, so the
+    fifth wrapped and the bag showed four columns. Measured, not estimated: each slot's two
+    margins are rounded to whole pixels on their own (3 units at 1.6 px/pt is 4.8 px, laid out as
+    5), so the overshoot grows with the slot count — about one pixel per slot plus one for the
+    grid's own edges. Two units of slack still wrapped the bank at 1920x1080. For N slots that is
+    (N + 1) px, i.e. (N + 1) / pixels-per-point units: 6 px is 9.4 units at 0.64 px/pt (1024 wide
+    at Interface Scale 0.75), so 12 units holds five columns on any screen this client supports.
+*/
 .inv-scroll {
     flex: 1;
     padding: 10px;
+    padding-right: 0;
 }
 
 .inv-grid {

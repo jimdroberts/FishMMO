@@ -5,7 +5,8 @@
  * The same four required inputs in the same order — account name, email, password, age —
  * validated by the same rules, which the server publishes at api/account/policy and which
  * come from FishMMO.Shared.Authentication, the class the LoginServer validates with too.
- * After them, all optional: a phone number, how to verify (email and/or SMS), a beta code
+ * After them, all optional: a phone number, a Discord username, how to verify (email, SMS and/or a
+ * Discord DM — any one code verifies the account), a beta code
  * (required while the shard's beta gate is on), and a few details that help support prove
  * who owns an account.
  *
@@ -30,7 +31,7 @@ import * as ui from './ui.js';
 const MIN_AGE = 13;
 const MAX_AGE = 100;
 
-/** Six digits: the shape of both the emailed and the texted verification code. */
+/** Six digits: the shape of every verification code — emailed, texted, or sent as a Discord DM. */
 const VERIFY_CODE_LENGTH = 6;
 
 /**
@@ -64,7 +65,25 @@ function checkField(rule, value) {
 	return null;
 }
 
-const CHANNEL_LABELS = { email: 'email address', sms: 'phone' };
+/** Every verification channel, in the order the server falls back through them. */
+const CHANNELS = ['email', 'sms', 'discord'];
+
+/** Where each channel's code arrives, as a sentence fragment: "sent to your email address". */
+const CHANNEL_PLACES = { email: 'to your email address', sms: 'to your phone', discord: 'as a Discord direct message' };
+
+/**
+ * The Discord invite as a link, or plain words when the server has none.
+ *
+ * The URL comes from the server's configuration, which only publishes https:// links; it is checked
+ * again here anyway, because this lands on an anonymous page and a `javascript:` href would run.
+ * Escaped either way, and opened in a new tab that cannot reach back into this one.
+ */
+export function discordJoinMarkup(inviteUrl, text = "Join our Discord server first") {
+	const url = String(inviteUrl ?? '');
+	return /^https:\/\//i.test(url)
+		? `<a href="${ui.esc(url)}" target="_blank" rel="noopener noreferrer">${ui.esc(text)}</a>`
+		: ui.esc(text);
+}
 
 /**
  * Renders the registration card into a host element.
@@ -108,7 +127,11 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 	const profileRules = rules.profile ?? {};
 	const betaRequired = Boolean(rules.betaRequired);
 	const decoys = form?.decoys ?? [];
-	const offerChoice = !verification.autoVerify && verification.email && verification.sms;
+	/* The choice is offered only between channels this server switches on, and only when there are two
+	 * or more of them: with one, there is nothing to choose, and the server's rule sends that one. */
+	const enabledChannels = verification.autoVerify ? [] : CHANNELS.filter((c) => verification[c]);
+	const offerChoice = enabledChannels.length >= 2;
+	const offerDiscord = enabledChannels.includes('discord');
 
 	host.innerHTML = `
 		<div class="signin-card">
@@ -163,12 +186,22 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 					<div class="field-hint" id="hint-phone">With its country code. Needed only to verify by SMS.</div>
 				</div>
 
+				${offerDiscord ? `
+					<div class="field">
+						<label for="reg-discord">Discord username <span class="faint">(optional)</span></label>
+						<input id="reg-discord" name="discordUsername" autocomplete="off" autocapitalize="none" spellcheck="false"
+							maxlength="${Number(profileRules.discordUsernameMaxLength ?? 37)}"
+							placeholder="${ui.esc(profileRules.discordUsernameHint ?? 'fishfan or FishFan#1234')}" />
+						<div class="field-hint" id="hint-discordUsername">${discordJoinMarkup(verification.discordInviteUrl)} — the bot can only message members. Needed only to verify by Discord.</div>
+					</div>` : ''}
+
 				${offerChoice ? `
 					<div class="field">
-						<label>Verify this account by</label>
-						<label class="check-row"><input type="checkbox" id="reg-verify-email" name="verifyEmail" checked /> <span>A code sent to my email</span></label>
-						<label class="check-row"><input type="checkbox" id="reg-verify-sms" name="verifySms" /> <span>A code sent to my phone by SMS</span></label>
-						<div class="field-hint" id="hint-verifySms"></div>
+						<label>Send my verification code by</label>
+						${enabledChannels.includes('email') ? '<label class="check-row"><input type="checkbox" id="reg-verify-email" name="verifyEmail" checked /> <span>Email</span></label>' : ''}
+						${enabledChannels.includes('sms') ? '<label class="check-row"><input type="checkbox" id="reg-verify-sms" name="verifySms" /> <span>SMS to my phone</span></label>' : ''}
+						${enabledChannels.includes('discord') ? '<label class="check-row"><input type="checkbox" id="reg-verify-discord" name="verifyDiscord" /> <span>A Discord direct message (sent once)</span></label>' : ''}
+						<div class="field-hint" id="hint-verifySms">Choose more than one to have more ways to receive a code. Any one code verifies the account.</div>
 					</div>` : ''}
 
 				<div class="field">
@@ -223,11 +256,12 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 	const formEl = host.querySelector('#register-form');
 	const errorHost = host.querySelector('#register-error');
 	const hintDefaults = new Map();
-	host.querySelectorAll('.field-hint[id^="hint-"]').forEach((h) => hintDefaults.set(h.id, h.textContent));
+	// Markup, not text: the Discord hint carries the invite link, which must survive an error being cleared.
+	host.querySelectorAll('.field-hint[id^="hint-"]').forEach((h) => hintDefaults.set(h.id, h.innerHTML));
 
 	const clearFieldErrors = () => {
 		host.querySelectorAll('.field-hint[id^="hint-"]').forEach((h) => {
-			h.textContent = hintDefaults.get(h.id) ?? '';
+			h.innerHTML = hintDefaults.get(h.id) ?? '';
 			h.classList.remove('is-error');
 			h.style.color = '';
 		});
@@ -246,7 +280,9 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 			hint.classList.add('is-error');
 			hint.style.color = 'var(--danger)';
 		}
-		const input = safe === 'verifySms' ? host.querySelector('#reg-phone') : formEl.querySelector(`[name="${safe}"]`);
+		const input = safe === 'verifySms'
+			? host.querySelector('#reg-phone')
+			: safe === 'discordUsername' ? host.querySelector('#reg-discord') : formEl.querySelector(`[name="${safe}"]`);
 		input?.setAttribute('aria-invalid', 'true');
 	};
 
@@ -276,8 +312,11 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 		errorHost.innerHTML = '';
 		clearFieldErrors();
 		const values = Object.fromEntries(new FormData(formEl).entries());
-		const verifyEmail = offerChoice ? formEl.querySelector('#reg-verify-email').checked : true;
-		const verifySms = offerChoice ? formEl.querySelector('#reg-verify-sms').checked : false;
+		// With no choice offered, email is what is asked for; the server falls back from there.
+		const checked = (id) => Boolean(formEl.querySelector(id)?.checked);
+		const verifyEmail = offerChoice ? checked('#reg-verify-email') : true;
+		const verifySms = offerChoice ? checked('#reg-verify-sms') : false;
+		const verifyDiscord = offerChoice ? checked('#reg-verify-discord') : false;
 		const trimmed = (name) => String(values[name] ?? '').trim();
 
 		// Local checks first, in the same order the in-game panel applies them.
@@ -287,6 +326,7 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 		if (!values.email) return showError('A valid email address is required to register.', 'email');
 		if (!values.age) return showError('You must confirm your age to register.', 'age');
 		if (verifySms && !trimmed('phone')) return showError('Verifying by SMS needs a phone number.', 'phone');
+		if (verifyDiscord && !trimmed('discordUsername')) return showError('Verifying by Discord needs your Discord username.', 'discordUsername');
 		if (betaRequired && !trimmed('betaCode')) return showError('A beta code is required to register.', 'betaCode');
 
 		setBusy(true);
@@ -316,8 +356,10 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 				realName: trimmed('realName'),
 				address: trimmed('address'),
 				referralAccount: trimmed('referralAccount'),
+				discordUsername: trimmed('discordUsername'),
 				verifyEmail,
 				verifySms,
+				verifyDiscord,
 				formToken: form?.token ?? '',
 			};
 			// Posted back as they are, under their own names. The server decides what they mean.
@@ -421,85 +463,103 @@ export function wireHandover(host, { username, otpauthUri, recoveryCodes, onAckn
 /* ── Verification ────────────────────────────────────────────── */
 
 /**
- * One code form per outstanding channel, each with its own resend.
+ * One code form, whichever channels the codes went out on.
  *
- * An account can owe an email code, a phone code, or both, in either order. Every successful
- * verification answers with what is still outstanding, so the forms follow the server rather than
- * guessing: the one just verified goes away, and the account is verified only when the server says
- * nothing remains.
+ * An account may have been sent a code by email, by SMS and as a Discord DM at once, and any ONE of
+ * them verifies it — so there is one field, and the server works out which channel the code belongs
+ * to. Email and SMS each get a resend. Discord does not: the bot sends that code once, as one DM, and
+ * a second code would strand the first, so the page says so instead of offering a button that cannot work.
+ *
+ * A wrong code shows the server's own words, which are the same whatever went wrong — and which say
+ * that three wrong codes open a support ticket.
  *
  * @param {HTMLElement} container Where to render.
- * @param {object} options `username`, `pending` (["email","sms"]), `onVerified` when nothing remains.
+ * @param {object} options `username`, `pending` (["email","sms","discord"]), `onVerified` once verified.
  */
 export function renderVerification(container, { username, pending, onVerified }) {
-	let outstanding = [...new Set((pending ?? []).filter((c) => c === 'email' || c === 'sms'))];
+	const outstanding = CHANNELS.filter((c) => (pending ?? []).includes(c));
+	if (!outstanding.length) outstanding.push('email');
 
-	const draw = () => {
-		if (!outstanding.length) {
+	const places = outstanding.map((c) => CHANNEL_PLACES[c]);
+	const where = places.length === 1 ? places[0] : `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}`;
+	const resendable = outstanding.filter((c) => c === 'email' || c === 'sms');
+
+	container.innerHTML = `
+		<div class="stack">
+			${ui.banner('info', places.length === 1 ? 'Enter your verification code' : 'Enter any one of your codes',
+				places.length === 1
+					? `A verification code was sent ${where}. Enter it below, or later from the sign-in screen.`
+					: `A verification code was sent ${where}. Any one of them verifies the account: enter whichever arrives first, here or later from the sign-in screen.`)}
+			<form class="stack" data-verify>
+				<div class="field">
+					<label for="verify-code">Verification code</label>
+					<input id="verify-code" name="code" inputmode="numeric" maxlength="${VERIFY_CODE_LENGTH}"
+						autocomplete="one-time-code" placeholder="000000" required />
+				</div>
+				<div data-verify-result></div>
+				<button class="btn btn-primary btn-block" type="submit">Verify account</button>
+			</form>
+			${resendable.length ? `
+				<div class="row" style="gap:var(--sp-2);flex-wrap:wrap">
+					${resendable.map((c) => `<button class="btn btn-ghost grow" type="button" data-resend="${c}">Send a new code by ${c === 'sms' ? 'SMS' : 'email'}</button>`).join('')}
+				</div>
+				<div data-resend-result></div>` : ''}
+			${outstanding.includes('discord') ? `
+				<p class="xsmall muted" data-discord-note>
+					Your Discord code arrives once, as a direct message from the game's Discord bot, as soon as
+					you are in the game's Discord server. It is never re-sent.
+					<span data-discord-invite></span>
+				</p>` : ''}
+		</div>`;
+
+	const formEl = container.querySelector('form[data-verify]');
+	const resultHost = formEl.querySelector('[data-verify-result]');
+
+	formEl.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		resultHost.innerHTML = '';
+		const code = Number(new FormData(formEl).get('code'));
+		const button = formEl.querySelector('button[type="submit"]');
+		button.disabled = true;
+		try {
+			await api.verifyAccount(username, code);
 			container.innerHTML = ui.banner('ok', 'Account verified', 'You can sign in now.');
 			onVerified?.();
-			return;
+		} catch (err) {
+			button.disabled = false;
+			resultHost.innerHTML = ui.banner('danger', err.message || 'That verification code is not valid.');
 		}
-		container.innerHTML = `
-			<div class="stack">
-				${ui.banner('info', outstanding.length === 2 ? 'Two codes to enter' : 'Check your ' + CHANNEL_LABELS[outstanding[0]],
-					outstanding.length === 2
-						? 'A code was sent to your email address and another to your phone. Enter both, in either order, or come back from the sign-in screen later.'
-						: `A verification code was sent to your ${CHANNEL_LABELS[outstanding[0]]}. Enter it below, or later from the sign-in screen.`)}
-				${outstanding.map((channel) => `
-					<form class="stack" data-verify="${channel}">
-						<div class="field">
-							<label for="verify-code-${channel}">${channel === 'sms' ? 'Code sent to your phone' : 'Code sent to your email'}</label>
-							<input id="verify-code-${channel}" name="code" inputmode="numeric" maxlength="${VERIFY_CODE_LENGTH}"
-								autocomplete="one-time-code" placeholder="000000" required />
-						</div>
-						<div data-verify-result></div>
-						<div class="row" style="gap:var(--sp-2)">
-							<button class="btn btn-primary grow" type="submit">Verify ${channel === 'sms' ? 'phone' : 'email'}</button>
-							<button class="btn btn-ghost" type="button" data-resend="${channel}">Send a new code</button>
-						</div>
-					</form>`).join('')}
-			</div>`;
+	});
 
-		container.querySelectorAll('form[data-verify]').forEach((formEl) => {
-			const channel = formEl.dataset.verify;
-			const resultHost = formEl.querySelector('[data-verify-result]');
-
-			formEl.addEventListener('submit', async (e) => {
-				e.preventDefault();
-				resultHost.innerHTML = '';
-				const code = Number(new FormData(formEl).get('code'));
-				const button = formEl.querySelector('button[type="submit"]');
-				button.disabled = true;
-				try {
-					const response = channel === 'sms'
-						? await api.verifyPhone(username, code)
-						: await api.verifyAccount(username, code);
-					outstanding = response?.verified
-						? []
-						: (Array.isArray(response?.outstanding) ? response.outstanding : outstanding.filter((c) => c !== channel));
-					draw();
-				} catch (err) {
-					button.disabled = false;
-					resultHost.innerHTML = ui.banner('danger', err.message || 'That verification code is not valid.');
-				}
-			});
-
-			formEl.querySelector('[data-resend]')?.addEventListener('click', async (e) => {
-				e.target.disabled = true;
-				try {
-					const response = await api.resendVerification(username, channel);
-					resultHost.innerHTML = ui.banner('info', response?.message ?? 'If a code is owed, a new one is on its way.');
-				} catch (err) {
-					resultHost.innerHTML = ui.banner('danger', err.message || 'A new code could not be requested.');
-				}
-				// Re-enabled after the server's own cooldown would plausibly have passed; the server enforces it regardless.
-				setTimeout(() => { e.target.disabled = false; }, 30000);
-			});
+	container.querySelectorAll('[data-resend]').forEach((button) => {
+		button.addEventListener('click', async () => {
+			const channel = button.dataset.resend;
+			const resendHost = container.querySelector('[data-resend-result]');
+			button.disabled = true;
+			try {
+				const response = await api.resendVerification(username, channel);
+				resendHost.innerHTML = ui.banner('info', response?.message ?? 'If a code is owed, a new one is on its way.');
+			} catch (err) {
+				resendHost.innerHTML = ui.banner('danger', err.message || 'A new code could not be requested.');
+			}
+			// Re-enabled after the server's own cooldown would plausibly have passed; the server enforces it regardless.
+			setTimeout(() => { button.disabled = false; }, 30000);
 		});
-	};
+	});
 
-	draw();
+	const inviteHost = container.querySelector('[data-discord-invite]');
+	if (inviteHost) {
+		/* The invite link is a convenience: a policy that fails to load leaves the note as it is, and the
+		 * code still arrives for a player who is already in the server. */
+		loadPolicy()
+			.then((rules) => {
+				const url = rules?.verification?.discordInviteUrl;
+				if (/^https:\/\//i.test(String(url ?? '')) && inviteHost.isConnected) {
+					inviteHost.innerHTML = `${discordJoinMarkup(url, 'Join the Discord server')} if you have not yet.`;
+				}
+			})
+			.catch(() => {});
+	}
 }
 
 /**

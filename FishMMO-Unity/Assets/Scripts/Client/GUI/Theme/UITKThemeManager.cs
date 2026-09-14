@@ -41,6 +41,7 @@ namespace FishMMO.Client
 		private const string CLASS_PANEL        = "fish-panel";
 		private const string CLASS_PANEL_HEADER = "fish-panel__header";
 		private const string CLASS_PANEL_FOOTER = "fish-panel__footer";
+		private const string CLASS_PANEL_FLOATING = "fish-panel--floating";
 		private const string CLASS_PANEL_TITLE  = "fish-panel__title";
 		private const string CLASS_PANEL_ICON   = "fish-panel__icon";
 		private const string CLASS_SLOT         = "fish-slot";
@@ -326,13 +327,46 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// True for a panel, header or footer surface that belongs to a free-floating panel.
+		/// </summary>
+		/// <remarks>
+		/// A <c>fish-panel--floating</c> panel (the party frame) deliberately paints no box: its
+		/// stylesheet clears those three surfaces. Theme colours are written as inline styles, which
+		/// outrank any stylesheet, so without this a player theme with a Background or Primary
+		/// override would paint the box straight back in. Everything inside the panel — slots, bar
+		/// fills, icons, text — is still themed as usual.
+		/// </remarks>
+		private static bool IsFloatingSurface(VisualElement element, string className)
+		{
+			if (className != CLASS_PANEL && className != CLASS_PANEL_HEADER && className != CLASS_PANEL_FOOTER)
+			{
+				return false;
+			}
+
+			for (VisualElement current = element; current != null; current = current.parent)
+			{
+				if (current.ClassListContains(CLASS_PANEL_FLOATING))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Sets background-color on every element carrying a class, or clears it when unthemed.
 		/// </summary>
 		private static void SetBackground(VisualElement root, string className, UITKTheme theme, string name)
 		{
 			if (TryResolve(theme, name, out Color color))
 			{
-				root.Query(className: className).ForEach(e => e.style.backgroundColor = color);
+				root.Query(className: className).ForEach(e =>
+				{
+					if (!IsFloatingSurface(e, className))
+					{
+						e.style.backgroundColor = color;
+					}
+				});
 			}
 			else
 			{

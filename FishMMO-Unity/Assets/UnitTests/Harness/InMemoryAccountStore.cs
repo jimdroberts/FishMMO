@@ -44,11 +44,15 @@ namespace FishMMO.UnitTests.Harness
 			public bool EmailVerificationPending;
 			public bool PhoneVerificationPending;
 			public DateTime? PhoneVerifyCodeExpiresUtc;
+			public bool DiscordCodeOwed;
 		}
 
 		/// <summary>Every SMS resend the core asked for, in order: the account and the expiry it passed.</summary>
 		public readonly ConcurrentQueue<(string Username, DateTime? PhoneVerifyCodeExpiresUtc)> SmsResendRequests =
 			new ConcurrentQueue<(string Username, DateTime? PhoneVerifyCodeExpiresUtc)>();
+
+		/// <summary>Every Discord code issue the core asked for, in order, by account.</summary>
+		public readonly ConcurrentQueue<string> DiscordIssueRequests = new ConcurrentQueue<string>();
 
 		/// <summary>Per-key hook counters, keyed exactly as the core passed the key (existing account or not).</summary>
 		private readonly ConcurrentDictionary<string, int> loginLockChecks = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -105,13 +109,14 @@ namespace FishMMO.UnitTests.Harness
 			public readonly bool EmailVerificationPending;
 			public readonly bool PhoneVerificationPending;
 			public readonly DateTime? PhoneVerifyCodeExpiresUtc;
+			public readonly bool DiscordCodeOwed;
 			public Lookup(bool isVerified, string salt, string verifier, AccessLevel accessLevel, bool totpEnabled,
 				string username = "", bool emailVerificationPending = false, bool phoneVerificationPending = false,
-				DateTime? phoneVerifyCodeExpiresUtc = null)
+				DateTime? phoneVerifyCodeExpiresUtc = null, bool discordCodeOwed = false)
 			{
 				IsVerified = isVerified; Salt = salt; Verifier = verifier; AccessLevel = accessLevel; TotpEnabled = totpEnabled;
 				Username = username; EmailVerificationPending = emailVerificationPending; PhoneVerificationPending = phoneVerificationPending;
-				PhoneVerifyCodeExpiresUtc = phoneVerifyCodeExpiresUtc;
+				PhoneVerifyCodeExpiresUtc = phoneVerifyCodeExpiresUtc; DiscordCodeOwed = discordCodeOwed;
 			}
 		}
 
@@ -120,7 +125,7 @@ namespace FishMMO.UnitTests.Harness
 			if (byUsername.TryGetValue(username, out Record? rec))
 			{
 				result = new Lookup(rec.IsVerified, rec.Salt, rec.Verifier, rec.AccessLevel, rec.TotpEnabled,
-					rec.Username, rec.EmailVerificationPending, rec.PhoneVerificationPending, rec.PhoneVerifyCodeExpiresUtc);
+					rec.Username, rec.EmailVerificationPending, rec.PhoneVerificationPending, rec.PhoneVerifyCodeExpiresUtc, rec.DiscordCodeOwed);
 				return true;
 			}
 			result = default;
@@ -173,13 +178,14 @@ namespace FishMMO.UnitTests.Harness
 			if (byUsername.TryGetValue(username, out Record? r)) r.AccessLevel = level;
 		}
 
-		/// <summary>Which verification codes an unverified account still owes.</summary>
-		public void SetPendingVerification(string username, bool email, bool phone)
+		/// <summary>Which verification codes an unverified account is owed, and whether a Discord code was never issued.</summary>
+		public void SetPendingVerification(string username, bool email, bool phone, bool discordCodeOwed = false)
 		{
 			if (byUsername.TryGetValue(username, out Record? r))
 			{
 				r.EmailVerificationPending = email;
 				r.PhoneVerificationPending = phone;
+				r.DiscordCodeOwed = discordCodeOwed;
 			}
 		}
 

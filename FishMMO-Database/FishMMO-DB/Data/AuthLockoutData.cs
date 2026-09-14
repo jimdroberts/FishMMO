@@ -65,6 +65,9 @@ namespace FishMMO.Database.Data
 		/// <summary>The referring account, or null.</summary>
 		public string? ReferralAccount { get; set; }
 
+		/// <summary>The Discord username the one verification DM goes to, or null.</summary>
+		public string? DiscordUsername { get; set; }
+
 		/// <summary>The channels chosen to verify with.</summary>
 		public Enums.AccountVerificationChannels VerificationChannels { get; set; } = Enums.AccountVerificationChannels.Email;
 	}

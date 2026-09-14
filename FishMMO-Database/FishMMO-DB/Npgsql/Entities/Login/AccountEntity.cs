@@ -82,15 +82,12 @@ namespace FishMMO.Database.Npgsql.Entities
 		public long LastTotpWindow { get; set; }
 
 		/// <summary>
-		/// Temporary code used to link a Discord account. Null when no link is pending.
-		/// The Discord bot generates this code and the user verifies in-game.
+		/// Whether the account is verified: the one flag sign-in reads.
 		/// </summary>
-		public string? DiscordLinkCode { get; set; }
-
-		/// <summary>
-		/// Whether the account email has been verified via the registration verification link.
-		/// Defaults to false until the user clicks the verification URL sent to their email.
-		/// </summary>
+		/// <remarks>
+		/// Set by the first correct code on any channel the player chose, or by a server that verifies
+		/// nothing. See <c>AccountVerificationRules</c>.
+		/// </remarks>
 		public bool Verified { get; set; }
 
 		/// <summary>
@@ -195,6 +192,53 @@ namespace FishMMO.Database.Npgsql.Entities
 
 		/// <summary>The account that referred this one, as typed at registration, or null. No foreign key.</summary>
 		public string? ReferralAccount { get; set; }
+
+		/* ── Discord: the verification DM and the bot's account link ─────────────────────────────
+		 * The player gives a username; the bot resolves it to a user in the game's Discord server and
+		 * sends ONE direct message carrying the code. The user it went to becomes the account's linked
+		 * Discord user when the code is redeemed. See DiscordVerification for the once-only rules. */
+
+		/// <summary>
+		/// The Discord username the player gave, lowercase, or null: <c>fishfan</c>, or <c>fishfan#1234</c>
+		/// for a name that still carries its discriminator. See <c>AccountProfileRules.NormalizeDiscordUsername</c>.
+		/// </summary>
+		public string? DiscordUsername { get; set; }
+
+		/// <summary>
+		/// The Discord user this account is linked to, or null. Unique: one Discord account links one game account.
+		/// </summary>
+		/// <remarks>A snowflake is an unsigned 64-bit number; it is stored signed, which holds every snowflake until 2084.</remarks>
+		public long? DiscordUserId { get; set; }
+
+		/// <summary>When <see cref="DiscordUserId"/> was set, or null.</summary>
+		public DateTime? DiscordLinkedAt { get; set; }
+
+		/// <summary>Whether the Discord channel has been proven: the DM's code redeemed, or the bot's link made.</summary>
+		public bool DiscordVerified { get; set; }
+
+		/// <summary>The code the one DM carries, or 0 when none has been issued or it has been used.</summary>
+		public int DiscordVerifyCode { get; set; }
+
+		/// <summary>When the bot took the DM to send it, or null. Never reclaimed automatically.</summary>
+		public DateTime? DiscordDmClaimedAt { get; set; }
+
+		/// <summary>When the DM was delivered, or null. Once set, no further DM is sent for this account.</summary>
+		public DateTime? DiscordDmSentAt { get; set; }
+
+		/// <summary>The Discord user the DM was delivered to, or null.</summary>
+		public long? DiscordDmUserId { get; set; }
+
+		/// <summary>Sends Discord refused. Waiting for the player to join the server is not counted.</summary>
+		public int DiscordDmAttempts { get; set; }
+
+		/// <summary>Why the DM has not gone out yet, as the bot last recorded it, or null.</summary>
+		public string? DiscordDmLastError { get; set; }
+
+		/// <summary>
+		/// Incorrect verification codes since the last correct one. A support ticket is opened when it
+		/// reaches <c>AccountVerificationRules.FailedCodesBeforeTicket</c>.
+		/// </summary>
+		public int VerifyFailedCount { get; set; }
 
 		/* ── Sign-in lockout (issue #252) ─────────────────────────────────────────────────────
 		 * Counted in the database, not in a process, so the game's login servers and the panel

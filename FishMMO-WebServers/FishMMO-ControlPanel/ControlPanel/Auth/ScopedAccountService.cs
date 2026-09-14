@@ -78,16 +78,16 @@ namespace FishMMO.ControlPanel
 			=> InScopeAsync(s => s.ClearTotpAsync(accountName, cancellationToken));
 
 		/// <inheritdoc/>
-		public Task<DatabaseResult> PersistDiscordLinkCodeAsync(string accountName, string linkCode, CancellationToken cancellationToken = default)
-			=> InScopeAsync(s => s.PersistDiscordLinkCodeAsync(accountName, linkCode, cancellationToken));
+		public Task<DatabaseResult<bool>> PersistDiscordVerifyCodeAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.PersistDiscordVerifyCodeAsync(accountName, verifyCode, cancellationToken));
 
 		/// <inheritdoc/>
-		public Task<DatabaseResult<AccountData?>> FetchByDiscordLinkCodeAsync(string linkCode, CancellationToken cancellationToken = default)
-			=> InScopeAsync(s => s.FetchByDiscordLinkCodeAsync(linkCode, cancellationToken));
+		public Task<DatabaseResult<FishMMO.Database.Data.Enums.AccountVerificationChannels>> PersistVerifiedByCodeAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.PersistVerifiedByCodeAsync(accountName, verifyCode, cancellationToken));
 
 		/// <inheritdoc/>
-		public Task<DatabaseResult> PersistVerifiedAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default)
-			=> InScopeAsync(s => s.PersistVerifiedAsync(accountName, verifyCode, cancellationToken));
+		public Task<DatabaseResult<int>> RecordVerificationFailureAsync(string accountName, CancellationToken cancellationToken = default)
+			=> InScopeAsync(s => s.RecordVerificationFailureAsync(accountName, cancellationToken));
 
 		/// <inheritdoc/>
 		public Task<DatabaseResult<AccountAdminPage>> SearchAdminAsync(AccountAdminQuery query, CancellationToken cancellationToken = default)
@@ -144,10 +144,6 @@ namespace FishMMO.ControlPanel
 		/// <inheritdoc/>
 		public Task<DatabaseResult> PersistPhoneVerifyCodeAsync(string accountName, int verifyCode, DateTime expiresUtc, CancellationToken cancellationToken = default)
 			=> InScopeAsync(s => s.PersistPhoneVerifyCodeAsync(accountName, verifyCode, expiresUtc, cancellationToken));
-
-		/// <inheritdoc/>
-		public Task<DatabaseResult> PersistPhoneVerifiedAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default)
-			=> InScopeAsync(s => s.PersistPhoneVerifiedAsync(accountName, verifyCode, cancellationToken));
 
 		/// <inheritdoc/>
 		public Task<DatabaseResult<DateTime?>> RecordAuthFailureAsync(string accountName, AuthFailureKind kind, int threshold, TimeSpan window, TimeSpan lockout, CancellationToken cancellationToken = default)

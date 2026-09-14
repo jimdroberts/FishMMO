@@ -6,10 +6,10 @@ namespace FishMMO.Database.Data.Enums
 	/// The channels an account holder chose to prove their contact details with.
 	/// </summary>
 	/// <remarks>
-	/// Flags, because the player may choose both. The account's single <c>verified</c> flag — the one
-	/// sign-in reads — becomes true once every chosen channel has been proven, so choosing both is
-	/// stricter, never looser. A server may switch a channel off for development; see the
-	/// verification policy on the server side.
+	/// Flags, because the player may choose several. <b>Any one of them verifies the account</b>: a code
+	/// goes out on each chosen channel the server has switched on, and whichever is entered first sets
+	/// the single <c>verified</c> flag sign-in reads. Choosing more channels gives the player more ways
+	/// to receive a code, never more codes to enter. See <c>AccountVerificationRules</c>.
 	/// </remarks>
 	[Flags]
 	public enum AccountVerificationChannels : byte
@@ -20,5 +20,9 @@ namespace FishMMO.Database.Data.Enums
 		Email = 1,
 		/// <summary>A code sent by SMS to the account's phone number.</summary>
 		Sms = 2,
+		/// <summary>
+		/// A code sent once, by the Discord bot, as a direct message to the Discord username on the account.
+		/// </summary>
+		Discord = 4,
 	}
 }

@@ -15,11 +15,11 @@ namespace FishMMO.ControlPanel.Services
 	/// Configured by <c>Sms:DrainIntervalSeconds</c> and <c>Sms:MaxPerPass</c>.
 	/// </para>
 	/// <para>
-	/// <b>A delivered verification SMS stamps <c>verification_email_sent_at</c>.</b> That column is the
-	/// end of an unverified account's grace period, and what it really records is "a verification code
-	/// has reached the player". The database has no separate SMS stamp, and an account that verifies by
-	/// SMS only would otherwise keep its grace forever. Notifications stamp nothing, for the same
-	/// reason a password reset email stamps nothing.
+	/// <b>A delivered verification SMS stamps <c>verification_email_sent_at</c>.</b> What that column
+	/// records is "a verification code has reached the player", which staff read when an account cannot
+	/// verify; the database has no separate SMS stamp, and an SMS-only account would otherwise always
+	/// look as if nothing had arrived. Sign-in does not read it. Notifications stamp nothing, for the
+	/// same reason a password reset email stamps nothing.
 	/// </para>
 	/// <para>Nothing here is audited: a background loop is not an operator.</para>
 	/// </remarks>

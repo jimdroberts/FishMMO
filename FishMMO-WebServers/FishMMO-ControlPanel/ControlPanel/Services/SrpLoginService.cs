@@ -100,6 +100,7 @@ namespace FishMMO.ControlPanel.Services
 			bool IsReal,
 			bool VerificationRequired,
 			AccountVerificationChannels Outstanding,
+			bool DiscordVerifyCodeIssued,
 			DateTime CreatedUtc);
 
 		/// <summary>Result of the challenge step.</summary>
@@ -133,11 +134,17 @@ namespace FishMMO.ControlPanel.Services
 		/// property <c>SrpService.DerivePerUsernameFakeSalt</c> gives the game path.
 		/// </para>
 		/// <para>
-		/// An unverified account past its grace period gets its REAL salt and verifier, and is
-		/// marked. A wrong password still fails exactly as it would for anyone; a right one is told
-		/// which verification code is outstanding instead of being handed a session. Before this, the
-		/// unverified account was faked, and a player who had simply not typed their code was told
-		/// their password was wrong.
+		/// An unverified account gets its REAL salt and verifier, and is marked. A wrong password still
+		/// fails exactly as it would for anyone; a right one is told which verification codes it may
+		/// enter instead of being handed a session. Before this, the unverified account was faked, and a
+		/// player who had simply not typed their code was told their password was wrong.
+		/// </para>
+		/// <para>
+		/// There is no grace period. An account used to be let in until its first code had been
+		/// delivered, which made "the mail relay is down" and "verification is required" the same
+		/// thing for as long as the relay stayed down. Now an account owes a code from the moment it
+		/// exists, and a player who never receives one reaches staff through the ticket three wrong
+		/// codes open.
 		/// </para>
 		/// </remarks>
 		public async Task<ChallengeResult> ChallengeAsync(string username, CancellationToken cancellationToken = default)
@@ -150,6 +157,7 @@ namespace FishMMO.ControlPanel.Services
 			bool totpEnabled = false;
 			bool isReal = false;
 			bool verificationRequired = false;
+			bool discordVerifyCodeIssued = false;
 			AccountVerificationChannels outstanding = AccountVerificationChannels.None;
 
 			var lookup = await accounts.FetchForLoginAsync(username, false, cancellationToken);
@@ -162,17 +170,20 @@ namespace FishMMO.ControlPanel.Services
 				totpEnabled = data.TotpEnabled;
 				isReal = true;
 
-				// The same verification gate the LoginServer applies: an unverified account may
-				// sign in until its verification code has actually gone out, and the development
-				// auto-verify policy — or a server that verifies nothing — bypasses the gate outright.
+				/* The same verification gate the LoginServer applies, from the same shared rule. An
+				 * account that owes no code is in: a verified one, one on a server that verifies
+				 * nothing, and one no enabled channel can reach (AccountVerificationRules.IsWaived) —
+				 * Outstanding answers None for all three. The development auto-verify policy bypasses
+				 * the gate outright. */
+				AccountVerificationChannels owed = AccountVerificationRules.Outstanding(data, verification.Enabled);
 				bool verified = data.Verified ||
-								data.VerificationEmailSentAt == null ||
 								options.AutoVerifyAccounts ||
-								verification.VerifiesNothing;
+								owed == AccountVerificationChannels.None;
 				if (!verified)
 				{
 					verificationRequired = true;
-					outstanding = AccountRegistrationService.Outstanding(data);
+					outstanding = owed;
+					discordVerifyCodeIssued = data.DiscordVerifyCodeIssued;
 				}
 			}
 			else
@@ -193,7 +204,7 @@ namespace FishMMO.ControlPanel.Services
 
 			string handle = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
 			var exchange = new Exchange(username, salt, verifier, ephemeral.Secret, accessLevel, totpEnabled,
-				isReal, verificationRequired, outstanding, DateTime.UtcNow);
+				isReal, verificationRequired, outstanding, discordVerifyCodeIssued, DateTime.UtcNow);
 
 			if (exchanges.Count >= MaxExchanges)
 			{
@@ -215,7 +226,7 @@ namespace FishMMO.ControlPanel.Services
 		/// <item><description>A locked password step is refused WITHOUT evaluating the proof, with <see cref="GenericFailure"/>.</description></item>
 		/// <item><description>A failed proof is counted; the failure that starts a lock queues one security notice.</description></item>
 		/// <item><description>A good proof clears the count.</description></item>
-		/// <item><description>A proven, unverified account has any channel the server no longer verifies marked proven, and is then either let through or told which code is outstanding.</description></item>
+		/// <item><description>A proven, unverified account is issued its Discord code if it is owed one and has none, and is told which codes it may enter.</description></item>
 		/// </list>
 		/// </remarks>
 		public async Task<ProofResult> SignInProofAsync(string handle, string clientPublicEphemeral, string clientProof, CancellationToken cancellationToken = default)
@@ -273,36 +284,30 @@ namespace FishMMO.ControlPanel.Services
 
 			if (exchange.VerificationRequired)
 			{
-				/* The password is proven, so this is the account holder. A channel this server has
-				 * since stopped verifying can never be proven with a code nobody will send, so it is
-				 * marked proven here — the database recomputes `verified` — rather than leaving the
-				 * player waiting for a message that does not exist. */
-				AccountVerificationChannels outstanding = exchange.Outstanding;
-				AccountVerificationChannels switchedOff = outstanding & ~verification.Enabled;
-				if (switchedOff != AccountVerificationChannels.None)
+				/* The password is proven, so this is the account holder. An account that chose Discord
+				 * but has no Discord code — one registered in-game before the bot was switched on, or one
+				 * whose registration could not issue it — gets it now, and the bot sends the one DM.
+				 * Only here, after a CORRECT proof: a wrong password must never make the bot message
+				 * anybody, or the challenge endpoint would be a way to spam a stranger's Discord. The
+				 * database refuses to issue a second code, so repeated sign-ins send nothing more. */
+				if ((exchange.Outstanding & AccountVerificationChannels.Discord) != 0 && !exchange.DiscordVerifyCodeIssued)
 				{
-					var marked = await accounts.PersistChannelsVerifiedAsync(exchange.Username, switchedOff, cancellationToken);
-					if (marked.IsSuccess)
+					int discordCode = RandomNumberGenerator.GetInt32(100000, 1000000);
+					var issued = await accounts.PersistDiscordVerifyCodeAsync(exchange.Username, discordCode, cancellationToken);
+					if (!issued.IsSuccess)
 					{
-						outstanding &= verification.Enabled;
-					}
-					else
-					{
-						log.LogWarning("PersistChannelsVerifiedAsync({Channels}) failed for '{User}': [{Code}] {Message}",
-							switchedOff, exchange.Username, marked.ErrorCode, marked.ErrorMessage);
+						log.LogWarning("PersistDiscordVerifyCodeAsync failed for '{User}' at sign-in: [{Code}] {Message}",
+							exchange.Username, issued.ErrorCode, issued.ErrorMessage);
 					}
 				}
 
-				if (outstanding != AccountVerificationChannels.None)
+				return evaluated with
 				{
-					return evaluated with
-					{
-						Ok = false,
-						Error = VerificationRequiredMessage(outstanding),
-						VerificationRequired = true,
-						Outstanding = outstanding,
-					};
-				}
+					Ok = false,
+					Error = VerificationRequiredMessage(exchange.Outstanding),
+					VerificationRequired = true,
+					Outstanding = exchange.Outstanding,
+				};
 			}
 
 			return evaluated;
@@ -329,15 +334,27 @@ namespace FishMMO.ControlPanel.Services
 			return Evaluate(exchange, clientPublicEphemeral, clientProof);
 		}
 
-		/// <summary>The one message naming which code an account still owes.</summary>
+		/// <summary>The one message naming the codes an unverified account may enter.</summary>
+		/// <remarks>
+		/// Names every outstanding channel, because any one of them verifies the account: a player told
+		/// only about the email may not think to look in Discord, where the code already is.
+		/// </remarks>
 		public static string VerificationRequiredMessage(AccountVerificationChannels outstanding)
 		{
-			bool email = (outstanding & AccountVerificationChannels.Email) != 0;
-			bool sms = (outstanding & AccountVerificationChannels.Sms) != 0;
-			string which = email && sms
-				? "the code sent to your email address and the code sent to your phone"
-				: sms ? "the code sent to your phone" : "the code sent to your email address";
-			return $"This account is not verified yet. Enter {which} to finish verifying it, then sign in.";
+			var places = new List<string>(3);
+			if ((outstanding & AccountVerificationChannels.Email) != 0) places.Add("your email address");
+			if ((outstanding & AccountVerificationChannels.Sms) != 0) places.Add("your phone");
+			if ((outstanding & AccountVerificationChannels.Discord) != 0) places.Add("you as a Discord direct message");
+			if (places.Count == 0)
+			{
+				places.Add("your email address");
+			}
+
+			string where = places.Count == 1
+				? places[0]
+				: string.Join(", ", places.Take(places.Count - 1)) + " or " + places[^1];
+			string any = places.Count == 1 ? "the code" : "any one of the codes";
+			return $"This account is not verified yet. Enter {any} we sent to {where} to verify it, then sign in.";
 		}
 
 		private ProofResult Evaluate(Exchange exchange, string clientPublicEphemeral, string clientProof)

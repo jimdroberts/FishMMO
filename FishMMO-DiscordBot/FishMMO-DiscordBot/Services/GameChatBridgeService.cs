@@ -106,13 +106,22 @@ namespace FishMMO.DiscordBot.Services
 				return BridgeResult.RateLimited;
 			}
 
-			// Check if the Discord user's linked game account is bridge-banned
-			var linked = accountLinkingService.GetLinkedAccount(message.Author.Id);
-			if (linked != null && bridgeBanService.IsBridgeBanned(linked.CharacterName, linked.GameAccountName))
+			/* Check if the Discord user's linked game account is bridge-banned. The link lives in the
+			 * database now and names an account, not a character, so only account bans apply here.
+			 * A failed lookup refuses the message: a ban that cannot be checked is not lifted. */
+			var linkLookup = await accountLinkingService.GetLinkedAccountAsync(message.Author.Id);
+			if (!linkLookup.IsSuccess)
 			{
 				logger.LogWarning(
-					"Bridge-banned user {User} (linked to {CharacterName}) attempted to bridge message.",
-					message.Author.Username, linked.CharacterName);
+					"Could not read the account link for {User} (ID: {UserId}) to check bridge bans ({ErrorCode}). Message not bridged.",
+					message.Author.Username, message.Author.Id, linkLookup.ErrorCode);
+				return BridgeResult.Error;
+			}
+			if (linkLookup.Data.HasValue && bridgeBanService.IsBridgeBanned(null, linkLookup.Data.Value.AccountName))
+			{
+				logger.LogWarning(
+					"Bridge-banned user {User} (linked to account {AccountName}) attempted to bridge message.",
+					message.Author.Username, linkLookup.Data.Value.AccountName);
 				return BridgeResult.BridgeBanned;
 			}
 

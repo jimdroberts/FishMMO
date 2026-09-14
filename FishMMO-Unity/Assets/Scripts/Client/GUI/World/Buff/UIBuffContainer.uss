@@ -80,6 +80,29 @@
     align-items: flex-start;
 }
 
+/* The player's own strips DO NOT WRAP until they have to; UITKBuffContainer adds
+   .buff-list--wrap past the 33 icons one row holds.
+
+   This is the fix for an icon that fell off the band into the resource bars. The container is
+   fit-content, so the list is exactly as wide as its icons — and every icon's size and margins
+   are snapped to device pixels. Wherever pixels-per-point is fractional (2.87 at 3440x1440, 1.25
+   at interface scale 1.25) the snapped icons add up to a hair more than the width they were
+   measured into, so a wrapping list broke its LAST icon onto a second line, and with the
+   container's height already fixed at one row that line hung below it, over the bars. Measured:
+   two icons at 2.87 px/pt, a 36.28-wide list, the second icon at y+16. No width can fix that for
+   a list whose width IS its content, which is why flex-shrink: 0 on the list did not either; a
+   row that cannot wrap has no second line to push. Past 33 icons the container is held at its
+   max-width instead of fitting its content, a wrapped second row is intended, and it grows
+   upward from the bottom-anchored band (measured with 40). */
+.buff-container > .buff-list {
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+}
+
+.buff-container > .buff-list.buff-list--wrap {
+    flex-wrap: wrap;
+}
+
 /* Both sides pack toward the midline, which is the whole point of the arrangement: the first
    icon of the newest row appears at the centre and the strip is read outward from there. The
    buffs' list packs right because the list sits in the left half; the debuffs' packs left

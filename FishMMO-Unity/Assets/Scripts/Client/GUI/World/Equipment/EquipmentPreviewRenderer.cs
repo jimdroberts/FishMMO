@@ -381,6 +381,18 @@ namespace FishMMO.Client
 		/// <returns>True when a texture of the requested size is available.</returns>
 		private bool EnsureTexture(int pixelWidth, int pixelHeight)
 		{
+			/* Capped uniformly before the per-edge clamp. The request is in device pixels, so on a
+			 * large display a tall viewport can pass the cap on one edge only; clamping the edges
+			 * independently then changed the texture's aspect, and the frame — which reads that
+			 * aspect — no longer matched the box the texture is stretched into. */
+			int longest = Mathf.Max(pixelWidth, pixelHeight);
+			if (longest > MaximumTextureEdge)
+			{
+				float fit = (float)MaximumTextureEdge / longest;
+				pixelWidth = Mathf.RoundToInt(pixelWidth * fit);
+				pixelHeight = Mathf.RoundToInt(pixelHeight * fit);
+			}
+
 			pixelWidth = Mathf.Clamp(pixelWidth, MinimumTextureEdge, MaximumTextureEdge);
 			pixelHeight = Mathf.Clamp(pixelHeight, MinimumTextureEdge, MaximumTextureEdge);
 

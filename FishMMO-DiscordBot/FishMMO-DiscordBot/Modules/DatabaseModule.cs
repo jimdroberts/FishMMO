@@ -75,7 +75,8 @@ namespace FishMMO.DiscordBot.Modules
 						.AddField("Access Level", accessLevel, true)
 						.AddField("Email", account.Email ?? "—", true)
 						.AddField("2FA Enabled", account.TotpEnabled ? "Yes" : "No", true)
-						.AddField("Discord Link", string.IsNullOrEmpty(account.DiscordLinkCode) ? "—" : "Pending", true)
+						.AddField("Discord User", string.IsNullOrEmpty(account.DiscordUsername) ? "—" : account.DiscordUsername, true)
+						.AddField("Discord Link", DescribeDiscordLink(account.DiscordUserId, account.DiscordVerified, account.DiscordDmSentAt), true)
 						.AddField("Created", account.TimeCreated.ToString("yyyy-MM-dd HH:mm"), true)
 						.AddField("Last Login", account.LastLogin.ToString("yyyy-MM-dd HH:mm"), true)
 						.WithTimestamp(DateTimeOffset.UtcNow)
@@ -93,6 +94,26 @@ namespace FishMMO.DiscordBot.Modules
 				logger.LogError(ex, "Database error during GetAccount for '{AccountName}'.", accountName);
 				await ReplyAsync("An error occurred while fetching the account.");
 			}
+		}
+
+		/// <summary>
+		/// Describes an account's Discord link for staff: whether a Discord user is linked, whether the
+		/// Discord channel is proven, and whether the one verification DM has gone out.
+		/// </summary>
+		/// <remarks>
+		/// The Discord user id is shown because it is what staff need to find the member; the verification
+		/// code is never shown here.
+		/// </remarks>
+		internal static string DescribeDiscordLink(long? discordUserId, bool discordVerified, DateTime? discordDmSentAt)
+		{
+			string link = discordUserId.HasValue
+				? $"Linked ({unchecked((ulong)discordUserId.Value)})"
+				: "Not linked";
+			string verified = discordVerified ? "verified" : "unverified";
+			string dm = discordDmSentAt.HasValue
+				? $"DM sent {discordDmSentAt.Value:yyyy-MM-dd HH:mm} UTC"
+				: "no DM sent";
+			return $"{link}, {verified}, {dm}";
 		}
 
 		/// <summary>

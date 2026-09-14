@@ -8,7 +8,9 @@ using Discord.Commands;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.DiscordBot.Services;
 
 namespace FishMMO.DiscordBot.Modules
@@ -56,21 +58,31 @@ namespace FishMMO.DiscordBot.Modules
 				}
 			}
 
-			var linked = accountLinkingService.GetLinkedAccount(user.Id);
-			if (linked == null)
+			var lookup = await accountLinkingService.GetLinkedAccountAsync(user.Id);
+			if (!lookup.IsSuccess)
+			{
+				logger.LogError(
+					"Could not read the account link for Discord user {UserId} ({ErrorCode}: {ErrorMessage}).",
+					user.Id, lookup.ErrorCode, lookup.ErrorMessage);
+				await ReplyAsync("An error occurred while looking up the linked account.");
+				return;
+			}
+			if (!lookup.Data.HasValue)
 			{
 				string target = user.Id == Context.User.Id ? "You don't" : $"{user.Username} doesn't";
 				await ReplyAsync($"{target} have a linked game account.");
 				return;
 			}
 
+			// A link is to an account, not a character: there is no character name to show.
+			var linked = lookup.Data.Value;
 			var embed = new EmbedBuilder()
 				.WithTitle("Linked Account")
 				.WithColor(Color.Blue)
 				.AddField("Discord User", $"{user.Username} ({user.Id})", true)
-				.AddField("Game Account", linked.GameAccountName, true)
-				.AddField("Character", linked.CharacterName, true)
-				.AddField("Linked Since", linked.LinkedAtUtc.ToString("yyyy-MM-dd HH:mm:ss UTC"), true)
+				.AddField("Game Account", linked.AccountName, true)
+				.AddField("Discord Username", string.IsNullOrEmpty(linked.DiscordUsername) ? "—" : linked.DiscordUsername, true)
+				.AddField("Linked Since", linked.LinkedAtUtc.HasValue ? linked.LinkedAtUtc.Value.ToString("yyyy-MM-dd HH:mm:ss UTC") : "—", true)
 				.WithTimestamp(DateTimeOffset.UtcNow)
 				.Build();
 
@@ -104,9 +116,7 @@ namespace FishMMO.DiscordBot.Modules
 
 				var character = await dbContext.Characters
 					.Include(c => c.Attributes)
-					.Include(c => c.Equipment)
-					.Include(c => c.Inventory)
-					.Include(c => c.Bank)
+					.Include(c => c.Items)
 					.Include(c => c.Skills)
 					.Include(c => c.Buffs)
 					.Include(c => c.Achievements)
@@ -181,9 +191,10 @@ namespace FishMMO.DiscordBot.Modules
 
 				// Equipment embed
 				EmbedBuilder? equipEmbed = null;
-				if (character.Equipment != null && character.Equipment.Count > 0)
+				// Equipment, inventory and bank are one character_item table, told apart by container.
+				var activeItems = character.Items?.Where(i => !i.Deleted).ToList() ?? new List<CharacterItemEntity>();
 				{
-					var activeEquip = character.Equipment.Where(e => !e.Deleted).OrderBy(e => e.Slot).ToList();
+					var activeEquip = activeItems.Where(e => e.Container == ItemContainerType.Equipment).OrderBy(e => e.Slot).ToList();
 					if (activeEquip.Count > 0)
 					{
 						equipEmbed = new EmbedBuilder()
@@ -201,9 +212,8 @@ namespace FishMMO.DiscordBot.Modules
 
 				// Inventory embed
 				EmbedBuilder? invEmbed = null;
-				if (character.Inventory != null && character.Inventory.Count > 0)
 				{
-					var activeInv = character.Inventory.Where(i => !i.Deleted).OrderBy(i => i.Slot).ToList();
+					var activeInv = activeItems.Where(i => i.Container == ItemContainerType.Inventory).OrderBy(i => i.Slot).ToList();
 					if (activeInv.Count > 0)
 					{
 						invEmbed = new EmbedBuilder()
@@ -394,9 +404,8 @@ namespace FishMMO.DiscordBot.Modules
 
 				// Bank embed
 				EmbedBuilder? bankEmbed = null;
-				if (character.Bank != null && character.Bank.Count > 0)
 				{
-					var activeBank = character.Bank.Where(b => !b.Deleted).OrderBy(b => b.Slot).ToList();
+					var activeBank = activeItems.Where(b => b.Container == ItemContainerType.Bank).OrderBy(b => b.Slot).ToList();
 					if (activeBank.Count > 0)
 					{
 						bankEmbed = new EmbedBuilder()

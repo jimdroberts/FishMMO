@@ -10,5 +10,8 @@
 
 		/// <inheritdoc/>
 		protected override string RootModifierClass => "res-bar--hp";
+
+		/// <inheritdoc/>
+		protected override int RowSlot => -1;
 	}
 }

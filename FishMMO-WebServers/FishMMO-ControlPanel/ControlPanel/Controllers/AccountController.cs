@@ -116,6 +116,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var channels = AccountVerificationChannels.None;
 			if (request.VerifyEmail) channels |= AccountVerificationChannels.Email;
 			if (request.VerifySms) channels |= AccountVerificationChannels.Sms;
+			if (request.VerifyDiscord) channels |= AccountVerificationChannels.Discord;
 
 			var result = await registration.RegisterAsync(new AccountRegistrationService.RegistrationInput(
 				request.Username,
@@ -130,6 +131,7 @@ namespace FishMMO.ControlPanel.Controllers
 					Country = request.Country,
 					Address = request.Address,
 					ReferralAccount = request.ReferralAccount,
+					DiscordUsername = request.DiscordUsername,
 					VerificationChannels = channels,
 				},
 				request.BetaCode), HttpContext.RequestAborted);
@@ -143,11 +145,7 @@ namespace FishMMO.ControlPanel.Controllers
 			string[] pending = AccountRegistrationService.ChannelNames(result.VerificationPending);
 			string message = result.AutoVerified
 				? "Account created and verified."
-				: pending.Length == 2
-					? "Account created. Enter the codes sent to your email address and your phone."
-					: pending.Contains("sms")
-						? "Account created. Enter the code sent to your phone."
-						: "Account created. Check your email for the verification code.";
+				: RegisteredMessage(result.VerificationPending);
 
 			// The otpauth URI and the recovery codes are returned exactly once, here, and are
 			// never retrievable again — the same contract the in-game TwoFactorSetup broadcast
@@ -186,6 +184,32 @@ namespace FishMMO.ControlPanel.Controllers
 			});
 		}
 
+		/// <summary>What a new, unverified account is told about the codes on their way.</summary>
+		/// <remarks>
+		/// The Discord code is the one that does not arrive on its own: the bot can only message a member
+		/// of the game's Discord server, so the player is told to join, and that the code comes once.
+		/// </remarks>
+		private static string RegisteredMessage(AccountVerificationChannels pending)
+		{
+			var places = new List<string>(3);
+			if ((pending & AccountVerificationChannels.Email) != 0) places.Add("your email address");
+			if ((pending & AccountVerificationChannels.Sms) != 0) places.Add("your phone");
+			if ((pending & AccountVerificationChannels.Discord) != 0) places.Add("your Discord account");
+			if (places.Count == 0)
+			{
+				places.Add("your email address");
+			}
+
+			string message = places.Count == 1
+				? $"Account created. Enter the code sent to {places[0]} to verify it."
+				: $"Account created. A code is on its way to {string.Join(", ", places.Take(places.Count - 1))} and {places[^1]}; any one of them verifies the account.";
+			if ((pending & AccountVerificationChannels.Discord) != 0)
+			{
+				message += " The Discord code arrives once, as a direct message from the game's Discord bot, after you join the game's Discord server.";
+			}
+			return message;
+		}
+
 		/// <summary>The decoy values out of the unmatched body properties, as text.</summary>
 		private static Dictionary<string, string> DecoyValues(Dictionary<string, JsonElement> extra)
 		{
@@ -207,7 +231,18 @@ namespace FishMMO.ControlPanel.Controllers
 			return values;
 		}
 
-		/// <summary>Redeems the code emailed at registration.</summary>
+		/// <summary>Redeems a verification code from any channel.</summary>
+		/// <remarks>
+		/// <para>
+		/// One endpoint for every channel, because any one correct code verifies the account: the player
+		/// types whichever code reached them first, and the database finds which channel it belongs to.
+		/// There used to be a <c>verify-phone</c> twin; it is gone with the every-channel rule.
+		/// </para>
+		/// <para>
+		/// Every failure — wrong code, unknown account, verified account, the third wrong code opening a
+		/// support ticket — is one 400 with <see cref="AccountRegistrationService.InvalidCodeError"/>.
+		/// </para>
+		/// </remarks>
 		[HttpPost("verify")]
 		[AllowAnonymous]
 		[EnableRateLimiting("Register")]
@@ -218,43 +253,31 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = "A username and verification code are required." });
 			}
 
-			var (ok, error, outstanding) = await registration.VerifyAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
+			var (ok, error) = await registration.VerifyAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
 			if (!ok)
 			{
 				return BadRequest(new { error });
 			}
-			return VerifiedResponse("Email address verified.", outstanding);
-		}
-
-		/// <summary>Redeems the code texted at registration.</summary>
-		/// <remarks>
-		/// The phone twin of <c>verify</c>, rate-limited the same way. What is still outstanding is
-		/// returned only after a correct code, which already proves control of the account's channel.
-		/// </remarks>
-		[HttpPost("verify-phone")]
-		[AllowAnonymous]
-		[EnableRateLimiting("Register")]
-		public async Task<IActionResult> VerifyPhone([FromBody] VerifyRequest request)
-		{
-			if (request == null || string.IsNullOrWhiteSpace(request.Username) || request.Code <= 0)
+			return Ok(new
 			{
-				return BadRequest(new { error = "A username and verification code are required." });
-			}
-
-			var (ok, error, outstanding) = await registration.VerifyPhoneAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
-			if (!ok)
-			{
-				return BadRequest(new { error });
-			}
-			return VerifiedResponse("Phone number verified.", outstanding);
+				message = "Account verified. You can sign in now.",
+				verified = true,
+				outstanding = Array.Empty<string>(),
+			});
 		}
 
 		/// <summary>
 		/// Sends a fresh verification code for one channel, if the account is owed one.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Always the same 200 and the same words: unknown account, verified account, a channel it
 		/// never chose, or a cooldown still running. Anything else would say which names exist.
+		/// </para>
+		/// <para>
+		/// Discord is refused with a 400, for every account alike: its code is sent once, as one DM, and
+		/// is never re-sent. Because the refusal does not depend on the account, it says nothing about one.
+		/// </para>
 		/// </remarks>
 		[HttpPost("verify/resend")]
 		[AllowAnonymous]
@@ -266,23 +289,16 @@ namespace FishMMO.ControlPanel.Controllers
 			{
 				return BadRequest(new { error = "A username and a channel (email or sms) are required." });
 			}
+			if (channel == AccountVerificationChannels.Discord)
+			{
+				return BadRequest(new { error = "The Discord code is sent once, as a direct message from the game's Discord bot, and cannot be re-sent. Enter it, or ask for a new email or SMS code." });
+			}
 
 			await registration.ResendAsync(request.Username.Trim(), channel, HttpContext.RequestAborted);
 			return Ok(new
 			{
 				message = $"If that account is waiting for a {(channel == AccountVerificationChannels.Sms ? "phone" : "email")} code, a new one is on its way. " +
 						  $"Codes can be resent every {VerificationResendThrottle.Cooldown.TotalMinutes:0} minutes; the newest code is the one that works.",
-			});
-		}
-
-		private IActionResult VerifiedResponse(string what, AccountVerificationChannels outstanding)
-		{
-			string[] remaining = AccountRegistrationService.ChannelNames(outstanding);
-			return Ok(new
-			{
-				message = remaining.Length == 0 ? "Account verified." : $"{what} One more code is still needed.",
-				verified = remaining.Length == 0,
-				outstanding = remaining,
 			});
 		}
 
@@ -448,6 +464,9 @@ namespace FishMMO.ControlPanel.Controllers
 				{
 					email = verification.Email,
 					sms = verification.Sms,
+					discord = verification.Discord,
+					// Only ever an https:// link; Program.cs drops anything else.
+					discordInviteUrl = verification.DiscordInviteUrl,
 					autoVerify = options.AutoVerifyAccounts || verification.VerifiesNothing,
 				},
 				profile = new
@@ -456,6 +475,8 @@ namespace FishMMO.ControlPanel.Controllers
 					countryMaxLength = AccountProfileRules.MaxCountryLength,
 					addressMaxLength = AccountProfileRules.MaxAddressLength,
 					phoneHint = "+44 7700 900123",
+					discordUsernameMaxLength = AccountProfileRules.MaxDiscordTagLength,
+					discordUsernameHint = "fishfan or FishFan#1234",
 				},
 			});
 		}
@@ -486,6 +507,8 @@ namespace FishMMO.ControlPanel.Controllers
 				emailVerified = data.EmailVerified,
 				phone = data.Phone,
 				phoneVerified = data.PhoneVerified,
+				discordUsername = data.DiscordUsername,
+				discordVerified = data.DiscordVerified,
 				verificationChannels = AccountRegistrationService.ChannelNames((AccountVerificationChannels)data.VerificationChannels),
 				totpEnabled = data.TotpEnabled,
 				totpVerifiedAtUtc = data.TotpVerifiedAt,
@@ -912,11 +935,17 @@ namespace FishMMO.ControlPanel.Controllers
 			/// <summary>Optional name of the account that referred this one.</summary>
 			public string ReferralAccount { get; set; }
 
-			/// <summary>Verify with an emailed code. Choosing neither channel means email.</summary>
+			/// <summary>Verify with an emailed code. Choosing no channel means email.</summary>
 			public bool VerifyEmail { get; set; }
 
 			/// <summary>Verify with a texted code. Needs <see cref="Phone"/>.</summary>
 			public bool VerifySms { get; set; }
+
+			/// <summary>Verify with a code sent once as a Discord DM by the game's bot. Needs <see cref="DiscordUsername"/>.</summary>
+			public bool VerifyDiscord { get; set; }
+
+			/// <summary>Optional Discord username, as <c>fishfan</c> or <c>FishFan#1234</c>. Required when verifying by Discord.</summary>
+			public string DiscordUsername { get; set; }
 
 			/// <summary>The signed token from <c>register/form</c>.</summary>
 			public string FormToken { get; set; }
@@ -935,7 +964,7 @@ namespace FishMMO.ControlPanel.Controllers
 			/// <summary>Account name.</summary>
 			public string Username { get; set; } = "";
 
-			/// <summary><c>email</c> or <c>sms</c>.</summary>
+			/// <summary><c>email</c> or <c>sms</c>. <c>discord</c> is refused: that code is never re-sent.</summary>
 			public string Channel { get; set; } = "";
 		}
 
@@ -983,7 +1012,7 @@ namespace FishMMO.ControlPanel.Controllers
 			/// <summary>Account to verify.</summary>
 			public string Username { get; set; } = "";
 
-			/// <summary>The six-digit code from the verification email.</summary>
+			/// <summary>The six-digit code from any verification message: email, SMS or Discord DM.</summary>
 			public int Code { get; set; }
 		}
 

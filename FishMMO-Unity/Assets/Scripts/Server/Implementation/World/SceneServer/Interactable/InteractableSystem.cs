@@ -143,6 +143,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{ "/closedungeon", OnCloseDungeonCommand },
 				{ "/closeinstance", OnCloseDungeonCommand },
 			});
+			ChatHelper.SetCommandHelp("/closedungeon", new ChatCommandHelp()
+			{
+				Category = "Instance",
+				Summary = "Party leader: closes your party's dungeon so you can start another.",
+				Aliases = new[] { "/closeinstance" },
+			});
 
 			/* The dialogue choice cache is memory-only and keyed by character ID. Without these
 			 * two hooks it has no idea who is still playing, which is what made its capacity

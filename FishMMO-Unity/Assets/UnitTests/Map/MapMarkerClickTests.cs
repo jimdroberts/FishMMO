@@ -61,6 +61,7 @@ namespace FishMMO.UnitTests
 		private GameObject host;
 		private UIDocument document;
 		private PanelSettings settings;
+		private RenderTexture target;
 		private UITKMapView view;
 
 		[SetUp]
@@ -72,6 +73,13 @@ namespace FishMMO.UnitTests
 			LogAssert.IsNotNull(uxml, $"the map UXML must exist at {UxmlPath}");
 
 			settings = Object.Instantiate(asset);
+
+			/* A 1200x800 target, so one panel unit is one pixel. PanelSettings scales with the
+			 * screen, and on the editor's own 640x480 surface every length is snapped at 0.53
+			 * pixels per unit, which alone puts a centred label 0.9 out of line with its icon. */
+			target = new RenderTexture(1200, 800, 24, RenderTextureFormat.ARGB32);
+			target.Create();
+			settings.targetTexture = target;
 
 			host = new GameObject("MapMarkerClickTest");
 			document = host.AddComponent<UIDocument>();
@@ -109,8 +117,14 @@ namespace FishMMO.UnitTests
 			{
 				Object.DestroyImmediate(settings);
 			}
+			if (target != null)
+			{
+				target.Release();
+				Object.DestroyImmediate(target);
+			}
 
 			host = null;
+			target = null;
 			document = null;
 			settings = null;
 			view = null;

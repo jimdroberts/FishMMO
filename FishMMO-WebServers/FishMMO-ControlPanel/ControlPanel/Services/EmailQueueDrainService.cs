@@ -29,14 +29,12 @@ namespace FishMMO.ControlPanel.Services
 	/// <para>
 	/// <b>The verification stamp is conditional, and that condition is the reason
 	/// <see cref="EmailKind"/> exists.</b> After a successful send the old drain always called
-	/// <c>PersistVerificationEmailSentAsync</c>, which stamps <c>verification_email_sent_at</c>
-	/// and thereby ENDS the grace period an unverified account logs in under — both
-	/// <c>ServerAuthenticator</c> and <see cref="SrpLoginService"/> allow an unverified account
-	/// in only while that stamp is null. That was correct when verification mail was the only
-	/// mail in the table. It no longer is: the panel queues password resets here too, and
-	/// stamping after one of those would lock an unverified player out of the game and the panel
-	/// at the exact moment they finished recovering their password. So the stamp follows the
-	/// row's kind, and the kind is a column rather than a guess at the subject line.
+	/// <c>PersistVerificationEmailSentAsync</c>, which stamps <c>verification_email_sent_at</c>.
+	/// That column once ended the grace period an unverified account signed in under; there is no
+	/// grace period any more, and it now records only when a verification code last reached the
+	/// player — which staff read on the account page and in the ticket three wrong codes open. A
+	/// stamp after a password reset would tell them a code arrived when none did. So the stamp
+	/// still follows the row's kind, and the kind is a column rather than a guess at the subject line.
 	/// </para>
 	/// <para>
 	/// <b>Nothing here is audited.</b> The audit log records what an operator did; a background
@@ -303,29 +301,24 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>
-		/// Ends the account's unverified grace period — but only for a verification email.
+		/// Records that a verification code reached the player — but only for a verification email.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Stamping <c>verification_email_sent_at</c> is what turns "unverified but allowed in"
-		/// into "unverified and blocked until you type the code", and it is correct precisely
-		/// once: when the code has actually reached the mailbox. That is why it happens here,
-		/// after the relay accepted the message, and not when the row was enqueued — the
-		/// LoginServer learned that the hard way, where stamping on enqueue with an unreachable
-		/// relay locked accounts out permanently over mail that never went anywhere.
+		/// <c>verification_email_sent_at</c> answers "did a code actually arrive?" for staff looking
+		/// into an account that cannot verify. It is true precisely once the relay accepted the
+		/// message, which is why it is stamped here and not when the row was enqueued: a stamp on
+		/// enqueue with an unreachable relay would claim delivery of mail that never went anywhere.
+		/// Sign-in no longer reads it — an unverified account is refused whether or not a code went out.
 		/// </para>
 		/// <para>
-		/// <b>A password reset must not be stamped.</b> Its recipient may well be an unverified
-		/// account — somebody who registered, never typed the code, and has now forgotten their
-		/// password — and stamping would lock them out of the game and the panel at the moment
-		/// they recovered access. Nothing about delivering a reset says anything about whether a
-		/// verification code reached them.
+		/// <b>A password reset must not be stamped.</b> Nothing about delivering a reset says anything
+		/// about whether a verification code reached the player.
 		/// </para>
 		/// <para>
 		/// A failure here is logged and not retried: the mail went out, and the queue has no way
-		/// to express "delivered, bookkeeping pending". The cost of missing it is that an
-		/// unverified account keeps its grace period a while longer, which is the safe direction
-		/// — the opposite mistake locks a player out.
+		/// to express "delivered, bookkeeping pending". The cost is an account page that shows an
+		/// older delivery time than the real one.
 		/// </para>
 		/// </remarks>
 		private async Task StampVerificationIfNeededAsync(

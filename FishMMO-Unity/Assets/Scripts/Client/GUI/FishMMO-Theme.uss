@@ -169,6 +169,9 @@
     --scrim-80:     rgba(0, 8, 11, 0.82);
     --overlay-dim:  rgba(0, 4, 6, 0.62);
     --overlay-soft: rgba(0, 4, 6, 0.40);
+    /* --abyss-800 at 55%: a surface that separates content from the world behind it without
+       hiding the world. The party frame's member cards. */
+    --surface-translucent: rgba(0, 20, 28, 0.55);
 
     /* ── Text shadows ─────────────────────────────────────
        Text drawn over the world (floating combat numbers, nameplates, region banners) and over
@@ -1302,6 +1305,19 @@ TextField.fish-input:disabled > #unity-text-input {
 
 .fish-dropdown .unity-base-popup-field__arrow {
     -unity-background-image-tint-color: var(--abyss-200);
+}
+
+/*
+    The dropdown counterpart of .fish-input--compact. Unity's default theme pads a popup field's
+    inner .unity-base-popup-field__input by 10px top and bottom, so a dropdown pinned to 24px is
+    left with 24 - 10 - 10 - 1 - 1 = 2px for its value text. The selected value then draws as a
+    sliver. Any panel that gives a .fish-dropdown an exact height has to put this class on it.
+    The selector names the type for the same specificity reason as the text-field rule above.
+*/
+.fish-dropdown--compact > .unity-base-popup-field__input,
+DropdownField.fish-dropdown--compact > .unity-base-popup-field__input {
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 /* Sliders. */

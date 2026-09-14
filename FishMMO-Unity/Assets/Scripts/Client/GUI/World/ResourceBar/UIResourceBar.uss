@@ -46,6 +46,13 @@
     underneath it (the health bar measured 160x20 at (24,652) on a 768-tall screen).
 
     All three are draggable: see the CanDrag override in UITKResourceBar.
+
+    CENTRED FROM C#, and the lefts below are only the first frame. They centre the row in a panel
+    exactly 1200 units wide, which the Interface Scale setting breaks (1500 wide at 0.8, 960 at
+    1.25). UITKResourceBar.PlaceInRow recomputes each left from the live panel width on every
+    geometry change, keeping the 200px bars and 6px gaps written here, and stands down for a
+    position the player dragged to. It is not `left: 50%` with a translate or margin: a stored
+    position is the bar's own left, so a stylesheet offset would move every saved bar.
 */
 .res-bar {
     position: absolute;

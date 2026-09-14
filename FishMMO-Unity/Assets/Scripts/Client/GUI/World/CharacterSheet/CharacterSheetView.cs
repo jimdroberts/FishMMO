@@ -689,8 +689,21 @@ namespace FishMMO.Client
 				return false;
 			}
 
-			width = Mathf.RoundToInt(measuredWidth);
-			height = Mathf.RoundToInt(measuredHeight);
+			/* Device pixels, not panel points. resolvedStyle is measured in points, and the panel
+			 * is ScaleWithScreenSize against a 1200-unit-wide reference, so one point covers
+			 * Screen.width / 1200 pixels — 1.6 at 1920x1080, 2.13 at 2560x1440. A texture sized in
+			 * points is stretched by that factor into the viewport and the character renders soft.
+			 * It only matched while the panel was ConstantPhysicalSize, one point per pixel at 96
+			 * DPI. scaledPixelsPerPoint is the panel's own factor, the Interface Scale multiplier
+			 * included; the renderer caps the result. */
+			float pixelsPerPoint = element.panel != null ? element.scaledPixelsPerPoint : 1.0f;
+			if (float.IsNaN(pixelsPerPoint) || pixelsPerPoint <= 0.0f)
+			{
+				pixelsPerPoint = 1.0f;
+			}
+
+			width = Mathf.RoundToInt(measuredWidth * pixelsPerPoint);
+			height = Mathf.RoundToInt(measuredHeight * pixelsPerPoint);
 			return true;
 		}
 

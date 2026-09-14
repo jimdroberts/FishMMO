@@ -152,11 +152,10 @@ namespace FishMMO.Auth.Implementation
 		private readonly ConcurrentDictionary<int, string> accountKeyByClientId = new ConcurrentDictionary<int, string>();
 
 		/// <summary>
-		/// For an unverified sign-in, whether the only outstanding code is the SMS one. Decides between
-		/// <see cref="ClientAuthenticationResult.AccountUnverified"/> and
-		/// <see cref="ClientAuthenticationResult.PhoneUnverified"/> after the proof.
+		/// For an unverified sign-in, what the account is owed once the proof is correct: a refreshed email
+		/// code, a refreshed SMS code, a first Discord code. See <see cref="UnverifiedWork"/>.
 		/// </summary>
-		private readonly ConcurrentDictionary<int, bool> phoneOnlyPendingByClientId = new ConcurrentDictionary<int, bool>();
+		private readonly ConcurrentDictionary<int, UnverifiedWork> unverifiedWorkByClientId = new ConcurrentDictionary<int, UnverifiedWork>();
 
 		/// <summary>Tracks per-username TOTP failure counts and first-failure timestamps for lockout enforcement.</summary>
 		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> totpUsernameFailures
@@ -383,7 +382,7 @@ namespace FishMMO.Auth.Implementation
 			verifyCodeExpiryByClientId.Clear();
 			phoneVerifyCodeExpiryByClientId.Clear();
 			accountKeyByClientId.Clear();
-			phoneOnlyPendingByClientId.Clear();
+			unverifiedWorkByClientId.Clear();
 			totpUsernameFailures.Clear();
 			loginUsernameFailures.Clear();
 			totpSemaphore?.Dispose();
@@ -530,7 +529,7 @@ namespace FishMMO.Auth.Implementation
 			verifyCodeExpiryByClientId.TryRemove(clientId, out _);
 			phoneVerifyCodeExpiryByClientId.TryRemove(clientId, out _);
 			accountKeyByClientId.TryRemove(clientId, out _);
-			phoneOnlyPendingByClientId.TryRemove(clientId, out _);
+			unverifiedWorkByClientId.TryRemove(clientId, out _);
 			connectionIpCache.Remove(clientId);
 		}
 
@@ -937,8 +936,10 @@ namespace FishMMO.Auth.Implementation
 							// so an expired code could never be refreshed by attempting to log in.
 							verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
 							phoneVerifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.PhoneVerifyCodeExpiresUtc;
-							phoneOnlyPendingByClientId[GetConnectionClientId(conn)] =
-								!lookupResult.EmailVerificationPending && lookupResult.PhoneVerificationPending;
+							unverifiedWorkByClientId[GetConnectionClientId(conn)] =
+								(lookupResult.EmailVerificationPending ? UnverifiedWork.EmailCode : UnverifiedWork.None) |
+								(lookupResult.PhoneVerificationPending ? UnverifiedWork.SmsCode : UnverifiedWork.None) |
+								(lookupResult.DiscordVerificationCodeOwed ? UnverifiedWork.DiscordCode : UnverifiedWork.None);
 							await Log.Debug(LogPrefix, "Carrying real SRP state for unverified username-based login; AccountUnverified deferred until after M1.");
 						}
 					}
@@ -1152,25 +1153,29 @@ namespace FishMMO.Auth.Implementation
 			// Defer the AccountUnverified result until *after* a valid M1 proof so
 			// that wrong-password attempts on an unverified account are
 			// indistinguishable from any other failed login (no username-existence
-			// oracle). The legitimate owner who knows their password gets a
-			// meaningful "verify your email" response.
+			// oracle). The legitimate owner who knows their password is asked for a code.
 			if (isUnverified)
 			{
-				// If the verification code has expired, auto-generate a fresh one.
-				// Only triggers when the user actively attempts login after expiry.
-				bool phoneOnly = phoneOnlyPendingByClientId.TryGetValue(proofClientId, out bool pendingPhoneOnly) && pendingPhoneOnly;
-				if (!phoneOnly && verifyCodeExpiryByClientId.TryGetValue(proofClientId, out var expiry))
+				/* Any one code verifies the account, so every channel it is owed is kept alive here rather than
+				 * only the first: an expired email code and an expired SMS code are both refreshed, and a Discord
+				 * code the account chose but was never issued (the channel was switched on after it registered)
+				 * is issued. All of it only after a correct proof: a wrong password must never send anything.
+				 * A Discord code is never re-issued; its one DM is the only one. */
+				UnverifiedWork work = unverifiedWorkByClientId.TryGetValue(proofClientId, out UnverifiedWork owed) ? owed : UnverifiedWork.EmailCode;
+				if ((work & UnverifiedWork.EmailCode) != 0 && verifyCodeExpiryByClientId.TryGetValue(proofClientId, out var expiry))
 				{
 					_ = TryResendVerificationEmailIfExpiredAsync(username!, expiry);
 				}
-				// The SMS twin. Only when the SMS code is the one being asked for: while an email code
-				// is outstanding the player is sent to the email step first, and the SMS code is
-				// refreshed on the sign-in that follows it. A missing SMS code counts as expired.
-				if (phoneOnly && phoneVerifyCodeExpiryByClientId.TryGetValue(proofClientId, out var phoneExpiry))
+				// A missing SMS code counts as expired.
+				if ((work & UnverifiedWork.SmsCode) != 0 && phoneVerifyCodeExpiryByClientId.TryGetValue(proofClientId, out var phoneExpiry))
 				{
 					_ = TryResendVerificationSmsIfExpiredAsync(username!, phoneExpiry);
 				}
-				RejectAndPurge(conn, phoneOnly ? ClientAuthenticationResult.PhoneUnverified : ClientAuthenticationResult.AccountUnverified);
+				if ((work & UnverifiedWork.DiscordCode) != 0)
+				{
+					_ = TryIssueDiscordVerificationCodeAsync(username!);
+				}
+				RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
 				return;
 			}
 
@@ -1891,10 +1896,9 @@ namespace FishMMO.Auth.Implementation
 		protected abstract Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey);
 
 		/// <summary>
-		/// Called when an unverified account attempts login. The implementation should
-		/// check whether the verification code has expired and, if so, generate a new
-		/// code and enqueue a fresh verification email. No-op when the code is still
-		/// valid or when the email has not yet been sent (VerificationEmailSentAt is null).
+		/// Called after a correct proof when an unverified account is owed an email code. The
+		/// implementation should check whether the verification code has expired and, if so,
+		/// generate a new code and enqueue a fresh verification email. No-op when the code is still valid.
 		/// </summary>
 		/// <param name="username">The account username.</param>
 		/// <param name="verifyCodeExpiresUtc">UTC expiry of the current code, or null.</param>
@@ -1903,7 +1907,7 @@ namespace FishMMO.Auth.Implementation
 
 		/// <summary>
 		/// The SMS twin of <see cref="TryResendVerificationEmailIfExpiredAsync"/>. Called after a correct
-		/// proof when the only outstanding code is the SMS one. The implementation should, when the SMS
+		/// proof when the account is owed an SMS code. The implementation should, when the SMS
 		/// code is missing or expired, generate a new code, store it and enqueue a fresh message.
 		/// </summary>
 		/// <remarks>
@@ -1914,6 +1918,20 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="phoneVerifyCodeExpiresUtc">UTC expiry of the current SMS code, or null when none was issued.</param>
 		/// <returns>True if a new code was generated and the message was enqueued.</returns>
 		protected virtual Task<bool> TryResendVerificationSmsIfExpiredAsync(string username, DateTime? phoneVerifyCodeExpiresUtc) =>
+			Task.FromResult(false);
+
+		/// <summary>
+		/// Called after a correct proof when the account chose Discord verification, Discord is switched on,
+		/// and no Discord code has ever been issued — typically because the channel was switched on after the
+		/// account registered. The implementation should issue the code, which queues its one DM.
+		/// </summary>
+		/// <remarks>
+		/// Fire-and-forget like the resends, so it must not throw. Never a resend: a Discord code is issued
+		/// once and its DM is sent once. Virtual with a no-op default.
+		/// </remarks>
+		/// <param name="username">The account username.</param>
+		/// <returns>True if a code was issued.</returns>
+		protected virtual Task<bool> TryIssueDiscordVerificationCodeAsync(string username) =>
 			Task.FromResult(false);
 
 		#endregion
@@ -1927,7 +1945,7 @@ namespace FishMMO.Auth.Implementation
 		{
 			/// <summary>Whether the account was found and fetchable.</summary>
 			public bool IsSuccess;
-			/// <summary>Whether the account has been email-verified.</summary>
+			/// <summary>Whether the account may sign in without a code: verified, or not asked for one by this server.</summary>
 			public bool IsVerified;
 			/// <summary>SRP salt.</summary>
 			public string Salt;
@@ -1950,6 +1968,25 @@ namespace FishMMO.Auth.Implementation
 			public bool PhoneVerificationPending;
 			/// <summary>UTC expiry for the SMS verification code; null when none has been issued.</summary>
 			public DateTime? PhoneVerifyCodeExpiresUtc;
+			/// <summary>
+			/// For an unverified account: whether it is owed a Discord code that has never been issued. See
+			/// <see cref="TryIssueDiscordVerificationCodeAsync"/>.
+			/// </summary>
+			public bool DiscordVerificationCodeOwed;
+		}
+
+		/// <summary>What an unverified sign-in is owed once its proof is correct.</summary>
+		[Flags]
+		private enum UnverifiedWork : byte
+		{
+			/// <summary>Nothing.</summary>
+			None = 0,
+			/// <summary>An email code, refreshed if it has expired.</summary>
+			EmailCode = 1,
+			/// <summary>An SMS code, issued if missing or refreshed if expired.</summary>
+			SmsCode = 2,
+			/// <summary>A Discord code, issued for the first time.</summary>
+			DiscordCode = 4,
 		}
 
 		/// <summary>Holds transient state for a connection that has passed SRP proof and is awaiting TOTP confirmation.</summary>

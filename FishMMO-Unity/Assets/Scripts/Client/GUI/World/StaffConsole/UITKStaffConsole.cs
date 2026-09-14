@@ -1240,9 +1240,9 @@ namespace FishMMO.Client
 					VisualElement row = NewRow(id == selectedTicketID);
 
 					VisualElement top = NewLine();
-					top.Add(NewLabel("#" + id.ToString(CultureInfo.InvariantCulture), "fish-row__name", "staff-row__trail"));
+					top.Add(NewLabel("#" + id.ToString(CultureInfo.InvariantCulture), "fish-row__name", "staff-row__lead"));
 					top.Add(NewLabel(ticket.Status, "fish-badge", "fish-badge--accent", "staff-badge"));
-					top.Add(NewLabel(ticket.Category, "fish-row__meta", "staff-row__name"));
+					top.Add(NewLabel(ticket.Category, "fish-row__meta", "staff-row__name", "staff-row__spaced"));
 					top.Add(NewLabel(StaffConsoleFormat.FormatAge(ticket.LastActivityUtcTicks, now), "fish-row__meta", "staff-row__trail"));
 					row.Add(top);
 
@@ -1488,6 +1488,7 @@ namespace FishMMO.Client
 					choices = choices,
 				};
 				dropdown.AddToClassList("fish-dropdown");
+				dropdown.AddToClassList("fish-dropdown--compact");
 				dropdown.AddToClassList("staff-field__dropdown");
 				dropdown.SetValueWithoutNotify(string.IsNullOrEmpty(current) ? choices[0] : current);
 				dropdown.RegisterValueChangedCallback(evt =>
@@ -1518,6 +1519,7 @@ namespace FishMMO.Client
 						tooltip = "Pick from the roster",
 					};
 					picker.AddToClassList("fish-dropdown");
+					picker.AddToClassList("fish-dropdown--compact");
 					picker.AddToClassList("staff-field__pick");
 					picker.RegisterValueChangedCallback(evt =>
 					{

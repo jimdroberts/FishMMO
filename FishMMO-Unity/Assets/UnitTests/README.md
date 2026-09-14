@@ -341,6 +341,8 @@ the next sim's manager as a duplicate.
 | `Login_WrongPassword_ReturnsInvalidUsernameOrPassword` | `InvalidUsernameOrPassword` |
 | `Login_UnknownUser_ReturnsInvalidUsernameOrPasswordWithoutEnumeration` | `InvalidUsernameOrPassword` (same as wrong pw — anti-enumeration) |
 | `Login_UnverifiedAccount_ReturnsAccountUnverifiedAfterCorrectProof` | `AccountUnverified` |
+| `Login_UnverifiedAccount_IsAskedForAnyCodeWhateverItOwes` | `AccountUnverified` for every mix of owed channels; never `PhoneUnverified` |
+| `Login_UnverifiedAccount_RefreshesEveryOwedCodeOnlyAfterACorrectProof` | SMS resend and Discord code issue happen only after a correct proof, on every account that owes them |
 | `Login_SequentialSessionsSameServer_StateProperlyReset` | Both sessions `LoginSuccess`, with distinct per-session server pubkey / cookie |
 | `Login_SameCredentials_CaseSensitivePassword_Rejected` | `InvalidUsernameOrPassword` (SRP does not normalize case) |
 | `Login_DistributedPasswordGuessing_LocksTheAccountOut` | Wrong passwords from distinct source IPs lock the account; the *correct* password is then refused too |

@@ -222,9 +222,16 @@ namespace FishMMO.UnitTests.Harness
 					EmailVerificationPending = row.EmailVerificationPending,
 					PhoneVerificationPending = row.PhoneVerificationPending,
 					PhoneVerifyCodeExpiresUtc = row.PhoneVerifyCodeExpiresUtc,
+					DiscordVerificationCodeOwed = row.DiscordCodeOwed,
 				});
 			}
 			return Task.FromResult(new SrpAccountLookupResult { IsSuccess = false });
+		}
+
+		protected override Task<bool> TryIssueDiscordVerificationCodeAsync(string username)
+		{
+			store.DiscordIssueRequests.Enqueue(username);
+			return Task.FromResult(true);
 		}
 
 		protected override Task<bool> CheckIsOnlineAsync(string username) => Task.FromResult(store.IsOnline(username));

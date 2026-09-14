@@ -88,9 +88,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private string pendingVerifyUsername;
 
-		/// <summary>Which code <see cref="pendingVerifyUsername"/> is waiting for.</summary>
-		private VerificationCodeChannel pendingVerifyChannel;
-
 		/// <summary>
 		/// The identifier the current sign-in was started with. Not a secret — it is still in the
 		/// username field — and kept because the authenticator drops its own copy the moment the SRP
@@ -422,7 +419,7 @@ namespace FishMMO.Client
 					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					OnLoginAuthenticationDialog(verificationSubmitted
-						? "That verification code was not accepted.\n\nCheck the code and sign in again to enter it. Codes expire after 24 hours."
+						? "That verification code was not accepted.\n\nSign in again to enter a code. After three incorrect codes a support ticket is opened for your account, and staff will contact you by email."
 						: "Invalid Username or Password.");
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
@@ -431,11 +428,11 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.Banned:
 					OnLoginAuthenticationDialog("Account is banned. Please contact the system administrator.");
 					break;
+				// PhoneUnverified is what a server one release behind sends when the SMS code was the one it
+				// asked for. Any one code verifies the account now, so it is the same prompt.
 				case ClientAuthenticationResult.AccountUnverified:
-					OnVerificationCodeRequired(VerificationCodeChannel.Email);
-					break;
 				case ClientAuthenticationResult.PhoneUnverified:
-					OnVerificationCodeRequired(VerificationCodeChannel.Sms);
+					OnVerificationCodeRequired();
 					break;
 				case ClientAuthenticationResult.BetaAccessRequired:
 					OnLoginAuthenticationDialog("This server is running a closed test, and your account does not have beta access.\n\n" +
@@ -517,8 +514,14 @@ namespace FishMMO.Client
 		private const int VerificationCodeLength = 6;
 
 		/// <summary>
-		/// Handles AccountUnverified (the email code is outstanding) and PhoneUnverified (the SMS code
-		/// is): asks for that code, then sends it.
+		/// What the verification prompt says. The client is not told which channels the account chose, and any
+		/// one of the codes verifies it, so the prompt names them all.
+		/// </summary>
+		private const string VerificationPrompt = "Your account has not been verified yet.\n\n" +
+			"Enter the verification code we sent you. It may have arrived by email, by text message, or as a direct message from our Discord bot. Any one of them verifies your account.";
+
+		/// <summary>
+		/// Handles AccountUnverified: asks for a verification code, then sends it.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -530,49 +533,43 @@ namespace FishMMO.Client
 		/// verification-only connection when the one that reported the result has gone.
 		/// </para>
 		/// <para>
-		/// An account that chose both channels is asked for the email code first. A correct one is
-		/// answered with PhoneUnverified on the same connection, which lands back here for the SMS code.
+		/// One prompt, whatever the account chose: the server tries the code against every code the account
+		/// holds, and any one of them verifies it. Leaving the prompt, or entering a code that is not accepted,
+		/// ends the attempt with a message saying why — the account cannot sign in until it is verified.
 		/// </para>
 		/// </remarks>
-		private void OnVerificationCodeRequired(VerificationCodeChannel channel)
+		private void OnVerificationCodeRequired()
 		{
 			string identifier = !string.IsNullOrEmpty(pendingVerifyUsername) ? pendingVerifyUsername : signInIdentifier;
 			if (string.IsNullOrEmpty(identifier) || !Authentication.IsAllowedUsername(identifier))
 			{
 				// Verification is by account name; the server never reports this for an email sign-in.
-				OnLoginAuthenticationDialog(channel == VerificationCodeChannel.Sms
-					? "Your phone number has not been verified yet. Sign in with your account name to enter the code sent to you by SMS."
-					: "Your account has not been verified yet. Sign in with your account name to enter the code sent to your email.");
+				OnLoginAuthenticationDialog("Your account has not been verified yet. Sign in with your account name to enter your verification code.");
 				return;
 			}
 
 			pendingVerifyUsername = identifier;
-			pendingVerifyChannel = channel;
 			verificationSubmitted = false;
 			SetSignInLocked(true);
 			Hide();
 
-			/* Stop the reply clock. SetSignInLocked arms it, but from here the client is waiting on a
-			 * person fetching a code from their email or phone, which routinely takes longer than the
+			/* Stop the reply clock. SetSignInLocked arms it, but from here the client is waiting on a person
+			 * fetching a code from their email, phone or Discord, which routinely takes longer than the
 			 * watchdog allows. It is re-armed the instant a code is actually sent. */
 			replyGuard.Clear();
-
-			string prompt = channel == VerificationCodeChannel.Sms
-				? "Your phone number has not been verified. Please enter the verification code sent to your phone by SMS."
-				: "Your account has not been verified. Please enter the verification code sent to your email.";
 
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
 				verificationPromptOpen = true;
 				uiDialogInputBox.OpenCode(
-					prompt,
+					VerificationPrompt,
 					VerificationCodeLength,
 					(code) =>
 					{
 						verificationPromptOpen = false;
 						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))
 						{
-							SubmitVerificationCode(pendingVerifyUsername, code.Trim(), pendingVerifyChannel);
+							SubmitVerificationCode(pendingVerifyUsername, code.Trim());
 						}
 					},
 					() =>
@@ -580,6 +577,8 @@ namespace FishMMO.Client
 						verificationPromptOpen = false;
 						pendingVerifyUsername = null;
 						verificationSubmitted = false;
+						// Leaving the prompt ends the attempt like any other refusal, and says why.
+						LoginNotice.Show("Your account has to be verified before you can sign in, so you are back at the sign-in screen.\n\nSign in again when you have your verification code.");
 						Client.ForceDisconnect();
 						SetSignInLocked(false);
 						Show();
@@ -588,10 +587,10 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Sends a verification code: on the live connection when there is one (the second code of an
-		/// email-then-SMS pair), otherwise on a new verification-only connection.
+		/// Sends a verification code: on the live connection when there is one, otherwise on a new
+		/// verification-only connection. The channel on the wire is not consulted; the server tries every code.
 		/// </summary>
-		private void SubmitVerificationCode(string accountName, string code, VerificationCodeChannel channel)
+		private void SubmitVerificationCode(string accountName, string code)
 		{
 			verificationSubmitted = true;
 			authResultSeen = false;
@@ -599,7 +598,7 @@ namespace FishMMO.Client
 
 			if (!Client.IsConnectionReady(LocalConnectionState.Stopped))
 			{
-				Client.LoginAuthenticator.SendVerifyCode(accountName, code, channel);
+				Client.LoginAuthenticator.SendVerifyCode(accountName, code, VerificationCodeChannel.Email);
 				return;
 			}
 
@@ -630,7 +629,7 @@ namespace FishMMO.Client
 
 				if (!Client.IsConnectionReady(LocalConnectionState.Stopped) ||
 					!Client.TryGetRandomLoginServerPort(out ushort serverPort) ||
-					!Client.LoginAuthenticator.SetVerificationRequest(accountName, code, channel))
+					!Client.LoginAuthenticator.SetVerificationRequest(accountName, code, VerificationCodeChannel.Email))
 				{
 					verificationSubmitted = false;
 					Log.Warning("UITKLogin", "Could not open a connection to send the verification code.");

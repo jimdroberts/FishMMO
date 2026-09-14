@@ -332,7 +332,137 @@ namespace FishMMO.Client
 			{
 				inviteButton.clicked += OnButtonInviteToParty;
 			}
+
+			partyPanel = root.Q(PANEL_NAME);
+			MakeClickThrough(root);
+
+			/* Both, because they resize independently: the root with the screen and interface
+			 * scale, the frame as members join and leave. Unregistered first because OnStarting
+			 * re-runs against a rebuilt tree. */
+			root.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
+			root.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
+			partyPanel?.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
+			partyPanel?.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 		}
+
+		/// <summary>Name of the frame element in UIParty.uxml.</summary>
+		private const string PANEL_NAME = "party-root";
+
+		/// <summary>The frame itself; the element dragged and placed.</summary>
+		private VisualElement partyPanel;
+
+		/// <summary>The stylesheet's top, captured while no inline top overrides it.</summary>
+		private float authoredTop = float.NaN;
+
+		/// <summary>
+		/// Lets clicks through the parts of the free-floating frame that paint nothing.
+		/// </summary>
+		/// <remarks>
+		/// The frame has no background any more (see UIParty.uss), so a press on the empty space
+		/// around the rows is, to the player, a press on the world. Left pickable, that invisible
+		/// box would still swallow it — and <see cref="UITKControl.HasFocus"/> would report the UI as
+		/// hovered, which gates targeting and world interaction. The header (the drag handle), the
+		/// rows (the member context menu) and the buttons stay pickable; only the containers do not.
+		/// </remarks>
+		private void MakeClickThrough(VisualElement root)
+		{
+			if (partyPanel != null)
+			{
+				partyPanel.pickingMode = PickingMode.Ignore;
+			}
+
+			if (columns != null)
+			{
+				columns.pickingMode = PickingMode.Ignore;
+				columns.Query<VisualElement>().ForEach(e => e.pickingMode = PickingMode.Ignore);
+			}
+
+			ScrollView scroll = root.Q<ScrollView>();
+			if (scroll != null)
+			{
+				scroll.pickingMode = PickingMode.Ignore;
+				scroll.contentViewport.pickingMode = PickingMode.Ignore;
+				scroll.contentContainer.pickingMode = PickingMode.Ignore;
+			}
+
+			if (memberList != null)
+			{
+				memberList.pickingMode = PickingMode.Ignore;
+			}
+			if (emptyLabel != null)
+			{
+				emptyLabel.pickingMode = PickingMode.Ignore;
+			}
+
+			VisualElement footer = root.Q(className: "party-footer");
+			if (footer != null)
+			{
+				footer.pickingMode = PickingMode.Ignore;
+			}
+		}
+
+		/// <summary>Keeps the default placement on screen whenever the frame or the screen resizes.</summary>
+		private void OnPlacementGeometryChanged(GeometryChangedEvent evt)
+		{
+			PlaceOnScreen();
+		}
+
+		/// <summary>
+		/// Pulls the frame's default top up just far enough that every member stays on screen.
+		/// </summary>
+		/// <remarks>
+		/// The frame is sized to its members (see UIParty.uss) and anchored at the stylesheet's top,
+		/// 8 units under the target frame. On a short panel — 506 units at 21:9, 540 at interface
+		/// scale 1.25 — a full party from there runs off the bottom of the screen, and a member
+		/// below the edge is as hidden as one scrolled away. So the top moves up by exactly the
+		/// overhang, overlapping the target frame if it must, and returns to the stylesheet's value
+		/// when there is room. A position the player dragged to is theirs and is left alone;
+		/// UITKControl already clamps that one into the viewport.
+		/// </remarks>
+		private void PlaceOnScreen()
+		{
+			if (partyPanel == null || partyPanel.parent == null || HasPlayerPosition)
+			{
+				return;
+			}
+
+			if (partyPanel.style.top.keyword == StyleKeyword.Null)
+			{
+				authoredTop = partyPanel.resolvedStyle.top;
+			}
+
+			float viewportHeight = partyPanel.parent.layout.height;
+			float frameHeight = partyPanel.layout.height;
+			if (float.IsNaN(authoredTop) || float.IsNaN(viewportHeight) || float.IsNaN(frameHeight) ||
+				viewportHeight <= 0.0f)
+			{
+				return;
+			}
+
+			float fitted = Mathf.Max(0.0f, Mathf.Min(authoredTop, viewportHeight - frameHeight));
+			if (Mathf.Abs(fitted - authoredTop) <= 0.01f)
+			{
+				if (partyPanel.style.top.keyword != StyleKeyword.Null)
+				{
+					partyPanel.style.top = StyleKeyword.Null;
+				}
+				return;
+			}
+
+			/* Against the value last written, not resolvedStyle.top, which is snapped to device
+			 * pixels and so never equals the target at a fractional pixels-per-point — comparing
+			 * with it rewrote the top on every geometry event, a layout loop. */
+			if (partyPanel.style.top.keyword != StyleKeyword.Null && Mathf.Abs(placedTop - fitted) <= 0.01f)
+			{
+				return;
+			}
+
+			placedTop = fitted;
+			partyPanel.style.top = fitted;
+		}
+
+		/// <summary>The top last written by <see cref="PlaceOnScreen"/>.</summary>
+		private float placedTop = float.NaN;
 
 		/// <summary>
 		/// Re-applies the roster after the visual tree was rebuilt.

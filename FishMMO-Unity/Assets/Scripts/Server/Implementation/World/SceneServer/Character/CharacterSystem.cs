@@ -201,6 +201,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{ "/unstuck", OnUnstuckCommand },
 				{ "/stuck", OnUnstuckCommand },
 			});
+			ChatHelper.SetCommandHelp("/leaveinstance", new ChatCommandHelp()
+			{
+				Category = "Instance",
+				Summary = "Leaves the instance you are in.",
+				Aliases = new[] { "/exitinstance" },
+			});
+			ChatHelper.SetCommandHelp("/unstuck", new ChatCommandHelp()
+			{
+				Category = "General",
+				Summary = "Moves you to a safe spot if you are stuck. Not in combat or instances.",
+				Aliases = new[] { "/stuck" },
+			});
 
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;

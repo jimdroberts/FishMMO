@@ -9,6 +9,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Services;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.DiscordBot.Services;
 
 namespace FishMMO.DiscordBot
@@ -105,6 +107,10 @@ namespace FishMMO.DiscordBot
 						return factory.CreateDbContext();
 					});
 
+					// The bot's side of an account in the database: the verification DM and the account link.
+					services.AddSingleton<IDiscordAccountService>(provider =>
+						new DiscordAccountService(provider.GetRequiredService<NpgsqlDbContextFactory>()));
+
 					services.AddSingleton<BotConfigurationService>();
 					services.AddSingleton<ChatRelayPolicy>();
 					services.AddSingleton<RateLimiterService>();
@@ -112,9 +118,12 @@ namespace FishMMO.DiscordBot
 					services.AddSingleton<BridgeBanService>();
 					services.AddSingleton<DynamicChannelManagerService>();
 					services.AddHostedService(sp => sp.GetRequiredService<DynamicChannelManagerService>());
+					// After DynamicChannelManagerService: its start loads botdata.json, which the link import reads.
+					services.AddHostedService(sp => sp.GetRequiredService<AccountLinkingService>());
 					services.AddSingleton<GameChatBridgeService>();
 					services.AddSingleton<CommandHandlingService>();
 					services.AddHostedService<ChatPollingService>();
+					services.AddHostedService<DiscordVerificationService>();
 				});
 	}
 }

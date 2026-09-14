@@ -8,6 +8,9 @@
 
 import * as srp from '../srp.js';
 
+/** How the profile names each verification channel. */
+const CHANNEL_NAMES = { email: 'email', sms: 'SMS', discord: 'Discord' };
+
 const TABS = [
 	['profile', 'Profile'],
 	['security', 'Security'],
@@ -98,8 +101,11 @@ export async function render(host, ctx) {
 								<dt>Phone</dt><dd>${account.phone
 									? `${ui.esc(account.phone)} ${account.phoneVerified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}`
 									: '<span class="faint">—</span>'}</dd>
+								<dt>Discord</dt><dd>${account.discordUsername
+									? `${ui.esc(account.discordUsername)} ${account.discordVerified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}`
+									: '<span class="faint">—</span>'}</dd>
 								<dt>Account</dt><dd>${account.verified ? ui.badge('verified', 'ok') : ui.badge('not verified yet', 'warn')}
-									${(account.verificationChannels ?? []).length ? `<div class="cell-sub">verifies by ${ui.esc(account.verificationChannels.map((c) => (c === 'sms' ? 'SMS' : 'email')).join(' and '))}</div>` : ''}</dd>
+									${(account.verificationChannels ?? []).length ? `<div class="cell-sub">verifies by ${ui.esc(account.verificationChannels.map((c) => CHANNEL_NAMES[c] ?? c).join(' or '))}</div>` : ''}</dd>
 								<dt>Age</dt><dd>${account.age || '—'}</dd>
 								<dt>Two-factor</dt><dd>${account.totpEnabled ? ui.badge('enabled', 'ok') : ui.badge('not set up', 'warn')}</dd>
 								<dt>Enrolled</dt><dd>${account.totpVerifiedAtUtc ? ui.dateTime(account.totpVerifiedAtUtc) : '<span class="faint">—</span>'}</dd>

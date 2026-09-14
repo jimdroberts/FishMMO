@@ -46,14 +46,20 @@
     flex-shrink: 0;
 }
 
-.staff-header__titles > .fish-panel__title {
-    height: 15px;
+/*
+    No fixed height: each line takes the height of its own text. A pinned 15px/12px box kept the
+    default theme's 4px top and bottom padding, which left 7px for a 15px title line and 4px for a
+    13px subtitle line. The two lines together are 28px, well inside the 44px header.
+*/
+.staff-header__titles > .fish-panel__title,
+.staff-header__titles > .fish-panel__subtitle {
     flex-shrink: 0;
+    padding: 0;
+    margin: 0;
 }
 
 .staff-header__titles > .fish-panel__subtitle {
-    height: 12px;
-    flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .staff-tabs {
@@ -203,10 +209,28 @@
     text-overflow: ellipsis;
 }
 
+/*
+    The spacing rules below are qualified with .staff-row on purpose. `.staff-row Label` (one class
+    and one type) zeroes every label's margin and outranks a bare class, so a plain
+    `.staff-row__trail { margin-left }` lost and the distance sat flush against the badge before it.
+*/
 .staff-row__trail {
     flex-shrink: 0;
-    margin-left: 6px;
     -unity-text-align: middle-right;
+}
+
+.staff-row .staff-row__trail {
+    margin-left: 6px;
+}
+
+/* The first item on a line that is not a stretching name, e.g. a ticket number. */
+.staff-row__lead {
+    flex-shrink: 0;
+}
+
+/* A label that follows a badge, e.g. a ticket's category. */
+.staff-row .staff-row__spaced {
+    margin-left: 6px;
 }
 
 .staff-row .staff-badge {
@@ -275,6 +299,18 @@
     flex-shrink: 1;
     height: 24px;
     margin: 0;
+}
+
+/*
+    The default theme gives a popup field's inner box a 4px left margin that a text field's inner
+    box does not have, so the choice box sat 4px right of the text boxes above and below it. The
+    10px left padding matches the text input's, so the values line up as well as the boxes.
+    Vertical padding is trimmed by .fish-dropdown--compact in the theme.
+*/
+DropdownField.staff-field__dropdown > .unity-base-popup-field__input,
+DropdownField.staff-field__pick > .unity-base-popup-field__input {
+    margin-left: 0;
+    padding-left: 10px;
 }
 
 .staff-field__pick {
@@ -449,10 +485,11 @@
     flex-shrink: 0;
 }
 
+/* The right margin stops the section rule short of the Clear button instead of running into it. */
 .staff-output__title {
     flex-grow: 1;
     padding: 0;
-    margin: 0;
+    margin: 0 8px 0 0;
 }
 
 .staff-output__clear {

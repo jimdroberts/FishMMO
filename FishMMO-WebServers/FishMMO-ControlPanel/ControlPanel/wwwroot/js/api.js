@@ -121,9 +121,9 @@ export const api = {
 	 * rendered, left empty, and posted back under their own names; see register.js. */
 	getRegistrationForm: () => request('GET', '/account/register/form'),
 	register: (body) => request('POST', '/account/register', body),
+	// Any one code from any channel — email, SMS or the Discord DM — verifies the account.
 	verifyAccount: (username, code) => request('POST', '/account/verify', { username, code }),
-	verifyPhone: (username, code) => request('POST', '/account/verify-phone', { username, code }),
-	// Always answers the same way, whether or not anything was sent.
+	// Always answers the same way, whether or not anything was sent. `discord` is refused: that code is sent once.
 	resendVerification: (username, channel) => request('POST', '/account/verify/resend', { username, channel }),
 	// Takes nothing: the browser applies the rules locally so the password it is
 	// checking never has to be transmitted.

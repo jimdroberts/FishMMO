@@ -372,8 +372,8 @@ function signinCard(title, sub, wide = false) {
 }
 
 /**
- * The account's password was right, but it still owes a verification code (email, phone, or both).
- * The same per-channel forms registration shows, each with its own resend.
+ * The account's password was right, but it has not entered a verification code yet. The same code
+ * form registration shows: any one code from any channel it was sent on verifies it.
  */
 function renderVerifyScreen(payload) {
 	const body = signinCard('Verify your account', payload.username);

@@ -67,8 +67,13 @@ namespace FishMMO.Auth.Core
 		/// </summary>
 		TokenRevoked = 14,
 		/// <summary>
-		/// Account email has not been verified. The user must enter the verification code sent during registration.
+		/// The account has not been verified. The user must enter a verification code: any one of the
+		/// codes sent by email, by SMS or by Discord DM verifies it.
 		/// </summary>
+		/// <remarks>
+		/// Sent only after a correct SRP proof, so it tells nobody without the password that the account exists.
+		/// A wrong code is answered with <see cref="InvalidUsernameOrPassword"/>, like every other refusal.
+		/// </remarks>
 		AccountUnverified = 15,
 		/// <summary>
 		/// Account has been successfully verified with the correct verification code.
@@ -105,16 +110,12 @@ namespace FishMMO.Auth.Core
 		/// </remarks>
 		ServerLocked = 21,
 		/// <summary>
-		/// The password was proven, but the phone number the account chose to verify with has not
-		/// been. The client must enter the code sent to the phone by SMS.
+		/// Legacy: the SMS code was the one outstanding. Current servers answer every unverified sign-in
+		/// with <see cref="AccountUnverified"/>, because any one code verifies the account.
 		/// </summary>
 		/// <remarks>
-		/// The SMS counterpart of <see cref="AccountUnverified"/>, which keeps meaning "the email
-		/// code is outstanding". An account that chose both channels is asked for the email code
-		/// first; a correct email code then answers with this value rather than
-		/// <see cref="AccountVerified"/>, so the client knows to ask for the second code. Like
-		/// <see cref="AccountUnverified"/>, it is only ever sent after a correct SRP proof or a
-		/// correct verification code, so it reveals nothing to someone who has neither.
+		/// Kept so the values after it do not move, and still handled by clients exactly as
+		/// <see cref="AccountUnverified"/>.
 		/// </remarks>
 		PhoneUnverified = 22,
 		/// <summary>

@@ -36,8 +36,13 @@ namespace FishMMO.Client
 		public string Text = "";
 
 		/// <summary>
-		/// Pixel offset from the centre of the screen.
+		/// Offset from the centre of the screen, in panel points.
 		/// </summary>
+		/// <remarks>
+		/// <see cref="Initialize"/> receives the offset in SCREEN PIXELS and converts it on the way
+		/// in — see <see cref="ScreenOffsetToPanel"/>. Everything after that, including the upward
+		/// drift, is panel points.
+		/// </remarks>
 		public Vector2 PixelOffset = Vector2.zero;
 
 		// fade
@@ -134,6 +139,36 @@ namespace FishMMO.Client
 
 			parent.Add(element);
 			return element;
+		}
+
+		/// <summary>
+		/// Converts an offset measured in screen pixels into panel points.
+		/// </summary>
+		/// <param name="screenOffset">Offset in screen pixels.</param>
+		/// <returns>The same offset in panel points, or the input when no panel is available.</returns>
+		/// <remarks>
+		/// The panel is ScaleWithScreenSize against a 1200-unit-wide reference, so one panel point
+		/// is <c>Screen.width / 1200</c> pixels — 1.6 at 1920x1080, 2.87 at 3440x1440. The one
+		/// caller, <c>DisplayRegionNameAction</c>, lives in the shared assembly with no panel to
+		/// measure and passes <c>Screen.height * 0.2</c> in pixels. Written unconverted into a
+		/// translate that is measured in points, that put the region banner 32% of the panel above
+		/// centre at 1080p instead of 20%, and off the top of the screen at 4K; it only matched
+		/// while the panel was mistakenly ConstantPhysicalSize, one point per pixel at 96 DPI.
+		/// <c>RuntimePanelUtils.ScreenToPanel</c> is the supported conversion, and an offset is the
+		/// difference of two converted positions so the panel origin cancels. With no label layer
+		/// loaded nothing is drawn, so the raw value is as good as any.
+		/// </remarks>
+		private Vector2 ScreenOffsetToPanel(Vector2 screenOffset)
+		{
+			Label target = ResolveElement();
+			IPanel panel = target != null ? target.panel : null;
+			if (panel == null || screenOffset == Vector2.zero)
+			{
+				return screenOffset;
+			}
+
+			return RuntimePanelUtils.ScreenToPanel(panel, screenOffset) -
+				RuntimePanelUtils.ScreenToPanel(panel, Vector2.zero);
 		}
 
 		/// <summary>
@@ -273,7 +308,7 @@ namespace FishMMO.Client
 		/// <param name="lifeTime">Lifetime of the label in seconds.</param>
 		/// <param name="fadeColor">If true, label fades color over time.</param>
 		/// <param name="increaseY">If true, label moves upward over time.</param>
-		/// <param name="pixelOffset">Pixel offset for label placement.</param>
+		/// <param name="pixelOffset">Offset from the centre of the screen, in screen pixels.</param>
 		public void Initialize(string text, FontStyle fontStyle, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
 		{
 			Text = text;
@@ -286,7 +321,7 @@ namespace FishMMO.Client
 			this.fontSize = fontSize > 0 ? fontSize : 16;
 
 			currentColor = color;
-			PixelOffset = pixelOffset;
+			PixelOffset = ScreenOffsetToPanel(pixelOffset);
 
 			FadeColor = false;
 			IncreaseY = false;

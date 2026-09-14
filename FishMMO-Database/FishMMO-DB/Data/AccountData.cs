@@ -58,12 +58,7 @@ namespace FishMMO.Database.Data
 		public readonly long LastTotpWindow;
 
 		/// <summary>
-		/// Temporary code for Discord account linking. Null when no link is pending.
-		/// </summary>
-		public readonly string? DiscordLinkCode;
-
-		/// <summary>
-		/// Whether the account email has been verified via the registration verification link.
+		/// Whether the account is verified: the one flag sign-in reads. Any one proven channel sets it.
 		/// </summary>
 		public readonly bool Verified;
 
@@ -78,7 +73,7 @@ namespace FishMMO.Database.Data
 		public readonly DateTime? VerifyCodeExpiresUtc;
 
 		/// <summary>
-		/// UTC timestamp when the verification email was sent. Null if not yet sent.
+		/// UTC timestamp when a verification email or text was last delivered. Null if none has been.
 		/// </summary>
 		public readonly DateTime? VerificationEmailSentAt;
 
@@ -93,7 +88,7 @@ namespace FishMMO.Database.Data
 		public readonly DateTime LastLogin;
 		/// <summary>
 		/// The verification channels the player chose, as <c>AccountVerificationChannels</c> flags.
-		/// <see cref="Verified"/> is true once every one of them has been proven.
+		/// <see cref="Verified"/> is set by the first of them to be proven.
 		/// </summary>
 		public readonly byte VerificationChannels;
 		/// <summary>Whether the email channel has been proven.</summary>
@@ -111,6 +106,14 @@ namespace FishMMO.Database.Data
 		/// login server reads it to re-send an expired or missing SMS code at sign-in.
 		/// </summary>
 		public readonly DateTime? PhoneVerifyCodeExpiresUtc;
+		/// <summary>The Discord username the player gave, lowercase, or null. Where the one verification DM goes.</summary>
+		public readonly string? DiscordUsername;
+		/// <summary>Whether the Discord channel has been proven (by the DM's code, or by the bot's link).</summary>
+		public readonly bool DiscordVerified;
+		/// <summary>Whether a Discord code has been issued. A code is issued once and never replaced.</summary>
+		public readonly bool DiscordVerifyCodeIssued;
+		/// <summary>When the verification DM was delivered, or null. Set once; no second DM is ever sent.</summary>
+		public readonly DateTime? DiscordDmSentAt;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AccountData"/> struct.
@@ -126,7 +129,6 @@ namespace FishMMO.Database.Data
 			string? totpSecret,
 			DateTime? totpVerifiedAt,
 			long lastTotpWindow,
-			string? discordLinkCode,
 			bool verified,
 			int verifyCode,
 			DateTime? verifyCodeExpiresUtc,
@@ -139,7 +141,11 @@ namespace FishMMO.Database.Data
 			string? phone = null,
 			DateTime? loginLockedUntilUtc = null,
 			DateTime? twoFactorLockedUntilUtc = null,
-			DateTime? phoneVerifyCodeExpiresUtc = null)
+			DateTime? phoneVerifyCodeExpiresUtc = null,
+			string? discordUsername = null,
+			bool discordVerified = false,
+			bool discordVerifyCodeIssued = false,
+			DateTime? discordDmSentAt = null)
 		{
 			Name = name;
 			Salt = salt;
@@ -151,7 +157,6 @@ namespace FishMMO.Database.Data
 			TotpSecret = totpSecret;
 			TotpVerifiedAt = totpVerifiedAt;
 			LastTotpWindow = lastTotpWindow;
-			DiscordLinkCode = discordLinkCode;
 			Verified = verified;
 			VerifyCode = verifyCode;
 			VerifyCodeExpiresUtc = verifyCodeExpiresUtc;
@@ -165,6 +170,10 @@ namespace FishMMO.Database.Data
 			LoginLockedUntilUtc = loginLockedUntilUtc;
 			TwoFactorLockedUntilUtc = twoFactorLockedUntilUtc;
 			PhoneVerifyCodeExpiresUtc = phoneVerifyCodeExpiresUtc;
+			DiscordUsername = discordUsername;
+			DiscordVerified = discordVerified;
+			DiscordVerifyCodeIssued = discordVerifyCodeIssued;
+			DiscordDmSentAt = discordDmSentAt;
 		}
 	}
 }

@@ -78,6 +78,22 @@ namespace FishMMO.Client
 		/// <summary>USS class applied to each buff group's stack/name label.</summary>
 		private const string LABEL_CLASS = "buff-group__label";
 
+		/// <summary>USS class that lets the icon list wrap onto a second row.</summary>
+		private const string WRAP_CLASS = "buff-list--wrap";
+
+		/// <summary>
+		/// Icons one row holds: the container's 600-unit max-width, less its 6-unit midline gutter,
+		/// at an 18-unit pitch (16px icon, 2px margin). See .buff-container in UIBuffContainer.uss.
+		/// </summary>
+		/// <remarks>
+		/// The list only wraps past this. A fit-content list that is allowed to wrap breaks its last
+		/// icon onto a second line at any fractional pixels-per-point, because the snapped icons add
+		/// up to a hair more than the width they were measured into — and that line falls below the
+		/// band into the resource bars. If the icon size, margin, gutter or max-width changes, this
+		/// has to change with it.
+		/// </remarks>
+		private const int SINGLE_ROW_CAPACITY = 33;
+
 		/// <summary>Name of the shared tooltip overlay registered with the UIManager.</summary>
 		private const string TOOLTIP_NAME = "UITooltip";
 
@@ -357,6 +373,17 @@ namespace FishMMO.Client
 				view.Root?.RemoveFromHierarchy();
 				groups.Remove(templateID);
 			}
+
+			UpdateWrap();
+		}
+
+		/// <summary>
+		/// Lets the list wrap only once it holds more icons than one row can.
+		/// </summary>
+		/// <remarks>See <see cref="SINGLE_ROW_CAPACITY"/> for why it must not wrap before then.</remarks>
+		private void UpdateWrap()
+		{
+			list?.EnableInClassList(WRAP_CLASS, list.childCount > SINGLE_ROW_CAPACITY);
 		}
 
 		/// <summary>
@@ -376,6 +403,7 @@ namespace FishMMO.Client
 				view.Root?.RemoveFromHierarchy();
 			}
 			groups.Clear();
+			UpdateWrap();
 		}
 
 		/// <summary>
@@ -415,6 +443,7 @@ namespace FishMMO.Client
 			{
 				view = CreateGroup(entry.Template);
 				list.Add(view.Root);
+				UpdateWrap();
 			}
 
 			// Quantised: the icon is 16px tall, so sub-percent changes are not visible and writing

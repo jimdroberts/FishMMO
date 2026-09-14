@@ -600,12 +600,15 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		/// <summary>An unverified account is asked for whichever code is outstanding: email first, SMS when only SMS is owed.</summary>
+		/// <summary>
+		/// An unverified account is asked for a code the same way whatever it owes: any one code verifies it,
+		/// so the server no longer says which channel to use.
+		/// </summary>
 		[Test]
-		public async Task Login_UnverifiedAccount_ReportsWhichCodeIsOutstanding()
+		public async Task Login_UnverifiedAccount_IsAskedForAnyCodeWhateverItOwes()
 		{
-			await AuthTestTrace.LogTestStart(nameof(Login_UnverifiedAccount_ReportsWhichCodeIsOutstanding),
-				"Test: phone-only outstanding gives PhoneUnverified; email outstanding (alone or with SMS) gives AccountUnverified.");
+			await AuthTestTrace.LogTestStart(nameof(Login_UnverifiedAccount_IsAskedForAnyCodeWhateverItOwes),
+				"Test: a phone-only account and an account owing every channel both get AccountUnverified, never PhoneUnverified.");
 			try
 			{
 				using AuthTestHarness h = new AuthTestHarness();
@@ -613,31 +616,31 @@ namespace FishMMO.UnitTests
 				SpreadAttemptsAcrossDistinctIps(h);
 				h.Store.SeedAccount("smsonly", "correct horse battery staple", isVerified: false);
 				h.Store.SetPendingVerification("smsonly", email: false, phone: true);
-				h.Store.SeedAccount("bothowed", "correct horse battery staple", isVerified: false);
-				h.Store.SetPendingVerification("bothowed", email: true, phone: true);
+				h.Store.SeedAccount("everything", "correct horse battery staple", isVerified: false);
+				h.Store.SetPendingVerification("everything", email: true, phone: true, discordCodeOwed: true);
 
 				ClientAuthenticationResult sms = await h.Client.AttemptLogin("smsonly", "correct horse battery staple");
-				LogAssert.AreEqual(ClientAuthenticationResult.PhoneUnverified, sms, $"Expected PhoneUnverified, got {sms}.");
+				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, sms, $"Expected AccountUnverified, got {sms}.");
 
-				ClientAuthenticationResult both = await h.Client.AttemptLogin("bothowed", "correct horse battery staple");
-				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, both, $"Expected AccountUnverified (email first), got {both}.");
+				ClientAuthenticationResult all = await h.Client.AttemptLogin("everything", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, all, $"Expected AccountUnverified, got {all}.");
 			}
 			finally
 			{
-				await AuthTestTrace.LogTestEnd(nameof(Login_UnverifiedAccount_ReportsWhichCodeIsOutstanding));
+				await AuthTestTrace.LogTestEnd(nameof(Login_UnverifiedAccount_IsAskedForAnyCodeWhateverItOwes));
 			}
 		}
 
 		/// <summary>
-		/// The SMS twin of the sign-in email resend: the core asks for a fresh SMS code only after a
-		/// correct proof, only when the SMS code is the one outstanding, and passes the stored expiry.
-		/// The due-or-not decision on that expiry is pinned separately.
+		/// After a correct proof the core keeps every channel the account is owed alive: the SMS code is refreshed
+		/// whether or not an email code is owed as well, and a Discord code the account was never issued is issued.
+		/// A wrong password asks for nothing. The due-or-not decision on the SMS expiry is pinned separately.
 		/// </summary>
 		[Test]
-		public async Task Login_PhoneOnlyUnverified_AsksForAnSmsResendOnlyAfterACorrectProof()
+		public async Task Login_UnverifiedAccount_RefreshesEveryOwedCodeOnlyAfterACorrectProof()
 		{
-			await AuthTestTrace.LogTestStart(nameof(Login_PhoneOnlyUnverified_AsksForAnSmsResendOnlyAfterACorrectProof),
-				"Test: wrong password asks for nothing; correct password on a phone-only account asks once with the stored expiry; an email-first account does not ask.");
+			await AuthTestTrace.LogTestStart(nameof(Login_UnverifiedAccount_RefreshesEveryOwedCodeOnlyAfterACorrectProof),
+				"Test: a wrong password asks for nothing; a correct one asks for an SMS resend wherever SMS is owed, and issues a Discord code only where one is owed.");
 			try
 			{
 				using AuthTestHarness h = new AuthTestHarness();
@@ -646,24 +649,36 @@ namespace FishMMO.UnitTests
 				h.Store.SeedAccount("smsexpired", "correct horse battery staple", isVerified: false);
 				h.Store.SetPendingVerification("smsexpired", email: false, phone: true);
 				h.Store.SetPhoneVerifyCodeExpiry("smsexpired", expired);
-				h.Store.SeedAccount("emailfirst", "correct horse battery staple", isVerified: false);
-				h.Store.SetPendingVerification("emailfirst", email: true, phone: true);
-				h.Store.SetPhoneVerifyCodeExpiry("emailfirst", expired);
+				h.Store.SeedAccount("emailandsms", "correct horse battery staple", isVerified: false);
+				h.Store.SetPendingVerification("emailandsms", email: true, phone: true);
+				h.Store.SetPhoneVerifyCodeExpiry("emailandsms", expired);
+				h.Store.SeedAccount("discordowed", "correct horse battery staple", isVerified: false);
+				h.Store.SetPendingVerification("discordowed", email: true, phone: false, discordCodeOwed: true);
 
 				ClientAuthenticationResult wrong = await h.Client.AttemptLogin("smsexpired", "wrong-password");
 				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, wrong, $"Expected InvalidUsernameOrPassword, got {wrong}.");
 				LogAssert.AreEqual(0, h.Store.SmsResendRequests.Count, "A wrong password must never trigger an SMS (cost and enumeration).");
+				ClientAuthenticationResult wrongDiscord = await h.Client.AttemptLogin("discordowed", "wrong-password");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, wrongDiscord, $"Expected InvalidUsernameOrPassword, got {wrongDiscord}.");
+				LogAssert.AreEqual(0, h.Store.DiscordIssueRequests.Count, "A wrong password must never issue a Discord code: its DM goes to a stranger's inbox otherwise.");
 
 				ClientAuthenticationResult sms = await h.Client.AttemptLogin("smsexpired", "correct horse battery staple");
-				LogAssert.AreEqual(ClientAuthenticationResult.PhoneUnverified, sms, $"Expected PhoneUnverified, got {sms}.");
-				LogAssert.AreEqual(1, h.Store.SmsResendRequests.Count, "A correct proof on a phone-only account must ask for exactly one SMS resend.");
+				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, sms, $"Expected AccountUnverified, got {sms}.");
+				LogAssert.AreEqual(1, h.Store.SmsResendRequests.Count, "A correct proof on an account owing SMS must ask for exactly one SMS resend.");
 				LogAssert.IsTrue(h.Store.SmsResendRequests.TryPeek(out var request), "The resend request was not recorded.");
 				LogAssert.AreEqual("smsexpired", request.Username, "The resend must name the signing-in account.");
 				LogAssert.AreEqual((DateTime?)expired, request.PhoneVerifyCodeExpiresUtc, "The resend must carry the stored SMS code expiry.");
 
-				ClientAuthenticationResult both = await h.Client.AttemptLogin("emailfirst", "correct horse battery staple");
+				ClientAuthenticationResult both = await h.Client.AttemptLogin("emailandsms", "correct horse battery staple");
 				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, both, $"Expected AccountUnverified, got {both}.");
-				LogAssert.AreEqual(1, h.Store.SmsResendRequests.Count, "While the email code is asked for first, no SMS resend is requested.");
+				LogAssert.AreEqual(2, h.Store.SmsResendRequests.Count, "An email code owed as well must not hold the SMS code back: any one code verifies the account.");
+				LogAssert.AreEqual(0, h.Store.DiscordIssueRequests.Count, "Neither account so far is owed a Discord code.");
+
+				ClientAuthenticationResult discord = await h.Client.AttemptLogin("discordowed", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.AccountUnverified, discord, $"Expected AccountUnverified, got {discord}.");
+				LogAssert.AreEqual(1, h.Store.DiscordIssueRequests.Count, "A correct proof on an account owed a Discord code must issue exactly one.");
+				LogAssert.IsTrue(h.Store.DiscordIssueRequests.TryPeek(out string discordAccount) && discordAccount == "discordowed", "The issue must name the signing-in account.");
+				LogAssert.AreEqual(2, h.Store.SmsResendRequests.Count, "An account that owes no SMS code must not ask for one.");
 
 				DateTime now = DateTime.UtcNow;
 				LogAssert.IsTrue(FishMMO.Server.Implementation.AccountVerificationPolicy.IsSmsCodeResendDue(null, now), "A missing SMS code is due.");
@@ -672,7 +687,7 @@ namespace FishMMO.UnitTests
 			}
 			finally
 			{
-				await AuthTestTrace.LogTestEnd(nameof(Login_PhoneOnlyUnverified_AsksForAnSmsResendOnlyAfterACorrectProof));
+				await AuthTestTrace.LogTestEnd(nameof(Login_UnverifiedAccount_RefreshesEveryOwedCodeOnlyAfterACorrectProof));
 			}
 		}
 

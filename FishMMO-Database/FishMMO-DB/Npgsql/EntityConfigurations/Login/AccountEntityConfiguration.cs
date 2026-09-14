@@ -65,9 +65,6 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0L);
 
-			builder.Property(e => e.DiscordLinkCode)
-				.HasMaxLength(64);
-
 			builder.Property(e => e.Verified)
 				.IsRequired()
 				.HasDefaultValue(false);
@@ -139,6 +136,40 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.ReferralAccount)
 				.HasMaxLength(50);
 
+			// Discord verification and the bot's link. See the entity.
+			// A username, or a name with "#" and its four-digit discriminator: AccountProfileRules.MaxDiscordTagLength.
+			builder.Property(e => e.DiscordUsername)
+				.HasMaxLength(37);
+
+			builder.Property(e => e.DiscordUserId);
+
+			builder.Property(e => e.DiscordLinkedAt);
+
+			builder.Property(e => e.DiscordVerified)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			builder.Property(e => e.DiscordVerifyCode)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			builder.Property(e => e.DiscordDmClaimedAt);
+
+			builder.Property(e => e.DiscordDmSentAt);
+
+			builder.Property(e => e.DiscordDmUserId);
+
+			builder.Property(e => e.DiscordDmAttempts)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			builder.Property(e => e.DiscordDmLastError)
+				.HasMaxLength(256);
+
+			builder.Property(e => e.VerifyFailedCount)
+				.IsRequired()
+				.HasDefaultValue(0);
+
 			// Sign-in lockout counters. See the entity.
 			builder.Property(e => e.FailedLoginCount)
 				.IsRequired()
@@ -174,9 +205,14 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsUnique()
 				.HasFilter("email IS NOT NULL");
 
-			// Index on discord link code for verification lookups
-			builder.HasIndex(e => e.DiscordLinkCode)
-				.HasFilter("discord_link_code IS NOT NULL");
+			// One Discord account links one game account.
+			builder.HasIndex(e => e.DiscordUserId)
+				.IsUnique()
+				.HasFilter("discord_user_id IS NOT NULL");
+
+			// What the Discord bot reads: DMs owed and not yet sent, and the one owed to a member who just joined.
+			builder.HasIndex(e => e.DiscordUsername)
+				.HasFilter("discord_verify_code <> 0 AND discord_dm_sent_at IS NULL");
 		}
 	}
 }

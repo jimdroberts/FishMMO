@@ -260,8 +260,16 @@ async function renderDetail(host, ctx, name) {
 								<dt>Phone</dt><dd>${account.phone
 									? `${ui.esc(account.phone)} ${account.phoneVerified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}`
 									: '<span class="faint">—</span>'}</dd>
+								<dt>Discord</dt><dd>${account.discordUsername
+									? `${ui.esc(account.discordUsername)} ${account.discordVerified ? ui.badge('verified', 'ok') : ui.badge('unverified', 'warn')}
+										${account.discordLinked ? ui.badge('linked', 'ok') : ''}
+										<div class="cell-sub">${discordDmState(ui, account)}</div>`
+									: '<span class="faint">—</span>'}</dd>
 								<dt>Verified</dt><dd>${account.verified ? ui.badge('yes', 'ok') : ui.badge('no', 'warn')}
-									${(account.verificationChannels ?? []).length ? `<div class="cell-sub">by ${ui.esc(account.verificationChannels.join(' and '))}</div>` : ''}</dd>
+									${(account.verificationChannels ?? []).length ? `<div class="cell-sub">by ${ui.esc(account.verificationChannels.join(' or '))} (any one code verifies)</div>` : ''}
+									${account.verified ? '' : `
+										<div class="cell-sub">email or SMS code last delivered: ${account.verificationEmailSentAt ? ui.esc(ui.dateTime(account.verificationEmailSentAt)) : 'never'}</div>
+										<div class="cell-sub">incorrect codes in a row: <span class="tnum">${ui.num(account.verifyFailedCount ?? 0)}</span>${(account.verifyFailedCount ?? 0) >= 3 ? ' — a support ticket was opened' : ''}</div>`}</dd>
 								<dt>Real name</dt><dd>${optional(ui, account.realName)}</dd>
 								<dt>Country</dt><dd>${optional(ui, account.country)}</dd>
 								<dt>Address</dt><dd style="white-space:pre-line;overflow-wrap:anywhere">${optional(ui, account.address)}</dd>
@@ -396,6 +404,18 @@ function actionsCard(ui, { account, banned, isSelf, online, selfHint }) {
 			</div>`,
 		foot: 'Everything except Kick needs a fresh code from your authenticator before it is applied.',
 	});
+}
+
+/**
+ * Where the one Discord verification DM stands, as the bot last recorded it. The bot sends it once
+ * and never again, so "claimed but never confirmed" is worth saying: that DM will not be retried.
+ */
+function discordDmState(ui, account) {
+	if (account.discordDmSentAt) return `DM delivered ${ui.esc(ui.dateTime(account.discordDmSentAt))}`;
+	if (account.discordDmClaimedAt) return `the bot took the DM ${ui.esc(ui.dateTime(account.discordDmClaimedAt))} and never confirmed it`;
+	return account.discordDmLastError
+		? `DM not sent yet: ${ui.esc(account.discordDmLastError)}`
+		: 'DM not sent yet';
 }
 
 /** An optional personal detail, or a faint dash. */

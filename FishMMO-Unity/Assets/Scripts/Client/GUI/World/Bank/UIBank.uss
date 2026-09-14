@@ -86,9 +86,13 @@
    BODY : scrollable wrapping slot grid
    ═══════════════════════════════════════════════════════════ */
 
+/* padding-right 0, not 10: six 50-unit slots filled the 300-unit grid exactly, and device-pixel
+   snapping at a fractional pixels-per-point wrapped the sixth. Six slots need (6 + 1) px of slack,
+   10.9 units at 0.64 px/pt; this gives 12. See .inv-scroll in UIInventory.uss for the measurement. */
 .bank-scroll {
     flex: 1;
     padding: 10px;
+    padding-right: 0;
 }
 
 .bank-grid {

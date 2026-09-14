@@ -19,7 +19,6 @@ namespace FishMMO.DiscordBot.Modules
 	{
 		private readonly IServiceProvider serviceProvider;
 		private readonly AccountLinkingService accountLinkingService;
-		private readonly BotConfigurationService botConfigService;
 		private readonly ILogger<LinkModule> logger;
 
 		private const int MaxNameLength = 64;
@@ -27,12 +26,10 @@ namespace FishMMO.DiscordBot.Modules
 		public LinkModule(
 			IServiceProvider serviceProvider,
 			AccountLinkingService accountLinkingService,
-			BotConfigurationService botConfigService,
 			ILogger<LinkModule> logger)
 		{
 			this.serviceProvider = serviceProvider;
 			this.accountLinkingService = accountLinkingService;
-			this.botConfigService = botConfigService;
 			this.logger = logger;
 		}
 
@@ -50,13 +47,16 @@ namespace FishMMO.DiscordBot.Modules
 				return;
 			}
 
-			// Check if already linked
-			var existing = accountLinkingService.GetLinkedAccount(Context.User.Id);
-			if (existing != null)
+			// Check if already linked. The account name is not echoed: this reply may be in a public channel.
+			var existing = await accountLinkingService.GetLinkedAccountAsync(Context.User.Id);
+			if (!existing.IsSuccess)
 			{
-				await ReplyAsync(
-					$"Your Discord account is already linked to **{existing.CharacterName}** (Account: {existing.GameAccountName}). " +
-					$"Use `/unlink` to remove the link first.");
+				await ReplyAsync("An error occurred while checking your linked account. Please try again later.");
+				return;
+			}
+			if (existing.Data.HasValue)
+			{
+				await ReplyAsync("Your Discord account is already linked to a game account. Use `/unlink` to remove the link first.");
 				return;
 			}
 
@@ -80,10 +80,18 @@ namespace FishMMO.DiscordBot.Modules
 					return;
 				}
 
-				string? code = accountLinkingService.StartLinkRequest(Context.User.Id, characterName);
-				if (code == null)
+				var (status, code) = await accountLinkingService.StartLinkRequestAsync(
+					Context.User.Id,
+					DiscordVerificationRules.StoredUsernameFor(Context.User.Username, Context.User.Discriminator),
+					characterName);
+				if (status == LinkRequestStatus.AlreadyLinked)
 				{
-					await ReplyAsync("Unable to start linking. Your account may already be linked.");
+					await ReplyAsync("Unable to start linking. Your account is already linked.");
+					return;
+				}
+				if (status != LinkRequestStatus.Started || code == null)
+				{
+					await ReplyAsync("An error occurred while starting the link process.");
 					return;
 				}
 
@@ -130,14 +138,20 @@ namespace FishMMO.DiscordBot.Modules
 		[Summary("Removes the link between your Discord and game accounts.")]
 		public async Task UnlinkAsync()
 		{
-			bool removed = accountLinkingService.Unlink(Context.User.Id);
-			if (!removed)
+			var removed = await accountLinkingService.UnlinkAsync(Context.User.Id);
+			if (!removed.IsSuccess)
+			{
+				logger.LogError(
+					"Unlink failed for Discord user {UserId} ({ErrorCode}: {ErrorMessage}).",
+					Context.User.Id, removed.ErrorCode, removed.ErrorMessage);
+				await ReplyAsync("An error occurred while unlinking your account. Please try again later.");
+				return;
+			}
+			if (!removed.Data)
 			{
 				await ReplyAsync("Your Discord account is not linked to any game account.");
 				return;
 			}
-
-			await botConfigService.SavePersistentDataAsync();
 
 			logger.LogInformation(
 				"Discord user {User} ({UserId}) unlinked their game account.",

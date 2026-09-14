@@ -18,14 +18,31 @@
     UIDocument whose root fills the screen, so a root with a size but no position resolves to the
     top-left corner.
 
-    BOTH EDGES PINNED, so the frame occupies exactly the space that is free rather than a height
-    of its own. It used to be `top: 50%; translate: 0 -50%` — vertically centred — which is the
+    SIZED TO ITS MEMBERS, not to the gap it sits in. Every member of the party is always shown in
+    full, whatever the resolution, aspect ratio or interface scale, and the frame is allowed to
+    overlap other HUD panels to do it — an overlap is acceptable, a hidden member is not. It used
+    to pin BOTH edges (top 129, bottom 368), so its height was whatever the bottom-anchored stack
+    left over: one row of six visible at 16:9, and a 5-unit sliver at 21:9. Now the height is the
+    content's (max party 6: 44 header + 18 columns + 6 x 58 rows + 34 footer), capped only at the
+    full screen height, where the internal scroll takes over — which happens only when the whole
+    screen cannot hold six rows (e.g. 21:9 at interface scale 1.25). UITKParty.PlaceOnScreen pulls
+    the default top up from 129 just far enough to keep the frame on screen when it would
+    otherwise run off the bottom, and stands down for a position the player dragged to.
+
+    FREE-FLOATING (fish-panel--floating): no panel fill, no border, no header or footer bar, so
+    the roster reads as rows over the world rather than as a box covering it. The container keeps
+    its bounds, so dragging by the header, the stored position and the layout measurements work
+    as before; the header tints on hover to show where to grab. UITKThemeManager skips the panel,
+    header and footer surfaces of a floating panel, or a player theme would paint the box back in
+    as inline styles. Text over the world carries the --shadow-text-hard halo.
+
+    What follows is the history of the fixed offsets, kept because the neighbours still use them.
+    It used to be `top: 50%; translate: 0 -50%` — vertically centred — which is the
     one place that cannot work: the chat panel is anchored to the bottom and gives ground
     downward as the window shortens, so the two met in the middle. Measured at 1200x800 they
     overlapped by 420x1.5px, and the overlap is 64px at 16:9 (a 675-unit panel) and grows from
-    there as the screen gets wider. So the roster fills the gap instead: top at 129px, which is
-    8px under the target frame, and bottom at 368px, which is the toast stack's offset — the
-    frame ends where the toasts begin.
+    there as the screen gets wider. So the roster filled the gap instead: top at 129px, which is
+    8px under the target frame, and bottom at 368px, which is the toast stack's offset.
 
     The target frame is what sets 129 now, and it is a hard limit rather than a preference. It is
     centred and 536 wide, so it spans x332..868, and this frame's right edge at x454 is a long way
@@ -43,9 +60,8 @@
     width, so the panel is 1200 units wide at every aspect ratio and its height is whatever the
     screen gives — and that is a pass over every HUD panel rather than a number here.
 
-    It is the internal scroll that absorbs this. .party-scroll already flex-grows with a
-    min-height, so a frame given 288 units on a 16:10 screen shows more of a six-member party
-    than one given 163 on a 16:9 screen, and neither ever collides with anything.
+    That squeeze was absorbed by the internal scroll, which hid members; it is what the sizing
+    above replaces.
 
     Wider than the roster it replaced because it now carries four columns instead of three
     narrow ones. Sized against the 1200x800 reference resolution in PanelSettings.asset, so this
@@ -61,11 +77,62 @@
     position: absolute;
     left: 2%;
     top: 129px;
-    bottom: 368px;
     width: 430px;
-    max-height: 72%;
+    max-height: 100%;
     flex-direction: column;
     flex-shrink: 0;
+}
+
+/* ── Floating chrome ────────────────────────────────────── */
+
+/* Two classes, so these outrank the single-class theme rules they clear. */
+.fish-panel.party-panel {
+    background-color: var(--clear);
+    border-left-color: var(--clear);
+    border-right-color: var(--clear);
+    border-bottom-color: var(--clear);
+    border-top-color: var(--clear);
+}
+
+.party-panel > .party-header,
+.party-panel > .party-footer {
+    background-color: var(--clear);
+    border-bottom-color: var(--clear);
+    border-top-color: var(--clear);
+}
+
+/* The grab affordance: invisible until the pointer is over the handle. */
+.party-panel > .party-header:hover {
+    background-color: var(--brand-lo);
+    border-bottom-color: var(--brand-border);
+}
+
+.party-panel .party-columns {
+    background-color: var(--clear);
+    border-bottom-color: var(--clear);
+}
+
+/* Each member is its own translucent card; the frame around them stays clear. */
+.party-panel .party-member {
+    background-color: var(--surface-translucent);
+    border-bottom-color: var(--clear);
+    border-radius: 6px;
+}
+
+.party-panel .party-member:hover {
+    background-color: var(--scrim-80);
+}
+
+/* A halo on every line of text, so names and values read over snow and over shadow alike. */
+.party-panel Label {
+    text-shadow: 0 1px 3px var(--shadow-text-hard);
+}
+
+/* The panel-surface greys were chosen against --abyss-800; over the world they sink. */
+.party-panel .fish-panel__subtitle,
+.party-panel .fish-col-head,
+.party-panel .party-meter__caption {
+    color: var(--abyss-200);
 }
 
 /* ── Header ─────────────────────────────────────────────── */
@@ -158,14 +225,16 @@
 }
 
 .party-col--identity { width: 92px; }
-.party-col--bars     { width: 126px; }
+.party-col--bars     { width: 87px; }
 .party-col--meters   { width: 62px; }
 .party-col--effects  { flex-grow: 1; flex-shrink: 1; width: auto; }
 
 /* ── Body ───────────────────────────────────────────────── */
 
+/* Content height, shrinking only once the frame hits max-height: 100% of the screen. */
 .party-scroll {
-    flex-grow: 1;
+    flex-grow: 0;
+    flex-shrink: 1;
     min-height: 64px;
 }
 
@@ -174,20 +243,26 @@
 }
 
 /*
-    One roster band. The theme's .fish-row supplies the hover state and the
-    leading accent rail; this only sets the geometry.
+    One roster band, drawn as a card. The theme's .fish-row supplies the hover
+    state and the leading accent rail; this only sets the geometry (the card
+    fill is in the floating-chrome block above).
 
-    Height follows from the bars: three 16px tracks and two 2px gaps is 52px,
-    plus 3px of breathing room top and bottom. Fixed rather than derived so six
-    members always occupy the same space and the panel does not resize as buffs
-    come and go.
+    Height follows from the tallest column, the effects: two 22px strips and a
+    3px gap is 47px, plus 3px of card padding top and bottom. The bars were
+    that column once (three 16px tracks); at 8px they are 28 tall and no longer
+    decide it. Fixed rather than derived so six members always occupy the same
+    space and the panel does not resize as buffs come and go. The 4px margin is
+    the gap that separates one member's card from the next.
 */
 .party-member {
     flex-direction: row;
     align-items: center;
-    height: 58px;
-    padding-left: 10px;
-    padding-right: 10px;
+    height: 53px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-bottom: 4px;
     flex-shrink: 0;
 }
 
@@ -231,8 +306,9 @@
 
 /* ── Member: resource bars ──────────────────────────────── */
 
+/* 87 = the 79px track plus 8px of gutter; matches .party-col--bars. */
 .party-member__bars {
-    width: 126px;
+    width: 87px;
     flex-shrink: 0;
     flex-direction: column;
     justify-content: center;
@@ -240,12 +316,14 @@
 }
 
 /*
-    16px tall, stacked, health above mana above stamina. Tall enough that a
-    glance across six members compares depth rather than hue, which is the whole
-    reason a party frame has bars instead of numbers.
+    8px tall and 79 wide, stacked, health above mana above stamina: half the
+    height and two thirds the width of the 16x118 tracks they replaced, so the
+    roster covers less of the world. Still tall enough that a glance across six
+    members compares depth rather than hue, which is the reason a party frame
+    has bars instead of numbers.
 */
 .party-bar {
-    height: 16px;
+    height: 8px;
     position: relative;
     flex-shrink: 0;
 }
@@ -264,13 +342,17 @@
     width: 100%;
 }
 
+/* 7px to sit inside the 8px track. Padding and margin zeroed: a Label's default 11px box would
+   push the glyphs off a track this short. */
 .party-bar__label {
     position: absolute;
     left: 0;
     right: 0;
     top: 0;
     bottom: 0;
-    font-size: 9px;
+    font-size: 7px;
+    padding: 0;
+    margin: 0;
 }
 
 /* ── Member: output meters ──────────────────────────────── */

@@ -7,17 +7,25 @@ namespace FishMMO.ControlPanel.Services
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// A player chooses the channels they verify with at registration. A channel whose switch is
-	/// off is not asked for a code: it is marked proven through
-	/// <c>IAccountService.PersistChannelsVerifiedAsync</c>, which recomputes <c>verified</c>. A
-	/// server with both switches off verifies nothing, and registration takes the same
-	/// auto-verify path the development <see cref="PanelRegistrationOptions.AutoVerifyAccounts"/>
-	/// setting takes — one mechanism, not two.
+	/// A player chooses the channels they verify with at registration — email, SMS, a Discord DM, or
+	/// several — and a code goes out on each one this server switches on. <b>Any one correct code
+	/// verifies the account.</b> More channels give the player more ways to receive a code, never more
+	/// codes to enter. Which channels an account is actually sent and asked for is
+	/// <c>AccountVerificationRules</c>, shared with the login server, not anything decided here: when
+	/// nothing the player chose is switched on, the account falls back to one that is, so switching a
+	/// channel off never lets an account in without a code.
+	/// </para>
+	/// <para>
+	/// A server with every switch off verifies nothing, and registration takes the same auto-verify
+	/// path the development <see cref="PanelRegistrationOptions.AutoVerifyAccounts"/> setting takes —
+	/// one mechanism, not two. These switches must match the login server's <c>VerifyEmail</c>,
+	/// <c>VerifySms</c> and <c>VerifyDiscord</c>, or an account could be let into the game and refused
+	/// by the panel, or the other way round.
 	/// </para>
 	/// <para>
 	/// Unlike the development bypass these are honoured in Production. They are a deliberate
 	/// shard policy ("this shard does not verify phone numbers"), not a convenience that must not
-	/// escape a laptop, and a shard that turns both off is told so loudly at startup.
+	/// escape a laptop, and a shard that turns them all off is told so loudly at startup.
 	/// </para>
 	/// </remarks>
 	public sealed class VerificationOptions
@@ -28,13 +36,34 @@ namespace FishMMO.ControlPanel.Services
 		/// <summary>Whether phone numbers are verified with a texted code.</summary>
 		public bool Sms { get; init; } = true;
 
+		/// <summary>
+		/// Whether a Discord username can be verified with a code sent as a DM by the game's Discord bot.
+		/// </summary>
+		/// <remarks>
+		/// Only meaningful with the Discord bot running: the panel issues the code, and the bot delivers
+		/// it. Switched on with no bot, a player who chose only Discord is asked for a code nobody sends,
+		/// and the rule's fallback cannot help, because Discord counts as switched on.
+		/// </remarks>
+		public bool Discord { get; init; } = true;
+
+		/// <summary>
+		/// The invite link to the game's Discord server, shown beside the Discord username field. Empty for none.
+		/// </summary>
+		/// <remarks>
+		/// The bot can only message members of a server it shares with the player, so the player has to
+		/// join first. It is published only when it is an <c>https://</c> link; anything else is dropped
+		/// at startup rather than rendered as a link on an anonymous page.
+		/// </remarks>
+		public string DiscordInviteUrl { get; init; } = "";
+
 		/// <summary>The channels this server sends codes for.</summary>
 		public AccountVerificationChannels Enabled =>
 			(Email ? AccountVerificationChannels.Email : AccountVerificationChannels.None) |
-			(Sms ? AccountVerificationChannels.Sms : AccountVerificationChannels.None);
+			(Sms ? AccountVerificationChannels.Sms : AccountVerificationChannels.None) |
+			(Discord ? AccountVerificationChannels.Discord : AccountVerificationChannels.None);
 
 		/// <summary>True when no channel is verified at all.</summary>
-		public bool VerifiesNothing => !Email && !Sms;
+		public bool VerifiesNothing => !Email && !Sms && !Discord;
 	}
 
 	/// <summary>

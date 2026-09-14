@@ -20,12 +20,18 @@
                         <ui:DropdownField name="register-age" class="fish-dropdown register-dropdown" />
                         <!--
                             How the account proves its contact details. Email is on by default; SMS needs
-                            the phone number in the optional column. The server decides which of these it
-                            actually checks (VerifyEmail and VerifySms in LoginServer.cfg).
+                            the phone number in the optional column, Discord the username below. A code goes
+                            out on each choice the server checks (VerifyEmail, VerifySms and VerifyDiscord in
+                            LoginServer.cfg), and any one of them verifies the account. The invite hint stays
+                            hidden unless the panel has an invite link.
                         -->
                         <ui:Label text="Verify my account by" class="fish-label fish-label--caption register-field-label" />
                         <ui:Toggle name="register-verify-email" text="Email" value="true" class="fish-toggle register-toggle" />
                         <ui:Toggle name="register-verify-sms" text="SMS (needs a phone number)" class="fish-toggle register-toggle" />
+                        <ui:Toggle name="register-verify-discord" text="Discord message (needs a Discord username)" class="fish-toggle register-toggle" />
+                        <ui:Label text="Discord username (e.g. fishfan or FishFan#1234)" class="fish-label fish-label--caption register-field-label" />
+                        <ui:TextField name="register-discord" class="fish-input register-input" />
+                        <ui:Label name="register-discord-hint" text="" style="display: none;" class="fish-label fish-label--muted register-field-label" />
                     </ui:VisualElement>
                     <ui:VisualElement name="register-column-optional" class="register-column">
                         <ui:Label text="Optional details" class="fish-label fish-label--accent register-section-caption" />

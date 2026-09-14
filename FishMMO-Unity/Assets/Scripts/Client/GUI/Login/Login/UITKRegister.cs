@@ -72,6 +72,12 @@ namespace FishMMO.Client
 		private const string VERIFY_EMAIL_NAME = "register-verify-email";
 		/// <summary>Verify-by-SMS toggle.</summary>
 		private const string VERIFY_SMS_NAME = "register-verify-sms";
+		/// <summary>Verify-by-Discord toggle.</summary>
+		private const string VERIFY_DISCORD_NAME = "register-verify-discord";
+		/// <summary>Discord username field; needed only to verify by Discord.</summary>
+		private const string DISCORD_NAME = "register-discord";
+		/// <summary>Where to join the game's Discord server; hidden unless an invite link is set.</summary>
+		private const string DISCORD_HINT_NAME = "register-discord-hint";
 		/// <summary>Digits in a verification code; a complete one submits itself.</summary>
 		private const int VerificationCodeLength = 6;
 
@@ -103,12 +109,21 @@ namespace FishMMO.Client
 		private TextField betaCode;
 		private Toggle verifyByEmail;
 		private Toggle verifyBySms;
+		private Toggle verifyByDiscord;
+		private TextField discordUsername;
+		private Label discordHint;
 
 		/// <summary>
-		/// The code to ask for once the two-factor setup has been shown: email unless the server said
-		/// only the SMS code is owed.
+		/// The invite link to the game's Discord server, shown beside the Discord username field.
 		/// </summary>
-		private VerificationCodeChannel nextVerificationChannel = VerificationCodeChannel.Email;
+		/// <remarks>
+		/// A player who verifies by Discord must be in that server: the bot can only message members of a
+		/// server it shares with them, and only finds a username among its own server's members. Empty hides
+		/// the hint. Only an https link is shown or opened.
+		/// </remarks>
+		[SerializeField]
+		[Tooltip("https invite link to the Discord server the FishMMO Discord bot runs in. Empty hides the hint.")]
+		private string discordInviteUrl = "";
 
 		/// <summary>
 		/// True when the server answered account creation with AccountVerified (no code owed on any
@@ -180,6 +195,10 @@ namespace FishMMO.Client
 			betaCode = Root.Q<TextField>(BETA_CODE_NAME);
 			verifyByEmail = Root.Q<Toggle>(VERIFY_EMAIL_NAME);
 			verifyBySms = Root.Q<Toggle>(VERIFY_SMS_NAME);
+			verifyByDiscord = Root.Q<Toggle>(VERIFY_DISCORD_NAME);
+			discordUsername = Root.Q<TextField>(DISCORD_NAME);
+			discordHint = Root.Q<Label>(DISCORD_HINT_NAME);
+			ApplyDiscordInvite();
 
 			if (password != null)
 			{
@@ -211,7 +230,7 @@ namespace FishMMO.Client
 			// Enter registers, Escape goes back to the sign-in screen. Enter observes the same
 			// lock as the Register button it mirrors; see LoginKeys.Attach.
 			LoginKeys.Attach(this, Root, OnClick_Register, OnClick_QuitToLogin, () => !replyGuard.IsPending);
-			LoginKeys.SetTabOrder(Root, username, email, password, ageSelect, verifyByEmail, verifyBySms,
+			LoginKeys.SetTabOrder(Root, username, email, password, ageSelect, verifyByEmail, verifyBySms, verifyByDiscord, discordUsername,
 				phone, country, realName, address, referral, betaCode, registerButton, quitToLoginButton);
 		}
 
@@ -351,14 +370,15 @@ namespace FishMMO.Client
 					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					OnRegistrationDialog(this.accountCreated
-						? "That verification code was not accepted.\n\nYour account exists: sign in with it to enter a code again. Codes expire after 24 hours."
+						? "That verification code was not accepted.\n\nYour account exists: sign in with it to enter a code again. After three incorrect codes a support ticket is opened for your account, and staff will contact you by email."
 						: "Invalid Username or Password.");
 					break;
 				case ClientAuthenticationResult.BetaCodeInvalid:
 					OnRegistrationDialog("That beta code is not valid.\n\nThis server is running a closed test, and a valid beta code is needed to create an account.");
 					break;
 				case ClientAuthenticationResult.AccountDetailsInvalid:
-					OnRegistrationDialog("Some of the optional details were not accepted.\n\nCheck that the phone number starts with its country code (for example +44), and try again.");
+					OnRegistrationDialog("Some of the details were not accepted.\n\nCheck that the phone number starts with its country code (for example +44) and that the Discord username is written as it appears on your profile. " +
+						"If you chose to verify by SMS or Discord, fill in the phone number or Discord username it needs: this server has to be able to send you a verification code.");
 					break;
 				case ClientAuthenticationResult.Banned:
 					OnRegistrationDialog("Account creation failed. Please contact the system administrator.");
@@ -376,7 +396,7 @@ namespace FishMMO.Client
 					/* The account exists and is waiting for its code. Registering again cannot
 					 * help, but the verification prompt can — it is the same code, and the same
 					 * account name is already in pendingVerifyUsername. */
-					OpenVerifyCodeDialog(VerificationCodeChannel.Email);
+					OpenVerifyCodeDialog();
 					break;
 				case ClientAuthenticationResult.TokenInvalid:
 				case ClientAuthenticationResult.TokenExpired:
@@ -430,18 +450,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// PhoneUnverified: as the answer to account creation, the SMS code is the only one owed; after
-		/// a correct email code, the SMS code is owed next.
+		/// PhoneUnverified, from a server one release behind that still asked for codes one channel at a
+		/// time. Any one code verifies the account now, so it means what AccountCreated means before the
+		/// account exists and what AccountUnverified means after.
 		/// </summary>
 		private void OnPhoneUnverifiedResult()
 		{
 			if (!this.accountCreated)
 			{
 				OnAccountCreated();
-				nextVerificationChannel = VerificationCodeChannel.Sms;
 				return;
 			}
-			OpenVerifyCodeDialog(VerificationCodeChannel.Sms);
+			OpenVerifyCodeDialog();
 		}
 
 		/// <summary>
@@ -455,7 +475,7 @@ namespace FishMMO.Client
 				OnAccountVerified();
 				return;
 			}
-			OpenVerifyCodeDialog(nextVerificationChannel);
+			OpenVerifyCodeDialog();
 		}
 
 		/// <summary>
@@ -467,7 +487,6 @@ namespace FishMMO.Client
 			 * by verifying the email, so the flag below turns the reply timeout from "give up"
 			 * into "skip the step that went missing". */
 			this.accountCreated = true;
-			nextVerificationChannel = VerificationCodeChannel.Email;
 
 			SetFormLocked(true);
 
@@ -664,17 +683,16 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Opens the verification code input dialog for the given channel.
+		/// Opens the verification code input dialog. One prompt for every channel: the server tries the code
+		/// against every code the account holds, and any one of them verifies it.
 		/// </summary>
-		/// <param name="channel">Whether the code was emailed or sent by SMS.</param>
-		private void OpenVerifyCodeDialog(VerificationCodeChannel channel)
+		private void OpenVerifyCodeDialog()
 		{
 			// Waiting on the player, not on the server. See OnTwoFactorSetupReceived.
 			replyGuard.Clear();
 
-			string prompt = channel == VerificationCodeChannel.Sms
-				? "Please enter the verification code sent to your phone by SMS."
-				: "Please enter the verification code sent to your email.";
+			const string prompt = "Enter the verification code we sent you. It may arrive by email, by text message, or as a " +
+				"direct message from our Discord bot once you are in our Discord server. Any one of them verifies your account.";
 
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
@@ -685,7 +703,7 @@ namespace FishMMO.Client
 					{
 						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))
 						{
-							Client.LoginAuthenticator.SendVerifyCode(pendingVerifyUsername, code.Trim(), channel);
+							Client.LoginAuthenticator.SendVerifyCode(pendingVerifyUsername, code.Trim(), VerificationCodeChannel.Email);
 
 							// A request is outstanding again; restart the clock.
 							replyGuard.Begin();
@@ -1036,7 +1054,6 @@ namespace FishMMO.Client
 			(servers, token) =>
 			{
 				pendingVerifyUsername = usernameText;
-				nextVerificationChannel = VerificationCodeChannel.Email;
 				verificationCompleteAtCreation = false;
 				twoFactorSetupShown = false;
 					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
@@ -1165,7 +1182,7 @@ namespace FishMMO.Client
 			{
 				ageSelect.index = 0;
 			}
-			foreach (TextField field in new[] { phone, country, realName, address, referral, betaCode })
+			foreach (TextField field in new[] { phone, country, realName, address, referral, betaCode, discordUsername })
 			{
 				if (field != null)
 				{
@@ -1175,12 +1192,51 @@ namespace FishMMO.Client
 			ResetVerificationChoice();
 		}
 
-		/// <summary>Email verification on, SMS off: the choice every player starts with.</summary>
+		/// <summary>
+		/// Shows where to join the game's Discord server, when this client has an invite link. See
+		/// <see cref="discordInviteUrl"/>.
+		/// </summary>
+		private void ApplyDiscordInvite()
+		{
+			if (discordHint == null)
+			{
+				return;
+			}
+
+			string url = InviteLink();
+			discordHint.style.display = url != null ? DisplayStyle.Flex : DisplayStyle.None;
+			if (url == null)
+			{
+				return;
+			}
+			discordHint.text = $"Join our Discord server first so the bot can message you: {url}";
+			// A method group, so a second OnStarting over the same tree does not open the link twice.
+			discordHint.RegisterCallback<ClickEvent>(OnDiscordHintClicked);
+		}
+
+		/// <summary>The configured invite link when it is an https link, otherwise null.</summary>
+		private string InviteLink()
+		{
+			string url = discordInviteUrl == null ? null : discordInviteUrl.Trim();
+			return !string.IsNullOrEmpty(url) && url.StartsWith("https://", System.StringComparison.OrdinalIgnoreCase) ? url : null;
+		}
+
+		private void OnDiscordHintClicked(ClickEvent evt)
+		{
+			string url = InviteLink();
+			if (url != null)
+			{
+				Application.OpenURL(url);
+			}
+		}
+
+		/// <summary>Email verification on, SMS and Discord off: the choice every player starts with.</summary>
 		private void ResetVerificationChoice()
 		{
 			// SetValueWithoutNotify: nothing listens today, and a reset must never look like a choice.
 			verifyByEmail?.SetValueWithoutNotify(true);
 			verifyBySms?.SetValueWithoutNotify(false);
+			verifyByDiscord?.SetValueWithoutNotify(false);
 		}
 
 		/// <summary>Reads the optional details and the verification choice off the form.</summary>
@@ -1195,6 +1251,10 @@ namespace FishMMO.Client
 			{
 				channels |= RegistrationVerificationChannels.Sms;
 			}
+			if (verifyByDiscord != null && verifyByDiscord.value)
+			{
+				channels |= RegistrationVerificationChannels.Discord;
+			}
 
 			return new RegistrationProfile
 			{
@@ -1203,6 +1263,7 @@ namespace FishMMO.Client
 				RealName = NullIfBlank(realName),
 				Address = NullIfBlank(address),
 				ReferralAccount = NullIfBlank(referral),
+				DiscordUsername = NullIfBlank(discordUsername),
 				BetaCode = NullIfBlank(betaCode),
 				VerificationChannels = channels,
 			};
@@ -1354,7 +1415,7 @@ namespace FishMMO.Client
 			{
 				ageSelect.SetEnabled(interactable);
 			}
-			foreach (VisualElement control in new VisualElement[] { phone, country, realName, address, referral, betaCode, verifyByEmail, verifyBySms })
+			foreach (VisualElement control in new VisualElement[] { phone, country, realName, address, referral, betaCode, verifyByEmail, verifyBySms, verifyByDiscord, discordUsername })
 			{
 				control?.SetEnabled(interactable);
 			}

@@ -1,3 +1,4 @@
+using FishMMO.Database.Data.Enums;
 using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation
@@ -5,11 +6,11 @@ namespace FishMMO.Server.Implementation
 	/// <summary>
 	/// Single source of truth for whether, and on which channels, new accounts must prove their
 	/// contact details: the development-only <c>AutoVerifyAccounts</c> bypass and the per-channel
-	/// <c>VerifyEmail</c> / <c>VerifySms</c> switches.
+	/// <c>VerifyEmail</c> / <c>VerifySms</c> / <c>VerifyDiscord</c> switches. Which codes an account is
+	/// then sent and asked for is <c>AccountVerificationRules</c>, shared with the Control Panel.
 	///
 	/// Two call sites must agree on these answers:
-	///   * Account creation, which decides which codes to send, which chosen channels to mark
-	///     proven without a code, and whether to verify the account outright.
+	///   * Account creation, which decides which codes to send and whether to verify the account outright.
 	///   * The login lookup, which otherwise rejects an unverified account. Without the login side
 	///     honouring the same switches, an account created before a switch changed would be asked
 	///     for a code no server will ever send, or let in without one it still owes.
@@ -19,12 +20,14 @@ namespace FishMMO.Server.Implementation
 	///   <item><c>AutoVerifyAccounts=true</c> (editor and development builds only): every account is
 	///   verified at creation, no code is sent, and authenticator enrolment is skipped. Unchanged
 	///   from before the channel switches existed.</item>
-	///   <item><c>VerifyEmail</c> / <c>VerifySms</c>: a channel the player chose whose switch is false
-	///   is marked proven without a code. When both are false, every new account is verified at
-	///   creation through the same database write the bypass uses — but, unlike the bypass, it is
-	///   still enrolled in two-factor authentication, because these switches are allowed in a
-	///   production build and must not quietly turn the second factor off with them.</item>
-	///   <item>Otherwise a code goes out on each chosen channel that is switched on.</item>
+	///   <item><c>VerifyEmail</c> / <c>VerifySms</c> / <c>VerifyDiscord</c> say which channels this server
+	///   sends codes on. When all three are false, every new account is verified at creation through
+	///   the same database write the bypass uses — but, unlike the bypass, it is still enrolled in
+	///   two-factor authentication, because these switches are allowed in a production build and must
+	///   not quietly turn the second factor off with them.</item>
+	///   <item>Otherwise a code goes out on each channel the player chose that is switched on and the
+	///   account can receive, falling back to email; <b>any one code verifies the account</b>, and
+	///   there is no grace period: sign-in asks for a code until one is entered.</item>
 	/// </list>
 	///
 	/// The compile-time guard on <see cref="IsAutoVerifyEnabled"/> is deliberate: a production player
@@ -44,6 +47,9 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>Configuration key switching SMS-code verification on or off. Default true.</summary>
 		public const string VerifySmsKey = "VerifySms";
+
+		/// <summary>Configuration key switching Discord-DM verification on or off. Default true.</summary>
+		public const string VerifyDiscordKey = "VerifyDiscord";
 
 		/// <summary>
 		/// Returns <c>true</c> when new accounts should be verified on creation and unverified
@@ -83,6 +89,19 @@ namespace FishMMO.Server.Implementation
 		/// <param name="configuration">Server configuration; null counts as switched on.</param>
 		public static bool IsSmsVerificationEnabled(IServerConfiguration configuration) =>
 			IsChannelEnabled(configuration, VerifySmsKey);
+
+		/// <summary>Whether a player who chose Discord verification must enter the code the Discord bot sent.</summary>
+		/// <remarks>Needs FishMMO-DiscordBot running against the same database: it delivers the code.</remarks>
+		/// <param name="configuration">Server configuration; null counts as switched on.</param>
+		public static bool IsDiscordVerificationEnabled(IServerConfiguration configuration) =>
+			IsChannelEnabled(configuration, VerifyDiscordKey);
+
+		/// <summary>The channels this server sends verification codes on.</summary>
+		/// <param name="configuration">Server configuration; null counts as every channel switched on.</param>
+		public static AccountVerificationChannels EnabledChannels(IServerConfiguration configuration) =>
+			(IsEmailVerificationEnabled(configuration) ? AccountVerificationChannels.Email : AccountVerificationChannels.None) |
+			(IsSmsVerificationEnabled(configuration) ? AccountVerificationChannels.Sms : AccountVerificationChannels.None) |
+			(IsDiscordVerificationEnabled(configuration) ? AccountVerificationChannels.Discord : AccountVerificationChannels.None);
 
 		/// <summary>
 		/// Whether the sign-in path owes a fresh SMS verification code: none was ever issued (null), or

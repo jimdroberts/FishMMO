@@ -36,6 +36,7 @@ namespace FishMMO.UnitTests
 		private UITKTrade trade;
 		private UIDocument document;
 		private PanelSettings sharedSettings;
+		private RenderTexture target;
 		private readonly List<Object> assets = new List<Object>();
 
 		private StackableTestTemplate arrows;
@@ -53,6 +54,13 @@ namespace FishMMO.UnitTests
 			LogAssert.IsNotNull(uxml, $"the trade UXML must exist at {UxmlPath}");
 
 			sharedSettings = Object.Instantiate(settings);
+
+			/* A 1200x800 target, so one panel unit is one pixel. PanelSettings scales with the
+			 * screen, and on the editor's own 640x480 surface every length is snapped at 0.53
+			 * pixels per unit — the 22px box below then lays out at 22.5 because of the harness. */
+			target = new RenderTexture(1200, 800, 24, RenderTextureFormat.ARGB32);
+			target.Create();
+			sharedSettings.targetTexture = target;
 
 			host = new GameObject("UITrade");
 			document = host.AddComponent<UIDocument>();
@@ -102,6 +110,11 @@ namespace FishMMO.UnitTests
 			if (sharedSettings != null)
 			{
 				Object.DestroyImmediate(sharedSettings);
+			}
+			if (target != null)
+			{
+				target.Release();
+				Object.DestroyImmediate(target);
 			}
 		}
 

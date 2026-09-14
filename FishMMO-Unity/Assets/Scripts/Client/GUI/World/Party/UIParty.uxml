@@ -2,7 +2,7 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="../Buff/UIBuffContainer.uss" />
     <Style src="UIParty.uss" />
-    <ui:VisualElement name="party-root" class="fish-panel party-panel">
+    <ui:VisualElement name="party-root" class="fish-panel fish-panel--floating party-panel">
 
         <ui:VisualElement name="panel-header" class="fish-panel__header party-header">
             <ui:VisualElement class="fish-panel__icon party-header__icon" />

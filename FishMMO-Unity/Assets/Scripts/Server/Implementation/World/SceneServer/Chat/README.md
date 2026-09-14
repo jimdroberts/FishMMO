@@ -57,6 +57,7 @@ Four architectural features keep the chat pipeline responsive under extreme load
 - Command extraction and routing via `ChatHelper` command registry, keyed **including** the leading slash and matched case-insensitively
 - **Per-command access levels** — commands are registered with a minimum `AccessLevel`, enforced in `ChatHelper.TryParseCommand` against the character's own level as loaded from its database row. A command the sender may not run is *consumed*, not rejected: it is neither executed nor echoed to a channel, and the response is indistinguishable from an unknown command, so command names cannot be probed. Every refusal is reported through `ChatHelper.OnCommandRefused` and logged with the character and account that tried it
 - **Every elevated command is audited.** `ChatHelper.TryParseCommand` raises `OnElevatedCommand` for any command registered above `Player`, and `ChatSystem.Audit.cs` writes a row to `admin_audit_log` — the same table the Control Panel writes to, so "show me everything this person did" is one query rather than two. Refusals are recorded as well as successes: a player probing for admin command names produces a run of refusals against one account, which is the pattern the log exists to make visible. The actor is the **account**, not the character, so one operator's history is not split across every character they own. Recording happens at the gate rather than inside each handler, so a command added later is audited because it was registered with an elevated level and not because its author remembered
+- **`/help [command]`** (`ChatSystem.Help.cs`) — lists every command the caller may run, or describes one. Registered at `AccessLevel.Player`, so it is not audited. The listing is built by `ChatCommandHelpListing` from the caller's server-loaded `AccessLevel` with the access gate's own test: a player never sees `/gm`, `/admin` or any other elevated command, and a game master never sees `/admin`. `/gm` and `/admin` are listed as one entry each pointing at their own `help`; no sub-command is named. `/help <command>` answers a command above the caller exactly as it answers one that does not exist. Help text is attached with `ChatHelper.SetCommandHelp` beside each `AddCommands` (channel commands: `ChatHelper.ChannelCommandHelp`), and `ChatHelpCommandTests` fails when a registered word is not described.
 - **Player support commands** — `/report`, `/bug`, `/helpme` and `/tickets`, all registered at `AccessLevel.Player` and filed against `ISupportTicketService`. The subject is derived from the first 60 characters (or built as `Report: <name>`) so a player never has to type two fields into a chat line; the body is what they typed. Flood control (5 unfinished tickets per account, 60-second cooldown) belongs to the service, and its refusal message is surfaced to the player verbatim rather than paraphrased. **No audit row is written**: these are Player-level commands, the audit hook at the access gate deliberately ignores them, and a player asking for help is not an operator action
 - **Authoritative sender resolution** — the sender is taken from `ICharacterMappingData.ConnectionCharacters` (populated by the character load pipeline from the database) rather than from `conn.FirstObject`, so a command's authorisation can never be decided from a network-deserialised payload
 - Post-prepend length enforcement capped at `maxMessageLength + MaxChannelIdPrefixLength` (22 chars)
@@ -263,7 +264,7 @@ Registered in `InitializeOnce` via `RegisterSupportCommands` and removed in `OnD
 | `/helpme` | `/helpme <what you need>` | `Help` |
 | `/tickets` | `/tickets` | (lists the caller's own unfinished tickets) |
 
-`/helpme` rather than `/help`: nothing registers `/help` today, but it is the obvious name for a command that lists commands, and taking it for a ticket filing would force whoever writes that listing later either to collide with support or to rename a command players have already learned.
+`/helpme` rather than `/help`: `/help` is the command listing (see above).
 
 **Filing** (`/report`, `/bug`, `/helpme`):
 - Refuses, with the usage line, when the description is empty — and `/report` also when it names nobody, or names the caller.
@@ -493,6 +494,8 @@ Chat/
 ├── ChatSystem.LocalChat.cs             # Partial: Region (scene-scoped) and Say (observer-scoped) broadcast handlers
 ├── ChatSystem.TellChat.cs              # Partial: Tell (private whisper) async target resolution handler
 ├── ChatSystem.SupportCommands.cs       # Partial: /report, /bug, /helpme, /tickets player support commands
+├── ChatSystem.Help.cs                  # Partial: /help, the access-level guarded command listing
+├── ChatCommandHelpListing.cs           # Pure /help text builder (visibility, grouping, no-oracle topic answer)
 ├── ChatSystem.WorldChat.cs             # Partial: World and Trade outbound-batched channel handlers + BroadcastToWorld
 ├── ChatSystemRuntimeData.cs           # Polling cursor state, lock-free queues, outbound buffers, broadcast scratch buffers
 ├── ChatSystemMainThreadQueueData.cs   # Per-system main-thread action queue container

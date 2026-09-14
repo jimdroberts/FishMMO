@@ -245,40 +245,51 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Sets the temporary Discord link verification code for an account.
-		/// The Discord bot generates this code; the user verifies in-game with /verify.
+		/// Issues the account's Discord verification code and wakes the Discord bot to deliver it.
 		/// </summary>
-		/// <param name="accountName">The account name.</param>
-		/// <param name="linkCode">The link code, or null to clear after verification.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>DatabaseResult indicating success or failure.</returns>
-		Task<DatabaseResult> PersistDiscordLinkCodeAsync(
-			string accountName,
-			string? linkCode,
-			CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Fetches an account by its Discord link code for verification.
-		/// Used by the Discord bot to confirm in-game verification.
-		/// </summary>
-		/// <param name="linkCode">The Discord link code to search for.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>DatabaseResult containing the AccountData if found, or null.</returns>
-		Task<DatabaseResult<AccountData?>> FetchByDiscordLinkCodeAsync(
-			string linkCode,
-			CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Sets the verified status for an account.
-		/// Called when the user provides the correct verify code from the email verification link.
-		/// </summary>
-		/// <param name="accountName">The account name.</param>
-		/// <param name="verifyCode">The verification code the user provided. Must match the stored verify code.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>DatabaseResult indicating success or failure.</returns>
-		Task<DatabaseResult> PersistVerifiedAsync(
+		/// <remarks>
+		/// Once per account, ever. Nothing is written when a code was already issued, the DM has been sent
+		/// or taken by the bot, the account has no Discord username, or it is already verified: the one DM
+		/// carries this code, and replacing it would strand a DM nobody will ever resend. See
+		/// <see cref="DiscordVerification"/>.
+		/// </remarks>
+		/// <returns>True when this call issued the code.</returns>
+		Task<DatabaseResult<bool>> PersistDiscordVerifyCodeAsync(
 			string accountName,
 			int verifyCode,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Redeems a verification code from any channel, in one conditional update.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The code is matched against every code the account holds — email, SMS and Discord — and a match
+		/// on any one of them verifies the account. The update also clears every other outstanding code and
+		/// the failed-code count. A Discord match links the account to the Discord user the DM reached,
+		/// unless that user is already linked to a different account, in which case it does not match.
+		/// </para>
+		/// <para>
+		/// Only an unverified account can match. A wrong code, an expired one, an unknown account and a
+		/// verified account all fail with the same validation error.
+		/// </para>
+		/// </remarks>
+		/// <returns>The channel or channels the code proved.</returns>
+		Task<DatabaseResult<FishMMO.Database.Data.Enums.AccountVerificationChannels>> PersistVerifiedByCodeAsync(
+			string accountName,
+			int verifyCode,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Counts an incorrect verification code against an unverified account.
+		/// </summary>
+		/// <remarks>
+		/// In the database, so the login servers and the panel share one count. Callers go through
+		/// <c>VerificationFailureTicket.RecordAsync</c>, which opens the support ticket.
+		/// </remarks>
+		/// <returns>The count since the last correct code, or 0 for an unknown or already verified account.</returns>
+		Task<DatabaseResult<int>> RecordVerificationFailureAsync(
+			string accountName,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
@@ -524,19 +535,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> PersistProfileAsync(string accountName, AccountProfileData profile, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Marks channels proven without a code, for a server that has switched their verification off,
-		/// and recomputes <c>verified</c>. The SMS channel is only marked when a number is on record.
+		/// Verifies an account without a code: marks the given channels proven and sets <c>verified</c>.
+		/// The SMS channel is only marked when a number is on record; Discord is never marked, because a
+		/// proven Discord channel means a linked Discord user.
 		/// </summary>
+		/// <remarks>
+		/// For an account <see cref="AccountVerificationRules.IsWaived"/> — verification is required but no
+		/// enabled channel can reach it. Server-initiated only; never reachable from a client-supplied value.
+		/// </remarks>
 		Task<DatabaseResult> PersistChannelsVerifiedAsync(string accountName, FishMMO.Database.Data.Enums.AccountVerificationChannels channels, CancellationToken cancellationToken = default);
 
 		/// <summary>Records an outstanding SMS verification code. Refused when the account has no number.</summary>
 		Task<DatabaseResult> PersistPhoneVerifyCodeAsync(string accountName, int verifyCode, DateTime expiresUtc, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Redeems an SMS verification code in one conditional update, proving the phone channel and
-		/// setting <c>verified</c> once every chosen channel is proven.
-		/// </summary>
-		Task<DatabaseResult> PersistPhoneVerifiedAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Counts one failed sign-in step and locks that step once <paramref name="threshold"/> failures

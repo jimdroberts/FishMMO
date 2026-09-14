@@ -39,6 +39,7 @@ namespace FishMMO.UnitTests
 		private UITKMerchant merchant;
 		private UIDocument document;
 		private PanelSettings sharedSettings;
+		private RenderTexture target;
 
 		[SetUp]
 		public void SetUp()
@@ -49,6 +50,14 @@ namespace FishMMO.UnitTests
 			LogAssert.IsNotNull(uxml, $"the merchant UXML must exist at {UxmlPath}");
 
 			sharedSettings = Object.Instantiate(settings);
+
+			/* A 1200x800 target, so one panel unit is one pixel. PanelSettings scales with the
+			 * screen, and left to the editor's own 640x480 surface a hand-mounted panel runs at
+			 * 0.53 pixels per unit, where every length is snapped to whole pixels — the 22px box
+			 * below then lays out at 22.5 for reasons that belong to the harness, not the panel. */
+			target = new RenderTexture(1200, 800, 24, RenderTextureFormat.ARGB32);
+			target.Create();
+			sharedSettings.targetTexture = target;
 
 			host = new GameObject("UIMerchant");
 			document = host.AddComponent<UIDocument>();
@@ -80,6 +89,15 @@ namespace FishMMO.UnitTests
 			if (host != null)
 			{
 				Object.DestroyImmediate(host);
+			}
+			if (sharedSettings != null)
+			{
+				Object.DestroyImmediate(sharedSettings);
+			}
+			if (target != null)
+			{
+				target.Release();
+				Object.DestroyImmediate(target);
 			}
 		}
 

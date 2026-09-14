@@ -126,10 +126,17 @@ builder.Services.AddSingleton(registrationOptions);
 
 /* Account security policy (issue #252). Each is read once at startup; see the README's
  * Configuration table for what every key does. */
+/* The Discord invite is rendered as a link on the anonymous registration page, so only an https://
+ * link is published; anything else is dropped here and said once at startup, below. */
+string discordInviteUrl = (builder.Configuration.GetValue("Verification:DiscordInviteUrl", "") ?? "").Trim();
+bool discordInviteRejected = discordInviteUrl.Length > 0 &&
+							 !discordInviteUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 var verificationOptions = new VerificationOptions
 {
 	Email = builder.Configuration.GetValue("Verification:Email", true),
 	Sms = builder.Configuration.GetValue("Verification:Sms", true),
+	Discord = builder.Configuration.GetValue("Verification:Discord", true),
+	DiscordInviteUrl = discordInviteRejected ? "" : discordInviteUrl,
 };
 builder.Services.AddSingleton(verificationOptions);
 builder.Services.AddSingleton(new BetaOptions
@@ -301,7 +308,17 @@ if (verificationOptions.VerifiesNothing)
 {
 	/* Legal, and sometimes intended — but it means every new account is verified on creation and
 	 * every unverified account is let in, so it is said once, loudly, rather than discovered. */
-	app.Logger.LogWarning("Verification:Email and Verification:Sms are both off: accounts are verified on creation and no verification code is ever sent.");
+	app.Logger.LogWarning("Verification:Email, Verification:Sms and Verification:Discord are all off: accounts are verified on creation and no verification code is ever sent.");
+}
+if (discordInviteRejected)
+{
+	app.Logger.LogWarning("Verification:DiscordInviteUrl is not an https:// link and was ignored: the registration form shows no Discord invite.");
+}
+if (verificationOptions.Discord && !verificationOptions.VerifiesNothing && verificationOptions.DiscordInviteUrl.Length == 0)
+{
+	/* Not an error — a player may already be in the server — but the bot can only message members,
+	 * and without the link the form cannot tell anyone where to join. */
+	app.Logger.LogWarning("Verification:Discord is on but Verification:DiscordInviteUrl is empty: players choosing Discord are not shown where to join the Discord server.");
 }
 
 /* The TOTP master KEK, loaded once before the host serves anything. It is the same

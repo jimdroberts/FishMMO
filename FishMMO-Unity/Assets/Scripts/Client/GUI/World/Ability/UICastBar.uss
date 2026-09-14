@@ -23,10 +23,16 @@
     outward from the centre, then the cast bar above both. Every offset in this block is measured
     from the bottom so the whole thing tracks the hotkey bar — itself bottom-anchored — instead
     of drifting with the aspect ratio.
+
+    Centred by `left: 50%` and a translate of half its FIXED width, not by the old absolute
+    left:500, which is centred only in a 1200-unit panel and sat 150 units off at interface scale
+    0.8 (a 1500-unit panel). A px translate is safe here: the width never changes, and the cast bar
+    is not draggable, so there is no stored left/top for the offset to shift.
 */
 .castbar-root {
     position: absolute;
-    left: 500px;
+    left: 50%;
+    translate: -100px 0;
     bottom: 132px;
     width: 200px;
     height: 22px;

@@ -278,7 +278,8 @@ namespace FishMMO.UnitTests
 					RealName = "Zoë Ångström",
 					Address = "1 High Street\nLondon",
 					ReferralAccount = "old_friend",
-					VerificationChannels = RegistrationVerificationChannels.Email | RegistrationVerificationChannels.Sms,
+					DiscordUsername = "Zoë Ångström#1234",
+					VerificationChannels = RegistrationVerificationChannels.Email | RegistrationVerificationChannels.Sms | RegistrationVerificationChannels.Discord,
 				};
 
 				LogAssert.IsTrue(h.Client.SetLoginCredentials("frank", "p@ssword1!", register: true, email: "frank@example.test", age: 21, profile: sentProfile),
@@ -310,6 +311,7 @@ namespace FishMMO.UnitTests
 				LogAssert.AreEqual(sentProfile.RealName, received.RealName, "RealName (non-ASCII)");
 				LogAssert.AreEqual(sentProfile.Address, received.Address, "Address (with a line break)");
 				LogAssert.AreEqual(sentProfile.ReferralAccount, received.ReferralAccount, "ReferralAccount");
+				LogAssert.AreEqual(sentProfile.DiscordUsername, received.DiscordUsername, "DiscordUsername (non-ASCII, with a discriminator)");
 				LogAssert.AreEqual(sentProfile.VerificationChannels, received.VerificationChannels, "VerificationChannels");
 
 				// The six sequences were consumed: replaying the same message must fail, not decrypt twice.
@@ -362,6 +364,32 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(AccountProfileRules.MaxAddressLength, RegistrationProfile.MaxAddressLength, "Address limit drifted.");
 			LogAssert.AreEqual((byte)FishMMO.Database.Data.Enums.AccountVerificationChannels.Email, (byte)RegistrationVerificationChannels.Email, "Email flag drifted.");
 			LogAssert.AreEqual((byte)FishMMO.Database.Data.Enums.AccountVerificationChannels.Sms, (byte)RegistrationVerificationChannels.Sms, "SMS flag drifted.");
+			LogAssert.AreEqual((byte)FishMMO.Database.Data.Enums.AccountVerificationChannels.Discord, (byte)RegistrationVerificationChannels.Discord, "Discord flag drifted.");
+			LogAssert.AreEqual(AccountProfileRules.MinDiscordUsernameLength, RegistrationProfile.MinDiscordNameLength, "Discord username minimum drifted.");
+			LogAssert.AreEqual(AccountProfileRules.MaxDiscordUsernameLength, RegistrationProfile.MaxDiscordNameLength, "Discord username maximum drifted.");
+			LogAssert.IsTrue(RegistrationProfile.MaxDiscordUsernameLength >= AccountProfileRules.MaxDiscordTagLength + 1,
+				"The client must accept as typed every tag the database stores, with room for a leading @.");
+
+			/* Both Discord forms: a unique username, and a freer name that still carries its discriminator.
+			 * Every case goes through both implementations, so a rule that changes in one fails here. */
+			string[] discordNames =
+			{
+				"fishfan", "FishFan", "@fishfan", "  fish_fan.99  ", "fish..fan", "f", "fish-fan", "fish fan", new string('a', 32), new string('a', 33),
+				"FishFan#1234", "Fish Fan#0001", "@Zoë#4321", "fishfan#123", "fishfan#12345", "fishfan#12a4", "fish:fan#1234", "fish@fan#1234",
+				"a#1234", "```x#1234", "fish#fan#1234", "#1234", "", "   ",
+			};
+			foreach (string input in discordNames)
+			{
+				LogAssert.AreEqual(AccountProfileRules.NormalizeDiscordUsername(input), RegistrationProfile.NormalizeDiscordUsername(input),
+					$"Discord username normalisation disagrees with the database for '{input}'.");
+			}
+			LogAssert.AreEqual("fishfan#1234", AccountProfileRules.NormalizeDiscordUsername("@FishFan#1234"), "Control: a tag is kept, lowercased, without the @.");
+			LogAssert.IsNull(AccountProfileRules.NormalizeDiscordUsername("fish..fan"), "Control: a unique username never has two periods together.");
+
+			RegistrationProfile discordWithoutName = new RegistrationProfile { VerificationChannels = RegistrationVerificationChannels.Discord };
+			LogAssert.IsFalse(discordWithoutName.TryValidate(out _), "Discord verification without a Discord username must be refused.");
+			LogAssert.IsFalse(AccountProfileRules.TryValidate(new AccountProfileData { VerificationChannels = FishMMO.Database.Data.Enums.AccountVerificationChannels.Discord }, out _, out _),
+				"Control: the database refuses Discord without a username too.");
 
 			string[] phones =
 			{
@@ -381,6 +409,34 @@ namespace FishMMO.UnitTests
 
 			RegistrationProfile tooLong = new RegistrationProfile { RealName = new string('a', RegistrationProfile.MaxRealNameLength + 1) };
 			LogAssert.IsFalse(tooLong.TryValidate(out _), "An over-long real name must be refused.");
+		}
+
+		/// <summary>
+		/// A client one release behind sends the six-string version 1 profile, with no Discord username. The
+		/// server must still read it, or that client could not register at all.
+		/// </summary>
+		[Test]
+		public void RegistrationProfile_StillReadsTheVersionOneFormat()
+		{
+			var v1 = new System.Collections.Generic.List<byte> { 1, (byte)RegistrationVerificationChannels.Sms };
+			foreach (string field in new[] { "+447700900123", "", "United Kingdom", "", "", "old_friend" })
+			{
+				byte[] utf8 = Encoding.UTF8.GetBytes(field);
+				v1.Add((byte)(utf8.Length >> 8));
+				v1.Add((byte)utf8.Length);
+				v1.AddRange(utf8);
+			}
+
+			LogAssert.IsTrue(RegistrationProfile.TryDeserialize(v1.ToArray(), out RegistrationProfile received), "A version 1 profile must still parse.");
+			LogAssert.AreEqual("+447700900123", received.Phone, "Phone");
+			LogAssert.AreEqual("old_friend", received.ReferralAccount, "ReferralAccount");
+			LogAssert.IsNull(received.DiscordUsername, "A version 1 profile has no Discord username.");
+			LogAssert.AreEqual(RegistrationVerificationChannels.Sms, received.VerificationChannels, "VerificationChannels");
+
+			byte[] current = new RegistrationProfile { DiscordUsername = "fishfan" }.Serialize();
+			LogAssert.AreEqual(RegistrationProfile.FormatVersion, current[0], "Control: the encoder writes the current version.");
+			v1[0] = RegistrationProfile.FormatVersion;
+			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(v1.ToArray(), out _), "Six strings labelled with the current version must be refused: it has seven.");
 		}
 
 		/// <summary>The decoder refuses anything the encoder could not have produced.</summary>

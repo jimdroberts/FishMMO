@@ -24,6 +24,102 @@ namespace FishMMO.Database.Data
 		/// <summary>Longest postal address accepted.</summary>
 		public const int MaxAddressLength = 512;
 
+		/// <summary>Shortest Discord username Discord allows.</summary>
+		public const int MinDiscordUsernameLength = 2;
+
+		/// <summary>Longest Discord username Discord allows, not counting a discriminator.</summary>
+		public const int MaxDiscordUsernameLength = 32;
+
+		/// <summary>Longest stored Discord name: a username, <c>#</c>, and a four-digit discriminator.</summary>
+		public const int MaxDiscordTagLength = MaxDiscordUsernameLength + 5;
+
+		/// <summary>The one refusal for a Discord username that is not one.</summary>
+		public const string InvalidDiscordUsernameError =
+			"Enter your Discord username as it appears on your profile, for example fishfan or FishFan#1234.";
+
+		/// <summary>
+		/// Normalises a Discord username in either form Discord uses: a unique username (<c>fishfan</c>), or
+		/// a name with its four-digit discriminator (<c>FishFan#1234</c>).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Trimmed, a leading <c>@</c> dropped, and lowercased, because Discord matches both forms without
+		/// regard to case.
+		/// </para>
+		/// <para>
+		/// A unique username is 2 to 32 lowercase letters, digits, underscores and periods, never two periods
+		/// together. A name with a discriminator is the older form, whose names were freer — capitals, spaces,
+		/// most of Unicode — so its name part is held only to its length and to what Discord never allowed in
+		/// one: <c>@</c>, <c>#</c>, <c>:</c>, a code fence, control characters. The discriminator is exactly
+		/// four digits.
+		/// </para>
+		/// <para>
+		/// Anything in neither form is refused rather than guessed at: the bot looks the name up exactly, and
+		/// a DM sent to the wrong person is a verification code in a stranger's hands.
+		/// </para>
+		/// </remarks>
+		/// <returns>The normalised username, or null when it is not one.</returns>
+		public static string? NormalizeDiscordUsername(string? input)
+		{
+			if (string.IsNullOrWhiteSpace(input))
+			{
+				return null;
+			}
+
+			string name = input.Trim();
+			if (name.StartsWith("@", StringComparison.Ordinal))
+			{
+				name = name.Substring(1);
+			}
+
+			int hash = name.LastIndexOf('#');
+			if (hash < 0)
+			{
+				name = name.ToLowerInvariant();
+				if (name.Length < MinDiscordUsernameLength || name.Length > MaxDiscordUsernameLength ||
+					name.IndexOf("..", StringComparison.Ordinal) >= 0)
+				{
+					return null;
+				}
+				foreach (char c in name)
+				{
+					bool ok = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
+					if (!ok)
+					{
+						return null;
+					}
+				}
+				return name;
+			}
+
+			string legacyName = name.Substring(0, hash).Trim();
+			string discriminator = name.Substring(hash + 1);
+			if (discriminator.Length != 4)
+			{
+				return null;
+			}
+			foreach (char c in discriminator)
+			{
+				if (c < '0' || c > '9')
+				{
+					return null;
+				}
+			}
+			if (legacyName.Length < MinDiscordUsernameLength || legacyName.Length > MaxDiscordUsernameLength ||
+				legacyName.IndexOf("```", StringComparison.Ordinal) >= 0)
+			{
+				return null;
+			}
+			foreach (char c in legacyName)
+			{
+				if (char.IsControl(c) || c == '@' || c == '#' || c == ':')
+				{
+					return null;
+				}
+			}
+			return legacyName.ToLowerInvariant() + "#" + discriminator;
+		}
+
 		/// <summary>
 		/// Normalises a phone number to E.164: a leading <c>+</c> and 8 to 15 digits.
 		/// </summary>
@@ -125,10 +221,25 @@ namespace FishMMO.Database.Data
 				clean.ReferralAccount = referral.ToLowerInvariant();
 			}
 
-			AccountVerificationChannels channels = input.VerificationChannels & (AccountVerificationChannels.Email | AccountVerificationChannels.Sms);
+			if (!string.IsNullOrWhiteSpace(input.DiscordUsername))
+			{
+				clean.DiscordUsername = NormalizeDiscordUsername(input.DiscordUsername);
+				if (clean.DiscordUsername == null)
+				{
+					error = InvalidDiscordUsernameError;
+					return false;
+				}
+			}
+
+			AccountVerificationChannels channels = input.VerificationChannels & AccountVerificationRules.All;
 			if ((channels & AccountVerificationChannels.Sms) != 0 && clean.Phone == null)
 			{
 				error = "Verifying by SMS needs a phone number.";
+				return false;
+			}
+			if ((channels & AccountVerificationChannels.Discord) != 0 && clean.DiscordUsername == null)
+			{
+				error = "Verifying by Discord needs your Discord username.";
 				return false;
 			}
 			clean.VerificationChannels = channels;

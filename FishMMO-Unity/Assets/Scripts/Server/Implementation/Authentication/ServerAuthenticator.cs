@@ -286,34 +286,26 @@ namespace FishMMO.Server.Implementation
 
 			var d = result.Data;
 
-			/* Which codes this account still owes, under THIS server's switches. A channel counts only
-			 * when the player chose it, it is switched on, and it has not been proven.
-			 *
-			 * Email keeps its grace period: an unverified account may sign in until the verification
-			 * email is actually sent (VerificationEmailSentAt), so an undeliverable mail never locks a
-			 * player out. SMS has no delivery stamp to wait for, so an outstanding phone code blocks
-			 * from the start — which is why the Production template ships VerifySms=false until an SMS
-			 * provider exists. AutoVerifyAccounts (development builds only) bypasses the gate outright
-			 * so accounts created before the flag was set are not locked out of a local server. */
+			/* Which codes this account is asked for, under THIS server's switches: AccountVerificationRules,
+			 * the one rule the Control Panel's sign-in applies too. Any one code verifies the account, and
+			 * there is no grace period: an unverified account is asked for a code from the moment it exists,
+			 * whether or not a message has been delivered yet. An account no enabled channel can reach, and
+			 * every account on a server that verifies nothing, is not asked. AutoVerifyAccounts (development
+			 * builds only) bypasses the gate outright so accounts created before the flag was set are not
+			 * locked out of a local server. */
 			IServerConfiguration configuration = Server?.Configuration;
-			var channels = (AccountVerificationChannels)d.VerificationChannels;
-			bool emailPending = AccountVerificationPolicy.IsEmailVerificationEnabled(configuration) &&
-				(channels & AccountVerificationChannels.Email) != 0 &&
-				!d.EmailVerified &&
-				d.VerificationEmailSentAt != null;
-			bool phonePending = AccountVerificationPolicy.IsSmsVerificationEnabled(configuration) &&
-				(channels & AccountVerificationChannels.Sms) != 0 &&
-				!d.PhoneVerified;
+			AccountVerificationChannels outstanding = AccountVerificationRules.Outstanding(d, AccountVerificationPolicy.EnabledChannels(configuration));
 
 			return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult
 			{
 				IsSuccess = true,
 				IsVerified = d.Verified ||
 					AccountVerificationPolicy.IsAutoVerifyEnabled(configuration) ||
-					(!emailPending && !phonePending),
+					outstanding == AccountVerificationChannels.None,
 				AccountName = d.Name,
-				EmailVerificationPending = emailPending,
-				PhoneVerificationPending = phonePending,
+				EmailVerificationPending = (outstanding & AccountVerificationChannels.Email) != 0,
+				PhoneVerificationPending = (outstanding & AccountVerificationChannels.Sms) != 0,
+				DiscordVerificationCodeOwed = (outstanding & AccountVerificationChannels.Discord) != 0 && !d.DiscordVerifyCodeIssued,
 				Salt = d.Salt,
 				Verifier = d.Verifier,
 				AccessLevel = (AccessLevel)d.AccessLevel,
@@ -875,7 +867,10 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override async Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc)
 			{
-				if (verifyCodeExpiresUtc == null || verifyCodeExpiresUtc.Value > DateTime.UtcNow)
+				/* A missing code counts as due, like SMS: with no grace period, an account asked for an email
+				 * code it was never sent (email became its channel after it registered) would otherwise wait
+				 * for a message nobody is going to send. A live code is never replaced. */
+				if (verifyCodeExpiresUtc != null && verifyCodeExpiresUtc.Value > DateTime.UtcNow)
 					return false;
 
 				int newCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
@@ -913,15 +908,18 @@ namespace FishMMO.Server.Implementation
 
 				// VerificationEmailSentAt is deliberately NOT stamped here. Queueing an email
 				// is not sending one: the queue processor stamps it after SMTP confirms
-				// delivery. Stamping on enqueue ended the grace period for a mail that may
-				// never go out — with an unreachable SMTP host, a single expired-code login
-				// attempt locked the account out permanently.
+				// delivery, and staff (and the support ticket opened after three wrong codes)
+				// read it as "a code actually reached this player".
 				return true;
 			}
 
 			/// <inheritdoc/>
 			protected override Task<bool> TryResendVerificationSmsIfExpiredAsync(string username, DateTime? phoneVerifyCodeExpiresUtc) =>
 				outer.TryResendVerificationSmsIfDueCoreAsync(username, phoneVerifyCodeExpiresUtc);
+
+			/// <inheritdoc/>
+			protected override Task<bool> TryIssueDiscordVerificationCodeAsync(string username) =>
+				outer.TryIssueDiscordVerificationCodeCoreAsync(username);
 		}
 
 		#endregion
@@ -1019,6 +1017,39 @@ namespace FishMMO.Server.Implementation
 			finally
 			{
 				smsResendsInFlight.TryRemove(username, out _);
+			}
+		}
+
+		/// <summary>
+		/// Issues the Discord verification code for an unverified account that chose Discord and was never
+		/// issued one, because the channel was switched on after it registered. The Discord bot sends the DM.
+		/// </summary>
+		/// <remarks>
+		/// Reached only after a correct password proof. Never a resend: the database issues a Discord code
+		/// once and this does nothing for an account that has one. Fire-and-forget from the core: never throws.
+		/// </remarks>
+		private async Task<bool> TryIssueDiscordVerificationCodeCoreAsync(string username)
+		{
+			try
+			{
+				var registry = Server?.Database?.ServiceRegistry;
+				if (string.IsNullOrEmpty(username) || registry == null || !registry.TryGet<IAccountService>(out var accountService))
+				{
+					return false;
+				}
+
+				DatabaseResult<bool> issued = await accountService.PersistDiscordVerifyCodeAsync(username, RandomNumberGenerator.GetInt32(100000, 1000000));
+				if (!issued.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"PersistDiscordVerifyCodeAsync DB error for '{username}': [{issued.ErrorCode}] {issued.ErrorMessage}");
+					return false;
+				}
+				return issued.Data;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error(LogPrefix, $"Issuing a Discord verification code for '{username}' failed: {ex}");
+				return false;
 			}
 		}
 

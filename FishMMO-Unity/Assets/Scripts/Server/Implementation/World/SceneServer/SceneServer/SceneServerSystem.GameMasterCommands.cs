@@ -88,6 +88,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{ "/gm", OnGameMasterCommand },
 			}, AccessLevel.GameMaster);
 
+			ChatHelper.SetCommandHelp("/gm", new ChatCommandHelp()
+			{
+				Category = "Staff",
+				Arguments = "<command>",
+				Summary = "Game master commands. /gm help lists them.",
+			});
+
 			ChatHelper.SetAuditRedactor("/gm", RedactGameMasterAudit);
 
 			RegisterStaffConsoleBroadcasts();

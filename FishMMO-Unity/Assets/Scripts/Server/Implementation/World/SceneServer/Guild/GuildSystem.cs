@@ -309,6 +309,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{ "/gi", OnGuildInvite },
 				{ "/ginvite", OnGuildInvite },
 			});
+			ChatHelper.SetCommandHelp("/ginvite", new ChatCommandHelp()
+			{
+				Category = "Social",
+				Arguments = "<character>",
+				Summary = "Invites a character to your guild.",
+				Aliases = new[] { "/gi" },
+			});
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived, true);

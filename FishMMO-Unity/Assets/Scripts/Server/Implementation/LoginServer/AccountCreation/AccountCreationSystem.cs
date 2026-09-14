@@ -883,8 +883,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					/* The optional details are validated by the database's own rules BEFORE the account row
 					 * exists: refusing afterwards would leave an account behind that the player was told
 					 * was not created. The client checks the same rules first, so this is a backstop. */
-					AccountVerificationChannels chosenChannels = (AccountVerificationChannels)(byte)(submittedProfile.VerificationChannels &
-						(RegistrationVerificationChannels.Email | RegistrationVerificationChannels.Sms));
+					AccountVerificationChannels chosenChannels = (AccountVerificationChannels)(byte)submittedProfile.VerificationChannels & AccountVerificationRules.All;
 					if (chosenChannels == AccountVerificationChannels.None)
 					{
 						// Email is mandatory at registration anyway; "neither" means the default.
@@ -897,6 +896,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						Country = submittedProfile.Country,
 						Address = submittedProfile.Address,
 						ReferralAccount = submittedProfile.ReferralAccount,
+						DiscordUsername = submittedProfile.DiscordUsername,
 						VerificationChannels = chosenChannels,
 					};
 					if (!AccountProfileRules.TryValidate(submittedDetails, out AccountProfileData cleanProfile, out string _))
@@ -905,6 +905,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 						await Log.Debug("AccountCreationSystem", "Refused account creation: an optional detail failed the profile rules.");
 						BroadcastEarlyResult(request.Connection, ClientAuthenticationResult.AccountDetailsInvalid);
 						return;
+					}
+
+					/* A server that verifies at least one channel must be able to send the new account a code on one
+					 * of them. Email is always given, so this refuses only when email verification is off and the player
+					 * gave nothing an enabled channel can use (a Discord-only server and no Discord username). Refused
+					 * here, before the row exists: an existing account in that position is let in at sign-in instead
+					 * (AccountVerificationRules.IsWaived), because it cannot be asked, but a new one need not be made so. */
+					if (!AccountVerificationPolicy.IsAutoVerifyEnabled(Server.Configuration))
+					{
+						AccountVerificationChannels enabledChannels = AccountVerificationPolicy.EnabledChannels(Server.Configuration);
+						if (enabledChannels != AccountVerificationChannels.None &&
+							AccountVerificationRules.Effective(cleanProfile.VerificationChannels, enabledChannels,
+								AccountVerificationRules.Receivable(email, cleanProfile.Phone, cleanProfile.DiscordUsername)) == AccountVerificationChannels.None)
+						{
+							await Log.Debug("AccountCreationSystem", "Refused account creation: no verification channel this server uses can reach the account.");
+							BroadcastEarlyResult(request.Connection, ClientAuthenticationResult.AccountDetailsInvalid);
+							return;
+						}
 					}
 
 					string betaCode = string.IsNullOrWhiteSpace(submittedProfile.BetaCode) ? null : submittedProfile.BetaCode.Trim();
@@ -984,7 +1002,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 							{
 							// Release mode: a code on every chosen channel that is switched on, then the mandatory
 							// 2FA setup below. AccountVerificationPolicy documents the precedence.
-							result = await DeliverVerificationCodesAsync(accountService, username, email, profileResult.IsSuccess ? cleanProfile.Phone : null, chosenChannels);
+							result = await DeliverVerificationCodesAsync(accountService, username, email,
+							profileResult.IsSuccess ? cleanProfile.Phone : null,
+							profileResult.IsSuccess ? cleanProfile.DiscordUsername : null,
+							chosenChannels);
 							// Generate and store mandatory 2FA setup.
 							// Snapshot TotpMasterKey to prevent a TOCTOU race.
 							byte[] totpMasterKeySnapshot = TotpMasterKey;
@@ -1604,14 +1625,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 		/// <summary>
 		/// Processes a single account verification request asynchronously.
-		/// Decrypts username and verify code, then validates via PersistVerifiedAsync.
+		/// Decrypts username and verify code, then redeems it via PersistVerifiedByCodeAsync.
 		/// </summary>
 		/// <remarks>
 		/// <b>CancellationToken:</b> This method does not currently accept a CancellationToken.
 		/// The underlying <see cref="TryEnqueueAsyncWork"/> infrastructure dispatches bare
 		/// <c>Func&lt;Task&gt;</c> delegates. If the base infrastructure is extended to pass
 		/// per-operation tokens (e.g., linked to server shutdown), this method should propagate
-		/// that token into its DB calls (<c>PersistVerifiedAsync</c>) to enable cooperative
+		/// that token into its DB calls (<c>PersistVerifiedByCodeAsync</c>) to enable cooperative
 		/// cancellation during graceful shutdown.
 		/// </remarks>
 		private async Task ProcessAccountVerifyAsync(
@@ -1761,15 +1782,31 @@ namespace FishMMO.Server.Implementation.LoginServer
 							}
 						}
 
-						/* Each channel's code is stored and redeemed apart, in one conditional update each.
-						 * A correct code may still leave the account owing the other channel's, so the
-						 * answer is whatever is outstanding next, not a flat AccountVerified. */
-						DatabaseResult dbResult = channel == VerificationCodeChannel.Sms
-							? await accountService.PersistPhoneVerifiedAsync(username, verifyCode)
-							: await accountService.PersistVerifiedAsync(username, verifyCode);
-						result = dbResult.IsSuccess
-							? await ResolveVerificationProgressAsync(accountService, username)
-							: ClientAuthenticationResult.InvalidUsernameOrPassword;
+						/* One conditional update tries the code against every code the account holds — email,
+						 * SMS and Discord — and any match verifies it, so the broadcast's channel is not consulted.
+						 * A wrong code counts towards the support ticket opened after three in a row. The answer is
+						 * the same whether or not that ticket was opened: this message is accepted before any
+						 * password, so it must not say which accounts exist and are waiting for a code. */
+						DatabaseResult<AccountVerificationChannels> dbResult = await accountService.PersistVerifiedByCodeAsync(username, verifyCode);
+						if (dbResult.IsSuccess)
+						{
+							result = ClientAuthenticationResult.AccountVerified;
+						}
+						else
+						{
+							result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+							Server.Database.ServiceRegistry.TryGet<ISupportTicketService>(out var supportTickets);
+							FishMMO.Database.Npgsql.Services.VerificationFailureTicket.Outcome outcome =
+								await FishMMO.Database.Npgsql.Services.VerificationFailureTicket.RecordAsync(accountService, supportTickets, username);
+							if (outcome.TicketOpened)
+							{
+								await Log.Warning("AccountCreationSystem", $"Opened support ticket {outcome.TicketId} for '{username}' after {outcome.Failures} incorrect verification codes.");
+							}
+							else if (outcome.TicketError != null)
+							{
+								await Log.Warning("AccountCreationSystem", $"A support ticket was due for '{username}' after {outcome.Failures} incorrect verification codes but could not be opened: {outcome.TicketError}");
+							}
+						}
 					}
 
 				trackFailure:
@@ -1984,74 +2021,60 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Sends a verification code on every channel the player chose that this server has switched
-		/// on, marks the chosen channels it has switched off as proven, and says what the client should
-		/// ask for next.
+		/// Sends a verification code on every channel this account is asked for, and says what the client
+		/// should do next.
 		/// </summary>
 		/// <remarks>
-		/// Precedence is <see cref="AccountVerificationPolicy"/>'s. This runs only when the development
-		/// <c>AutoVerifyAccounts</c> bypass is off. With both switches off every account is verified at
-		/// creation through the same database write the bypass uses — but the caller still enrols it in
-		/// two-factor authentication, because unlike the bypass these switches are legal in production.
+		/// Which channels is <see cref="AccountVerificationRules.Effective"/>, the rule sign-in and the Control
+		/// Panel apply too: the player's choices that this server has switched on and the account can receive,
+		/// falling back to email. Any one of the codes verifies the account. This runs only when the
+		/// development <c>AutoVerifyAccounts</c> bypass is off. A server that verifies no channel, and an account
+		/// no enabled channel can reach, are verified at creation — but the caller still enrols them in
+		/// two-factor authentication, because unlike the bypass these are legal in production.
 		/// </remarks>
 		/// <returns>
-		/// <see cref="ClientAuthenticationResult.AccountCreated"/> when the email code is outstanding (it is
-		/// asked for first), <see cref="ClientAuthenticationResult.PhoneUnverified"/> when only the SMS code
-		/// is, and <see cref="ClientAuthenticationResult.AccountVerified"/> when nothing is.
+		/// <see cref="ClientAuthenticationResult.AccountCreated"/> when a code is outstanding, and
+		/// <see cref="ClientAuthenticationResult.AccountVerified"/> when none is.
 		/// </returns>
 		private async Task<ClientAuthenticationResult> DeliverVerificationCodesAsync(
 			IAccountService accountService,
 			string username,
 			string email,
 			string phone,
+			string discordUsername,
 			AccountVerificationChannels chosen)
 		{
-			bool emailOn = AccountVerificationPolicy.IsEmailVerificationEnabled(Server.Configuration);
-			bool smsOn = AccountVerificationPolicy.IsSmsVerificationEnabled(Server.Configuration);
+			AccountVerificationChannels enabled = AccountVerificationPolicy.EnabledChannels(Server.Configuration);
+			AccountVerificationChannels effective = AccountVerificationRules.Effective(chosen, enabled,
+				AccountVerificationRules.Receivable(email, phone, discordUsername));
 
-			if (!emailOn && !smsOn)
+			if (effective == AccountVerificationChannels.None)
 			{
-				DatabaseResult verified = await accountService.PersistAutoVerifiedAsync(username);
+				/* Nothing to ask for: the server verifies no channel (the same write the development bypass
+				 * uses), or verification is required but nothing it sends can reach this account. */
+				DatabaseResult verified = enabled == AccountVerificationChannels.None
+					? await accountService.PersistAutoVerifiedAsync(username)
+					: await accountService.PersistChannelsVerifiedAsync(username, AccountVerificationChannels.None);
 				if (!verified.IsSuccess)
 				{
-					await Log.Warning("AccountCreationSystem", $"PersistAutoVerifiedAsync DB error for user '{username}': {verified.ErrorCode} - {verified.ErrorMessage}");
+					await Log.Warning("AccountCreationSystem", $"Verifying '{username}' without a code failed: {verified.ErrorCode} - {verified.ErrorMessage}");
 				}
 				return ClientAuthenticationResult.AccountVerified;
 			}
 
-			AccountVerificationChannels enabled =
-				(emailOn ? AccountVerificationChannels.Email : AccountVerificationChannels.None) |
-				(smsOn ? AccountVerificationChannels.Sms : AccountVerificationChannels.None);
-			AccountVerificationChannels outstanding = chosen & enabled;
-			AccountVerificationChannels waived = chosen & ~enabled;
-
-			if (waived != AccountVerificationChannels.None)
-			{
-				DatabaseResult waiveResult = await accountService.PersistChannelsVerifiedAsync(username, waived);
-				if (!waiveResult.IsSuccess)
-				{
-					await Log.Warning("AccountCreationSystem", $"PersistChannelsVerifiedAsync DB error for user '{username}': {waiveResult.ErrorCode} - {waiveResult.ErrorMessage}");
-				}
-			}
-
-			if ((outstanding & AccountVerificationChannels.Email) != 0)
+			if ((effective & AccountVerificationChannels.Email) != 0)
 			{
 				await SendEmailVerificationCodeAsync(accountService, username, email);
 			}
-			if ((outstanding & AccountVerificationChannels.Sms) != 0)
+			if ((effective & AccountVerificationChannels.Sms) != 0)
 			{
 				await SendSmsVerificationCodeAsync(accountService, username, phone);
 			}
-
-			if ((outstanding & AccountVerificationChannels.Email) != 0)
+			if ((effective & AccountVerificationChannels.Discord) != 0)
 			{
-				return ClientAuthenticationResult.AccountCreated;
+				await IssueDiscordVerificationCodeAsync(accountService, username);
 			}
-			if ((outstanding & AccountVerificationChannels.Sms) != 0)
-			{
-				return ClientAuthenticationResult.PhoneUnverified;
-			}
-			return ClientAuthenticationResult.AccountVerified;
+			return ClientAuthenticationResult.AccountCreated;
 		}
 
 		/// <summary>Generates, stores and queues the email verification code.</summary>
@@ -2136,39 +2159,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// After an accepted verification code, what the account still owes under this server's switches.
+		/// Issues the Discord verification code. The login server only issues it: the database wakes the
+		/// Discord bot, which sends it in the account's one DM, once the player is in the Discord server.
 		/// </summary>
-		/// <remarks>
-		/// No email grace period here, unlike sign-in: the player is already in the verification flow
-		/// and holding codes, so an outstanding email code is simply the next thing to ask for.
-		/// </remarks>
-		private async Task<ClientAuthenticationResult> ResolveVerificationProgressAsync(IAccountService accountService, string username)
+		private async Task IssueDiscordVerificationCodeAsync(IAccountService accountService, string username)
 		{
-			var fetched = await accountService.FetchForLoginAsync(username);
-			if (!fetched.IsSuccess)
+			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
+			DatabaseResult<bool> issued = await accountService.PersistDiscordVerifyCodeAsync(username, verifyCode);
+			if (!issued.IsSuccess)
 			{
-				// The code was accepted; sign-in will make any remaining demand itself.
-				return ClientAuthenticationResult.AccountVerified;
+				await Log.Error("AccountCreationSystem", $"PersistDiscordVerifyCodeAsync DB error for user '{username}': {issued.ErrorCode} - {issued.ErrorMessage}");
 			}
-
-			var account = fetched.Data;
-			if (account.Verified)
-			{
-				return ClientAuthenticationResult.AccountVerified;
-			}
-
-			var channels = (AccountVerificationChannels)account.VerificationChannels;
-			if (AccountVerificationPolicy.IsEmailVerificationEnabled(Server.Configuration) &&
-				(channels & AccountVerificationChannels.Email) != 0 && !account.EmailVerified)
-			{
-				return ClientAuthenticationResult.AccountUnverified;
-			}
-			if (AccountVerificationPolicy.IsSmsVerificationEnabled(Server.Configuration) &&
-				(channels & AccountVerificationChannels.Sms) != 0 && !account.PhoneVerified)
-			{
-				return ClientAuthenticationResult.PhoneUnverified;
-			}
-			return ClientAuthenticationResult.AccountVerified;
 		}
 
 		/// <summary>Builds the verification SMS. Plain text, well under the queue's 480-character limit.</summary>

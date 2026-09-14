@@ -96,10 +96,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>Registers the player support commands.</summary>
 		/// <remarks>
-		/// <c>/helpme</c>, not <c>/help</c>. Nothing registers <c>/help</c> today, but it is the
-		/// obvious name for a command listing commands, and taking it here for a ticket filing
-		/// would mean whoever writes that listing later either collides with support or has to
-		/// rename a command players have learned.
+		/// <c>/helpme</c>, not <c>/help</c>: <c>/help</c> is the command listing, registered in
+		/// ChatSystem.Help.cs.
 		/// </remarks>
 		private void RegisterSupportCommands()
 		{
@@ -110,6 +108,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{ "/helpme", OnSupportHelpCommand },
 				{ "/tickets", OnSupportTicketsCommand },
 			}, AccessLevel.Player);
+
+			ChatHelper.SetCommandHelp("/report", new ChatCommandHelp()
+			{
+				Category = "Support",
+				Arguments = "<character> <what happened>",
+				Summary = "Reports a player to the staff.",
+			});
+			ChatHelper.SetCommandHelp("/bug", new ChatCommandHelp()
+			{
+				Category = "Support",
+				Arguments = "<what happened>",
+				Summary = "Reports a bug.",
+			});
+			ChatHelper.SetCommandHelp("/helpme", new ChatCommandHelp()
+			{
+				Category = "Support",
+				Arguments = "<what you need>",
+				Summary = "Asks the staff for help.",
+			});
+			ChatHelper.SetCommandHelp("/tickets", new ChatCommandHelp()
+			{
+				Category = "Support",
+				Summary = "Lists your unfinished support tickets.",
+			});
 
 			/* The report panel's broadcast rides on the same registration: it is the same filing
 			 * with a form in front of it, and registering it anywhere else would be a second
