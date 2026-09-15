@@ -10,17 +10,20 @@
                 <ui:VisualElement class="launcher-header-spacer" />
                 <ui:Button name="launcher-settings-btn" text="Settings" class="fish-button launcher-header-btn" />
             </ui:VisualElement>
-            <ui:VisualElement name="launcher-hero" class="launcher-hero" />
             <!--
-                One body for the news and the settings. Settings is positioned absolutely over the
-                bottom of this body (see .launcher-settings in UILauncher.uss), so opening it
-                covers part of the news instead of taking space from it: the news keeps its size,
-                and its text is not re-laid out on every toggle.
+                The banner and the news share one stage, and settings overlays the stage from its
+                bottom edge (see .launcher-settings in UILauncher.uss). Opening it covers the lower
+                news instead of taking space from it, so the news keeps its size and its text is
+                not re-laid out on every toggle; on a short window it grows up over the banner
+                rather than being cut off. The footer is outside the stage and never moves.
             -->
+            <ui:VisualElement name="launcher-stage" class="launcher-stage">
+            <ui:VisualElement name="launcher-hero" class="launcher-hero" />
             <ui:VisualElement name="launcher-body" class="launcher-body">
-            <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
-                <ui:VisualElement name="launcher-news" class="launcher-news" />
-            </ui:ScrollView>
+                <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
+                    <ui:VisualElement name="launcher-news" class="launcher-news" />
+                </ui:ScrollView>
+            </ui:VisualElement>
             <ui:ScrollView name="launcher-settings" class="fish-scroll launcher-settings launcher-settings--closed">
                 <!--
                     No low-value/high-value here on purpose. UITKClientLauncher writes both from

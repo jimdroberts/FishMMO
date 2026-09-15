@@ -14,8 +14,10 @@ namespace FishMMO.UnitTests
 	/// </summary>
 	/// <remarks>
 	/// <para>Two separate properties, pinned together because both live in the same toggle.
-	/// The overlay: settings is positioned absolutely over the bottom of the body, so opening it
-	/// covers part of the news instead of resizing it, and the footer never moves.</para>
+	/// The overlay: settings is positioned absolutely over the bottom of the stage that holds the
+	/// banner and the news, so opening it covers part of the news instead of resizing it, and the
+	/// footer never moves. Whether every setting is reachable at every window shape is
+	/// <see cref="LauncherSettingsReachableTests"/>.</para>
 	/// <para>The closing switch: repeated clicks on Settings made memory jump, and the cost was not
 	/// the news reflowing. Measured with 2,400 opens and closes, closing with <c>display: none</c>
 	/// (the old <c>fish-hidden</c> class) allocated about 12 KB more per frame than an idle launcher
@@ -110,6 +112,7 @@ namespace FishMMO.UnitTests
 			VisualElement settingsPanel = Named("launcher-settings");
 			VisualElement newsPane = Named("launcher-news-scroll");
 			VisualElement body = Named("launcher-body");
+			VisualElement stage = Named("launcher-stage");
 			VisualElement footer = Named("launcher-footer");
 
 			LogAssert.IsTrue(settingsPanel.ClassListContains(ClosedClass), "settings starts closed, as the launcher shows it");
@@ -139,7 +142,7 @@ namespace FishMMO.UnitTests
 			Rect bodyOpen = body.worldBound;
 
 			LogAssert.IsTrue(settingsPanel.resolvedStyle.position == Position.Absolute,
-				"settings is positioned absolutely, over the body, not as a flex item beside the news");
+				"settings is positioned absolutely, over the stage, not as a flex item beside the news");
 			LogAssert.IsTrue(settingsOpen.height > 1f && settingsOpen.width > 1f,
 				$"settings has real size when open; it resolved to {settingsOpen.width}x{settingsOpen.height}");
 
@@ -152,8 +155,9 @@ namespace FishMMO.UnitTests
 				$"settings overlaps the news it covers (settings {settingsOpen}, news {newsOpen})");
 			LogAssert.IsTrue(Mathf.Abs(settingsOpen.yMax - bodyOpen.yMax) < 1f,
 				$"settings sits against the bottom of the body, just above the footer (settings bottom {settingsOpen.yMax}, body bottom {bodyOpen.yMax})");
-			LogAssert.IsTrue(settingsOpen.height <= bodyClosed.height * 0.38f + 1f,
-				$"settings stays within its 38% cap of the body, leaving most of the news visible (settings {settingsOpen.height}, body {bodyClosed.height})");
+			Rect stageOpen = stage.worldBound;
+			LogAssert.IsTrue(settingsOpen.yMin >= stageOpen.yMin - 1f,
+				$"settings never extends above the stage, so it can never cover the header (settings top {settingsOpen.yMin}, stage top {stageOpen.yMin})");
 		}
 	}
 }

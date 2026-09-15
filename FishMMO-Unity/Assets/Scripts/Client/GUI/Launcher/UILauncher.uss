@@ -111,27 +111,28 @@
 /* ── Settings ───────────────────────────────────────────── */
 
 /*
-    Sits between the news pane and the footer rather than overlaying them, so opening it
-    never covers the progress bar or the Play button — the launcher can be mid-download
-    while the player is reading this.
-*/
-/*
     An overlay, not a band in the column. Settings is positioned absolutely across the bottom
-    of .launcher-body, so opening it covers the lower part of the news instead of shrinking the
-    news pane, and the footer never moves. As a flex item it took its height from the news on
-    every toggle. The allocation spike on repeated clicks was a separate cost, from how the panel
-    was closed; see .launcher-settings--closed below.
+    of .launcher-stage, so opening it covers the lower part of the news instead of shrinking the
+    news pane, and the footer (the progress bar and Play) never moves or gets covered: the
+    launcher can be mid-download while the player is reading this. As a flex item it took its
+    height from the news on every toggle. The allocation spike on repeated clicks was a separate
+    cost, from how the panel was closed; see .launcher-settings--closed below.
 
-    The cap is a percentage of the body, which is the containing block for an absolute child,
-    so it still leaves most of the news readable behind it. overflow: hidden on .launcher-panel
-    keeps the overlay from spilling over the footer; the body ends above the footer anyway.
+    Sized to its content and capped at the whole stage, banner included. The panel is always
+    1200 units wide (the shared panel settings match width), so a wide or short window is a
+    short panel, while the banner keeps its image's aspect ratio at about 377 units whatever the
+    window. The overlay used to live in the news body alone, capped at 38% of it: 66 units at
+    16:9 and one or two at 21:9, so the list was cut off at the resolutions most players run.
+    Capped at the stage it covers the banner when it needs the room and scrolls only when the
+    whole stage is shorter than the list. LauncherSettingsReachableTests pins this at every
+    common window shape.
 */
 .launcher-settings {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    max-height: 38%;
+    max-height: 100%;
     flex-direction: column;
     background-color: var(--abyss-700);
     border-top-color: var(--abyss-500);
@@ -222,10 +223,22 @@
     footer, allowed to shrink below its content. It is also the containing block the settings
     overlay is positioned against, so the news inside it simply fills the body.
 */
+/*
+    The banner and the news pane, and the containing block for the settings overlay. overflow:
+    hidden so a banner taller than a very short stage is clipped here instead of drawing over
+    the footer.
+*/
+.launcher-stage {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
 .launcher-body {
     flex-grow: 1;
     min-height: 0;
-    position: relative;
 }
 
 .launcher-news-scroll {
