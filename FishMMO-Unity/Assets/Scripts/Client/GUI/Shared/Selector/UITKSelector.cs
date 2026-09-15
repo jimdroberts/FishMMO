@@ -43,6 +43,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private const string EMPTY_LABEL_NAME = "selector-empty";
 
+		/// <summary>Scroll view around the option rows.</summary>
+		private const string SCROLL_NAME = "selector-scroll";
+
 		/// <summary>
 		/// USS class applied to the currently selected item.
 		/// </summary>
@@ -68,6 +71,9 @@ namespace FishMMO.Client
 		/// The empty-list placeholder.
 		/// </summary>
 		private Label emptyLabel;
+
+		/// <summary>Scroll view around the option rows.</summary>
+		private ScrollView selectorScroll;
 
 		/// <summary>
 		/// Callback invoked with the selected object's ID when accepted.
@@ -124,6 +130,7 @@ namespace FishMMO.Client
 			cancelButton = Root.Q<Button>(CANCEL_BUTTON_NAME);
 			countLabel = Root.Q<Label>(COUNT_LABEL_NAME);
 			emptyLabel = Root.Q<Label>(EMPTY_LABEL_NAME);
+			selectorScroll = Root.Q<ScrollView>(SCROLL_NAME);
 
 			if (acceptButton != null)
 			{
@@ -190,6 +197,12 @@ namespace FishMMO.Client
 		/// </summary>
 		protected override void ApplyRequest()
 		{
+			// The scroll position persists with the tree; an unrelated list must not open halfway down.
+			if (selectorScroll != null)
+			{
+				selectorScroll.scrollOffset = UnityEngine.Vector2.zero;
+			}
+
 			UpdateEventSlots();
 			UpdateAcceptEnabled();
 		}

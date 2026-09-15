@@ -34,7 +34,8 @@ namespace FishMMO.Client
 	/// window is deaf rather than hidden. The sheet is centred by default and the player drags it
 	/// clear; that costs nothing here because <see cref="UITKControl.CanDrag"/> already defaults true
 	/// and the shared header is already <c>name="panel-header"</c>, which is the resolved drag handle.
-	/// Position is per-open: nothing persists, and a tree rebuild resets it.
+	/// Like every draggable panel, a dragged position is remembered (UITKPanelPositions) and restored
+	/// when the window next opens; closing it does not put it back in the middle.
 	/// </para>
 	/// <para>
 	/// <b>The preview shows an unarmed body, and cannot help it.</b> An observed character's race
@@ -104,7 +105,7 @@ namespace FishMMO.Client
 
 			/* A rebuilt tree means the old view's element references point into a tree nobody can see,
 			 * so it is replaced. Disposed rather than dropped: it owns a render texture and a camera
-			 * reference, and a hide/show cycle would otherwise leak one of each every time. */
+			 * reference, and each tree replacement would otherwise leak one of each. */
 			sheet?.Dispose();
 
 			/* ShowAttributes is the whole difference between this viewer and the player's own sheet:

@@ -86,8 +86,8 @@
     belongs in the middle of the screen where your sheet and theirs are both readable, not tiled
     against the right edge. It is centred by default and the player drags it wherever they want:
     UITKControl.CanDrag already defaults true and this tree's header is already name="panel-header",
-    which is the resolved drag handle, so movability costs nothing here. Nothing about the position
-    persists — it is per-open, and a visual-tree rebuild puts it back in the middle.
+    which is the resolved drag handle, so movability costs nothing here. Like every draggable panel,
+    a dragged position is remembered and restored when the window next opens.
 
         1200 units  −  520 wide  =  680  →  680 / 2  =  340
 

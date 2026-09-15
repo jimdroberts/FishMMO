@@ -83,7 +83,7 @@ namespace FishMMO.Client
 		/// <summary>The status line, where refusals and confirmations are written.</summary>
 		private Label statusLabel;
 
-		/// <summary>The status text, kept across the tree rebuilds a hide/show causes.</summary>
+		/// <summary>The status text, kept as data so a replaced tree can be given it back.</summary>
 		private string statusText = string.Empty;
 
 		/// <summary>Cached reference to the craft confirm button, for the submit lock.</summary>
@@ -96,10 +96,11 @@ namespace FishMMO.Client
 		/// The effects chosen for each slot, as plain data.
 		/// </summary>
 		/// <remarks>
-		/// The rows are <see cref="VisualElement"/>s belonging to one visual tree, and
-		/// <c>UIDocument</c> re-clones the tree on every enable. Keeping the SELECTION only in
-		/// those rows meant a hide/show — or any tree rebuild — silently emptied a half-built craft
-		/// while the panel still looked populated to the code that reads it.
+		/// The rows are <see cref="VisualElement"/>s belonging to one visual tree. When hiding
+		/// disabled the <c>UIDocument</c>, every show re-cloned that tree, and keeping the SELECTION
+		/// only in those rows meant a hide/show silently emptied a half-built craft while the panel
+		/// still looked populated to the code that reads it. Hiding keeps the tree now, but a genuine
+		/// tree replacement would do the same, so the selection stays plain data.
 		/// </remarks>
 		private readonly List<ITooltip> selectedEvents = new List<ITooltip>();
 
@@ -143,7 +144,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
-			/* Every row in slotRows belongs to the tree that was just discarded. */
+			/* On a re-run every row in slotRows belongs to the tree that was just replaced. */
 			slotRows.Clear();
 
 			VisualElement root = Root;
@@ -216,9 +217,9 @@ namespace FishMMO.Client
 		/// Re-applies the in-progress craft to the current visual tree.
 		/// </summary>
 		/// <remarks>
-		/// Runs from both hooks: on the very first open <c>hasStarted</c> is still false so
-		/// <c>ReinitializeIfTreeReplaced</c> bails and only <c>OnAfterShow</c> fires, while on later
-		/// shows the tree may genuinely have been replaced.
+		/// Runs from both hooks: <c>OnAfterShow</c> on every open, and <c>OnAfterStarting</c> once
+		/// at startup and again only if the tree is genuinely replaced. Writing from both is
+		/// idempotent; the startup call is redundant for a panel that has never been shown.
 		/// </remarks>
 		private void ApplySelection()
 		{

@@ -56,6 +56,12 @@ namespace FishMMO.Client
 		private const string HIDDEN_CLASS = "fish-hidden";
 
 		/// <summary>
+		/// USS class that closes the settings overlay by visibility rather than display. Defined in
+		/// UILauncher.uss, which explains why display: none is the wrong switch for it.
+		/// </summary>
+		private const string SETTINGS_CLOSED_CLASS = "launcher-settings--closed";
+
+		/// <summary>
 		/// The UIDocument that owns the launcher's visual tree. Assign in the Inspector.
 		/// </summary>
 		[Tooltip("UIDocument backing the launcher UI.")]
@@ -551,7 +557,21 @@ namespace FishMMO.Client
 		private void ToggleSettings()
 		{
 			this.settingsOpen = !this.settingsOpen;
-			SetHidden(this.settingsPanel, !this.settingsOpen);
+			if (this.settingsPanel == null)
+			{
+				return;
+			}
+
+			this.settingsPanel.EnableInClassList(SETTINGS_CLOSED_CLASS, !this.settingsOpen);
+
+			/* A closed panel is still laid out, so a field that had focus when it closed would keep
+			 * it and go on taking keystrokes while invisible. Hand focus back on close. */
+			if (!this.settingsOpen &&
+				this.settingsPanel.focusController?.focusedElement is VisualElement focused &&
+				this.settingsPanel.Contains(focused))
+			{
+				focused.Blur();
+			}
 		}
 
 		/// <summary>

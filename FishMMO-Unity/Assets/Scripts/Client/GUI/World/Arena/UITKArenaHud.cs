@@ -533,6 +533,8 @@ namespace FishMMO.Client
 
 		protected override void OnAfterShow()
 		{
+			// Feed lines and an announcement that expired while hidden are retired before they show.
+			TickFeed();
 			ApplyState();
 		}
 

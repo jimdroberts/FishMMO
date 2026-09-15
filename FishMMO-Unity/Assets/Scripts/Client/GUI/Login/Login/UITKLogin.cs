@@ -233,7 +233,8 @@ namespace FishMMO.Client
 		/// Re-applies the sign-in lock after the visual tree was rebuilt.
 		/// </summary>
 		/// <remarks>
-		/// <see cref="SetSignInLocked"/> writes into elements that the next hide/show replaces, so
+		/// <see cref="SetSignInLocked"/> writes into elements that a tree replacement discards (and
+		/// every hide/show did, when hiding disabled the document), so
 		/// a panel that came back during a login still in flight — which is exactly what the
 		/// verification and TOTP flows do, and what the reply timeout does — presented an enabled
 		/// Sign In button over a request the client was still waiting on. Driven off the guard
@@ -332,6 +333,10 @@ namespace FishMMO.Client
 			{
 				handshakeMessage.text = "";
 			}
+
+			/* The tree persists while hidden, so a password typed and never submitted — the player
+			 * went to Register instead — would still be in the field when the panel next opened. */
+			password?.SetValueWithoutNotify(string.Empty);
 		}
 
 		/// <summary>

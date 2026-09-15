@@ -215,10 +215,11 @@ namespace FishMMO.Client
 		/// Re-applies the drag icon after the visual tree has been rebuilt.
 		/// </summary>
 		/// <remarks>
-		/// Per THE CONTRACT: <c>UIDocument</c> clones the UXML afresh on every enable, so the
-		/// element <see cref="SetReference"/> wrote the icon into is discarded the moment the
-		/// panel is shown. Without this the very first drag of a session is invisible — the
-		/// classic symptom — and every drag after a hide/show is too.
+		/// Per THE CONTRACT: <c>UIDocument</c> clones the UXML afresh on every enable, and when
+		/// hiding disabled it the element <see cref="SetReference"/> wrote the icon into was
+		/// discarded the moment the panel was shown — the very first drag of a session was
+		/// invisible, the classic symptom, and every drag after a hide/show was too. This still
+		/// covers a genuinely replaced tree.
 		/// </remarks>
 		protected override void OnAfterStarting()
 		{
@@ -229,9 +230,9 @@ namespace FishMMO.Client
 		/// Re-applies the drag icon on every show, including the first one.
 		/// </summary>
 		/// <remarks>
-		/// <c>OnAfterStarting</c> alone is not enough. On the very first open <c>hasStarted</c> is
-		/// still false, so <c>ReinitializeIfTreeReplaced</c> returns before re-running it, and the
-		/// icon written before <see cref="Show"/> is lost with the discarded tree.
+		/// <c>OnAfterStarting</c> alone is not enough: it runs once at startup and again only on a
+		/// genuine tree replacement, not on an ordinary show, so the icon for each drag has to be
+		/// written here.
 		/// </remarks>
 		protected override void OnAfterShow()
 		{
@@ -493,10 +494,10 @@ namespace FishMMO.Client
 			HasItemIdentity = hasItemIdentity;
 			SplitAmount = splitAmount;
 
-			/* Show first, then paint. Enabling the document re-clones the UXML, so an icon written
-			 * into dragIcon before this point belongs to a tree that has already been thrown away
-			 * — the drag then follows the cursor as an invisible 48x48 hole. ApplyIcon also runs
-			 * from OnAfterShow, so this call is the belt to that braces. */
+			/* Show first, then paint. When hiding disabled the document, an icon written into
+			 * dragIcon before this point belonged to a tree already thrown away — the drag then
+			 * followed the cursor as an invisible 48x48 hole. ApplyIcon also runs from
+			 * OnAfterShow, so this call is the belt to that braces. */
 			Show();
 			ApplyIcon();
 			UpdatePosition();
@@ -508,8 +509,8 @@ namespace FishMMO.Client
 		private void ApplyIcon()
 		{
 			/* Re-resolve whenever the cached element is missing or has been detached. UIDocument
-			 * hands out a whole new tree on every enable, so a dragIcon cached before a hide/show
-			 * belongs to a tree nobody can see — painting into it is the invisible-drag-icon
+			 * hands out a whole new tree on every enable, so a dragIcon cached before a tree
+			 * replacement belongs to a tree nobody can see — painting into it is the invisible-drag-icon
 			 * symptom THE CONTRACT describes. A detached element reports a null panel. */
 			if (Root != null && (dragIcon == null || dragIcon.panel == null))
 			{

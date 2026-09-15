@@ -111,12 +111,12 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// The rows used to be the only record of the list, and rows do not survive this panel.
-		/// It is authored <c>StartOpen: 0</c>, so the very first world list a client ever
-		/// receives arrives while there is no visual tree: row construction was gated on
-		/// <c>serverListContainer != null</c>, that gate was false, and the <see cref="Show"/> on
-		/// the line below it then presented an empty world list to a player who had just
-		/// successfully selected a character. The same happens on every later arrival that lands
-		/// while the panel is hidden, because showing it re-clones the UXML.
+		/// It is authored <c>StartOpen: 0</c>, and when hiding disabled the document the very first
+		/// world list a client ever received arrived while there was no visual tree: row construction
+		/// was gated on <c>serverListContainer != null</c>, that gate was false, and the
+		/// <see cref="Show"/> on the line below it then presented an empty world list to a player who
+		/// had just successfully selected a character. The same happened on every later arrival that
+		/// landed while the panel was hidden, because showing it re-cloned the UXML.
 		/// <para>
 		/// Holding the details here makes the rows a rendering of state, which
 		/// <see cref="RebuildServerRows"/> re-runs against whatever tree is on screen. See
@@ -622,7 +622,7 @@ namespace FishMMO.Client
 		/// Re-renders the world list and the control states after the visual tree was rebuilt.
 		/// </summary>
 		/// <remarks>
-		/// Every element this panel writes to is replaced on each hide/show. The connect lock
+		/// Every element this panel writes to is replaced when the tree is (once on each hide/show). The connect lock
 		/// matters as much as the rows do: it came back enabled while the hop-token request it
 		/// was guarding was still outstanding, so a second click started a second handoff.
 		/// </remarks>

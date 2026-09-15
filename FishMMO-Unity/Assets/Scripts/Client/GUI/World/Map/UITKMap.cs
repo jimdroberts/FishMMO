@@ -342,7 +342,13 @@ namespace FishMMO.Client
 			BuildFilterToggles();
 			BuildColorSwatches();
 
+			/* Removed before adding. OnStarting runs again whenever this panel's visual tree is
+			 * replaced (UITKControl.ReinitializeIfTreeReplaced; once every hide/show), and these are
+			 * static events, so each opening of the world map used to add another copy of both
+			 * handlers. Same defect as UITKMinimap. */
+			ClientMapSystem.OnSceneMapChanged -= MapSystem_OnSceneChanged;
 			ClientMapSystem.OnSceneMapChanged += MapSystem_OnSceneChanged;
+			ClientMapSystem.OnNotesChanged -= MapSystem_OnNotesChanged;
 			ClientMapSystem.OnNotesChanged += MapSystem_OnNotesChanged;
 
 			/* Static events on the controller interface, so they can be subscribed before any
@@ -409,6 +415,35 @@ namespace FishMMO.Client
 			CenterOnCharacter();
 			nextMarkerRefreshTime = 0.0;
 			RefreshNotes();
+			RefreshWaypointPanel();
+
+			/* The readouts persist with the tree and would describe wherever the pointer was when the
+			 * map was closed until it next moved over the map. */
+			if (cursorLabel != null)
+			{
+				cursorLabel.text = string.Empty;
+			}
+			if (regionLabel != null)
+			{
+				regionLabel.text = string.Empty;
+			}
+		}
+
+		/// <summary>
+		/// Hides the map and ends a pan that was in progress.
+		/// </summary>
+		/// <remarks>
+		/// Hiding releases the pointer the map had captured, and a released capture sends no pointer
+		/// up, so without this the next open would pan on the first pointer move.
+		/// </remarks>
+		/// <param name="overrideIsAlwaysOpen">When true, the call is a no-op.</param>
+		public override void Hide(bool overrideIsAlwaysOpen)
+		{
+			base.Hide(overrideIsAlwaysOpen);
+			if (!Visible)
+			{
+				panning = false;
+			}
 		}
 
 		/// <summary>

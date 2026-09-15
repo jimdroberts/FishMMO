@@ -459,13 +459,22 @@ namespace FishMMO.Client
 			Root.UnregisterCallback<KeyDownEvent>(OnPickerKeyDown, TrickleDown.TrickleDown);
 			Root.RegisterCallback<KeyDownEvent>(OnPickerKeyDown, TrickleDown.TrickleDown);
 
+			current = InitialColor;
+
+			/* The textures are for a picker somebody is looking at. Every picker starts with its
+			 * scene, hidden, and building a 192x192 spectrum for each at load was work thrown away;
+			 * OnAfterShow builds them on the first open. */
+			if (!Visible)
+			{
+				return;
+			}
+
 			// Static spectrum backgrounds that never change.
 			BuildStaticStrips();
 
-			/* Seeded silently. Open assigns the subscriber before Show, and Show is what runs this
-			 * on a start-hidden panel, so notifying here reported the caller's own colour straight
-			 * back to it as if the player had picked it — and the Options panel answers every
-			 * report with a settings write and a theme reload. */
+			/* Seeded silently. Open assigns the subscriber before Show, so notifying here reported
+			 * the caller's own colour straight back to it as if the player had picked it — and the
+			 * Options panel answers every report with a settings write and a theme reload. */
 			ApplyColor(InitialColor, notify: false);
 		}
 
@@ -473,11 +482,17 @@ namespace FishMMO.Client
 		/// Re-binds the textures and re-applies the colour after a visual tree rebuild.
 		/// </summary>
 		/// <remarks>
-		/// The strips survive the rebuild but the elements they were bound to do not, so a
-		/// re-shown picker came back with no spectrum behind any of its sliders.
+		/// The strips survive a rebuild but the elements they were bound to do not, so a picker
+		/// whose tree was replaced came back with no spectrum behind any of its sliders. A hidden
+		/// picker waits for <see cref="OnAfterShow"/>, which does the same.
 		/// </remarks>
 		protected override void OnAfterStarting()
 		{
+			if (!Visible)
+			{
+				return;
+			}
+
 			BuildStaticStrips();
 			ApplyColor(current, notify: false);
 		}
@@ -791,8 +806,8 @@ namespace FishMMO.Client
 			InitialColor = initial;
 
 			/* The colour is set as state before Show, and written into the tree by OnAfterShow.
-			 * Writing it into the elements here would be lost — enabling the document re-clones
-			 * the UXML — and letting OnAfterShow run against the previous colour would report
+			 * Writing it into the elements here was lost when hiding disabled the document and
+			 * Show re-cloned the UXML — and letting OnAfterShow run against the previous colour would report
 			 * that stale colour to the caller that has only just subscribed. */
 			current = initial;
 

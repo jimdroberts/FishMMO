@@ -308,10 +308,8 @@ namespace FishMMO.Client
 		/// Writes the tracked pet state into the current visual tree.
 		/// </summary>
 		/// <remarks>
-		/// Called from both <see cref="OnAfterShow"/> and <see cref="OnAfterStarting"/>: on the
-		/// very first open <c>hasStarted</c> is still false so the tree-replacement path bails out
-		/// and only <c>OnAfterShow</c> runs, while on later shows the tree may genuinely have been
-		/// replaced. Applying the same state from both is idempotent.
+		/// Called from both <see cref="OnAfterShow"/> and <see cref="OnAfterStarting"/>, the latter
+		/// for a tree that was built or replaced. Applying the same state from both is idempotent.
 		/// </remarks>
 		private void ApplyPetState()
 		{
@@ -458,8 +456,8 @@ namespace FishMMO.Client
 				petHealthText = string.Empty;
 			}
 
-			// Show() re-clones the tree, so the state above has to be applied AFTER it, which is
-			// what OnAfterShow does. Applying it again here covers the already-visible case.
+			// Show() writes the state above through OnAfterShow; an already-visible panel is
+			// written directly.
 			if (!Visible)
 			{
 				Show();
@@ -498,7 +496,12 @@ namespace FishMMO.Client
 			if (attribute is CharacterResourceAttribute resource)
 			{
 				ApplyHealth(resource);
-				ApplyPetState();
+
+				// Every health tick; a hidden panel is written when it opens, by OnAfterShow.
+				if (Visible)
+				{
+					ApplyPetState();
+				}
 			}
 		}
 

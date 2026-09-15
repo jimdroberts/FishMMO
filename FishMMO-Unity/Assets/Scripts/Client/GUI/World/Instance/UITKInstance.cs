@@ -13,8 +13,8 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// The roster is a MODEL (<see cref="members"/>, plain data) rendered into a VIEW rebuilt from
-	/// scratch on every open, because <c>UIDocument</c> re-clones the UXML each time it is enabled
-	/// — the rule <see cref="UITKParty"/> documents at length.
+	/// scratch on every open, because <c>UIDocument</c> re-clones the UXML whenever it is re-enabled
+	/// (which hiding used to cause) — the rule <see cref="UITKParty"/> documents at length.
 	/// <para>
 	/// <b>Every open asks the server, and it keeps asking.</b> Membership changes without this
 	/// client being told — someone leaves, someone is removed, the leader walks out — and there is

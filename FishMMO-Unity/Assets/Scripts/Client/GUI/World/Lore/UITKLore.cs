@@ -21,6 +21,7 @@ namespace FishMMO.Client
 		private const string TEXT_NAME = "lore-text";
 		private const string GRANTS_NAME = "lore-grants";
 		private const string FOOTER_NAME = "panel-footer";
+		private const string SCROLL_NAME = "lore-scroll";
 		private const string CLOSE_BTN_NAME = "close-button";
 
 		private const string CSS_HIDDEN = "lore-hidden";
@@ -55,9 +56,9 @@ namespace FishMMO.Client
 		/// Fills the panel on every show.
 		/// </summary>
 		/// <remarks>
-		/// Enabling the document re-clones the UXML, so anything written before <c>Show()</c> is
-		/// discarded — and this panel is only ever opened by a server broadcast, which is exactly
-		/// the case <c>OnAfterStarting</c> alone does not cover.
+		/// When hiding disabled the document, every show re-cloned the UXML and discarded anything
+		/// written before <c>Show()</c>. This panel is only ever opened by a server broadcast, and
+		/// <c>OnAfterStarting</c> runs only at startup and on a genuine tree replacement.
 		/// </remarks>
 		protected override void OnAfterShow()
 		{
@@ -93,6 +94,13 @@ namespace FishMMO.Client
 			loreText = template.LoreText ?? string.Empty;
 			grantSummary = BuildGrantSummary(template);
 
+			// The scroll position persists with the tree; a new text starts at its top.
+			ScrollView scroll = Root?.Q<ScrollView>(SCROLL_NAME);
+			if (scroll != null)
+			{
+				scroll.scrollOffset = UnityEngine.Vector2.zero;
+			}
+
 			if (!Visible)
 			{
 				Show();
@@ -104,7 +112,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Writes everything that has to survive the visual tree being re-cloned.
+		/// Writes the per-open content, and refills the visual tree if it is ever re-cloned.
 		/// </summary>
 		private void ApplyPerOpenContent()
 		{

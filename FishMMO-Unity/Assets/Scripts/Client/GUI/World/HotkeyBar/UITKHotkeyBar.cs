@@ -20,8 +20,9 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>Model / view split.</b> <see cref="bindings"/> is plain data describing what is bound to
 	/// each slot and belongs to the character; <see cref="slots"/> holds the elements currently
-	/// rendering it and belongs to ONE visual tree. <c>UIDocument</c> re-clones the UXML on every
-	/// enable, so any element cached across a hide/show is a pointer into a discarded tree — the
+	/// rendering it and belongs to ONE visual tree. A <c>UIDocument</c> clones the UXML afresh when
+	/// re-enabled (which hiding used to cause on every hide/show), so any element cached across that
+	/// is a pointer into a discarded tree — the
 	/// old code kept its slot state exclusively in those elements and rebuilt them by APPENDING to
 	/// a list it never cleared, so a rebuilt tree produced twelve more orphaned slots and a bar
 	/// whose bindings had quietly detached from what the player could see.
@@ -165,7 +166,7 @@ namespace FishMMO.Client
 		/// Queries the list container, builds the hotkey slots and subscribes to cooldown events.
 		/// </summary>
 		/// <remarks>
-		/// Runs again on every tree rebuild, so everything here is written to be idempotent: the
+		/// Runs again if the tree is ever replaced, so everything here is written to be idempotent: the
 		/// slot list is cleared before it is rebuilt, and the static cooldown subscriptions are
 		/// removed before they are added. A bare <c>+=</c> on a static event from a hook that can
 		/// re-run is an unbounded handler leak.
@@ -174,8 +175,8 @@ namespace FishMMO.Client
 		{
 			EnsureBindings();
 
-			/* The elements in `slots` belong to the tree that was just replaced. Dropping them
-			 * first is what stops BuildSlots appending a second set of twelve. */
+			/* On a re-run the elements in `slots` belong to the tree that was just replaced.
+			 * Dropping them first is what stops BuildSlots appending a second set of twelve. */
 			slots.Clear();
 			list = null;
 

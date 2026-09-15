@@ -148,9 +148,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -171,8 +171,8 @@ namespace FishMMO.Client
 				CountRows);
 
 			/* Unsubscribe first. OnStarting is re-run by ReinitializeIfTreeReplaced every time the
-			 * visual tree is rebuilt — which is every reopen, because hiding the panel disables
-			 * its UIDocument and re-enabling it clones the UXML afresh. A bare += here therefore
+			 * visual tree is rebuilt — which used to be every reopen, when hiding the panel disabled
+			 * its UIDocument and re-enabling it cloned the UXML afresh. A bare += here therefore
 			 * stacked one more subscription per reopen. Removing a handler that is not subscribed
 			 * is a no-op, so this is safe on the first pass. */
 			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
@@ -266,7 +266,7 @@ namespace FishMMO.Client
 		/// <c>OnPreSetCharacter</c> then <c>OnPostSetCharacter</c> on every tree rebuild, and this
 		/// panel's unsubscribe used to live in <see cref="OnPreUnsetCharacter"/> instead — a
 		/// method that path never calls. The result was one extra subscription to a static event
-		/// per reopen.
+		/// per rebuild, which was then every reopen.
 		/// <para>
 		/// The rows go too: they belong to the tree that has just been replaced, and keeping them
 		/// would leave the panel correctly wired and completely empty.

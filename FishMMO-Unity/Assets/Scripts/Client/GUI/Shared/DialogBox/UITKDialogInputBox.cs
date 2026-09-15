@@ -70,8 +70,8 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// Carried as request state rather than set directly on the field, for the same reason the
-		/// message is: <see cref="UITKControl.Show()"/> re-clones the UXML, so anything written to
-		/// the old <see cref="TextField"/> is discarded. It is applied in
+		/// message is: <see cref="UITKControl.Show()"/> used to re-clone the UXML and discard anything
+		/// written to the old <see cref="TextField"/>. It is applied in
 		/// <see cref="ApplyRequest"/> against the live tree, and — importantly — cleared in
 		/// <see cref="ClearRequest"/>, so a masked prompt cannot leave the shared dialog masked
 		/// for the next caller that asks for an ordinary line of text.
@@ -196,7 +196,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The field is cleared here rather than in <see cref="Open"/> so the previous
 		/// prompt's answer — a verification code, a password — cannot survive into the next one
-		/// on the re-cloned tree.
+		/// in the tree the shared dialog keeps between opens.
 		/// </remarks>
 		protected override void ApplyRequest()
 		{

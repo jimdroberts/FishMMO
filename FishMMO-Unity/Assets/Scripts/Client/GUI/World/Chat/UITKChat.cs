@@ -18,10 +18,11 @@ namespace FishMMO.Client
 	/// separate from the elements that render it. That separation is not decoration: a
 	/// <c>UIDocument</c> re-clones its UXML every time it is enabled, so every element this class
 	/// has ever created can be replaced out from under it, and anything held only as a
-	/// <see cref="VisualElement"/> is lost with it. Rebuilding the view from the model in
-	/// <see cref="OnStarting"/> is what keeps a hide/show from emptying the window — and what
-	/// stops it from stacking a second copy of the welcome block and a second default tab on top
-	/// of the first every time the tree comes back.
+	/// <see cref="VisualElement"/> is lost with it. Hiding used to do exactly that on every
+	/// hide/show; it keeps the tree now, but rebuilding the view from the model in
+	/// <see cref="OnStarting"/> is still what survives a replaced tree — and what stops it from
+	/// stacking a second copy of the welcome block and a second default tab on top of the first
+	/// every time the tree comes back.
 	/// </remarks>
 	public class UITKChat : UITKCharacterControl, IChatHelper
 	{
@@ -395,7 +396,7 @@ namespace FishMMO.Client
 		/// <c>UITKControl.ReinitializeIfTreeReplaced</c>), so everything it does has to be
 		/// idempotent. It used to call <see cref="AddTab"/> and write the welcome block
 		/// unconditionally, which meant a second default tab and a second welcome banner after
-		/// every hide/show — and, because the old rows were still in the discarded tree, a
+		/// every hide/show, when hiding still replaced the tree — and, because the old rows were still in the discarded tree, a
 		/// message list that grew by a full screen of content per login.
 		/// </remarks>
 		public override void OnStarting()
@@ -619,7 +620,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public void EnableChatInput()
 		{
-			if (Character == null ||
+			if (!Visible ||
+				Character == null ||
 				inputField == null)
 			{
 				return;

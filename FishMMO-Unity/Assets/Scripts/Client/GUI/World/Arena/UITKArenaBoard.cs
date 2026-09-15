@@ -230,6 +230,13 @@ namespace FishMMO.Client
 			view = BoardView.Queue;
 			history = null;
 			leaderboard = null;
+
+			// The scroll position persists with the tree; a fresh visit opens at the top.
+			if (listScroll != null)
+			{
+				listScroll.scrollOffset = Vector2.zero;
+			}
+
 			Show();
 			ApplyBoard();
 			RequestProfile();

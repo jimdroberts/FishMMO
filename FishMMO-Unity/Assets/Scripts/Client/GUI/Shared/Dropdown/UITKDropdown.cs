@@ -17,10 +17,11 @@ namespace FishMMO.Client
 	/// dropdown.AddToggle("Show offline", OnToggleOffline);
 	/// dropdown.Show();
 	/// </code>
-	/// Those <c>AddButton</c> calls cannot create elements straight away. The menu starts hidden,
-	/// so before the first <c>Show()</c> there is no visual tree to add them to at all, and after
-	/// a hide there is one that is about to be replaced — enabling the document re-clones the
-	/// UXML. Either way the entries went into a tree nobody sees and the menu opened empty.
+	/// Those <c>AddButton</c> calls used to be unable to create elements straight away. The menu
+	/// starts hidden, and when hiding disabled the document there was no visual tree before the
+	/// first <c>Show()</c>, and after a hide there was one about to be replaced — enabling the
+	/// document re-cloned the UXML. Either way the entries went into a tree nobody saw and the
+	/// menu opened empty.
 	/// <para>
 	/// So the entries are recorded as data here and built into the live tree from
 	/// <see cref="OnAfterShow"/> and after any tree rebuild. That also makes the ordering of the
@@ -62,7 +63,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// Rebuilt whenever the entries are built into a tree; a reference kept across a
-		/// hide/show would point at an element that has already been discarded.
+		/// rebuild would point at an element that has already been discarded.
 		/// </remarks>
 		public Dictionary<string, Button> Buttons = new Dictionary<string, Button>();
 

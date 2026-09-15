@@ -84,9 +84,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -104,8 +104,8 @@ namespace FishMMO.Client
 				"achievements");
 
 			/* Unsubscribe first. OnStarting is re-run by ReinitializeIfTreeReplaced every time
-			 * the visual tree is rebuilt — which is every reopen, because hiding the panel
-			 * disables its UIDocument and re-enabling it clones the UXML afresh. A bare += here
+			 * the visual tree is rebuilt — which used to be every reopen, when hiding the panel
+			 * disabled its UIDocument and re-enabling it cloned the UXML afresh. A bare += here
 			 * therefore stacked one more subscription per reopen, and the handler ran once more
 			 * each time. Removing a handler that is not subscribed is a no-op, so this is safe on
 			 * the first pass. */
@@ -132,8 +132,8 @@ namespace FishMMO.Client
 		/// The Pre half is what makes re-initialisation idempotent. <c>OnAfterStarting</c> runs
 		/// <c>OnPreSetCharacter</c> then <c>OnPostSetCharacter</c> on every tree rebuild, and this
 		/// panel's unsubscribe used to live in <see cref="OnPreUnsetCharacter"/> instead — a
-		/// method that path never calls. The result was one extra static subscription per reopen,
-		/// on a static event, so the handler ran N times for a panel opened N times.
+		/// method that path never calls. The result was one extra static subscription per rebuild,
+		/// on a static event, so when every open rebuilt the tree the handler ran N times for a panel opened N times.
 		/// <para>
 		/// The rows are cleared here as well. They are <c>VisualElement</c>s belonging to the tree
 		/// that has just been replaced; keeping them would leave the dictionary full of elements
@@ -172,7 +172,7 @@ namespace FishMMO.Client
 				AchievementController_OnUpdateAchievement(Character, achievement);
 			}
 
-			// Re-apply the category the player had selected, so a reopen does not reset the tab.
+			// Re-apply the category the player had selected, so a rebuild does not reset the tab.
 			Category_OnClick(currentCategory);
 		}
 
@@ -240,6 +240,7 @@ namespace FishMMO.Client
 				};
 				categoryButton.AddToClassList("fish-tab");
 				categoryButton.AddToClassList(CATEGORY_BUTTON_CLASS);
+				categoryButton.EnableInClassList("fish-tab--active", category == currentCategory);
 				categoryList.Add(categoryButton);
 				categoryButtons.Add(category, categoryButton);
 			}
@@ -247,6 +248,9 @@ namespace FishMMO.Client
 			if (!achievements.TryGetValue(achievement.Template.ID, out DescriptionRow row))
 			{
 				row = CreateRow();
+				/* Filtered like the rows Category_OnClick already sorted, or an achievement first reached
+				 * while another category is selected shows up in that category's list. */
+				row.Root.style.display = category == currentCategory ? DisplayStyle.Flex : DisplayStyle.None;
 				row.Label.text = achievement.Template.Description;
 				if (achievement.Template.Icon != null)
 				{

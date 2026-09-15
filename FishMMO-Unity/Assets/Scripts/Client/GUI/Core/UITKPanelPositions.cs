@@ -8,11 +8,11 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// Panel positions have to survive two very different lifetimes, and the shorter one is the
-	/// reason this exists at all. Hiding a panel disables its <see cref="UnityEngine.UIElements.UIDocument"/>,
-	/// and re-enabling it clones the UXML afresh — so the inline <c>left</c>/<c>top</c> a drag
-	/// wrote are discarded the first time the panel is closed. Without somewhere outside the
+	/// reason this exists at all. Hiding a panel used to disable its <see cref="UnityEngine.UIElements.UIDocument"/>,
+	/// and re-enabling it cloned the UXML afresh — so the inline <c>left</c>/<c>top</c> a drag
+	/// wrote were discarded the first time the panel was closed. Without somewhere outside the
 	/// visual tree to keep them, "move the inventory window" only lasted until the player pressed
-	/// the key that closed it.
+	/// the key that closed it. Hiding keeps the tree now, but a replaced tree still loses them.
 	/// <para>
 	/// The longer lifetime is the session. Values live in <see cref="Configuration.GlobalSettings"/>
 	/// under <c>UI.Panel.&lt;name&gt;.X</c> / <c>.Y</c>, beside every other client setting, so a

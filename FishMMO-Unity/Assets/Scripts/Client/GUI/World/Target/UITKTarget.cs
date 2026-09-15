@@ -40,9 +40,9 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>Model / view split.</b> The displayed values live in each card's fields; the elements
 	/// belong to one visual tree and are rebuilt from those fields in <c>OnAfterShow</c> /
-	/// <c>OnAfterStarting</c>. <c>UIDocument</c> re-clones the UXML on every enable, so a frame
-	/// that wrote its content before <c>Show()</c> — or cached elements across a hide/show — comes
-	/// back blank.
+	/// <c>OnAfterStarting</c>. When hiding disabled the <c>UIDocument</c>, every show re-cloned
+	/// the UXML, so a frame that wrote its content before <c>Show()</c> came back blank. The tree
+	/// persists across hide/show now; the fields still let a genuinely replaced tree be refilled.
 	/// </para>
 	/// </remarks>
 	public class UITKTarget : UITKCharacterControl
@@ -236,7 +236,7 @@ namespace FishMMO.Client
 			/// </summary>
 			public bool HasTarget => !ReferenceEquals(Target, null);
 
-			/// <summary>Queries this card's elements from a freshly cloned tree.</summary>
+			/// <summary>Queries this card's elements from the panel's current tree.</summary>
 			/// <param name="panelRoot">The panel's root element.</param>
 			public void QueryElements(VisualElement panelRoot)
 			{
@@ -291,7 +291,7 @@ namespace FishMMO.Client
 		/// Queries both cards' elements and subscribes to the observed-buff push.
 		/// </summary>
 		/// <remarks>
-		/// Re-runs on every tree rebuild. The pooled icons belong to the tree that was just
+		/// Re-runs if the tree is ever replaced. The pooled icons then belong to the tree that was just
 		/// replaced, so the pool is dropped rather than reused; the static subscription is removed
 		/// before it is added so rebuilds cannot stack handlers.
 		/// </remarks>
@@ -705,8 +705,9 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="card">The card that was just resolved.</param>
 		/// <remarks>
-		/// Show() re-clones the tree, so the card's state must be written AFTER it. OnAfterShow
-		/// does exactly that, for both cards; ApplyCardState covers the already-visible case.
+		/// Show() used to re-clone the tree, so the card's state had to be written AFTER it; it no
+		/// longer does, but OnAfterShow still writes both cards on every open, and ApplyCardState
+		/// covers the already-visible case.
 		/// </remarks>
 		private void PresentCard(TargetCard card)
 		{
@@ -801,10 +802,10 @@ namespace FishMMO.Client
 		/// Writes both cards' tracked state into the current visual tree.
 		/// </summary>
 		/// <remarks>
-		/// Called from <see cref="OnAfterShow"/> and <see cref="OnAfterStarting"/>. On a panel's
-		/// very first open <c>hasStarted</c> is still false, so <c>ReinitializeIfTreeReplaced</c>
-		/// bails out and only <c>OnAfterShow</c> runs; on later shows the tree may genuinely have
-		/// been replaced and both fire. Writing the same state twice is harmless.
+		/// Called from <see cref="OnAfterShow"/> and <see cref="OnAfterStarting"/>.
+		/// <c>OnAfterShow</c> runs on every open; <c>OnAfterStarting</c> runs once when the tree
+		/// first exists and again only if it is genuinely replaced, when both fire. Writing the
+		/// same state twice is harmless.
 		/// </remarks>
 		private void ApplyTargetState()
 		{

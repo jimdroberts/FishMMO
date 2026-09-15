@@ -33,13 +33,12 @@ namespace FishMMO.Client
 	/// player's benefit and clamped again on the server, which recomputes the price from its own
 	/// templates. The client never sends a price, and the totals shown here are display only.</para>
 	///
-	/// <para><b>Content is written after Show, and again after a tree rebuild.</b> A
-	/// <c>UIDocument</c> re-clones its UXML on every enable, so anything written before
-	/// <see cref="UITKControl.Show"/> is discarded. The merchant offer arrives in a broadcast, is
-	/// kept as plain data, and is rendered from <see cref="OnAfterShow"/> and
-	/// <see cref="OnAfterStarting"/> — both, because on a panel's very first open
-	/// <c>hasStarted</c> is still false and the re-initialisation path bails out before
-	/// <c>OnAfterShow</c> would help.</para>
+	/// <para><b>Content is written after Show, and again after a tree rebuild.</b> When hiding
+	/// disabled the <c>UIDocument</c>, every show re-cloned the UXML and discarded anything written
+	/// before <see cref="UITKControl.Show"/>. The merchant offer arrives in a broadcast, is
+	/// kept as plain data, and is rendered from <see cref="OnAfterShow"/>, which runs on every
+	/// open, and <see cref="OnAfterStarting"/>, which runs once at startup and again only if the
+	/// tree is genuinely replaced.</para>
 	/// </remarks>
 	public class UITKMerchant : UITKCharacterControl
 	{
@@ -60,6 +59,9 @@ namespace FishMMO.Client
 
 		/// <summary>Name of the header close button element.</summary>
 		private const string CLOSE_BTN_NAME = "close-button";
+
+		/// <summary>Scroll view around the entry lists.</summary>
+		private const string SCROLL_NAME = "merchant-scroll";
 
 		/// <summary>Name of the abilities tab button.</summary>
 		private const string ABILITIES_TAB_NAME = "merchant-tab-abilities";
@@ -300,9 +302,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -412,7 +414,7 @@ namespace FishMMO.Client
 		/// Overridden rather than left to <see cref="OnPreUnsetCharacter"/> because
 		/// <c>OnAfterStarting</c> re-runs the Pre/Post pair on every visual tree rebuild and never
 		/// touches the Unset half. Subscribing in Post without a matching unsubscribe in Pre is
-		/// how a panel ends up with one extra handler per reopen.
+		/// how a panel ends up with one extra handler per rebuild.
 		/// </remarks>
 		public override void OnPreSetCharacter()
 		{
@@ -467,15 +469,22 @@ namespace FishMMO.Client
 		protected override void OnAfterShow()
 		{
 			RebuildAll();
+
+			// The scroll position persists with the tree; a merchant's offer opens at its top.
+			ScrollView scroll = Root?.Q<ScrollView>(SCROLL_NAME);
+			if (scroll != null)
+			{
+				scroll.scrollOffset = Vector2.zero;
+			}
 		}
 
 		/// <summary>
-		/// Renders the merchant's offer again after the visual tree has been rebuilt.
+		/// Renders the merchant's offer once the tree exists, and again if it is replaced.
 		/// </summary>
 		/// <remarks>
-		/// Both hooks are needed. <c>OnAfterShow</c> alone does nothing on a panel's first open,
-		/// because the tree-replacement check bails out while <c>hasStarted</c> is still false;
-		/// <c>OnAfterStarting</c> alone misses every subsequent reopen.
+		/// <c>OnAfterShow</c> covers every open; this covers a tree genuinely replaced while the
+		/// panel is up. <c>OnAfterStarting</c> alone would miss every open after startup, and at
+		/// startup it is harmless: there is no offer to render yet.
 		/// </remarks>
 		protected override void OnAfterStarting()
 		{
@@ -488,8 +497,9 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// Closing the merchant with Escape while the pointer sat over a row left the tooltip on
-		/// screen for good: the row's PointerLeave never fires, because the element is not left —
-		/// it is destroyed along with the rest of the tree when the document is disabled.
+		/// screen for good: the row's PointerLeave never fired, because the element was not left —
+		/// it was destroyed along with the rest of the tree when hiding disabled the document. The
+		/// tree survives a hide now, but a row that merely stops being drawn is not a promised leave.
 		/// </remarks>
 		public override void Hide(bool overrideIsAlwaysOpen)
 		{
@@ -520,8 +530,8 @@ namespace FishMMO.Client
 			}
 
 			/* Only while open. The inventory changes constantly during play and this panel is
-			 * closed for nearly all of it; rebuilding a hidden panel's list writes rows into a
-			 * tree that is discarded on the next open anyway. */
+			 * closed for nearly all of it; rebuilding a hidden panel's list is wasted work, since
+			 * OnAfterShow rebuilds every list on the next open anyway. */
 			if (sellRebuildQueued && Visible)
 			{
 				sellRebuildQueued = false;
@@ -583,9 +593,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Show first, then render. Enabling the document clones a fresh tree, so anything
-			 * written before this line is thrown away — see the class remarks. Show() calls
-			 * OnAfterShow, which does the rendering. */
+			/* Show first, then render. Show used to clone a fresh tree, throwing away anything
+			 * written before this line — see the class remarks. Show() calls OnAfterShow, which
+			 * does the rendering. */
 			Show();
 
 			// Already visible: Show is a no-op and OnAfterShow never ran, so render directly.
@@ -702,6 +712,7 @@ namespace FishMMO.Client
 			int itemCount = BuildEntries(itemsList, template?.Items, MerchantTabType.Item);
 			int premadeCount = BuildEntries(premadeList, template?.PremadeAbilities, MerchantTabType.PremadeAbility);
 			BuildSellEntries();
+			sellRebuildQueued = false;
 
 			SetTabEnabled(abilitiesTab, abilityCount > 0);
 			SetTabEnabled(eventsTab, eventCount > 0);
@@ -709,9 +720,9 @@ namespace FishMMO.Client
 			SetTabEnabled(premadeTab, premadeCount > 0);
 			SetTabEnabled(sellTab, template != null && template.BuysItems);
 
-			/* The selection lived in the tree that was just replaced, so it cannot survive a
-			 * rebuild. Dropping it also closes the footer, which is the correct state for a panel
-			 * that has just been re-rendered. */
+			/* The selection pointed at an entry this rebuild just replaced, so it cannot survive
+			 * one. Dropping it also closes the footer, which is the correct state for a panel that
+			 * has just been re-rendered. */
 			ClearSelection();
 
 			ApplyTabVisibility();

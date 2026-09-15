@@ -45,6 +45,7 @@ namespace FishMMO.Client
 		private const string SUBTITLE_NAME = "header-subtitle";
 		private const string EMPTY_NAME = "container-empty";
 		private const string STATUS_NAME = "container-status";
+		private const string SCROLL_NAME = "container-scroll";
 		private const string TAKE_ALL_NAME = "container-take-all";
 		private const string CLOSE_BTN_NAME = "close-button";
 
@@ -164,10 +165,10 @@ namespace FishMMO.Client
 		/// Fills the panel on every show, including the very first one.
 		/// </summary>
 		/// <remarks>
-		/// Enabling the document re-clones the UXML, so anything written before <c>Show()</c> is
-		/// discarded. This panel's first open is always driven by a server broadcast rather than
-		/// by startup, which is exactly the case where <c>OnAfterStarting</c> alone is not enough.
-		/// Both hooks do the work and both are idempotent.
+		/// When hiding disabled the document, every show re-cloned the UXML and discarded anything
+		/// written before <c>Show()</c>. This panel is always opened by a server broadcast rather
+		/// than at startup, and <c>OnAfterStarting</c> runs only at startup and on a genuine tree
+		/// replacement, so it alone is not enough. Both hooks do the work and both are idempotent.
 		/// </remarks>
 		protected override void OnAfterShow()
 		{
@@ -237,6 +238,19 @@ namespace FishMMO.Client
 				ClearPending();
 			}
 
+			/* A different container, or one opened afresh: the status line and the scroll position
+			 * persist with the tree and describe the last one. A refresh of the open container keeps
+			 * both, so taking an item does not jump the list back to the top. */
+			if (!Visible || msg.InteractableID != containerID)
+			{
+				SetStatus(string.Empty);
+				ScrollView scroll = Root?.Q<ScrollView>(SCROLL_NAME);
+				if (scroll != null)
+				{
+					scroll.scrollOffset = Vector2.zero;
+				}
+			}
+
 			containerID = msg.InteractableID;
 			slotData = msg.Items ?? new ContainerSlotData[0];
 
@@ -296,7 +310,7 @@ namespace FishMMO.Client
 		// ── Rendering ─────────────────────────────────────────────────────────
 
 		/// <summary>
-		/// Writes everything that has to survive the visual tree being re-cloned.
+		/// Writes the per-open content, and refills the visual tree if it is ever re-cloned.
 		/// </summary>
 		private void ApplyPerOpenContent()
 		{
@@ -580,6 +594,7 @@ namespace FishMMO.Client
 			containerName = string.Empty;
 			ClearPending();
 			DestroyRows();
+			SetStatus(string.Empty);
 		}
 	}
 }

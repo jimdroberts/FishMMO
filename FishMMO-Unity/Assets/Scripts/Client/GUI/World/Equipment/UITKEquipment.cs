@@ -108,7 +108,7 @@ namespace FishMMO.Client
 			/* The sheet resolves the attribute list, the preview viewport and the status labels in the
 			 * same tree, and hides the regions this viewer may not see — for this panel, none. It is
 			 * disposed rather than dropped because it owns a render texture and a camera reference, and
-			 * a hide/show cycle would otherwise leak one of each every time. */
+			 * a tree replacement re-running this would otherwise leak one of each every time. */
 			sheet?.Dispose();
 			sheet = new CharacterSheetView(root, CharacterSheetOptions.Equipment);
 
@@ -436,7 +436,12 @@ namespace FishMMO.Client
 			 * handed back when the panel closes, so the opening after that starts from nothing. The
 			 * attribute rows are NOT rebuilt here — they are built once per character by SetSubject,
 			 * because they carry subscriptions and rebuilding them per open would churn them. */
-			sheet?.Refresh();
+			if (Visible)
+			{
+				/* The preview claims a camera and a render texture that Hide hands back. A hidden panel
+				 * is given characters too, and would hold them with nothing to release them. */
+				sheet?.Refresh();
+			}
 		}
 
 		/* RefreshAllSlots, IsSlotBlocked, RefreshSlot, SetSlotItem, ClearSlot, RefreshSlotTooltip

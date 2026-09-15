@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -19,10 +20,12 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// The second is measurement. An element's <c>resolvedStyle</c> size is NaN until the layout
-	/// pass that follows the frame it was added or re-cloned in, so a clamp computed at the
-	/// moment of positioning has nothing to clamp against and silently does nothing. The clamp
-	/// here reports whether it could be applied, and the caller defers a single re-clamp to the
-	/// element's next <see cref="GeometryChangedEvent"/> when it could not.
+	/// pass that follows the frame it was added in, so a clamp computed at the moment of
+	/// positioning has nothing to clamp against and silently does nothing. A widget that is reused
+	/// has the opposite problem: panels keep their trees across hide and show, so a menu reopened
+	/// with new entries measures at the size its previous entries gave it, and a clamp that trusts
+	/// that alone leaves it hanging off the edge. The clamp here is applied at once with whatever
+	/// size can be read, and again on the element's next <see cref="GeometryChangedEvent"/>.
 	/// </para>
 	/// <para>
 	/// Sizes are compared against the container's <c>contentRect</c> rather than
@@ -60,8 +63,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Positions <paramref name="element"/> at <paramref name="desired"/> and keeps it inside
-		/// <paramref name="container"/>, deferring the clamp when the element has not been laid
-		/// out yet.
+		/// <paramref name="container"/>, clamping again once the element's layout settles.
 		/// </summary>
 		/// <param name="container">Element the position is measured against, normally the panel root.</param>
 		/// <param name="element">Absolutely-positioned element to move.</param>
@@ -79,19 +81,60 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (TryClamp(container, element, desired, flip))
+			if (!clampRequests.TryGetValue(element, out ClampRequest request))
+			{
+				request = new ClampRequest();
+				clampRequests.Add(element, request);
+				element.RegisterCallback<GeometryChangedEvent>(OnClampedElementGeometryChanged);
+			}
+			request.Container = container;
+			request.Desired = desired;
+			request.Flip = flip;
+			request.Armed = true;
+
+			/* Not measurable yet: write the unclamped position so the widget is at least at the
+			 * cursor for the frame it appears on. Either way the request stays armed, and the next
+			 * layout clamps against the size the element actually settles at. */
+			if (!TryClamp(container, element, desired, flip))
+			{
+				element.style.left = desired.x;
+				element.style.top = desired.y;
+			}
+		}
+
+		/// <summary>The latest placement asked of an element.</summary>
+		private sealed class ClampRequest
+		{
+			public VisualElement Container;
+			public Vector2 Desired;
+			public bool Flip;
+			public bool Armed;
+		}
+
+		/// <summary>
+		/// One request per placed element, held weakly so a destroyed widget takes its entry with it.
+		/// </summary>
+		/// <remarks>
+		/// One permanent handler per element that reads its latest request, rather than a one-shot
+		/// handler per placement: a one-shot handler that never fired, because the size did not
+		/// change, would fire on some later resize with the anchor of a placement long replaced.
+		/// </remarks>
+		private static readonly ConditionalWeakTable<VisualElement, ClampRequest> clampRequests = new ConditionalWeakTable<VisualElement, ClampRequest>();
+
+		/// <summary>Clamps an armed element against its settled size, then disarms it.</summary>
+		private static void OnClampedElementGeometryChanged(GeometryChangedEvent evt)
+		{
+			if (!(evt.currentTarget is VisualElement element) ||
+				!clampRequests.TryGetValue(element, out ClampRequest request) ||
+				!request.Armed)
 			{
 				return;
 			}
 
-			/* Not measurable yet. Write the unclamped position so the widget is at least at the
-			 * cursor for the frame it appears on, and re-run the clamp once the layout that
-			 * gives the element a size has happened. RegisterCallbackOnce rather than
-			 * RegisterCallback: this runs on the frame a tree is (re-)cloned, and a permanent
-			 * handler would re-clamp on every later resize using a stale anchor. */
-			element.style.left = desired.x;
-			element.style.top = desired.y;
-			element.RegisterCallbackOnce<GeometryChangedEvent>((evt) => TryClamp(container, element, desired, flip));
+			if (TryClamp(request.Container, element, request.Desired, request.Flip))
+			{
+				request.Armed = false;
+			}
 		}
 
 		/// <summary>

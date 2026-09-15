@@ -257,11 +257,11 @@ namespace FishMMO.Client
 		/// Fills the panel on every show, including the very first one.
 		/// </summary>
 		/// <remarks>
-		/// Enabling the document re-clones the UXML, so anything written before <c>Show()</c> is
-		/// discarded. This panel's first open is always driven by a server broadcast rather than
-		/// by startup, which is precisely the case where <c>OnAfterStarting</c> alone is not
-		/// enough — see the same note on the bank panel. Both hooks do the work and both are
-		/// idempotent.
+		/// When hiding disabled the document, every show re-cloned the UXML and discarded anything
+		/// written before <c>Show()</c>. This panel is always opened by a server broadcast rather
+		/// than at startup, and <c>OnAfterStarting</c> runs only at startup and on a genuine tree
+		/// replacement, so it alone is not enough — see the same note on the bank panel. Both
+		/// hooks do the work and both are idempotent.
 		/// </remarks>
 		protected override void OnAfterShow()
 		{
@@ -382,8 +382,8 @@ namespace FishMMO.Client
 
 			if (!Visible)
 			{
-				// Show() ends in OnAfterShow, which renders; rendering here as well would write
-				// into a tree the document is about to discard and re-clone.
+				// Show() ends in OnAfterShow, which renders; rendering here as well would only
+				// do the work twice.
 				Show();
 				return;
 			}
@@ -653,7 +653,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// <c>RemoveFromHierarchy</c> rather than <c>listRoot.Remove</c>: after the document
-		/// re-clones the UXML these roots belong to the previous tree, and
+		/// re-clones the UXML (a genuine tree replacement) these roots belong to the previous tree, and
 		/// <c>VisualElement.Remove</c> throws for an element that is not its child — which would
 		/// abandon the rebuild and leave the panel permanently blank.
 		/// </remarks>

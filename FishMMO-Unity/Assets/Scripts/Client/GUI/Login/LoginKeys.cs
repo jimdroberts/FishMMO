@@ -162,8 +162,8 @@ namespace FishMMO.Client
 		/// <para>
 		/// A <see cref="ConditionalWeakTable{TKey,TValue}"/> rather than a plain dictionary,
 		/// because the key is a root that <see cref="UnityEngine.UIElements.UIDocument"/>
-		/// <b>replaces</b> on every enable: a panel that is hidden and shown a hundred times
-		/// produces a hundred distinct roots, and a strong-keyed dictionary would hold every one
+		/// <b>replaces</b> on every enable: when hiding disabled the document, a panel hidden and
+		/// shown a hundred times produced a hundred distinct roots, and a strong-keyed dictionary would hold every one
 		/// of them — and the whole discarded visual tree hanging off it — alive forever. The weak
 		/// table lets a dead root and its binding go together, with no bookkeeping here at all.
 		/// </para>

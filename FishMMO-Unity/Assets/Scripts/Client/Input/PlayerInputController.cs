@@ -352,11 +352,12 @@ namespace FishMMO.Client
 			UIManager.Show("UIDebuff");
 			UIManager.Show("UIMinimap");
 
-			/* The crosshair must be in this list even though UITKCrosshair drives its own
-			 * visibility from OnToggleMouseMode: a StartOpen:0 panel's UIDocument is disabled,
-			 * so its visual tree never clones, OnStarting never runs, and the subscription that
-			 * would show it never exists. This first Show() is what breaks that deadlock; from
-			 * then on the panel follows mouse mode (hidden while the cursor is free). */
+			/* The crosshair stays in this list even though UITKCrosshair drives its own
+			 * visibility from OnToggleMouseMode. When hiding disabled a StartOpen:0 panel's
+			 * UIDocument, its visual tree never cloned, OnStarting never ran, and the subscription
+			 * that would show it never existed; this first Show() broke that deadlock. OnStarting
+			 * now runs at scene load, and this Show() puts the crosshair up before the first
+			 * toggle; from then on the panel follows mouse mode (hidden while the cursor is free). */
 			UIManager.Show("UICrosshair");
 		}
 

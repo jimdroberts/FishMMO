@@ -256,7 +256,7 @@ namespace FishMMO.Client
 
 			if (slotGrid == null)
 			{
-				// Built on the first open instead — see ApplyPerOpenContent.
+				// Built once the tree exists instead — see ApplyPerOpenContent.
 				return;
 			}
 
@@ -378,8 +378,8 @@ namespace FishMMO.Client
 		/// Two ways the grid goes stale. The container changed size — including the case that
 		/// matters most here, a grid built at zero because the panel was opened before the
 		/// character had one, which nothing else would ever correct. And the elements belong to a
-		/// tree that has since been replaced: <c>UIDocument</c> re-clones the UXML on every
-		/// enable, and a slot whose parent is not the current grid is drawn nowhere at all while
+		/// tree that has since been replaced: <c>UIDocument</c> re-clones the UXML whenever it is
+		/// re-enabled, and a slot whose parent is not the current grid is drawn nowhere at all while
 		/// still looking perfectly valid from C#.
 		/// </para>
 		/// </remarks>
@@ -479,7 +479,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// <c>RemoveFromHierarchy</c>, not <c>slotGrid.Remove</c>.
 		/// <c>VisualElement.Remove</c> THROWS when the element is not its child, and after the
-		/// document re-clones the UXML these roots belong to the previous tree while
+		/// document re-clones the UXML (every show, when hiding disabled it) these roots belong to the previous tree while
 		/// <c>slotGrid</c> is the new one — so the old code threw on the first slot, abandoning
 		/// the rebuild and leaving the panel permanently empty on screen.
 		/// </remarks>

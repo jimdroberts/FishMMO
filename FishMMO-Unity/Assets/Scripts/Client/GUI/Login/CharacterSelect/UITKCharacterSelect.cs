@@ -132,12 +132,13 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// The rows used to be the only record of what the server had sent, and rows do not
-		/// survive this panel. It is authored <c>StartOpen: 0</c>, so on the first login it has no
-		/// visual tree at all when the list arrives and <see cref="CreateCharacterRow"/> dropped
-		/// every character on the floor — the player reached an empty character screen with a
-		/// Create button and no explanation. On later arrivals the handler hid the panel first,
-		/// which disables the UIDocument and discards the tree, built the rows into that discarded
-		/// tree, and then showed the panel again — re-cloning the UXML and its empty list.
+		/// survive this panel. It is authored <c>StartOpen: 0</c>, so when hiding disabled the
+		/// document it had no visual tree at all on the first login when the list arrived, and
+		/// <see cref="CreateCharacterRow"/> dropped every character on the floor — the player
+		/// reached an empty character screen with a Create button and no explanation. On later
+		/// arrivals the handler hid the panel first, which then disabled the UIDocument and
+		/// discarded the tree, built the rows into that discarded tree, and then showed the panel
+		/// again — re-cloning the UXML and its empty list.
 		/// <para>
 		/// Holding the characters here makes the rows a rendering of state rather than the state
 		/// itself, so <see cref="RebuildCharacterRows"/> can run from
@@ -930,9 +931,9 @@ namespace FishMMO.Client
 		/// <param name="text">Message to display, or null/empty to hide the line.</param>
 		private void SetStatus(string text)
 		{
-			/* Held as state as well as written to the tree. Enabling the UIDocument re-clones the
-			 * UXML, so a message written before a Show() is discarded — and every caller here is
-			 * "explain why, then show the panel". See UITKControl.OnAfterShow. */
+			/* Held as state as well as written to the tree. When hiding disabled the UIDocument, a
+			 * message written before a Show() was discarded with the re-cloned UXML — and every
+			 * caller here is "explain why, then show the panel". See UITKControl.OnAfterShow. */
 			this.pendingStatus = text;
 
 			if (statusLabel == null)
@@ -961,7 +962,8 @@ namespace FishMMO.Client
 		/// Re-applies the status line and the refresh lock after the visual tree was rebuilt.
 		/// </summary>
 		/// <remarks>
-		/// The elements are new after every hide/show, so a message written before the rebuild is
+		/// The elements are new after a tree rebuild (after every hide/show, when hiding disabled the
+		/// document), so a message written before the rebuild is
 		/// gone. This panel is shown precisely <i>because</i> something went wrong, so losing the
 		/// sentence explaining it would leave an empty list with no explanation.
 		/// </remarks>
@@ -985,7 +987,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// The rows, the status line and the two button locks are all written into elements that
-		/// a later hide/show replaces. The locks matter as much as the rows: Connect came back
+		/// a tree replacement discards. The locks matter as much as the rows: Connect came back
 		/// enabled after a rebuild while the reply guard was still pending, so a second click sent
 		/// a second selection for a request that was already in flight.
 		/// </remarks>

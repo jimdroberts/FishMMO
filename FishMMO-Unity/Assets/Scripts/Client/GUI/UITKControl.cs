@@ -100,8 +100,12 @@ namespace FishMMO.Client
 		public Client Client { get; private set; }
 
 		/// <summary>
-		/// True when the UIDocument is enabled (panel is rendered and interactive).
+		/// True while the panel is shown: drawn, clickable and focusable.
 		/// </summary>
+		/// <remarks>
+		/// A hidden panel keeps its UIDocument enabled and its visual tree alive; only its root's
+		/// visibility changes. See <see cref="ApplyRootVisibility"/>.
+		/// </remarks>
 		public bool Visible { get; private set; }
 
 		/// <summary>
@@ -612,10 +616,9 @@ namespace FishMMO.Client
 		/// Writes <see cref="Layer"/> onto the document's sorting order.
 		/// </summary>
 		/// <remarks>
-		/// Applied on Awake and again on every Show. Once is not enough: hiding a panel disables
-		/// its UIDocument, and UI Toolkit drops and re-registers the panel when it is re-enabled,
-		/// so a panel that is shown after another was created can otherwise come back in the
-		/// wrong order.
+		/// Applied on Awake and again on every Show. Hiding no longer disables the UIDocument, but a
+		/// document enabled from outside — Show enables one it finds disabled — is dropped and
+		/// re-registered by UI Toolkit, and could otherwise come back in the wrong order.
 		/// </remarks>
 		private void ApplySortingOrder()
 		{
@@ -688,8 +691,9 @@ namespace FishMMO.Client
 		/// notice when the tree has been replaced underneath us.
 		/// </summary>
 		/// <remarks>
-		/// Hiding a panel disables its <see cref="UIDocument"/>, and re-enabling it clones the
-		/// UXML afresh. Every element reference an override cached during <c>OnStarting</c> then
+		/// A <see cref="UIDocument"/> that is disabled and re-enabled, or given a new source asset,
+		/// clones the UXML afresh. Hiding does neither, so this is the exception rather than every
+		/// open. Every element reference an override cached during <c>OnStarting</c> then
 		/// points into a tree that is no longer displayed: writes to it are silently lost and the
 		/// panel shows whatever the UXML declares. A label authored as a placeholder keeps
 		/// reading that placeholder, and a bar fill keeps whatever width the stylesheet gave it.
@@ -701,6 +705,17 @@ namespace FishMMO.Client
 		private VisualElement startedTreeRoot;
 
 		/// <summary>
+		/// The root whose visibility was last written to match <see cref="Visible"/>.
+		/// </summary>
+		/// <remarks>
+		/// A UIDocument can replace its root after this control's Awake: it builds one when it is
+		/// enabled with none, and again whenever its source asset is assigned. An inline style on
+		/// the old root does not carry over, so a hidden panel whose root was replaced would
+		/// appear. Comparing against this each frame is one reference check per panel.
+		/// </remarks>
+		private VisualElement visibilityAppliedRoot;
+
+		/// <summary>
 		/// Registers this control with the <see cref="UIManager"/>, applies
 		/// <see cref="StartOpen"/>, and runs <see cref="OnStarting"/> as soon as the visual
 		/// tree exists.
@@ -710,9 +725,9 @@ namespace FishMMO.Client
 			ApplySortingOrder();
 			UIManager.RegisterTK(this);
 
-			/* Applied before OnStarting, and independently of it. A panel's initial visibility
-			 * must not wait on the visual tree, and a hidden panel disables its UIDocument —
-			 * which is precisely why OnStarting cannot run here for every control. */
+			/* Applied before OnStarting, and independently of it: a panel's initial visibility
+			 * must not wait on the visual tree, which may not exist until the document's own
+			 * OnEnable. Start and the per-frame root check apply it once the tree is there. */
 			if (!StartOpen)
 			{
 				Hide();
@@ -780,9 +795,10 @@ namespace FishMMO.Client
 		/// a base one and silently disable this retry for exactly the panels that need it.
 		/// A coroutine cannot be shadowed that way.
 		/// <para>
-		/// A panel that starts hidden has its UIDocument disabled and therefore no tree, so this
-		/// keeps waiting until something shows it. The GameObject itself stays active
-		/// throughout — only the document is disabled — so the coroutine survives.
+		/// Hidden panels keep their UIDocument enabled, so the tree normally exists by the next
+		/// frame whether or not the panel is shown. A document that is disabled some other way,
+		/// as test harnesses do to mimic an unshown panel, has no tree, and this keeps waiting
+		/// until something shows it.
 		/// </para>
 		/// </remarks>
 		private IEnumerator WaitForVisualTree()
@@ -846,6 +862,7 @@ namespace FishMMO.Client
 				UITKPanelScale.Register(Document.panelSettings);
 			}
 
+			ApplyRootVisibility();
 			return true;
 		}
 
@@ -999,10 +1016,12 @@ namespace FishMMO.Client
 		/// that arrived before the visual tree existed.
 		/// </summary>
 		/// <remarks>
-		/// Initialisation is no longer guaranteed to happen before the control is given data.
-		/// A panel that starts hidden has no visual tree until it is shown, and world entry can
-		/// hand it a character in the meantime — so whatever it was told before it had elements
-		/// to write into has to be applied again here, or the panel stays blank.
+		/// Initialisation is not guaranteed to happen before the control is given data: the
+		/// document's tree can come up after this control's Awake, and a character can be handed to
+		/// the panel in between — so whatever it was told before it had elements to write into has
+		/// to be applied again here, or the panel stays blank. For a hidden panel this runs at scene
+		/// load, so anything that claims the cursor, a camera or a texture belongs behind a check of
+		/// <see cref="Visible"/>.
 		/// </remarks>
 		protected virtual void OnAfterStarting() { }
 
@@ -1011,9 +1030,10 @@ namespace FishMMO.Client
 		/// Override to perform one-time initialisation against <see cref="Root"/>.
 		/// </summary>
 		/// <remarks>
-		/// Guaranteed to see a populated <see cref="Root"/>. For a control that starts hidden
-		/// this runs when it is first shown rather than at Awake, because a hidden panel's
-		/// UIDocument is disabled and has no tree to query.
+		/// Guaranteed to see a populated <see cref="Root"/>. Runs once, as soon as the tree exists:
+		/// for a panel that starts hidden that is scene load, not its first open, so it must not
+		/// assume a character, a client or a visible panel. Per-open work belongs in
+		/// <see cref="OnAfterShow"/>. Runs again only if the document's tree is genuinely replaced.
 		/// </remarks>
 		public virtual void OnStarting() { }
 
@@ -1093,11 +1113,94 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void Update()
 		{
+			/* A root the document replaced since the last write would otherwise show a hidden
+			 * panel, or keep a shown one invisible, until the next Show or Hide. */
+			if (!ReferenceEquals(Root, this.visibilityAppliedRoot))
+			{
+				ApplyRootVisibility();
+			}
+
 			/* The debounced configuration write is NOT pumped from here any more. Two of them used
 			 * to be, once per panel per frame, which made a guarantee about the player's settings
 			 * depend on at least one panel being alive to make it — see ClientSettingsPump. */
 			PollLoseFocus();
 			OnTick();
+		}
+
+		/// <summary>
+		/// Applies this panel's visibility to the tree its document built during OnEnable.
+		/// </summary>
+		/// <remarks>
+		/// Start runs after every component's Awake and OnEnable and before the first frame is
+		/// drawn, so a panel that starts hidden is hidden before anything can be seen. Written in
+		/// Awake alone, the style could land on a root the document then replaces. No panel
+		/// declares its own Start, so this one is not shadowed.
+		/// </remarks>
+		private void Start()
+		{
+			ApplyRootVisibility();
+		}
+
+		/// <summary>
+		/// Writes <see cref="Visible"/> onto the document's root.
+		/// </summary>
+		/// <remarks>
+		/// <para><b>Why visibility and not the document or display.</b> Disabling the UIDocument
+		/// is what hiding used to do, and Unity's UIDocument discards its whole tree on disable:
+		/// every show cloned the UXML again and re-ran initialisation, about 77 KB of allocation
+		/// per open for the target frame. <c>display: none</c> keeps the tree but takes it out of
+		/// the displayed hierarchy, and showing it rebuilds every element's visuals and re-meshes
+		/// every label. Hidden visibility keeps the tree, its layout and its generated visuals,
+		/// and simply stops drawing it, the way deactivating a UGUI canvas did.</para>
+		/// <para><b>Why hidden panels ignore input.</b> Visibility is inherited, UI Toolkit only
+		/// picks elements that resolve as visible, and only focuses visible elements. A child that
+		/// sets <c>visibility: visible</c> explicitly would break that; none may.</para>
+		/// <para>Visible writes the style keyword Null rather than Visible, so the root inherits
+		/// like any other element and nothing is pinned.</para>
+		/// </remarks>
+		private void ApplyRootVisibility()
+		{
+			VisualElement root = Root;
+			this.visibilityAppliedRoot = root;
+			if (root == null)
+			{
+				return;
+			}
+
+			root.style.visibility = Visible
+				? new StyleEnum<Visibility>(StyleKeyword.Null)
+				: new StyleEnum<Visibility>(Visibility.Hidden);
+		}
+
+		/// <summary>
+		/// Releases keyboard focus and any pointer capture held by an element of this panel.
+		/// </summary>
+		/// <remarks>
+		/// Discarding the tree used to release both as a side effect. A hidden tree is still
+		/// attached, so a focused field would go on taking keystrokes and a slider mid-drag would
+		/// keep the pointer, on a panel nobody can see.
+		/// </remarks>
+		private void ReleaseInputHeldInside()
+		{
+			VisualElement root = Root;
+			IPanel panel = root?.panel;
+			if (panel == null)
+			{
+				return;
+			}
+
+			if (panel.focusController?.focusedElement is VisualElement focused && root.Contains(focused))
+			{
+				focused.Blur();
+			}
+
+			for (int pointerId = 0; pointerId < PointerId.maxPointers; ++pointerId)
+			{
+				if (panel.GetCapturingElement(pointerId) is VisualElement capturing && root.Contains(capturing))
+				{
+					capturing.ReleasePointer(pointerId);
+				}
+			}
 		}
 
 		/// <summary>
@@ -1342,7 +1445,8 @@ namespace FishMMO.Client
 		#endregion
 
 		/// <summary>
-		/// Shows the panel by enabling the <see cref="UIDocument"/>.
+		/// Shows the panel: makes its root visible again, enabling the <see cref="UIDocument"/>
+		/// first only if something had disabled it.
 		/// </summary>
 		public virtual void Show()
 		{
@@ -1360,9 +1464,16 @@ namespace FishMMO.Client
 				ShowInventoryIfClosed();
 			}
 
-			Document.enabled = true;
+			/* Only when off. A hidden panel keeps its document enabled and its tree alive, so this
+			 * normally does nothing; a document disabled from outside (a test harness, or a
+			 * scene authored that way) is enabled here, which clones its tree. */
+			if (!Document.enabled)
+			{
+				Document.enabled = true;
+			}
 			ApplySortingOrder();
 			Visible = true;
+			ApplyRootVisibility();
 
 			// A panel the player just opened belongs above the ones already on screen.
 			if (FocusOnSelect)
@@ -1380,22 +1491,18 @@ namespace FishMMO.Client
 				UIManager.RegisterCloseOnEscapeTK(this);
 			}
 
-			/* Initialisation, for the first open of a panel that starts hidden. Such a panel has
-			 * its UIDocument disabled and therefore no visual tree at Awake, so OnStarting could
-			 * not run there; enabling the document above is what clones the tree, and running the
-			 * initialisation here rather than leaving it to the retry coroutine's next frame is
-			 * what keeps OnStarting ahead of OnAfterShow. The other order is silently broken:
-			 * OnAfterShow writes per-open content into element references that OnStarting has not
-			 * cached yet, so the first opening of every start-hidden panel showed whatever the
-			 * UXML declares. Cheap and idempotent once started. */
+			/* Initialisation, for a panel opened before its retry coroutine got to it — most often
+			 * a document that was disabled from outside and cloned its tree just above. Running it
+			 * here rather than on the retry's next frame keeps OnStarting ahead of OnAfterShow;
+			 * the other order writes per-open content into element references OnStarting has not
+			 * cached yet. Cheap and idempotent once started. */
 			TryStart();
 
 			ReinitializeIfTreeReplaced();
 
-			/* Last, and only once the tree above is guaranteed current. Anything a caller writes
-			 * into its elements BEFORE Show() is lost: enabling the document makes UIDocument
-			 * clone the UXML afresh, so the elements that were just written to belong to a tree
-			 * that has already been discarded. Per-open content therefore belongs here. */
+			/* Last, and only once the tree above is guaranteed current. Per-open content belongs
+			 * here: it runs against the tree the player is about to see, even on the rare show that
+			 * had to enable a disabled document and so built a new tree. */
 			OnAfterShow();
 		}
 
@@ -1404,14 +1511,13 @@ namespace FishMMO.Client
 		/// see. Override to write content that changes from one opening to the next.
 		/// </summary>
 		/// <remarks>
-		/// This exists because "set the text, then Show" does not work and fails silently.
-		/// <see cref="UIDocument"/> clones the UXML on enable, so a panel that fills in its
-		/// message, list rows or icon before calling <see cref="Show()"/> writes into a tree that
-		/// is thrown away microseconds later, and the player sees whatever the UXML declares —
-		/// an empty dialog, a blank tooltip, a selector with no rows.
+		/// Panels keep their tree across hide and show, so an element written while hidden still
+		/// holds that value when shown. This is the place for content that should be current at
+		/// the moment of opening, and for resetting anything a fresh opening should not inherit
+		/// from the last one: typed text, a pending confirmation, a leftover error.
 		/// <para>
-		/// Distinct from <see cref="OnAfterStarting"/>, which re-applies state after the tree is
-		/// rebuilt. This one runs on every show, rebuilt tree or not.
+		/// Distinct from <see cref="OnAfterStarting"/>, which runs once when the panel starts and
+		/// again only if its tree is ever genuinely rebuilt. This one runs on every show.
 		/// </para>
 		/// </remarks>
 		protected virtual void OnAfterShow() { }
@@ -1460,20 +1566,23 @@ namespace FishMMO.Client
 			OnAfterStarting();
 
 			/* The handle lives in the tree that was just replaced, so the callbacks registered
-			 * on the old one went with it. Re-registering is not optional: a panel that has
-			 * been hidden and re-shown would otherwise silently stop being draggable. */
+			 * on the old one went with it. Re-registering is not optional: a panel whose tree was
+			 * replaced would otherwise silently stop being draggable. */
 			AttachDragHandlers();
 			AttachFocusHandler();
 
 			/* Re-register before repainting. UIDocument.OnDisable drops rootVisualElement and
-			 * OnEnable builds a new one, so after a hide/show the theme registry still holds the
-			 * old detached root: it leaks, and ApplyToAll — which is what an Options colour change
+			 * OnEnable builds a new one, so after the document is re-enabled the theme registry
+			 * still holds the old detached root: it leaks, and ApplyToAll — which is what an Options colour change
 			 * goes through — repaints the tree nobody can see while the live one keeps the old
 			 * palette. */
 			RegisterThemeRoot(root);
 
 			// The rebuilt tree carries none of the inline overrides the old one was painted with.
 			UITKThemeManager.Apply(root);
+
+			// Nor its visibility.
+			ApplyRootVisibility();
 		}
 
 		/// <summary>
@@ -2148,8 +2257,13 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			Document.enabled = false;
+
+			/* The document stays enabled and the tree stays alive: hiding is a visibility change,
+			 * as deactivating a UGUI canvas was. Input held inside goes first, while the elements
+			 * holding it can still be found. */
+			ReleaseInputHeldInside();
 			Visible = false;
+			ApplyRootVisibility();
 
 			UIManager.UnregisterCloseOnEscapeTK(this);
 		}

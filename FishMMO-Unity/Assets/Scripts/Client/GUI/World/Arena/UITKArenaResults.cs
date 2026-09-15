@@ -24,6 +24,7 @@ namespace FishMMO.Client
 		private const string SCORES_NAME = "results-scores";
 		private const string PEDESTAL_NAME = "results-pedestal";
 		private const string LIST_NAME = "results-list";
+		private const string SCROLL_NAME = "results-scroll";
 		private const string RANK_NAME = "results-rank";
 		private const string RETURN_NAME = "results-return";
 		private const string CLOSE_BUTTON_NAME = "results-close-btn";
@@ -98,6 +99,13 @@ namespace FishMMO.Client
 			if (template?.MatchEndTriggers != null && template.MatchEndTriggers.Count > 0)
 			{
 				Character.Invoke(template.MatchEndTriggers, new ArenaEventData(Character, ArenaCuePhase.Ended, 0, MyTeam(), msg.WinnerTeam));
+			}
+
+			// The scroll position persists with the tree; a new match's results open at the top.
+			ScrollView scroll = Root?.Q<ScrollView>(SCROLL_NAME);
+			if (scroll != null)
+			{
+				scroll.scrollOffset = Vector2.zero;
 			}
 
 			if (!Visible)

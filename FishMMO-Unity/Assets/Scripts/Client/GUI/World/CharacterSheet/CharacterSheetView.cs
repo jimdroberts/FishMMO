@@ -961,7 +961,7 @@ namespace FishMMO.Client
 			UnsubscribeAttributes();
 
 			/* RemoveFromHierarchy, not attributeList.Remove. VisualElement.Remove THROWS when the
-			 * element is not its child, and after the document re-clones the UXML these rows belong to
+			 * element is not its child, and after the document re-clones the UXML (every show, when hiding disabled it) these rows belong to
 			 * the previous tree while attributeList is the new one — so the old code threw part-way
 			 * through, aborting the rebuild and leaving the panel permanently empty. RemoveFromHierarchy
 			 * asks the element about its own parent and is a no-op when it has none. */

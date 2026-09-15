@@ -116,23 +116,42 @@
     while the player is reading this.
 */
 /*
-    A ScrollView, capped at a fraction of the window. It previously clipped instead of
-    scrolling, so once the list grew past its cap the bottom entries were simply cut off and
-    read as the footer overlapping them — the settings at the end of the list could not be
-    reached at all. Scrolling keeps every setting available at any window size while the
-    footer stays put.
+    An overlay, not a band in the column. Settings is positioned absolutely across the bottom
+    of .launcher-body, so opening it covers the lower part of the news instead of shrinking the
+    news pane, and the footer never moves. As a flex item it took its height from the news on
+    every toggle. The allocation spike on repeated clicks was a separate cost, from how the panel
+    was closed; see .launcher-settings--closed below.
 
-    flex-shrink: 0 with a max-height means this band never grows past its cap and never
-    squeezes the footer; the news pane above absorbs all remaining space.
+    The cap is a percentage of the body, which is the containing block for an absolute child,
+    so it still leaves most of the news readable behind it. overflow: hidden on .launcher-panel
+    keeps the overlay from spilling over the footer; the body ends above the footer anyway.
 */
 .launcher-settings {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 38%;
     flex-direction: column;
     background-color: var(--abyss-700);
     border-top-color: var(--abyss-500);
     border-top-width: 1px;
-    flex-shrink: 0;
-    max-height: 38%;
-    margin-bottom: 4px;
+}
+
+/*
+    Closed with visibility, not display. display: none takes the subtree out of the displayed
+    hierarchy, and showing it again rebuilds the visuals of every element in it and re-meshes
+    every label: measured at about 25 KB of allocations per open and close, which is what made
+    repeated clicks on Settings spike memory. Hidden visibility keeps the overlay laid out and
+    its visuals built, and simply does not draw it. Because it is absolute it takes no space
+    from the news either way.
+
+    Visibility is inherited and UI Toolkit only picks and focuses visible elements, so every
+    control inside a closed panel ignores clicks and keyboard focus; clicks fall through to the
+    news beneath. Nothing in the theme sets visibility explicitly, which would break that.
+*/
+.launcher-settings--closed {
+    visibility: hidden;
 }
 
 .launcher-settings > #unity-content-viewport > #unity-content-container {
@@ -198,6 +217,17 @@
     content height, so a long news page pushes the footer — and therefore the Play
     button — off the bottom of the screen instead of scrolling.
 */
+/*
+    The body takes over what the news pane used to claim directly: the space between hero and
+    footer, allowed to shrink below its content. It is also the containing block the settings
+    overlay is positioned against, so the news inside it simply fills the body.
+*/
+.launcher-body {
+    flex-grow: 1;
+    min-height: 0;
+    position: relative;
+}
+
 .launcher-news-scroll {
     flex-grow: 1;
     min-height: 0;

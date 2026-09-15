@@ -36,9 +36,9 @@ namespace FishMMO.Client
 	/// <para>
 	/// Per-open content is applied from <see cref="ApplyRequest"/>, which runs from both
 	/// <see cref="UITKControl.OnAfterShow"/> and <see cref="UITKControl.OnAfterStarting"/>.
-	/// Writing it before <c>Show()</c> does not work — the document re-clones the UXML on enable
-	/// — and writing it only in <c>OnAfterShow</c> misses the very first open, where the visual
-	/// tree does not exist yet and <c>ReinitializeIfTreeReplaced</c> bails out.
+	/// Writing it before <c>Show()</c> did not work when hiding disabled the document, which
+	/// re-cloned the UXML on enable. <c>OnAfterShow</c> is what runs on every open;
+	/// <c>OnAfterStarting</c> covers a tree genuinely replaced while a request is armed.
 	/// </para>
 	/// </remarks>
 	public abstract class UITKCallbackDialog : UITKControl

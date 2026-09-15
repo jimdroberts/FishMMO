@@ -191,7 +191,7 @@ namespace FishMMO.Client
 			acceptButton = root.Q<Button>(ACCEPT_NAME);
 			cancelButton = root.Q<Button>(CANCEL_NAME);
 
-			// Resolved locally each run: OnStarting re-runs on a fresh tree.
+			// Resolved locally each run: OnStarting only re-runs on a replacement tree.
 			Button closeButton = root.Q<Button>(CLOSE_NAME);
 			if (closeButton != null)
 			{

@@ -213,7 +213,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Re-applies per-open content after the visual tree has been replaced.
+		/// Applies per-open content once the visual tree exists, and again if it is ever replaced.
 		/// </summary>
 		protected override void OnAfterStarting()
 		{
@@ -225,12 +225,12 @@ namespace FishMMO.Client
 		/// Re-applies per-open content on every show, including the very first one.
 		/// </summary>
 		/// <remarks>
-		/// THE CONTRACT, and both panels had written it out separately. Enabling the document
-		/// re-clones the UXML, so anything written before <c>Show()</c> is discarded.
-		/// <c>OnAfterStarting</c> covers later opens, but on the first ever open <c>hasStarted</c>
-		/// is still false and <c>ReinitializeIfTreeReplaced</c> returns before calling it — and a
-		/// panel opened by a broadcast has its first open triggered by something the player did
-		/// rather than at startup. Both hooks do the work, and both are idempotent.
+		/// THE CONTRACT, and both panels had written it out separately. When hiding disabled the
+		/// document, every show re-cloned the UXML and discarded anything written before
+		/// <c>Show()</c>. The tree persists across hide/show now, but <c>OnAfterStarting</c> runs
+		/// once at startup and only again on a genuine tree replacement, so it cannot carry
+		/// per-open content: this hook runs on every open. Both hooks do the work, and both are
+		/// idempotent.
 		/// </remarks>
 		protected override void OnAfterShow()
 		{

@@ -160,7 +160,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Writes everything that has to survive the visual tree being re-cloned.
+		/// Writes the per-open content, and refills the visual tree if it is ever re-cloned.
 		/// </summary>
 		private void ApplyPerOpenContent()
 		{

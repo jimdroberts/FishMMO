@@ -148,7 +148,7 @@ namespace FishMMO.Client
 
 			/* Both, because they resize independently: the root when the screen or interface scale
 			 * changes, the bar when a reset hands its left back to the stylesheet. Unregistered
-			 * first because OnStarting re-runs against a rebuilt tree. */
+			 * first because OnStarting re-runs if the tree is ever replaced. */
 			root.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 			root.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 			barRoot?.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);

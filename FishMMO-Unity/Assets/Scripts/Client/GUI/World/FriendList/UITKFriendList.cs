@@ -14,10 +14,11 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// The list is split into a MODEL (<see cref="friends"/>, plain data, owned by the character)
-	/// and a VIEW (<see cref="rows"/>, elements owned by one visual tree). <c>UIDocument</c>
-	/// re-clones the UXML on every enable, so the view is destroyed on each hide/show; keeping
+	/// and a VIEW (<see cref="rows"/>, elements owned by one visual tree). When hiding disabled the
+	/// <c>UIDocument</c>, the UXML was re-cloned and the view destroyed on each hide/show; keeping
 	/// only the view left the panel permanently empty after the first close, because the data that
-	/// would have redrawn it was inside the discarded elements. See <see cref="OnAfterStarting"/>.
+	/// would have redrawn it was inside the discarded elements. Hiding keeps the tree now; the model
+	/// still covers a genuine tree replacement. See <see cref="OnAfterStarting"/>.
 	/// </remarks>
 	public class UITKFriendList : UITKCharacterControl
 	{
@@ -100,8 +101,8 @@ namespace FishMMO.Client
 		/// Queries the friend list and wires up the add-friend button.
 		/// </summary>
 		/// <remarks>
-		/// Runs against a fresh tree every time, so it drops the old view first — those elements
-		/// belong to a tree that no longer exists.
+		/// Runs once per tree, and again only against a replacement tree, so it drops the old view
+		/// first — on a re-run those elements belong to a tree that no longer exists.
 		/// </remarks>
 		public override void OnStarting()
 		{
@@ -113,9 +114,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -135,7 +136,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Re-applies the friend list after the visual tree was rebuilt.
+		/// Applies the friend list once the visual tree exists, and again if it is replaced.
 		/// </summary>
 		/// <remarks>
 		/// The base implementation re-runs the character pre/post pair, which is what
@@ -165,7 +166,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// <c>UITKCharacterControl.OnAfterStarting</c> calls Pre then Post on every tree rebuild
 		/// so the pair cancels out. Leaving this un-overridden made the Pre call a no-op, so every
-		/// reopen stacked another subscription onto the same controller.
+		/// rebuild (then every reopen) stacked another subscription onto the same controller.
 		/// </remarks>
 		public override void OnPreSetCharacter()
 		{

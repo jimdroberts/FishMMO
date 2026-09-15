@@ -501,21 +501,25 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void ReopeningThePanelDoesNotStrandTheOldTreesChrome()
+		public void ReopeningThePanelKeepsItsChromeLive()
 		{
-			/* Hiding a panel disables its UIDocument, which discards the tree; showing it clones a
-			 * fresh one. The bindings held across that boundary point at labels nobody can see. */
+			/* Hiding a panel only hides its root; the tree and every binding into it survive. The
+			 * count badge before closing must be the same label after reopening, and it must go on
+			 * following the rows. */
 			Rows(Field<VisualElement>("itemsList"), 3);
 			Invoke(merchant, "SwitchTab", MerchantTabType.Item);
+			Label countBefore = Live.Q<Label>("merchant-count");
 
 			merchant.Hide();
 			merchant.Show();
 
 			Label count = Live.Q<Label>("merchant-count");
+			LogAssert.AreSame(countBefore, count, "reopening does not rebuild the count badge");
+
 			Rows(Field<VisualElement>("itemsList"), 6);
 			Invoke(merchant, "SwitchTab", MerchantTabType.Item);
 
-			LogAssert.AreEqual("6", count.text, "the rebuilt tree's badge is the one being written");
+			LogAssert.AreEqual("6", count.text, "and the badge still follows the rows");
 		}
 	}
 }

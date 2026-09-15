@@ -151,7 +151,13 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Ages the visible toasts and retires the ones whose time is up.
 		/// </summary>
-		private void Update()
+		/// <remarks>
+		/// The base per-frame hook, not a <c>private void Update()</c> of its own: Unity binds only
+		/// the most-derived <c>Update</c>, so declaring one here silently disabled
+		/// <c>UITKControl.Update</c> for this panel — its lose-focus poll and the check that keeps a
+		/// replaced root's visibility in step with the panel.
+		/// </remarks>
+		protected override void OnTick()
 		{
 			if (live.Count < 1)
 			{

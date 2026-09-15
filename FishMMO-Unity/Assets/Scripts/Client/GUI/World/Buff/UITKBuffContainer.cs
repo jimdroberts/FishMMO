@@ -29,9 +29,10 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// <b>Model / view split.</b> <see cref="entries"/> is plain data owned by the character;
-	/// <see cref="groups"/> holds the elements of ONE visual tree. <c>UIDocument</c> re-clones the
-	/// UXML on every enable, so a dictionary of elements cached across a hide/show points into a
-	/// discarded tree and the strip comes back permanently empty.
+	/// <see cref="groups"/> holds the elements of ONE visual tree. A <c>UIDocument</c> that is
+	/// disabled and re-enabled clones the UXML afresh (hiding used to do that on every hide/show),
+	/// so a dictionary of elements cached across that points into a discarded tree and the strip
+	/// comes back permanently empty.
 	/// </para>
 	/// <para>
 	/// <b>Dismissal.</b> A click on an icon asks the server to take that buff off the character —
@@ -160,7 +161,7 @@ namespace FishMMO.Client
 		/// Queries the list container and subscribes to buff lifecycle events.
 		/// </summary>
 		/// <remarks>
-		/// Re-runs on every tree rebuild, so the element dictionary is dropped first (those
+		/// Re-runs if the tree is ever replaced, so the element dictionary is dropped first (those
 		/// elements belong to the discarded tree) and every static subscription is removed before
 		/// it is added. A bare <c>+=</c> from a hook that can re-run leaks handlers without bound.
 		/// </remarks>

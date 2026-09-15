@@ -19,10 +19,11 @@ namespace FishMMO.Client
 	/// things the player can see for themselves — a reason and a description.
 	/// </para>
 	/// <para>
-	/// <b>The draft lives on the component, not in the tree.</b> <c>UIDocument</c> re-clones the
-	/// UXML on every show, so a reason or a paragraph held only in the fields would be gone the
-	/// next time the panel appeared. Every change is copied into the model as it happens and the
-	/// fields are rewritten from the model on every show.
+	/// <b>The draft lives on the component, not in the tree.</b> When hiding disabled the
+	/// <c>UIDocument</c>, every show re-cloned the UXML, so a reason or a paragraph held only in
+	/// the fields was gone the next time the panel appeared; a replaced tree would still lose it.
+	/// Every change is copied into the model as it happens and the fields are rewritten from the
+	/// model on every show.
 	/// </para>
 	/// <para>
 	/// <b>A refusal keeps the text; a filing closes the form.</b> The most common refusal is the

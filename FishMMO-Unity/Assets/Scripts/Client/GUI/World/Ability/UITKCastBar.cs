@@ -66,8 +66,8 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// Held as data rather than read back out of <see cref="castLabel"/>: the label element
-		/// belongs to the visual tree, and <c>UIDocument</c> re-clones that tree on every enable,
-		/// so the element is not a reliable record of what the bar is showing. It also lets a
+		/// belongs to the visual tree, which is replaced if the <c>UIDocument</c> is ever disabled and
+		/// re-enabled, so the element is not a reliable record of what the bar is showing. It also lets a
 		/// second activation starting while the first is still on screen be recognised as a
 		/// different cast, which resets the fill instead of letting the new cast inherit the old
 		/// one's progress.
@@ -182,14 +182,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Re-applies the cast currently in progress to a freshly rebuilt visual tree.
+		/// Re-applies the cast currently in progress to the current visual tree.
 		/// </summary>
 		/// <remarks>
-		/// Runs from both <see cref="OnAfterShow"/> and <c>OnAfterStarting</c>. The first open of
-		/// a panel has <c>hasStarted</c> still false, so <c>ReinitializeIfTreeReplaced</c> bails
-		/// out and <c>OnAfterShow</c> is the only hook that runs; on every later show the tree may
-		/// genuinely have been replaced and both fire. Writing the same state from both is
-		/// idempotent and is the only arrangement that is correct in both cases.
+		/// Runs from both <see cref="OnAfterShow"/> and <c>OnAfterStarting</c>. <c>OnAfterShow</c>
+		/// runs on every open; <c>OnAfterStarting</c> runs once when the tree first exists and again
+		/// only if the tree is genuinely replaced, when both fire. Writing the same state from both
+		/// is idempotent and is correct in either case.
 		/// </remarks>
 		private void ApplyCastState()
 		{

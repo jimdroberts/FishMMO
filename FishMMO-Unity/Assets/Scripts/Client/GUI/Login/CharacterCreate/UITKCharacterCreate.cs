@@ -221,18 +221,17 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// This is half of the fix for a character-create screen that was inert on the first
-		/// login. The scene sets <c>StartOpen: 0</c>, so the document is disabled and
-		/// <c>TryStart</c> defers <see cref="OnStarting"/> to the visual-tree retry coroutine.
+		/// login. The scene sets <c>StartOpen: 0</c>, and when hiding disabled the document
+		/// <c>TryStart</c> deferred <see cref="OnStarting"/> to the visual-tree retry coroutine.
 		/// <c>UIManager.SetClient</c> then runs <see cref="OnClientSet"/> — which is where the
 		/// population lived — while <c>raceDropdown</c>, <c>modelDropdown</c> and
 		/// <c>locationDropdown</c> were all still null, and every access was guarded by a null
 		/// check, so the whole thing silently did nothing. The player got three empty dropdowns and
 		/// a Create button that could never satisfy its own preconditions.
 		/// <para>
-		/// Both hooks are needed and neither is sufficient. <see cref="OnAfterShow"/> alone misses
-		/// the very first open, because <c>hasStarted</c> is still false there and
-		/// <c>ReinitializeIfTreeReplaced</c> bails out; this one alone misses nothing structural
-		/// but is not called on an ordinary re-show. Population is idempotent and selection is
+		/// Both hooks run it. This one runs once the tree exists (scene load, for this start-hidden
+		/// panel) and again on a genuine tree replacement, but not on an ordinary show;
+		/// <see cref="OnAfterShow"/> covers every open. Population is idempotent and selection is
 		/// preserved by name, so running it from both costs a rebuild of three small lists.
 		/// </para>
 		/// <para>
@@ -273,8 +272,8 @@ namespace FishMMO.Client
 		/// Puts the Create button back into the state the outstanding request implies.
 		/// </summary>
 		/// <remarks>
-		/// <see cref="SetCreateButtonLocked"/> writes into a button that the next hide/show
-		/// replaces, so the panel could come back offering Create while the creation it had
+		/// <see cref="SetCreateButtonLocked"/> writes into a button that a tree replacement discards
+		/// (every hide/show did, when hiding disabled the document), so the panel could come back offering Create while the creation it had
 		/// already sent was still unanswered — and a second click creates a second character.
 		/// Driven off the guard so the button cannot disagree with the wait it represents.
 		/// </remarks>
@@ -540,6 +539,8 @@ namespace FishMMO.Client
 			SetCreateButtonLocked(false);
 			if (msg.Result == CharacterCreateResult.Success)
 			{
+				// The form persists while hidden; the name just taken must not be offered next time.
+				ClearName();
 				Hide();
 				if (UIManager.TryGetTK("UICharacterSelect", out UITKCharacterSelect characterSelect))
 				{
@@ -733,8 +734,9 @@ namespace FishMMO.Client
 		/// Writes the result line, holding the text across tree rebuilds.
 		/// </summary>
 		/// <remarks>
-		/// Held as state as well as written, because the panel is re-cloned on every show and this
-		/// label is the only feedback the screen has. See <see cref="UITKControl.OnAfterShow"/>.
+		/// Held as state as well as written, because a replaced tree (every show, when hiding
+		/// disabled the document) would lose it and this label is the only feedback the screen has.
+		/// See <see cref="UITKControl.OnAfterShow"/>.
 		/// </remarks>
 		/// <param name="text">The message, or null to clear the line.</param>
 		private void SetResult(string text)
@@ -782,13 +784,26 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Unlocks the create button when quitting to login.
+		/// Unlocks the create button and clears the name when quitting to login.
 		/// </summary>
+		/// <remarks>
+		/// The name field persists with the tree, and the next login may be another account.
+		/// </remarks>
 		public override void OnQuitToLogin()
 		{
 			base.OnQuitToLogin();
 
 			SetCreateButtonLocked(false);
+			ClearName();
+		}
+
+		/// <summary>
+		/// Empties the name field and the name it feeds.
+		/// </summary>
+		private void ClearName()
+		{
+			CharacterName = string.Empty;
+			nameField?.SetValueWithoutNotify(string.Empty);
 		}
 
 		/// <summary>

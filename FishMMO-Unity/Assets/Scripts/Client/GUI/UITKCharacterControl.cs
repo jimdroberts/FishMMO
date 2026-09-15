@@ -79,7 +79,8 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// World entry calls <see cref="UIManager.SetCharacter"/> for every control at once, and
-		/// a control that starts hidden has no visual tree until something shows it — so
+		/// a control's visual tree can come up after its Awake (and, when hiding disabled the
+		/// document, a hidden control had none until something showed it) — so
 		/// <see cref="OnPostSetCharacter"/> can run before <c>OnStarting</c> has cached any
 		/// elements. Overrides that write into those elements would then dereference null, and
 		/// even a null-safe one would leave the panel showing nothing, because the only call

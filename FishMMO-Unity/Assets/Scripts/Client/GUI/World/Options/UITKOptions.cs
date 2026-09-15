@@ -19,8 +19,8 @@ namespace FishMMO.Client
 	/// editing a scene, which is how all five gameplay toggles were lost once already.</para>
 	///
 	/// <para><b>The panel applies nothing at start-up.</b> It used to be the only code that applied
-	/// VSync, brightness and the frame-rate cap — from its own <c>OnStarting</c>, which does not
-	/// run until the panel is first opened, and the panel ships closed. A player who capped their
+	/// VSync, brightness and the frame-rate cap — from its own <c>OnStarting</c>, which then did not
+	/// run until the panel was first opened, and the panel ships closed. A player who capped their
 	/// frame rate got the bootstrap default every session until they visited the menu. Those
 	/// settings are now applied by <see cref="ClientSettingsBootstrap"/> during boot, and this
 	/// panel only reads them back to position its controls and writes them when the player changes
@@ -384,8 +384,8 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// Static, and deliberately not persisted. It has to outlive the visual tree — hiding the
-		/// panel disables its UIDocument and the tree is cloned afresh on the next open, so an
-		/// instance field on a rebuilt page would not survive — but which tab a player was last
+		/// panel used to disable its UIDocument and clone the tree afresh on the next open, and a
+		/// replaced tree still would, so state held on a rebuilt page would not survive — but which tab a player was last
 		/// looking at is not a setting, and writing it to Configuration.cfg would put a line in a
 		/// shared settings file every time somebody clicked a tab.
 		/// </remarks>
@@ -672,7 +672,9 @@ namespace FishMMO.Client
 			InitializeChatSettings();
 			InitializeColorSettings();
 			InitializeProfileSection();
-			InitializeControlsSection();
+
+			/* The binding rows are not built here: OnAfterShow rebuilds them on every open, and the
+			 * panel starts with its scene, so rows built now were thrown away unseen. */
 
 			/* Buttons are wired here rather than inside the Initialize* methods above, because
 			 * several of those rebuild their rows and are called again — ResetAllBindings calls
@@ -728,11 +730,9 @@ namespace FishMMO.Client
 		/// Re-applies state after the visual tree has been rebuilt.
 		/// </summary>
 		/// <remarks>
-		/// The panel starts hidden, so its tree is cloned afresh on every open and every element
-		/// cached above belongs to the previous one. <c>OnStarting</c> re-runs from
-		/// <c>ReinitializeIfTreeReplaced</c> and rebuilds every page; this only has to put the
-		/// display prompt back into whatever state the countdown is in, because that state lives
-		/// across an open and close.
+		/// <c>OnStarting</c> runs again only if the document's tree is genuinely replaced, and
+		/// rebuilds every page when it does; this only has to put the display prompt back into
+		/// whatever state the countdown is in, because that state lives outside the tree.
 		/// </remarks>
 		protected override void OnAfterStarting()
 		{
@@ -751,8 +751,19 @@ namespace FishMMO.Client
 		/// </remarks>
 		protected override void OnAfterShow()
 		{
+			/* The display mode is re-read on every open. The panel starts with its scene, and in a
+			 * standalone build that is while the launcher's small window is still in force — read only
+			 * then, the dropdowns offered the launcher's window and Revert put the game back into it.
+			 * An armed revert keeps the mode it will restore. */
+			if (!displayRevertArmed)
+			{
+				InitializeDisplaySettings();
+				SetScreenStatus(string.Empty);
+			}
+
 			RefreshDisplayPrompt();
 			RefreshProfileList();
+			SetProfileStatus(string.Empty);
 			InitializeControlsSection();
 			RefreshSwatches();
 		}
@@ -961,6 +972,8 @@ namespace FishMMO.Client
 			{
 				resolutionDropdown.choices = BuildResolutionLabels();
 				resolutionDropdown.index = IndexOfResolution(committedResolution);
+				// Removed before it is added: this runs on every open.
+				resolutionDropdown.UnregisterValueChangedCallback(OnResolutionSelectionChanged);
 				resolutionDropdown.RegisterValueChangedCallback(OnResolutionSelectionChanged);
 			}
 			if (refreshRateDropdown != null)

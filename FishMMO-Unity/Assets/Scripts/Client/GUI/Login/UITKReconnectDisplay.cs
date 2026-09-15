@@ -109,7 +109,7 @@ namespace FishMMO.Client
 			if (attempts <= maxAttempts)
 			{
 				/* State first, tree second. Writing straight into the elements here and then
-				 * calling Show() lost every write: enabling the UIDocument re-clones the UXML, so
+				 * calling Show() lost every write: enabling the UIDocument re-cloned the UXML, so
 				 * the attempt counter this method had just filled in belonged to a tree that was
 				 * discarded microseconds later and the player read the UXML's empty placeholder.
 				 * ApplyState runs from OnAfterShow/OnAfterStarting against the live tree. */
@@ -214,11 +214,20 @@ namespace FishMMO.Client
 			ApplyState();
 		}
 
-		/// <inheritdoc/>
+		/// <summary>
+		/// Re-applies the state to a tree that was replaced while the panel was showing.
+		/// </summary>
+		/// <remarks>
+		/// Only while visible. The panel starts with its scene, hidden, and <c>ApplyState</c> claims
+		/// the cursor: run at scene load, it switched mouse mode on for a panel nobody could see.
+		/// </remarks>
 		protected override void OnAfterStarting()
 		{
 			base.OnAfterStarting();
-			ApplyState();
+			if (Visible)
+			{
+				ApplyState();
+			}
 		}
 
 		/// <summary>

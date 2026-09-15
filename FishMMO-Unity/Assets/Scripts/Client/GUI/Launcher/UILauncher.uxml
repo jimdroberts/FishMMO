@@ -11,10 +11,17 @@
                 <ui:Button name="launcher-settings-btn" text="Settings" class="fish-button launcher-header-btn" />
             </ui:VisualElement>
             <ui:VisualElement name="launcher-hero" class="launcher-hero" />
+            <!--
+                One body for the news and the settings. Settings is positioned absolutely over the
+                bottom of this body (see .launcher-settings in UILauncher.uss), so opening it
+                covers part of the news instead of taking space from it: the news keeps its size,
+                and its text is not re-laid out on every toggle.
+            -->
+            <ui:VisualElement name="launcher-body" class="launcher-body">
             <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
                 <ui:VisualElement name="launcher-news" class="launcher-news" />
             </ui:ScrollView>
-            <ui:ScrollView name="launcher-settings" class="fish-scroll launcher-settings fish-hidden">
+            <ui:ScrollView name="launcher-settings" class="fish-scroll launcher-settings launcher-settings--closed">
                 <!--
                     No low-value/high-value here on purpose. UITKClientLauncher writes both from
                     the LauncherSettings constants at bind time, which are the same bounds the
@@ -37,6 +44,7 @@
                 </ui:VisualElement>
                 <ui:Label name="launcher-patchdir-note" text="" class="launcher-settings-note" />
             </ui:ScrollView>
+            </ui:VisualElement>
             <ui:VisualElement name="launcher-footer" class="fish-panel__footer launcher-footer">
                 <ui:Label name="launcher-status" text="" class="launcher-status" />
                 <ui:VisualElement name="launcher-progress" class="launcher-progress fish-hidden">

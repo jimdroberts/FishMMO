@@ -159,11 +159,26 @@ namespace FishMMO.RenderScratch
 			minimapRenders = 0;
 			nextGiTime = 0;
 			nextStandardTime = 0;
-			if (IsMinimapMode(modes[modeIndex]) || modes[modeIndex].StartsWith("gi"))
+			toggles = 0;
+			markerRefreshes = 0;
+			nextMarkerRefresh = 0;
+			if (IsMinimapMode(modes[modeIndex]) || modes[modeIndex].StartsWith("gi") || modes[modeIndex].StartsWith("showhide") || modes[modeIndex].StartsWith("doc-toggle") || modes[modeIndex].StartsWith("launcher"))
 			{
 				if (IsMinimapMode(modes[modeIndex]))
 				{
 					BuildMinimap();
+				}
+				if (modes[modeIndex].StartsWith("showhide"))
+				{
+					BuildTargetPanel();
+				}
+				if (modes[modeIndex].StartsWith("doc-toggle"))
+				{
+					BuildBareDocument();
+				}
+				if (modes[modeIndex].StartsWith("launcher"))
+				{
+					BuildLauncher();
 				}
 				Debug.Log($"[PlayLeakProbe] === mode {modes[modeIndex]} for {framesPerMode} frames ===");
 				return;
@@ -232,7 +247,9 @@ namespace FishMMO.RenderScratch
 				if (frame < framesPerMode) return;
 
 				GC.Collect();
-				string line = $"{mode,-8} over {frame - WARMUP_FRAMES} frames ({Time.realtimeSinceStartupAsDouble - modeStart:0}s, {renders} renders, texture {(renderer?.Texture == null ? "none" : renderer.Texture.width + "x" + renderer.Texture.height)}, minimap renders {minimapRenders}, managed garbage {managedGarbage / 1024.0 / (frame - WARMUP_FRAMES):0.0} KB/frame): {Delta(frame - WARMUP_FRAMES, true)}";
+				GC.WaitForPendingFinalizers();
+				GC.Collect();
+				string line = $"{mode,-8} over {frame - WARMUP_FRAMES} frames ({Time.realtimeSinceStartupAsDouble - modeStart:0}s, {renders} renders, texture {(renderer?.Texture == null ? "none" : renderer.Texture.width + "x" + renderer.Texture.height)}, minimap renders {minimapRenders}, show cycles {toggles}, theme roots {ThemeRootCount()}, marker refreshes {markerRefreshes}, markers laid out {mapView?.childCount}, managed garbage {managedGarbage / 1024.0 / (frame - WARMUP_FRAMES):0.0} KB/frame): {Delta(frame - WARMUP_FRAMES, true)}";
 				Debug.Log("[PlayLeakProbe] RESULT " + line);
 				report.AppendLine(line);
 
@@ -263,8 +280,78 @@ namespace FishMMO.RenderScratch
 					StepMinimap(mode);
 					return;
 
+				case "markers":
+				case "markers-still":
+					StepMarkers(mode == "markers");
+					return;
+
 				case "minimap-standard":
 					StepMinimapStandard();
+					return;
+
+				case "showhide":
+					// Hide then show on alternate frames: one full tree rebuild every two frames.
+					if (targetPanel != null)
+					{
+						if (targetPanel.Visible) targetPanel.Hide(); else { targetPanel.Show(); ++toggles; }
+					}
+					return;
+
+				case "doc-toggle":
+					// The same markup and panel settings, but a bare UIDocument with no panel code:
+					// disable and re-enable it on alternate frames. Isolates Unity's own rebuild.
+					if (bareDocument != null)
+					{
+						if (bareDocument.enabled) bareDocument.enabled = false; else { bareDocument.enabled = true; ++toggles; }
+					}
+					return;
+
+				case "launcher-toggle":
+					// Exactly what UITKClientLauncher.ToggleSettings does: flip fish-hidden on the
+					// settings scroll view. Alternate frames, one open/close pair every two frames.
+					if (launcherSettings != null)
+					{
+						bool hidden = launcherSettings.ClassListContains("fish-hidden");
+						launcherSettings.EnableInClassList("fish-hidden", !hidden);
+						if (hidden) ++toggles;
+					}
+					return;
+
+				case "launcher-inline":
+					// Inline display instead of the class: skips selector re-matching, still leaves layout.
+					if (launcherSettings != null)
+					{
+						launcherSettings.RemoveFromClassList("fish-hidden");
+						bool shown = launcherSettings.resolvedStyle.display == DisplayStyle.Flex && launcherSettings.style.display.keyword != StyleKeyword.Null && launcherSettings.style.display.value == DisplayStyle.Flex;
+						launcherSettings.style.display = shown ? DisplayStyle.None : DisplayStyle.Flex;
+						if (!shown) ++toggles;
+					}
+					return;
+
+				case "launcher-visibility":
+					// Visibility instead of display: the overlay stays laid out and keeps its render
+					// data, and is only not drawn and not picked while hidden.
+					if (launcherSettings != null)
+					{
+						launcherSettings.RemoveFromClassList("fish-hidden");
+						bool visible = launcherSettings.style.visibility.keyword == StyleKeyword.Null || launcherSettings.style.visibility.value == Visibility.Visible;
+						if (!visibleInitialised)
+						{
+							launcherSettings.style.visibility = Visibility.Hidden;
+							launcherSettings.pickingMode = PickingMode.Ignore;
+							visibleInitialised = true;
+							return;
+						}
+						launcherSettings.style.visibility = visible ? Visibility.Hidden : Visibility.Visible;
+						if (!visible) ++toggles;
+					}
+					return;
+
+				case "launcher-still":
+					return;
+
+				case "showhide-still":
+					// Mounted and shown once, never toggled: the control.
 					return;
 
 				case "gi":
@@ -311,7 +398,81 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		private static bool IsMinimapMode(string mode) => mode.StartsWith("minimap");
+		private static bool IsMinimapMode(string mode) => mode.StartsWith("minimap") || mode.StartsWith("markers");
+
+		private const int MarkerCount = 40;
+		private readonly System.Collections.Generic.List<MapMarkerSnapshot> markerBuffer = new System.Collections.Generic.List<MapMarkerSnapshot>(MarkerCount);
+		private double nextMarkerRefresh;
+		private int markerRefreshes;
+
+		/// <summary>
+		/// UITKMinimap.LateUpdate with NPC markers: render at the capped rate, collect and set markers
+		/// ten times a second, and re-lay them out on every other frame. Positions move every frame
+		/// when <paramref name="moving"/>, as wandering NPCs do; the still mode is the control.
+		/// </summary>
+		private void StepMarkers(bool moving)
+		{
+			if (minimapRenderer == null || mapView == null)
+			{
+				return;
+			}
+
+			MapViewTransform view = new MapViewTransform(Vector3.zero, 25.0f, 0.0f);
+			mapView.View = view;
+			if (minimapRenderer.Render(view))
+			{
+				++minimapRenders;
+				mapView.MapTexture = minimapRenderer.Texture;
+				mapView.RefreshSurface();
+			}
+
+			double now = Time.unscaledTimeAsDouble;
+			if (now >= nextMarkerRefresh)
+			{
+				nextMarkerRefresh = now + 0.1;
+				++markerRefreshes;
+				markerBuffer.Clear();
+				for (int i = 0; i < MarkerCount; ++i)
+				{
+					float phase = moving ? frame * 0.01f + i : i;
+					markerBuffer.Add(new MapMarkerSnapshot
+					{
+						Source = null,
+						Position = new Vector3(Mathf.Sin(phase) * 18f, 0f, Mathf.Cos(phase * 0.7f) * 18f),
+						TracksSource = false,
+						HasFacing = false,
+						Type = MapMarkerType.NPC,
+						Relationship = default,
+						Icon = null,
+						Tint = Color.white,
+						Label = "Wandering NPC " + (i % 5),
+						Tooltip = "NPC",
+						Size = 12f,
+						ClampToEdge = false,
+						Priority = i,
+					});
+				}
+				mapView.SetMarkers(markerBuffer);
+			}
+			else
+			{
+				if (moving)
+				{
+					for (int i = 0; i < markerBuffer.Count; ++i)
+					{
+						MapMarkerSnapshot m = markerBuffer[i];
+						float phase = frame * 0.01f + i;
+						m.Position = new Vector3(Mathf.Sin(phase) * 18f, 0f, Mathf.Cos(phase * 0.7f) * 18f);
+						markerBuffer[i] = m;
+					}
+					mapView.SetMarkers(markerBuffer);
+				}
+				else
+				{
+					mapView.RelayoutMarkers();
+				}
+			}
+		}
 
 		/// <summary>
 		/// Reports the document's state after enabling and, when it built no root, runs its own
@@ -452,6 +613,109 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
+		private const string TARGET_UXML_PATH = "Assets/Scripts/Client/GUI/World/Target/UITarget.uxml";
+		private UITKTarget targetPanel;
+		private GameObject targetHost;
+		private int toggles;
+
+		/// <summary>
+		/// Mounts the real target frame the way HudOverlapProbe does: its own host and document,
+		/// its own markup, OnStarting run once. Hide disables the document and Show re-enables it,
+		/// which clones a fresh tree and re-runs the panel's startup — the exact cycle a hover
+		/// target change drives in the client.
+		/// </summary>
+		private void BuildTargetPanel()
+		{
+			VisualTreeAsset tree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(TARGET_UXML_PATH);
+			if (tree == null)
+			{
+				throw new InvalidOperationException("no target frame markup at " + TARGET_UXML_PATH);
+			}
+
+			targetHost = new GameObject("LeakProbeTarget");
+			targetHost.SetActive(false);
+			UIDocument targetDocument = targetHost.AddComponent<UIDocument>();
+			targetDocument.panelSettings = settings;
+			targetDocument.visualTreeAsset = tree;
+			targetHost.SetActive(true);
+
+			targetPanel = targetHost.AddComponent<UITKTarget>();
+			targetPanel.Document = targetDocument;
+			targetPanel.OnStarting();
+			targetPanel.Show();
+			Debug.Log($"[PlayLeakProbe] target frame mounted: root={(targetDocument.rootVisualElement != null)} panel={(targetDocument.rootVisualElement?.panel != null)} visible={targetPanel.Visible}");
+		}
+
+		private UIDocument bareDocument;
+		private GameObject bareHost;
+
+		private void BuildBareDocument()
+		{
+			VisualTreeAsset tree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(TARGET_UXML_PATH);
+			if (tree == null)
+			{
+				throw new InvalidOperationException("no target frame markup at " + TARGET_UXML_PATH);
+			}
+			bareHost = new GameObject("LeakProbeBareDocument");
+			bareHost.SetActive(false);
+			bareDocument = bareHost.AddComponent<UIDocument>();
+			bareDocument.panelSettings = settings;
+			bareDocument.visualTreeAsset = tree;
+			bareHost.SetActive(true);
+			Debug.Log($"[PlayLeakProbe] bare document mounted: root={(bareDocument.rootVisualElement != null)} panel={(bareDocument.rootVisualElement?.panel != null)}");
+		}
+
+		private const string LAUNCHER_UXML_PATH = "Assets/Scripts/Client/GUI/Launcher/UILauncher.uxml";
+		private GameObject launcherHost;
+		private VisualElement launcherSettings;
+		private bool visibleInitialised;
+
+		/// <summary>
+		/// The client launcher's own markup on the shared panel settings, with its news area filled
+		/// with wrapped text the way a rendered HTML feed fills it, so opening settings reflows it.
+		/// </summary>
+		private void BuildLauncher()
+		{
+			VisualTreeAsset tree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(LAUNCHER_UXML_PATH);
+			if (tree == null)
+			{
+				throw new InvalidOperationException("no launcher markup at " + LAUNCHER_UXML_PATH);
+			}
+			launcherHost = new GameObject("LeakProbeLauncher");
+			launcherHost.SetActive(false);
+			UIDocument launcherDocument = launcherHost.AddComponent<UIDocument>();
+			launcherDocument.panelSettings = settings;
+			launcherDocument.visualTreeAsset = tree;
+			launcherHost.SetActive(true);
+
+			VisualElement root = launcherDocument.rootVisualElement;
+			launcherSettings = root?.Q("launcher-settings");
+			visibleInitialised = false;
+			VisualElement news = root?.Q("launcher-news");
+			if (launcherSettings == null || news == null)
+			{
+				throw new InvalidOperationException("launcher markup is missing #launcher-settings or #launcher-news");
+			}
+			for (int i = 0; i < 300; ++i)
+			{
+				VisualElement block = new VisualElement();
+				block.AddToClassList("launcher-news__block");
+				Label text = new Label($"Patch note {i}: the quick brown fox jumps over the lazy dog while the servers restart and the guild halls reopen for the evening event, bring friends and bring potions.");
+				text.AddToClassList(i % 25 == 0 ? "launcher-news__h2" : "launcher-news__text");
+				block.Add(text);
+				news.Add(block);
+			}
+			Debug.Log($"[PlayLeakProbe] launcher mounted: panel={(root.panel != null)} settingsHidden={launcherSettings.ClassListContains("fish-hidden")} newsChildren={news.childCount}");
+		}
+
+		private static int ThemeRootCount()
+		{
+			FieldInfo field = typeof(UITKThemeManager).GetField("roots", BindingFlags.NonPublic | BindingFlags.Static);
+			object set = field?.GetValue(null);
+			PropertyInfo count = set?.GetType().GetProperty("Count");
+			return count != null ? (int)count.GetValue(set) : -1;
+		}
+
 		private string Delta(int frames, bool objects)
 		{
 			long rss = ReadRss() - baselineRss;
@@ -481,6 +745,9 @@ namespace FishMMO.RenderScratch
 
 		private void Release()
 		{
+			if (targetHost != null) { Destroy(targetHost); targetHost = null; targetPanel = null; }
+			if (bareHost != null) { Destroy(bareHost); bareHost = null; bareDocument = null; }
+			if (launcherHost != null) { Destroy(launcherHost); launcherHost = null; launcherSettings = null; }
 			if (mapView != null) { mapView.RemoveFromHierarchy(); mapView = null; }
 			minimapRenderer?.Dispose();
 			minimapRenderer = null;

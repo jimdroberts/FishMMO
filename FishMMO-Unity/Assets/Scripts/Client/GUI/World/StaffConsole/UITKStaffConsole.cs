@@ -31,7 +31,8 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// The model (catalogue, roster, tickets, form values, output) lives on the component and the
-	/// view is rebuilt from it, because <c>UIDocument</c> re-clones the tree on every show.
+	/// view is rebuilt from it, because a <c>UIDocument</c> re-clones its tree when re-enabled (every
+	/// show, when hiding disabled it).
 	/// </para>
 	/// </remarks>
 	public class UITKStaffConsole : UITKControl
@@ -1617,7 +1618,8 @@ namespace FishMMO.Client
 				output.RemoveAt(0);
 			}
 
-			if (outputList == null)
+			// Hidden, the line waits in the model; OnAfterShow redraws the output from it.
+			if (outputList == null || !Visible)
 			{
 				return;
 			}

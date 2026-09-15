@@ -290,6 +290,9 @@ namespace FishMMO.Client
 			{
 				statusMessage.text = "";
 			}
+
+			// The tree persists while hidden; a password must never outlive the form it was typed into.
+			password?.SetValueWithoutNotify(string.Empty);
 		}
 
 		/// <summary>
@@ -531,7 +534,8 @@ namespace FishMMO.Client
 		/// Re-applies the status line and the form lock after the visual tree was rebuilt.
 		/// </summary>
 		/// <remarks>
-		/// <see cref="SetFormLocked"/> writes into elements that the next hide/show replaces, so a
+		/// <see cref="SetFormLocked"/> writes into elements that a tree replacement discards (and
+		/// every hide/show did, when hiding disabled the document), so a
 		/// panel that came back mid-registration — which is what the drop handler and the reply
 		/// timeout both do — offered an enabled Register button over a request that was still
 		/// outstanding. Driven off the guard rather than off a second copy of the flag, so the two

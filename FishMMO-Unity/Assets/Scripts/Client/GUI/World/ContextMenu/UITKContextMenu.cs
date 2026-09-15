@@ -16,10 +16,11 @@ namespace FishMMO.Client
 	/// into a layout-group parent, so the panel has no scene dependencies that can go missing.
 	///
 	/// The entries a caller passes to <see cref="Open"/> are recorded rather than built on the
-	/// spot. Enabling the document re-clones the UXML, and on the very first open the visual tree
-	/// does not exist at all — so building at call time filled a tree that was either discarded a
-	/// moment later or was never there. <see cref="OnAfterShow"/> and
-	/// <see cref="OnAfterStarting"/> build them into whichever tree is actually live.
+	/// spot. When hiding disabled the document, Show re-cloned the UXML, and on the very first open
+	/// the visual tree did not exist at all — so building at call time filled a tree that was either
+	/// discarded a moment later or was never there. The tree persists now, but
+	/// <see cref="OnAfterShow"/> and <see cref="OnAfterStarting"/> still build them into whichever
+	/// tree is actually live.
 	///
 	/// Placement goes through <see cref="UITKScreenSpace"/>: the pointer arrives in screen pixels
 	/// with Y measured from the bottom, the panel is laid out in points with Y from the top, and a
@@ -164,9 +165,9 @@ namespace FishMMO.Client
 			openedFrame = Time.frameCount;
 			pointerInside = true;
 
-			/* Show, then build. The document re-clones the UXML on enable, so anything added to
-			 * entryList before this call goes into a tree that is discarded — and on the first
-			 * ever open there is no tree to add to in the first place. */
+			/* Show, then build. When hiding disabled the document, anything added to entryList
+			 * before this call went into a tree Show discarded, and on the first ever open there
+			 * was no tree at all. Neither is true now; the order is kept as the convention. */
 			Show();
 
 			// Already visible: Show is a no-op, so replace the contents directly.

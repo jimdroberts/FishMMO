@@ -16,10 +16,10 @@ namespace FishMMO.Client
 	/// nothing to do with scene instances.
 	/// <para>
 	/// The list is a MODEL (<see cref="channels"/>, plain data) rendered into a VIEW that is
-	/// rebuilt from scratch on every open. <c>UIDocument</c> re-clones the UXML each time it is
-	/// enabled, so anything written into elements before <see cref="UITKControl.Show"/> belongs to
-	/// a tree that is discarded microseconds later — the same rule <see cref="UITKParty"/>
-	/// documents at length.
+	/// rebuilt from scratch on every open. When hiding disabled the <c>UIDocument</c>, anything
+	/// written into elements before <see cref="UITKControl.Show"/> belonged to a tree discarded
+	/// microseconds later — the same rule <see cref="UITKParty"/> documents at length. The tree
+	/// persists now; the model is what a genuinely replaced tree is rebuilt from.
 	/// </para>
 	/// <para>
 	/// <b>Every open asks the server.</b> A channel list is a population snapshot that goes stale
@@ -167,9 +167,9 @@ namespace FishMMO.Client
 		/// Queries the list container and wires the footer buttons.
 		/// </summary>
 		/// <remarks>
-		/// Runs against a fresh tree every time the document is enabled, so every cached element
-		/// reference is replaced here and the previously generated rows are dropped — they belong
-		/// to a tree that no longer exists.
+		/// Runs once per tree, and again only if the document's tree is replaced, so every cached
+		/// element reference is replaced here and any previously generated rows are dropped — they
+		/// belong to a tree that no longer exists.
 		/// </remarks>
 		public override void OnStarting()
 		{

@@ -61,7 +61,7 @@ namespace FishMMO.Client
 		/// Identity, not a bool. This used to be a plain <c>elementsBound</c> latch that was set
 		/// once and never cleared — but <see cref="UITKControl.ReinitializeIfTreeReplaced"/> re-runs
 		/// <see cref="OnStarting"/> every time the <c>UIDocument</c> is disabled and re-enabled,
-		/// which is exactly what Hide/Show do here. So on the SECOND death the dialog was re-cloned
+		/// which is exactly what Hide/Show used to do. So on the SECOND death the dialog was re-cloned
 		/// from UXML while the latch still read "bound": the cached label and buttons pointed into
 		/// the discarded tree, the live Respawn and Accept-Resurrect buttons had no click handlers
 		/// at all, and <see cref="SetResurrectVisible"/> wrote into the dead tree. With no close
@@ -122,7 +122,8 @@ namespace FishMMO.Client
 		private void EnsureElementsBound()
 		{
 			VisualElement root = Root;
-			if (root == null || ReferenceEquals(boundTreeRoot, root))
+			// An empty root is a document that has not cloned its markup yet; bind to the tree it gets.
+			if (root == null || root.childCount == 0 || ReferenceEquals(boundTreeRoot, root))
 			{
 				return;
 			}
@@ -438,7 +439,8 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClickRespawn()
 		{
-			if (Client == null)
+			// A click queued on the frame the dialog closed must not respawn a player it no longer asks.
+			if (!Visible || Client == null)
 			{
 				return;
 			}
@@ -472,7 +474,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClickAcceptResurrect()
 		{
-			if (Client == null || currentResurrectorID == 0)
+			if (!Visible || Client == null || currentResurrectorID == 0)
 			{
 				return;
 			}

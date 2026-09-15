@@ -23,8 +23,9 @@ namespace FishMMO.Client
 	/// * <see cref="rows"/> is the VIEW — the elements currently rendering the model. Every entry
 	///   in it belongs to one specific visual tree.
 	///
-	/// <c>UIDocument</c> re-clones the UXML every time the document is enabled, so the entire view
-	/// is thrown away on each hide/show. The previous version of this panel kept ONLY the view;
+	/// <c>UIDocument</c> re-clones the UXML every time the document is enabled, and hiding used to
+	/// disable it, so the entire view was thrown away on each hide/show. Hiding keeps the tree now,
+	/// but a genuine tree replacement still discards the view. The previous version of this panel kept ONLY the view;
 	/// after one close the rows were orphaned in a dead tree and the roster could never come back,
 	/// because the data that would have rebuilt it had gone with the elements. That is why
 	/// <see cref="OnStarting"/> drops the view and <see cref="OnAfterStarting"/> rebuilds it from
@@ -411,6 +412,11 @@ namespace FishMMO.Client
 		/// </remarks>
 		private bool logViewDirty;
 
+		/// <summary>
+		/// Set when the ranks page no longer matches the ladder while the panel is hidden.
+		/// </summary>
+		private bool rankViewDirty;
+
 		/// <summary>Label displaying the guild name.</summary>
 		private Label guildLabel;
 		/// <summary>The container element that holds the generated member rows.</summary>
@@ -500,8 +506,8 @@ namespace FishMMO.Client
 		/// Queries elements and wires up the action buttons.
 		/// </summary>
 		/// <remarks>
-		/// Runs against a FRESH tree every time, including after a rebuild, so the first thing it
-		/// does is drop the old view. The elements in it belong to a tree that no longer exists;
+		/// Runs once per tree: at startup, and again only against a replacement tree, so the first
+		/// thing it does is drop the old view. On a re-run those elements belong to a tree that no longer exists;
 		/// keeping them would leave the panel writing into orphaned elements forever.
 		/// The buttons are new objects too, so <c>+=</c> here cannot accumulate handlers.
 		/// </remarks>
@@ -515,9 +521,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -595,7 +601,7 @@ namespace FishMMO.Client
 			if (createButton != null)
 			{
 				createButton.clicked += OnButtonCreateGuild;
-				// The tree was just re-cloned; the fee the server stated still applies to it.
+				// This tree may be new; the fee the server stated still applies to it.
 				RefreshCreateButtonLabel();
 			}
 
@@ -668,22 +674,22 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Re-applies the roster, guild text, tab and filters after the visual tree was rebuilt.
+		/// Applies the roster, guild text, tab and filters once the tree exists, and again if it is replaced.
 		/// </summary>
 		/// <remarks>
-		/// This is the hook that closes CRIT-5. The base implementation re-runs the character
-		/// pre/post pair, which is what re-subscribes this panel to the guild controller; the
-		/// rebuild below then re-renders whatever the model already holds, so a guild that was on
-		/// screen before the panel was closed is on screen again when it reopens — without
-		/// waiting for the next server pump.
+		/// This is the hook that closed CRIT-5, from when every reopen rebuilt the tree. The base
+		/// implementation re-runs the character pre/post pair, which is what re-subscribes this
+		/// panel to the guild controller; the rebuild below then re-renders whatever the model
+		/// already holds, so a replaced tree shows the guild that was on screen before —
+		/// without waiting for the next server pump.
 		/// </remarks>
 		protected override void OnAfterStarting()
 		{
 			base.OnAfterStarting();
 
-			/* The search box is an element, so its text goes with the discarded tree. Pushing the
+			/* The search box is an element, so its text goes with a replaced tree. Pushing the
 			 * remembered term back into it keeps the field and the list agreeing — a box that
-			 * reopened empty over a still-filtered roster would look like a bug in the filter. */
+			 * came back empty over a still-filtered roster would look like a bug in the filter. */
 			if (searchField != null && searchField.value != searchTerm)
 			{
 				searchField.SetValueWithoutNotify(searchTerm);
@@ -695,6 +701,39 @@ namespace FishMMO.Client
 			RebuildRosterView();
 			RebuildLogView();
 			RebuildRankView();
+		}
+
+		/// <summary>
+		/// Brings the panel up to date with whatever changed while it was closed.
+		/// </summary>
+		/// <remarks>
+		/// Rebuilds are deferred while hidden and flushed here. The log and the ladder are only pulled
+		/// when their page is opened, and the panel reopens on the page it was closed on, so that page
+		/// is pulled again; <see cref="SetActiveTab"/> does that, and drops a hover card left over
+		/// from before the close.
+		/// </remarks>
+		protected override void OnAfterShow()
+		{
+			SetActiveTab(activeTab);
+			ApplyGuildInfo();
+
+			if (rosterViewDirty)
+			{
+				rosterViewDirty = false;
+				RebuildRosterView();
+			}
+
+			if (logViewDirty)
+			{
+				logViewDirty = false;
+				RebuildLogView();
+			}
+
+			if (rankViewDirty)
+			{
+				rankViewDirty = false;
+				RebuildRankView();
+			}
 		}
 
 		/// <summary>
@@ -713,7 +752,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// <c>UITKCharacterControl.OnAfterStarting</c> calls Pre then Post on every tree rebuild
 		/// specifically so the pair cancels out. Leaving this un-overridden — as this panel used
-		/// to — made the Pre call a no-op, so every reopen stacked another subscription and each
+		/// to — made the Pre call a no-op, so every rebuild (then every reopen) stacked another subscription and each
 		/// roster update ran the handlers one more time than the last.
 		/// </remarks>
 		public override void OnPreSetCharacter()
@@ -746,6 +785,11 @@ namespace FishMMO.Client
 				// The fee usually arrives before this panel binds; the controller kept it.
 				RefreshCreateButtonLabel();
 			}
+
+			/* The panel started at world load, before there was a character, and drew the buttons for
+			 * a player in no guild. Redrawn against the character now rather than waiting for a guild
+			 * event that may already have arrived. */
+			ApplyGuildInfo();
 		}
 
 		/// <summary>
@@ -1399,6 +1443,13 @@ namespace FishMMO.Client
 		protected override void OnTick()
 		{
 			base.OnTick();
+
+			/* A hidden panel keeps its flags and OnAfterShow flushes them, so guild pumps that
+			 * arrive while the window is closed cost nothing until somebody opens it. */
+			if (!Visible)
+			{
+				return;
+			}
 
 			if (rosterViewDirty)
 			{
@@ -2227,10 +2278,10 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// Right-click rather than left, and the shared context menu rather than the dropdown.
 		/// The dropdown path was unreachable by construction: it called <c>Hide()</c> and then
-		/// added its entries, but <c>Hide()</c> disables the document, so every entry was added
+		/// added its entries, but <c>Hide()</c> then disabled the document, so every entry was added
 		/// to a tree that the following <c>Show()</c> immediately discarded.
 		/// <c>UITKContextMenu.Open</c> shows first and builds afterwards, which is the order the
-		/// re-cloning document actually requires.
+		/// re-cloning document required, and remains the conventional one.
 		/// </remarks>
 		private void OnMemberPointerDown(PointerDownEvent evt, long characterID)
 		{
@@ -2525,8 +2576,17 @@ namespace FishMMO.Client
 			/* Every roster row renders a rank NAME resolved from this ladder, so a ladder that
 			 * arrives after the roster — which is the normal ordering on join — has to repaint
 			 * the rows that were drawn without it. The ranks page renders the ladder itself. */
-			RebuildRosterView();
 			ApplyGuildInfo();
+
+			// Deferred while hidden, like the roster and the log; OnAfterShow flushes both.
+			if (!Visible)
+			{
+				InvalidateRosterView();
+				rankViewDirty = true;
+				return;
+			}
+
+			RebuildRosterView();
 			RebuildRankView();
 		}
 

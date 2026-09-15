@@ -13,13 +13,13 @@ namespace FishMMO.Client
 	/// back to the server for validation.
 	/// </summary>
 	/// <remarks>
-	/// <para><b>Content is written after Show, and again after a tree rebuild.</b> A
-	/// <c>UIDocument</c> re-clones its UXML on every enable, so the speaker, body and choice
+	/// <para><b>Content is written after Show, and again after a tree rebuild.</b> When hiding
+	/// disabled the <c>UIDocument</c>, every show re-cloned the UXML, so the speaker, body and choice
 	/// buttons written before <see cref="UITKControl.Show"/> belonged to a tree that was discarded
 	/// microseconds later — the panel opened blank. The node arrives in a broadcast, is kept as
-	/// plain data, and is rendered from <see cref="OnAfterShow"/> and
-	/// <see cref="OnAfterStarting"/>. Both, because on a panel's first open <c>hasStarted</c> is
-	/// still false and the re-initialisation path bails out before <c>OnAfterShow</c> would help.</para>
+	/// plain data, and is rendered from <see cref="OnAfterShow"/>, which runs on every open, and
+	/// <see cref="OnAfterStarting"/>, which runs once at startup and again only if the tree is
+	/// genuinely replaced.</para>
 	///
 	/// <para><b>There is always a way out.</b> A node whose choices have all been filtered away —
 	/// every one already taken, every one's conditions unmet — used to render no buttons at all,
@@ -63,6 +63,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the container that holds the generated choice buttons.</summary>
 		private const string CHOICES_NAME = "dialogue-choices";
 
+		/// <summary>Scroll view around the dialogue text.</summary>
+		private const string TEXT_SCROLL_NAME = "dialogue-text-scroll";
+
 		/// <summary>USS class applied to each generated choice button.</summary>
 		private const string CHOICE_BUTTON_CLASS = "dialogue-choice";
 
@@ -88,6 +91,9 @@ namespace FishMMO.Client
 		/// <summary>The container element that holds the generated choice buttons.</summary>
 		private VisualElement choicesContainer;
 
+		/// <summary>Scroll view around the dialogue text.</summary>
+		private ScrollView textScroll;
+
 		/// <summary>
 		/// Queries the speaker, text, and choices elements.
 		/// </summary>
@@ -99,9 +105,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -111,6 +117,7 @@ namespace FishMMO.Client
 			speakerLabel = root.Q<Label>(SPEAKER_NAME);
 			dialogueText = root.Q<Label>(TEXT_NAME);
 			choicesContainer = root.Q(CHOICES_NAME);
+			textScroll = root.Q<ScrollView>(TEXT_SCROLL_NAME);
 		}
 
 		/// <summary>
@@ -169,10 +176,10 @@ namespace FishMMO.Client
 
 			currentNode = startNode;
 
-			/* Show first, then render. Enabling the document clones a fresh tree, so a RefreshUI
-			 * before this line writes into elements that are thrown away — which is exactly what
-			 * this did, and why the dialogue opened blank. Show() calls OnAfterShow, which
-			 * renders. */
+			/* Show first, then render. When hiding disabled the document, Show cloned a fresh tree,
+			 * so a RefreshUI before this line wrote into elements that were thrown away — which is
+			 * exactly what this did, and why the dialogue opened blank. Show() calls OnAfterShow,
+			 * which renders. */
 			Show();
 
 			// Already visible: Show is a no-op and OnAfterShow never ran, so render directly.
@@ -290,6 +297,12 @@ namespace FishMMO.Client
 			}
 
 			dialogueText.text = currentNode.Text;
+
+			// The scroll position persists with the tree; each node's text starts at its top.
+			if (textScroll != null)
+			{
+				textScroll.scrollOffset = Vector2.zero;
+			}
 
 			ClearChoiceButtons();
 
@@ -412,6 +425,17 @@ namespace FishMMO.Client
 			currentNode = null;
 			cachedChoices = 0;
 			ClearChoiceButtons();
+
+			/* The tree persists while hidden; the last conversation's lines must not show for a frame
+			 * when the next one opens. */
+			if (speakerLabel != null)
+			{
+				speakerLabel.text = string.Empty;
+			}
+			if (dialogueText != null)
+			{
+				dialogueText.text = string.Empty;
+			}
 		}
 
 		/// <summary>

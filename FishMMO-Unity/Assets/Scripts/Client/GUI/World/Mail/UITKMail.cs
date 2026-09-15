@@ -120,7 +120,6 @@ namespace FishMMO.Client
 		protected override void OnAfterStarting()
 		{
 			base.OnAfterStarting();
-			WireControls();
 			ApplyPerOpenContent();
 		}
 
@@ -128,13 +127,10 @@ namespace FishMMO.Client
 		/// Fills the panel on every show.
 		/// </summary>
 		/// <remarks>
-		/// Enabling the document re-clones the UXML, so both the element references and the button
-		/// callbacks have to be re-established — anything wired before <c>Show()</c> is attached to
-		/// a tree that no longer exists.
+		/// The buttons are wired once, in <see cref="OnStarting"/>, against the tree the panel keeps.
 		/// </remarks>
 		protected override void OnAfterShow()
 		{
-			WireControls();
 			ApplyPerOpenContent();
 		}
 
@@ -186,6 +182,10 @@ namespace FishMMO.Client
 			composing = false;
 			requestInFlight = false;
 
+			// The status lines persist with the tree; the last mailbox's outcome must not greet this one.
+			SetStatus(string.Empty);
+			SetComposeStatus(string.Empty);
+
 			if (!Visible)
 			{
 				Show();
@@ -203,6 +203,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientMailListBroadcastReceived(MailListBroadcast msg, Channel channel)
 		{
+			/* A reply for a mailbox the player has since closed. Hide empties the inbox, and storing
+			 * this would put the old letters back in front of the next open until its fetch lands. */
+			if (!Visible || mailboxID == 0)
+			{
+				return;
+			}
+
 			entries = msg.Entries ?? new MailEntryData[0];
 
 			/* Keep the selection if the mail is still there. A refresh follows every claim, and
@@ -279,9 +286,11 @@ namespace FishMMO.Client
 		/// Attaches the header, read-pane and compose-pane callbacks to the current tree.
 		/// </summary>
 		/// <remarks>
-		/// Re-run on every show because <c>Show()</c> re-clones the UXML. Callbacks are assigned to
-		/// a freshly queried element each time, so there is nothing to unsubscribe — the elements
-		/// they were attached to have been discarded with the old tree.
+		/// Called once, from <see cref="OnStarting"/>. It was also called from
+		/// <see cref="OnAfterStarting"/> and <see cref="OnAfterShow"/>, against the same buttons, so
+		/// every button carried a handler per call and one click claimed, deleted or sent more than
+		/// once. The panel keeps its tree across hide and show; a tree that is genuinely replaced
+		/// re-runs <see cref="OnStarting"/> against new elements, so <c>+=</c> cannot stack.
 		/// </remarks>
 		private void WireControls()
 		{
@@ -331,7 +340,7 @@ namespace FishMMO.Client
 		// ── Rendering ─────────────────────────────────────────────────────────
 
 		/// <summary>
-		/// Writes everything that has to survive the visual tree being re-cloned.
+		/// Writes the per-open content, and refills the visual tree if it is ever re-cloned.
 		/// </summary>
 		private void ApplyPerOpenContent()
 		{

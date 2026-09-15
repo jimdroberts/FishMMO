@@ -541,37 +541,30 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void ClosingThePanelAndReopeningItRebuildsTheRowsIntoTheNewTree()
+		public void ClosingThePanelAndReopeningItKeepsTheSameTreeAndRows()
 		{
-			/* Hiding the panel disables its UIDocument, which discards the tree; showing it clones a
-			 * fresh one, so every element the panel cached belongs to a tree nobody can see. */
+			/* Hiding a panel only hides its root; the UIDocument stays enabled and the tree stays
+			 * alive, the way deactivating a UGUI canvas kept its hierarchy. It used to disable the
+			 * document, which discarded the tree, so every reopen cloned the UXML again, re-ran
+			 * initialisation and rebuilt every row: allocation on every open, and a panel that could
+			 * only be correct if it rebuilt itself each time. */
 			FactionTemplate faction = NewFaction("FactionPanel_Reopen");
 			Apply(faction, 100);
-			LogAssert.IsNotNull(RowFor("FactionPanel_Reopen"), "the row exists in the first tree");
+			VisualElement row = RowFor("FactionPanel_Reopen");
+			VisualElement list = Field<VisualElement>("list");
+			LogAssert.IsNotNull(row, "the row exists before closing");
 
 			panel.Hide();
-
-			/* The Pre half of the rebuild. OnAfterStarting runs this and then OnPostSetCharacter
-			 * whenever the tree is rebuilt and a character is set; this fixture has no character, so
-			 * it is called directly here. It is the half that drops the rows belonging to the tree
-			 * that has just been discarded — and dropping them is load-bearing, not tidiness:
-			 * without it the panel holds a row element nobody can see, ApplyFaction then finds the
-			 * faction already in its dictionary, decides the row does not need moving, and renders
-			 * nothing into the tree that is actually on screen. */
-			panel.OnPreSetCharacter();
 			panel.Show();
 
-			LogAssert.IsNull(RowFor("FactionPanel_Reopen"),
-				"the rebuilt tree starts empty; the rows went with the tree that was discarded");
-			LogAssert.AreSame(Live.Q("faction-list"), Field<VisualElement>("list"),
-				"and the panel must have re-resolved the list from the tree it can actually draw");
+			LogAssert.AreSame(list, Field<VisualElement>("list"), "reopening does not rebuild the list");
+			LogAssert.AreSame(Live.Q("faction-list"), list, "and the list the panel holds is the one on screen");
+			LogAssert.AreSame(row, RowFor("FactionPanel_Reopen"), "the row survives closing and reopening");
 
-			// Rendering into the new tree works, and files into the NEW tree's sections.
+			// Rendering the same faction again updates that row in place.
 			Apply(faction, 100);
-			LogAssert.IsNotNull(RowFor("FactionPanel_Reopen"), "a faction must render into the rebuilt tree");
-			LogAssert.AreEqual(1, RowsIn("ally").childCount, "in the section it belongs to");
-			LogAssert.IsTrue(IsCollapsed(RowFor("FactionPanel_Reopen")),
-				"and folded shut, since the expansion went with the rows");
+			LogAssert.AreSame(row, RowFor("FactionPanel_Reopen"), "a repeat render reuses the row");
+			LogAssert.AreEqual(1, RowsIn("ally").childCount, "and does not add a second one to its section");
 		}
 
 		// ── What cannot be reached from a tree ──────────────────────────────────

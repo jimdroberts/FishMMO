@@ -18,10 +18,11 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// <para>
 	/// The roster is split into a MODEL (<see cref="roster"/>, plain data, owned by the character)
-	/// and a VIEW (<see cref="rows"/>, elements owned by one visual tree). <c>UIDocument</c>
-	/// re-clones the UXML on every enable, so the view is destroyed on each hide/show. Keeping
+	/// and a VIEW (<see cref="rows"/>, elements owned by one visual tree). When hiding disabled the
+	/// <c>UIDocument</c>, the UXML was re-cloned and the view destroyed on each hide/show. Keeping
 	/// only the view — as this panel used to — meant the party vanished permanently after the
 	/// first close, because the data that would have redrawn it was inside the discarded elements.
+	/// Hiding keeps the tree now; the model still covers a genuine tree replacement.
 	/// See <see cref="OnAfterStarting"/>.
 	/// </para>
 	/// <para>
@@ -285,9 +286,9 @@ namespace FishMMO.Client
 		/// Queries the member list and wires up the action buttons.
 		/// </summary>
 		/// <remarks>
-		/// Runs against a fresh tree every time, so it drops the old view first — those elements
-		/// belong to a tree that no longer exists. The buttons are new objects, so <c>+=</c>
-		/// cannot accumulate handlers across rebuilds.
+		/// Runs once per tree: at startup, and again only against a replacement tree, so it drops
+		/// the old view first — on a re-run those elements belong to a tree that no longer exists.
+		/// The buttons are new objects each time, so <c>+=</c> cannot accumulate handlers.
 		/// </remarks>
 		public override void OnStarting()
 		{
@@ -300,9 +301,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -338,7 +339,7 @@ namespace FishMMO.Client
 
 			/* Both, because they resize independently: the root with the screen and interface
 			 * scale, the frame as members join and leave. Unregistered first because OnStarting
-			 * re-runs against a rebuilt tree. */
+			 * re-runs if the tree is ever replaced. */
 			root.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 			root.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 			partyPanel?.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
@@ -483,13 +484,19 @@ namespace FishMMO.Client
 		/// Redraws the roster whenever the panel is shown.
 		/// </summary>
 		/// <remarks>
-		/// <c>Show()</c> re-clones the tree, so anything written before it is discarded. On the
-		/// very first open <c>OnAfterStarting</c> has not run yet and this is the only pass that
-		/// happens; on later opens both run and writing the same state twice is harmless.
+		/// The rows persist while the panel is hidden, so they are brought up to date in place: a
+		/// member added while it was closed gets a row, and every row is re-read from its model.
+		/// Rebuilding from scratch here threw away every row and buff icon on every open.
 		/// </remarks>
 		protected override void OnAfterShow()
 		{
-			RebuildRosterView();
+			foreach (MemberModel model in roster.Values)
+			{
+				GetOrCreateRow(model);
+				ApplyModelToRow(model);
+			}
+
+			RefreshHeader();
 		}
 
 		/// <summary>
@@ -508,7 +515,8 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// <c>UITKCharacterControl.OnAfterStarting</c> calls Pre then Post on every tree rebuild
 		/// so the pair cancels out. Leaving this un-overridden made the Pre call a no-op, so
-		/// every reopen stacked another subscription onto the same controller.
+		/// every rebuild (which every reopen was, when hiding discarded the tree) stacked another
+		/// subscription onto the same controller.
 		/// </remarks>
 		public override void OnPreSetCharacter()
 		{
@@ -1352,10 +1360,14 @@ namespace FishMMO.Client
 			 * let the identity column collapse to the height of the name alone — so a leader's
 			 * name would sit higher than everybody else's, and the column a player scans down
 			 * would be the one column not aligned. Visibility draws nothing and keeps the
-			 * baseline. */
+			 * baseline.
+			 *
+			 * A leader's badge clears the inline value rather than writing Visible. Panels hide by
+			 * setting their root's visibility, which children inherit; an explicit Visible here
+			 * would override that and leave the badge drawn on a hidden party panel. */
 			bool isLeader = model.Rank == PartyRank.Leader;
 			row.Rank.text = isLeader ? "LEADER" : string.Empty;
-			row.Rank.style.visibility = isLeader ? Visibility.Visible : Visibility.Hidden;
+			row.Rank.style.visibility = isLeader ? new StyleEnum<Visibility>(StyleKeyword.Null) : new StyleEnum<Visibility>(Visibility.Hidden);
 		}
 
 		/// <summary>
@@ -1671,10 +1683,6 @@ namespace FishMMO.Client
 			}
 			rows.Clear();
 
-			/* The pool holds elements belonging to the tree that was just replaced. Reusing them
-			 * would parent dead elements into the new one. */
-			iconPool.Clear();
-
 			if (memberList != null)
 			{
 				memberList.Clear();
@@ -1957,7 +1965,7 @@ namespace FishMMO.Client
 		/// <param name="characterID">The member's character ID.</param>
 		/// <remarks>
 		/// Right-click through the shared context menu, replacing the dropdown. The dropdown call
-		/// hid the panel and then added its entries, but hiding disables the document — so every
+		/// hid the panel and then added its entries, but hiding then disabled the document — so every
 		/// entry was added to a tree the following <c>Show()</c> discarded, and the menu could
 		/// never appear with anything in it.
 		/// </remarks>

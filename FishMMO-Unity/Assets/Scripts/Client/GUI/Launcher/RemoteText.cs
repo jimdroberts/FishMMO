@@ -83,7 +83,8 @@ namespace FishMMO.Client
 		/// first: <c>enableRichText</c> is a property of the element, and a label resolved from
 		/// a freshly cloned UXML tree is a different element with the default back in place.
 		/// (See the project's "mutate then Show" contract — <c>UIDocument</c> re-clones its tree
-		/// on every enable, so a flag set once on a cached element does not survive.)
+		/// whenever it is re-enabled, so a flag set once on a cached element does not survive a
+		/// replaced tree.)
 		/// </remarks>
 		/// <param name="label">The label to write into. Null is ignored.</param>
 		/// <param name="text">Untrusted text. Null is treated as empty.</param>

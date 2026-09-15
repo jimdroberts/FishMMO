@@ -261,12 +261,12 @@ namespace FishMMO.Client
 			if (!IsQueued)
 			{
 				selectedDifficulty = 0;
+				publicToggle?.SetValueWithoutNotify(false);
 			}
 			ClearList();
 
-			/* Show first, then render. Enabling the document re-clones the UXML, so anything
-			 * written before this line belonged to a tree that was discarded microseconds later
-			 * and the panel opened blank. Show() calls OnAfterShow, which does the writing. */
+			/* Show first, then render: Show() calls OnAfterShow, which does the writing, so a
+			 * closed panel renders once rather than twice. */
 			Show();
 
 			// Already visible: Show is a no-op and OnAfterShow never ran, so render directly.
@@ -283,12 +283,12 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Draws the pending dungeon again after the visual tree has been rebuilt.
+		/// Draws the pending dungeon once the tree exists, and again if it is rebuilt.
 		/// </summary>
 		/// <remarks>
-		/// Both hooks are needed: on a panel's first open <c>hasStarted</c> is still false and the
-		/// tree-replacement check bails out before <c>OnAfterShow</c> would help, while
-		/// <c>OnAfterStarting</c> alone misses every later reopen.
+		/// <c>OnAfterShow</c> covers every open; this covers a tree genuinely replaced while the
+		/// panel is up. <c>OnAfterStarting</c> alone runs once at startup and would miss every
+		/// later open.
 		/// </remarks>
 		protected override void OnAfterStarting()
 		{
@@ -1095,6 +1095,9 @@ namespace FishMMO.Client
 			currentInteractableID = 0;
 			currentTemplate = null;
 			selectedDifficulty = 0;
+			/* The toggle persists with the tree. A group opened to strangers at one entrance must not
+			 * silently stay open at the next. */
+			publicToggle?.SetValueWithoutNotify(false);
 			ClearList();
 		}
 

@@ -51,8 +51,8 @@ namespace FishMMO.Client
 		/// The content the current tooltip is showing.
 		/// </summary>
 		/// <remarks>
-		/// Kept so it can be re-rendered after the document re-clones the UXML; building elements
-		/// before <c>Show()</c> builds them into a tree that is about to be discarded.
+		/// Kept so it can be re-rendered if the document ever re-clones the UXML; when hiding disabled
+		/// the document, elements built before <c>Show()</c> went into a tree about to be discarded.
 		/// </remarks>
 		private TooltipContent pendingContent;
 
@@ -155,9 +155,10 @@ namespace FishMMO.Client
 		/// Reports whether the element this tooltip belongs to is still on screen.
 		/// </summary>
 		/// <remarks>
-		/// Three ways it can stop being: the element was removed from its tree (a list rebuild),
-		/// its panel was hidden or destroyed (<c>panel</c> goes null when the document is
-		/// disabled), or something in its ancestry was set to <c>display: none</c>.
+		/// Four ways it can stop being: the element was removed from its tree (a list rebuild),
+		/// its panel was destroyed (<c>panel</c> goes null), its panel was hidden (panels hide by
+		/// visibility and keep their tree, so <c>panel</c> stays set), or something in its ancestry
+		/// was set to <c>display: none</c>.
 		/// </remarks>
 		private bool IsOwnerAlive()
 		{
@@ -168,6 +169,12 @@ namespace FishMMO.Client
 			}
 
 			if (owner.panel == null || owner.parent == null)
+			{
+				return false;
+			}
+
+			// Visibility is inherited, so the owner's own resolved value answers for its whole panel.
+			if (owner.resolvedStyle.visibility == Visibility.Hidden)
 			{
 				return false;
 			}
@@ -214,9 +221,9 @@ namespace FishMMO.Client
 			this.owner = owner;
 			this.pendingContent = content;
 
-			/* Show before writing. Enabling the document re-clones the UXML, so a label written
-			 * to here would belong to a tree that is discarded microseconds later — the tooltip
-			 * would open, every time, blank. OnAfterShow does the write against the live tree. */
+			/* Show before writing. When hiding disabled the document, a label written to here
+			 * belonged to a tree discarded microseconds later — the tooltip opened, every time,
+			 * blank. The tree persists now; OnAfterShow still does the write against the live tree. */
 			Show();
 
 			// Already visible for a different owner: Show is a no-op, so render directly.

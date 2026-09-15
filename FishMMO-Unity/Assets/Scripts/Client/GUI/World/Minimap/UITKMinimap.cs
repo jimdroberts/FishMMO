@@ -450,6 +450,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Refreshes the markers at once when the minimap is shown again, instead of on the next interval.
+		/// </summary>
+		protected override void OnAfterShow()
+		{
+			nextMarkerRefreshTime = 0.0;
+		}
+
+		/// <summary>
 		/// Re-reads everything derived from the scene when the character changes zone.
 		/// </summary>
 		private void MapSystem_OnSceneChanged()

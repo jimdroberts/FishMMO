@@ -225,9 +225,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
-			/* Every row in this list is a VisualElement from the tree that was just discarded.
-			 * Keeping them would leave the panel rendering nothing while still believing it is
-			 * full, and every later add would append to a dead container. */
+			/* On a re-run every row in this list is a VisualElement from the tree that was just
+			 * replaced. Keeping them would leave the panel rendering nothing while still believing
+			 * it is full, and every later add would append to a dead container. */
 			entries.Clear();
 
 			VisualElement root = Root;
@@ -236,9 +236,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
-			 * against a freshly cloned tree, so this is a new element each time and the
-			 * handler cannot accumulate the way a subscription to a static event would. */
+			/* Resolved from the tree rather than cached: OnStarting runs once per tree, and
+			 * re-runs only against a replacement tree, so this is a new element each time and
+			 * the handler cannot accumulate the way a subscription to a static event would. */
 			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeButton != null)
 			{
@@ -269,8 +269,8 @@ namespace FishMMO.Client
 			{
 				/* SetValueWithoutNotify, because writing .value inside a rebuild queues a
 				 * ChangeEvent that arrives after this method returns and re-enters the filter
-				 * with a stale tree. The text is restored here so a hide/show does not silently
-				 * drop a search the player had typed. */
+				 * with a stale tree. The text is restored here so a tree replacement does not
+				 * silently drop a search the player had typed; a hide/show keeps the field. */
 				searchField.SetValueWithoutNotify(searchText);
 				searchField.RegisterValueChangedCallback(OnSearchChanged);
 			}
@@ -281,6 +281,19 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStopLocalClient += PlayerCharacter_OnStopLocalClient;
 
 			SwitchTab(currentTab);
+		}
+
+		/// <summary>
+		/// Resets the status line and the details pane for a fresh open.
+		/// </summary>
+		/// <remarks>
+		/// Both persist with the tree: a refusal or forget-failure message would greet the next open,
+		/// and a details pane closed while previewing a hovered row would go on showing that row.
+		/// </remarks>
+		protected override void OnAfterShow()
+		{
+			SetStatus(currentTab == AbilityTabType.Ability ? ABILITY_TAB_HINT : KNOWLEDGE_TAB_HINT);
+			RestoreSelectedDetails();
 		}
 
 		/// <summary>
@@ -348,7 +361,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The panel is otherwise fed exclusively by the <c>OnAdd*</c> events, which the controller
 		/// raises once, on <c>OnStartCharacter</c>. Anything that rebuilds the visual tree after
-		/// that point — the first hide/show, a theme reload — left the panel permanently empty,
+		/// that point — the first hide/show, back when hiding discarded the tree — left the panel permanently empty,
 		/// because the events that would have filled it had already fired.
 		/// </remarks>
 		private void RebuildFromCharacter(IAbilityController abilityController)
