@@ -35,6 +35,32 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class InventorySetItemBroadcastSerializer
 	{
+		/// <summary>Upper bound accepted for an inventory array length, against a corrupt stream.</summary>
+		/// <remarks>
+		/// <para>
+		/// Anchored on the container: <c>InventoryController.OnAwake</c> calls
+		/// <c>AddSlots(null, 32)</c>, so the largest legitimate array — a full inventory sent in one
+		/// <see cref="InventorySetMultipleItemsBroadcast"/> at login — is 32 entries. There is no
+		/// <c>Constants</c> value to point at; 32 is written into the controller directly, which is
+		/// why this bound restates it here rather than referencing it.
+		/// </para>
+		/// <para>
+		/// The ceiling is 32x that capacity on purpose. Truncating a legitimate array is worse than
+		/// the allocation it prevents — a player would silently lose rows from their own bags — and
+		/// the bound's whole job is to stop <c>new InventorySetItemBroadcast[2_000_000_000]</c>, not
+		/// to police a plausible count. A thousand of these structs is tens of kilobytes, so the
+		/// headroom costs nothing and survives bag slots, expansions, or a doubled starting size
+		/// without anybody remembering this file exists.
+		/// </para>
+		/// <para>
+		/// This is a server → client path, so the realistic trigger is a mangled or truncated
+		/// stream — a desynchronised reader interpreting the middle of some other field as a length
+		/// prefix — rather than a hostile client. A client cannot send this message to itself. The
+		/// bound is cheap insurance against corruption, not a security control.
+		/// </para>
+		/// </remarks>
+		public const int MaxInventoryItems = 1024;
+
 		/// <summary>Writes an <see cref="InventorySetItemBroadcast"/>.</summary>
 		public static void WriteInventorySetItemBroadcast(this Writer writer, InventorySetItemBroadcast value)
 		{
@@ -83,12 +109,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Reads an array of <see cref="InventorySetItemBroadcast"/>.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxInventoryItems"/> cannot be allocated and cannot be
+		/// resynchronised past either — the entries behind it are only locatable by trusting the
+		/// count just rejected — so the array comes back empty and the caller applies nothing. Only
+		/// the sender's own -1, which is not a length at all, means null.
+		/// </remarks>
 		public static InventorySetItemBroadcast[] ReadInventorySetItemBroadcastArray(this Reader reader)
 		{
 			int length = reader.ReadInt32();
 			if (length < 0)
 			{
 				return null;
+			}
+			if (length > MaxInventoryItems)
+			{
+				return System.Array.Empty<InventorySetItemBroadcast>();
 			}
 
 			InventorySetItemBroadcast[] value = new InventorySetItemBroadcast[length];

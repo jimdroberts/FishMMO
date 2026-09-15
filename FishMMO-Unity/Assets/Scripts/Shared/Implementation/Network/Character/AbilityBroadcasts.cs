@@ -27,6 +27,34 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class KnownAbilityAddBroadcastSerializer
 	{
+		/// <summary>Upper bound accepted for a known-ability array length, against a corrupt stream.</summary>
+		/// <remarks>
+		/// <para>
+		/// Registry-bounded rather than capacity-bounded. One entry is one learned
+		/// <c>BaseAbilityTemplate</c>, so the largest legitimate array — the whole known set shipped
+		/// at login in one <see cref="KnownAbilityAddMultipleBroadcast"/> — cannot exceed the number
+		/// of base ability templates authored in the project. That is currently under a hundred
+		/// assets under <c>Assets/Templates/Entity/Abilities</c>, and there is no constant anywhere
+		/// that caps it: nothing stops a designer adding the next one, so no exact bound exists to
+		/// reference.
+		/// </para>
+		/// <para>
+		/// This ceiling is therefore an explicitly generous, explicitly arbitrary one rather than a
+		/// derived limit — two orders of magnitude above today's content, chosen so that ability
+		/// authoring can grow for the life of the project without anyone rediscovering this file.
+		/// The deliberate asymmetry: a bound set too low truncates a legitimate array and a player
+		/// logs in missing abilities they own, which is a much worse bug than the large allocation
+		/// the bound exists to prevent. A bound set too high still turns an unbounded
+		/// <c>new T[2_000_000_000]</c> into a few tens of kilobytes, which is the entire point.
+		/// </para>
+		/// <para>
+		/// Server → client, so the honest threat is a mangled or truncated stream — a reader that
+		/// has lost alignment and is interpreting some other field as a length prefix — not a
+		/// hostile client, which has no way to send this message to itself.
+		/// </para>
+		/// </remarks>
+		public const int MaxKnownAbilities = 8192;
+
 		/// <summary>Writes a <see cref="KnownAbilityAddBroadcast"/>.</summary>
 		public static void WriteKnownAbilityAddBroadcast(this Writer writer, KnownAbilityAddBroadcast value)
 		{
@@ -67,12 +95,23 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Reads an array of <see cref="KnownAbilityAddBroadcast"/>.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxKnownAbilities"/> cannot be allocated and cannot be
+		/// resynchronised past either — the entries behind it are only locatable by trusting the
+		/// count just rejected — so the array comes back empty and nothing is learned. Only the
+		/// sender's own -1, which is not a length at all, means null.
+		/// </remarks>
 		public static KnownAbilityAddBroadcast[] ReadKnownAbilityAddBroadcastArray(this Reader reader)
 		{
 			int length = reader.ReadInt32();
 			if (length < 0)
 			{
 				return null;
+			}
+
+			if (length > MaxKnownAbilities)
+			{
+				return System.Array.Empty<KnownAbilityAddBroadcast>();
 			}
 
 			KnownAbilityAddBroadcast[] value = new KnownAbilityAddBroadcast[length];
@@ -115,6 +154,36 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class KnownAbilityEventAddBroadcastSerializer
 	{
+		/// <summary>Upper bound accepted for a known-ability-event array length, against a corrupt stream.</summary>
+		/// <remarks>
+		/// <para>
+		/// Registry-bounded, exactly as <see cref="KnownAbilityAddBroadcastSerializer.MaxKnownAbilities"/>
+		/// is: one entry is one learned ability event template, so the largest legitimate array —
+		/// the whole known event set at login, in one
+		/// <see cref="KnownAbilityEventAddMultipleBroadcast"/> — cannot exceed the number of event
+		/// templates authored under <c>Assets/Templates/Entity/Abilities/Events</c>. No constant
+		/// caps that count, so there is no exact bound to reference and this is a deliberately
+		/// generous ceiling rather than a derived one.
+		/// </para>
+		/// <para>
+		/// Held at the same value as the base-ability bound on purpose. The two arrive together in
+		/// the same login sync and grow together as abilities are authored, so one number moving
+		/// without the other would be the kind of asymmetry that makes a future reader guess. Event
+		/// templates typically outnumber base abilities — several per ability — which is the other
+		/// reason not to set this one tighter.
+		/// </para>
+		/// <para>
+		/// Note this is a distinct concern from <see cref="AbilityAddBroadcastSerializer.MAX_EVENTS"/>,
+		/// which bounds the events baked into ONE crafted ability. That is genuinely a handful and
+		/// bounded by <c>AdditionalEventSlots</c>; this is the player's whole learned catalogue.
+		/// </para>
+		/// <para>
+		/// Server → client, so the honest threat is a mangled or truncated stream rather than a
+		/// hostile client.
+		/// </para>
+		/// </remarks>
+		public const int MaxKnownAbilityEvents = 8192;
+
 		/// <summary>Writes a <see cref="KnownAbilityEventAddBroadcast"/>.</summary>
 		public static void WriteKnownAbilityEventAddBroadcast(this Writer writer, KnownAbilityEventAddBroadcast value)
 		{
@@ -155,12 +224,23 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Reads an array of <see cref="KnownAbilityEventAddBroadcast"/>.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxKnownAbilityEvents"/> cannot be allocated and cannot be
+		/// resynchronised past either — the entries behind it are only locatable by trusting the
+		/// count just rejected — so the array comes back empty and nothing is learned. Only the
+		/// sender's own -1, which is not a length at all, means null.
+		/// </remarks>
 		public static KnownAbilityEventAddBroadcast[] ReadKnownAbilityEventAddBroadcastArray(this Reader reader)
 		{
 			int length = reader.ReadInt32();
 			if (length < 0)
 			{
 				return null;
+			}
+
+			if (length > MaxKnownAbilityEvents)
+			{
+				return System.Array.Empty<KnownAbilityEventAddBroadcast>();
 			}
 
 			KnownAbilityEventAddBroadcast[] value = new KnownAbilityEventAddBroadcast[length];
@@ -222,6 +302,37 @@ namespace FishMMO.Shared
 		/// out — the count is read straight off the wire and is otherwise unbounded.
 		/// </remarks>
 		public const int MAX_EVENTS = 64;
+
+		/// <summary>Upper bound accepted for a crafted-ability array length, against a corrupt stream.</summary>
+		/// <remarks>
+		/// <para>
+		/// The weakest anchor of the seven bounds added here, and worth being honest about. The
+		/// other arrays are one entry per authored template and so are bounded, however loosely, by
+		/// the content in the project. These are crafted ability INSTANCES — each a database row
+		/// with its own <c>ID</c> — and a player assembles them from combinations of templates, so
+		/// the count is bounded by nothing in the codebase: no cap on crafting, no cap in the
+		/// controller, and <c>Constants.Configuration.MaximumPlayerHotkeys</c> (12) bounds only what
+		/// can be BOUND to a key, not what can be owned.
+		/// </para>
+		/// <para>
+		/// So this is a clearly-labelled generous ceiling, not a derived limit, and it is set high
+		/// deliberately: the failure mode of a bound that is too low is that a dedicated player's
+		/// login sync silently drops the abilities past it, and abilities are the one thing on this
+		/// list that cost real time to acquire. Eight thousand instances is a long way past any
+		/// plausible collection and still a trivial allocation, which is the trade this bound is
+		/// making — it exists only to keep a corrupt length from turning into a multi-gigabyte
+		/// <c>new AbilityAddBroadcast[...]</c>.
+		/// </para>
+		/// <para>
+		/// If crafted abilities ever gain a real per-character cap, this should be re-anchored to it
+		/// rather than left as a guess.
+		/// </para>
+		/// <para>
+		/// Server → client, so the realistic trigger is a mangled or truncated stream rather than a
+		/// hostile client.
+		/// </para>
+		/// </remarks>
+		public const int MaxAbilities = 8192;
 
 		/// <summary>Writes an <see cref="AbilityAddBroadcast"/>. A null event array travels as length 0.</summary>
 		public static void WriteAbilityAddBroadcast(this Writer writer, AbilityAddBroadcast value)
@@ -300,12 +411,24 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Reads an array of <see cref="AbilityAddBroadcast"/>.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxAbilities"/> cannot be allocated and cannot be resynchronised
+		/// past either — and less so here than anywhere else in this file, because each element is
+		/// variable length (its own event count), so the bytes to skip are not even computable from
+		/// the rejected count. The array comes back empty. Only the sender's own -1, which is not a
+		/// length at all, means null.
+		/// </remarks>
 		public static AbilityAddBroadcast[] ReadAbilityAddBroadcastArray(this Reader reader)
 		{
 			int length = reader.ReadInt32();
 			if (length < 0)
 			{
 				return null;
+			}
+
+			if (length > MaxAbilities)
+			{
+				return System.Array.Empty<AbilityAddBroadcast>();
 			}
 
 			AbilityAddBroadcast[] value = new AbilityAddBroadcast[length];

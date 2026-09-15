@@ -118,8 +118,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				SendContainerResult(conn, msg.InteractableID, msg.Slot, succeeded, reason);
 
 				/* Re-send the whole contents after a take, rather than trusting the client to
-				 * remove one row. Containers are not private — two players can be looking at the
-				 * same chest — so what the taker sees has to come from the server's copy. */
+				 * remove one row: what THE TAKER sees comes from the server's copy, so a client
+				 * that dropped an update converges on the next one instead of compounding the
+				 * error.
+				 *
+				 * Only the taker. This is deliberately narrower than the corpse equivalent and
+				 * the previous wording here claimed otherwise — it said the refresh existed
+				 * because "two players can be looking at the same chest", which is true of the
+				 * world but is not what this line does. A second player standing at the same
+				 * chest keeps a row for an item that is gone until they click it themselves and
+				 * are answered with ContainerFailureReason.AlreadyTaken. Corrected rather than
+				 * implemented, because:
+				 *
+				 *   - There is no per-container viewer registry to send to. Corpses have one
+				 *     (ILootableCorpse.AddLootViewer / RemoveLootViewer, refreshed through
+				 *     RefreshCorpseViewers and torn down on OnCorpseExpired); containers have
+				 *     nothing equivalent. Building it means a viewer set on IContainer and
+				 *     Container, registration in SendContainerOpenBroadcastAction, a new
+				 *     client → server close message with its handler registration, a client that
+				 *     sends it when the panel hides, and despawn-time teardown — five files, a
+				 *     new wire message and a new lifecycle, none of which belongs behind a
+				 *     comment fix.
+				 *
+				 *   - The obvious shortcut is actively wrong. ContainerOpenBroadcast doubles as
+				 *     the OPEN message: UITKContainer calls Show() on receipt. Sending it to the
+				 *     interactable's network observers would force a chest window open on every
+				 *     client in range and tell them what is inside a box they never touched —
+				 *     which is exactly what was deleted from Container's spawn payload (see the
+				 *     remark on Container.items) and must not come back through this path.
+				 *
+				 * So the staleness is real, bounded, and self-correcting on the next click. The
+				 * fix is a viewer registry mirroring the corpse one; until then this comment says
+				 * what the code does. */
 				if (succeeded && takenFrom != null)
 				{
 					SendContainerContents(conn, takenFrom);

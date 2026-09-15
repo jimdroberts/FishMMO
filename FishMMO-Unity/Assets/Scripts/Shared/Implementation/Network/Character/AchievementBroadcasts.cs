@@ -31,6 +31,33 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class AchievementUpdateBroadcastSerializer
 	{
+		/// <summary>Upper bound accepted for an achievement array length, against a corrupt stream.</summary>
+		/// <remarks>
+		/// <para>
+		/// Registry-bounded. One entry is the progress on one <c>AchievementTemplate</c>, and a
+		/// character holds at most one <c>Achievement</c> per template — <c>IAchievementController</c>
+		/// keys them by template — so the largest legitimate array, the whole set sent at login in
+		/// one <see cref="AchievementUpdateMultipleBroadcast"/>, cannot exceed the number of
+		/// achievement templates authored in the project. That is currently a handful of assets
+		/// under <c>Assets/Templates/Entity/Achievements</c>.
+		/// </para>
+		/// <para>
+		/// No constant caps the template count, so there is nothing exact to reference and this is a
+		/// deliberately generous ceiling rather than a derived limit. Achievements are also the
+		/// category most likely to be added to in bulk — they tend to arrive a hundred at a time
+		/// with a content patch — which is precisely why the number is three orders of magnitude
+		/// above today's content instead of snug against it. Truncating this array would show a
+		/// player their achievement list with entries missing and their progress apparently reset,
+		/// which is worse than the allocation being prevented.
+		/// </para>
+		/// <para>
+		/// Server → client, so the honest threat is a mangled or truncated stream — a reader that
+		/// has lost alignment reading some other field as a length prefix — not a hostile client,
+		/// which cannot send this message to itself.
+		/// </para>
+		/// </remarks>
+		public const int MaxAchievements = 4096;
+
 		/// <summary>Writes an <see cref="AchievementUpdateBroadcast"/>.</summary>
 		public static void WriteAchievementUpdateBroadcast(this Writer writer, AchievementUpdateBroadcast value)
 		{
@@ -75,12 +102,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Reads an array of <see cref="AchievementUpdateBroadcast"/>.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxAchievements"/> cannot be allocated and cannot be
+		/// resynchronised past either — the entries behind it are only locatable by trusting the
+		/// count just rejected — so the array comes back empty and no progress is applied. Only the
+		/// sender's own -1, which is not a length at all, means null.
+		/// </remarks>
 		public static AchievementUpdateBroadcast[] ReadAchievementUpdateBroadcastArray(this Reader reader)
 		{
 			int length = reader.ReadInt32();
 			if (length < 0)
 			{
 				return null;
+			}
+			if (length > MaxAchievements)
+			{
+				return System.Array.Empty<AchievementUpdateBroadcast>();
 			}
 
 			AchievementUpdateBroadcast[] value = new AchievementUpdateBroadcast[length];

@@ -124,7 +124,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ReplyUsage(character, gameMasterCommands, warning ? "warn" : "msg");
 				return;
 			}
-			if (!TryResolveTarget(character, name, out IPlayerCharacter target))
+			/* Sends text and nothing else — no target state changes, so rank does not apply. Gating
+			 * it would stop a GameMaster flagging something to an Admin in-game and buy nothing: the
+			 * line is on the System channel and signed with the sender's name either way. */
+			if (!TryResolveTarget(character, name, out IPlayerCharacter target, StaffTargetRank.SkipOutranks))
 			{
 				return;
 			}
@@ -159,11 +162,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (target.ID != character.ID && !Outranks(character, target.AccessLevel))
-			{
-				Reply(character, $"{target.CharacterName} is {target.AccessLevel}; you cannot kick them.");
-				return;
-			}
+			/* The rank check that used to sit here has moved into TryResolveTarget, which every
+			 * character-targeting staff command passes through. Kick was the ONLY command that had
+			 * it; leaving a copy behind would be unreachable code and would suggest the other
+			 * commands still lack the gate. */
 
 			string accountName = target.Account;
 			string targetName = target.CharacterName;

@@ -154,8 +154,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				new OperatorCommand
 				{
 					Name = "access", Aliases = new[] { "setaccess" }, Category = "Accounts",
-					Summary = "Sets an account's access level, below your own. It applies when they next log in.",
-					Arguments = "account:Account;level:Choice=Banned,Player,GameMaster,Admin", Destructive = true,
+					Summary = "Sets an account's access level, below your own, lifting any ban. /admin ban bans.",
+					Arguments = "account:Account;level:Choice=Player,GameMaster,Admin", Destructive = true,
 					Run = SetAccountAccessLevel,
 				},
 				new OperatorCommand
@@ -243,11 +243,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Three guards, each closing a way this command could be used to escalate rather than
+		/// Four guards, each closing a way this command could be used to escalate rather than
 		/// to administer: an operator may not change their own level, may not act on an account
-		/// at or above their own, and may not grant a level at or above their own. Without the
-		/// last one an administrator could mint administrators, which makes the level ceiling
-		/// decorative.
+		/// at or above their own, may not grant a level at or above their own, and may not set
+		/// <see cref="AccessLevel.Banned"/> at all. Without the third an administrator could mint
+		/// administrators, which makes the level ceiling decorative; see the fourth below.
+		/// </para>
+		/// <para>
+		/// <b>This command lifts a ban; it can never apply one.</b> The write clears the ban
+		/// columns, so setting a banned account to Player is the unban and is meant to be — it is
+		/// how a ban and a demotion are undone in one action. The same write reached with
+		/// <c>Banned</c> would have left a permanent ban with no actor, no reason, no revoked
+		/// session and no kick, and would have ERASED the actor and reason of a ban already there.
+		/// <c>/admin ban</c> exists for that and records all of it, so this refuses the level
+		/// outright rather than quietly writing a worse ban than the ban command would.
 		/// </para>
 		/// <para>
 		/// Existing sessions are not severed here. The Control Panel revokes a session whose
@@ -271,6 +280,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				!Enum.IsDefined(typeof(AccessLevel), level))
 			{
 				Reply(character, $"'{OperatorCommandParsing.Truncate(levelText, 24)}' is not an access level.");
+				return;
+			}
+
+			/* Banned is not a level this command grants, and the refusal is here as well as in
+			 * PersistAccessLevelAsync so the operator gets an answer that names the right command
+			 * instead of a database validation message. A ban applied here would carry no actor and
+			 * no reason, revoke nothing, kick nobody, and — run on an account already banned — would
+			 * erase whoever banned them and why. /admin ban refuses to overwrite an existing
+			 * permanent ban for precisely that reason, and this command must not be the way round it. */
+			if (level == AccessLevel.Banned)
+			{
+				// Two lines: one reply over ChatBroadcast.MaxTextLength is cut, and the cut half is the why.
+				Reply(character, "/admin access cannot set Banned. Use /admin ban <account> <reason>.");
+				Reply(character, "It records who banned them and why; access would record neither.");
 				return;
 			}
 
@@ -321,7 +344,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await Log.Warning("SceneServerSystem",
 					$"Administrator '{actorName}' ({actorAccount}) set account '{accountName}' from {currentLevel} to {level}.");
 
-				return $"'{accountName}' is now {level}. They keep their current level until they reconnect.";
+				/* Said out loud when it happens. The write clears the ban columns, so an operator
+				 * raising a banned account's level has also lifted the ban, and one who did not mean
+				 * to needs to know that now rather than when the player logs in. */
+				string lifted = currentLevel == AccessLevel.Banned ? " Ban lifted." : string.Empty;
+				return $"'{accountName}' is now {level}.{lifted} They keep their current level until they reconnect.";
 			});
 		}
 

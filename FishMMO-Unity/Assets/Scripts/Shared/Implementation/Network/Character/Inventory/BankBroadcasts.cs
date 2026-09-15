@@ -36,6 +36,31 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class BankSetItemBroadcastSerializer
 	{
+		/// <summary>Upper bound accepted for a bank array length, against a corrupt stream.</summary>
+		/// <remarks>
+		/// <para>
+		/// Anchored on the container: <c>BankController.OnAwake</c> calls <c>AddSlots(null, 100)</c>,
+		/// so the largest legitimate array — a full bank sent in one
+		/// <see cref="BankSetMultipleItemsBroadcast"/> at login — is 100 entries. As with the
+		/// inventory there is no <c>Constants</c> value for it; the capacity lives in the controller,
+		/// and this bound restates it rather than referencing it.
+		/// </para>
+		/// <para>
+		/// Deliberately looser than the inventory's ceiling relative to today's capacity, because
+		/// the bank is the container most likely to grow — tabs, purchased expansions, shared
+		/// account storage all add slots to this one. Truncating a legitimate array would silently
+		/// delete rows from a player's stored goods, which is far worse than the allocation being
+		/// prevented, so the headroom is large on purpose. Four thousand of these structs is a
+		/// rounding error in memory; two billion is not, and that is the only case this stops.
+		/// </para>
+		/// <para>
+		/// Server → client, so the realistic trigger is a mangled or truncated stream rather than a
+		/// hostile client — a reader that has lost its place treating arbitrary bytes as a length
+		/// prefix. Insurance against corruption, not a security control.
+		/// </para>
+		/// </remarks>
+		public const int MaxBankItems = 4096;
+
 		/// <summary>Writes a <see cref="BankSetItemBroadcast"/>.</summary>
 		public static void WriteBankSetItemBroadcast(this Writer writer, BankSetItemBroadcast value)
 		{
@@ -84,12 +109,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Reads an array of <see cref="BankSetItemBroadcast"/>.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxBankItems"/> cannot be allocated and cannot be resynchronised
+		/// past either — the entries behind it are only locatable by trusting the count just
+		/// rejected — so the array comes back empty and the caller applies nothing. Only the
+		/// sender's own -1, which is not a length at all, means null.
+		/// </remarks>
 		public static BankSetItemBroadcast[] ReadBankSetItemBroadcastArray(this Reader reader)
 		{
 			int length = reader.ReadInt32();
 			if (length < 0)
 			{
 				return null;
+			}
+			if (length > MaxBankItems)
+			{
+				return System.Array.Empty<BankSetItemBroadcast>();
 			}
 
 			BankSetItemBroadcast[] value = new BankSetItemBroadcast[length];
