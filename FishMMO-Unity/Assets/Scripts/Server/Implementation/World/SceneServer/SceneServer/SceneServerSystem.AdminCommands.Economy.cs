@@ -101,7 +101,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void ReportCurrency(IPlayerCharacter character, string arguments)
 		{
 			if (!TryGetCurrencyTemplate(character) ||
-				!TryResolveOptionalTarget(character, arguments, out IPlayerCharacter target, out _))
+				// Reports a balance and changes nothing; read-only, so rank does not apply.
+				!TryResolveOptionalTarget(character, arguments, out IPlayerCharacter target, out _, StaffTargetRank.SkipOutranks))
 			{
 				return;
 			}

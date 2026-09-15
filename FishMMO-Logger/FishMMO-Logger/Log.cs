@@ -407,52 +407,62 @@ namespace FishMMO.Logging
 			await Task.CompletedTask;
 		}
 
+		/* The six level helpers below return Write's task directly instead of being `async Task`
+		 * methods that await it.
+		 *
+		 * `async` here bought nothing and cost a second async state machine and a second Task per
+		 * call, on top of Write's. That is invisible at Error level and ruinous at Debug: these are
+		 * called from the expected-false branches of ECA conditions, which every ability evaluates
+		 * once per target, so a 10-body AoE behind a 3-condition gate ran ~30 of them per cast.
+		 * Returning the inner task makes the refused path allocation-free end to end — see the
+		 * comment on Write. */
+
 		/// <summary>
 		/// Writes a log message with LogLevel.Critical severity.
 		/// </summary>
-		public static async Task Critical(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
+		public static Task Critical(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
 		{
-			await Write(LogLevel.Critical, source, message, exception, data);
+			return Write(LogLevel.Critical, source, message, exception, data);
 		}
 
 		/// <summary>
 		/// Writes a log message with LogLevel.Error severity.
 		/// </summary>
-		public static async Task Error(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
+		public static Task Error(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
 		{
-			await Write(LogLevel.Error, source, message, exception, data);
+			return Write(LogLevel.Error, source, message, exception, data);
 		}
 
 		/// <summary>
 		/// Writes a log message with LogLevel.Warning severity.
 		/// </summary>
-		public static async Task Warning(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
+		public static Task Warning(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
 		{
-			await Write(LogLevel.Warning, source, message, exception, data);
+			return Write(LogLevel.Warning, source, message, exception, data);
 		}
 
 		/// <summary>
 		/// Writes a log message with LogLevel.Info severity.
 		/// </summary>
-		public static async Task Info(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
+		public static Task Info(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
 		{
-			await Write(LogLevel.Info, source, message, exception, data);
+			return Write(LogLevel.Info, source, message, exception, data);
 		}
 
 		/// <summary>
 		/// Writes a log message with LogLevel.Debug severity.
 		/// </summary>
-		public static async Task Debug(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
+		public static Task Debug(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
 		{
-			await Write(LogLevel.Debug, source, message, exception, data);
+			return Write(LogLevel.Debug, source, message, exception, data);
 		}
 
 		/// <summary>
 		/// Writes a log message with LogLevel.Verbose severity.
 		/// </summary>
-		public static async Task Verbose(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
+		public static Task Verbose(string source, string message, Exception exception = null, Dictionary<string, object> data = null)
 		{
-			await Write(LogLevel.Verbose, source, message, exception, data);
+			return Write(LogLevel.Verbose, source, message, exception, data);
 		}
 
 		/// <summary>
@@ -506,31 +516,178 @@ namespace FishMMO.Logging
 			await Task.WhenAll(loggingTasks);
 		}
 
+		/* ----------------------------------------------------------------------------------------
+		 * Level gating: why Write is split in two.
+		 *
+		 * Write used to be a single `async Task` that guarded only on `loggers == null` and then
+		 * went straight to `new LogEntry(...)`. Nothing asked whether any sink actually wanted the
+		 * level, so a Log.Debug call at Error level still paid for: a LogEntry, an async state
+		 * machine, a returned Task, the Where/Select closures and enumerators, the List<Task> from
+		 * .ToList(), and a Task.WhenAll over it. Every one of those was thrown away unread.
+		 *
+		 * That is not a micro-optimisation here. The Debug call sites live on the expected-false
+		 * branches of the per-target ECA conditions (IsCharacterAliveCondition,
+		 * HasRequiredAttributeCondition, IsImmortalCondition, IsCharacterNPCCondition,
+		 * HasGuildCondition, HasPartyCondition), so they run once per target per condition per
+		 * cast — tens of times per AoE, thousands of times a second on a populated scene server.
+		 *
+		 * So the public entry point is now a plain (non-async) Task method that answers "would any
+		 * sink take this?" and returns Task.CompletedTask when the answer is no. A non-async method
+		 * is deliberate: an `async` method with an early `return` still runs through
+		 * AsyncTaskMethodBuilder, whereas this path allocates nothing at all. The actual dispatch
+		 * lives in WriteCore, which is only entered once something is known to want the entry.
+		 *
+		 * What the early-out CANNOT do is stop the caller building the message: `$"..."` is
+		 * evaluated at the call site before Write is ever entered. That is what IsEnabled is for —
+		 * hot call sites should read `if (Log.IsEnabled(LogLevel.Debug))` around both the
+		 * interpolation and the call.
+		 * ------------------------------------------------------------------------------------- */
+
+		/// <summary>
+		/// Returns true when at least one sink — the console formatter or any enabled
+		/// <see cref="ILogger"/> — would accept a message at <paramref name="level"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Intended for hot call sites that build their message with string interpolation. The
+		/// early-out inside <see cref="Write"/> cannot prevent that string from being built, because
+		/// the interpolation is evaluated by the caller before <see cref="Write"/> is entered; only
+		/// a test at the call site can:
+		/// </para>
+		/// <code>
+		/// if (Log.IsEnabled(LogLevel.Debug))
+		/// {
+		///     Log.Debug("HasGuildCondition", $"{character.Name} has no guild.");
+		/// }
+		/// </code>
+		/// <para>
+		/// This is a cheap read of already-loaded state (a set lookup plus a walk of the logger
+		/// dictionary) and performs no allocation. It answers by exactly the same rule
+		/// <see cref="Write"/> dispatches by, so a false here can never drop a message some sink
+		/// would have taken.
+		/// </para>
+		/// <para>
+		/// It returns false when the manager is not initialized or has been shut down. In that state
+		/// <see cref="Write"/> does still emit an <c>[INTERNAL] CRITICAL</c> line through
+		/// <see cref="OnInternalLogMessage"/>, so guarding an uninitialized-manager diagnostic on
+		/// IsEnabled would suppress it. That is the intended trade: the guard exists for per-frame
+		/// gameplay logging, not for startup diagnostics, and a hot path must not pay for a
+		/// not-initialized notice tens of times per cast.
+		/// </para>
+		/// </remarks>
+		/// <param name="level">The level a caller is considering logging at.</param>
+		/// <returns>True when the message would reach at least one sink.</returns>
+		public static bool IsEnabled(LogLevel level)
+		{
+			// Read the field once. Shutdown() nulls it from another thread, and re-reading it would
+			// let this method answer from two different states within one call.
+			var sinks = loggers;
+			return sinks != null && WouldAnySinkAccept(level, sinks);
+		}
+
+		/// <summary>
+		/// Whether the console formatter or any enabled logger in <paramref name="sinks"/> accepts
+		/// <paramref name="level"/>. This is the single source of truth for level gating: both
+		/// <see cref="IsEnabled"/> and <see cref="Write"/>'s early-out call it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The predicate is derived from <see cref="WriteCore"/>'s dispatch, not guessed at, so the
+		/// two cannot disagree. WriteCore accepts a logger when
+		/// <c>IsEnabled &amp;&amp; AllowedLevels.Contains(level) &amp;&amp; (!consoleHandled || HandlesConsoleParts)</c>.
+		/// The third clause never excludes anything in the case that matters here: if the console
+		/// handled the entry then this method has already returned true on the console test, and if
+		/// it did not then <c>!consoleHandled</c> is true for every logger. So "no sink accepts" is
+		/// exactly "the console refuses AND no enabled logger allows the level", which is what this
+		/// returns — and <see cref="ILogger.HandlesConsoleParts"/> is deliberately not consulted.
+		/// </para>
+		/// <para>
+		/// A null <see cref="ILogger.AllowedLevels"/> counts as accepting nothing. WriteCore's
+		/// <c>.Contains</c> would throw on it; treating it as a refusal cannot hide a message that
+		/// would otherwise have been delivered, only one that would have thrown.
+		/// </para>
+		/// </remarks>
+		private static bool WouldAnySinkAccept(LogLevel level, Dictionary<string, ILogger> sinks)
+		{
+			// Snapshot for the same reason as above: Shutdown() nulls this one too.
+			var consoleLevels = consoleAllowedLevels;
+			if (_consoleFormatter != null && consoleLevels != null && consoleLevels.Contains(level))
+			{
+				return true;
+			}
+
+			// A foreach over .Values, not LINQ: this runs on the refused path of every gated log
+			// call, and an enumerator plus a closure per call is most of what the early-out exists
+			// to avoid. Dictionary<,>.ValueCollection's enumerator is a struct, so this allocates
+			// nothing.
+			foreach (var logger in sinks.Values)
+			{
+				if (logger == null)
+				{
+					continue;
+				}
+				var allowed = logger.AllowedLevels;
+				if (logger.IsEnabled && allowed != null && allowed.Contains(level))
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		/// <summary>
 		/// The primary entry point for all log messages. Dispatches to all configured loggers.
 		/// </summary>
-		public static async Task Write(LogLevel level, string source, string message, Exception exception = null, Dictionary<string, object> data = null)
+		/// <remarks>
+		/// Returns <see cref="Task.CompletedTask"/> without building a <see cref="LogEntry"/> when no
+		/// sink would accept <paramref name="level"/>. See <see cref="IsEnabled"/> for skipping the
+		/// caller-side message construction as well.
+		/// </remarks>
+		public static Task Write(LogLevel level, string source, string message, Exception exception = null, Dictionary<string, object> data = null)
 		{
-			if (loggers == null)
+			var sinks = loggers;
+			if (sinks == null)
 			{
 				OnInternalLogMessage?.Invoke($"[INTERNAL] CRITICAL: Log manager not initialized or shut down. Message: {message}");
-				return;
+				return Task.CompletedTask;
 			}
 
+			if (!WouldAnySinkAccept(level, sinks))
+			{
+				return Task.CompletedTask;
+			}
+
+			return WriteCore(sinks, level, source, message, exception, data);
+		}
+
+		/// <summary>
+		/// Builds the entry and dispatches it. Only reached when <see cref="Write"/> has established
+		/// that at least one sink wants <paramref name="level"/>.
+		/// </summary>
+		/// <remarks>
+		/// Takes the logger dictionary as a parameter rather than re-reading the static field, so the
+		/// set it dispatches to is the same set the acceptance test was made against even if
+		/// <see cref="Shutdown"/> runs in between.
+		/// </remarks>
+		private static async Task WriteCore(Dictionary<string, ILogger> sinks, LogLevel level, string source, string message, Exception exception, Dictionary<string, object> data)
+		{
 			var entry = new LogEntry(level, source, message, exception, data);
 
 			bool consoleHandled = false;
 
 			// Always write to console if enabled and allowed level via the IConsoleFormatter
-			if (_consoleFormatter != null && consoleAllowedLevels != null && consoleAllowedLevels.Contains(entry.Level))
+			var consoleLevels = consoleAllowedLevels;
+			var formatter = _consoleFormatter;
+			if (formatter != null && consoleLevels != null && consoleLevels.Contains(entry.Level))
 			{
-				_consoleFormatter.WriteStructuredLog(entry);
+				formatter.WriteStructuredLog(entry);
 				consoleHandled = true;
 			}
 
 			// Dispatch to other loggers asynchronously, filtering by their enabled state and allowed levels.
 			// If console output was already handled by _consoleFormatter, exclude loggers that specifically handle console parts.
-			var loggingTasks = loggers.Values // Iterate over values of the dictionary
+			var loggingTasks = sinks.Values // Iterate over values of the dictionary
 				.Where(logger => logger.IsEnabled &&
 								 logger.AllowedLevels.Contains(entry.Level) &&
 								 (!consoleHandled || logger.HandlesConsoleParts))

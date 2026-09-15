@@ -30,6 +30,34 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class FactionUpdateBroadcastSerializer
 	{
+		/// <summary>Upper bound accepted for a faction array length, against a corrupt stream.</summary>
+		/// <remarks>
+		/// <para>
+		/// The tightest-anchored of these bounds. One entry is one standing against one
+		/// <c>FactionTemplate</c>, and a character holds exactly one standing per template, so the
+		/// largest legitimate array cannot exceed the number of faction templates authored in the
+		/// project — currently a handful of assets under <c>Assets/Templates/Entity/Factions</c>.
+		/// The realistic array is far smaller still: <c>FactionController.FlushDirtyFactionUpdates</c>
+		/// builds it from <c>dirtyFactionTemplateIDs</c>, the factions that actually changed this
+		/// flush, which is usually one or two.
+		/// </para>
+		/// <para>
+		/// Even so the ceiling is left generous rather than snug. Factions are authored content with
+		/// no constant capping their number, the login path does send a character's full standing
+		/// set, and truncating it would leave a player hostile or neutral to factions they had
+		/// actually earned standing with — a silently wrong world state, which is worse than the
+		/// allocation the bound prevents. The bound only needs to be small enough that a corrupt
+		/// length cannot become a multi-gigabyte array; at these element sizes 4096 already achieves
+		/// that with room to spare.
+		/// </para>
+		/// <para>
+		/// Server → client, so the honest threat is a mangled or truncated stream rather than a
+		/// hostile client. Note that the observer variant of this data travels as
+		/// <c>CharacterObserverFactionUpdateBroadcast</c> and is not read through here.
+		/// </para>
+		/// </remarks>
+		public const int MaxFactions = 4096;
+
 		/// <summary>Writes a <see cref="FactionUpdateBroadcast"/>.</summary>
 		public static void WriteFactionUpdateBroadcast(this Writer writer, FactionUpdateBroadcast value)
 		{
@@ -72,12 +100,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Reads an array of <see cref="FactionUpdateBroadcast"/>.</summary>
+		/// <remarks>
+		/// A length past <see cref="MaxFactions"/> cannot be allocated and cannot be resynchronised
+		/// past either — the entries behind it are only locatable by trusting the count just
+		/// rejected — so the array comes back empty and no standing is applied. Only the sender's
+		/// own -1, which is not a length at all, means null.
+		/// </remarks>
 		public static FactionUpdateBroadcast[] ReadFactionUpdateBroadcastArray(this Reader reader)
 		{
 			int length = reader.ReadInt32();
 			if (length < 0)
 			{
 				return null;
+			}
+			if (length > MaxFactions)
+			{
+				return System.Array.Empty<FactionUpdateBroadcast>();
 			}
 
 			FactionUpdateBroadcast[] value = new FactionUpdateBroadcast[length];

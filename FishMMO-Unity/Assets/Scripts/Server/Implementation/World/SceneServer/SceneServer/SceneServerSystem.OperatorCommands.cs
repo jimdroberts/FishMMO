@@ -347,7 +347,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">The operator.</param>
 		/// <param name="arguments">Text whose first word is the name.</param>
 		/// <param name="target">The resolved character.</param>
-		private bool TryResolveTarget(IPlayerCharacter character, string arguments, out IPlayerCharacter target)
+		private bool TryResolveTarget(IPlayerCharacter character, string arguments, out IPlayerCharacter target,
+			StaffTargetRank rank = StaffTargetRank.RequireOutranks)
 		{
 			target = null;
 
@@ -368,6 +369,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Reply(character, $"'{OperatorCommandParsing.Truncate(name, 32)}' is not on this scene server.");
 				return false;
 			}
+
+			/* The rank gate lives HERE so a new command inherits it.
+			 *
+			 * Outranks existed but had exactly one caller — kick. Every other staff action on a live
+			 * character went ungated, so a compromised GameMaster could summon and teleport the Admin
+			 * investigating them, and an Admin could kill, immobilise or rewrite the currency and
+			 * attributes of a peer Admin. That is precisely the case Outranks' own remarks describe:
+			 * "a compromised account removing, muting or banning the colleagues who would notice".
+			 *
+			 * Pasting the check into ten methods would have left the eleventh to remember it, so it
+			 * goes in the one place every character-targeting command already passes through. The
+			 * opt-out is an enum rather than a bool: SkipOutranks has to be typed out, which makes it
+			 * greppable and makes it read wrong on a command that changes the target's state.
+			 *
+			 * Acting on yourself is always allowed — an operator unsticking or inspecting their own
+			 * character is not an escalation, and kick already made that allowance explicitly. */
+			if (rank == StaffTargetRank.RequireOutranks &&
+				target.ID != character.ID &&
+				!Outranks(character, target.AccessLevel))
+			{
+				Reply(character, "That character is at or above your access level.");
+				target = null;
+				return false;
+			}
+
 			return true;
 		}
 
@@ -380,14 +406,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="arguments">The command's argument text.</param>
 		/// <param name="target">The caller, or the named character.</param>
 		/// <param name="rest">The arguments after any name.</param>
-		private bool TryResolveOptionalTarget(IPlayerCharacter character, string arguments, out IPlayerCharacter target, out string rest)
+		/// <param name="rank">Passed through to <see cref="TryResolveTarget"/>. Only consulted when a
+		/// name was actually given — the no-name case resolves to the caller, and an operator acting
+		/// on their own character is never an escalation.</param>
+		private bool TryResolveOptionalTarget(IPlayerCharacter character, string arguments, out IPlayerCharacter target, out string rest,
+			StaffTargetRank rank = StaffTargetRank.RequireOutranks)
 		{
 			if (!OperatorCommandParsing.TrySplitLeadingCharacter(arguments, out string name, out rest))
 			{
 				target = character;
 				return true;
 			}
-			return TryResolveTarget(character, name, out target);
+			return TryResolveTarget(character, name, out target, rank);
+		}
+
+		/// <summary>Whether a resolved staff target must be outranked by the operator.</summary>
+		/// <remarks>
+		/// An enum rather than a bool because the opt-out is the dangerous half, and a bare
+		/// <c>false</c> at a call site carries no reason with it. <c>SkipOutranks</c> is correct only
+		/// for commands that READ the target, or that move the OPERATOR — never for one that changes
+		/// the target's state.
+		/// </remarks>
+		private enum StaffTargetRank
+		{
+			/// <summary>Refuse a target at or above the operator's level. The default.</summary>
+			RequireOutranks = 0,
+
+			/// <summary>Allow any target. Read-only commands, and commands that move the operator.</summary>
+			SkipOutranks,
 		}
 
 		/// <summary>

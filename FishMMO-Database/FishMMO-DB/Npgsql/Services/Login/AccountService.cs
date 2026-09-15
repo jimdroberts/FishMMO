@@ -777,9 +777,38 @@ namespace FishMMO.Database.Npgsql.Services
 					$"'{accessLevel}' is not a valid access level.");
 			}
 
+			/* Banned is refused, however the caller spells it, and refused HERE rather than only in
+			 * the callers so that a new caller inherits the refusal instead of having to remember it.
+			 *
+			 * The statement below clears banned_until, banned_by and ban_reason. That is right when a
+			 * level change LIFTS a ban and destructive when it applies one. Setting the level to Banned
+			 * through here produced a row indistinguishable from a permanent ban with no actor and no
+			 * reason; run over an account already banned it ERASED who banned them and why, which is
+			 * exactly the overwrite BanAsync's callers refuse to allow; and it revoked no auth token,
+			 * ended no Control Panel session and wrote no kick request, so the "banned" account kept
+			 * playing on the session it already held until it chose to reconnect.
+			 *
+			 * BanAsync is the only way to Banned. It writes the level and the ban columns in one
+			 * statement inside a transaction with the token revocation, the panel-session revocation
+			 * and the kick, so a ban cannot exist half-applied or unattributed. UnbanAsync is the only
+			 * way back to Player for a banned account, for the same reason in reverse. */
+			if ((AccessLevel)accessLevel == AccessLevel.Banned)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"An account is banned with BanAsync, which records who banned it and why, revokes its " +
+					"sessions and writes a kick. A level change to Banned would record none of that.");
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				/* The ban columns are cleared in the same statement as the level, and the guard above
+				 * has already established that the new level is not Banned — so reaching here always
+				 * means the ban, if there was one, is being lifted, and leaving a banned_until behind
+				 * would leave an expiry pointing at a ban that no longer exists for LiftExpiredBanAsync
+				 * to trip over. Promoting a banned account straight to GameMaster or Admin is an unban
+				 * and a grant in one deliberate action, which is why it clears them too. */
 				var sql = $@"UPDATE {TableName}
 					SET access_level = {{1}},
 						banned_until = NULL,

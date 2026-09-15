@@ -260,7 +260,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Reports where a character is, if this scene server holds them.</summary>
 		private void ReportWhere(IPlayerCharacter character, string arguments)
 		{
-			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target))
+			/* reads the target's location and changes nothing about them, so it is not an escalation to run it on a peer. */
+			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target,
+				StaffTargetRank.SkipOutranks))
 			{
 				return;
 			}
@@ -280,7 +282,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void ReportCharacterInfo(IPlayerCharacter character, string arguments)
 		{
-			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target))
+			/* reads the target's details and changes nothing about them, so it is not an escalation to run it on a peer. */
+			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target,
+				StaffTargetRank.SkipOutranks))
 			{
 				return;
 			}
@@ -446,7 +450,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Moves the caller to a character.</summary>
 		private void GoToCharacter(IPlayerCharacter character, string arguments)
 		{
-			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target))
+			/* moves the OPERATOR, not the target, so it is not an escalation to run it on a peer. */
+			if (!TryResolveTarget(character, arguments, out IPlayerCharacter target,
+				StaffTargetRank.SkipOutranks))
 			{
 				return;
 			}
@@ -655,7 +661,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void ListRescuePoints(IPlayerCharacter character, string arguments)
 		{
-			if (!TryResolveOptionalTarget(character, arguments, out IPlayerCharacter target, out _))
+			// Lists the rescue points in the target's scene. Reads only the scene name; nothing changes.
+			if (!TryResolveOptionalTarget(character, arguments, out IPlayerCharacter target, out _, StaffTargetRank.SkipOutranks))
 			{
 				return;
 			}

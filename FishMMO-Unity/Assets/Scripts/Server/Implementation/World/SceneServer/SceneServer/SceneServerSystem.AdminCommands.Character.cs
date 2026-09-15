@@ -185,7 +185,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ReplyUsage(character, adminCommands, "attr");
 				return;
 			}
-			if (!TryResolveTarget(character, name, out IPlayerCharacter target) ||
+			/* Reads the target's attribute and changes nothing, so it is gated like the other
+			 * read-only reports rather than by rank — see ReportWhere and ReportCharacterInfo. */
+			if (!TryResolveTarget(character, name, out IPlayerCharacter target, StaffTargetRank.SkipOutranks) ||
 				!TryFindAttributeTemplate(character, attributeText, out CharacterAttributeTemplate template) ||
 				!target.TryGet(out ICharacterAttributeController attributeController))
 			{
