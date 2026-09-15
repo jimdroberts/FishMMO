@@ -36,6 +36,22 @@ namespace FishMMO.Client
 		private static Dictionary<NamingSystemType, Dictionary<string, Action<long>>> pendingIdRequests = new Dictionary<NamingSystemType, Dictionary<string, Action<long>>>();
 
 		/// <summary>
+		/// When each pending name request was last sent, so a request the server dropped can be
+		/// sent again the next time something asks for that name.
+		/// </summary>
+		/// <remarks>
+		/// The server debounces naming requests per connection (75 ms) and answers a debounced
+		/// request with nothing at all. Several characters spawning in one frame therefore left
+		/// all but the first with a request that was pending forever: every later ask for that ID
+		/// only appended its callback to the pending chain, no name ever arrived, and the chain
+		/// kept each captured character alive for the session.
+		/// </remarks>
+		private static Dictionary<NamingSystemType, Dictionary<long, double>> pendingNameSentAt = new Dictionary<NamingSystemType, Dictionary<long, double>>();
+
+		/// <summary>Seconds after which a still-pending name request is sent again on the next ask.</summary>
+		private const double NameRequestRetrySeconds = 2.0;
+
+		/// <summary>
 		/// Initializes the naming system, registers broadcast handlers, and loads cached names from disk (outside Unity Editor).
 		/// </summary>
 		/// <param name="client">The client instance to use for network operations.</param>
@@ -118,9 +134,15 @@ namespace FishMMO.Client
 				{
 					pendingNameRequests.Add(type, pendingActions = new Dictionary<long, Action<string>>());
 				}
+				if (!pendingNameSentAt.TryGetValue(type, out Dictionary<long, double> sentAt))
+				{
+					pendingNameSentAt.Add(type, sentAt = new Dictionary<long, double>());
+				}
+				double now = UnityEngine.Time.unscaledTimeAsDouble;
 				if (!pendingActions.ContainsKey(id))
 				{
 					pendingActions.Add(id, action);
+					sentAt[id] = now;
 
 					// Send request to server to get the name for this ID.
 					Client.Broadcast(new NamingBroadcast()
@@ -134,6 +156,19 @@ namespace FishMMO.Client
 				{
 					// Multiple callbacks for the same ID are combined.
 					pendingActions[id] += action;
+
+					/* Sent again if the first request is old enough to have been dropped by the
+					 * server's per-connection debounce; the reply resolves the whole chain. */
+					if (!sentAt.TryGetValue(id, out double last) || now - last >= NameRequestRetrySeconds)
+					{
+						sentAt[id] = now;
+						Client.Broadcast(new NamingBroadcast()
+						{
+							Type = type,
+							ID = id,
+							Name = "",
+						}, Channel.Reliable);
+					}
 				}
 			}
 		}
@@ -193,6 +228,10 @@ namespace FishMMO.Client
 					pendingActions?.Invoke(msg.Name);
 					pendingRequests[msg.ID] = null;
 					pendingRequests.Remove(msg.ID);
+				}
+				if (pendingNameSentAt.TryGetValue(msg.Type, out Dictionary<long, double> sentAt))
+				{
+					sentAt.Remove(msg.ID);
 				}
 			}
 			if (msg.ID != 0)

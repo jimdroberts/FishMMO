@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using FishMMO.Logging;
 
 namespace FishMMO.Client
@@ -17,6 +18,12 @@ namespace FishMMO.Client
 	/// component disabled and submitting an explicit render request is the supported way to say
 	/// that under a scriptable render pipeline; <see cref="FramesPerSecond"/> then costs what it
 	/// says it costs.</para>
+	///
+	/// <para><b>Why the request is a <see cref="UniversalRenderPipeline.SingleCameraRequest"/>.</b>
+	/// URP services a <see cref="RenderPipeline.StandardRequest"/> by running its whole per-frame
+	/// <c>Render</c> path for the one camera; the single-camera request renders just the camera
+	/// and is the path URP documents for this use. Same reasoning and same measurement as
+	/// <see cref="EquipmentPreviewRenderer"/>: a cost choice, not a memory fix.</para>
 	///
 	/// <para><b>Why every setting is re-applied on every render.</b> The camera's field of view is
 	/// the one piece of the map subsystem that turns into real information when it is widened: a
@@ -85,6 +92,9 @@ namespace FishMMO.Client
 
 		/// <summary>Whether a warning about the render request path has already been logged.</summary>
 		private bool loggedUnsupportedRequest;
+
+		/// <summary>The request submitted each render; one instance, retargeted when the texture changes.</summary>
+		private readonly UniversalRenderPipeline.SingleCameraRequest request = new UniversalRenderPipeline.SingleCameraRequest();
 
 		/// <summary>The texture the UI should draw. Null until <see cref="Configure"/> has run.</summary>
 		public RenderTexture Texture => texture;
@@ -201,10 +211,7 @@ namespace FishMMO.Client
 				camera.targetTexture = texture;
 			}
 
-			RenderPipeline.StandardRequest request = new RenderPipeline.StandardRequest()
-			{
-				destination = texture,
-			};
+			request.destination = texture;
 
 			if (RenderPipeline.SupportsRenderRequest(camera, request))
 			{
@@ -212,10 +219,12 @@ namespace FishMMO.Client
 				return true;
 			}
 
+			/* A pipeline that refuses a SingleCameraRequest is not URP, so there is no point
+			 * offering it a StandardRequest either; Camera.Render is the portable fallback. */
 			if (!loggedUnsupportedRequest)
 			{
 				loggedUnsupportedRequest = true;
-				Log.Warning("MinimapCameraRenderer", "The active render pipeline does not accept a StandardRequest; falling back to Camera.Render. The minimap will still work, but it will not respect the frame cap as precisely.");
+				Log.Warning("MinimapCameraRenderer", "The active render pipeline does not accept a SingleCameraRequest; falling back to Camera.Render. The minimap will still work, but it will not respect the frame cap as precisely.");
 			}
 
 			camera.Render();

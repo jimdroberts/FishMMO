@@ -233,6 +233,102 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		// ── Isolation ─────────────────────────────────────────────────────────
+
+		[Test]
+		public void TheProjectDefinesTheCharacterPreviewLayer()
+		{
+			/* Without it the renderer falls back to the shared Player layer, and the preview
+			 * shows whoever is standing next to the character — the defect this layer exists
+			 * to fix. Authored in ProjectSettings/TagManager.asset. */
+			LogAssert.IsTrue(Constants.Layers.Index.CharacterPreview >= 0, "the CharacterPreview layer is defined in the Tag Manager");
+			LogAssert.IsTrue(Constants.Layers.Index.CharacterPreview != Constants.Layers.Index.Player, "and it is not the layer every character is drawn on");
+		}
+
+		[Test]
+		public void AnAdoptedCameraCullsToThePreviewLayerAlone()
+		{
+			GameObject host = new GameObject("PreviewCameraHost");
+			try
+			{
+				EquipmentPreviewRenderer renderer = new EquipmentPreviewRenderer();
+				renderer.Configure(host.AddComponent<Camera>());
+				LogAssert.AreEqual(1 << Constants.Layers.Index.CharacterPreview, renderer.Camera.cullingMask,
+					"the camera sees only what Render moves onto the preview layer, never the shared Player layer");
+				renderer.Dispose();
+			}
+			finally
+			{
+				Object.DestroyImmediate(host);
+			}
+		}
+
+		[Test]
+		public void RenderingIsolatesEveryRendererUnderTheSubjectAndPutsThemBack()
+		{
+			GameObject host = new GameObject("PreviewCameraHost");
+			GameObject subject = new GameObject("Subject");
+			GameObject neighbour = new GameObject("Neighbour");
+			try
+			{
+				int player = Constants.Layers.Index.Player;
+
+				GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+				body.transform.SetParent(subject.transform, false);
+				body.layer = player;
+
+				GameObject armour = GameObject.CreatePrimitive(PrimitiveType.Cube);
+				armour.transform.SetParent(body.transform, false);
+				armour.layer = Constants.Layers.Index.DefaultLayer;
+
+				GameObject hidden = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				hidden.transform.SetParent(subject.transform, false);
+				hidden.layer = player;
+				hidden.SetActive(false);
+
+				// A character beside the subject: on the shared layer, never under the subject.
+				neighbour.AddComponent<MeshRenderer>();
+				neighbour.layer = player;
+
+				EquipmentPreviewRenderer renderer = new EquipmentPreviewRenderer();
+				renderer.Configure(host.AddComponent<Camera>());
+
+				LogAssert.IsTrue(renderer.Render(64, 64, subject.transform), "a render is submitted");
+				LogAssert.AreEqual(3, renderer.LastIsolatedCount, "every renderer under the subject, inactive ones included, was moved for the render");
+
+				LogAssert.AreEqual(player, body.layer, "the body is back on the layer it came from");
+				LogAssert.AreEqual(Constants.Layers.Index.DefaultLayer, armour.layer, "and each piece goes back to ITS layer, not to one shared value");
+				LogAssert.AreEqual(player, hidden.layer, "a hidden region is restored too");
+				LogAssert.AreEqual(player, neighbour.layer, "the neighbour was never touched");
+
+				renderer.Dispose();
+			}
+			finally
+			{
+				Object.DestroyImmediate(neighbour);
+				Object.DestroyImmediate(subject);
+				Object.DestroyImmediate(host);
+			}
+		}
+
+		[Test]
+		public void RenderingWithoutASubjectIsolatesNothing()
+		{
+			GameObject host = new GameObject("PreviewCameraHost");
+			try
+			{
+				EquipmentPreviewRenderer renderer = new EquipmentPreviewRenderer();
+				renderer.Configure(host.AddComponent<Camera>());
+				LogAssert.IsTrue(renderer.Render(64, 64), "a render is still submitted");
+				LogAssert.AreEqual(0, renderer.LastIsolatedCount, "nothing was moved");
+				renderer.Dispose();
+			}
+			finally
+			{
+				Object.DestroyImmediate(host);
+			}
+		}
+
 		// ── Camera handover ───────────────────────────────────────────────────
 
 		[Test]

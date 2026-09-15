@@ -615,7 +615,10 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (!previewRenderer.Render(width, height))
+			/* The mesh root alone: the body model and every equipment mesh hang under it, and
+			 * nothing else does. Isolating it is what keeps a character standing next to the
+			 * subject out of the picture — every character shares the Player layer. */
+			if (!previewRenderer.Render(width, height, subject.MeshRoot))
 			{
 				return;
 			}

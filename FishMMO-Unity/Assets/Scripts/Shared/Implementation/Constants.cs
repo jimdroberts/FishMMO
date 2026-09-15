@@ -379,6 +379,13 @@ namespace FishMMO.Shared
 
 				/// <summary>Index of the Player layer, or -1 if missing.</summary>
 				public static readonly int Player = LayerMask.NameToLayer("Player");
+
+				/// <summary>
+				/// Index of the CharacterPreview layer, or -1 if missing. Nothing lives on it: the
+				/// equipment preview moves one character's renderers onto it for the duration of a
+				/// render so its camera photographs that character and no other.
+				/// </summary>
+				public static readonly int CharacterPreview = LayerMask.NameToLayer("CharacterPreview");
 			}
 
 			/// <summary>

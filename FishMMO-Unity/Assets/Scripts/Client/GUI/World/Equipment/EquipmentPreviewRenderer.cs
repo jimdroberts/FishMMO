@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using FishMMO.Logging;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -23,6 +26,24 @@ namespace FishMMO.Client
 	/// subject is one character rather than the world, so a render is cheap — but "cheap" is not
 	/// "free", and submitting explicitly is also what makes the camera's state (target texture,
 	/// enablement) something this class can guarantee rather than something a scene authored.</para>
+	///
+	/// <para><b>Why the render is a <see cref="UniversalRenderPipeline.SingleCameraRequest"/> and not a
+	/// <see cref="RenderPipeline.StandardRequest"/>.</b> Both photograph one camera into one
+	/// texture, but URP services a StandardRequest by running its whole per-frame <c>Render</c>
+	/// path (per-frame constants, camera sorting, render-graph end-of-frame) for that one camera,
+	/// while a SingleCameraRequest renders just the camera. The single-camera path is the one URP
+	/// documents for this use. Measured on 2026-09-15 with <c>PreviewLeakProbe</c>: the two are
+	/// indistinguishable on memory — neither leaks per request — so this is a cost choice, not a
+	/// leak fix.</para>
+
+	/// <para><b>Why the subject is moved to its own layer for each render.</b> Every character's
+	/// visuals sit on the Player layer, so a camera that culls to that layer photographs whichever
+	/// characters stand inside its orthographic box — the player and anyone next to them. There is
+	/// no per-character layer, and URP's camera culling knows only GameObject layers. So
+	/// <see cref="Render(int, int, Transform)"/> moves the subject's renderers onto the otherwise
+	/// empty CharacterPreview layer, submits, and puts them back before returning. Culling happens
+	/// synchronously inside the submit, and nothing else runs between the two writes, so no other
+	/// system can observe the swap.</para>
 	///
 	/// <para><b>What it puts back.</b> The camera belongs to the character prefab and outlives any
 	/// one opening of the panel, so <see cref="Dispose"/> restores the target texture the prefab
@@ -82,6 +103,21 @@ namespace FishMMO.Client
 		/// <summary>Whether a warning about the render request path has already been logged.</summary>
 		private bool loggedUnsupportedRequest;
 
+		/// <summary>
+		/// The request submitted each frame. One instance, retargeted when the texture changes,
+		/// because the request is a class and a fresh one per frame is garbage for nothing.
+		/// </summary>
+		private readonly UniversalRenderPipeline.SingleCameraRequest request = new UniversalRenderPipeline.SingleCameraRequest();
+
+		/// <summary>The subject's renderers during a render, in the order their layers were saved.</summary>
+		private readonly List<Renderer> isolated = new List<Renderer>();
+
+		/// <summary>The layer each entry of <see cref="isolated"/> came from.</summary>
+		private readonly List<int> isolatedLayers = new List<int>();
+
+		/// <summary>How many renderers the last render isolated. Exposed so a test can see the swap happened.</summary>
+		public int LastIsolatedCount { get; private set; }
+
 		/// <summary>The texture the panel should draw. Null until a render has been submitted.</summary>
 		public RenderTexture Texture => texture;
 
@@ -124,18 +160,38 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="pixelWidth">Viewport width in pixels. Values below 2 are refused.</param>
 		/// <param name="pixelHeight">Viewport height in pixels. Values below 2 are refused.</param>
+		/// <param name="subject">
+		/// The hierarchy to photograph, alone. Its renderers are moved to the CharacterPreview
+		/// layer for this render and restored before the call returns. Null renders whatever the
+		/// camera's mask sees, which on a shared layer includes any neighbour.
+		/// </param>
 		/// <returns>True when a render was submitted.</returns>
 		/// <remarks>
 		/// A refusal is not an error: the first tick after a panel opens can run before the UI
 		/// layout engine has measured anything, and those measurements arrive a frame later. The
 		/// caller is expected to keep asking.
 		/// </remarks>
-		public bool Render(int pixelWidth, int pixelHeight)
+		public bool Render(int pixelWidth, int pixelHeight, Transform subject = null)
 		{
 			if (camera == null || !EnsureTexture(pixelWidth, pixelHeight))
 			{
 				return false;
 			}
+
+			Isolate(subject);
+			try
+			{
+				return Submit();
+			}
+			finally
+			{
+				RestoreIsolated();
+			}
+		}
+
+		/// <summary>Submits the render into the current texture.</summary>
+		private bool Submit()
+		{
 
 			if (!texture.IsCreated())
 			{
@@ -147,10 +203,7 @@ namespace FishMMO.Client
 				camera.targetTexture = texture;
 			}
 
-			RenderPipeline.StandardRequest request = new RenderPipeline.StandardRequest()
-			{
-				destination = texture,
-			};
+			request.destination = texture;
 
 			if (RenderPipeline.SupportsRenderRequest(camera, request))
 			{
@@ -158,14 +211,66 @@ namespace FishMMO.Client
 				return true;
 			}
 
+			/* A pipeline that refuses a SingleCameraRequest is not URP, so there is no point
+			 * offering it a StandardRequest either; Camera.Render is the portable fallback. */
 			if (!loggedUnsupportedRequest)
 			{
 				loggedUnsupportedRequest = true;
-				Log.Warning("EquipmentPreviewRenderer", "The active render pipeline does not accept a StandardRequest; falling back to Camera.Render. The character preview will still work.");
+				Log.Warning("EquipmentPreviewRenderer", "The active render pipeline does not accept a SingleCameraRequest; falling back to Camera.Render. The character preview will still work.");
 			}
 
 			camera.Render();
 			return true;
+		}
+
+		/// <summary>
+		/// Moves every renderer beneath <paramref name="subject"/> onto the preview layer,
+		/// remembering where each came from.
+		/// </summary>
+		/// <param name="subject">The hierarchy to isolate. May be null.</param>
+		/// <remarks>
+		/// Gathered every render rather than cached: equipment meshes come and go under the
+		/// mesh root as items are equipped, and a stale list would leave a new piece on the
+		/// shared layer, invisible to the preview. The non-allocating overload keeps this off
+		/// the garbage collector.
+		/// </remarks>
+		private void Isolate(Transform subject)
+		{
+			isolated.Clear();
+			isolatedLayers.Clear();
+			LastIsolatedCount = 0;
+
+			int layer = Constants.Layers.Index.CharacterPreview;
+			if (subject == null || layer < 0)
+			{
+				return;
+			}
+
+			subject.GetComponentsInChildren(true, isolated);
+			for (int i = 0; i < isolated.Count; ++i)
+			{
+				GameObject go = isolated[i].gameObject;
+				isolatedLayers.Add(go.layer);
+				go.layer = layer;
+			}
+
+			LastIsolatedCount = isolated.Count;
+		}
+
+		/// <summary>Puts every renderer <see cref="Isolate"/> moved back on its own layer.</summary>
+		private void RestoreIsolated()
+		{
+			for (int i = 0; i < isolated.Count; ++i)
+			{
+				Renderer renderer = isolated[i];
+				if (renderer != null)
+				{
+					renderer.gameObject.layer = isolatedLayers[i];
+				}
+			}
+
+			isolated.Clear();
+			isolatedLayers.Clear();
 		}
 
 		/// <summary>
@@ -356,21 +461,29 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <returns>The culling mask.</returns>
 		/// <remarks>
-		/// The character visual layer alone. Everything the player should see in the preview —
-		/// the body model and every mesh the equipment controller builds — is moved there as it is
-		/// created; nothing else in the world is, so the preview cannot pick up scenery, other
-		/// players, or markers.
+		/// The CharacterPreview layer alone. Nothing is authored on it; <see cref="Isolate"/>
+		/// puts the subject there for exactly one render, so the camera sees that character and
+		/// nobody standing beside them. When the project lacks the layer the mask falls back to
+		/// the shared visual layer, which shows the subject — and any neighbour inside the frame.
 		/// </remarks>
 		private static int BuildCullingMask()
 		{
-			int layer = FishMMO.Shared.Constants.Layers.Index.Player;
-			if (layer < 0)
+			int layer = Constants.Layers.Index.CharacterPreview;
+			if (layer >= 0)
 			{
-				Log.Warning("EquipmentPreviewRenderer", "Layer 'Player' is not defined in this project, so the equipment preview cannot isolate the character and will stay blank. Add it in Project Settings > Tags and Layers.");
+				return 1 << layer;
+			}
+
+			Log.Warning("EquipmentPreviewRenderer", "Layer 'CharacterPreview' is not defined in this project, so the equipment preview cannot isolate its subject and will also show any character standing next to it. Add it in Project Settings > Tags and Layers.");
+
+			int shared = Constants.Layers.Index.Player;
+			if (shared < 0)
+			{
+				Log.Warning("EquipmentPreviewRenderer", "Layer 'Player' is not defined in this project either, so the equipment preview will stay blank.");
 				return 0;
 			}
 
-			return 1 << layer;
+			return 1 << shared;
 		}
 
 		/// <summary>
@@ -436,7 +549,9 @@ namespace FishMMO.Client
 			}
 
 			texture.Release();
-			UnityEngine.Object.Destroy(texture);
+			// Destroy is an error outside play mode, which is where the tests and the probes run.
+			if (Application.isPlaying) UnityEngine.Object.Destroy(texture);
+			else UnityEngine.Object.DestroyImmediate(texture);
 			texture = null;
 			textureWidth = 0;
 			textureHeight = 0;

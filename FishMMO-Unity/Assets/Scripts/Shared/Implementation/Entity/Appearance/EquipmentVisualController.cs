@@ -33,6 +33,11 @@ namespace FishMMO.Shared
 			public bool IsActive;
 			/// <summary>The Addressables async operation handle for the loaded equipment prefab.</summary>
 			public AsyncOperationHandle<GameObject> PrefabHandle;
+			/// <summary>
+			/// A mesh baked from a skinned weapon prefab, owned by this slot. A runtime Mesh is
+			/// not freed with the GameObject that displays it, so it is destroyed on release.
+			/// </summary>
+			public Mesh BakedMesh;
 			/// <summary>The instantiated weapon GameObject, if this slot holds a weapon.</summary>
 			public GameObject WeaponInstance;
 			/// <summary>Incrementing generation counter to reject stale async load completions.</summary>
@@ -179,11 +184,21 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 		private bool TryRefreshModelState()
 		{
+			/* The old skeleton's bone cache is keyed by that root's instance ID, and the only
+			 * other eviction is TearDownVisuals, which clears whichever root is held at the time.
+			 * A race model reloaded on a live character (OnModelReady fires per instantiation)
+			 * replaced this field without clearing the outgoing root, leaving one orphaned bone
+			 * map of destroyed Transforms in the static cache per reload, for the session. */
+			Transform previousRoot = skeletonRoot;
 			skeletonRoot = bodyVisibilityManager?.SkeletonRoot;
 			if (skeletonRoot == null && Character?.MeshRoot != null)
 			{
 				Animator animator = Character.MeshRoot.GetComponentInChildren<Animator>();
 				if (animator != null) skeletonRoot = animator.transform;
+			}
+			if (previousRoot != null && previousRoot != skeletonRoot)
+			{
+				SkeletonBinder.ClearBoneCache(previousRoot);
 			}
 			modelReady = skeletonRoot != null;
 			return modelReady;
@@ -243,7 +258,14 @@ namespace FishMMO.Shared
 			bool isWeapon = weaponTemplate != null;
 			string boneName = isWeapon ? weaponTemplate.AttachBoneName : null;
 
-			assetRef.LoadAssetAsync<GameObject>().Completed += (handle) =>
+			/* Loaded by key, not through the AssetReference instance. An AssetReference holds ONE
+			 * operation: its LoadAssetAsync logs "already been loaded", returns an invalid handle,
+			 * and subscribing to that handle throws — so the second character to wear the same
+			 * template while the first's load was alive lost its visual, and the template's own
+			 * OnLoad (which loads MeshReference itself) made that the FIRST attempt for any item
+			 * that falls back to MeshReference. Loading by key gives every equip its own refcounted
+			 * handle, which is what ReleaseSlotRenderer already releases. */
+			Addressables.LoadAssetAsync<GameObject>(assetRef.RuntimeKey).Completed += (handle) =>
 			{
 				/* A superseded load still holds an Addressables reference, and nothing else will
 				 * ever release it: ReleaseSlotRenderer only knows about the handle that WON. This
@@ -337,7 +359,15 @@ namespace FishMMO.Shared
 			if (mf == null || mr == null)
 			{
 				SkinnedMeshRenderer smr = prefab.GetComponentInChildren<SkinnedMeshRenderer>();
-				if (smr != null) { Mesh bm = new Mesh(); smr.BakeMesh(bm); AttachWeaponMesh(bm, smr.sharedMaterials, wt, renderer); return; }
+				if (smr != null)
+				{
+					Mesh bm = new Mesh();
+					smr.BakeMesh(bm);
+					// Owned by the slot so ReleaseSlotRenderer can destroy it; nothing else frees a runtime Mesh.
+					renderer.BakedMesh = bm;
+					AttachWeaponMesh(bm, smr.sharedMaterials, wt, renderer);
+					return;
+				}
 				Debug.LogError($"[EVC] '{prefab.name}' has no MeshRenderer or SkinnedMeshRenderer.");
 				return;
 			}
@@ -447,6 +477,15 @@ namespace FishMMO.Shared
 				renderer.WeaponInstance = null;
 				renderer.MeshRenderer = null;
 				renderer.MeshFilter = null;
+			}
+			if (renderer.BakedMesh != null)
+			{
+				/* Destroying the weapon GameObject above does not free this: a Mesh created with
+				 * new Mesh() is its own native object and lived on after every re-equip and every
+				 * pooled despawn — one baked weapon mesh leaked per equip of a skinned weapon. */
+				if (Application.isPlaying) Destroy(renderer.BakedMesh);
+				else DestroyImmediate(renderer.BakedMesh);
+				renderer.BakedMesh = null;
 			}
 			if (renderer.PrefabHandle.IsValid())
 			{

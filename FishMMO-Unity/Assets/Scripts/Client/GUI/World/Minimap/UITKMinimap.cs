@@ -190,8 +190,15 @@ namespace FishMMO.Client
 
 			zoom = ClientSettings.GetFloat(ClientSettings.MinimapZoomKey, 25.0f, 5.0f, 200.0f);
 
+			/* Removed before adding. OnStarting runs again whenever the panel's visual tree is
+			 * replaced (UITKControl.ReinitializeIfTreeReplaced), and these are static events, so
+			 * every rebuild used to add another copy of each handler: the scene-change handler
+			 * then flushed and reloaded the map once per copy. */
+			ClientMapSystem.OnSceneMapChanged -= MapSystem_OnSceneChanged;
 			ClientMapSystem.OnSceneMapChanged += MapSystem_OnSceneChanged;
+			ClientMapSystem.OnNotesChanged -= MapSystem_OnNotesChanged;
 			ClientMapSystem.OnNotesChanged += MapSystem_OnNotesChanged;
+			ExploreMapAction.OnExploreMap -= MapSystem_OnExploreMap;
 			ExploreMapAction.OnExploreMap += MapSystem_OnExploreMap;
 		}
 
