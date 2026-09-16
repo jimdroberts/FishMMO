@@ -1,0 +1,209 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79504a724a19454cb82d41e2b16336c3, type: 3}
+  m_Name: StartScene A
+  m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Spawner.SceneSpawnTable
+  SceneName: StartScene A
+  ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
+  Spawners:
+  - Name: NPCSpawner
+    Position: {x: 25.191568, y: 32.74, z: -54.33}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 4
+    MaxSpawnCount: 4
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 1
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 50, y: 5, z: 25}
+    Spawnables:
+    - rid: 4707557207935025179
+    - rid: 4707557207935025180
+    - rid: 4707557207935025181
+    - rid: 4707557207935025182
+  - Name: OrcSpawner
+    Position: {x: 138.42906, y: 15.113663, z: -0.58421326}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 6
+    MaxSpawnCount: 9
+    UniqueSpawnables: 0
+    SpawnType: 2
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 1
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 75, y: 15, z: 65}
+    Spawnables:
+    - rid: 4707557207935025183
+    - rid: 4707557207935025184
+    - rid: 4707557207935025185
+  references:
+    version: 2
+    RefIds:
+    - rid: 4707557207935025179
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 2
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025180
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 2
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025181
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 2
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025182
+      type: {class: ItemSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0.25
+        ItemTemplate: {fileID: 11400000, guid: d4194c9fc4a87c84cbdde10c40a67656, type: 2}
+        MinimumAmount: 1
+        MaximumAmount: 1
+        RollTable: []
+        AchievementTemplateID: 0
+    - rid: 4707557207935025183
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 1.2
+        AttributeBonusOverride: {fileID: 11400000, guid: 7c33d6280baf6d94b8eee0548a749deb,
+          type: 2}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 11400000, guid: b80bc0482ed9646928250918c4f9a266,
+          type: 2}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
+          type: 2}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025184
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 1.35
+        AttributeBonusOverride: {fileID: 11400000, guid: 0f2ff92179a6d1b4c9dde7ad6a4afdb0,
+          type: 2}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7,
+          type: 2}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
+          type: 2}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025185
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 1.35
+        AttributeBonusOverride: {fileID: 11400000, guid: 7c33d6280baf6d94b8eee0548a749deb,
+          type: 2}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 11400000, guid: 22ada2cd43c7cc5fd72bdebffe7d7275,
+          type: 2}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
+          type: 2}
+        MinimumScale: 1
+        MaximumScale: 1

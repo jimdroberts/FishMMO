@@ -2527,11 +2527,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 849065438}
-  - component: {fileID: 849065437}
   - component: {fileID: 849065436}
   m_Layer: 0
   m_Name: MerchantSpawnArea
-  m_TagString: Untagged
+  m_TagString: EditorOnly
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2548,13 +2547,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 849065437}
-  _networkObjectCache: {fileID: 849065437}
-  Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  IsCacheDirty: 1
   InitialRespawnTime: 15
   InitialSpawnCount: 0
   MaxSpawnCount: 1
@@ -2568,7 +2562,6 @@ MonoBehaviour:
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 10.47, y: 15.56, z: 25.5}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
   - rid: 8938684497020846080
   - rid: 8938684497020846081
@@ -2578,7 +2571,8 @@ MonoBehaviour:
     version: 2
     RefIds:
     - rid: 8938684497020846080
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
       data:
         NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
           type: 3}
@@ -2597,7 +2591,8 @@ MonoBehaviour:
         MinimumScale: 1
         MaximumScale: 1
     - rid: 8938684497020846081
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
       data:
         NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
           type: 3}
@@ -2616,7 +2611,8 @@ MonoBehaviour:
         MinimumScale: 1
         MaximumScale: 1
     - rid: 8938684497020846082
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
           type: 3}
@@ -2634,58 +2630,6 @@ MonoBehaviour:
         FactionOverride: {fileID: 0}
         MinimumScale: 1
         MaximumScale: 1
---- !u!114 &849065437
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 849065435}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
-  _predictionType: 0
-  _graphicalObject: {fileID: 0}
-  _detachGraphicalObject: 0
-  _enableStateForwarding: 0
-  _networkTransform: {fileID: 0}
-  _ownerInterpolation: 1
-  _ownerSmoothedProperties: 255
-  _adaptiveInterpolation: 3
-  _spectatorSmoothedProperties: 255
-  _spectatorInterpolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
-  <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 9107823738220353153
-  SerializedTransformProperties:
-    Position: {x: -144.28, y: 9.65, z: 44.7}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
-  <IsNested>k__BackingField: 0
-  WasActiveDuringEdit: 1
-  WasActiveDuringEdit_Set1: 1
-  <ComponentIndex>k__BackingField: 0
-  <PredictedSpawn>k__BackingField: {fileID: 0}
-  <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
-  InitializedParentNetworkBehaviour: {fileID: 0}
-  InitializedNestedNetworkObjects: []
-  RuntimeParentNetworkBehaviour: {fileID: 0}
-  RuntimeChildNetworkBehaviours: []
-  _isNetworked: 1
-  _isSpawnable: 1
-  _isGlobal: 0
-  _initializeOrder: 0
-  _preventDespawnOnDisconnect: 0
-  _defaultDespawnType: 0
 --- !u!4 &849065438
 Transform:
   m_ObjectHideFlags: 0

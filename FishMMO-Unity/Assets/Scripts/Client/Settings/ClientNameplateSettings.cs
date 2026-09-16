@@ -7,7 +7,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// How overhead nameplates look: how large, how strongly, how solid a background, which rows
-	/// are worth reading, and how many may be on screen at once.
+	/// are worth reading, whether icons are drawn, and how many may be on screen at once.
 	/// </summary>
 	/// <remarks>
 	/// <para><b>Separate from <see cref="ClientWorldLabelSettings"/> on purpose.</b> The two are
@@ -99,6 +99,15 @@ namespace FishMMO.Client
 		public const bool DefaultShowTitles = true;
 
 		/// <summary>
+		/// Whether a fresh install draws nameplate icons.
+		/// </summary>
+		/// <remarks>
+		/// On: an icon is only ever drawn because a developer authored one, so the default is to
+		/// show what they authored. No plate carries one out of the box.
+		/// </remarks>
+		public const bool DefaultShowIcons = true;
+
+		/// <summary>
 		/// Raised when any of these change, so the layer can re-read them.
 		/// </summary>
 		/// <remarks>
@@ -135,6 +144,10 @@ namespace FishMMO.Client
 		/// <summary>Whether the title row is drawn.</summary>
 		public static bool ShowTitles => ClientSettings.GetBool(
 			ClientSettings.NameplateShowTitlesKey, DefaultShowTitles);
+
+		/// <summary>Whether nameplate icons are drawn.</summary>
+		public static bool ShowIcons => ClientSettings.GetBool(
+			ClientSettings.NameplateShowIconsKey, DefaultShowIcons);
 
 		/// <summary>Writes the nameplate opacity and notifies the layer.</summary>
 		public static void SetOpacity(float value)
@@ -179,6 +192,13 @@ namespace FishMMO.Client
 		public static void SetShowTitles(bool value)
 		{
 			ClientSettings.Set(ClientSettings.NameplateShowTitlesKey, value);
+			Raise();
+		}
+
+		/// <summary>Writes the icon setting and notifies the layer.</summary>
+		public static void SetShowIcons(bool value)
+		{
+			ClientSettings.Set(ClientSettings.NameplateShowIconsKey, value);
 			Raise();
 		}
 

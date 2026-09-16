@@ -15,6 +15,18 @@ MonoBehaviour:
   m_GroupName: Server_Static_Permanent
   m_GUID: f2edf6310b68f6b4bae56ba99aeaeab9
   m_SerializeEntries:
+  - m_GUID: 52b7d40e4f9b4f8abf005afa870e8ad2
+    m_Address: Assets/Prefabs/Server/SceneServer/AISystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95f857a74d9b4f87a71060f2e717e0e2
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnerSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 188aa9244eeba18cca6f90abf9bee2b2
     m_Address: Assets/Prefabs/Server/SceneServer/PartySystem.asset
     m_ReadOnly: 0

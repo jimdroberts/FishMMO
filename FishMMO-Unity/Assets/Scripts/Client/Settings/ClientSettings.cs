@@ -260,6 +260,9 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for showing the title row — "&lt;Banker&gt;" — on a nameplate.</summary>
 		public const string NameplateShowTitlesKey = "Nameplates.ShowTitles";
 
+		/// <summary>Configuration key for drawing the optional icon a nameplate's style or owner gives it.</summary>
+		public const string NameplateShowIconsKey = "Nameplates.ShowIcons";
+
 		// ── Interface ───────────────────────────────────────────────
 
 		/// <summary>Configuration key for the interface scale multiplier.</summary>

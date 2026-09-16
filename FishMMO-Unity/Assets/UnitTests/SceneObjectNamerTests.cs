@@ -171,6 +171,27 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void AuthoredMode_GeneratesNothing_AndTheNamerKeepsTheAuthoredName()
+		{
+			/* A chest has no race and no place to be named after. Authored mode must never build a
+			 * name, and the namer must short-circuit before resolving anything, so a container does
+			 * not log a naming failure on every spawn. */
+			var settings = new SceneObjectNamingSettings { Mode = SceneObjectNamingMode.Authored };
+			Assert.IsFalse(SceneObjectNameResolver.TryBuild(settings, elf, 9, CharacterGender.Unspecified, out string name, out _));
+			Assert.IsNull(name);
+			Assert.IsFalse(settings.UsesRace);
+			Assert.IsFalse(settings.UsesBiome, "the payload length follows UsesBiome and must stay at the fixed five bytes");
+
+			string namer = System.IO.File.ReadAllText(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(),
+				"Assets/Scripts/Shared/Implementation/Entity/Naming/SceneObjectNamer.cs"));
+			int generate = namer.IndexOf("private void GenerateNameIfNeeded()", System.StringComparison.Ordinal);
+			int authored = namer.IndexOf("settings.Mode == SceneObjectNamingMode.Authored", generate, System.StringComparison.Ordinal);
+			int resolve = namer.IndexOf("SceneObjectNameResolver.ResolveRace", generate, System.StringComparison.Ordinal);
+			Assert.That(authored, Is.GreaterThan(generate).And.LessThan(resolve),
+				"the authored short-circuit must come before any race is resolved");
+		}
+
+		[Test]
 		public void DungeonAndPOI_NeedABiome_AndWorkWithOne()
 		{
 			var dungeon = new SceneObjectNamingSettings { Mode = SceneObjectNamingMode.Dungeon };

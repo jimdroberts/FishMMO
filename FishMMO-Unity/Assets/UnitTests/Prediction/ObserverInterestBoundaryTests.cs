@@ -11,6 +11,7 @@ using FishNet.Managing.Predicting;
 using FishNet.Object;
 using FishNet.Transporting;
 using UnityEngine;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -424,14 +425,14 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void AiLiveness_IsNotDecidedFromTheObserverSet()
 		{
-			string ai = ReadSource("Scripts/Shared/Implementation/Entity/NPC/AI/AIController.cs");
+			string ai = ReadSource("Scripts/Server/Implementation/World/SceneServer/AI/AIController.cs");
 			LogAssert.IsFalse(ai.Contains("Observers.Count", StringComparison.Ordinal),
 				"An observer count is a bandwidth figure. Deciding liveness from it let a budget eviction " +
 				"full-heal a monster with a player standing next to it.");
 			LogAssert.IsTrue(ai.Contains("ObserverStreamingRegistry.TryGetNearestViewerDistance", StringComparison.Ordinal),
 				"The tier must come from the registry's measured proximity.");
 
-			string sweep = ReadSource("Scripts/Shared/Implementation/Entity/NPC/AI/BaseAIState.cs");
+			string sweep = ReadSource("Scripts/Server/Implementation/World/SceneServer/AI/BaseAIState.cs");
 			LogAssert.IsFalse(sweep.Contains("controller.Observers", StringComparison.Ordinal),
 				"A budget-evicted monster must still be able to aggro the player who pulled it.");
 			LogAssert.IsTrue(sweep.Contains("controller.HasNearbyPlayer", StringComparison.Ordinal),
@@ -556,7 +557,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ObserverFanOuts_SerialiseOnce()
 		{
-			string boss = ReadSource("Scripts/Shared/Implementation/Entity/NPC/AI/Boss/BossScriptState.cs");
+			string boss = ReadSource("Scripts/Server/Implementation/World/SceneServer/AI/Boss/BossScriptState.cs");
 			LogAssert.IsFalse(boss.Contains("foreach (NetworkConnection conn in controller.NetworkObject.Observers)", StringComparison.Ordinal),
 				"A boss phase announcement must not be re-serialised once per raid member.");
 			LogAssert.IsTrue(boss.Contains("ServerManager.Broadcast(controller.NetworkObject,", StringComparison.Ordinal),

@@ -2,6 +2,7 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 
 namespace FishMMO.Shared
 {
@@ -307,8 +308,11 @@ namespace FishMMO.Shared
 			builder.Append(spawner.MaxSpawnCount);
 			builder.Append(" | Entries: ");
 			builder.Append(spawner.Spawnables == null ? 0 : spawner.Spawnables.Count);
-			builder.Append(" | Alive: ");
-			builder.Append(Application.isPlaying && spawner.Spawned != null ? spawner.Spawned.Count : 0);
+			if (!spawner.CompareTag(ObjectSpawner.EditorOnlyTag))
+			{
+				// Anything else ships the spawner to every client build.
+				builder.Append(" | NOT EditorOnly");
+			}
 			builder.Append("\nPosition: ");
 			builder.Append(spawner.RandomSpawnPosition ? "Random" : "Fixed");
 			builder.Append(" | Bounds: ");

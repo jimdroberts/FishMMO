@@ -1,0 +1,49 @@
+using UnityEngine;
+using FishMMO.Shared.Core;
+using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
+
+namespace FishMMO.Server.Implementation.World.SceneServer.AI
+{
+	/// <summary>
+	/// Condition that evaluates based on the distance between the NPC and its current target.
+	/// <para>
+	/// Examples:<br/>
+	/// - "Distance ≤ 3" → in melee range, use a cleave ability.<br/>
+	/// - "Distance ≥ 15" → far away, use a snipe ability.
+	/// </para>
+	/// </summary>
+	[CreateAssetMenu(fileName = "New AI Distance Condition", menuName = "FishMMO/Character/NPC/AI/Conditions/Distance Condition")]
+	public class AIDistanceCondition : AIAbilityCondition
+	{
+		/// <summary>
+		/// The comparison operator to use against the distance value.
+		/// </summary>
+		[Tooltip("How to compare the distance value.")]
+		public ComparisonOperator Operator = ComparisonOperator.LessOrEqual;
+
+		/// <summary>
+		/// Distance threshold in world units.
+		/// </summary>
+		[Tooltip("Distance threshold in world units.")]
+		public float Distance = 5f;
+
+		/// <summary>
+		/// Evaluates whether the current distance to the target satisfies the comparison.
+		/// Returns false if there is no target.
+		/// </summary>
+		/// <param name="controller">The AI controller of the NPC.</param>
+		/// <param name="self">The NPC's character.</param>
+		/// <param name="target">The NPC's current target (may be null).</param>
+		/// <returns>True if the distance comparison holds, false if there is no target.</returns>
+		public override bool Evaluate(AIController controller, ICharacter self, ICharacter target)
+		{
+			if (controller.Target == null)
+				return false;
+
+			float sqrDist = controller.GetSqrDistanceToTarget();
+			float dist = Mathf.Sqrt(sqrDist);
+			return Compare(dist, Operator, Distance);
+		}
+	}
+}

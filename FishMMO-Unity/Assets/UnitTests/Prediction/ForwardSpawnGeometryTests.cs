@@ -6,6 +6,7 @@ using FishNet.Managing.Predicting;
 using FishNet.Object;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests.Prediction
 {

@@ -13,7 +13,6 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Represents a non-player character (NPC) in the game. Handles attribute generation, network payloads, and spawning logic.
 	/// </summary>
-	[RequireComponent(typeof(AIController))]
 	[RequireComponent(typeof(CharacterPredictionController))]
 	[RequireComponent(typeof(AbilityController))]
 	[RequireComponent(typeof(TargetController))]
@@ -26,6 +25,22 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NetworkObserver))]
 	public class NPC : BaseCharacter, ISceneObject, ISpawnable, IInteractable, ILootableCorpse
 	{
+		/// <summary>
+		/// Raised on the server at the end of <see cref="OnStartServer"/>, on every spawn including
+		/// pool reuse.
+		/// </summary>
+		/// <remarks>
+		/// How the server assembly learns that an NPC has come into the world without shared code
+		/// naming anything in it. The server's AI host attaches a brain here to any NPC whose
+		/// spawner did not already prepare one.
+		/// </remarks>
+		public static event Action<NPC> OnServerSpawned;
+
+		/// <summary>
+		/// Raised on the server from <see cref="OnStopServer"/>, before the NPC is reset for the pool.
+		/// </summary>
+		public static event Action<NPC> OnServerDespawned;
+
 		/// <summary>
 		/// Static random number generator for NPC attribute seed generation.
 		/// </summary>
@@ -73,13 +88,13 @@ namespace FishMMO.Shared
 		/// The prefab is the right home for these because respawn cadence is a property of the
 		/// creature, not of the patch of ground it stands on: a wolf should come back at wolf pace
 		/// wherever it is placed, and a rare spawn should stay rare at every spawner that can
-		/// produce it. Before this, the values lived only on <see cref="NPCSpawnableSettings"/> and
+		/// produce it. Before this, the values lived only on the spawner's NPC settings and
 		/// defaulted to zero — so any spawner whose author did not fill them in respawned its
 		/// creatures instantly, forever.
 		/// </para>
 		/// <para>
 		/// A spawner can still override the pair for a specific placement — see
-		/// <see cref="NPCSpawnableSettings.MinimumRespawnTime"/>.
+		/// <c>NPCSpawnableSettings.MinimumRespawnTime</c> in the server assembly.
 		/// </para>
 		/// </remarks>
 		[Tooltip("Longest time in seconds before this NPC respawns after its corpse decays. A spawner may override it.")]
@@ -185,12 +200,11 @@ namespace FishMMO.Shared
 		private float corpseInteractionRangeSqr;
 
 		/// <summary>
-		/// True when entering corpse state is what disabled this NPC's brain.
+		/// True when entering corpse state is what stopped this NPC's brain.
 		/// </summary>
 		/// <remarks>
 		/// Tracked so <see cref="ResetState"/> restores only what the corpse path switched off.
-		/// Unconditionally re-enabling the controller would override a prefab that deliberately
-		/// ships with its brain disabled.
+		/// Unconditionally restarting the brain would override one the server deliberately stopped.
 		/// </remarks>
 		private bool aiDisabledByCorpse;
 
@@ -212,34 +226,9 @@ namespace FishMMO.Shared
 		public List<AbilityTemplate> Abilities = new List<AbilityTemplate>();
 
 		/// <summary>
-		/// Reference to the spawner that created this NPC.
+		/// The server-side spawner that created this NPC, or null.
 		/// </summary>
-		[SerializeField, ShowReadonly]
-		private ObjectSpawner objectSpawner;
-
-		/// <summary>
-		/// Reference to the spawner that created this NPC.
-		/// </summary>
-		public ObjectSpawner ObjectSpawner
-		{
-			get { return objectSpawner; }
-			set { objectSpawner = value; }
-		}
-
-		/// <summary>
-		/// Settings used when spawning this NPC.
-		/// </summary>
-		[SerializeReference, ShowReadonly]
-		private SpawnableSettings spawnableSettings;
-
-		/// <summary>
-		/// Settings used when spawning this NPC.
-		/// </summary>
-		public SpawnableSettings SpawnableSettings
-		{
-			get { return spawnableSettings; }
-			set { spawnableSettings = value; }
-		}
+		public ISpawnOwner Spawner { get; set; }
 
 #if UNITY_EDITOR
 		/// <summary>
@@ -334,6 +323,19 @@ namespace FishMMO.Shared
 
 			// Subscribe to the server tick for corpse decay timer.
 			base.TimeManager.OnTick += CorpseDecayTick;
+
+			OnServerSpawned?.Invoke(this);
+		}
+
+		/// <summary>
+		/// Called when the server stops this NPC — a despawn to the pool, or the server shutting
+		/// down. Lets the server assembly detach what it attached in <see cref="OnServerSpawned"/>.
+		/// </summary>
+		public override void OnStopServer()
+		{
+			OnServerDespawned?.Invoke(this);
+
+			base.OnStopServer();
 		}
 
 		/// <summary>
@@ -366,10 +368,9 @@ namespace FishMMO.Shared
 			// Give the brain back, if the corpse path is what took it away.
 			if (aiDisabledByCorpse)
 			{
-				AIController ai = GetComponent<AIController>();
-				if (ai != null)
+				if (TryGet(out INPCBrain brain))
 				{
-					ai.enabled = true;
+					brain.ResumeAfterCorpse();
 				}
 				aiDisabledByCorpse = false;
 			}
@@ -401,8 +402,7 @@ namespace FishMMO.Shared
 			npcRNG = null;
 			npcSeed = 0;
 			npcGender = CharacterGender.Unspecified;
-			ObjectSpawner = null;
-			SpawnableSettings = null;
+			Spawner = null;
 		}
 
 		/// <summary>
@@ -523,7 +523,7 @@ namespace FishMMO.Shared
 			/* Server only, explicitly. Everything below is authoritative state — the loot roll,
 			 * the contributor snapshot, the decay clock — and a client has no business holding
 			 * any of it. Nothing reaches here on a client today, since the only caller is the
-			 * server's OnKilled subscriber and ObjectSpawner disables itself off the server; the
+			 * server's OnKilled subscriber and spawners exist only on the server; the
 			 * guard is here so that stays true of any future caller rather than by coincidence.
 			 * Clients derive corpse state from the replicated dead flag instead — see IsCorpse. */
 			if (!base.IsServerStarted) return;
@@ -542,28 +542,14 @@ namespace FishMMO.Shared
 			corpseDecayShortened = false;
 			corpseInteractionRangeSqr = CorpseInteractionRange * CorpseInteractionRange;
 
-			// Disable AI so the corpse does not move or fight.
-			AIController ai = GetComponent<AIController>();
-			if (ai != null)
+			/* Stop the brain so the corpse does not move or fight. Remembered, because nothing
+			 * else would ever switch it back on: before this, the first death of a pooled NPC
+			 * disabled its controller permanently, and every later occupant of that pool slot
+			 * spawned, stood still, and never thought again. The brain also drops its path, target
+			 * and threat table — see INPCBrain.SuspendForCorpse. */
+			if (TryGet(out INPCBrain brain))
 			{
-				/* Remembered, because nothing else would ever switch it back on. Before this, the
-				 * first death of a pooled NPC disabled its controller permanently: every later
-				 * occupant of that pool slot spawned, stood still, and never thought again.
-				 *
-				 * The brain runs from a TimeManager tick subscription, which a disabled
-				 * MonoBehaviour still receives; AIController.TimeManager_OnTick honours `enabled`
-				 * itself. HaltMovement stops the body — path, target, threat — so the corpse does
-				 * not keep walking to wherever its killer was. */
-				aiDisabledByCorpse = ai.enabled;
-				ai.enabled = false;
-				ai.HaltMovement();
-
-				/* A corpse holds no grudges. Beyond being wrong, a populated threat table keeps
-				 * AggressionState.HasAggression true, which is exactly the flag
-				 * AggressionDispatcher uses to decide who is worth delivering heal and kill
-				 * events to — so every corpse in the scene would be walked and handed every such
-				 * event for the whole of its decay. */
-				ai.AggressionState?.Clear();
+				aiDisabledByCorpse = brain.SuspendForCorpse();
 			}
 
 			// Prevent the corpse from being killed again.
@@ -630,7 +616,7 @@ namespace FishMMO.Shared
 		/// decay timer expires or on server shutdown.
 		/// </summary>
 		/// <remarks>
-		/// Routes through the owning <see cref="ObjectSpawner"/> so a respawn is scheduled, and
+		/// Routes through the owning <see cref="Spawner"/> so a respawn is scheduled, and
 		/// despawns directly when there is no spawner. The fallback matters: an NPC placed by
 		/// script or adopted rather than spawned has no spawner, and the null-conditional this
 		/// replaced meant such an NPC's corpse never decayed at all — it sat in the world as an
@@ -644,7 +630,7 @@ namespace FishMMO.Shared
 			isCorpse = false;
 			corpseDecayTimer = 0f;
 
-			ObjectSpawner spawner = ObjectSpawner;
+			ISpawnOwner spawner = Spawner;
 			if (spawner != null)
 			{
 				spawner.Despawn(this);

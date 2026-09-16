@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests.AI
 {
@@ -214,32 +215,52 @@ namespace FishMMO.UnitTests.AI
 		// --- Prefab wiring -----------------------------------------------------------------
 
 		[Test]
-		public void EveryNPCPrefab_NamesAnArchetype()
+		public void EveryNPCPrefab_HasAnArchetypeInTheBrainCatalogue()
 		{
-			/* The archetype is the ONLY AI wiring a prefab carries: every state, the personality,
-			 * the rotation, the LOD profile and the threat tuning are read from it. A controller
-			 * without one has no initial state, so the NPC spawns and never ticks — and nothing at
-			 * compile time says so. */
+			/* The archetype is the whole brain: every state, the personality, the rotation, the LOD
+			 * profile and the threat tuning are read from it. It lives in the server's brain
+			 * catalogue, keyed by prefab. An NPC without an entry spawns with no initial state and
+			 * never thinks — and nothing at compile time says so. */
 			StringBuilder missing = new StringBuilder();
 			int scanned = 0;
 
 			foreach (GameObject root in NPCPrefabFactory.FindNPCPrefabs(includeLocal: true))
 			{
-				AIController controller = root.GetComponent<AIController>();
-				if (controller == null)
-				{
-					continue;
-				}
-
 				scanned++;
-				if (controller.Archetype == null)
+				if (AIBrainCatalogueEditorUtility.GetArchetype(root) == null)
 				{
 					missing.AppendLine("    " + AssetDatabase.GetAssetPath(root));
 				}
 			}
 
-			Assert.Greater(scanned, 0, "No prefab with an AIController was found; the scan is broken.");
-			Assert.IsEmpty(missing.ToString(), "NPC prefabs with an AIController but no archetype:\n" + missing);
+			Assert.Greater(scanned, 0, "No NPC prefab was found; the scan is broken.");
+			Assert.IsEmpty(missing.ToString(), "NPC prefabs with no archetype in the AI brain catalogue:\n" + missing);
+		}
+
+		[Test]
+		public void NoNPCPrefab_CarriesServerOnlyAIComponents()
+		{
+			/* NPC prefabs are shared with clients. The brain and its NavMeshAgent are added by the
+			 * server when it spawns the NPC; left on the prefab they ship server-only code and data
+			 * to every player, and the server would drive the prefab's copy instead of its own. */
+			StringBuilder offenders = new StringBuilder();
+			int scanned = 0;
+
+			foreach (GameObject root in NPCPrefabFactory.FindNPCPrefabs(includeLocal: true))
+			{
+				scanned++;
+				if (root.GetComponentInChildren<AIController>(true) != null)
+				{
+					offenders.AppendLine("    " + AssetDatabase.GetAssetPath(root) + " (AIController)");
+				}
+				if (root.GetComponentInChildren<UnityEngine.AI.NavMeshAgent>(true) != null)
+				{
+					offenders.AppendLine("    " + AssetDatabase.GetAssetPath(root) + " (NavMeshAgent)");
+				}
+			}
+
+			Assert.Greater(scanned, 0, "No NPC prefab was found; the scan is broken.");
+			Assert.IsEmpty(offenders.ToString(), "NPC prefabs carrying server-only AI components:\n" + offenders);
 		}
 
 		// --- Named behaviour: the point of the exercise -------------------------------------

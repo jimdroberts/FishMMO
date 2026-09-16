@@ -42,10 +42,32 @@
 }
 
 .nameplate {
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
     translate: -50% -100%;
+}
+
+/*
+    The box holds an optional icon and this column of rows. The box's direction places the icon
+    (row = left, row-reverse = right, column = above) and is written from C# per plate; the rows
+    always stack here, centred on each other.
+*/
+.nameplate-body {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/*
+    Hidden by default: a plate draws an icon only when its style or its owner gives it one. Sized
+    from C# like everything else on a plate. The sprite is fitted rather than stretched, so a
+    non-square icon keeps its shape inside the square box.
+*/
+.nameplate-icon {
+    display: none;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
 /*

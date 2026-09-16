@@ -1,0 +1,47 @@
+﻿using System.Collections.Generic;
+using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
+
+namespace FishMMO.Server.Core.World.SceneServer
+{
+	/// <summary>
+	/// Interface for AI state management — querying and transitioning between AI states.
+	/// Separated from IAIController to satisfy ISP: consumers that only need state transitions
+	/// can depend on this smaller contract.
+	/// </summary>
+	public interface IAIStateMachine : ICharacterBehaviour
+	{
+		/// <summary>
+		/// The current AI state.
+		/// </summary>
+		BaseAIState CurrentState { get; }
+
+		/// <summary>
+		/// The state this NPC uses for combat, or null when it cannot fight.
+		/// </summary>
+		BaseAIState AttackingState { get; }
+
+		/// <summary>
+		/// The state this NPC falls back to when it has nothing to do.
+		/// </summary>
+		BaseAIState IdleState { get; }
+
+		/// <summary>
+		/// Changes the AI state, optionally providing targets for attacking states.
+		/// </summary>
+		/// <param name="newState">The new state to transition to.</param>
+		/// <param name="targets">Optional list of targets for attacking states.</param>
+		void ChangeState(BaseAIState newState, List<ICharacter> targets = null);
+
+		/// <summary>
+		/// Transitions to the idle state.
+		/// </summary>
+		void TransitionToIdleState();
+
+		/// <summary>
+		/// Transitions to a random movement state from the available movement states.
+		/// </summary>
+		void TransitionToRandomMovementState();
+	}
+}

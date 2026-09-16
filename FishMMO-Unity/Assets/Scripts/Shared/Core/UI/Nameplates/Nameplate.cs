@@ -95,6 +95,12 @@ namespace FishMMO.Shared.Core
 		/// <summary>The faction-standing colour the client last resolved for this plate.</summary>
 		private Color allianceTint = Color.white;
 
+		/// <summary>The icon written at runtime, when <see cref="hasIconOverride"/> is set.</summary>
+		private Sprite iconOverride;
+
+		/// <summary>True when <see cref="iconOverride"/> replaces the style's icon, even with null.</summary>
+		private bool hasIconOverride;
+
 		/// <summary>Bumped by every change to the rows.</summary>
 		public int Revision { get; private set; }
 
@@ -216,6 +222,51 @@ namespace FishMMO.Shared.Core
 		{
 			customStyle = value;
 			useCustomStyle = true;
+			++styleRevision;
+		}
+
+		// ── Icon ────────────────────────────────────────────────────
+
+		/// <summary>
+		/// The icon this plate is drawn with: its runtime icon if one was set, otherwise its
+		/// style's. Null when the plate has none, which is the default.
+		/// </summary>
+		public Sprite Icon => hasIconOverride ? iconOverride : Style.Icon;
+
+		/// <summary>Whether a runtime icon currently replaces the style's.</summary>
+		public bool HasIconOverride => hasIconOverride;
+
+		/// <summary>
+		/// Gives this plate an icon of its own, overriding its style's.
+		/// </summary>
+		/// <param name="value">The icon, or null to draw none even when the style has one.</param>
+		/// <remarks>
+		/// For an icon that is a statement about this object right now — a quest giver with
+		/// something to offer, a player flagged for PvP. An icon that is part of what a thing IS
+		/// belongs in its style instead, where a shared asset can carry it. Cleared when the plate
+		/// is disabled, like the Status row, so a pooled object does not bring it into its next
+		/// life.
+		/// </remarks>
+		public void SetIcon(Sprite value)
+		{
+			if (hasIconOverride && ReferenceEquals(iconOverride, value))
+			{
+				return;
+			}
+			iconOverride = value;
+			hasIconOverride = true;
+			++styleRevision;
+		}
+
+		/// <summary>Drops the runtime icon, so the style's icon (if any) is drawn again.</summary>
+		public void ClearIcon()
+		{
+			if (!hasIconOverride)
+			{
+				return;
+			}
+			iconOverride = null;
+			hasIconOverride = false;
 			++styleRevision;
 		}
 
@@ -453,6 +504,10 @@ namespace FishMMO.Shared.Core
 			 * from its first frame. The name and guild rows are rewritten by the payload of the
 			 * new life; nothing rewrites Status, so it is cleared here. */
 			ClearLine(NameplateSlot.Status);
+
+			// A runtime icon is the same kind of state: written by an observer, never rewritten
+			// by the next occupant. The style's icon is part of the prefab and stays.
+			ClearIcon();
 
 			OnNameplateDisabled?.Invoke(this);
 		}

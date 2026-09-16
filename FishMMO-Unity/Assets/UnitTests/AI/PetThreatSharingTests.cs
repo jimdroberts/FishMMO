@@ -4,6 +4,7 @@ using NUnit.Framework;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishMMO.UnitTests.Harness;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests.AI
@@ -135,13 +136,25 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void PetDeclaresTheLinkAndTheDispatcherConsultsIt()
 		{
-			string scripts = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Shared/Implementation/Entity/NPC");
-			string pet = File.ReadAllText(Path.Combine(scripts, "Pet/Pet.cs"));
-			string dispatcher = File.ReadAllText(Path.Combine(scripts, "AI/AggressionDispatcher.cs"));
+			string root = Directory.GetCurrentDirectory();
+			string pet = File.ReadAllText(Path.Combine(root, "Assets/Scripts/Shared/Implementation/Entity/NPC/Pet/Pet.cs"));
+			string ai = Path.Combine(root, "Assets/Scripts/Server/Implementation/World/SceneServer/AI");
+			string dispatcher = File.ReadAllText(Path.Combine(ai, "AggressionDispatcher.cs"));
+			string host = File.ReadAllText(Path.Combine(ai, "AIBrainHost.cs"));
 
-			LogAssert.IsTrue(pet.Contains("AggressionDispatcher.LinkPet(this, value);") &&
-				pet.Contains("AggressionDispatcher.UnlinkPet(this);"),
-				"Pet.PetOwner must link on assignment and unlink on clear");
+			/* The pet is shared code and the dispatcher is server code, so the link travels through
+			 * an event: the pet announces every owner change, and the dispatcher — subscribed by the
+			 * brain host before any pet can exist — links on an owner and unlinks on null. */
+			LogAssert.IsTrue(pet.Contains("OnPetOwnerChanged?.Invoke(this, value);"),
+				"Pet.PetOwner must announce every owner change, including the clear");
+			int handler = dispatcher.IndexOf("private static void OnPetOwnerChanged(Pet pet, ICharacter owner)", System.StringComparison.Ordinal);
+			LogAssert.IsTrue(handler >= 0 &&
+				dispatcher.IndexOf("LinkPet(pet, owner);", handler, System.StringComparison.Ordinal) > handler &&
+				dispatcher.IndexOf("UnlinkPet(pet);", handler, System.StringComparison.Ordinal) > handler,
+				"the dispatcher must link on an owner and unlink on a clear");
+			LogAssert.IsTrue(dispatcher.Contains("Pet.OnPetOwnerChanged += OnPetOwnerChanged;") &&
+				host.Contains("AggressionDispatcher.EnsurePetLinksTracked();"),
+				"the brain host must start the dispatcher following pet owner changes");
 
 			int damaged = dispatcher.IndexOf("private static void OnCharacterDamaged(", System.StringComparison.Ordinal);
 			int share = dispatcher.IndexOf("ShareThreat(attacker, defender, amount);", damaged, System.StringComparison.Ordinal);

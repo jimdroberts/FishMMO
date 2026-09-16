@@ -183,23 +183,166 @@ namespace FishMMO.UnitTests
 		public void Decide_TruthTable_InCheckOrder()
 		{
 			WaypointTravelOptions d = WaypointTravelOptions.Default;
-			Assert.AreEqual(WaypointTravelRefusalReason.CannotAct, WaypointTravel.Decide(false, true, false, false, false, d));
-			Assert.AreEqual(WaypointTravelRefusalReason.InCombat, WaypointTravel.Decide(true, true, false, false, false, d));
-			Assert.AreEqual(WaypointTravelRefusalReason.NotInScene, WaypointTravel.Decide(true, false, false, false, false, d));
-			Assert.AreEqual(WaypointTravelRefusalReason.Locked, WaypointTravel.Decide(true, false, true, false, false, d));
-			Assert.AreEqual(WaypointTravelRefusalReason.ConditionsNotMet, WaypointTravel.Decide(true, false, true, true, false, d));
-			Assert.AreEqual(WaypointTravelRefusalReason.None, WaypointTravel.Decide(true, false, true, true, true, d));
+			// canAct, inCombat, sameScene, nearWaypoint, unlocked, conditionsMet
+			Assert.AreEqual(WaypointTravelRefusalReason.CannotAct, WaypointTravel.Decide(false, true, false, false, false, false, d));
+			Assert.AreEqual(WaypointTravelRefusalReason.InCombat, WaypointTravel.Decide(true, true, false, false, false, false, d));
+			Assert.AreEqual(WaypointTravelRefusalReason.NotInScene, WaypointTravel.Decide(true, false, false, false, false, false, d));
+			Assert.AreEqual(WaypointTravelRefusalReason.NotNearWaypoint, WaypointTravel.Decide(true, false, true, false, false, false, d));
+			Assert.AreEqual(WaypointTravelRefusalReason.Locked, WaypointTravel.Decide(true, false, true, true, false, false, d));
+			Assert.AreEqual(WaypointTravelRefusalReason.ConditionsNotMet, WaypointTravel.Decide(true, false, true, true, true, false, d));
+			Assert.AreEqual(WaypointTravelRefusalReason.None, WaypointTravel.Decide(true, false, true, true, true, true, d));
 		}
 
 		[Test]
 		public void Decide_OptionsRelaxPolicyButNeverPhysics()
 		{
 			WaypointTravelOptions relaxed = new WaypointTravelOptions(requireUnlocked: false, evaluateConditions: false, allowInCombat: true);
-			Assert.AreEqual(WaypointTravelRefusalReason.None, WaypointTravel.Decide(true, true, true, false, false, relaxed));
-			Assert.AreEqual(WaypointTravelRefusalReason.CannotAct, WaypointTravel.Decide(false, false, true, true, true, relaxed),
+			Assert.IsFalse(relaxed.RequireNearbyWaypoint, "A designer-authored move is not bound by the origin rule.");
+			Assert.AreEqual(WaypointTravelRefusalReason.None, WaypointTravel.Decide(true, true, true, false, false, false, relaxed));
+			Assert.AreEqual(WaypointTravelRefusalReason.CannotAct, WaypointTravel.Decide(false, false, true, true, true, true, relaxed),
 				"A dead or unloaded character cannot be moved by any option.");
-			Assert.AreEqual(WaypointTravelRefusalReason.NotInScene, WaypointTravel.Decide(true, false, false, true, true, relaxed),
+			Assert.AreEqual(WaypointTravelRefusalReason.NotInScene, WaypointTravel.Decide(true, false, false, true, true, true, relaxed),
 				"Same-scene is a fact about where the waypoint is, not a policy.");
+		}
+
+		[Test]
+		public void PlayerRequestOptions_FollowThePolicy()
+		{
+			Assert.IsTrue(WaypointTravelOptions.Default.RequireNearbyWaypoint, "Issue #253: the shipped rule is on.");
+			Assert.AreEqual(WaypointTravelPolicy.DefaultNearbyRange, WaypointTravelOptions.Default.NearbyRange);
+
+			WaypointTravelOptions off = WaypointTravelOptions.ForPlayerRequest(new WaypointTravelPolicy(false, 25.0f));
+			Assert.IsFalse(off.RequireNearbyWaypoint);
+			Assert.IsTrue(off.RequireUnlocked && off.EvaluateConditions && !off.AllowInCombat,
+				"Turning the origin rule off relaxes nothing else a player request is held to.");
+			Assert.AreEqual(WaypointTravelRefusalReason.None, WaypointTravel.Decide(true, false, true, false, true, true, off),
+				"With the rule off, being far from every waypoint is not a refusal.");
+
+			WaypointTravelOptions wide = WaypointTravelOptions.ForPlayerRequest(new WaypointTravelPolicy(true, 25.0f));
+			Assert.AreEqual(25.0f, wide.NearbyRange);
+		}
+
+		// ── WaypointTravelPolicy ─────────────────────────────────────────────────
+
+		[Test]
+		public void Policy_RangeIsInclusiveAndClamped()
+		{
+			WaypointTravelPolicy policy = new WaypointTravelPolicy(true, 10.0f);
+			Assert.IsTrue(policy.IsWithinRange(Vector3.zero, new Vector3(10, 0, 0)), "The boundary counts.");
+			Assert.IsTrue(policy.IsWithinRange(Vector3.zero, new Vector3(6, 0, 8)));
+			Assert.IsFalse(policy.IsWithinRange(Vector3.zero, new Vector3(6, 0, 8.01f)));
+			Assert.IsFalse(policy.IsWithinRange(Vector3.zero, new Vector3(0, 10.5f, 0)), "Height counts: a waypoint on the cliff above is not here.");
+
+			Assert.AreEqual(WaypointTravelPolicy.MinimumNearbyRange, new WaypointTravelPolicy(true, 0.0f).NearbyRange);
+			Assert.AreEqual(WaypointTravelPolicy.MinimumNearbyRange, new WaypointTravelPolicy(true, -5.0f).NearbyRange);
+			Assert.AreEqual(WaypointTravelPolicy.MaximumNearbyRange, new WaypointTravelPolicy(true, 1e9f).NearbyRange);
+			Assert.AreEqual(WaypointTravelPolicy.DefaultNearbyRange, new WaypointTravelPolicy(true, float.NaN).NearbyRange);
+			Assert.AreEqual(WaypointTravelPolicy.DefaultNearbyRange, new WaypointTravelPolicy(true, float.PositiveInfinity).NearbyRange);
+		}
+
+		[Test]
+		public void Policy_ClientCheck_NeedsANearbyDiscoveredWaypointInThisScene()
+		{
+			WaypointController controller = NewHost("Controller").AddComponent<WaypointController>();
+			controller.InitializeOnce(new MockCharacter(1));
+			controller.Restore("Town", 0, 0b01UL); // 0 discovered, 1 not
+
+			WorldSceneDetails details = new WorldSceneDetails();
+			details.Waypoints.Add(0, new SceneWaypointDetails() { Index = 0, Name = "Far", Position = new Vector3(100, 0, 0) });
+			details.Waypoints.Add(1, new SceneWaypointDetails() { Index = 1, Name = "Near", Position = Vector3.zero });
+
+			WaypointTravelPolicy on = new WaypointTravelPolicy(true, 10.0f);
+			Assert.IsFalse(on.IsSatisfiedBy(details, "Town", controller, Vector3.zero),
+				"Standing at a waypoint never activated does not count.");
+			Assert.IsTrue(on.IsSatisfiedBy(details, "Town", controller, new Vector3(95, 0, 0)));
+			Assert.IsFalse(on.IsSatisfiedBy(details, "Elsewhere", controller, new Vector3(95, 0, 0)), "Discovery is per scene.");
+			Assert.IsFalse(on.IsSatisfiedBy(null, "Town", controller, new Vector3(95, 0, 0)), "No cache, no claim.");
+			Assert.IsFalse(on.IsSatisfiedBy(details, "Town", null, new Vector3(95, 0, 0)));
+
+			WaypointTravelPolicy off = new WaypointTravelPolicy(false, 10.0f);
+			Assert.IsTrue(off.IsSatisfiedBy(null, null, null, Vector3.zero), "The rule off is satisfied everywhere.");
+		}
+
+		[Test]
+		public void Policy_PayloadRoundTrip()
+		{
+			foreach (WaypointTravelPolicy sent in new[] { new WaypointTravelPolicy(true, 12.5f), new WaypointTravelPolicy(false, 3.0f), WaypointTravelPolicy.Default })
+			{
+				Writer writer = new Writer();
+				WaypointController.WriteTravelPolicy(writer, sent);
+				Reader reader = new Reader(writer.GetArraySegment(), null);
+				WaypointTravelPolicy received = WaypointController.ReadTravelPolicy(reader);
+
+				Assert.AreEqual(0, reader.Remaining, "The owner block is framed; the policy must read back exactly what it wrote.");
+				Assert.AreEqual(sent.RequireNearbyWaypoint, received.RequireNearbyWaypoint);
+				Assert.AreEqual(sent.NearbyRange, received.NearbyRange);
+			}
+		}
+
+		[Test]
+		public void Controller_TravelPolicy_IsTheDefaultUntilTheServerSaysOtherwise()
+		{
+			WaypointController controller = NewHost("Controller").AddComponent<WaypointController>();
+			controller.InitializeOnce(new MockCharacter(1));
+			Assert.IsTrue(controller.TravelPolicy.RequireNearbyWaypoint);
+			Assert.AreEqual(WaypointTravelPolicy.DefaultNearbyRange, controller.TravelPolicy.NearbyRange);
+		}
+
+		// ── WaypointRegistry origin search ───────────────────────────────────────
+
+		[Test]
+		public void Registry_TryFindNearest_HonoursRangeDiscoveryAndDistance()
+		{
+			/* A named preview scene, because edit-mode scenes are untitled and a discovery record
+			 * refuses an empty scene name — every discovered-origin assertion would pass or fail
+			 * for that reason alone. */
+			UnityEngine.SceneManagement.Scene scene = UnityEditor.SceneManagement.EditorSceneManager.NewPreviewScene();
+			try
+			{
+				scene.name = "WaypointOriginTown";
+				Waypoint far = NewHost("Far").AddComponent<Waypoint>();
+				Waypoint near = NewHost("Near").AddComponent<Waypoint>();
+				Waypoint nearer = NewHost("Nearer").AddComponent<Waypoint>();
+				foreach (Waypoint waypoint in new[] { far, near, nearer })
+				{
+					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(waypoint.gameObject, scene);
+				}
+				SetIndex(far, 0);
+				SetIndex(near, 1);
+				SetIndex(nearer, 2);
+				far.transform.position = new Vector3(50, 0, 0);
+				near.transform.position = new Vector3(8, 0, 0);
+				nearer.transform.position = new Vector3(0, 0, 3);
+				Assert.IsTrue(WaypointRegistry.Register(far));
+				Assert.IsTrue(WaypointRegistry.Register(near));
+				Assert.IsTrue(WaypointRegistry.Register(nearer));
+
+				int handle = scene.handle;
+				string sceneName = far.SceneName;
+				Assert.IsFalse(string.IsNullOrEmpty(sceneName), "Fixture: the scene needs a name for discovery to mean anything.");
+
+				Assert.IsTrue(WaypointRegistry.TryFindNearest(handle, Vector3.zero, 10.0f, null, out IWaypoint found));
+				Assert.AreSame(nearer, found, "The nearest qualifying waypoint is reported.");
+
+				Assert.IsFalse(WaypointRegistry.TryFindNearest(handle, Vector3.zero, 2.0f, null, out found));
+				Assert.IsNull(found);
+
+				WaypointController controller = NewHost("Controller").AddComponent<WaypointController>();
+				controller.InitializeOnce(new MockCharacter(1));
+				controller.Restore(sceneName, 0, 0b011UL); // far and near discovered, nearer not
+
+				Assert.IsTrue(WaypointRegistry.TryFindNearest(handle, Vector3.zero, 10.0f, controller, out found));
+				Assert.AreSame(near, found, "An undiscovered waypoint is not an origin, however close.");
+
+				Assert.IsFalse(WaypointRegistry.TryFindNearest(handle, Vector3.zero, 5.0f, controller, out _));
+				Assert.IsFalse(WaypointRegistry.TryFindNearest(controller.gameObject.scene.handle, Vector3.zero, 1000.0f, null, out _),
+					"Another scene instance's waypoints are never an origin.");
+			}
+			finally
+			{
+				WaypointRegistry.Clear();
+				UnityEditor.SceneManagement.EditorSceneManager.ClosePreviewScene(scene);
+			}
 		}
 
 		// ── WaypointController ───────────────────────────────────────────────────

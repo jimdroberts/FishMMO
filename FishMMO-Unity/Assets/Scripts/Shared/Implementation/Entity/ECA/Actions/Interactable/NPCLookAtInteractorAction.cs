@@ -30,11 +30,11 @@ namespace FishMMO.Shared
 			if (initiator == null) return;
 			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
 
-			AIController aiController = data.Interactable.Transform.GetComponent<AIController>();
-			if (aiController == null) return;
+			// The brain is a server-attached component; a townsperson without one simply does not turn.
+			INPCBrain brain = data.Interactable.Transform.GetComponent<INPCBrain>();
+			if (brain == null) return;
 
-			aiController.LookTarget = initiator.Transform;
-			aiController.TransitionToIdleState();
+			brain.FaceInteractor(initiator.Transform);
 		}
 	}
 }

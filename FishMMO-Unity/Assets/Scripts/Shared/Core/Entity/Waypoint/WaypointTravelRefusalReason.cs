@@ -40,5 +40,13 @@ namespace FishMMO.Shared.Core
 
 		/// <summary>The peer asked to travel is not the authority. Only ever seen in a misconfigured process.</summary>
 		NotAuthoritative = 8,
+
+		/// <summary>
+		/// The character is not standing near a waypoint they have discovered, and this server
+		/// requires one to travel from (<c>WaypointTravelPolicy</c>). Checked after
+		/// <see cref="NotInScene"/> and before <see cref="Locked"/>: it is about where the
+		/// traveller is, not about the destination. Appended, so the wire values above are stable.
+		/// </summary>
+		NotNearWaypoint = 9,
 	}
 }

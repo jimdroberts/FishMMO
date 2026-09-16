@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 91f9b012a49c60722b0fcb1621eb10bd, type: 3}
+  m_Name: Dungeon Chest Loot
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.LootTableTemplate
+  Entries:
+  - ItemTemplate: {fileID: 11400000, guid: 0ec11e24101f9ddd1a002b65004cb524, type: 2}
+    DropChance: 0.8
+    MinimumAmount: 1
+    MaximumAmount: 3
+  - ItemTemplate: {fileID: 11400000, guid: a94b344b8c1a49954b87be475ebeb78a, type: 2}
+    DropChance: 0.8
+    MinimumAmount: 1
+    MaximumAmount: 3
+  - ItemTemplate: {fileID: 11400000, guid: 0446fdf72ba15d6d08c86d5e4a2c87c6, type: 2}
+    DropChance: 0.6
+    MinimumAmount: 1
+    MaximumAmount: 4
+  - ItemTemplate: {fileID: 11400000, guid: 2a69803876db8086d81d72c790a12e9b, type: 2}
+    DropChance: 0.3
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: 970d2a4d7efe92faa9c4dfd7d00abf4c, type: 2}
+    DropChance: 0.2
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: 4558469513a2e19ba9894d28d5da44c9, type: 2}
+    DropChance: 0.15
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: 483b86c675e552786b89be5e0dfb6704, type: 2}
+    DropChance: 0.15
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: 1bd40dadbe68381429a0ce918130a642, type: 2}
+    DropChance: 0.05
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: 1cc999ebd456f0943bbcfc4c09497b1b, type: 2}
+    DropChance: 0.05
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: f069d2a30c555ce42bb8079226fc8f14, type: 2}
+    DropChance: 0.05
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: 4a7063529ee215d4a915672973d299db, type: 2}
+    DropChance: 0.05
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: d4194c9fc4a87c84cbdde10c40a67656, type: 2}
+    DropChance: 0.05
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: c44327c9e1311ab4289d7debd893f0b6, type: 2}
+    DropChance: 0.05
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - ItemTemplate: {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}
+    DropChance: 0.05
+    MinimumAmount: 1
+    MaximumAmount: 1
+  MaximumItemDrops: 6
+  MinimumCurrency: 0
+  MaximumCurrency: 0

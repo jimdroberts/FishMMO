@@ -224,6 +224,17 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* An authored name is not generated at all. A zero seed is what both peers read as "keep
+			 * the current name" (see ApplyGeneratedName), so nothing is resolved, nothing is logged,
+			 * and the payload keeps its fixed five bytes. */
+			if (settings.Mode == SceneObjectNamingMode.Authored)
+			{
+				nameSeed = 0;
+				selectedGender = CharacterGender.Unspecified;
+				nameGenerated = true;
+				return;
+			}
+
 			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<IFactionController>());
 			nameSeed = SceneObjectNameResolver.DeriveSeed(settings, authoredName);
 			selectedGender = settings.Mode == SceneObjectNamingMode.Character

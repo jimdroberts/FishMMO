@@ -163,7 +163,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
+  destinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &336808840
 GameObject:
@@ -287,10 +287,9 @@ GameObject:
   m_Component:
   - component: {fileID: 352688523}
   - component: {fileID: 352688522}
-  - component: {fileID: 352688524}
   m_Layer: 0
   m_Name: Orc 2
-  m_TagString: Untagged
+  m_TagString: EditorOnly
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -307,30 +306,89 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 352688524}
-  _networkObjectCache: {fileID: 352688524}
-  Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  IsCacheDirty: 1
   InitialRespawnTime: 0
   InitialSpawnCount: 0
   MaxSpawnCount: 1
-  SpawnType: 0
+  UniqueSpawnables: 0
+  SpawnType: 2
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
   RandomSpawnPosition: 1
   SphereRadius: 0.5
-  BoundingBoxSize: {x: 1, y: 1, z: 1}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
+  BoundingBoxSize: {x: 1, y: 1.5, z: 1}
   Spawnables:
-  - rid: -2
+  - rid: 4707557207935025161
+  - rid: 4707557207935025162
+  - rid: 4707557207935025163
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 4707557207935025161
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025162
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.3
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025163
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.2
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
 --- !u!4 &352688523
 Transform:
   m_ObjectHideFlags: 0
@@ -346,58 +404,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &352688524
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 352688521}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
-  _predictionType: 0
-  _graphicalObject: {fileID: 0}
-  _detachGraphicalObject: 0
-  _enableStateForwarding: 0
-  _networkTransform: {fileID: 0}
-  _ownerInterpolation: 1
-  _ownerSmoothedProperties: 255
-  _adaptiveInterpolation: 3
-  _spectatorSmoothedProperties: 255
-  _spectatorInterpolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
-  <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 7921816910454355023
-  SerializedTransformProperties:
-    Position: {x: -101.91, y: 17.7, z: 26.68}
-    Rotation: {x: -0, y: -0, z: -0, w: 1}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
-  <IsNested>k__BackingField: 0
-  WasActiveDuringEdit: 1
-  WasActiveDuringEdit_Set1: 1
-  <ComponentIndex>k__BackingField: 0
-  <PredictedSpawn>k__BackingField: {fileID: 0}
-  <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
-  InitializedParentNetworkBehaviour: {fileID: 0}
-  InitializedNestedNetworkObjects: []
-  RuntimeParentNetworkBehaviour: {fileID: 0}
-  RuntimeChildNetworkBehaviours: []
-  _isNetworked: 1
-  _isSpawnable: 1
-  _isGlobal: 0
-  _initializeOrder: 0
-  _preventDespawnOnDisconnect: 0
-  _defaultDespawnType: 0
 --- !u!1 &412017732
 GameObject:
   m_ObjectHideFlags: 0
@@ -881,7 +887,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 560362197}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -933,7 +939,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -1953,10 +1959,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1149952039}
   - component: {fileID: 1149952038}
-  - component: {fileID: 1149952040}
   m_Layer: 0
   m_Name: Orc 3
-  m_TagString: Untagged
+  m_TagString: EditorOnly
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1973,30 +1978,89 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 1149952040}
-  _networkObjectCache: {fileID: 1149952040}
-  Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  IsCacheDirty: 1
   InitialRespawnTime: 0
   InitialSpawnCount: 0
   MaxSpawnCount: 1
-  SpawnType: 0
+  UniqueSpawnables: 0
+  SpawnType: 2
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
   RandomSpawnPosition: 1
   SphereRadius: 0.5
-  BoundingBoxSize: {x: 1, y: 1, z: 1}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
+  BoundingBoxSize: {x: 1, y: 1.5, z: 1}
   Spawnables:
-  - rid: -2
+  - rid: 4707557207935025158
+  - rid: 4707557207935025159
+  - rid: 4707557207935025160
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 4707557207935025158
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025159
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.3
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 4707557207935025160
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.2
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
 --- !u!4 &1149952039
 Transform:
   m_ObjectHideFlags: 0
@@ -2012,58 +2076,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1149952040
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1149952037}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
-  _predictionType: 0
-  _graphicalObject: {fileID: 0}
-  _detachGraphicalObject: 0
-  _enableStateForwarding: 0
-  _networkTransform: {fileID: 0}
-  _ownerInterpolation: 1
-  _ownerSmoothedProperties: 255
-  _adaptiveInterpolation: 3
-  _spectatorSmoothedProperties: 255
-  _spectatorInterpolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
-  <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 7921816913385748020
-  SerializedTransformProperties:
-    Position: {x: -93.273, y: 17.7, z: 22.58}
-    Rotation: {x: -0, y: -0, z: -0, w: 1}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
-  <IsNested>k__BackingField: 0
-  WasActiveDuringEdit: 1
-  WasActiveDuringEdit_Set1: 1
-  <ComponentIndex>k__BackingField: 0
-  <PredictedSpawn>k__BackingField: {fileID: 0}
-  <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
-  InitializedParentNetworkBehaviour: {fileID: 0}
-  InitializedNestedNetworkObjects: []
-  RuntimeParentNetworkBehaviour: {fileID: 0}
-  RuntimeChildNetworkBehaviours: []
-  _isNetworked: 1
-  _isSpawnable: 1
-  _isGlobal: 0
-  _initializeOrder: 0
-  _preventDespawnOnDisconnect: 0
-  _defaultDespawnType: 0
 --- !u!1 &1162279319
 GameObject:
   m_ObjectHideFlags: 0
@@ -2299,6 +2311,7 @@ Terrain:
   m_AllowAutoConnect: 1
   m_EnableHeightmapRayTracing: 1
   m_EnableTreesAndDetailsRayTracing: 0
+  m_EnableHeightmapLODFrustumCulling: 1
   m_TreeMotionVectorModeOverride: 3
 --- !u!4 &1327666855
 Transform:
@@ -2490,8 +2503,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   MaxClients: 6
+  MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
     type: 3}
+  Climate: {fileID: 0}
+  BiomeMap: {fileID: 0}
+  RuntimeTemperatureOffset: 0
+  RuntimeHumidityOffset: 0
 --- !u!4 &1334146826
 Transform:
   m_ObjectHideFlags: 0
@@ -3028,10 +3046,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1583805993}
   - component: {fileID: 1583805992}
-  - component: {fileID: 1583805994}
   m_Layer: 0
   m_Name: Chest
-  m_TagString: Untagged
+  m_TagString: EditorOnly
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -3048,27 +3065,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 1583805994}
-  _networkObjectCache: {fileID: 1583805994}
-  Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  IsCacheDirty: 1
   InitialRespawnTime: 0
   InitialSpawnCount: 0
   MaxSpawnCount: 1
+  UniqueSpawnables: 0
   SpawnType: 0
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
-  RandomSpawnPosition: 1
+  RespawnCheckIntervalMinimum: 3
+  RespawnCheckIntervalMaximum: 6
+  RandomSpawnPosition: 0
   SphereRadius: 0.5
   BoundingBoxSize: {x: 1, y: 1, z: 1}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
-  Spawnables: []
+  Spawnables:
+  - rid: 4707557207935025164
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 4707557207935025164
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: 48d5a903fd5eb581ba5235f674695571,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: 0
 --- !u!4 &1583805993
 Transform:
   m_ObjectHideFlags: 0
@@ -3078,64 +3105,12 @@ Transform:
   m_GameObject: {fileID: 1583805991}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -102.08, y: 17.7, z: 18.54}
+  m_LocalPosition: {x: -102.08, y: 17.2, z: 18.54}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1583805994
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1583805991}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
-  _predictionType: 0
-  _graphicalObject: {fileID: 0}
-  _detachGraphicalObject: 0
-  _enableStateForwarding: 0
-  _networkTransform: {fileID: 0}
-  _ownerInterpolation: 1
-  _ownerSmoothedProperties: 255
-  _adaptiveInterpolation: 3
-  _spectatorSmoothedProperties: 255
-  _spectatorInterpolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
-  <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 7921816910622845748
-  SerializedTransformProperties:
-    Position: {x: -102.08, y: 17.7, z: 18.54}
-    Rotation: {x: -0, y: -0, z: -0, w: 1}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
-  <IsNested>k__BackingField: 0
-  WasActiveDuringEdit: 1
-  WasActiveDuringEdit_Set1: 1
-  <ComponentIndex>k__BackingField: 0
-  <PredictedSpawn>k__BackingField: {fileID: 0}
-  <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
-  InitializedParentNetworkBehaviour: {fileID: 0}
-  InitializedNestedNetworkObjects: []
-  RuntimeParentNetworkBehaviour: {fileID: 0}
-  RuntimeChildNetworkBehaviours: []
-  _isNetworked: 1
-  _isSpawnable: 1
-  _isGlobal: 0
-  _initializeOrder: 0
-  _preventDespawnOnDisconnect: 0
-  _defaultDespawnType: 0
 --- !u!1 &1699450705
 GameObject:
   m_ObjectHideFlags: 0
@@ -3648,7 +3623,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1959955019}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1959955019}
   MaximumSimultaneousHits: 16
   AdditionalSize: 0.1
   Layers:

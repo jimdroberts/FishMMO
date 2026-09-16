@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
@@ -217,7 +218,7 @@ namespace FishMMO.Shared
 			/* The generic path creates one Editor for the asset, which for a prefab is the
 			 * GameObject header and nothing else. What a designer edits lives on components. */
 			AddNPCComponentSection(prefab.GetComponent<NPC>(), "NPC — loot, corpse, abilities");
-			AddNPCComponentSection(prefab.GetComponent<AIController>(), "AI Controller — archetype, boss script");
+			AddNPCBrainSection(prefab);
 			AddNPCComponentSection(prefab.GetComponent<FactionController>(), "Faction — race, aggression");
 			AddNPCComponentSection(prefab.GetComponent<CharacterAttributeController>(), "Attributes");
 			AddNPCComponentSection(prefab.GetComponent<Interactable>(), "Interaction");
@@ -305,7 +306,7 @@ namespace FishMMO.Shared
 			List<string> problems = new List<string>();
 			if (recipe.Archetype == null)
 			{
-				problems.Add("No AI archetype: the controller has no states and the NPC never ticks.");
+				problems.Add("No AI archetype in the brain catalogue: the NPC spawns with no states and never thinks.");
 			}
 			if (recipe.Race == null)
 			{
@@ -324,6 +325,35 @@ namespace FishMMO.Shared
 				problems.Add("Merchant with no merchant template: nothing to sell.");
 			}
 			return problems;
+		}
+
+		/// <summary>
+		/// Adds the brain fields: the archetype and boss script the server spawns this prefab with.
+		/// </summary>
+		/// <remarks>
+		/// Written straight to the server's <see cref="AIBrainCatalogue"/>, not to the prefab. The
+		/// prefab is shared with clients and carries no AI.
+		/// </remarks>
+		/// <param name="prefab">The NPC prefab.</param>
+		private void AddNPCBrainSection(GameObject prefab)
+		{
+			Foldout foldout = new Foldout();
+			foldout.text = "AI Brain — archetype, boss script (server catalogue)";
+			foldout.value = true;
+			foldout.AddToClassList("constants-section");
+
+			foldout.Add(NPCObjectField<AIArchetypeTemplate>("Archetype", AIBrainCatalogueEditorUtility.GetArchetype(prefab), value =>
+			{
+				AIBrainCatalogueEditorUtility.SetArchetype(prefab, value as AIArchetypeTemplate);
+				SetStatus($"Brain updated: {prefab.name}");
+			}));
+			foldout.Add(NPCObjectField<BossScript>("Boss Script", AIBrainCatalogueEditorUtility.GetBossScript(prefab), value =>
+			{
+				AIBrainCatalogueEditorUtility.SetBossScript(prefab, value as BossScript);
+				SetStatus($"Brain updated: {prefab.name}");
+			}));
+
+			inspectorContent.Add(foldout);
 		}
 
 		/// <summary>

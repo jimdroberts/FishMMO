@@ -6,13 +6,20 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Options a caller passes to <see cref="WaypointTravel.TryTravel"/>. The server's map request
-	/// uses the defaults; a designer's <see cref="TeleportToWaypointAction"/> may relax them.
+	/// uses <see cref="ForPlayerRequest"/>; a designer's <see cref="TeleportToWaypointAction"/> may
+	/// relax them.
 	/// </summary>
 	public readonly struct WaypointTravelOptions
 	{
-		/// <summary>The rules a player's own map request is held to.</summary>
-		public static readonly WaypointTravelOptions Default = new WaypointTravelOptions(
-			requireUnlocked: true, evaluateConditions: true, allowInCombat: false);
+		/// <summary>The rules a player's own map request is held to, under the shipped <see cref="WaypointTravelPolicy"/>.</summary>
+		public static readonly WaypointTravelOptions Default = ForPlayerRequest(WaypointTravelPolicy.Default);
+
+		/// <summary>The rules a player's own map request is held to, under <paramref name="policy"/>.</summary>
+		public static WaypointTravelOptions ForPlayerRequest(in WaypointTravelPolicy policy)
+		{
+			return new WaypointTravelOptions(requireUnlocked: true, evaluateConditions: true, allowInCombat: false,
+				requireNearbyWaypoint: policy.RequireNearbyWaypoint, nearbyRange: policy.NearbyRange);
+		}
 
 		/// <summary>Refuse unless the traveller has discovered the waypoint.</summary>
 		public readonly bool RequireUnlocked;
@@ -23,11 +30,32 @@ namespace FishMMO.Shared
 		/// <summary>Permit travel while flagged in combat. Off for anything a player initiates.</summary>
 		public readonly bool AllowInCombat;
 
+		/// <summary>
+		/// Refuse unless the traveller stands within <see cref="NearbyRange"/> of a waypoint in its
+		/// own scene instance. See <see cref="WaypointTravelPolicy"/>.
+		/// </summary>
+		public readonly bool RequireNearbyWaypoint;
+
+		/// <summary>The origin radius <see cref="RequireNearbyWaypoint"/> measures against, in metres.</summary>
+		public readonly float NearbyRange;
+
+		/// <summary>
+		/// Options with no origin requirement — the form a designer-authored move uses, since
+		/// working away from a waypoint is what an item or quest teleport is for.
+		/// </summary>
 		public WaypointTravelOptions(bool requireUnlocked, bool evaluateConditions, bool allowInCombat)
+			: this(requireUnlocked, evaluateConditions, allowInCombat, requireNearbyWaypoint: false, nearbyRange: WaypointTravelPolicy.DefaultNearbyRange)
+		{
+		}
+
+		public WaypointTravelOptions(bool requireUnlocked, bool evaluateConditions, bool allowInCombat,
+			bool requireNearbyWaypoint, float nearbyRange)
 		{
 			RequireUnlocked = requireUnlocked;
 			EvaluateConditions = evaluateConditions;
 			AllowInCombat = allowInCombat;
+			RequireNearbyWaypoint = requireNearbyWaypoint;
+			NearbyRange = WaypointTravelPolicy.ClampRange(nearbyRange);
 		}
 	}
 
@@ -50,12 +78,13 @@ namespace FishMMO.Shared
 		/// <param name="canAct">Whether the traveller may act at all (alive, loaded, not mid-transfer, not incapacitated).</param>
 		/// <param name="inCombat">Whether the traveller is flagged in combat.</param>
 		/// <param name="sameScene">Whether the waypoint stands in the traveller's own scene instance.</param>
+		/// <param name="nearWaypoint">Whether the traveller stands near a qualifying origin waypoint. Only read when <see cref="WaypointTravelOptions.RequireNearbyWaypoint"/> is set.</param>
 		/// <param name="unlocked">Whether the traveller has discovered the waypoint.</param>
 		/// <param name="conditionsMet">Whether the waypoint's travel conditions pass for the traveller.</param>
 		/// <param name="options">Which rules apply.</param>
 		/// <returns><see cref="WaypointTravelRefusalReason.None"/> when travel is permitted, else why not.</returns>
 		public static WaypointTravelRefusalReason Decide(bool canAct, bool inCombat, bool sameScene,
-			bool unlocked, bool conditionsMet, in WaypointTravelOptions options)
+			bool nearWaypoint, bool unlocked, bool conditionsMet, in WaypointTravelOptions options)
 		{
 			if (!canAct)
 			{
@@ -68,6 +97,10 @@ namespace FishMMO.Shared
 			if (!sameScene)
 			{
 				return WaypointTravelRefusalReason.NotInScene;
+			}
+			if (options.RequireNearbyWaypoint && !nearWaypoint)
+			{
+				return WaypointTravelRefusalReason.NotNearWaypoint;
 			}
 			if (options.RequireUnlocked && !unlocked)
 			{
@@ -108,9 +141,10 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			player.TryGet(out IWaypointController controller);
+
 			bool unlocked = false;
-			if (options.RequireUnlocked &&
-				player.TryGet(out IWaypointController controller))
+			if (options.RequireUnlocked && controller != null)
 			{
 				unlocked = controller.IsUnlocked(waypoint.SceneName, waypoint.WaypointIndex);
 			}
@@ -126,10 +160,26 @@ namespace FishMMO.Shared
 			bool sameScene = player.GameObject != null &&
 				player.GameObject.scene.handle == waypoint.GameObject.scene.handle;
 
+			/* The origin must be discovered whenever the destination must be: standing at a stone
+			 * the player never activated is not using it. A request that waives discovery waives
+			 * it for both ends. */
+			bool nearWaypoint = false;
+			if (options.RequireNearbyWaypoint && sameScene && player.Transform != null &&
+				(!options.RequireUnlocked || controller != null))
+			{
+				nearWaypoint = WaypointRegistry.TryFindNearest(
+					player.GameObject.scene.handle,
+					player.Transform.position,
+					options.NearbyRange,
+					options.RequireUnlocked ? controller : null,
+					out _);
+			}
+
 			reason = Decide(
 				canAct: CharacterStateValidation.CanAct(player),
 				inCombat: player.IsFlagged(CharacterFlags.IsInCombat),
 				sameScene: sameScene,
+				nearWaypoint: nearWaypoint,
 				unlocked: unlocked,
 				conditionsMet: conditionsMet,
 				options: options);

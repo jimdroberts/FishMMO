@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 54f2f51f4239422c845b3871ceae388d, type: 3}
+  m_Name: SpawnTableCatalogue
+  m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Spawner.SpawnTableCatalogue
+  Tables:
+  - {fileID: 11400000, guid: e33fb943e3679306abf47876b2a7d872, type: 2}
+  - {fileID: 11400000, guid: f23e4e47e1bcac9b18d2d3bee4159f51, type: 2}
+  - {fileID: 11400000, guid: 48e90ed169b30a433adb7716340a2cb0, type: 2}
+  - {fileID: 11400000, guid: e04a60db5b629dde0ab3ab264cdf946b, type: 2}

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using NUnit.Framework;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests.AI
@@ -74,7 +75,7 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void HighestThreatAgainstTheOwnerWins()
 		{
-			FishMMO.Shared.AggressionDispatcher.Clear();
+			AggressionDispatcher.Clear();
 			try
 			{
 				FishMMO.UnitTests.Harness.StubCharacter owner = new FishMMO.UnitTests.Harness.StubCharacter { ID = 1 };
@@ -82,27 +83,27 @@ namespace FishMMO.UnitTests.AI
 				FishMMO.UnitTests.Harness.StubCharacter furious = new FishMMO.UnitTests.Harness.StubCharacter { ID = 11 };
 				FishMMO.UnitTests.Harness.StubCharacter indifferent = new FishMMO.UnitTests.Harness.StubCharacter { ID = 12 };
 
-				FishMMO.Shared.AggressionState mildState = new FishMMO.Shared.AggressionState(mild);
-				FishMMO.Shared.AggressionState furiousState = new FishMMO.Shared.AggressionState(furious);
-				FishMMO.Shared.AggressionState indifferentState = new FishMMO.Shared.AggressionState(indifferent);
+				AggressionState mildState = new AggressionState(mild);
+				AggressionState furiousState = new AggressionState(furious);
+				AggressionState indifferentState = new AggressionState(indifferent);
 				mildState.Controller.RecordDamage(owner.ID, 5);
 				furiousState.Controller.RecordDamage(owner.ID, 50);
 				indifferentState.Controller.RecordDamage(99, 500);
 
-				bool found = FishMMO.Shared.AggressionDispatcher.TryFindHighestThreatAgainst(owner, null, out FishMMO.Shared.Core.ICharacter best);
+				bool found = AggressionDispatcher.TryFindHighestThreatAgainst(owner, null, out FishMMO.Shared.Core.ICharacter best);
 				LogAssert.IsTrue(found && ReferenceEquals(best, furious),
 					"the NPC the owner has attacked the most must win, and one that only hates someone else must not be considered");
 
-				bool filtered = FishMMO.Shared.AggressionDispatcher.TryFindHighestThreatAgainst(owner, c => !ReferenceEquals(c, furious), out best);
+				bool filtered = AggressionDispatcher.TryFindHighestThreatAgainst(owner, c => !ReferenceEquals(c, furious), out best);
 				LogAssert.IsTrue(filtered && ReferenceEquals(best, mild),
 					"a candidate the caller's rule refuses must yield to the next highest");
 
-				LogAssert.IsTrue(!FishMMO.Shared.AggressionDispatcher.TryFindHighestThreatAgainst(new FishMMO.UnitTests.Harness.StubCharacter { ID = 2 }, null, out _),
+				LogAssert.IsTrue(!AggressionDispatcher.TryFindHighestThreatAgainst(new FishMMO.UnitTests.Harness.StubCharacter { ID = 2 }, null, out _),
 					"a character nobody hates resolves nothing");
 			}
 			finally
 			{
-				FishMMO.Shared.AggressionDispatcher.Clear();
+				AggressionDispatcher.Clear();
 			}
 		}
 	}

@@ -257,6 +257,38 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		}
 
 		/// <summary>
+		/// Re-bakes every world scene's server-only spawn table before any addressables build, and
+		/// refuses to build while a spawner would reach the shared scene bundle.
+		/// </summary>
+		/// <remarks>
+		/// World scenes are one bundle for clients and servers alike. A spawner that is not tagged
+		/// <c>EditorOnly</c>, or still carries a network object, ships its configuration to every
+		/// player, so it stops the build rather than a warning nobody reads. Client builds bake too:
+		/// the scene bundle is shared, and the tables must match the scenes it was built from.
+		/// </remarks>
+		/// <exception cref="InvalidOperationException">A spawner would ship to clients.</exception>
+		private static void BakeSpawnTables()
+		{
+			List<string> problems = new List<string>();
+			List<string> blocking = new List<string>();
+
+			Log.Debug("BuildLogger", "Baking spawn tables...");
+			int baked = SpawnTableBaker.BakeAll(problems, blocking);
+
+			for (int i = 0; i < problems.Count; ++i)
+			{
+				Log.Warning("BuildLogger", problems[i]);
+			}
+
+			if (blocking.Count > 0)
+			{
+				throw new InvalidOperationException($"{blocking.Count} spawner(s) would ship to clients; fix them before building:\n  " + string.Join("\n  ", blocking));
+			}
+
+			Log.Debug("BuildLogger", $"Baked {baked} spawner(s).");
+		}
+
+		/// <summary>
 		/// Removes the baked world maps and their addressable group after a client build and
 		/// rebuilds the world scene details cache without them, so the project is left as it was
 		/// found.
@@ -303,6 +335,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				// assets, not code — the Server/Player distinction doesn't affect bundle content.
 				// Building with Server subtarget causes SBP failures.
 				configurator.Configure(StandaloneBuildSubtarget.Player, buildTarget);
+				BakeSpawnTables();
 				BakeWorldMaps(customBuildType);
 				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}

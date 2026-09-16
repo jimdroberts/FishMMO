@@ -8,6 +8,7 @@ using FishNet.Managing.Predicting;
 using FishNet.Object;
 using NUnit.Framework;
 using UnityEngine;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -158,8 +159,8 @@ namespace FishMMO.UnitTests
 			string[] sources =
 			{
 				"Assets/Scripts/Shared/Implementation/Entity/ECA/Actions/Character/ApplyThreatAction.cs",
-				"Assets/Scripts/Shared/Implementation/Entity/NPC/AI/BaseAIState.cs",
-				"Assets/Scripts/Shared/Implementation/Entity/NPC/AI/States/HealerAttackingState.cs",
+				"Assets/Scripts/Server/Implementation/World/SceneServer/AI/BaseAIState.cs",
+				"Assets/Scripts/Server/Implementation/World/SceneServer/AI/States/HealerAttackingState.cs",
 			};
 
 			/* Any GetComponent for an ICharacter reached off a collider. The three sites spelled it
@@ -202,7 +203,7 @@ namespace FishMMO.UnitTests
 			string[] mustDedupe =
 			{
 				"Assets/Scripts/Shared/Implementation/Entity/ECA/Actions/Character/ApplyThreatAction.cs",
-				"Assets/Scripts/Shared/Implementation/Entity/NPC/AI/BaseAIState.cs",
+				"Assets/Scripts/Server/Implementation/World/SceneServer/AI/BaseAIState.cs",
 			};
 
 			for (int i = 0; i < mustDedupe.Length; ++i)

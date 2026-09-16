@@ -167,7 +167,7 @@ namespace FishMMO.Shared
 		/// rewind path. This hook lets the harness say "treat this caster as a client that claims
 		/// this view offset" so <see cref="ResolveAnchor"/> and <c>CharacterPositionHistory</c>
 		/// run for real, with synthetic 0–500ms claims. Internal, and visible only to
-		/// FishMMO.TestHarness via InternalsVisibleTo; delete alongside that folder.
+		/// the FishMMO.TestHarness assemblies via InternalsVisibleTo; delete alongside that folder.
 		/// </remarks>
 		internal static System.Func<ICharacter, (byte ticks, byte fraction)?> ClaimOverride;
 
@@ -209,13 +209,13 @@ namespace FishMMO.Shared
 			}
 
 			/* A server-driven character compensates nothing, and ownership alone does not identify
-			 * one: a pet is owned by the connection that summoned it while a server-side AIController
+			 * one: a pet is owned by the connection that summoned it while a server-side brain
 			 * writes its input. The owner check above lets monsters out because they are ownerless;
 			 * this lets pets out for the real reason. Today a pet also carries no KCCPlayer, so
 			 * nothing ever writes its ViewOffsetTicks and the zero check below would catch it — but
 			 * that is a property of the current prefabs, not a rule, and rewinding an NPC's targets
 			 * away from where its brain aimed is silent when it happens. */
-			if (nob.TryGetComponent(out IAIController _))
+			if (nob.TryGetComponent(out NPC _))
 			{
 				return false;
 			}

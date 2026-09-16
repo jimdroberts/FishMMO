@@ -138,6 +138,13 @@ refusal re-enables it with the reason; an arrival closes the map. The panel has 
 `UITKMap.OnFastTravelClicked` for anything else that wants the click. Only the current scene's
 waypoints are shown or travelable; other scenes wait for the world-map system.
 
+When the server's `WaypointTravelPolicy` requires it (the default, issue #253), the button is also
+disabled unless the character stands within the policy's range of a waypoint it has discovered, and
+the hint says so. The map still opens anywhere for looking. The policy reaches the client in the
+`WaypointController` owner payload (`IWaypointController.TravelPolicy`); the check runs against the
+baked `WorldSceneDetails.Waypoints` positions on the refresh tick, so walking up to a waypoint with
+the map open enables the button. It is a hint only — the server refuses with `NotNearWaypoint`.
+
 ## The anti-radar story, briefly
 
 The observer system decides which entities exist on a client at all; nothing without a GameObject

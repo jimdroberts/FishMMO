@@ -47,6 +47,13 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		static Action<ICharacter, string, int> OnWaypointMapRequested;
 
+		/// <summary>
+		/// The origin rule travel is held to. On the server, the process's own
+		/// <c>WaypointTravelPolicy.Server</c>; on the owner client, the copy the server sent in the
+		/// spawn payload, which the map uses to say "go to a waypoint" before the player clicks.
+		/// </summary>
+		FishMMO.Shared.WaypointTravelPolicy TravelPolicy { get; }
+
 		/// <summary>Every scene the character has at least one unlocked waypoint in.</summary>
 		IReadOnlyCollection<string> UnlockedScenes { get; }
 

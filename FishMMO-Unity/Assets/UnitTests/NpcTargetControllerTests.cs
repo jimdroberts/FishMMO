@@ -2,6 +2,7 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -155,7 +156,7 @@ namespace FishMMO.UnitTests
 		public void AttackCooldownIsArmedOnlyWhenActivateQueued()
 		{
 			string state = ReadSource(Path.Combine(Scripts,
-				"Implementation/Entity/NPC/AI/States/BaseAttackingState.cs"));
+				"../Server/Implementation/World/SceneServer/AI/States/BaseAttackingState.cs"));
 
 			int activate = state.IndexOf("if (!abilityController.Activate(ability.ID, held))", System.StringComparison.Ordinal);
 			int arm = state.IndexOf("controller.AttackCooldownTimer = AttackCooldown + jitter;", System.StringComparison.Ordinal);

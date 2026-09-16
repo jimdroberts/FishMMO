@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FishMMO.Shared;
 using FishNet.Serializing;
 using NUnit.Framework;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 using UnityLogAssert = UnityEngine.TestTools.LogAssert;
 

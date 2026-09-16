@@ -104,7 +104,7 @@ namespace FishMMO.TestHarness
 		/// <summary>
 		/// Instantiates a character prefab under an inactive parent (so the caller can add or
 		/// configure components before <c>BaseCharacter.Awake</c> registers behaviours), then
-		/// activates and network-spawns it server-owned, the way <c>ObjectSpawner</c> does.
+		/// activates and network-spawns it server-owned, the way the server's spawners do.
 		/// </summary>
 		/// <param name="prefab">The character prefab.</param>
 		/// <param name="position">Spawn position.</param>
@@ -113,7 +113,7 @@ namespace FishMMO.TestHarness
 		/// <param name="configure">Runs while the clone is still inactive.</param>
 		/// <param name="afterActivate">Runs once active but before the network spawn — where
 		/// anything that needs a live component but must precede <c>OnStartServer</c> goes
-		/// (<c>AIController.Initialize</c>, which warps the NavMeshAgent, is the example).</param>
+		/// (preparing the NPC brain, which warps the NavMeshAgent, is the example).</param>
 		public GameObject Spawn(GameObject prefab, Vector3 position, Quaternion rotation,
 			UnityEngine.SceneManagement.Scene scene, System.Action<GameObject> configure = null,
 			System.Action<GameObject> afterActivate = null)

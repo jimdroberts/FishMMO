@@ -1,21 +1,23 @@
-﻿using FishNet.Object;
+using FishNet.Object;
 
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// Interface for spawnable entities managed by an ObjectSpawner. Provides access to spawner, settings, network object, unique ID, and despawn logic.
+	/// An entity a server-side spawner creates and recycles: NPCs, world items, gathering nodes,
+	/// containers.
 	/// </summary>
+	/// <remarks>
+	/// The spawner itself lives in the server assembly, so the entity holds it only as an
+	/// <see cref="ISpawnOwner"/>. What the entity was spawned from is the spawner's bookkeeping,
+	/// not the entity's, and is kept there.
+	/// </remarks>
 	public interface ISpawnable
 	{
 		/// <summary>
-		/// The ObjectSpawner responsible for spawning and managing this entity.
+		/// The spawner that created this entity and schedules its respawn, or null when it was
+		/// placed any other way.
 		/// </summary>
-		ObjectSpawner ObjectSpawner { get; set; }
-
-		/// <summary>
-		/// The settings used to configure this spawnable entity.
-		/// </summary>
-		SpawnableSettings SpawnableSettings { get; set; }
+		ISpawnOwner Spawner { get; set; }
 
 		/// <summary>
 		/// The network object associated with this entity for network synchronization.

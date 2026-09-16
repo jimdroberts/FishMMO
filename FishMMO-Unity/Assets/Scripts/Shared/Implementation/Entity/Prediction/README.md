@@ -144,7 +144,7 @@ When a new subsystem needs to carry data through the prediction pipeline:
 | Execution order | Sorted by `IPredictableController.Order` ascending — lower values run first |
 | Tick binding | Subscribes to `TimeManager.OnPreTick` and `OnTick` on `OnStartNetwork()`, unsubscribes on `OnStopNetwork()` |
 | Tick snapshots | `CurrentLocalTickSnapshot`, `CurrentReplicateTickSnapshot` and `PendingReplicateTickSnapshot` are published so consumers that run before this behaviour's own tick callback (ability objects, region triggers) do not observe the previous tick's value |
-| Input authority | `HasInputAuthority` — an AI character answers "the server", everyone else "the owning client". Ownership alone cannot answer it: a monster is server-owned with no owning connection, while a pet is owned by the summoner's connection yet driven entirely by a server-side `AIController`. |
+| Input authority | `HasInputAuthority` — an AI character answers "the server", everyone else "the owning client". Ownership alone cannot answer it: a monster is server-owned with no owning connection, while a pet is owned by the summoner's connection yet driven entirely by a server-side `AIController`. Decided by the character's type (`NPC`, which pets derive from), never by the presence of a brain component: the brain only exists on the server, so a component check would hand a pet's input to its owner's client. |
 | Observer transport | `ApplyObserverTransportMode` silences the `NetworkTransform` only when prediction genuinely moves the character (a `KCCPlayer` is present) **and** state forwarding is on. An NPC runs the same pipeline but is moved by a NavMeshAgent, so its `MotorState` is default every tick and the transform is the only thing moving it. |
 
 ### CharacterReplicateData
@@ -444,8 +444,9 @@ or rubber banding" report (issue #176):
 - **Positions pack to 24 bits at 1 cm** (FISHMMO EDIT in `NetworkTransform`, multiplier 100 on
   every prefab). The wire grid must stay well under a walking character's per-tick displacement
   (5 cm at 30 Hz); the 10 cm grid tried before rendered a walk as alternating stalls and hops.
-- **The NavMeshAgent is disabled on clients** (`AIController.OnStartNetwork`). Left enabled it
-  re-maps the interpolated transform onto the client's NavMesh every frame.
+- **Clients have no NavMeshAgent at all.** The agent arrives with the server-side brain, which
+  `AIBrainHost` adds only when the server spawns an NPC. An agent on a client would re-map the
+  interpolated transform onto the client's NavMesh every frame.
 
 The one thing genuinely broken by forwarding-off is a character with nothing to replicate position —
 `CharacterPredictionController.OnStartNetwork` warns for a predicted object with no

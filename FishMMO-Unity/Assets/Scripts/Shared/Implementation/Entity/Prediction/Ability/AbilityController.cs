@@ -575,7 +575,7 @@ namespace FishMMO.Shared
 		/// </para>
 		/// <para>
 		/// Without this, nothing ever wrote those fields for an NPC and the aim a client used came
-		/// from <c>AIController</c> — which disables itself off the server. Every observing client
+		/// from the AI controller — which never runs off the server. Every observing client
 		/// therefore resolved an NPC's aim from a default-initialised controller and spawned its
 		/// ability objects at the world origin pointing down +Z, while the server span them
 		/// correctly. Replicating the aim is what lets a client reproduce the shot the server took.
@@ -588,7 +588,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			if (!Character.TryGet(out IAIController ai))
+			if (!Character.TryGet(out INPCBrain ai))
 			{
 				return;
 			}

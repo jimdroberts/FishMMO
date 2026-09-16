@@ -5,6 +5,7 @@ using UnityEngine;
 using FishNet.Serializing;
 using FishMMO.Shared;
 using NUnit.Framework;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests
 {

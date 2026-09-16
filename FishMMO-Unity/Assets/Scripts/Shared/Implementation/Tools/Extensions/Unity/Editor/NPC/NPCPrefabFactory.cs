@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
@@ -177,8 +178,7 @@ namespace FishMMO.Shared
 			{
 				return KIND_PET;
 			}
-			AIController ai = prefab.GetComponent<AIController>();
-			if (ai != null && ai.BossScript != null)
+			if (AIBrainCatalogueEditorUtility.GetBossScript(prefab) != null)
 			{
 				return KIND_BOSS;
 			}
@@ -288,11 +288,8 @@ namespace FishMMO.Shared
 				recipe.Abilities.AddRange(npc.Abilities);
 			}
 
-			AIController ai = prefab.GetComponent<AIController>();
-			if (ai != null)
-			{
-				recipe.Archetype = ai.Archetype;
-			}
+			// The brain is server data, kept in the catalogue rather than on the prefab.
+			recipe.Archetype = AIBrainCatalogueEditorUtility.GetArchetype(prefab);
 
 			CharacterAttributeController attributes = prefab.GetComponent<CharacterAttributeController>();
 			if (attributes != null)
@@ -391,7 +388,7 @@ namespace FishMMO.Shared
 
 			if (recipe.Archetype == null)
 			{
-				problems.Add("No AI archetype. The controller reads every state from it; without one the NPC spawns and never ticks.");
+				problems.Add("No AI archetype. The brain reads every state from it; without one the NPC spawns and never thinks.");
 			}
 
 			if (recipe.AttributeDatabase == null)
@@ -484,6 +481,17 @@ namespace FishMMO.Shared
 			AssetDatabase.Refresh();
 
 			GameObject created = AssetDatabase.LoadAssetAtPath<GameObject>(targetPath);
+
+			/* The brain goes in the server's catalogue: the prefab is shared with clients and carries
+			 * no AI. A copied boss keeps its encounter script, the same way it keeps everything else
+			 * it was cloned from. */
+			AIBrainCatalogueEditorUtility.SetArchetype(created, recipe.Archetype);
+			BossScript baseBoss = AIBrainCatalogueEditorUtility.GetBossScript(recipe.BasePrefab);
+			if (baseBoss != null)
+			{
+				AIBrainCatalogueEditorUtility.SetBossScript(created, baseBoss);
+			}
+
 			Debug.Log($"[{LOG}] Created NPC prefab '{targetPath}' from '{basePath}'.");
 			return created;
 		}
@@ -516,12 +524,6 @@ namespace FishMMO.Shared
 			if (attributes != null)
 			{
 				attributes.CharacterAttributeDatabase = recipe.AttributeDatabase;
-			}
-
-			AIController ai = root.GetComponent<AIController>();
-			if (ai != null)
-			{
-				ai.Archetype = recipe.Archetype;
 			}
 
 			FactionController faction = root.GetComponent<FactionController>();

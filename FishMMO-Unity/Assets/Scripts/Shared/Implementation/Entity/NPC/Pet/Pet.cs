@@ -24,13 +24,24 @@ namespace FishMMO.Shared
 		public PetAbilityTemplate PetAbilityTemplate;
 
 		/// <summary>
+		/// Raised whenever a pet's <see cref="PetOwner"/> changes; the owner is null when the link
+		/// is cleared.
+		/// </summary>
+		/// <remarks>
+		/// The server's threat dispatcher listens so that threat against either member of the pair
+		/// is threat against both. It lives in the server assembly, which shared code cannot call.
+		/// </remarks>
+		public static event Action<Pet, ICharacter> OnPetOwnerChanged;
+
+		/// <summary>
 		/// The character that owns this pet.
 		/// </summary>
 		/// <remarks>
-		/// Setting it also declares the pair to <see cref="AggressionDispatcher"/>, so that from
-		/// then on threat against either is threat against both: hit the owner and the pet
-		/// answers, hit the pet and the owner answers. Clearing it (dismissal, death, pool reset)
-		/// removes the link again. Any owner qualifies; an NPC handed a pet gets the same rule.
+		/// Setting it also declares the pair to the server's threat dispatcher (through
+		/// <see cref="OnPetOwnerChanged"/>), so that from then on threat against either is threat
+		/// against both: hit the owner and the pet answers, hit the pet and the owner answers.
+		/// Clearing it (dismissal, death, pool reset) removes the link again. Any owner qualifies;
+		/// an NPC handed a pet gets the same rule.
 		/// </remarks>
 		public ICharacter PetOwner
 		{
@@ -43,14 +54,7 @@ namespace FishMMO.Shared
 				}
 
 				petOwner = value;
-				if (value != null)
-				{
-					AggressionDispatcher.LinkPet(this, value);
-				}
-				else
-				{
-					AggressionDispatcher.UnlinkPet(this);
-				}
+				OnPetOwnerChanged?.Invoke(this, value);
 			}
 		}
 
@@ -317,7 +321,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// A pet's lifetime is tied to its owner rather than to an <see cref="ObjectSpawner"/>, so
+		/// A pet's lifetime is tied to its owner rather than to a spawner, so
 		/// it skips the corpse timer and despawns through the network manager directly.
 		/// <see cref="NPC.ReturnToPool"/> routes through the spawner, which a pet does not have,
 		/// so the previous implementation called it and silently did nothing.

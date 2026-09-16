@@ -1,25 +1,38 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 
 namespace FishMMO.UnitTests.AI
 {
 	/// <summary>
-	/// Pins crowd avoidance OFF on every NPC prefab (issue #220): the NavMesh crowd is global
+	/// Pins crowd avoidance OFF on every NPC's agent (issue #220): the NavMesh crowd is global
 	/// across stacked scene instances, so avoidance made NPCs dodge NPCs in other instances.
-	/// AISeparation and AICombatSlots space them instead. Read from YAML, and enforced in code by
-	/// AIController.InitializeOnce as well, so this pins the authored intent.
+	/// AISeparation and AICombatSlots space them instead.
 	/// </summary>
+	/// <remarks>
+	/// The agent is no longer authored on the prefab: the server adds it with the brain at spawn,
+	/// so the setting is pinned where it is made — <c>AIController.InitializeOnce</c> — and the
+	/// prefabs are pinned to carry no agent that could disagree with it.
+	/// </remarks>
 	[TestFixture]
 	public class NpcAgentAvoidanceTests
 	{
 		[Test]
-		public void EveryNavMeshAgentPrefab_HasObstacleAvoidanceOff()
+		public void TheBrainTurnsCrowdAvoidanceOff()
+		{
+			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(),
+				"Assets/Scripts/Server/Implementation/World/SceneServer/AI/AIController.cs"));
+
+			Assert.That(source, Does.Contain("Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;"),
+				"the brain must switch crowd avoidance off on the agent it runs");
+		}
+
+		[Test]
+		public void NoPrefab_AuthorsANavMeshAgent()
 		{
 			List<string> offenders = new List<string>();
-			int checkedCount = 0;
+			int scanned = 0;
 
 			foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Prefabs" }))
 			{
@@ -28,23 +41,16 @@ namespace FishMMO.UnitTests.AI
 				{
 					continue;
 				}
-				string text = File.ReadAllText(path);
-				if (!text.Contains("\nNavMeshAgent:"))
+				scanned++;
+				if (File.ReadAllText(path).Contains("\nNavMeshAgent:"))
 				{
-					continue;
-				}
-				checkedCount++;
-				foreach (Match m in Regex.Matches(text, @"^\s+m_ObstacleAvoidanceType:\s*(\d+)\s*$", RegexOptions.Multiline))
-				{
-					if (m.Groups[1].Value != "0")
-					{
-						offenders.Add(path);
-					}
+					offenders.Add(path);
 				}
 			}
 
-			Assert.That(checkedCount, Is.GreaterThan(0), "no NavMeshAgent prefabs found; the pin is vacuous");
-			Assert.That(offenders, Is.Empty, "NavMeshAgent.obstacleAvoidanceType must be NoObstacleAvoidance on NPCs");
+			Assert.That(scanned, Is.GreaterThan(0), "no prefabs found; the pin is vacuous");
+			Assert.That(offenders, Is.Empty,
+				"a NavMeshAgent is server-only and added with the brain at spawn; authored on a prefab it ships to clients");
 		}
 	}
 }

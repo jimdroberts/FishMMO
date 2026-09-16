@@ -135,6 +135,7 @@ namespace FishMMO.Client
 		private const string NAMEPLATE_MAX_VALUE_NAME = "nameplate-max-value";
 		private const string NAMEPLATE_SHOW_GUILD_NAME = "nameplate-show-guild-toggle";
 		private const string NAMEPLATE_SHOW_TITLES_NAME = "nameplate-show-titles-toggle";
+		private const string NAMEPLATE_SHOW_ICONS_NAME = "nameplate-show-icons-toggle";
 		private const string COLOR_LIST_NAME = "options-color-list";
 		private const string RESET_COLORS_NAME = "options-reset-colors-btn";
 		private const string CONTROLS_LIST_NAME = "options-controls-list";
@@ -464,6 +465,7 @@ namespace FishMMO.Client
 		private Label nameplateMaxValueLabel;
 		private Toggle nameplateShowGuildToggle;
 		private Toggle nameplateShowTitlesToggle;
+		private Toggle nameplateShowIconsToggle;
 		private VisualElement colorList;
 		private Button resetColorsButton;
 		private VisualElement controlsList;
@@ -642,6 +644,7 @@ namespace FishMMO.Client
 			nameplateMaxValueLabel = Root.Q<Label>(NAMEPLATE_MAX_VALUE_NAME);
 			nameplateShowGuildToggle = Root.Q<Toggle>(NAMEPLATE_SHOW_GUILD_NAME);
 			nameplateShowTitlesToggle = Root.Q<Toggle>(NAMEPLATE_SHOW_TITLES_NAME);
+			nameplateShowIconsToggle = Root.Q<Toggle>(NAMEPLATE_SHOW_ICONS_NAME);
 			colorList = Root.Q<VisualElement>(COLOR_LIST_NAME);
 			resetColorsButton = Root.Q<Button>(RESET_COLORS_NAME);
 			controlsList = Root.Q<VisualElement>(CONTROLS_LIST_NAME);
@@ -2102,6 +2105,13 @@ namespace FishMMO.Client
 				nameplateShowTitlesToggle.SetValueWithoutNotify(ClientNameplateSettings.ShowTitles);
 				nameplateShowTitlesToggle.RegisterValueChangedCallback((evt) =>
 					ClientNameplateSettings.SetShowTitles(evt.newValue));
+			}
+
+			if (nameplateShowIconsToggle != null)
+			{
+				nameplateShowIconsToggle.SetValueWithoutNotify(ClientNameplateSettings.ShowIcons);
+				nameplateShowIconsToggle.RegisterValueChangedCallback((evt) =>
+					ClientNameplateSettings.SetShowIcons(evt.newValue));
 			}
 		}
 

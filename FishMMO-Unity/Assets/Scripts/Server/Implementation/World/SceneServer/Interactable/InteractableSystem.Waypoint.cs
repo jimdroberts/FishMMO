@@ -26,7 +26,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// <para>The request is validated end to end on the server: the scene the client's map was
 	/// showing must be the scene the character is in, the waypoint must be live in that scene
 	/// instance, and <see cref="WaypointTravel.TryTravel"/> applies the rules (can act, not in
-	/// combat, discovered, conditions). Every refusal is reported to the owner so the map can
+	/// combat, standing at a discovered waypoint when <see cref="requireNearbyWaypointForTravel"/>
+	/// is on, discovered, conditions). Every refusal is reported to the owner so the map can
 	/// re-enable its button and say why.</para>
 	/// </remarks>
 	public partial class InteractableSystem
@@ -38,12 +39,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		[Tooltip("Minimum milliseconds between fast-travel requests from one connection.")]
 		[SerializeField] private int waypointTravelDebounceMilliseconds = 2000;
 
+		[Tooltip("Game rule (issue #253): a player may only fast travel while standing near a waypoint they have discovered in the same scene. " +
+			"Turn off to allow fast travel from anywhere. Item and quest teleports (TeleportToWaypointAction) are never bound by it.")]
+		[SerializeField] private bool requireNearbyWaypointForTravel = WaypointTravelPolicy.DefaultRequireNearbyWaypoint;
+
+		[Tooltip("How near, in metres, a player must stand to a discovered waypoint to fast travel. A waypoint's interaction range is 3.5. Ignored when the rule above is off.")]
+		[SerializeField] private float waypointTravelOriginRange = WaypointTravelPolicy.DefaultNearbyRange;
+
 		/// <summary>Scratch list for collecting dirty pages on the main thread.</summary>
 		private readonly List<WaypointPageSnapshot> waypointPageScratch = new List<WaypointPageSnapshot>();
 
 		private void InitializeWaypoints()
 		{
 			waypointTravelDebounceMilliseconds = Mathf.Max(0, waypointTravelDebounceMilliseconds);
+			waypointTravelOriginRange = WaypointTravelPolicy.ClampRange(waypointTravelOriginRange);
+
+			/* Installed before any character can spawn: the owner's spawn payload carries it, so the
+			 * map knows the rule before the player first opens it. */
+			WaypointTravelPolicy.Server = new WaypointTravelPolicy(requireNearbyWaypointForTravel, waypointTravelOriginRange);
+			Log.Debug("InteractableSystem", $"Waypoint travel: RequireNearbyWaypoint={requireNearbyWaypointForTravel}, OriginRange={waypointTravelOriginRange}m");
 
 			Server.NetworkWrapper.RegisterBroadcast<WaypointTravelRequestBroadcast>(OnServerWaypointTravelRequestBroadcastReceived, true);
 
@@ -57,6 +71,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			IWaypointController.OnWaypointUnlocked -= IWaypointController_OnWaypointUnlocked;
 			IWaypointController.OnWaypointTravelled -= IWaypointController_OnWaypointTravelled;
+
+			WaypointTravelPolicy.Server = WaypointTravelPolicy.Default;
 		}
 
 		/// <summary>
@@ -107,7 +123,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				// On success TryTravel raises OnWaypointTravelled, which tells the owner below.
-				if (!WaypointTravel.TryTravel(character, waypoint, WaypointTravelOptions.Default, out WaypointTravelRefusalReason reason))
+				WaypointTravelOptions options = WaypointTravelOptions.ForPlayerRequest(WaypointTravelPolicy.Server);
+				if (!WaypointTravel.TryTravel(character, waypoint, options, out WaypointTravelRefusalReason reason))
 				{
 					SendWaypointTravelRefused(character, msg.WaypointIndex, reason);
 				}

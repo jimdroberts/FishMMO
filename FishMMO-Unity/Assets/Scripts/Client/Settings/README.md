@@ -98,7 +98,7 @@ files.
 | Gameplay | `ShowDamage`, `ShowHeals`, `ShowAchievementCompletion`, `IgnorePartyInvites`, `IgnoreGuildInvites` |
 | Crosshair | `Crosshair.Enabled`, `Crosshair.Style`, `Crosshair.Size`, `Crosshair.Opacity` |
 | World labels | `WorldLabels.Scale`, `WorldLabels.Distance`, `WorldLabels.Opacity`, `WorldLabels.MaxVisible`, `WorldLabels.Occlude`, `WorldLabels.NpcNameRange`, `WorldLabels.PlayerNameRange`, `WorldLabels.ShowOwnName` |
-| Nameplates | `Nameplates.Opacity`, `Nameplates.Scale`, `Nameplates.BackgroundOpacity`, `Nameplates.MaxVisible`, `Nameplates.ShowGuild`, `Nameplates.ShowTitles` |
+| Nameplates | `Nameplates.Opacity`, `Nameplates.Scale`, `Nameplates.BackgroundOpacity`, `Nameplates.MaxVisible`, `Nameplates.ShowGuild`, `Nameplates.ShowTitles`, `Nameplates.ShowIcons` |
 | Map | `Map.MinimapZoom`, `Map.MinimapRotates`, `Map.MinimapFrameRate`, `Map.ShowCoordinates` |
 | Interface | `UI.Scale`, `UI.SnapGridSize`, `UI.Panel.<PanelName>.X` / `.Y`, `UIThemeVersion`, `<Name>ColorR/G/B/A` |
 | Input | `InputBindingOverrides` (the Input System's override JSON) |
@@ -273,7 +273,7 @@ only a player who moves something changes anything.
 | Model | Consumer | What it owns |
 |---|---|---|
 | `ClientCrosshairSettings` | `UITKCrosshair` | `Enabled`, `Style` (`Cross` / `Dot` / `Circle`, applied as one of `StyleClasses` on the icon), `Size` (4–32 pt, default 8), `Opacity` (0.1–1) |
-| `ClientNameplateSettings` | `UITKNameplateLayer` | `Opacity` (0.2–1), `Scale` (0.5–2), `BackgroundOpacity` (0–1, a multiplier on each style's own opacity), `MaxVisible` (8–256, default 64), `ShowGuild`, `ShowTitles` |
+| `ClientNameplateSettings` | `UITKNameplateLayer` | `Opacity` (0.2–1), `Scale` (0.5–2), `BackgroundOpacity` (0–1, a multiplier on each style's own opacity), `MaxVisible` (8–256, default 64), `ShowGuild`, `ShowTitles`, `ShowIcons` |
 | `ClientWorldLabelSettings` | `UITKWorldLabelLayer`, and `ClientNameplateDisplay` for the three visibility rules | `Scale` (0.5–2), `Distance` (10–200 m, default 80), `Opacity` (0.2–1), `MaxVisible` (16–256, default 64), `Occlude` (default off), `NpcNameRange` / `PlayerNameRange` (0–200 m, default 30; zero means target only), `ShowOwnName` |
 
 **Why nameplates and world labels are split.** They are drawn by different layers with separate

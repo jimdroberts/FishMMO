@@ -8,3 +8,6 @@ using System.Runtime.CompilerServices;
 // pieces the network stack normally drives — KCCPlatform.Step and friends — so it
 // gets the same internals access the unit tests have. Delete alongside that folder.
 [assembly: InternalsVisibleTo("FishMMO.TestHarness")]
+// The combat sim runs NPC brains, which live in the server assembly, so it builds into the
+// server-side harness assembly and needs the same access (LagCompensationTick.ClaimOverride).
+[assembly: InternalsVisibleTo("FishMMO.TestHarness.Server")]

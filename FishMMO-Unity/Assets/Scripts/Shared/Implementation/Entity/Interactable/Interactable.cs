@@ -86,14 +86,9 @@ namespace FishMMO.Shared
 #pragma warning restore CS0414
 
 		/// <summary>
-		/// Reference to the object spawner responsible for spawning/despawning this object.
+		/// The server-side spawner responsible for spawning/despawning this object, or null.
 		/// </summary>
-		public ObjectSpawner ObjectSpawner { get; set; }
-
-		/// <summary>
-		/// Settings for spawning this object (e.g., prefab, spawn rules).
-		/// </summary>
-		public SpawnableSettings SpawnableSettings { get; set; }
+		public ISpawnOwner Spawner { get; set; }
 
 		/// <summary>
 		/// Unique ID for this interactable object (used for network sync).
@@ -309,7 +304,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Routes through the owning <see cref="ObjectSpawner"/> when there is one, so the spawner
+		/// Routes through the owning <see cref="Spawner"/> when there is one, so the spawner
 		/// can schedule a respawn. Falls back to despawning directly otherwise.
 		/// </para>
 		/// <para>
@@ -323,7 +318,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public void Despawn()
 		{
-			ObjectSpawner spawner = ObjectSpawner;
+			ISpawnOwner spawner = Spawner;
 			if (spawner != null)
 			{
 				spawner.Despawn(this);
@@ -345,7 +340,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			OnDespawn = null;
-			SpawnableSettings = null;
+			Spawner = null;
 		}
 
 		/// <summary>

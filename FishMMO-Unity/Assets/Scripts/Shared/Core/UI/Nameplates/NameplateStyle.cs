@@ -20,7 +20,22 @@ namespace FishMMO.Shared.Core
 	}
 
 	/// <summary>
-	/// How a nameplate is drawn: its type, its background, its border and its box.
+	/// Where a nameplate's icon sits relative to its rows.
+	/// </summary>
+	public enum NameplateIconPlacement : byte
+	{
+		/// <summary>Left of the rows, centred on the plate's height.</summary>
+		Left = 0,
+
+		/// <summary>Right of the rows, centred on the plate's height.</summary>
+		Right = 1,
+
+		/// <summary>Above the top row, centred on the plate's width.</summary>
+		Above = 2,
+	}
+
+	/// <summary>
+	/// How a nameplate is drawn: its type, its background, its border, its box and its icon.
 	/// </summary>
 	/// <remarks>
 	/// <para>A value type, so a style read from an asset cannot be mutated through the plate that
@@ -169,6 +184,49 @@ namespace FishMMO.Shared.Core
 		/// </remarks>
 		public float AnchorGap;
 
+		// ── Icon ────────────────────────────────────────────────────
+
+		/// <summary>
+		/// An optional icon drawn on the plate: a skull for a boss, a mark for a quest giver.
+		/// Null draws none, which is the default.
+		/// </summary>
+		/// <remarks>
+		/// Part of the style rather than of the plate so a shared look carries it: "every boss
+		/// gets a skull" is one field on one <see cref="NameplateStyleAsset"/>. A plate that needs
+		/// an icon of its own at runtime overrides this with <see cref="Nameplate.SetIcon"/>.
+		/// </remarks>
+		public Sprite Icon;
+
+		/// <summary>Where the icon sits relative to the rows.</summary>
+		public NameplateIconPlacement IconPlacement;
+
+		/// <summary>
+		/// The icon's edge length, in points at <see cref="ReferenceFontSize"/>. Zero matches the
+		/// name row's height.
+		/// </summary>
+		/// <remarks>
+		/// Zero is a real setting rather than "unset" because an icon the height of the name is
+		/// what almost every plate wants, and it should follow <see cref="LineHeight"/> when that
+		/// is tuned instead of needing a second number kept in step with it.
+		/// </remarks>
+		public float IconSize;
+
+		/// <summary>The gap between the icon and the rows, in points at <see cref="ReferenceFontSize"/>.</summary>
+		public float IconSpacing;
+
+		/// <summary>
+		/// Where the icon's tint comes from. <see cref="NameplateTint.Fixed"/> draws the sprite in
+		/// its own colours.
+		/// </summary>
+		public NameplateTint IconTint;
+
+		/// <summary>
+		/// How far the icon moves toward the alliance tint when <see cref="IconTint"/> is
+		/// <see cref="NameplateTint.Alliance"/>. The tint multiplies the sprite, so a white glyph
+		/// at one takes the standing colour exactly.
+		/// </summary>
+		public float IconBlend;
+
 		/// <summary>
 		/// The style a plate uses when it authors none of its own and references no asset.
 		/// </summary>
@@ -206,6 +264,13 @@ namespace FishMMO.Shared.Core
 			PaddingVertical = 2.0f,
 			MinWidth = 0.0f,
 			AnchorGap = 0.0f,
+
+			Icon = null,
+			IconPlacement = NameplateIconPlacement.Left,
+			IconSize = 0.0f,
+			IconSpacing = 4.0f,
+			IconTint = NameplateTint.Fixed,
+			IconBlend = 1.0f,
 		};
 
 		/// <summary>
@@ -233,6 +298,15 @@ namespace FishMMO.Shared.Core
 		public Color ResolveBorderColor(Color allianceTint)
 		{
 			return Blend(BorderColor, allianceTint, BorderTint, BorderBlend, BorderColor.a);
+		}
+
+		/// <summary>
+		/// The colour the icon's sprite is multiplied by. White leaves it as authored.
+		/// </summary>
+		/// <param name="allianceTint">The plate's current faction-standing tint.</param>
+		public Color ResolveIconTint(Color allianceTint)
+		{
+			return Blend(Color.white, allianceTint, IconTint, IconBlend, 1.0f);
 		}
 
 		/// <summary>

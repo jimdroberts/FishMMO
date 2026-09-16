@@ -3,6 +3,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests.AI
 {

@@ -2,13 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using NUnit.Framework;
-using UnityEngine;
-using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 
 namespace FishMMO.UnitTests.AI
 {
 	/// <summary>
-	/// Measures what an <see cref="ObjectSpawner"/> respawn poll actually costs, so the choice of
+	/// Measures what a <see cref="SpawnerRuntime"/> respawn poll actually costs, so the choice of
 	/// scheduler is settled with numbers rather than intuition.
 	/// </summary>
 	/// <remarks>
@@ -21,44 +20,36 @@ namespace FishMMO.UnitTests.AI
 	{
 		private const int ITERATIONS = 200000;
 
-		private static ObjectSpawner Build(GameObject go, int pendingTimers)
+		private static SpawnerRuntime Build(int pendingTimers)
 		{
-			ObjectSpawner spawner = go.AddComponent<ObjectSpawner>();
-			spawner.Spawnables = new List<SpawnableSettings> { new SpawnableSettings() };
-			spawner.MaxSpawnCount = 20;
-			spawner.SpawnableRespawnTimers.Clear();
+			SpawnerRuntime spawner = SpawnerTestKit.NewRuntime(new SpawnerScheduler(), maxSpawnCount: 20);
 			for (int i = 0; i < pendingTimers; ++i)
 			{
 				// Not yet due: the steady state, where the poll scans and finds nothing to do.
-				spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddMinutes(5.0));
+				spawner.AddRespawnTimer(DateTime.UtcNow.AddMinutes(5.0));
 			}
 			return spawner;
 		}
 
-		/// <summary>Nanoseconds per <see cref="ObjectSpawner.TryRespawn"/> call.</summary>
+		/// <summary>Nanoseconds per <see cref="SpawnerRuntime.TryRespawn()"/> call.</summary>
 		private static double MeasurePoll(int pendingTimers)
 		{
-			GameObject go = new GameObject("SpawnerPoll");
-			try
+			SpawnerRuntime spawner = Build(pendingTimers);
+
+			// Warm up the JIT before timing.
+			for (int i = 0; i < 1000; ++i)
 			{
-				ObjectSpawner spawner = Build(go, pendingTimers);
-
-				// Warm up the JIT before timing.
-				for (int i = 0; i < 1000; ++i)
-				{
-					spawner.TryRespawn();
-				}
-
-				Stopwatch watch = Stopwatch.StartNew();
-				for (int i = 0; i < ITERATIONS; ++i)
-				{
-					spawner.TryRespawn();
-				}
-				watch.Stop();
-
-				return watch.Elapsed.TotalMilliseconds * 1000000.0 / ITERATIONS;
+				spawner.TryRespawn();
 			}
-			finally { UnityEngine.Object.DestroyImmediate(go); }
+
+			Stopwatch watch = Stopwatch.StartNew();
+			for (int i = 0; i < ITERATIONS; ++i)
+			{
+				spawner.TryRespawn();
+			}
+			watch.Stop();
+
+			return watch.Elapsed.TotalMilliseconds * 1000000.0 / ITERATIONS;
 		}
 
 		[Test]

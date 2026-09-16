@@ -981,6 +981,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48d5a903fd5eb581ba5235f674695571
+    m_Address: Dungeon Chest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 49039745d22d4ef8b053dab04581ab7b
     m_Address: Giant Titles
     m_ReadOnly: 0
@@ -2463,6 +2469,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c181d1a575cc4e92ad4531b900709795
     m_Address: Frostsprite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c187672f40922c9edb6117dd0c3b243c
+    m_Address: Dungeon Chest Container
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

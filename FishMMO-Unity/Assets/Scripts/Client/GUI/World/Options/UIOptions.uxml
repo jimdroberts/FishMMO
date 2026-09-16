@@ -202,6 +202,10 @@
                     <ui:Toggle name="nameplate-show-titles-toggle" class="fish-toggle options-row-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Icons" class="fish-label options-row-label" />
+                    <ui:Toggle name="nameplate-show-icons-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
                     <ui:Label text="Maximum On Screen" class="fish-label options-row-label" />
                     <ui:Slider name="nameplate-max-slider" low-value="8" high-value="256" class="options-row-field" />
                     <ui:Label name="nameplate-max-value" text="64" class="fish-hint options-row-value" />

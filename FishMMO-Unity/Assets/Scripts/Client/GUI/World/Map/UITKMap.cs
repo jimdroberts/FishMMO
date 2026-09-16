@@ -32,7 +32,10 @@ namespace FishMMO.Client
 	/// <see cref="WaypointTravelRequestBroadcast"/>. Nothing moves until the server answers — a
 	/// refusal comes back with a reason and the button re-enables, an arrival closes the map. The
 	/// click, arrival, refusal and discovery each have a sound slot, and
-	/// <see cref="OnFastTravelClicked"/> is the hook for anything else that wants the click.</para>
+	/// <see cref="OnFastTravelClicked"/> is the hook for anything else that wants the click. When
+	/// the server's <see cref="WaypointTravelPolicy"/> requires it, the button stays disabled until
+	/// the character stands near a discovered waypoint — the map can still be opened anywhere to
+	/// look at.</para>
 	///
 	/// <para><b>What it does not show.</b> Exactly what the minimap does not show — the marker
 	/// rules are applied by the same <see cref="MapMarkerFilter"/>, so a hostile player who is too
@@ -177,6 +180,12 @@ namespace FishMMO.Client
 
 		/// <summary>Time, on the unscaled clock, at which a pending request is given up on.</summary>
 		private double travelPendingUntil;
+
+		/// <summary>
+		/// Whether the character satisfied the travel origin rule when the panel was last written.
+		/// The refresh tick rewrites the panel only when this flips, so a refusal's hint survives.
+		/// </summary>
+		private bool travelOriginSatisfied = true;
 
 		/// <summary>Label naming the scene.</summary>
 		private Label titleLabel;
@@ -467,6 +476,11 @@ namespace FishMMO.Client
 			{
 				// The server's answer never came. Hand the button back rather than leave it dead.
 				travelPending = false;
+				RefreshWaypointPanel();
+			}
+			else if (IsAtTravelOrigin(out _) != travelOriginSatisfied)
+			{
+				// The character walked up to, or away from, a waypoint with the map open.
 				RefreshWaypointPanel();
 			}
 
@@ -1175,6 +1189,12 @@ namespace FishMMO.Client
 				return;
 			}
 
+			if (!IsAtTravelOrigin(out WaypointTravelPolicy policy))
+			{
+				SetWaypointHint(DescribeOriginRule(policy));
+				return;
+			}
+
 			ClientUIAudio.Play(FastTravelClickSound);
 			OnFastTravelClicked?.Invoke(sceneName, selectedWaypointIndex);
 
@@ -1201,6 +1221,7 @@ namespace FishMMO.Client
 
 			SceneWaypointDetails details = null;
 			bool known = hasSelectedWaypoint && TryGetWaypointDetails(selectedWaypointIndex, out details);
+			travelOriginSatisfied = IsAtTravelOrigin(out WaypointTravelPolicy policy);
 
 			if (waypointNameLabel != null)
 			{
@@ -1214,13 +1235,17 @@ namespace FishMMO.Client
 			}
 			if (waypointTravelButton != null)
 			{
-				waypointTravelButton.SetEnabled(known && !travelPending);
+				waypointTravelButton.SetEnabled(known && !travelPending && travelOriginSatisfied);
 				waypointTravelButton.text = travelPending ? "TRAVELLING…" : "FAST TRAVEL";
 			}
 
 			if (travelPending)
 			{
 				SetWaypointHint("Waiting for the server…");
+			}
+			else if (known && !travelOriginSatisfied)
+			{
+				SetWaypointHint(DescribeOriginRule(policy));
 			}
 			else if (known)
 			{
@@ -1230,6 +1255,32 @@ namespace FishMMO.Client
 			{
 				SetWaypointHint("Click a discovered waypoint on the map to select it.");
 			}
+		}
+
+		/// <summary>
+		/// Whether the character may fast travel from where it stands, by the server's origin rule
+		/// as the owner payload reported it. A hint only; the server decides.
+		/// </summary>
+		/// <param name="policy">The rule that was applied, for the explanation.</param>
+		private bool IsAtTravelOrigin(out WaypointTravelPolicy policy)
+		{
+			policy = WaypointTravelPolicy.Default;
+			if (Character == null || Character.Transform == null ||
+				!Character.TryGet(out IWaypointController controller))
+			{
+				// No character means no button to enable; claim nothing about the rule.
+				return true;
+			}
+			policy = controller.TravelPolicy;
+			return policy.IsSatisfiedBy(ClientMapSystem.SceneDetails, ClientMapSystem.SceneName, controller, Character.Transform.position);
+		}
+
+		/// <summary>
+		/// Player-facing statement of the origin rule.
+		/// </summary>
+		private static string DescribeOriginRule(in WaypointTravelPolicy policy)
+		{
+			return $"You must be within {policy.NearbyRange:0}m of a discovered waypoint to fast travel.";
 		}
 
 		/// <summary>
@@ -1350,6 +1401,7 @@ namespace FishMMO.Client
 				case WaypointTravelRefusalReason.Locked: return "You have not discovered this waypoint.";
 				case WaypointTravelRefusalReason.ConditionsNotMet: return "You do not meet the requirements to travel here.";
 				case WaypointTravelRefusalReason.TooSoon: return "You travelled a moment ago. Try again shortly.";
+				case WaypointTravelRefusalReason.NotNearWaypoint: return "You must be at a discovered waypoint to fast travel.";
 				default: return "Fast travel was refused.";
 			}
 		}

@@ -4910,13 +4910,11 @@ GameObject:
   - component: {fileID: 49462260382753988}
   - component: {fileID: 714255674020307062}
   - component: {fileID: -4468559157413045786}
-  - component: {fileID: 6437443601116110890}
   - component: {fileID: 2119787057571980410}
   - component: {fileID: 7824644601122125574}
   - component: {fileID: 2150267445961412781}
   - component: {fileID: 7970910599131371131}
   - component: {fileID: 965746080839380323}
-  - component: {fileID: 6630461006965550917}
   - component: {fileID: 2898743231479186744}
   - component: {fileID: 1969692536659621655}
   - component: {fileID: 9168136948286660220}
@@ -5039,7 +5037,7 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
-  - {fileID: 6437443601116110890}
+  - {fileID: 0}
   - {fileID: 2119787057571980410}
   - {fileID: 7824644601122125574}
   - {fileID: 2150267445961412781}
@@ -5055,55 +5053,6 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
---- !u!114 &6437443601116110890
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3f8874737aea62f47bad32be5cc76342, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 3
-  _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: -4468559157413045786}
-  StuckTimeout: 2.5
-  StuckWarpTimeout: 8
-  SweepHits:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  archetype: {fileID: 11400000, guid: 4689f14e17de9c19f5ab5e2f64222034, type: 2}
-  BossScript: {fileID: 0}
-  TurnRate: 8
-  RepathInterval: 0.5
-  eyeTransform: {fileID: 0}
-  LookTarget: {fileID: 0}
-  RandomizeState: 0
-  Waypoints: []
-  AiTickRate: 8
-  SeparationRadius: 0
-  SeparationSpeed: 1
 --- !u!114 &2119787057571980410
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5130,6 +5079,7 @@ MonoBehaviour:
   regenTickRate: 1
   observedResourcePushInterval: 6
   observedResourceOutOfCombatPushInterval: 12
+  observedResourceSecondaryPushInterval: 30
 --- !u!114 &7824644601122125574
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5220,37 +5170,8 @@ MonoBehaviour:
   AttributeBonuses: {fileID: 0}
   Abilities:
   - {fileID: 11400000, guid: 7c14874e3c902684a8d562913ed73c24, type: 2}
-  objectSpawner: {fileID: 0}
-  spawnableSettings:
-    rid: -2
   PetAbilityTemplate: {fileID: 0}
-  references:
-    version: 2
-    RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
---- !u!195 &6630461006965550917
-NavMeshAgent:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_AgentTypeID: 0
-  m_Radius: 0.5
-  m_Speed: 3.5
-  m_Acceleration: 8
-  avoidancePriority: 50
-  m_AngularSpeed: 120
-  m_StoppingDistance: 0
-  m_AutoTraverseOffMeshLink: 1
-  m_AutoBraking: 1
-  m_AutoRepath: 1
-  m_Height: 1.6
-  m_BaseOffset: 0
-  m_WalkableMask: 4294967295
-  m_ObstacleAvoidanceType: 0
+  AttackPriority: 145
 --- !u!114 &2898743231479186744
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5461,6 +5382,52 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1810834502184966116}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &560455269513626109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9198423041106670181}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec1f9c8741254f67a74c53657f87e18d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.Nameplate
+  worldOffset: {x: 0, y: 0, z: 0}
+  visible: 0
+  priority: 0
+  styleAsset: {fileID: 0}
+  useCustomStyle: 0
+  customStyle:
+    FontSize: 0.25
+    NameTint: 1
+    NameColor: {r: 1, g: 1, b: 1, a: 1}
+    NameBlend: 1
+    SecondaryColor: {r: 0.82, g: 0.82, b: 0.86, a: 1}
+    LineHeight: 1
+    LineSpacing: 4
+    ShowBackground: 1
+    BackgroundTint: 1
+    BackgroundColor: {r: 0.04, g: 0.04, b: 0.06, a: 1}
+    BackgroundBlend: 0.3
+    BackgroundOpacity: 0.55
+    ShowBorder: 0
+    BorderTint: 1
+    BorderColor: {r: 0.85, g: 0.85, b: 0.9, a: 1}
+    BorderBlend: 0.75
+    BorderWidth: 1
+    CornerRadius: 4
+    PaddingHorizontal: 6
+    PaddingVertical: 2
+    MinWidth: 0
+    AnchorGap: 0
+    Icon: {fileID: 0}
+    IconPlacement: 0
+    IconSize: 0
+    IconSpacing: 4
+    IconTint: 0
+    IconBlend: 1
 --- !u!1001 &1810834502185364350
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5576,43 +5543,3 @@ Transform:
     type: 3}
   m_PrefabInstance: {fileID: 1810834502185364350}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &560455269513626109
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9198423041106670181}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ec1f9c8741254f67a74c53657f87e18d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.Nameplate
-  worldOffset: {x: 0, y: 0, z: 0}
-  visible: 0
-  priority: 0
-  styleAsset: {fileID: 0}
-  useCustomStyle: 0
-  customStyle:
-    FontSize: 0.25
-    NameTint: 1
-    NameColor: {r: 1, g: 1, b: 1, a: 1}
-    NameBlend: 1
-    SecondaryColor: {r: 0.82, g: 0.82, b: 0.86, a: 1}
-    LineHeight: 1
-    LineSpacing: 4
-    ShowBackground: 1
-    BackgroundTint: 1
-    BackgroundColor: {r: 0.04, g: 0.04, b: 0.06, a: 1}
-    BackgroundBlend: 0.3
-    BackgroundOpacity: 0.55
-    ShowBorder: 0
-    BorderTint: 1
-    BorderColor: {r: 0.85, g: 0.85, b: 0.9, a: 1}
-    BorderBlend: 0.75
-    BorderWidth: 1
-    CornerRadius: 4
-    PaddingHorizontal: 6
-    PaddingVertical: 2
-    MinWidth: 0
-    AnchorGap: 0

@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 		/// </para>
 		/// <para>
 		/// <b>The guarantee is computed in SCORE space, not in raw points.</b> An NPC chooses its
-		/// target with <c>AggressionController.GetThreatScore</c>, which multiplies raw points by a
+		/// target with the threat table's score, which multiplies raw points by a
 		/// vulnerability factor for a wounded or out-of-mana character — so a taunt that merely put
 		/// the taunter above the highest RAW entry still lost to a wounded ally on the very next
 		/// re-evaluation, and <see cref="ForceImmediateTargetSwitch"/> hid it for exactly one
@@ -94,75 +94,13 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!target.TryGet(out IAIController aiController))
+			if (!target.TryGet(out INPCBrain brain))
 			{
 				// Players have no threat table; taunting one is a no-op by design.
 				return;
 			}
 
-			AIController controller = aiController as AIController;
-			if (controller == null || controller.Aggression == null)
-			{
-				return;
-			}
-
-			float points = ThreatPoints;
-
-			if (GuaranteeTopThreat)
-			{
-				/* Worked in SCORE space and converted back, because score is what PickTarget reads.
-				 *
-				 * The table holds raw points and no character references, so it cannot evaluate
-				 * another entry's score directly — but every entry's score is at most its raw points
-				 * times MaximumVulnerabilityMultiplier, so clearing that bound clears every actual
-				 * score whichever entry carries it. Conservative by up to that factor and never
-				 * short, which is the direction a guarantee has to err in.
-				 *
-				 * The taunter's OWN multiplier is deliberately NOT used to shrink the requirement,
-				 * even though it is known exactly at this instant. It is TRANSIENT — 1.5x below 30%
-				 * health, gone the moment a heal lands — while the raw points granted here are
-				 * permanent. Dividing by it once granted a wounded tank proportionally fewer points,
-				 * and the first heal then dropped their score back under the previous top's ceiling:
-				 * the boss returned to its old target on the next re-evaluation, with
-				 * ForceImmediateTargetSwitch masking the failure for exactly one switch — the same
-				 * signature the raw-points version of this guarantee was replaced for. Treating the
-				 * taunter's multiplier as its floor of 1 keeps the guarantee standing for every later
-				 * multiplier the taunter can have. */
-				float highestRaw = controller.Aggression.GetHighestPoints(initiator.ID);
-				float ceilingScore = highestRaw * controller.Aggression.MaximumVulnerabilityMultiplier;
-
-				float requiredPoints = ceilingScore + LeadOverHighest;
-				float required = requiredPoints - controller.Aggression.GetPoints(initiator.ID);
-				if (required > points)
-				{
-					points = required;
-				}
-			}
-
-			/* The empty→non-empty edge belongs to whoever writes the first entry. AggressionState
-			 * detects it only in HandleDamaged, so a taunt that seeded the table consumed the edge
-			 * silently: when ForceTarget below declines (passive stance, authored false, dead
-			 * victim), the NPC's table is non-empty and the FIRST REAL HIT then sees wasEmpty ==
-			 * false and never fires OnCombatInitiated — the same consumed-edge failure HandleKilled's
-			 * comment documents. A Nearby-tier NPC relies on that event for combat entry, so it stood
-			 * idle until promoted into sweep range. Firing the edge here keeps the invariant: every
-			 * first entry initiates combat, whoever wrote it. */
-			bool wasEmpty = !controller.Aggression.HasAggression;
-
-			if (points > 0f)
-			{
-				controller.Aggression.AddPoints(initiator.ID, points);
-			}
-
-			if (wasEmpty && controller.Aggression.HasAggression)
-			{
-				controller.AggressionState?.OnCombatInitiated?.Invoke(initiator);
-			}
-
-			if (ForceImmediateTargetSwitch)
-			{
-				controller.ForceTarget(initiator);
-			}
+			brain.ApplyTaunt(initiator, ThreatPoints, GuaranteeTopThreat, LeadOverHighest, ForceImmediateTargetSwitch);
 		}
 	}
 }

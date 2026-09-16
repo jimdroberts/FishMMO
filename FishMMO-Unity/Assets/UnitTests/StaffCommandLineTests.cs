@@ -4,6 +4,7 @@ using NUnit.Framework;
 using FishMMO.Auth.Core;
 using FishMMO.Client;
 using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests

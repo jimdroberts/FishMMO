@@ -70,7 +70,7 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// A defensive pet has to know its owner is under attack, and the owner is a player with
 		/// no aggression table of its own to read. Subscribing here — one handler per player,
-		/// mirroring what <see cref="AggressionState"/> already does per NPC — is what lets a
+		/// mirroring what the server's <c>AggressionState</c> already does per NPC — is what lets a
 		/// defensive pet come to its owner's aid instead of watching.
 		/// </remarks>
 		public event Action<IPetController, ICharacter> OnOwnerAttacked;

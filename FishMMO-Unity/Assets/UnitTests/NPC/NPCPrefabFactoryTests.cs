@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests.NPCs
 {
@@ -51,6 +52,9 @@ namespace FishMMO.UnitTests.NPCs
 				AssetDatabase.DeleteAsset(GENERATED_ROOT);
 			}
 			AssetDatabase.Refresh();
+
+			// Creating a prefab gives it a brain catalogue entry; drop the ones just deleted.
+			AIBrainCatalogueEditorUtility.PruneMissing();
 		}
 
 		private static GameObject Load(string path)
@@ -84,7 +88,8 @@ namespace FishMMO.UnitTests.NPCs
 			Assert.AreSame(orc, recipe.BasePrefab);
 			Assert.IsNotNull(recipe.Race, "the race is stored as an ID and must resolve back to its asset");
 			Assert.AreEqual("Orc", recipe.Race.name);
-			Assert.AreSame(orc.GetComponent<AIController>().Archetype, recipe.Archetype);
+			Assert.IsNotNull(recipe.Archetype, "the orc's brain must be read from the server catalogue");
+			Assert.AreSame(AIBrainCatalogueEditorUtility.GetArchetype(orc), recipe.Archetype);
 			Assert.AreEqual(orc.GetComponent<NPC>().Abilities.Count, recipe.Abilities.Count);
 			Assert.AreEqual(NPCInteraction.None, recipe.Interaction);
 			Assert.AreEqual(NPCPrefabFactory.KIND_MONSTER, NPCPrefabFactory.Classify(orc));
@@ -150,7 +155,7 @@ namespace FishMMO.UnitTests.NPCs
 			GameObject orc = Load(ORC);
 			RaceTemplate human = LoadAsset<RaceTemplate>(HUMAN);
 			AIArchetypeTemplate archer = LoadAsset<AIArchetypeTemplate>(ARCHER);
-			AIArchetypeTemplate orcBrain = orc.GetComponent<AIController>().Archetype;
+			AIArchetypeTemplate orcBrain = AIBrainCatalogueEditorUtility.GetArchetype(orc);
 			int orcRaceID = SerializedRaceID(orc);
 
 			NPCRecipe recipe = NPCPrefabFactory.RecipeFrom(orc);
@@ -169,7 +174,9 @@ namespace FishMMO.UnitTests.NPCs
 			Assert.AreEqual("Factory Human Archer", created.name);
 
 			// The recipe landed.
-			Assert.AreSame(archer, created.GetComponent<AIController>().Archetype);
+			Assert.AreSame(archer, AIBrainCatalogueEditorUtility.GetArchetype(created),
+				"the recipe's brain must land in the server catalogue");
+			Assert.IsNull(created.GetComponent<AIController>(), "the brain is server data; the prefab must not carry it");
 			Assert.AreEqual(NPCPrefabFactory.ComputeTemplateID(human), SerializedRaceID(created));
 			Assert.IsTrue(created.GetComponent<FactionController>().IsAggressive);
 			Assert.IsFalse(created.GetComponent<NPC>().IsCharmable);
@@ -188,7 +195,7 @@ namespace FishMMO.UnitTests.NPCs
 				"a cloned prefab must own every NetworkBehaviour it carries");
 
 			// And the base was not edited in the process.
-			Assert.AreSame(orcBrain, orc.GetComponent<AIController>().Archetype);
+			Assert.AreSame(orcBrain, AIBrainCatalogueEditorUtility.GetArchetype(orc));
 			Assert.AreEqual(orcRaceID, SerializedRaceID(orc));
 		}
 

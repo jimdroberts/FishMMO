@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests
 {
@@ -209,8 +210,10 @@ namespace FishMMO.UnitTests
 			 * melee instead — correct, but not what a mage is for. */
 			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Orcs[2].path);
 			NPC npc = prefab.GetComponent<NPC>();
-			AIController ai = prefab.GetComponent<AIController>();
-			BaseAttackingState attacking = ai.AttackingState as BaseAttackingState;
+			// The brain is the prefab's entry in the server catalogue, not a component on it.
+			AIArchetypeTemplate archetype = AIBrainCatalogueEditorUtility.GetArchetype(prefab);
+			Assert.That(archetype, Is.Not.Null, "the orc mage has no brain in the AI brain catalogue");
+			BaseAttackingState attacking = archetype.AttackingState as BaseAttackingState;
 			Assert.That(attacking, Is.Not.Null);
 
 			float longest = 0f;

@@ -6,6 +6,7 @@ using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using NUnit.Framework;
 using UnityEngine;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 using UnityLogAssert = UnityEngine.TestTools.LogAssert;
 
@@ -527,17 +528,28 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Taunt_GuaranteeIsPermanent_AndTheEdgeIsNotConsumed()
 		{
-			string taunt = ReadSource(
+			/* The ECA action is a shared shell; the arithmetic runs in the server brain. */
+			string action = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/ECA/Actions/Character/ApplyTauntAction.cs");
+			LogAssert.IsTrue(action.Contains("brain.ApplyTaunt(initiator, ThreatPoints, GuaranteeTopThreat, LeadOverHighest, ForceImmediateTargetSwitch);"),
+				"The taunt action must hand every authored value to the server brain.");
 
-			LogAssert.IsFalse(taunt.Contains("taunterMultiplier"),
+			string brain = ReadSource(
+				"Assets/Scripts/Server/Implementation/World/SceneServer/AI/AIController.cs");
+			int taunt = brain.IndexOf("public void ApplyTaunt(", System.StringComparison.Ordinal);
+			LogAssert.IsTrue(taunt >= 0, "The brain must implement the taunt.");
+			string body = brain.Substring(taunt);
+
+			LogAssert.IsFalse(body.Contains("taunterMultiplier"),
 				"The required points must not be discounted by the taunter's transient vulnerability multiplier.");
-			LogAssert.IsTrue(taunt.Contains("float requiredPoints = ceilingScore + LeadOverHighest;"),
+			LogAssert.IsTrue(body.Contains("float requiredPoints = ceilingScore + leadOverHighest;"),
 				"The guarantee clears the score ceiling at the taunter's multiplier floor of 1, so it survives any later heal.");
 
-			LogAssert.IsTrue(taunt.Contains("controller.AggressionState?.OnCombatInitiated?.Invoke(initiator);"),
+			int wasEmpty = body.IndexOf("bool wasEmpty = !Aggression.HasAggression;", System.StringComparison.Ordinal);
+			int add = body.IndexOf("Aggression.AddPoints(taunter.ID, points);", System.StringComparison.Ordinal);
+			LogAssert.IsTrue(body.Contains("AggressionState?.OnCombatInitiated?.Invoke(taunter);"),
 				"A taunt that seeds the table must fire the empty-to-non-empty edge itself.");
-			LogAssert.IsTrue(taunt.Contains("bool wasEmpty = !controller.Aggression.HasAggression;"),
+			LogAssert.IsTrue(wasEmpty >= 0 && add > wasEmpty,
 				"Detected before the points are added, like HandleDamaged does.");
 		}
 

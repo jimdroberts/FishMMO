@@ -86,16 +86,24 @@ namespace FishMMO.Shared
 		private IPredictableController[] controllers = Array.Empty<IPredictableController>();
 
 		/// <summary>
-		/// True when this character's replicate input is produced by a server-side brain
-		/// (an <see cref="FishMMO.Shared.Core.IAIController"/>) rather than by a remote client.
+		/// True when this character's replicate input is produced by a server-side brain rather
+		/// than by a remote client — that is, when the character is an <see cref="NPC"/>.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Ownership alone cannot answer "who writes this character's input?". A monster is
 		/// server-owned and has no owning connection, while a pet is owned by the connection of
-		/// the player that summoned it — yet both are driven entirely by a server-side
-		/// <c>AIController</c>. Gating input on <see cref="NetworkBehaviour.IsOwner"/> therefore
-		/// left monsters with nobody producing input at all, and would have let a pet owner's
-		/// client produce input for a brain that does not run there.
+		/// the player that summoned it — yet both are driven entirely by a server-side brain.
+		/// Gating input on <see cref="NetworkBehaviour.IsOwner"/> therefore left monsters with
+		/// nobody producing input at all, and would let a pet owner's client produce input for a
+		/// brain that does not run there.
+		/// </para>
+		/// <para>
+		/// Decided by the character's TYPE, not by the presence of a brain component. The brain is
+		/// attached by the server at spawn and never exists on a client, so a component check
+		/// answers "no brain here" on every client — and on the owner of a pet that reads as "the
+		/// owner writes this input", which is exactly the hijack this flag exists to prevent.
+		/// </para>
 		/// </remarks>
 		private bool serverDrivenInput;
 
@@ -121,8 +129,8 @@ namespace FishMMO.Shared
 				.ToList();
 			controllers = sortedList.ToArray();
 
-			// An AI brain on the same GameObject means the server writes this character's input.
-			serverDrivenInput = GetComponent<FishMMO.Shared.Core.IAIController>() != null;
+			// An NPC — monster, townsperson or pet — is driven by the server's brain on every peer.
+			serverDrivenInput = GetComponent<NPC>() != null;
 		}
 
 		/// <summary>

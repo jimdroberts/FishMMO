@@ -13,6 +13,7 @@ using FishNet.Serializing;
 using KinematicCharacterController;
 using NUnit.Framework;
 using UnityEngine;
+using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests

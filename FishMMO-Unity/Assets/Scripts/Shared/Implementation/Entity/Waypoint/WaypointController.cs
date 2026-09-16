@@ -17,9 +17,9 @@ namespace FishMMO.Shared
 	/// which the interactable system answers by persisting the page and telling the owner. The
 	/// load path installs rows through <see cref="Restore"/>; the save path drains
 	/// <see cref="CollectDirtyPages"/> and confirms with <see cref="MarkPersisted"/>.</para>
-	/// <para><b>Owner client.</b> The spawn payload carries the whole record (owner only — an
-	/// observer is written an empty block, since which towns a stranger has visited is nobody's
-	/// business), and <see cref="WaypointUnlockedBroadcast"/> keeps it current. The three other
+	/// <para><b>Owner client.</b> The spawn payload carries the server's
+	/// <see cref="WaypointTravelPolicy"/> and the whole record (owner only — an observer is written
+	/// an empty block, since which towns a stranger has visited is nobody's business), and <see cref="WaypointUnlockedBroadcast"/> keeps it current. The three other
 	/// travel broadcasts are turned into the static events the map listens to.</para>
 	/// <para><b>Framing.</b> FishNet packs every behaviour's spawn payload into one buffer with no
 	/// per-behaviour framing, so the block is length-prefixed and the reader seeks to its end on
@@ -44,6 +44,12 @@ namespace FishMMO.Shared
 
 		private readonly Dictionary<string, WaypointUnlockMask> scenes = new Dictionary<string, WaypointUnlockMask>();
 
+		/// <summary>The server's origin rule as received in the owner payload. Unused on the server.</summary>
+		private WaypointTravelPolicy receivedTravelPolicy = WaypointTravelPolicy.Default;
+
+		/// <inheritdoc />
+		public WaypointTravelPolicy TravelPolicy => IsServerInitialized ? WaypointTravelPolicy.Server : receivedTravelPolicy;
+
 		/// <inheritdoc />
 		public IReadOnlyCollection<string> UnlockedScenes => scenes.Keys;
 
@@ -55,6 +61,7 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 			scenes.Clear();
+			receivedTravelPolicy = WaypointTravelPolicy.Default;
 		}
 
 		/// <inheritdoc />
@@ -163,6 +170,9 @@ namespace FishMMO.Shared
 
 			if (isOwner)
 			{
+				// The rule the map should show, ahead of the record. Owner only: it is about travel, which only the owner does.
+				WriteTravelPolicy(writer, WaypointTravelPolicy.Server);
+
 				int sceneCount = 0;
 				foreach (KeyValuePair<string, WaypointUnlockMask> scene in scenes)
 				{
@@ -219,6 +229,7 @@ namespace FishMMO.Shared
 			byte shape = reader.ReadUInt8Unpacked();
 			if (shape == PAYLOAD_SHAPE_OWNER)
 			{
+				receivedTravelPolicy = ReadTravelPolicy(reader);
 				scenes.Clear();
 
 				int sceneCount = reader.ReadInt32();
@@ -256,6 +267,21 @@ namespace FishMMO.Shared
 					$"ReadPayload consumed {reader.Position - (blockEnd - blockLength)} of {blockLength} framed bytes. Seeking to the end of the block.");
 				reader.Position = blockEnd;
 			}
+		}
+
+		/// <summary>Writes a travel policy: a flag byte and the radius. Five bytes.</summary>
+		internal static void WriteTravelPolicy(Writer writer, in WaypointTravelPolicy policy)
+		{
+			writer.WriteBoolean(policy.RequireNearbyWaypoint);
+			writer.WriteSingleUnpacked(policy.NearbyRange);
+		}
+
+		/// <summary>Reads what <see cref="WriteTravelPolicy"/> wrote. The radius is re-clamped.</summary>
+		internal static WaypointTravelPolicy ReadTravelPolicy(Reader reader)
+		{
+			bool requireNearbyWaypoint = reader.ReadBoolean();
+			float nearbyRange = reader.ReadSingleUnpacked();
+			return new WaypointTravelPolicy(requireNearbyWaypoint, nearbyRange);
 		}
 
 		#endregion

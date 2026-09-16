@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -56,16 +57,18 @@ namespace FishMMO.UnitTests
 			List<string> offenders = new List<string>();
 			int checkedCount = 0;
 
+			// NPC prefabs carry no AI; the brain each spawns with is its server catalogue entry.
+			Dictionary<string, string> brains = FishMMO.UnitTests.AI.BrainCatalogueYaml.ArchetypeGuidByPrefabGuid();
+			LogAssert.IsTrue(brains.Count > 0, "the AI brain catalogue must name archetypes");
+
 			foreach (string prefab in prefabs)
 			{
 				string source = File.ReadAllText(prefab);
 
-				/* The field was renamed to its camelCase backing field behind FormerlySerializedAs, so a
-				 * prefab saved before the rename carries "Archetype:" and one saved after carries
-				 * "archetype:". Both are the same slot. */
-				Match archetype = Regex.Match(source, "[Aa]rchetype: \\{fileID: \\d+, guid: ([0-9a-f]{32})");
-				if (!archetype.Success ||
-					!archetypeNames.TryGetValue(archetype.Groups[1].Value, out string archetypeName) ||
+				string prefabGuid = FishMMO.UnitTests.AI.BrainCatalogueYaml.GuidOf(prefab);
+				if (prefabGuid == null ||
+					!brains.TryGetValue(prefabGuid, out string archetypeGuid) ||
+					!archetypeNames.TryGetValue(archetypeGuid, out string archetypeName) ||
 					!Fights(archetypeName))
 				{
 					continue;

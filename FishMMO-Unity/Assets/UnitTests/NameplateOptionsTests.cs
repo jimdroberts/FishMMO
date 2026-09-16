@@ -85,6 +85,7 @@ namespace FishMMO.UnitTests
 				"the background starts at the strength each style asks for");
 			LogAssert.IsTrue(ClientNameplateSettings.ShowGuild, "guild rows start visible");
 			LogAssert.IsTrue(ClientNameplateSettings.ShowTitles, "title rows start visible");
+			LogAssert.IsTrue(ClientNameplateSettings.ShowIcons, "authored icons start visible");
 		}
 
 		[Test]
@@ -171,8 +172,9 @@ namespace FishMMO.UnitTests
 			ClientNameplateSettings.SetMaxVisible(32);
 			ClientNameplateSettings.SetShowGuild(false);
 			ClientNameplateSettings.SetShowTitles(false);
+			ClientNameplateSettings.SetShowIcons(false);
 
-			LogAssert.AreEqual(6, raised, "every nameplate setter must raise OnChanged exactly once");
+			LogAssert.AreEqual(7, raised, "every nameplate setter must raise OnChanged exactly once");
 		}
 
 		// --- Independence from the world labels -------------------------------------------------
@@ -281,6 +283,7 @@ namespace FishMMO.UnitTests
 				"nameplate-max-slider",
 				"nameplate-show-guild-toggle",
 				"nameplate-show-titles-toggle",
+				"nameplate-show-icons-toggle",
 			})
 			{
 				LogAssert.IsTrue(uxml.Contains($"name=\"{name}\""),

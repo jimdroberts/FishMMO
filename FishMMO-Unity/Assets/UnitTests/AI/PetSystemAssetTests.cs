@@ -3,6 +3,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests.AI
 {
@@ -222,8 +223,8 @@ namespace FishMMO.UnitTests.AI
 			/* A wander or patrol state joins the movement roll, and TransitionToRandomMovementState
 			 * — which is where a pet lands whenever a fight ends — can pick it. The pet wanders off
 			 * from the owner it belongs to, and no amount of following brings it back until the
-			 * roll changes. The controller reads both slots from its archetype, so this pins the
-			 * archetype each pet prefab actually names. */
+			 * roll changes. The brain reads both slots from its archetype, so this pins the
+			 * archetype each pet prefab's catalogue entry names. */
 			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
 			{
 				if (template.PetPrefab == null)
@@ -231,14 +232,14 @@ namespace FishMMO.UnitTests.AI
 					continue;
 				}
 
-				AIController controller = template.PetPrefab.GetComponent<AIController>();
-				if (controller == null)
+				AIArchetypeTemplate archetype = AIBrainCatalogueEditorUtility.GetArchetype(template.PetPrefab.gameObject);
+				if (archetype == null)
 				{
 					continue;
 				}
 
-				BaseAIState wander = controller.WanderState;
-				BaseAIState patrol = controller.PatrolState;
+				BaseAIState wander = archetype.WanderState;
+				BaseAIState patrol = archetype.PatrolState;
 
 				Assert.IsNull(wander,
 					$"'{template.PetPrefab.name}' resolves a wander state, so it can drift away from its owner.");
@@ -257,16 +258,14 @@ namespace FishMMO.UnitTests.AI
 					continue;
 				}
 
-				AIController controller = template.PetPrefab.GetComponent<AIController>();
-				Assert.IsNotNull(controller,
-					$"'{template.PetPrefab.name}' has no AIController, so it has no brain at all.");
+				// The brain is the pet prefab's entry in the server catalogue.
+				AIArchetypeTemplate archetype = AIBrainCatalogueEditorUtility.GetArchetype(template.PetPrefab.gameObject);
+				Assert.IsNotNull(archetype,
+					$"'{template.PetPrefab.name}' has no AI archetype in the brain catalogue, so it has no states at all.");
 
-				Assert.IsNotNull(controller.Archetype,
-					$"'{template.PetPrefab.name}' has no AI archetype, so its controller has no states at all.");
-
-				BaseAIState idle = controller.IdleState;
-				BaseAIState initial = controller.InitialState;
-				BaseAIState attacking = controller.AttackingState;
+				BaseAIState idle = archetype.IdleState;
+				BaseAIState initial = archetype.InitialState;
+				BaseAIState attacking = archetype.AttackingState;
 
 				Assert.IsInstanceOf<PetIdleState>(idle,
 					$"'{template.PetPrefab.name}' does not resolve a PetIdleState, so it will never follow its owner.");

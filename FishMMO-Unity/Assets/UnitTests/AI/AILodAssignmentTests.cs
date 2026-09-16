@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests.AI
 {
@@ -37,13 +38,17 @@ namespace FishMMO.UnitTests.AI
 		/// <summary>Folder the LOD settings assets live in.</summary>
 		private const string LOD_FOLDER = "Assets/Templates/Entity/NPCs/AI/LOD";
 
-		/// <summary>Every NPC prefab that carries an <see cref="AIController"/>.</summary>
+		/// <summary>Every NPC prefab with a brain in the server catalogue.</summary>
 		private static List<GameObject> brains;
+
+		/// <summary>The archetype each of <see cref="brains"/> spawns with, by index.</summary>
+		private static List<AIArchetypeTemplate> archetypes;
 
 		[OneTimeSetUp]
 		public void LoadPrefabs()
 		{
 			brains = new List<GameObject>();
+			archetypes = new List<AIArchetypeTemplate>();
 
 			string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { NPC_PREFAB_FOLDER });
 			for (int i = 0; i < guids.Length; i++)
@@ -55,9 +60,12 @@ namespace FishMMO.UnitTests.AI
 					continue;
 				}
 
-				if (prefab.GetComponentInChildren<AIController>(true) != null)
+				// The brain is the prefab's entry in the server catalogue, not a component on it.
+				AIArchetypeTemplate archetype = AIBrainCatalogueEditorUtility.GetArchetype(prefab);
+				if (archetype != null)
 				{
 					brains.Add(prefab);
+					archetypes.Add(archetype);
 				}
 			}
 		}
@@ -66,15 +74,14 @@ namespace FishMMO.UnitTests.AI
 		public void EveryNPCWithABrain_HasLodSettingsAssigned()
 		{
 			Assert.Greater(brains.Count, 0,
-				$"No NPC prefab with an AIController was found under {NPC_PREFAB_FOLDER}. " +
+				$"No NPC prefab with a catalogued brain was found under {NPC_PREFAB_FOLDER}. " +
 				"The test is looking in the wrong place rather than passing.");
 
 			StringBuilder missing = new StringBuilder();
 
 			for (int i = 0; i < brains.Count; i++)
 			{
-				AIController controller = brains[i].GetComponentInChildren<AIController>(true);
-				if (controller.LodSettings == null)
+				if (archetypes[i].LodSettings == null)
 				{
 					missing.AppendLine($"  {brains[i].name}");
 				}
@@ -93,7 +100,7 @@ namespace FishMMO.UnitTests.AI
 			 * produces a settings asset that reads plausibly and quietly never reaches a tier. */
 			for (int i = 0; i < brains.Count; i++)
 			{
-				AILodSettings settings = brains[i].GetComponentInChildren<AIController>(true).LodSettings;
+				AILodSettings settings = archetypes[i].LodSettings;
 				if (settings == null)
 				{
 					continue;
@@ -113,7 +120,7 @@ namespace FishMMO.UnitTests.AI
 			 * a tier in name only, and the ordering is easy to break by editing one field. */
 			for (int i = 0; i < brains.Count; i++)
 			{
-				AILodSettings settings = brains[i].GetComponentInChildren<AIController>(true).LodSettings;
+				AILodSettings settings = archetypes[i].LodSettings;
 				if (settings == null)
 				{
 					continue;
@@ -140,7 +147,7 @@ namespace FishMMO.UnitTests.AI
 			HashSet<AILodSettings> referenced = new HashSet<AILodSettings>();
 			for (int i = 0; i < brains.Count; i++)
 			{
-				AILodSettings settings = brains[i].GetComponentInChildren<AIController>(true).LodSettings;
+				AILodSettings settings = archetypes[i].LodSettings;
 				if (settings != null)
 				{
 					referenced.Add(settings);

@@ -17,6 +17,9 @@ MonoBehaviour:
   debounceSweepIntervalSeconds: 5
   debounceEntryTtlSeconds: 30
   debounceSweepMaxRemovals: 128
+  waypointTravelDebounceMilliseconds: 2000
+  requireNearbyWaypointForTravel: 1
+  waypointTravelOriginRange: 10
   worldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
     type: 2}
   maxAbilityCount: 25

@@ -15,6 +15,7 @@ using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -928,7 +929,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="petController">The owner's pet controller component.</param>
 		/// <param name="petAbilityTemplate">Template describing the pet prefab and abilities.</param>
 		/// <param name="nob">Pooled NetworkObject already instantiated at the desired spawn position.</param>
-		/// <param name="aiInitPosition">Position passed to <see cref="IAIController.Initialize"/>.</param>
+		/// <param name="aiInitPosition">Home position the pet's brain is prepared with; see <see cref="AIBrainHost.Prepare"/>.</param>
 		/// <param name="abilities">Optional ability list restored from the database; null when summoned fresh.</param>
 		/// <param name="broadcastTarget">Network connection that should receive the PetAddBroadcast.</param>
 		/// <param name="persistedAttributes">Attribute values restored from the database; null when summoned fresh.</param>
@@ -995,15 +996,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * NavMeshAgent (speed, isStopped, destination). Doing that on a pooled object that is
 			 * still disabled and not yet placed on a NavMesh makes Unity reject each call with an
 			 * "agent is not active / not on a NavMesh" error. */
-			if (pet.TryGet(out IAIController aiController))
+			if (AIBrainHost.TryGet(ServerManager.NetworkManager, out AIBrainHost brainHost))
 			{
 				/* The pet's home is where it stands, not the world origin. The database load path
 				 * passed Vector3.zero here, so a restored pet leashed to (0,0,0) and any state
 				 * with leashing enabled marched it across the map to the map's corner. */
-				aiController.Initialize(aiInitPosition);
+				AIController aiController = brainHost.Prepare(pet, aiInitPosition);
 
 				// Follow, do not fight: Target means "what I am attacking" to the whole AI.
-				aiController.Target = null;
+				if (aiController != null)
+				{
+					aiController.Target = null;
+				}
+			}
+			else
+			{
+				Log.Warning("PetSystem", $"No AI brain host is running; {pet.GameObject.name} will spawn without a brain.");
 			}
 
 			/* Factions BEFORE the spawn, not after.

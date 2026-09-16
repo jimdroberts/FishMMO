@@ -8,6 +8,7 @@ using System.Reflection;
 using FishNet.Serializing;
 using System.Linq;
 using FishMMO.Shared.Core;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 

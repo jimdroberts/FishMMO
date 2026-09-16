@@ -2,7 +2,9 @@
 using System.Text;
 using FishNet.Object;
 using UnityEditor;
+using UnityEngine.AI;
 using UnityEngine;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
@@ -31,7 +33,8 @@ namespace FishMMO.Shared
 	/// <para>
 	/// This is a one-shot migration plus an ongoing audit. New prefabs get the components
 	/// automatically from <see cref="NPC"/>'s <c>RequireComponent</c> attributes; existing ones
-	/// need this.
+	/// need this. The brain itself is not on the prefab at all: it is the prefab's entry in the
+	/// server's <see cref="AIBrainCatalogue"/>.
 	/// </para>
 	/// </remarks>
 	public static class AIPrefabWiringTool
@@ -165,35 +168,46 @@ namespace FishMMO.Shared
 					lines.Add("NetworkObject prediction is disabled — observers will never see the NPC's casts");
 				}
 
-				AIController controller = root.GetComponent<AIController>();
+				/* The brain is server data. A prefab still carrying the old controller or its agent
+				 * ships them to every client, and the server adds its own at spawn regardless. */
+				if (root.GetComponent<AIController>() != null)
+				{
+					lines.Add("still carries an AIController — AI is server-only; run FishMMO/AI/Migrate NPC Brains To Server Catalogue");
+				}
+				if (root.GetComponent<NavMeshAgent>() != null)
+				{
+					lines.Add("still carries a NavMeshAgent — the server adds the agent at spawn; run FishMMO/AI/Migrate NPC Brains To Server Catalogue");
+				}
+
+				AIArchetypeTemplate archetype = AIBrainCatalogueEditorUtility.GetArchetype(root);
 				NPC npc = root.GetComponent<NPC>();
 				bool isPet = root.GetComponent<Pet>() != null;
 
-				/* The archetype is the whole brain: every state the controller runs is read from
-				 * it, so a controller without one has no states at all. */
-				if (controller != null && controller.Archetype == null)
+				/* The archetype is the whole brain: every state the brain runs is read from it, so
+				 * an NPC without one has no states at all. */
+				if (archetype == null)
 				{
-					lines.Add("no Archetype — the controller has no states, no LOD profile and no personality; it spawns and never ticks");
+					lines.Add("no Archetype in the AI brain catalogue — the NPC spawns with no states, no LOD profile and no personality, and never thinks");
 				}
 
 				/* A merchant or a banker is an NPC with no combat wiring on purpose. Only report
 				 * a prefab that is *partly* set up for combat, which is the case that indicates a
 				 * mistake rather than a design choice. Pets are always combat-capable: theirs
 				 * comes from the summoning template rather than the prefab. */
-				bool hasCombatState = controller != null && controller.AttackingState != null;
+				bool hasCombatState = archetype != null && archetype.AttackingState != null;
 				bool hasAbilities = npc != null && npc.Abilities != null && npc.Abilities.Count > 0;
 				bool intendedForCombat = hasCombatState || hasAbilities || isPet;
 
-				if (controller != null && controller.Archetype != null && intendedForCombat)
+				if (archetype != null && intendedForCombat)
 				{
 					if (!hasCombatState)
 					{
-						lines.Add($"archetype '{controller.Archetype.name}' has no AttackingState — the NPC can never enter combat");
+						lines.Add($"archetype '{archetype.name}' has no AttackingState — the NPC can never enter combat");
 					}
 
-					if (controller.IdleState == null)
+					if (archetype.IdleState == null)
 					{
-						lines.Add($"archetype '{controller.Archetype.name}' has no IdleState — TransitionToIdleState is a no-op");
+						lines.Add($"archetype '{archetype.name}' has no IdleState — TransitionToIdleState is a no-op");
 					}
 
 					if (!hasAbilities && !isPet)
@@ -266,10 +280,87 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Moves every NPC prefab's brain into the server's <see cref="AIBrainCatalogue"/> and strips
+		/// the AI components from the prefab.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The one-shot migration for the move of the AI to the server assembly. A prefab authored
+		/// before it carries an <see cref="AIController"/> (the script kept its GUID, so the component
+		/// still loads) and a <see cref="NavMeshAgent"/>. Its archetype and boss script are copied into
+		/// the catalogue, then both components are removed: the server adds its own at spawn, and a
+		/// client never needs either.
+		/// </para>
+		/// <para>
+		/// An existing catalogue entry wins over the prefab's value, so running this again after the
+		/// catalogue has been edited cannot undo the edit. Idempotent.
+		/// </para>
+		/// </remarks>
+		[MenuItem("FishMMO/AI/Migrate NPC Brains To Server Catalogue", priority = 199)]
+		public static void MigrateNPCBrains()
+		{
+			StringBuilder report = new StringBuilder();
+			int migrated = 0;
+
+			foreach (string path in FindNPCPrefabPaths())
+			{
+				GameObject root = PrefabUtility.LoadPrefabContents(path);
+				try
+				{
+					AIController controller = root.GetComponent<AIController>();
+					NavMeshAgent agent = root.GetComponent<NavMeshAgent>();
+					if (controller == null && agent == null)
+					{
+						continue;
+					}
+
+					GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+					List<string> changes = new List<string>();
+
+					if (controller != null)
+					{
+						if (AIBrainCatalogueEditorUtility.GetArchetype(asset) == null && controller.Archetype != null)
+						{
+							AIBrainCatalogueEditorUtility.SetArchetype(asset, controller.Archetype);
+							changes.Add($"archetype '{controller.Archetype.name}' -> catalogue");
+						}
+						if (AIBrainCatalogueEditorUtility.GetBossScript(asset) == null && controller.BossScript != null)
+						{
+							AIBrainCatalogueEditorUtility.SetBossScript(asset, controller.BossScript);
+							changes.Add($"boss script '{controller.BossScript.name}' -> catalogue");
+						}
+
+						// The controller requires the agent, so it has to go first.
+						Object.DestroyImmediate(controller, true);
+						changes.Add("removed AIController");
+					}
+
+					if (agent != null)
+					{
+						Object.DestroyImmediate(agent, true);
+						changes.Add("removed NavMeshAgent");
+					}
+
+					PrefabUtility.SaveAsPrefabAsset(root, path);
+					migrated++;
+					report.AppendLine($"  {path}: {string.Join(", ", changes)}");
+				}
+				finally
+				{
+					PrefabUtility.UnloadPrefabContents(root);
+				}
+			}
+
+			AssetDatabase.SaveAssets();
+			Debug.Log($"[{LOG}] Migrated {migrated} NPC prefab(s) to the server brain catalogue.\n{report}");
+		}
+
+		/// <summary>
 		/// Runs every AI maintenance step in order. Used by the batch-mode entry point.
 		/// </summary>
 		public static void RepairAndAudit()
 		{
+			MigrateNPCBrains();
 			RepairNPCPrefabs();
 			AuditNPCPrefabs();
 			ValidateArchetypes();

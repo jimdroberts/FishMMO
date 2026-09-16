@@ -4,6 +4,7 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 
 namespace FishMMO.UnitTests.AI
 {
@@ -21,20 +22,6 @@ namespace FishMMO.UnitTests.AI
 	{
 		// --- Respawn drain --------------------------------------------------------------------
 
-		/// <summary>
-		/// A spawner whose <see cref="SpawnableSettings.NetworkObject"/> is null, so
-		/// <see cref="ObjectSpawner.SpawnObject"/> reaches its own guard and no-ops. The timer
-		/// bookkeeping under test still runs in full.
-		/// </summary>
-		private static ObjectSpawner BuildSpawner(GameObject go, int maxSpawnCount)
-		{
-			ObjectSpawner spawner = go.AddComponent<ObjectSpawner>();
-			spawner.Spawnables = new List<SpawnableSettings> { new SpawnableSettings() };
-			spawner.MaxSpawnCount = maxSpawnCount;
-			spawner.SpawnableRespawnTimers.Clear();
-			return spawner;
-		}
-
 		[Test]
 		public void TryRespawn_DrainsEveryDueTimerInOnePass()
 		{
@@ -42,51 +29,44 @@ namespace FishMMO.UnitTests.AI
 			 * ten-monster camp. Behind a polling interval the same cap becomes one monster per
 			 * interval, so a wiped camp takes the better part of a minute and no authored
 			 * MinimumRespawnTime can raise the ceiling. */
-			GameObject go = new GameObject("SpawnerDrain");
-			try
+			SpawnerRuntime spawner = SpawnerTestKit.NewRuntime(new SpawnerScheduler(), maxSpawnCount: 10);
+			DateTime overdue = DateTime.UtcNow.AddSeconds(-1.0);
+			for (int i = 0; i < 5; ++i)
 			{
-				ObjectSpawner spawner = BuildSpawner(go, maxSpawnCount: 10);
-				DateTime overdue = DateTime.UtcNow.AddSeconds(-1.0);
-				for (int i = 0; i < 5; ++i)
-				{
-					spawner.SpawnableRespawnTimers.Add(overdue);
-				}
-
-				spawner.TryRespawn();
-
-				Assert.AreEqual(0, spawner.SpawnableRespawnTimers.Count,
-					"Every due timer should be consumed in one pass, not just the first.");
+				spawner.AddRespawnTimer(overdue);
 			}
-			finally { UnityEngine.Object.DestroyImmediate(go); }
+
+			spawner.TryRespawn();
+
+			Assert.AreEqual(0, spawner.PendingRespawnCount,
+				"Every due timer should be consumed in one pass, not just the first.");
 		}
 
 		[Test]
 		public void TryRespawn_LeavesTimersThatAreNotYetDue()
 		{
 			// Draining must stay selective: a deadline in the future is not a deadline that passed.
-			GameObject go = new GameObject("SpawnerDrainSelective");
-			try
+			SpawnerRuntime spawner = SpawnerTestKit.NewRuntime(new SpawnerScheduler(), maxSpawnCount: 10);
+			for (int i = 0; i < 3; ++i)
 			{
-				ObjectSpawner spawner = BuildSpawner(go, maxSpawnCount: 10);
-				for (int i = 0; i < 3; ++i)
-				{
-					spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-				}
-				for (int i = 0; i < 2; ++i)
-				{
-					spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddMinutes(5.0));
-				}
-
-				spawner.TryRespawn();
-
-				Assert.AreEqual(2, spawner.SpawnableRespawnTimers.Count,
-					"Only the overdue timers should have been consumed.");
-				foreach (DateTime remaining in spawner.SpawnableRespawnTimers)
-				{
-					Assert.Greater(remaining, DateTime.UtcNow, "A future timer was consumed.");
-				}
+				spawner.AddRespawnTimer(DateTime.UtcNow.AddSeconds(-1.0));
 			}
-			finally { UnityEngine.Object.DestroyImmediate(go); }
+			for (int i = 0; i < 2; ++i)
+			{
+				spawner.AddRespawnTimer(DateTime.UtcNow.AddMinutes(5.0));
+			}
+
+			spawner.TryRespawn();
+
+			Assert.AreEqual(2, spawner.PendingRespawnCount,
+				"Only the overdue timers should have been consumed.");
+			List<DateTime> remaining = (List<DateTime>)typeof(SpawnerRuntime)
+				.GetField("respawnTimers", BindingFlags.Instance | BindingFlags.NonPublic)
+				.GetValue(spawner);
+			foreach (DateTime deadline in remaining)
+			{
+				Assert.Greater(deadline, DateTime.UtcNow, "A future timer was consumed.");
+			}
 		}
 
 		// --- Respawn check interval -----------------------------------------------------------
@@ -94,23 +74,20 @@ namespace FishMMO.UnitTests.AI
 		/// <summary>Drives the private scheduler and returns the delay it chose.</summary>
 		private static float ScheduleAndMeasure(float minimum, float maximum)
 		{
-			GameObject go = new GameObject("SpawnerInterval");
-			try
+			SpawnerRuntime spawner = SpawnerTestKit.NewRuntime(new SpawnerScheduler(), tune: d =>
 			{
-				ObjectSpawner spawner = go.AddComponent<ObjectSpawner>();
-				spawner.RespawnCheckIntervalMinimum = minimum;
-				spawner.RespawnCheckIntervalMaximum = maximum;
+				d.RespawnCheckIntervalMinimum = minimum;
+				d.RespawnCheckIntervalMaximum = maximum;
+			});
 
-				System.Type type = typeof(ObjectSpawner);
-				float now = Time.time;
-				type.GetMethod("ScheduleNextRespawnCheck", BindingFlags.Instance | BindingFlags.NonPublic)
-					.Invoke(spawner, new object[] { now });
-				float next = (float)type.GetField("nextRespawnCheckTime", BindingFlags.Instance | BindingFlags.NonPublic)
-					.GetValue(spawner);
+			System.Type type = typeof(SpawnerRuntime);
+			float now = Time.time;
+			type.GetMethod("ScheduleNextRespawnCheck", BindingFlags.Instance | BindingFlags.NonPublic)
+				.Invoke(spawner, new object[] { now });
+			float next = (float)type.GetField("nextRespawnCheckTime", BindingFlags.Instance | BindingFlags.NonPublic)
+				.GetValue(spawner);
 
-				return next - now;
-			}
-			finally { UnityEngine.Object.DestroyImmediate(go); }
+			return next - now;
 		}
 
 		[Test]
@@ -261,27 +238,27 @@ namespace FishMMO.UnitTests.AI
 		public void PoolReservation_IsANoOpWithoutANetworkManager()
 		{
 			// Called during scene start-up, where a manager is not guaranteed to exist yet.
-			ObjectSpawnerPool.Clear();
+			SpawnerPool.Clear();
 
-			Assert.AreEqual(0, ObjectSpawnerPool.Reserve(null, null, 10));
-			Assert.AreEqual(0, ObjectSpawnerPool.TotalReserved);
+			Assert.AreEqual(0, SpawnerPool.Reserve(null, null, 10));
+			Assert.AreEqual(0, SpawnerPool.TotalReserved);
 		}
 
 		[Test]
 		public void PoolReservation_IgnoresNonPositiveCounts()
 		{
-			ObjectSpawnerPool.Clear();
+			SpawnerPool.Clear();
 
-			Assert.AreEqual(0, ObjectSpawnerPool.Reserve(null, null, 0));
-			Assert.AreEqual(0, ObjectSpawnerPool.Reserve(null, null, -5));
+			Assert.AreEqual(0, SpawnerPool.Reserve(null, null, 0));
+			Assert.AreEqual(0, SpawnerPool.Reserve(null, null, -5));
 		}
 
 		[Test]
 		public void PoolReservation_ClearResetsTheRunningTotal()
 		{
-			ObjectSpawnerPool.Clear();
+			SpawnerPool.Clear();
 
-			Assert.AreEqual(0, ObjectSpawnerPool.TotalReserved,
+			Assert.AreEqual(0, SpawnerPool.TotalReserved,
 				"A stale total across scene loads would misreport the map's memory budget.");
 		}
 	}

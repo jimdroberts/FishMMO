@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using NUnit.Framework;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -50,7 +51,7 @@ namespace FishMMO.UnitTests
 		public void EnemySweepSkipsTheDead()
 		{
 			string state = File.ReadAllText(Path.Combine(Scripts,
-				"Implementation/Entity/NPC/AI/BaseAIState.cs"));
+				"../Server/Implementation/World/SceneServer/AI/BaseAIState.cs"));
 
 			int sweep = state.IndexOf("public virtual bool SweepForEnemies(", StringComparison.Ordinal);
 			int alive = state.IndexOf("if (!AITargetSelection.IsValidTarget(def))", StringComparison.Ordinal);
@@ -67,7 +68,7 @@ namespace FishMMO.UnitTests
 		public void DeadNpcReleasesItsCombatSlot()
 		{
 			string controller = File.ReadAllText(Path.Combine(Scripts,
-				"Implementation/Entity/NPC/AI/AIController.cs"));
+				"../Server/Implementation/World/SceneServer/AI/AIController.cs"));
 
 			int halt = controller.IndexOf("public void HaltMovement()", StringComparison.Ordinal);
 			int release = controller.IndexOf("ReleaseCombatSlots();", halt, StringComparison.Ordinal);
@@ -82,14 +83,21 @@ namespace FishMMO.UnitTests
 				"HaltMovement runs on the corpse path in place of the attacking state's Exit, so it must release the combat slot itself");
 
 			string npc = File.ReadAllText(Path.Combine(Scripts, "Implementation/Entity/NPC/NPC.cs"));
-			LogAssert.IsTrue(npc.Contains("ai.HaltMovement();"), "NPC.Despawn must halt the brain through HaltMovement");
+			LogAssert.IsTrue(npc.Contains("aiDisabledByCorpse = brain.SuspendForCorpse();"),
+				"NPC.Despawn must stop the brain through INPCBrain.SuspendForCorpse");
+
+			int suspend = controller.IndexOf("public bool SuspendForCorpse()", StringComparison.Ordinal);
+			int halted = controller.IndexOf("HaltMovement();", suspend, StringComparison.Ordinal);
+			int end = controller.IndexOf("\n\t\tpublic ", suspend + 1, StringComparison.Ordinal);
+			LogAssert.IsTrue(suspend >= 0 && halted > suspend && (end < 0 || halted < end),
+				"SuspendForCorpse must halt the brain through HaltMovement");
 		}
 
 		[Test]
 		public void ImmortalNpcAcquiresNoTarget()
 		{
 			string controller = File.ReadAllText(Path.Combine(Scripts,
-				"Implementation/Entity/NPC/AI/AIController.cs"));
+				"../Server/Implementation/World/SceneServer/AI/AIController.cs"));
 
 			int threat = controller.IndexOf("public void OnThreatReceived(ICharacter attacker)", StringComparison.Ordinal);
 			int threatGuard = controller.IndexOf("if (IsImmortal)", threat, StringComparison.Ordinal);

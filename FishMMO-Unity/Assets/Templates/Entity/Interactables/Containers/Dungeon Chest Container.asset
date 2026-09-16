@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bad6fb6bb7a8aa093979f4d6be014bc7, type: 3}
+  m_Name: Dungeon Chest Container
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.ContainerTemplate
+  IconReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Dungeon Chest
+  SlotCount: 8
+  DespawnWhenEmpty: 1
+  LootTable: {fileID: 11400000, guid: 70bb34a1fa02701618d985bda0545308, type: 2}

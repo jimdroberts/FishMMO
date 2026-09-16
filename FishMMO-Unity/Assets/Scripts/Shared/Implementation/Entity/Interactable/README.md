@@ -39,7 +39,7 @@ The Interactable system is a server-authoritative, template-driven framework for
 - Server-authoritative validation with `sqrMagnitude`-based range checks (no square root)
 - Template-driven configuration via ScriptableObjects per interactable type
 - Scene-object registration and generated naming via `SceneObjectNamer` (name generator, seeded per spawn; 5 bytes on the wire)
-- Object pooling support through `ISpawnable` and `ObjectSpawner` integration
+- Object pooling support through `ISpawnable`: a server-side spawner owns the object as its `ISpawnOwner` and recycles it through FishNet's pool
 - Client-side overhead title rendering with customizable colour, written onto a `Nameplate` (`EnsureNameplate` builds one on demand for an object that has none — a crate does not carry a plate prefab, a banker does)
 - Arena queueing and arena objectives (`ArenaBoard`, `ArenaObjective`) and claimable housing land (`PlotFoundation`)
 - Achievement integration on most interactable types
@@ -160,8 +160,16 @@ The world scene details cache rebuild reports duplicates and out-of-range indice
   interaction. `InteractableSystem.Waypoint.cs` checks the scene the map showed against the
   character's current scene, resolves the live object through `WaypointRegistry`, and calls
   `WaypointTravel.TryTravel`, whose rules (`Decide`) are: can act → not in combat → same scene
-  instance → discovered → the waypoint's authored `TravelConditions` pass. Refusals are reported
+  instance → standing near a discovered waypoint (when `WaypointTravelPolicy` requires it) →
+  discovered → the waypoint's authored `TravelConditions` pass. Refusals are reported
   with a `WaypointTravelRefusalReason`. Arrival runs `OnTravelTriggers` (`Waypoint Travel`).
+- **Travel origin (issue #253).** `WaypointTravelPolicy` is a game rule, on by default: a player
+  may only fast travel while within `NearbyRange` (10 m) of a waypoint they have discovered in
+  the same scene instance — in practice, by using a waypoint, which opens the map on it. The
+  toggle and range are `requireNearbyWaypointForTravel` / `waypointTravelOriginRange` on the
+  server's `InteractableSystem` asset; the owner client receives them in the `WaypointController`
+  payload and disables the map's travel button to match. `WaypointRegistry.TryFindNearest` is the
+  server check. Designer-authored moves (`TeleportToWaypointAction`) are exempt.
 - **Other ECA pieces.** `GrantWaypointAction` (unlock by scene name + index, for rewards),
   `TeleportToWaypointAction` (move to a waypoint in the current scene; can relax discovery,
   conditions and combat), `WaypointUnlockedCondition`.
@@ -222,7 +230,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 1. **Create a new interactable** — Add one of the concrete interactable components (e.g., `Merchant`, `GatheringNode`, `Container`) to a GameObject in a scene.
 2. **Assign a template** — For template-driven types, create the matching ScriptableObject (e.g., `MerchantTemplate`, `GatheringNodeTemplate`) and assign it to the component's `Template` field.
 3. **Set interaction range** — Adjust the `InteractionRange` field on the component (default: 3.5 units).
-4. **Ensure SceneObjectNamer** — Types like `AbilityCrafter`, `Banker`, `Merchant`, and `Container` require `SceneObjectNamer` (added automatically via `[RequireComponent]`). With default settings it names the object from its `FactionController` race; set a Race Override, a Biome, or another mode (City / Dungeon / Point of Interest / Item) on the component for anything else.
+4. **Ensure SceneObjectNamer** — Types like `AbilityCrafter`, `Banker`, `Merchant`, and `Container` require `SceneObjectNamer` (added automatically via `[RequireComponent]`). With default settings it names the object from its `FactionController` race; set a Race Override, a Biome, or another mode (City / Dungeon / Point of Interest / Item) on the component for anything else. Use **Authored** for an object that has neither a race nor a place to be named after — a chest, a crate: it keeps the name it was authored with and generates nothing (any other mode logs a naming failure on every spawn).
 5. **Server registration** — On the server, the interactable registers itself in `Awake()` via `SceneObject.Register()`. On the client, registration happens in `ReadPayload()` after receiving the object's `ID`.
 
 ## Configuration
@@ -263,9 +271,13 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 | Field / Property       | Type                | Description                              |
 |------------------------|---------------------|------------------------------------------|
-| `Template`             | `ContainerTemplate` | ScriptableObject: `SlotCount`, `DespawnWhenEmpty` |
+| `Template`             | `ContainerTemplate` | ScriptableObject: `Description` (window title), `SlotCount`, `DespawnWhenEmpty`, `LootTable` |
 | `AchievementTemplate`  | `AchievementTemplate`  | Achievement to increment on open      |
 | `Items`                | `List<Item>`        | Current item slots                       |
+
+The contents are rolled from `Template.LootTable` in `OnStartServer`, on every spawn including pool reuse, and cleared again in `ResetState`; a loot table's currency range is ignored by containers. The window opens through a trigger holding `SendContainerOpenBroadcastAction` (`Templates/Entity/ECA/Interactions/Container Open.asset`) in `onInteractTriggers`, and `InteractableSystem` handles each take. A template must be in the shared addressable group: the client looks it up by the ID the open broadcast carries.
+
+**Shipped container:** `Prefabs/Shared/Entity/Interactables/Containers/Dungeon Chest.prefab` — `Dungeon Chest Container` (8 slots, despawns when emptied) rolling `Dungeon Chest Loot` (potions, rations, fire scrolls, a small chance of a test armour or weapon piece). Its pivot is at its base, so its spawner uses a fixed position on the floor rather than a random one: the random placement adds the collider's full height above the ground hit. Spawned by the Dungeon's `Chest` spawner, respawning 5–10 minutes after it is emptied.
 
 ### GatheringNodeTemplate
 
@@ -328,15 +340,14 @@ Two of those lists sell abilities, and they sell different things. `Abilities` s
 | `OnDestroy()`     | Calls `SceneObject.Unregister()`.                                        |
 | `ReadPayload()`   | Reads `ID` (Int64) from network reader, registers in scene.             |
 | `WritePayload()`  | Writes `ID` (Int64) to network writer.                                  |
-| `ResetState()`    | Clears `OnDespawn` event and `SpawnableSettings` (object pooling reset).|
-| `Despawn()`       | Delegates to `ObjectSpawner.Despawn(this)`.                             |
+| `ResetState()`    | Clears `OnDespawn` event and `Spawner` (object pooling reset).          |
+| `Despawn()`       | Hands the object to `Spawner.Despawn(this)`, or despawns it to the pool directly when it has no spawner. |
 
 ### ISpawnable Members
 
 | Member              | Type                | Description                                         |
 |---------------------|---------------------|-----------------------------------------------------|
-| `ObjectSpawner`     | `ObjectSpawner`     | The spawner managing this object                    |
-| `SpawnableSettings` | `SpawnableSettings` | Spawn configuration from the spawner                |
+| `Spawner`           | `ISpawnOwner`       | The server-side spawner managing this object, or null. What it was spawned from is the spawner's bookkeeping. |
 | `ID`                | `long`              | Unique network identifier                           |
 | `OnDespawn`         | `event Action<ISpawnable>` | Fired when the object is despawned            |
 
@@ -459,7 +470,7 @@ Interactable/
 │   └── ObjectiveState.cs               # Enum: Neutral, Capturing, Captured, Contested
 ├── Container/
 │   ├── Container.cs                    # Chest/crate interactable (IItemContainer)
-│   └── ContainerTemplate.cs            # ScriptableObject: SlotCount, DespawnWhenEmpty
+│   └── ContainerTemplate.cs            # ScriptableObject: Description, SlotCount, DespawnWhenEmpty, LootTable
 ├── Dialogue/
 │   ├── DialogueInteractable.cs         # NPC dialogue interactable
 │   ├── DialogueNode.cs                 # Single node in a dialogue tree
@@ -559,7 +570,7 @@ MerchantTabType : byte
 ```
 Shared/Core/Entity/Interactable/                # 16 core interfaces (IAbilityCrafter, IBanker, etc.)
 Shared/Implementation/Entity/Naming/             # SceneObjectNamer used by interactables
-Shared/Implementation/Entity/Spawner/            # ObjectSpawner that spawns/despawns interactables
+Server/Implementation/World/SceneServer/Spawner/ # Server-only spawners that spawn/despawn interactables (see its README)
 Server/Implementation/World/SceneServer/          # Server-side interaction handling systems
 Client/GUI/World/                                 # Client-side UI Toolkit panels for each interaction type
 ```

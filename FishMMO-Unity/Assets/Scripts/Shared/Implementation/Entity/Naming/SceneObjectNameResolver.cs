@@ -20,6 +20,11 @@ namespace FishMMO.Shared
 		PointOfInterest = 3,
 		/// <summary>A legendary item name from the object's race.</summary>
 		Item = 4,
+		/// <summary>
+		/// No generated name: the object keeps the name it was authored with. For interactables such
+		/// as chests and crates that have neither a race nor a place to be named after.
+		/// </summary>
+		Authored = 5,
 	}
 
 	/// <summary>How the gender behind a character name is chosen.</summary>
@@ -306,6 +311,11 @@ namespace FishMMO.Shared
 			if (settings == null)
 			{
 				error = "no naming settings";
+				return false;
+			}
+			if (settings.Mode == SceneObjectNamingMode.Authored)
+			{
+				error = "the object keeps its authored name";
 				return false;
 			}
 			if (seed == 0)

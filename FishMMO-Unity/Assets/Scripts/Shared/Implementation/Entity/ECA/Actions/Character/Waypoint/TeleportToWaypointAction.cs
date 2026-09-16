@@ -14,7 +14,8 @@ namespace FishMMO.Shared
 	/// fast-travel request uses, so the rules are the same; the options below let a designer
 	/// relax the two that are policy rather than physics (discovery, combat). The
 	/// waypoint's own travel conditions are a third: an item that bypasses a level gate is a
-	/// legitimate thing to author.</para>
+	/// legitimate thing to author. The <see cref="WaypointTravelPolicy"/> origin rule never
+	/// applies here — working away from a waypoint is what this action is for.</para>
 	/// <para>Same-scene only for now. The waypoint is resolved in the character's own scene
 	/// instance; a <see cref="SceneName"/> naming another scene is refused with a warning until
 	/// the world-map transfer lands.</para>

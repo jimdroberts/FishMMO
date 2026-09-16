@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -89,6 +90,48 @@ namespace FishMMO.Shared
 				return false;
 			}
 			return true;
+		}
+
+		/// <summary>
+		/// Finds the live waypoint in a scene nearest to <paramref name="position"/>, within
+		/// <paramref name="range"/> metres (inclusive). The origin check behind
+		/// <see cref="WaypointTravelPolicy"/>.
+		/// </summary>
+		/// <param name="sceneHandle">The scene instance to search.</param>
+		/// <param name="position">Where the traveller stands.</param>
+		/// <param name="range">The search radius in metres.</param>
+		/// <param name="discoveredBy">When set, only waypoints this record has discovered qualify.</param>
+		/// <param name="nearest">The nearest qualifying waypoint, or null.</param>
+		/// <returns>True when one qualifies.</returns>
+		public static bool TryFindNearest(int sceneHandle, Vector3 position, float range,
+			IWaypointController discoveredBy, out IWaypoint nearest)
+		{
+			nearest = null;
+			if (range < 0.0f || !waypointsByScene.TryGetValue(sceneHandle, out Dictionary<int, IWaypoint> scene))
+			{
+				return false;
+			}
+			float bestSqr = range * range;
+			foreach (KeyValuePair<int, IWaypoint> entry in scene)
+			{
+				IWaypoint waypoint = entry.Value;
+				if (waypoint == null || waypoint.GameObject == null)
+				{
+					continue;
+				}
+				if (discoveredBy != null && !discoveredBy.IsUnlocked(waypoint.SceneName, waypoint.WaypointIndex))
+				{
+					continue;
+				}
+				// The GameObject's transform, which the map cache bakes, rather than the Awake-assigned Transform property.
+				float distanceSqr = (waypoint.GameObject.transform.position - position).sqrMagnitude;
+				if (distanceSqr <= bestSqr)
+				{
+					bestSqr = distanceSqr;
+					nearest = waypoint;
+				}
+			}
+			return nearest != null;
 		}
 
 		/// <summary>Appends the indices registered in a scene, in no particular order.</summary>

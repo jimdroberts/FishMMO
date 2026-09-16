@@ -60,6 +60,12 @@ namespace FishMMO.Client
 		/// <summary>USS class on the plate box itself: background, border, padding, rows.</summary>
 		private const string PLATE_CLASS = "nameplate";
 
+		/// <summary>USS class on the column that holds the rows, beside or under the icon.</summary>
+		private const string BODY_CLASS = "nameplate-body";
+
+		/// <summary>USS class on the plate's optional icon.</summary>
+		private const string ICON_CLASS = "nameplate-icon";
+
 		/// <summary>USS class on each row of text.</summary>
 		private const string LINE_CLASS = "nameplate-line";
 
@@ -100,8 +106,14 @@ namespace FishMMO.Client
 			/// <summary>Positioned every frame by writing <c>translate</c>.</summary>
 			public VisualElement Anchor;
 
-			/// <summary>The box: background, border, padding, and the rows.</summary>
+			/// <summary>The box: background, border, padding, the icon and the rows.</summary>
 			public VisualElement Plate;
+
+			/// <summary>The optional icon. Always the box's first child; hidden when there is none.</summary>
+			public VisualElement Icon;
+
+			/// <summary>The column the rows stack in.</summary>
+			public VisualElement Body;
 
 			/// <summary>One label per row, reused across content changes.</summary>
 			public readonly List<Label> Rows = new List<Label>();
@@ -209,6 +221,9 @@ namespace FishMMO.Client
 
 		/// <summary>Whether the player wants the title row drawn.</summary>
 		private bool showTitles = ClientNameplateSettings.DefaultShowTitles;
+
+		/// <summary>Whether the player wants nameplate icons drawn.</summary>
+		private bool showIcons = ClientNameplateSettings.DefaultShowIcons;
 
 		/// <summary>
 		/// Bumped whenever the player's settings are re-read, so every plate restyles once.
@@ -394,10 +409,24 @@ namespace FishMMO.Client
 			plate.AddToClassList(PLATE_CLASS);
 			anchor.Add(plate);
 
+			/* The icon is a sibling of a column of rows rather than a row itself, so that it can sit
+			 * beside the whole stack as well as above it: the box's flex direction is what places
+			 * it, and that is written per plate from the style. */
+			VisualElement icon = new VisualElement { pickingMode = PickingMode.Ignore };
+			icon.AddToClassList(ICON_CLASS);
+			icon.style.display = DisplayStyle.None;
+			plate.Add(icon);
+
+			VisualElement body = new VisualElement { pickingMode = PickingMode.Ignore };
+			body.AddToClassList(BODY_CLASS);
+			plate.Add(body);
+
 			PlateBinding binding = new PlateBinding
 			{
 				Anchor = anchor,
 				Plate = plate,
+				Icon = icon,
+				Body = body,
 			};
 
 			// Read by the hierarchy comparison, which is static so that sorting allocates nothing.
@@ -427,6 +456,10 @@ namespace FishMMO.Client
 				binding.Rows[i].text = string.Empty;
 				binding.Rows[i].style.display = DisplayStyle.None;
 			}
+
+			// Dropped rather than left for the next push, so a pooled binding holds no sprite alive.
+			binding.Icon.style.backgroundImage = StyleKeyword.Null;
+			binding.Icon.style.display = DisplayStyle.None;
 
 			/* Hidden on release and on rent. A pooled binding that came back displayed would flash
 			 * the previous plate's rows at the previous plate's position for one frame. */
@@ -486,6 +519,7 @@ namespace FishMMO.Client
 			backgroundOpacity = ClientNameplateSettings.BackgroundOpacity;
 			showGuild = ClientNameplateSettings.ShowGuild;
 			showTitles = ClientNameplateSettings.ShowTitles;
+			showIcons = ClientNameplateSettings.ShowIcons;
 
 			// Shared with the world labels: both describe projected world UI, not nameplates.
 			MaxVisibleDistance = ClientWorldLabelSettings.Distance;
@@ -573,9 +607,11 @@ namespace FishMMO.Client
 
 				/* Counted rather than taken from LineCount, because the player can turn a kind of
 				 * row off: a plate carrying nothing but a guild row, with guild rows hidden, would
-				 * otherwise draw as an empty box over somebody's head. */
+				 * otherwise draw as an empty box over somebody's head. An icon on its own is still
+				 * worth drawing — a marker over something with no name — so only a plate with
+				 * neither is dropped. The icon is only looked up when there are no rows. */
 				int visibleRows = CountVisibleRows(plate);
-				if (visibleRows == 0)
+				if (visibleRows == 0 && ResolveIcon(plate) == null)
 				{
 					SetDisplayed(binding, false);
 					continue;
@@ -728,6 +764,9 @@ namespace FishMMO.Client
 			if (sizeChanged || styleChanged || contentChanged || settingsChanged)
 			{
 				ApplyRows(binding, plate, in style, fontSize, scale, visibleRows, showGuild, showTitles);
+
+				// Content matters here too: the gap beside the icon exists only while there are rows.
+				ApplyIcon(binding, ResolveIcon(plate), in style, plate.AllianceTint, fontSize, scale, visibleRows);
 			}
 
 			binding.PushedFontSize = fontSize;
@@ -841,7 +880,7 @@ namespace FishMMO.Client
 			{
 				Label row = new Label { pickingMode = PickingMode.Ignore };
 				row.AddToClassList(LINE_CLASS);
-				binding.Plate.Add(row);
+				binding.Body.Add(row);
 				binding.Rows.Add(row);
 			}
 
@@ -878,6 +917,73 @@ namespace FishMMO.Client
 			{
 				binding.Rows[i].text = string.Empty;
 				binding.Rows[i].style.display = DisplayStyle.None;
+			}
+		}
+
+		/// <summary>The icon a plate is drawn with, or null when it has none or the player turned icons off.</summary>
+		private Sprite ResolveIcon(Nameplate plate)
+		{
+			return showIcons ? plate.Icon : null;
+		}
+
+		/// <summary>
+		/// Writes the plate's icon: its sprite, size, tint, and where it sits against the rows.
+		/// </summary>
+		/// <param name="binding">The plate's elements.</param>
+		/// <param name="icon">The resolved icon, or null for none.</param>
+		/// <param name="style">The plate's style.</param>
+		/// <param name="allianceTint">The plate's faction-standing colour.</param>
+		/// <param name="fontSize">The name row's resolved font size, in points.</param>
+		/// <param name="scale">Resolved font size over the style's reference size.</param>
+		/// <param name="visibleRows">How many rows are drawn beside the icon.</param>
+		/// <remarks>
+		/// A plate with no icon costs one display write here and is otherwise untouched: its box
+		/// keeps whatever direction it had, which does not matter with a single child. An icon of
+		/// size zero in the style is sized to the name row, so it tracks
+		/// <see cref="NameplateStyle.LineHeight"/> and the player's scale like the text does.
+		/// </remarks>
+		private static void ApplyIcon(PlateBinding binding, Sprite icon, in NameplateStyle style, Color allianceTint, float fontSize, float scale, int visibleRows)
+		{
+			VisualElement element = binding.Icon;
+			if (icon == null)
+			{
+				element.style.display = DisplayStyle.None;
+				element.style.backgroundImage = StyleKeyword.Null;
+				return;
+			}
+
+			float size = style.IconSize > 0.0f
+				? style.IconSize * scale
+				: fontSize * Mathf.Max(0.5f, style.LineHeight);
+			size = Mathf.Max(1.0f, size);
+
+			element.style.display = DisplayStyle.Flex;
+			element.style.backgroundImage = new StyleBackground(icon);
+			element.style.unityBackgroundImageTintColor = style.ResolveIconTint(allianceTint);
+			element.style.width = size;
+			element.style.height = size;
+
+			// An icon-only plate has nothing to keep a gap from, and the gap would push it off-centre.
+			float gap = visibleRows > 0 ? Mathf.Max(0.0f, style.IconSpacing * scale) : 0.0f;
+			element.style.marginLeft = 0.0f;
+			element.style.marginRight = 0.0f;
+			element.style.marginBottom = 0.0f;
+
+			switch (style.IconPlacement)
+			{
+				case NameplateIconPlacement.Right:
+					// Reversed so the icon can stay the first child whatever the placement.
+					binding.Plate.style.flexDirection = FlexDirection.RowReverse;
+					element.style.marginLeft = gap;
+					break;
+				case NameplateIconPlacement.Above:
+					binding.Plate.style.flexDirection = FlexDirection.Column;
+					element.style.marginBottom = gap;
+					break;
+				default:
+					binding.Plate.style.flexDirection = FlexDirection.Row;
+					element.style.marginRight = gap;
+					break;
 			}
 		}
 

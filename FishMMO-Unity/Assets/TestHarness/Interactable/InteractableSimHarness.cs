@@ -4,6 +4,7 @@ using FishMMO.Server;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using FishNet.Managing;
 using UnityEngine;
 
@@ -51,6 +52,9 @@ namespace FishMMO.TestHarness
 
 		private readonly SimServer server = new SimServer();
 		private NetworkManager networkManager;
+
+		/// <summary>The NPC brains; the bare sim server runs none of the scene server's systems.</summary>
+		private AIBrainHost brainHost;
 		private IPlayerCharacter interactor;
 		private Transform interactorTransform;
 		private readonly List<NPC> interactables = new List<NPC>();
@@ -112,6 +116,9 @@ namespace FishMMO.TestHarness
 				yield break;
 			}
 
+			// NPC brains, the same host the scene server's AISystem runs.
+			brainHost = SimBrains.StartHost(networkManager);
+
 			// Two bankers: one the walker stands next to, one it never approaches.
 			interactables.Add(SpawnInteractable(new Vector3(0f, 0f, 0f), "NearBanker"));
 			interactables.Add(SpawnInteractable(new Vector3(25f, 0f, 0f), "FarBanker"));
@@ -144,6 +151,8 @@ namespace FishMMO.TestHarness
 
 		private void OnDestroy()
 		{
+			brainHost?.Stop();
+			brainHost = null;
 			server.Shutdown();
 		}
 
@@ -159,27 +168,13 @@ namespace FishMMO.TestHarness
 		private NPC SpawnInteractable(Vector3 position, string name)
 		{
 			GameObject clone = server.Spawn(InteractablePrefab, position, Quaternion.identity,
-				gameObject.scene, configure: go =>
-				{
-					go.name = name;
-					/* Null LOD settings = always Active. The LOD profile lives on the archetype,
-					 * which is a shared asset, so the harness tunes a per-instance clone. */
-					AIController ai = go.GetComponent<AIController>();
-					if (ai != null && ai.Archetype != null)
-					{
-						AIArchetypeTemplate simBrain = Instantiate(ai.Archetype);
-						simBrain.name = ai.Archetype.name + " (sim)";
-						simBrain.LodSettings = null;
-						ai.Archetype = simBrain;
-					}
-				},
+				gameObject.scene, configure: go => go.name = name,
 				afterActivate: go =>
 				{
-					AIController ai = go.GetComponent<AIController>();
-					if (ai != null)
-					{
-						ai.Initialize(position);
-					}
+					/* Null LOD settings = always Active. The LOD profile lives on the archetype,
+					 * which is a shared asset, so the harness tunes a per-instance clone. */
+					AIArchetypeTemplate simBrain = SimBrains.CloneArchetype(brainHost, InteractablePrefab);
+					brainHost.Prepare(go.GetComponent<NPC>(), position, simBrain);
 				});
 			return clone.GetComponent<NPC>();
 		}

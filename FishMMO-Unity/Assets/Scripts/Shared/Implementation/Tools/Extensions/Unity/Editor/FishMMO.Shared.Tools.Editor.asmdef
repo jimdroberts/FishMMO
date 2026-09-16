@@ -3,6 +3,7 @@
     "rootNamespace": "FishMMO.Shared",
     "references": [
         "FishMMO.Shared",
+        "FishMMO.Server",
         "FishNet.Runtime",
         "Unity.Addressables",
         "Unity.Addressables.Editor",

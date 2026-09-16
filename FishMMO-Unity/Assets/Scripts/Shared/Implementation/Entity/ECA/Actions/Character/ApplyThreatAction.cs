@@ -17,18 +17,18 @@ namespace FishMMO.Shared
 	///   </item>
 	///   <item>
 	///     <b>Resource-weighted</b> — the cost of the cast is fed through each NPC's
-	///     <see cref="AggressionController.ResourceWeight"/>, so a caster burning mana near a
+	///     the NPC's resource weight, so a caster burning mana near a
 	///     pack draws proportionally more attention than one chipping away.
 	///   </item>
 	/// </list>
 	/// <para>
-	/// The resource-weighted path is what finally gives <see cref="AggressionController.ResourceWeight"/>
+	/// The resource-weighted path is what finally gives the NPC's resource weight
 	/// and <c>RecordResourceSpent</c> a caller. Both existed, were serialized, and were documented
 	/// as "points per resource point spent casting near the NPC" — but nothing in the project ever
 	/// invoked them, so tuning that weight had no effect at all.
 	/// </para>
 	/// <para>
-	/// Only NPCs already in combat are affected: <see cref="AggressionState.RecordResourceSpent"/>
+	/// Only NPCs already in combat are affected: the brain's resource-spent record
 	/// ignores an NPC with an empty threat table, so casting near an unaware mob does not pull it.
 	/// Server-only in effect — threat tables are not replicated.
 	/// </para>
@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Amount of resource this cast is treated as having spent. Each NPC scales it by its own
-		/// <see cref="AggressionController.ResourceWeight"/>.
+		/// the NPC's resource weight.
 		/// </summary>
 		[Tooltip("Resource spent by this cast, weighted per-NPC by its ResourceWeight.")]
 		public int ResourceSpent = 0;
@@ -190,26 +190,12 @@ namespace FishMMO.Shared
 					continue;
 				}
 
-				if (!candidate.TryGet(out IAIController aiController))
+				if (!candidate.TryGet(out INPCBrain brain))
 				{
 					continue;
 				}
 
-				AIController controller = aiController as AIController;
-				if (controller == null || controller.AggressionState == null)
-				{
-					continue;
-				}
-
-				if (ResourceSpent > 0)
-				{
-					controller.AggressionState.RecordResourceSpent(initiator.ID, ResourceSpent);
-				}
-
-				if (ThreatPoints > 0f && controller.Aggression != null && controller.Aggression.HasAggression)
-				{
-					controller.Aggression.AddPoints(initiator.ID, ThreatPoints);
-				}
+				brain.ApplyAreaThreat(initiator, ThreatPoints, ResourceSpent);
 			}
 		}
 	}

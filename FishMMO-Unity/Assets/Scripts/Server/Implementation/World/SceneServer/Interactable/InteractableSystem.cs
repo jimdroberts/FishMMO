@@ -501,15 +501,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			AIController aiController = interactable.Transform.GetComponent<AIController>();
-			if (aiController == null)
+			INPCBrain brain = interactable.Transform.GetComponent<INPCBrain>();
+			if (brain == null)
 			{
 				return;
 			}
 
 			// Look at the target and transition to idle state
-			aiController.LookTarget = character.Transform;
-			aiController.TransitionToIdleState();
+			brain.FaceInteractor(character.Transform);
 		}
 
 		/// <summary>
