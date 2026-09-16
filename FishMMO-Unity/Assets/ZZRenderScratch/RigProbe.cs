@@ -26,7 +26,7 @@ namespace FishMMO.RenderScratch
 			if (!ok) ++failures;
 		}
 
-		[MenuItem("FishMMO/UI Toolkit/Probe Character Rig")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Probe Character Rig", Section = "Probes", Order = 0)]
 		public static void Run()
 		{
 			GameObject go = null;
@@ -113,7 +113,7 @@ namespace FishMMO.RenderScratch
 			}
 
 			Debug.Log(failures == 0 ? "[Probe] RIG FEASIBLE" : $"[Probe] {failures} BLOCKER(S)");
-			EditorApplication.Exit(0);
+			EditorAutomation.Finish(0);
 		}
 
 		private static bool TrySet(object target, string member, object value)

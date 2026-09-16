@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
 using FishMMO.Server.Implementation.World.SceneServer.AI;
+using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 
 namespace FishMMO.Shared
 {
@@ -26,6 +27,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void ClearInspector()
 		{
+			ClearFullPage();
+
 			if (inspectorContent != null)
 			{
 				inspectorContent.Clear();
@@ -74,6 +77,13 @@ namespace FishMMO.Shared
 			if (IsNPCPrefab(asset))
 			{
 				ShowNPCInspector(asset as GameObject);
+				return;
+			}
+
+			// A baked spawn table is build output; it gets a read-only view, not an editor.
+			if (asset is SceneSpawnTable spawnTable)
+			{
+				ShowSpawnTableInspector(spawnTable);
 				return;
 			}
 
@@ -197,6 +207,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnDisable()
 		{
+			ClearFullPage();
 			DestroyActiveEditor();
 		}
 	}

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -115,7 +116,7 @@ namespace FishMMO.RenderScratch
 		private static int frames;
 		private static int stage;
 
-		[MenuItem("FishMMO/UI Toolkit/Probe HUD Overlap")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Probe HUD Overlap", Section = "Probes", Order = 4)]
 		public static void Run()
 		{
 			try
@@ -144,8 +145,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[Hud] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -313,8 +315,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[Hud] pump failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -534,7 +537,7 @@ namespace FishMMO.RenderScratch
 			}
 
 			EditorApplication.update -= Pump;
-			EditorApplication.Exit(0);
+			EditorAutomation.Finish(0);
 		}
 	}
 }

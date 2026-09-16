@@ -27,7 +27,7 @@ namespace FishMMO.TestHarness.Editor
 		private const string SceneFolder = "Assets/Scenes/Test";
 
 		/// <summary>Creates or refreshes every simulation scene.</summary>
-		[MenuItem("FishMMO/Test Scenes/Generate All")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate All Test Scenes", Section = "Test Scenes", Order = 0, Tooltip = "Regenerates every sim scene below.", Confirm = "Regenerate every test harness scene?")]
 		public static void GenerateAll()
 		{
 			EnsureFolder();
@@ -42,7 +42,7 @@ namespace FishMMO.TestHarness.Editor
 		/// <summary>Creates <c>InteractableSim.unity</c>: the server interact-chain scene. The
 		/// harness locates its prefabs and manifest itself (editor fallbacks), so the scene is
 		/// only the bootstrap.</summary>
-		[MenuItem("FishMMO/Test Scenes/Generate Interactable Sim")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Interactable Sim", Section = "Test Scenes", Order = 1)]
 		public static void GenerateInteractableSim()
 		{
 			EnsureFolder();
@@ -54,7 +54,7 @@ namespace FishMMO.TestHarness.Editor
 		}
 
 		/// <summary>Creates <c>RegionSim.unity</c>: the region enter/exit/nesting/ledger scene.</summary>
-		[MenuItem("FishMMO/Test Scenes/Generate Region Sim")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Region Sim", Section = "Test Scenes", Order = 2)]
 		public static void GenerateRegionSim()
 		{
 			EnsureFolder();
@@ -83,7 +83,7 @@ namespace FishMMO.TestHarness.Editor
 		}
 
 		/// <summary>Creates <c>PlatformSim.unity</c>: the twin-world platform prediction scene.</summary>
-		[MenuItem("FishMMO/Test Scenes/Generate Platform Sim")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Platform Sim", Section = "Test Scenes", Order = 3)]
 		public static void GeneratePlatformSim()
 		{
 			EnsureFolder();
@@ -98,7 +98,7 @@ namespace FishMMO.TestHarness.Editor
 		/// <summary>Creates <c>CombatSim.unity</c>: the zero-client server combat + lag-comp scene,
 		/// refreshing its manifest of mock content (which is deliberately not addressable-registered,
 		/// so the bootstrap needs direct references).</summary>
-		[MenuItem("FishMMO/Test Scenes/Generate Combat Sim")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Combat Sim", Section = "Test Scenes", Order = 4)]
 		public static void GenerateCombatSim()
 		{
 			EnsureFolder();
@@ -180,7 +180,7 @@ namespace FishMMO.TestHarness.Editor
 			if (manifest.Roster.Count == 0)
 			{
 				Debug.LogError("[TestSceneGenerator] No mock AbilityTemplates found under Assets/Templates — " +
-					"run the mock generator first (FishMMO → Mock Content).");
+					"run the mock generator first (FishMMO Dashboard → Core → Maintenance → Generate Mock Abilities).");
 			}
 			if (manifest.ChannelMarker == null || manifest.ChargeMarker == null)
 			{

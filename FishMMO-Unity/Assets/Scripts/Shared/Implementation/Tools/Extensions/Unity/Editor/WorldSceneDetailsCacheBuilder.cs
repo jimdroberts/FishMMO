@@ -11,9 +11,9 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class WorldSceneDetailsCacheBuilder
 	{
-		/// <summary>Menu entry point. See <see cref="Rebuild"/>.</summary>
-		[MenuItem("FishMMO/Rebuild World Scene Details", priority = -10)]
-		public static void RebuildMenuItem()
+		/// <summary>Dashboard entry point (World → World Scene Details). See <see cref="Rebuild"/>.</summary>
+		[DashboardTool(DashboardToolAttribute.WorldSceneDetails, "Rebuild World Scene Details", Section = "Cache", Order = 0, Tooltip = "Re-reads every world scene and rewrites the world scene details cache.")]
+		public static void RebuildFromDashboard()
 		{
 			Rebuild();
 		}

@@ -113,7 +113,7 @@ namespace FishMMO.Shared
 		/// The baked overhead map texture, loaded on demand by the client.
 		/// </summary>
 		[Header("Map Image")]
-		[Tooltip("Baked overhead capture of the scene. Produced by FishMMO/World Map/Bake Maps.")]
+		[Tooltip("Baked overhead capture of the scene. Produced by FishMMO Dashboard → World → World Map → Bake Maps.")]
 		public AssetReferenceTexture2D MapImage;
 
 		/// <summary>

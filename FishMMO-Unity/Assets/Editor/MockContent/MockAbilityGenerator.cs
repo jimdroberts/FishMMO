@@ -19,7 +19,7 @@ namespace FishMMO.MockContent
 	/// arbitrary long ids that Unity alone assigns correctly.
 	/// </para>
 	/// <para>
-	/// Run from the menu (<c>FishMMO/Mock Content/Generate Mock Abilities</c>) or headlessly with
+	/// Run from the FishMMO Dashboard (Core → Maintenance → Generate Mock Abilities) or headlessly with
 	/// <c>-executeMethod FishMMO.MockContent.MockAbilityGenerator.GenerateAll</c>.
 	/// </para>
 	/// <para>
@@ -69,7 +69,7 @@ namespace FishMMO.MockContent
 		private static GameObject flamePrefab;
 		private static GameObject punchPrefab;
 
-		[MenuItem("FishMMO/Mock Content/Generate Mock Abilities")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Mock Abilities", Section = "Mock Content", Order = 1, Tooltip = "Generates the mock ability templates. Does not register them as addressables.")]
 		public static void GenerateAll()
 		{
 			created.Clear();
@@ -119,7 +119,7 @@ namespace FishMMO.MockContent
 		/// <c>ICachedObject.AddToCache</c> from the addressable load callback). Deliberately NOT run
 		/// by <see cref="GenerateAll"/> because it modifies a shared settings asset.
 		/// </summary>
-		[MenuItem("FishMMO/Mock Content/Register Mock Abilities As Addressables")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Register Mock Abilities As Addressables", Section = "Mock Content", Order = 2, Tooltip = "Registers the generated mock abilities as addressables so the runtime template cache sees them. Modifies the shared addressables settings.", Confirm = "Register every mock ability as an addressable? This modifies the shared addressables settings.")]
 		public static void RegisterAddressables()
 		{
 			var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
@@ -154,7 +154,7 @@ namespace FishMMO.MockContent
 			Debug.Log($"[MockAbilityGenerator] Registered {count} mock assets as addressables in '{AddressableGroupName}'.");
 		}
 
-		[MenuItem("FishMMO/Mock Content/Delete Mock Abilities")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Delete Mock Abilities", Section = "Mock Content", Order = 3, Tooltip = "Deletes every generated mock ability.", Confirm = "Delete every generated mock ability?")]
 		public static void DeleteAll()
 		{
 			foreach (string folder in new[] { AbilityFolder, EventFolder, BuffFolder })

@@ -77,7 +77,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Moves every AI asset into its canonical folder.
 		/// </summary>
-		[MenuItem("FishMMO/AI/Organize AI Assets", priority = 203)]
+		[DashboardTool(DashboardToolAttribute.AITools, "Organize AI Assets", Section = "AI Assets", Order = 0, Tooltip = "Moves every AI asset into its canonical folder.", Confirm = "Move every AI asset into its canonical folder?")]
 		public static void OrganizeAIAssets()
 		{
 			StringBuilder report = new StringBuilder();
@@ -165,7 +165,7 @@ namespace FishMMO.Shared
 		/// writes the effective value out, which also means a later change to the initializer does
 		/// not silently retune every existing asset.
 		/// </remarks>
-		[MenuItem("FishMMO/AI/Re-serialize AI Assets", priority = 204)]
+		[DashboardTool(DashboardToolAttribute.AITools, "Re-serialize AI Assets", Section = "AI Assets", Order = 1, Tooltip = "Rewrites every AI asset so fields added since it was saved appear in its YAML with their effective values.", Confirm = "Re-serialize every AI asset? Expect a large diff.")]
 		public static void ReserializeAIAssets()
 		{
 			List<string> paths = new List<string>();

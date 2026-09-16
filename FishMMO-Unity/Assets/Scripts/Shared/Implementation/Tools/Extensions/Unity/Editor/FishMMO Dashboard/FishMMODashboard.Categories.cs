@@ -117,6 +117,11 @@ namespace FishMMO.Shared
 				IsSpecial = true,
 			});
 
+			AddToolPageCategory(DashboardToolAttribute.Validate, "Core");
+			AddToolPageCategory(DashboardToolAttribute.UnitTests, "Core");
+			AddToolPageCategory(DashboardToolAttribute.UITests, "Core");
+			AddToolPageCategory(DashboardToolAttribute.Maintenance, "Core");
+
 			// ── Character Templates ──
 			categories.Add(new TemplateCategory
 			{
@@ -254,6 +259,8 @@ namespace FishMMO.Shared
 			AddCategory<FishMMO.Shared.NameGeneration.NameGrammarTemplate>("Name Grammar", "Naming",
 				"Assets/Templates/Entity/Naming",
 				"FishMMO/Naming/Name Grammar");
+
+			AddNameGenerationCategory();
 
 			// ── Items ──
 			categories.Add(new TemplateCategory
@@ -491,6 +498,8 @@ namespace FishMMO.Shared
 				},
 			});
 
+			AddToolPageCategory(DashboardToolAttribute.AITools, "NPCs");
+
 			// ── Interactables ──
 			AddCategory<DialogueTemplate>("Dialogues", "Interactables",
 				"Assets/Templates/Entity/Interactables/Dialogues",
@@ -529,6 +538,9 @@ namespace FishMMO.Shared
 			AddCategory<WorldSceneDetailsCache>("World Scene Details", "World",
 				"Assets/Prefabs/Shared",
 				"FishMMO/World Scene Details");
+
+			RegisterSpawnTablesCategory();
+			AddToolPageCategory(DashboardToolAttribute.WorldMap, "World");
 		}
 
 		/// <summary>
@@ -688,12 +700,21 @@ namespace FishMMO.Shared
 				{
 					ShowPatchGeneratorInspector();
 				}
+				else if (cat.DisplayName == NAME_GENERATION_CATEGORY)
+				{
+					ShowNameGenerationPage();
+				}
+				else if (IsToolPage(cat.DisplayName))
+				{
+					ShowToolPage(cat.DisplayName);
+				}
 			}
 			else
 			{
 				LoadAssetsForCategory(cat);
 				RefreshEntityList();
 				ClearInspector();
+				ShowCategoryLanding(cat);
 			}
 
 			SetStatus($"Category: {cat.DisplayName}");

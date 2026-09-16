@@ -77,8 +77,8 @@ namespace FishMMO.UnitTests
 
 			LogAssert.AreEqual(0, missing.Count,
 				$"Interest management is not wired on: {string.Join(", ", missing)}. Without it every " +
-				"client pays the all-visible scene budget. Run FishMMO/Prediction/Attach Observers To " +
-				"Players And World Items.");
+				"client pays the all-visible scene budget. Run FishMMO Dashboard → Core → Maintenance → " +
+				"Attach Observers To Players And World Items.");
 		}
 
 		/// <summary>

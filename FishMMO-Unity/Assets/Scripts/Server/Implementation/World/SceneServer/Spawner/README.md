@@ -29,11 +29,15 @@ World scenes are built into **one addressable bundle shared by clients and serve
 |---|---|---|
 | `ObjectSpawner` | A world scene, on a GameObject tagged `EditorOnly` | Design-time placement and settings. Inert at runtime; never reaches a build. |
 | `SceneSpawnTable` | `Assets/Prefabs/Server/SceneServer/SpawnTables/<Scene>.asset` | The scene's spawners, baked: every authored value plus where each spawner stood. |
-| `SpawnTableCatalogue` | `…/SpawnTables/SpawnTableCatalogue.asset` | Every table, by scene name. Referenced by `SpawnerSystem.asset`, which is in the server-only addressable group. |
+| `SpawnTableCatalogue` | `…/SpawnTables/SpawnTableCatalogue.asset` | Every table, by scene name. Referenced by `SpawnerSystem.asset`. |
+
+Every table and the catalogue are **addressable in `Server_Static_Permanent`**, addressed by path and labelled for the server's boot load. Client builds drop every group with "Server" in its name, so the data never reaches a client bundle. `ServerAddressables.Register` does this whenever an asset is created, and again on every bake (so every build re-checks it). It is idempotent, so the group file only changes when an entry was missing or wrong. `SpawnTableBakeTests.ServerDataAssets_AreAddressableInTheServerGroupOnly` checks that each table and catalogue is in that group and in no group a client builds.
 | `SpawnerSystem` / `SpawnerHost` | Scene server | On each world scene load, runs one `SpawnerRuntime` per table entry for that scene instance; drops them on unload. |
 | `SpawnerRuntime` | Scene server | The spawner itself: pool reservation, spawning, respawn timers, conditions. The spawned objects' `ISpawnOwner`. |
 
-The bake runs from `FishMMO → Spawners → Bake Spawn Tables`, **whenever a world scene is saved**, and **before every addressables build** — which also refuses to build while any spawner is not tagged `EditorOnly` or still carries a `NetworkObject`. The tables are generated but checked in, like the world scene details cache.
+The bake runs from `FishMMO Dashboard → World → Spawn Tables → Rebuild Spawn Tables`, **whenever a world scene is saved**, and **before the addressables step of every build** — the dashboard's *Build Addressables* and *Build Game* (client and server) and the CLI build alike. Every build refuses to continue while any spawner is not tagged `EditorOnly` or still carries a `NetworkObject`. The tables are generated but checked in, like the world scene details cache. Their `[SerializeReference]` ids are numbered in table order, so rebaking an unchanged scene leaves its table byte-identical and a build does not dirty the tree.
+
+**Dashboard → World → Spawn Tables** shows the tables read-only. The landing page lists every world scene with its spawner count, flags tables missing from the catalogue or left behind by a scene that is no longer a world scene, and has **Rebuild Spawn Tables**, which offers to save modified scenes first and then reports each problem and build blocker. Selecting a table shows each spawner's placement, schedule, conditions and spawnables (prefab, chance, respawn window, NPC overrides), warns about entries that spawn nothing, and has **Rebake This Scene** and **Open Scene**. Edit spawners in the scene, not the table, because the next bake overwrites the table.
 
 It used to be a `NetworkBehaviour` on its own scene `NetworkObject` that disabled itself off the server, which shipped every spawner's configuration to every player and spent a scene network object on each.
 
@@ -88,11 +92,11 @@ This is also why the per-spawner override settings matter for memory and not onl
 
 Integrated module within the FishMMO Server assembly. The scene server's system list (`SceneServer.unity`) runs `SpawnerSystem`, and `SpawnerSystem.asset` names `SpawnTableCatalogue.asset`; `SpawnerSystem.asset` is in the `Server_Static_Permanent` addressable group, which pulls every table into the server-only bundle.
 
-Scenes authored before the move carry networked spawners. `FishMMO → Spawners → Migrate Scene Spawners` tags every spawner `EditorOnly`, removes the `NetworkObject` that existed only for it, and bakes the tables. `[MovedFrom]` on the settings classes lets old scenes' `[SerializeReference]` records resolve to the server assembly.
+Scenes authored before the move carry networked spawners. `FishMMO Dashboard → World → Spawn Tables → Migrate Scene Spawners` tags every spawner `EditorOnly`, removes the `NetworkObject` that existed only for it, and bakes the tables. `[MovedFrom]` on the settings classes lets old scenes' `[SerializeReference]` records resolve to the server assembly.
 
 ## Quick Start Guide
 
-1. Add an `ObjectSpawner` component to an empty GameObject in a world scene (`Add Component → FishMMO/Server/Object Spawner`). The GameObject is tagged `EditorOnly` automatically.
+1. Add an `ObjectSpawner` component to an empty GameObject in a world scene (`Add Component → FishMMO/Server/Object Spawner`). The GameObject is tagged `EditorOnly` automatically, and the tag cannot be left off. `ObjectSpawner.OnValidate` re-tags a spawner whenever it is loaded, pasted or edited, and `SpawnerTagEnforcer` re-tags every spawner as its scene is saved, which catches a tag changed on the GameObject afterwards. Each correction is logged and can be undone.
 2. Configure `Spawnables` — pick a settings type (NPC, item) and assign its prefab.
 3. Set `InitialSpawnCount` and `MaxSpawnCount` to control concurrency.
 4. Choose a `SpawnType` (Linear, Random, or Weighted).
@@ -241,7 +245,7 @@ Typical use: a camp that does not return while its guard stands.
 - **AI System** — `AIBrainHost.Prepare(npc, spawnPosition, archetypeOverride)` runs after the scene move and before the network spawn.
 - **Pet System** — pets are spawned by `PetSystem`, not by spawners, and despawn directly.
 - **Scene Server** — `SpawnerHost` follows FishNet's server-side `OnLoadEnd` / `OnUnloadEnd`, and starts a loaded scene one update later so the scene server's own handler (difficulty rules, orphan unloads) has always run first.
-- **Build** — `CustomBuildTool` bakes the tables and refuses to build while a spawner would ship.
+- **Build** — `CustomBuildTool` bakes the tables before the addressables step of both `RunBuild` (*Build Game*) and the addressables-only build, and refuses to build while a spawner would ship.
 
 ## Operational Checks
 
@@ -249,6 +253,10 @@ Typical use: a camp that does not return while its guard stands.
 |-------|---------------|-----------------|
 | Nothing ships | `SpawnTableBakeTests.ABuiltWorldScene_ReferencesNoSpawnerAndNoSpawnerData` | Built world scenes reference no spawner |
 | Tables up to date | `SpawnTableBakeTests.EverySceneWithSpawners_HasABakedTableThatMatchesIt` | Every scene's table matches its spawners |
+| Tag enforced | `SpawnTableBakeTests.AnUntaggedSpawner_IsRetaggedBeforeItsSceneIsSaved` | Saving a scene retags an untagged spawner |
+| Server group only | `SpawnTableBakeTests.ServerDataAssets_AreAddressableInTheServerGroupOnly` | Tables and catalogues are addressable only where clients never build |
+| Every build bakes | `SpawnTableBakeTests.EveryBuildPath_BakesSpawnTablesBeforeItsAddressables` | Each addressables build in `CustomBuildTool` is preceded by a bake |
+| Rebakes don't churn | `SpawnTableBakeTests.ABakedTable_KeepsItsReferenceIdsAcrossRebakes` | An unchanged rebake serializes identically |
 | Initial spawn | Run a scene server with `InitialSpawnCount > 0` | Correct number of entities spawned once the scene loads |
 | Max spawn cap | Verify `SpawnedCount` never exceeds `MaxSpawnCount` | Count stays at or below configured maximum |
 | Weighted selection | Set `SpawnType = Weighted` with varied `SpawnChance` | Higher-chance entries spawn proportionally more |

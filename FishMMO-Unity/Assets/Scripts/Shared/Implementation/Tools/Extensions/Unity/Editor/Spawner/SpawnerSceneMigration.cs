@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Migrates every world scene and bakes the spawn tables.
 		/// </summary>
-		[MenuItem("FishMMO/Spawners/Migrate Scene Spawners", priority = 11)]
+		[DashboardTool(DashboardToolAttribute.SpawnTables, "Migrate Scene Spawners", Section = "Migration", Order = 0, Tooltip = "Tags every spawner EditorOnly, removes NetworkObjects that existed only for spawners, saves the changed scenes and bakes the tables.", Confirm = "Migrate the spawners in every world scene? Changed scenes are saved.")]
 		public static void MigrateAll()
 		{
 			StringBuilder report = new StringBuilder();

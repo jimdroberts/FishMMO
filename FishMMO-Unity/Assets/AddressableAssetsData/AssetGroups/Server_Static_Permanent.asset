@@ -171,6 +171,42 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6aebb0836c44c5ba11d0cf941ce0353
+    m_Address: Assets/Prefabs/Server/SceneServer/AIBrainCatalogue.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e33fb943e3679306abf47876b2a7d872
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Dungeon.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9eff8c9262694279a2d40893e55c00ed
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/SpawnTableCatalogue.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f23e4e47e1bcac9b18d2d3bee4159f51
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene A.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48e90ed169b30a433adb7716340a2cb0
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene B.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e04a60db5b629dde0ab3ab264cdf946b
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Tutorial Spawners.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
   m_SchemaSet:

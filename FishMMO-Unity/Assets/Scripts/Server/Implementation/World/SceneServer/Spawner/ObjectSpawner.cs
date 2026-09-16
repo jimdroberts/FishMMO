@@ -10,7 +10,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 	/// <remarks>
 	/// <para>
 	/// <b>Authoring only.</b> The server never reads this component. The spawn table baker
-	/// (<c>FishMMO → Spawners → Bake Spawn Tables</c>, and automatically whenever a world scene is
+	/// (<c>FishMMO Dashboard → World → Spawn Tables → Rebuild Spawn Tables</c>, and automatically whenever a world scene is
 	/// saved or a build starts) copies every spawner in a scene into that scene's
 	/// <see cref="SceneSpawnTable"/>, and <see cref="SpawnerSystem"/> runs the table. World scenes
 	/// are built into one bundle shared by clients and servers, so the spawner's GameObject is
@@ -178,6 +178,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		private void Reset()
 		{
 			gameObject.tag = EditorOnlyTag;
+		}
+
+		/// <summary>
+		/// Re-tags the spawner whenever it is loaded, pasted or edited, so nobody can leave one
+		/// untagged. A tag changed on the GameObject afterwards does not call this; the scene-save
+		/// hook in <c>SpawnerTagEnforcer</c> catches that before the scene is written.
+		/// </summary>
+		private void OnValidate()
+		{
+			if (Application.isPlaying || CompareTag(EditorOnlyTag))
+			{
+				return;
+			}
+
+			// A tag cannot be set from inside OnValidate while Unity is loading or importing the object.
+			UnityEditor.EditorApplication.delayCall += () =>
+			{
+				if (this != null && !Application.isPlaying)
+				{
+					EnforceEditorOnlyTag(this);
+				}
+			};
+		}
+
+		/// <summary>
+		/// Tags a spawner's GameObject <see cref="EditorOnlyTag"/>, recording an undo step and
+		/// dirtying its scene or prefab.
+		/// </summary>
+		/// <param name="spawner">The spawner.</param>
+		/// <returns>True if the tag was changed.</returns>
+		public static bool EnforceEditorOnlyTag(ObjectSpawner spawner)
+		{
+			if (spawner == null || spawner.CompareTag(EditorOnlyTag))
+			{
+				return false;
+			}
+
+			GameObject go = spawner.gameObject;
+			UnityEditor.Undo.RecordObject(go, "Tag Spawner EditorOnly");
+			string previous = go.tag;
+			go.tag = EditorOnlyTag;
+			UnityEditor.EditorUtility.SetDirty(go);
+			if (go.scene.IsValid() && !UnityEditor.EditorUtility.IsPersistent(go))
+			{
+				UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(go.scene);
+			}
+			Debug.Log($"[ObjectSpawner] {go.name}: tag '{previous}' -> '{EditorOnlyTag}'. Spawners are authoring-only and must never ship to clients.", go);
+			return true;
 		}
 
 		/// <summary>

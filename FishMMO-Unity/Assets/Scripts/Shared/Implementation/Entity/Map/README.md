@@ -46,18 +46,18 @@ a headless server where no map exists.
 | `IMapMarkerIconSource` | `interface` | Supplies a marker's icon when the icon belongs to something the marker points at and arrives asynchronously — see [Live icons](#live-icons) |
 | `MapMarkerVisibility` | `enum` | Who may see it — `Always`, `SelfOnly`, `PartyOrGuild`, `Detection`, `Discovered` |
 | `MapBoundsResolver` | `static` | Derives a usable map rectangle when a scene has no definition |
-| `Editor/WorldMapBaker` | Editor | The bake, behind **FishMMO → World Map → Bake Maps**; **Remove Baked Maps** undoes it |
+| `Editor/WorldMapBaker` | Editor | The bake, behind **FishMMO Dashboard → World → World Map → Bake Maps**; **Remove Baked Maps** undoes it |
 
 ## Authoring a scene's map
 
 1. Drop `MapRegionLabel` and `MapPointOfInterest` components into the scene and place them on the
    terrain.
-2. Run **FishMMO → World Map → Bake Maps**. For every world scene it creates a
+2. Run **FishMMO Dashboard → World → World Map → Bake Maps**. For every world scene it creates a
    `WorldMapDefinition` under `Assets/Prefabs/Shared/WorldMaps/` if there is not one already,
    assigns it to that scene's `WorldSceneSettings`, migrates the loading image off the component,
    derives the map bounds from the scene's boundaries and terrain, harvests the labels and
    landmarks, photographs the scene from overhead, and registers the image as an addressable in the
-   `ClientWorldMaps` group. **FishMMO → World Map → Remove Baked Maps** deletes the bake folder and
+   `ClientWorldMaps` group. **FishMMO Dashboard → World → World Map → Remove Baked Maps** deletes the bake folder and
    that group again.
 3. Rebuild the world scene details cache so `WorldSceneDetails.MapDefinition` points at it.
 
@@ -172,7 +172,7 @@ Map/
 ├── MapMarkerVisibility.cs       # 5 visibility rules
 ├── MapBoundsResolver.cs         # Definition → SceneBoundary → terrain fallback chain
 └── Editor/
-    ├── WorldMapBaker.cs         # FishMMO → World Map → Bake Maps / Remove Baked Maps
+    ├── WorldMapBaker.cs         # FishMMO Dashboard → World → World Map → Bake Maps / Remove Baked Maps
     └── FishMMO.Shared.Map.Editor.asmdef
 ```
 

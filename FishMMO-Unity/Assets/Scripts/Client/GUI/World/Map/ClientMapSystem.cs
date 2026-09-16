@@ -649,7 +649,7 @@ namespace FishMMO.Client
 
 				if (handle.Status != AsyncOperationStatus.Succeeded)
 				{
-					Log.Warning("ClientMapSystem", $"Could not load the baked map image for scene '{requestedScene}'. The world map will draw markers over a plain background. Re-run FishMMO/World Map/Bake Maps, and check the image is in an addressable group.");
+					Log.Warning("ClientMapSystem", $"Could not load the baked map image for scene '{requestedScene}'. The world map will draw markers over a plain background. Re-run FishMMO Dashboard → World → World Map → Bake Maps, and check the image is in an addressable group.");
 					return;
 				}
 

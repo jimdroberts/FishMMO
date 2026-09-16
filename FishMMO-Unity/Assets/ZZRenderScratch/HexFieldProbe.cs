@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -32,7 +33,7 @@ namespace FishMMO.RenderScratch
 		private static RenderTexture texture;
 		private static int framesWaited;
 
-		[MenuItem("FishMMO/UI Toolkit/Probe Hex Field")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Probe Hex Field", Section = "Probes", Order = 2)]
 		public static void Run()
 		{
 			try
@@ -63,8 +64,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[HexProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -82,14 +84,14 @@ namespace FishMMO.RenderScratch
 				EditorApplication.update -= Pump;
 				Report();
 				Release();
-				EditorApplication.Exit(0);
+				EditorAutomation.Finish(0);
 			}
 			catch (Exception ex)
 			{
 				EditorApplication.update -= Pump;
 				Debug.LogError($"[HexProbe] pump failed: {ex}");
 				Release();
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

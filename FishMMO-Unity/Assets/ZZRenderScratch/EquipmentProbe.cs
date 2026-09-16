@@ -41,7 +41,7 @@ namespace FishMMO.RenderScratch
 		private static RenderTexture texture;
 		private static int framesWaited;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Equipment Populated")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Equipment Populated", Section = "Renders", Order = 3)]
 		public static void Render()
 		{
 			try
@@ -81,8 +81,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[EquipmentProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -100,14 +101,14 @@ namespace FishMMO.RenderScratch
 				EditorApplication.update -= Pump;
 				Capture();
 				Release();
-				EditorApplication.Exit(0);
+				EditorAutomation.Finish(0);
 			}
 			catch (Exception ex)
 			{
 				EditorApplication.update -= Pump;
 				Debug.LogError($"[EquipmentProbe] pump failed: {ex}");
 				Release();
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

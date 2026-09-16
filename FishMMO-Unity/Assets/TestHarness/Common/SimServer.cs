@@ -36,7 +36,7 @@ namespace FishMMO.TestHarness
 			if (manifest == null || manifest.NetworkPrefab == null)
 			{
 				Debug.LogError("[SimServer] No manifest (or no network prefab in it) — run " +
-					"FishMMO → Test Scenes → Generate Combat Sim first; every sim scene shares that manifest.");
+					"FishMMO Dashboard → Core → Maintenance → Generate Combat Sim first; every sim scene shares that manifest.");
 				yield break;
 			}
 

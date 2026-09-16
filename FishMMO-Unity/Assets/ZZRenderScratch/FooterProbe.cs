@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -16,7 +17,7 @@ namespace FishMMO.RenderScratch
 		private const string INSTANCE_UXML = "Assets/Scripts/Client/GUI/World/Instance/UIInstance.uxml";
 		private const string PANEL_SETTINGS = "Assets/UI Toolkit/PanelSettings.asset";
 
-		[MenuItem("FishMMO/UI Toolkit/Probe Footer")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Probe Footer", Section = "Probes", Order = 5)]
 		public static void Run()
 		{
 			GameObject host = new GameObject("FooterProbe") { hideFlags = HideFlags.HideAndDontSave };
@@ -111,7 +112,7 @@ namespace FishMMO.RenderScratch
 			finally
 			{
 				UnityEngine.Object.DestroyImmediate(host);
-				EditorApplication.Exit(0);
+				EditorAutomation.Finish(0);
 			}
 		}
 

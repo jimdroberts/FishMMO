@@ -31,9 +31,15 @@ namespace FishMMO.RenderScratch
 		private const string ARMED_KEY = "FishMMO.PlayLeakProbe.Armed";
 		private const string SCENE_PATH = "Assets/ZZRenderScratch/PlayLeakProbeScene.unity";
 
-		[MenuItem("FishMMO/UI Toolkit/Probe Preview Leak (Play Mode)")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Probe Preview Leak (Play Mode)", Section = "Probes", Order = 7, Tooltip = "Replaces the open scene with a scratch scene, enters play mode for several minutes, then leaves play mode.", Confirm = "This replaces the open scene with a scratch scene and runs in play mode for several minutes. Continue?")]
 		public static void Run()
 		{
+			// In an open editor the scratch scene replaces the user's; let them keep their work.
+			if (!EditorAutomation.LaunchedHeadless && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+			{
+				return;
+			}
+
 			try
 			{
 				Scene scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
@@ -53,7 +59,7 @@ namespace FishMMO.RenderScratch
 			catch (Exception ex)
 			{
 				Debug.LogError($"[PlayLeakProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -82,7 +88,7 @@ namespace FishMMO.RenderScratch
 			catch (Exception ex)
 			{
 				Debug.LogError($"[PlayLeakProbe] begin failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 	}
@@ -258,12 +264,14 @@ namespace FishMMO.RenderScratch
 				if (modeIndex < modes.Length) { BeginMode(); return; }
 
 				Debug.Log("[PlayLeakProbe] SUMMARY\n" + report);
-				EditorApplication.Exit(0);
+				enabled = false;
+				EditorAutomation.Finish(0);
 			}
 			catch (Exception ex)
 			{
 				Debug.LogError($"[PlayLeakProbe] pump failed: {ex}");
-				EditorApplication.Exit(1);
+				enabled = false;
+				EditorAutomation.Finish(1);
 			}
 		}
 

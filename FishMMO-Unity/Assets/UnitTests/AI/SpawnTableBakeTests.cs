@@ -270,7 +270,7 @@ namespace FishMMO.UnitTests.AI
 					}
 
 					checkedScenes++;
-					Assert.IsTrue(hasTable, $"{sceneName} has spawners but no baked table; run FishMMO/Spawners/Bake Spawn Tables");
+					Assert.IsTrue(hasTable, $"{sceneName} has spawners but no baked table; run FishMMO Dashboard → World → Spawn Tables → Rebuild Spawn Tables");
 					Assert.AreEqual(spawners.Count, table.Spawners.Count, $"{sceneName}: table is out of date");
 
 					for (int i = 0; i < spawners.Count; ++i)
@@ -415,6 +415,129 @@ namespace FishMMO.UnitTests.AI
 				new SpawnerBuildStripper().OnProcessScene(scene, null);
 
 				Assert.IsEmpty(SpawnTableBaker.CollectSpawners(scene), "every spawner component must be gone from a built scene");
+			}
+			finally
+			{
+				EditorSceneManager.ClosePreviewScene(scene);
+			}
+		}
+
+		[Test]
+		public void ABakedTable_KeepsItsReferenceIdsAcrossRebakes()
+		{
+			/* Random [SerializeReference] ids made every build rewrite every table with nothing
+			 * else changed. The bake numbers them in table order and copies them onto the asset. */
+			SceneSpawnTable Stage()
+			{
+				SceneSpawnTable staged = ScriptableObject.CreateInstance<SceneSpawnTable>();
+				staged.Spawners = new List<SpawnerDefinition>
+				{
+					new SpawnerDefinition { Spawnables = new List<SpawnableSettings> { new NPCSpawnableSettings(), null, new ItemSpawnableSettings() } },
+					null,
+					new SpawnerDefinition
+					{
+						Spawnables = new List<SpawnableSettings> { new SpawnableSettings() },
+						OrConditions = new List<RespawnCondition> { new SpawnersClearedCondition() },
+					},
+				};
+				Assert.IsTrue(SpawnTableBaker.AssignStableReferenceIds(staged));
+				return staged;
+			}
+
+			SceneSpawnTable asset = ScriptableObject.CreateInstance<SceneSpawnTable>();
+			SceneSpawnTable first = Stage();
+			SceneSpawnTable second = Stage();
+			try
+			{
+				EditorUtility.CopySerialized(first, asset);
+				string once = EditorJsonUtility.ToJson(asset);
+				EditorUtility.CopySerialized(second, asset);
+				Assert.AreEqual(once, EditorJsonUtility.ToJson(asset), "an unchanged rebake must serialize identically");
+
+				long Id(object managed) => UnityEngine.Serialization.ManagedReferenceUtility.GetManagedReferenceIdForObject(asset, managed);
+				Assert.AreEqual(1, Id(asset.Spawners[0].Spawnables[0]));
+				Assert.AreEqual(2, Id(asset.Spawners[0].Spawnables[2]));
+				Assert.AreEqual(3, Id(asset.Spawners[2].Spawnables[0]));
+				Assert.AreEqual(4, Id(asset.Spawners[2].OrConditions[0]));
+			}
+			finally
+			{
+				Object.DestroyImmediate(first);
+				Object.DestroyImmediate(second);
+				Object.DestroyImmediate(asset);
+			}
+		}
+
+		[Test]
+		public void ServerDataAssets_AreAddressableInTheServerGroupOnly()
+		{
+			/* The server loads its data by the Server_Static_Permanent label, and client builds drop
+			 * every group named "Server". An entry anywhere else would ship to players. */
+			List<string> paths = new List<string>();
+			foreach (string type in new[] { nameof(SceneSpawnTable), nameof(SpawnTableCatalogue), "AIBrainCatalogue" })
+			{
+				paths.AddRange(AssetDatabase.FindAssets("t:" + type, new[] { "Assets" }).Select(AssetDatabase.GUIDToAssetPath));
+			}
+			Assert.IsNotEmpty(paths);
+
+			string[] groupFiles = System.IO.Directory.GetFiles("Assets/AddressableAssetsData/AssetGroups", "*.asset");
+			string serverGroup = System.IO.File.ReadAllText("Assets/AddressableAssetsData/AssetGroups/" + ServerAddressables.GroupName + ".asset");
+			foreach (string path in paths)
+			{
+				string guid = AssetDatabase.AssetPathToGUID(path);
+				Assert.That(serverGroup, Does.Contain("m_GUID: " + guid), $"{path} must be in {ServerAddressables.GroupName}");
+				foreach (string file in groupFiles)
+				{
+					if (System.IO.Path.GetFileName(file).IndexOf("Server", System.StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						continue;
+					}
+					Assert.That(System.IO.File.ReadAllText(file), Does.Not.Contain("m_GUID: " + guid), $"{path} is in {file}, which clients build");
+				}
+			}
+		}
+
+		[Test]
+		public void EveryBuildPath_BakesSpawnTablesBeforeItsAddressables()
+		{
+			/* The dashboard's Build Game and the Build Addressables button build bundles through
+			 * different methods; a server built by one without the bake runs yesterday's spawners. */
+			string source = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/FishMMO Dashboard/CustomBuildTool/Core/CustomBuildTool.cs");
+			const string build = "addressableManager.BuildAddressablesWithExclusions(";
+			const string bake = "BakeSpawnTables();";
+
+			int calls = 0;
+			int from = 0;
+			for (int at = source.IndexOf(build, System.StringComparison.Ordinal); at >= 0; at = source.IndexOf(build, at + build.Length, System.StringComparison.Ordinal))
+			{
+				calls++;
+				string before = source.Substring(from, at - from);
+				Assert.That(before, Does.Contain(bake), $"addressables build #{calls} is not preceded by a spawn table bake");
+				from = at + build.Length;
+			}
+			Assert.GreaterOrEqual(calls, 2, "expected both the game build and the addressables-only build");
+		}
+
+		[Test]
+		public void AnUntaggedSpawner_IsRetaggedBeforeItsSceneIsSaved()
+		{
+			/* OnValidate does not run when someone changes the GameObject's tag afterwards; the
+			 * scene-saving hook is what keeps an untagged spawner out of every saved scene. */
+			Scene scene = EditorSceneManager.NewPreviewScene();
+			try
+			{
+				GameObject go = new GameObject("Untagged");
+				go.AddComponent<ObjectSpawner>();
+				go.tag = "Untagged";
+				SceneManager.MoveGameObjectToScene(go, scene);
+
+				System.Type enforcer = typeof(SpawnTableBaker).Assembly.GetType("FishMMO.Shared.SpawnerTagEnforcer");
+				Assert.IsNotNull(enforcer, "the save hook is gone");
+				enforcer.GetMethod("OnSceneSaving", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+					.Invoke(null, new object[] { scene, "Assets/Untagged.unity" });
+
+				Assert.IsTrue(go.CompareTag(ObjectSpawner.EditorOnlyTag));
+				Assert.IsFalse(ObjectSpawner.EnforceEditorOnlyTag(go.GetComponent<ObjectSpawner>()), "an already tagged spawner is left alone");
 			}
 			finally
 			{

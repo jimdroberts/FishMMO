@@ -34,7 +34,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Adds the history component to every predicted character prefab that lacks one.
 		/// </summary>
-		[MenuItem("FishMMO/Prediction/Attach Position History To Characters")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Attach Position History To Characters", Section = "Prediction Wiring", Order = 0, Tooltip = "Adds the lag-compensation history component to every predicted character prefab that lacks one.", Confirm = "Add position history to every predicted character prefab that lacks it?")]
 		public static void AttachToCharacters()
 		{
 			List<string> added = new List<string>();
@@ -102,7 +102,7 @@ namespace FishMMO.Shared
 		/// already in the list is not added twice.
 		/// </para>
 		/// </remarks>
-		[MenuItem("FishMMO/Prediction/Attach Observers To Players And World Items")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Attach Observers To Players And World Items", Section = "Prediction Wiring", Order = 1, Tooltip = "Adds the observer component and condition to player and world item prefabs. Idempotent.", Confirm = "Add observers to player and world item prefabs?")]
 		public static void AttachObserversToPlayersAndWorldItems()
 		{
 			(string root, string conditionPath)[] targets =
@@ -221,7 +221,7 @@ namespace FishMMO.Shared
 		/// and undo bookkeeping correct instead of writing a field behind the editor's back.
 		/// </para>
 		/// </remarks>
-		[MenuItem("FishMMO/Prediction/Switch Playable Characters To Interpolated")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Switch Playable Characters To Interpolated", Section = "Prediction Wiring", Order = 2, Tooltip = "Switches playable character NetworkObjects to interpolated prediction and clears state forwarding.", Confirm = "Switch every playable character prefab to interpolated prediction?")]
 		public static void SwitchPlayableCharactersToInterpolated()
 		{
 			const string root = "Assets/Prefabs/Shared/Entity/PlayableCharacters";

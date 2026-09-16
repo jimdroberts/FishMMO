@@ -105,7 +105,7 @@ assertion is the right tool, and should say why it is one.
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Unity Editor on Windows / Linux / macOS | Supported | Run via Test Runner (EditMode) or `FishMMO / Unit Tests` menu. |
+| Unity Editor on Windows / Linux / macOS | Supported | Run via Test Runner (EditMode) or the `FishMMO Dashboard → Core → Unit Tests` page. |
 | Unity batch mode (headless) | Supported | `-runTests -testPlatform EditMode`; see [Running](#running). |
 | Player builds | Not applicable | Both assemblies carry the `UNITY_INCLUDE_TESTS` define constraint. |
 
@@ -128,7 +128,7 @@ report `total=0`.
 ```
 Assets/UnitTests/
 ├── FishMMO.UnitTests.asmdef                  # EditMode-only assembly definition
-├── UnitTestMenu.cs                           # FishMMO / Unit Tests menu items + auth DLL provenance report
+├── UnitTestMenu.cs                           # FishMMO Dashboard → Core → Unit Tests buttons + auth DLL provenance report
 ├── TestAssemblySetup.cs                      # [SetUpFixture] — initialises FishMMO.Logging.Log
 ├── Harness/
 │   ├── AuthTestHarness.cs                    # Pairs ClientAuthenticatorCore + SrpAuthenticatorCore in-process
@@ -176,7 +176,7 @@ reports.
 
 These tests are configuration-free: no environment variables, `appsettings`,
 or external services are read. Verbose logging is toggled via the
-`FishMMO / Unit Tests / Run All EditMode Tests (Verbose)` menu, which sets
+`FishMMO Dashboard → Core → Unit Tests → Run All EditMode Tests (Verbose)` button, which sets
 the static `AuthTestTrace.Verbose` flag for the run.
 
 ---
@@ -188,14 +188,14 @@ the static `AuthTestTrace.Verbose` flag for the run.
 3. Select the **EditMode** tab.
 4. Run the `FishMMO.UnitTests` assembly.
 
-Or use the Unity menu shortcuts:
+Or use the FishMMO Dashboard's **Core → Unit Tests** page:
 
-| Menu item | Effect |
+| Button | Effect |
 | --- | --- |
-| `FishMMO / Unit Tests / Open Test Runner` | Opens the Test Runner window |
-| `FishMMO / Unit Tests / Run All EditMode Tests` | Runs all tests (quiet) |
-| `FishMMO / Unit Tests / Run All EditMode Tests (Verbose)` | Runs all tests with per-step trace logging |
-| `FishMMO / Unit Tests / Print Auth Assembly Identities` | Prints each auth type's assembly name, version and on-disk location — proves the tests loaded the DLLs from `Assets/Dependencies/` rather than falling back to local sources |
+| `FishMMO Dashboard → Core → Unit Tests → Open Test Runner` | Opens the Test Runner window |
+| `FishMMO Dashboard → Core → Unit Tests → Run All EditMode Tests` | Runs all tests (quiet) |
+| `FishMMO Dashboard → Core → Unit Tests → Run All EditMode Tests (Verbose)` | Runs all tests with per-step trace logging |
+| `FishMMO Dashboard → Core → Unit Tests → Print Auth Assembly Identities` | Prints each auth type's assembly name, version and on-disk location — proves the tests loaded the DLLs from `Assets/Dependencies/` rather than falling back to local sources |
 
 A direct run through the menu goes through `TestRunnerApi` with a
 `Filter { testMode = EditMode, assemblyNames = ["FishMMO.UnitTests"] }` and logs
@@ -307,7 +307,7 @@ inside its budget.
 ## PlayMode tests and the simulation harness
 
 `PlayMode/` mirrors the four self-running simulation scenes in `Assets/Scenes/Test/`, which
-are generated from `Assets/TestHarness/` by `FishMMO / Test Scenes / Generate All`
+are generated from `Assets/TestHarness/` by `FishMMO Dashboard → Core → Maintenance → Generate All Test Scenes`
 (headless: `-executeMethod FishMMO.TestHarness.Editor.TestSceneGenerator.GenerateAll`). Each
 PlayMode fixture asserts exactly what the scene's PASS banner shows, so a green run here and a
 green banner in the editor are the same fact.

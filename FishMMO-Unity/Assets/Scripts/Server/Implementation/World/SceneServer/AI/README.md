@@ -27,7 +27,7 @@ Every NPC and pet is driven by one `AIController`, which runs a `BaseAIState` ma
 |---|---|
 | `AISystem` | The scene server behaviour; owns the host and names the catalogue. |
 | `AIBrainHost` | Attaches, ticks and resets brains for one `NetworkManager`. `Prepare(npc, home, archetypeOverride)` before `ServerManager.Spawn`; `NPC.OnServerSpawned` catches anything spawned another way. |
-| `AIBrainCatalogue` | NPC prefab → archetype and boss script, keyed by FishNet's `AssetPathHash`. In the server-only addressable group with everything it references. |
+| `AIBrainCatalogue` | NPC prefab → archetype and boss script, keyed by FishNet's `AssetPathHash`. Addressable in `Server_Static_Permanent`: registered when created, and re-checked by every build. |
 
 The system is layered so that **archetypes are data, not code**:
 
@@ -123,7 +123,7 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 
 ### Behaviour trees
 
-- Optional layer above the state machine, edited visually via `FishMMO > Behavior Tree Editor` or the Open button on a tree in the FishMMO Dashboard.
+- Optional layer above the state machine, edited visually in the Behavior Tree Editor, opened from the **Open Behavior Tree Editor** button on a tree in the FishMMO Dashboard (NPCs → Behavior Trees).
 - The editor refuses connections that would make a tree cyclic, and the runtime carries a depth guard so a hand-edited or badly-merged asset degrades to a failed evaluation instead of a stack overflow that terminates the server process.
 
 ## Prerequisites
@@ -138,7 +138,7 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 
 Integrated module within the FishMMO Server assembly. No separate installation. The scene server's system list (`SceneServer.unity`) runs `AISystem`, and `AISystem.asset` names `AIBrainCatalogue.asset`; both are in the `Server_Static_Permanent` addressable group.
 
-An NPC prefab requires `CharacterPredictionController`, `AbilityController`, `CooldownController`, `TargetController` and `EnablePrediction` on its `NetworkObject` — and must **not** carry an `AIController` or `NavMeshAgent`, which the server adds. `NPC`'s `RequireComponent` attributes add the shared components automatically; `FishMMO > AI > Migrate NPC Brains To Server Catalogue` moves an old prefab's brain into the catalogue and strips its AI components; `FishMMO > AI > Repair NPC Prefabs For Combat` migrates existing prefabs and enables prediction. The `TargetController` is not cosmetic: `AbilityController` resolves every cast's target through it, and a caster without one completes the cast, starts the cooldown and spawns nothing (issue #232).
+An NPC prefab requires `CharacterPredictionController`, `AbilityController`, `CooldownController`, `TargetController` and `EnablePrediction` on its `NetworkObject` — and must **not** carry an `AIController` or `NavMeshAgent`, which the server adds. `NPC`'s `RequireComponent` attributes add the shared components automatically; `FishMMO Dashboard → NPCs → AI Tools → Migrate NPC Brains To Server Catalogue` moves an old prefab's brain into the catalogue and strips its AI components; `FishMMO Dashboard → NPCs → AI Tools → Repair NPC Prefabs For Combat` migrates existing prefabs and enables prediction. The `TargetController` is not cosmetic: `AbilityController` resolves every cast's target through it, and a caster without one completes the cast, starts the cooldown and spawns nothing (issue #232).
 
 ## Quick Start Guide
 
@@ -147,8 +147,8 @@ The fastest route is the dashboard: `FishMMO > FishMMO Dashboard > NPCs > +` ope
 1. Create an archetype: `FishMMO > Character > NPC > AI > Archetype`, or start from one of the 17 shipped assets under `Assets/Templates/Entity/NPCs/AI/Archetypes/` (10 enemy, 6 pet, 1 civilian).
 2. Give the NPC prefab that archetype in the server's brain catalogue — the dashboard's NPC inspector (`AI Brain`) writes it, or edit `Assets/Prefabs/Server/SceneServer/AIBrainCatalogue.asset` directly. That is the whole AI setup: the brain reads every state, the personality, the rotation, the LOD profile and the threat tuning from the archetype. There is no per-prefab slot to fill or override — a creature that needs one thing different gets its own archetype, so two NPCs naming the same archetype always behave the same.
 3. Populate `NPC.Abilities` with `AbilityTemplate`s — **an NPC with no abilities will chase its target and never strike**.
-4. Run `FishMMO > AI > Audit NPC Prefabs` to confirm the prefab is wired for combat.
-5. Run `FishMMO > AI > Validate Archetypes` to confirm the archetype is internally consistent.
+4. Run `FishMMO Dashboard → Core → Validate → Audit NPC Prefabs` to confirm the prefab is wired for combat.
+5. Run `FishMMO Dashboard → Core → Validate → Validate Archetypes` to confirm the archetype is internally consistent.
 
 ## Configuration
 
@@ -228,15 +228,15 @@ Intervals are counted in **AI ticks**, not frames. At the default 8 Hz brain, th
 
 | Menu | Purpose |
 |---|---|
-| `FishMMO > AI > Migrate NPC Brains To Server Catalogue` | Moves a prefab's archetype and boss script into the catalogue and removes its `AIController` and `NavMeshAgent` |
-| `FishMMO > AI > Repair NPC Prefabs For Combat` | Adds missing ability-pipeline components and enables prediction |
-| `FishMMO > AI > Audit NPC Prefabs` | Reports prefabs that cannot fight, and why |
-| `FishMMO > AI > Validate Archetypes` | Reports archetypes whose configuration cannot behave as described |
-| `FishMMO > AI > Audit Ability Intents` | Reports what the AI derives each ability template to do |
-| `FishMMO > AI > Organize AI Assets` | Files every AI asset into the canonical folder layout |
-| `FishMMO > AI > Re-serialize AI Assets` | Writes newly added serialized fields into the asset YAML |
-| `FishMMO > Behavior Tree Editor` | Visual behaviour tree graph editor |
-| `FishMMO > Validate Network Timing` | Confirms every scene agrees on tick rate |
+| `FishMMO Dashboard → NPCs → AI Tools → Migrate NPC Brains To Server Catalogue` | Moves a prefab's archetype and boss script into the catalogue and removes its `AIController` and `NavMeshAgent` |
+| `FishMMO Dashboard → NPCs → AI Tools → Repair NPC Prefabs For Combat` | Adds missing ability-pipeline components and enables prediction |
+| `FishMMO Dashboard → Core → Validate → Audit NPC Prefabs` | Reports prefabs that cannot fight, and why |
+| `FishMMO Dashboard → Core → Validate → Validate Archetypes` | Reports archetypes whose configuration cannot behave as described |
+| `FishMMO Dashboard → Core → Validate → Audit Ability Intents` | Reports what the AI derives each ability template to do |
+| `FishMMO Dashboard → NPCs → AI Tools → Organize AI Assets` | Files every AI asset into the canonical folder layout |
+| `FishMMO Dashboard → NPCs → AI Tools → Re-serialize AI Assets` | Writes newly added serialized fields into the asset YAML |
+| `FishMMO Dashboard → NPCs → Behavior Trees` → **Open Behavior Tree Editor** | Visual behaviour tree graph editor |
+| `FishMMO Dashboard → Core → Validate → Validate Network Timing` | Confirms every scene agrees on tick rate |
 
 ### How an NPC chooses an ability
 
@@ -262,7 +262,7 @@ recognises is `Control`; the **sum** of the attribute modifiers gives `Buff` or 
 the resource ticks gives `Heal` or `Damage`. The sum rather than the count, so a plate-armour buff
 with a small speed penalty is still a buff. This inference is the one place classification can be
 wrong, and `AbilityTemplate.IntentOverride` is the fix when it is — it replaces the derived value
-outright. Run `FishMMO > AI > Audit Ability Intents` to see what the AI makes of every ability in
+outright. Run `FishMMO Dashboard → Core → Validate → Audit Ability Intents` to see what the AI makes of every ability in
 the project.
 
 An ability with no recognisable actions classifies as `None` and stays usable, so content that
@@ -325,11 +325,11 @@ A state entered mid-fight for positioning (orbit, flank, flee) must have `KeepsC
 |---|---|
 | Brain is ticking | `AIController.EffectiveAiTickRate` reports the resolved rate; at 30 Hz network tick and 8 Hz requested it is 7.5 |
 | Archetype applied | `AIController.InitialState` and the other state properties resolve to the archetype's assets; a prefab with no archetype is reported by `Audit NPC Prefabs` and by the `EveryNPCPrefab_NamesAnArchetype` EditMode test |
-| NPC can fight | `FishMMO > AI > Audit NPC Prefabs` reports no problems |
-| Archetypes valid | `FishMMO > AI > Validate Archetypes` reports all valid |
+| NPC can fight | `FishMMO Dashboard → Core → Validate → Audit NPC Prefabs` reports no problems |
+| Archetypes valid | `FishMMO Dashboard → Core → Validate → Validate Archetypes` reports all valid |
 | LOD engaged | Move a player away from an NPC; its update rate should drop through Nearby, Far and Dormant |
 | Threat dispatch | Damage an NPC and confirm only that NPC's threat table changes |
-| Ability intents | `FishMMO > AI > Audit Ability Intents` reads each ability the way it was authored |
+| Ability intents | `FishMMO Dashboard → Core → Validate → Audit Ability Intents` reads each ability the way it was authored |
 | Taunt | Attach `ApplyTauntAction` to an ability's on-hit event; confirm the target switches to the taunter and stays |
 | Multi-attacker spacing | Pull three or more melee NPCs onto one target; they should form a ring, not a scrum |
 | Pet follow | Run a player through doorways and around props; the pet should keep up without wedging |

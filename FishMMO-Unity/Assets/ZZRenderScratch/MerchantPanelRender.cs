@@ -69,7 +69,7 @@ namespace FishMMO.RenderScratch
 		private static uint stackAmount = 1;
 		private static int stackIndex;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Merchant Panel (mock)")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Merchant Panel (mock)", Section = "Renders", Order = 9)]
 		public static void Render()
 		{
 			outputDirectory = Environment.GetEnvironmentVariable("FISHMMO_MERCHANT_RENDER_DIR");

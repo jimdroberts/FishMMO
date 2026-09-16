@@ -3,7 +3,8 @@
     "rootNamespace": "FishMMO.Client",
     "references": [
         "FishMMO.Client",
-        "FishMMO.Shared"
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor"
     ],
     "includePlatforms": [
         "Editor"

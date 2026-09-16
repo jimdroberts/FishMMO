@@ -46,7 +46,7 @@ namespace FishMMO.Shared
 		/// Adds any missing ability-system components to every NPC prefab in the project and
 		/// enables prediction on their NetworkObject.
 		/// </summary>
-		[MenuItem("FishMMO/AI/Repair NPC Prefabs For Combat", priority = 200)]
+		[DashboardTool(DashboardToolAttribute.AITools, "Repair NPC Prefabs For Combat", Section = "NPC Prefabs", Order = 0, Tooltip = "Adds missing ability-system components to every NPC prefab and enables prediction on its NetworkObject.", Confirm = "Add missing combat components to every NPC prefab and enable prediction on them?")]
 		public static void RepairNPCPrefabs()
 		{
 			StringBuilder report = new StringBuilder();
@@ -121,7 +121,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reports every NPC prefab that still cannot fight, and why.
 		/// </summary>
-		[MenuItem("FishMMO/AI/Audit NPC Prefabs", priority = 201)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Audit NPC Prefabs", Section = "AI", Order = 1, Tooltip = "Reports every NPC prefab that still cannot fight, and why. Changes nothing.")]
 		public static void AuditNPCPrefabs()
 		{
 			StringBuilder report = new StringBuilder();
@@ -172,11 +172,11 @@ namespace FishMMO.Shared
 				 * ships them to every client, and the server adds its own at spawn regardless. */
 				if (root.GetComponent<AIController>() != null)
 				{
-					lines.Add("still carries an AIController — AI is server-only; run FishMMO/AI/Migrate NPC Brains To Server Catalogue");
+					lines.Add("still carries an AIController — AI is server-only; run FishMMO Dashboard → NPCs → AI Tools → Migrate NPC Brains To Server Catalogue");
 				}
 				if (root.GetComponent<NavMeshAgent>() != null)
 				{
-					lines.Add("still carries a NavMeshAgent — the server adds the agent at spawn; run FishMMO/AI/Migrate NPC Brains To Server Catalogue");
+					lines.Add("still carries a NavMeshAgent — the server adds the agent at spawn; run FishMMO Dashboard → NPCs → AI Tools → Migrate NPC Brains To Server Catalogue");
 				}
 
 				AIArchetypeTemplate archetype = AIBrainCatalogueEditorUtility.GetArchetype(root);
@@ -239,7 +239,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Validates every <see cref="AIArchetypeTemplate"/> in the project.
 		/// </summary>
-		[MenuItem("FishMMO/AI/Validate Archetypes", priority = 202)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Validate Archetypes", Section = "AI", Order = 0, Tooltip = "Validates every AI archetype template. Changes nothing.")]
 		public static void ValidateArchetypes()
 		{
 			List<string> problems = new List<string>();
@@ -296,7 +296,7 @@ namespace FishMMO.Shared
 		/// catalogue has been edited cannot undo the edit. Idempotent.
 		/// </para>
 		/// </remarks>
-		[MenuItem("FishMMO/AI/Migrate NPC Brains To Server Catalogue", priority = 199)]
+		[DashboardTool(DashboardToolAttribute.AITools, "Migrate NPC Brains To Server Catalogue", Section = "NPC Prefabs", Order = 1, Tooltip = "Moves prefab-held AI settings into the server brain catalogue and removes the AI components from the prefabs. Idempotent; existing catalogue entries win.", Confirm = "Move NPC prefab AI settings into the server brain catalogue and strip the AI components from the prefabs?")]
 		public static void MigrateNPCBrains()
 		{
 			StringBuilder report = new StringBuilder();

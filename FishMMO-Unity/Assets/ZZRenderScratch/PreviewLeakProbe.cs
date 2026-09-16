@@ -117,7 +117,7 @@ namespace FishMMO.RenderScratch
 			return 0;
 		}
 
-		[MenuItem("FishMMO/UI Toolkit/Probe Preview Leak")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Probe Preview Leak", Section = "Probes", Order = 6)]
 		public static void Run()
 		{
 			try
@@ -142,8 +142,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[PreviewLeakProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -415,14 +416,14 @@ namespace FishMMO.RenderScratch
 
 				EditorApplication.update -= Pump;
 				Debug.Log("[PreviewLeakProbe] SUMMARY\n" + report);
-				EditorApplication.Exit(0);
+				EditorAutomation.Finish(0);
 			}
 			catch (Exception ex)
 			{
 				EditorApplication.update -= Pump;
 				Debug.LogError($"[PreviewLeakProbe] pump failed: {ex}");
 				Release();
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class EquipmentSlotValidator
 	{
-		[MenuItem("FishMMO/Validate/Equipment Item Slots", priority = 200)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Equipment Item Slots", Section = "Items", Order = 0, Tooltip = "Reports equipment templates filed in a folder that does not match their slot. Changes nothing.")]
 		public static void Validate()
 		{
 			string[] guids = AssetDatabase.FindAssets($"t:{nameof(EquippableItemTemplate)}");

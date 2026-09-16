@@ -51,7 +51,7 @@ namespace FishMMO.RenderScratch
 		private static readonly List<TradePanelPopulator.Stage> queue = new List<TradePanelPopulator.Stage>();
 		private static TradePanelPopulator.Stage current;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Trade Panel (mock)")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Trade Panel (mock)", Section = "Renders", Order = 2)]
 		public static void Render()
 		{
 			outputDirectory = Environment.GetEnvironmentVariable("FISHMMO_TRADE_RENDER_DIR");

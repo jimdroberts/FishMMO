@@ -5,6 +5,7 @@ using System.IO;
 using System.Collections.Generic;
 using System;
 using FishMMO.Logging;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using UnityEngine;
 
 namespace FishMMO.Shared.CustomBuildTool.Core
@@ -79,6 +80,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 						EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
 					}
 
+					// Before the bundles: a server built from stale tables spawns the wrong things, or nothing.
+					BakeSpawnTables();
 					BakeWorldMaps(customBuildType);
 
 					Log.Debug("BuildLogger", "Configuring addressables...");
@@ -286,6 +289,15 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 
 			Log.Debug("BuildLogger", $"Baked {baked} spawner(s).");
+
+			/* The tables and their catalogue register themselves as they are baked; the brain
+			 * catalogue is written by other tools, so it is checked here. Server group only — no
+			 * client build includes it. */
+			AIBrainCatalogue brains = AIBrainCatalogueEditorUtility.Find();
+			if (brains != null)
+			{
+				ServerAddressables.Register(AssetDatabase.GetAssetPath(brains));
+			}
 		}
 
 		/// <summary>
@@ -308,7 +320,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 			catch (Exception ex)
 			{
-				Log.Warning("BuildLogger", $"Removing the baked world maps failed; run FishMMO/World Map/Remove Baked Maps and FishMMO/Rebuild World Scene Details by hand: {ex.Message}");
+				Log.Warning("BuildLogger", $"Removing the baked world maps failed; run FishMMO Dashboard → World → World Map → Remove Baked Maps and FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details by hand: {ex.Message}");
 			}
 		}
 

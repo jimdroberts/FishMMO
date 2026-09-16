@@ -14,7 +14,7 @@ using FishMMO.Logging;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Adds entries under the <c>FishMMO/Unit Tests</c> menu for opening the
+	/// Adds buttons to the FishMMO Dashboard page Core → Unit Tests for opening the
 	/// Test Runner window and running the FishMMO.UnitTests EditMode assembly
 	/// directly. Results from a direct run are logged to the Unity console.
 	/// </summary>
@@ -22,21 +22,21 @@ namespace FishMMO.UnitTests
 	{
 		private const string AssemblyName = "FishMMO.UnitTests";
 
-		[MenuItem("FishMMO/Unit Tests/Open Test Runner", priority = 100)]
+		[DashboardTool(DashboardToolAttribute.UnitTests, "Open Test Runner", Section = "Unit Tests", Order = 0, Tooltip = "Opens Unity’s Test Runner window.")]
 		public static void OpenTestRunner()
 		{
 			// Same path Unity uses for Window > General > Test Runner.
 			EditorApplication.ExecuteMenuItem("Window/General/Test Runner");
 		}
 
-		[MenuItem("FishMMO/Unit Tests/Run All EditMode Tests", priority = 101)]
+		[DashboardTool(DashboardToolAttribute.UnitTests, "Run All EditMode Tests", Section = "Unit Tests", Order = 1, Tooltip = "Runs the whole FishMMO.UnitTests EditMode assembly and logs the results.")]
 		public static void RunAllEditModeTests()
 		{
 			AuthTestTrace.Verbose = false;
 			Execute();
 		}
 
-		[MenuItem("FishMMO/Unit Tests/Run All EditMode Tests (Verbose)", priority = 102)]
+		[DashboardTool(DashboardToolAttribute.UnitTests, "Run All EditMode Tests (Verbose)", Section = "Unit Tests", Order = 2, Tooltip = "The same run with verbose auth test tracing.")]
 		public static void RunAllEditModeTestsVerbose()
 		{
 			AuthTestTrace.Verbose = true;
@@ -44,7 +44,7 @@ namespace FishMMO.UnitTests
 			Execute();
 		}
 
-		[MenuItem("FishMMO/Unit Tests/Print Auth Assembly Identities", priority = 110)]
+		[DashboardTool(DashboardToolAttribute.UnitTests, "Print Auth Assembly Identities", Section = "Diagnostics", Order = 0, Tooltip = "Logs which FishMMO.Auth assemblies are loaded, and from where.")]
 		public static void PrintAuthAssemblies()
 		{
 			FishMMO.Logging.Log.WritePartsToConsole(

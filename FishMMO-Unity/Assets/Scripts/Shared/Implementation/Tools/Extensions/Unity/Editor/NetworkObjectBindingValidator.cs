@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 	/// This is a text scan of the YAML rather than a component walk because the tell is the
 	/// <c>guid</c> itself, and the text is what git carries. The same scan runs from four places:
 	/// the import hook below (an error the moment a bad asset lands), the build hook (a failed
-	/// build), the menu (a repair), and the unit test. The pre-commit hook and CI job in the
+	/// build), the dashboard's Core → Validate page (a repair), and the unit test. The pre-commit hook and CI job in the
 	/// repository root grep for the same shape without Unity.
 	/// </para>
 	/// </remarks>
@@ -160,11 +160,11 @@ namespace FishMMO.Shared
 			sb.AppendLine("A NetworkBehaviour must be bound to the NetworkObject in its own asset. These point at another asset, which silently breaks targeting and health on the affected entity:");
 			foreach (Finding f in findings)
 				sb.Append("  ").AppendLine(f.ToString());
-			sb.Append("Run FishMMO > Validate > Repair NetworkObject Bindings, or re-open the prefab so FishNet's OnValidate rebinds it.");
+			sb.Append("Run FishMMO Dashboard → Core → Validate → Repair NetworkObject Bindings, or re-open the prefab so FishNet's OnValidate rebinds it.");
 			return sb.ToString();
 		}
 
-		[MenuItem("FishMMO/Validate/NetworkObject Bindings", priority = 201)]
+		[DashboardTool(DashboardToolAttribute.Validate, "NetworkObject Bindings", Section = "Networking", Order = 0, Tooltip = "Reports NetworkObject bindings that were pasted or migrated from another object. Changes nothing.")]
 		public static void Validate()
 		{
 			List<Finding> findings = ScanAll("Assets");
@@ -174,7 +174,7 @@ namespace FishMMO.Shared
 				Debug.LogError(Describe(findings));
 		}
 
-		[MenuItem("FishMMO/Validate/Repair NetworkObject Bindings", priority = 202)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Repair NetworkObject Bindings", Section = "Networking", Order = 1, Tooltip = "Repairs the bindings the check above reports. Writes to prefabs and scenes.", Confirm = "Repair every foreign NetworkObject binding? This writes to prefabs and scenes.")]
 		public static void RepairAll()
 		{
 			List<Finding> findings = ScanAll("Assets");

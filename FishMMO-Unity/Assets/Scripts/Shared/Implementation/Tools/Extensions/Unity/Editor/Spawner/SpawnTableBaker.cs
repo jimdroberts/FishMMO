@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 
 namespace FishMMO.Shared
 {
@@ -23,15 +24,13 @@ namespace FishMMO.Shared
 	/// <see cref="SpawnerSystem"/> references.
 	/// </para>
 	/// <para>
-	/// Runs from <c>FishMMO → Spawners → Bake Spawn Tables</c>, whenever a world scene is saved,
+	/// Runs from the FishMMO Dashboard (World → Spawn Tables), whenever a world scene is saved,
 	/// and before every addressables build, so a table cannot fall behind its scene in anything
 	/// that ships. The tables are generated but checked in, like the world scene details cache.
 	/// </para>
 	/// </remarks>
 	public static class SpawnTableBaker
 	{
-		/// <summary>Log category.</summary>
-		private const string LOG = "SpawnTableBaker";
 
 		/// <summary>
 		/// Where the tables and their catalogue are written.
@@ -42,24 +41,6 @@ namespace FishMMO.Shared
 		/// The catalogue the scene server's <see cref="SpawnerSystem"/> references.
 		/// </summary>
 		public const string CataloguePath = TableFolder + "/SpawnTableCatalogue.asset";
-
-		/// <summary>
-		/// Bakes every world scene. Menu entry.
-		/// </summary>
-		[MenuItem("FishMMO/Spawners/Bake Spawn Tables", priority = 10)]
-		public static void BakeAllMenu()
-		{
-			List<string> problems = new List<string>();
-			int count = BakeAll(problems);
-			if (problems.Count > 0)
-			{
-				Debug.LogWarning($"[{LOG}] Baked {count} spawner(s) with {problems.Count} problem(s):\n  " + string.Join("\n  ", problems));
-			}
-			else
-			{
-				Debug.Log($"[{LOG}] Baked {count} spawner(s).");
-			}
-		}
 
 		/// <summary>
 		/// Every world scene path the bake covers.
@@ -198,11 +179,28 @@ namespace FishMMO.Shared
 				AssetDatabase.CreateAsset(table, tablePath);
 			}
 
-			table.SceneName = scene.name;
-			table.ScenePath = scene.path;
-			table.Spawners = definitions;
+			/* Staged on a fresh instance so the reference ids can be chosen: the previous bake's
+			 * objects still hold ids in the table's own registry. CopySerialized then carries the
+			 * ids over, so rebaking an unchanged scene rewrites the table byte for byte — without
+			 * this every build left every table modified with nothing but new random rids. */
+			SceneSpawnTable staged = ScriptableObject.CreateInstance<SceneSpawnTable>();
+			try
+			{
+				staged.name = table.name;
+				staged.SceneName = scene.name;
+				staged.ScenePath = scene.path;
+				staged.Spawners = definitions;
+				AssignStableReferenceIds(staged);
+				EditorUtility.CopySerialized(staged, table);
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(staged);
+			}
 			EditorUtility.SetDirty(table);
 
+			// Every bake, not only on creation: a table that predates the rule is fixed by the next build.
+			ServerAddressables.Register(tablePath);
 			AddToCatalogue(table);
 			AssetDatabase.SaveAssetIfDirty(table);
 			return table;
@@ -258,6 +256,54 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Numbers a table's <c>[SerializeReference]</c> objects 1, 2, 3… in table order, so the
+		/// same content always serializes to the same text.
+		/// </summary>
+		/// <param name="table">A table whose objects have not been serialized yet.</param>
+		/// <returns>False if Unity refused an id; that table falls back to random ids.</returns>
+		public static bool AssignStableReferenceIds(SceneSpawnTable table)
+		{
+			long next = 1;
+			bool all = true;
+
+			void Assign<T>(List<T> list) where T : class
+			{
+				if (list == null)
+				{
+					return;
+				}
+				for (int i = 0; i < list.Count; ++i)
+				{
+					if (list[i] != null)
+					{
+						all &= ManagedReferenceUtility.SetManagedReferenceIdForObject(table, list[i], next++);
+					}
+				}
+			}
+
+			if (table.Spawners != null)
+			{
+				for (int i = 0; i < table.Spawners.Count; ++i)
+				{
+					SpawnerDefinition definition = table.Spawners[i];
+					if (definition == null)
+					{
+						continue;
+					}
+					Assign(definition.Spawnables);
+					Assign(definition.OrConditions);
+					Assign(definition.TrueConditions);
+				}
+			}
+
+			if (!all)
+			{
+				Debug.LogWarning($"[SpawnTableBaker] {table.name}: could not assign stable reference ids; the table will diff on every bake.");
+			}
+			return all;
+		}
+
+		/// <summary>
 		/// The spawners of one scene, in hierarchy order — the order the table keeps.
 		/// </summary>
 		public static List<ObjectSpawner> CollectSpawners(Scene scene)
@@ -294,11 +340,11 @@ namespace FishMMO.Shared
 			string where = $"{scene.name}/{spawner.gameObject.name}";
 			if (!spawner.CompareTag(ObjectSpawner.EditorOnlyTag))
 			{
-				Report(problems, blocking, $"{where} is not tagged {ObjectSpawner.EditorOnlyTag}; it would ship to clients. Run FishMMO/Spawners/Migrate Scene Spawners.");
+				Report(problems, blocking, $"{where} is not tagged {ObjectSpawner.EditorOnlyTag}; it would ship to clients. Run FishMMO Dashboard → World → Spawn Tables → Migrate Scene Spawners.");
 			}
 			if (spawner.GetComponent<NetworkObject>() != null)
 			{
-				Report(problems, blocking, $"{where} still has a NetworkObject; spawners are not networked any more. Run FishMMO/Spawners/Migrate Scene Spawners.");
+				Report(problems, blocking, $"{where} still has a NetworkObject; spawners are not networked any more. Run FishMMO Dashboard → World → Spawn Tables → Migrate Scene Spawners.");
 			}
 			if (spawner.Spawnables == null || spawner.Spawnables.Count == 0)
 			{
@@ -339,14 +385,13 @@ namespace FishMMO.Shared
 		public static SpawnTableCatalogue GetOrCreateCatalogue()
 		{
 			SpawnTableCatalogue catalogue = AssetDatabase.LoadAssetAtPath<SpawnTableCatalogue>(CataloguePath);
-			if (catalogue != null)
+			if (catalogue == null)
 			{
-				return catalogue;
+				EnsureFolder(TableFolder);
+				catalogue = ScriptableObject.CreateInstance<SpawnTableCatalogue>();
+				AssetDatabase.CreateAsset(catalogue, CataloguePath);
 			}
-
-			EnsureFolder(TableFolder);
-			catalogue = ScriptableObject.CreateInstance<SpawnTableCatalogue>();
-			AssetDatabase.CreateAsset(catalogue, CataloguePath);
+			ServerAddressables.Register(CataloguePath);
 			return catalogue;
 		}
 

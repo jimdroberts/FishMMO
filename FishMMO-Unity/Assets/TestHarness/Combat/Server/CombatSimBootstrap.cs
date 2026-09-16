@@ -124,7 +124,7 @@ namespace FishMMO.TestHarness
 #endif
 			if (Manifest == null || Manifest.NpcPrefab == null)
 			{
-				Debug.LogError("[CombatSim] No manifest (or no NPC prefab in it) — run FishMMO → Test Scenes → Generate Combat Sim first.");
+				Debug.LogError("[CombatSim] No manifest (or no NPC prefab in it) — run FishMMO Dashboard → Core → Maintenance → Generate Combat Sim first.");
 				yield break;
 			}
 

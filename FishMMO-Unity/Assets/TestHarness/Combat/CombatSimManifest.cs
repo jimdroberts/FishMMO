@@ -8,7 +8,7 @@ namespace FishMMO.TestHarness
 	/// Direct references to everything the CombatSim needs that the addressable labels do NOT
 	/// carry: the mock content is deliberately unregistered (inert in builds), so the harness
 	/// caches it by hand from these references instead. Populated by the scene generator
-	/// (FishMMO → Test Scenes) scanning <c>Assets/Templates/**/Mock/</c>; regenerating the scene
+	/// (FishMMO Dashboard → Core → Maintenance, Test Scenes section) scanning <c>Assets/Templates/**/Mock/</c>; regenerating the scene
 	/// refreshes it.
 	/// </summary>
 	public sealed class CombatSimManifest : ScriptableObject

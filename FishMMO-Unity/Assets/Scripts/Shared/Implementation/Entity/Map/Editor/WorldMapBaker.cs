@@ -80,7 +80,6 @@ namespace FishMMO.Shared.WorldMaps
 		/// <summary>
 		/// Bakes a map for every world scene.
 		/// </summary>
-		[MenuItem("FishMMO/World Map/Bake Maps")]
 		public static void BakeAll()
 		{
 			string worldScenePath = Constants.Configuration.WorldScenePath.Replace(@"\", @"/");
@@ -139,10 +138,9 @@ namespace FishMMO.Shared.WorldMaps
 		/// <summary>
 		/// Removes everything the bake produced: the definitions, the images and their addressable
 		/// group. The build tool calls this after a client build and then rebuilds the world scene
-		/// details cache so it no longer references the removed definitions; it is also a menu item
-		/// for tidying up after a manual bake.
+		/// details cache so it no longer references the removed definitions; it is also a FishMMO
+		/// Dashboard button (World → World Map) for tidying up after a manual bake.
 		/// </summary>
-		[MenuItem("FishMMO/World Map/Remove Baked Maps")]
 		public static void CleanBakedMaps()
 		{
 			bool removedFolder = AssetDatabase.IsValidFolder(OutputDirectory) && AssetDatabase.DeleteAsset(OutputDirectory);

@@ -16,7 +16,7 @@ namespace FishMMO.RenderScratch
 	{
 		private static int failures;
 
-		[MenuItem("FishMMO/UI Toolkit/Test Theme Guard")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Test Theme Guard", Section = "Probes", Order = 1)]
 		public static void Run()
 		{
 			try
@@ -34,7 +34,7 @@ namespace FishMMO.RenderScratch
 			}
 
 			Debug.Log(failures == 0 ? "[Guard] ALL PASS" : $"[Guard] {failures} FAILURE(S)");
-			EditorApplication.Exit(failures == 0 ? 0 : 1);
+			EditorAutomation.Finish(failures == 0 ? 0 : 1);
 		}
 
 		// ── Cases ───────────────────────────────────────────────────

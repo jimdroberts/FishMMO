@@ -4,6 +4,7 @@
     "references": [
         "FishMMO.Client",
         "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
         "FishNet.Runtime",
         "Unity.InputSystem"
     ],

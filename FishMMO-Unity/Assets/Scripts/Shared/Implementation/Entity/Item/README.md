@@ -136,7 +136,7 @@ Two consequences worth knowing:
 - **Renumbering does not migrate saved data.** A character's equipment is persisted with
   whatever integer the template held when it was saved, so correcting a template does not
   correct rows already written against the old numbering.
-- **`FishMMO > Validate > Equipment Item Slots`** cross-checks every equippable template's
+- **`FishMMO Dashboard → Core → Validate → Equipment Item Slots`** cross-checks every equippable template's
   `Slot` against the folder it is filed under, because the folder independently records what a
   human meant when they filed the asset. It reports mismatches rather than correcting them: a
   template deliberately filed somewhere that does not match its slot is legitimate, and the tool

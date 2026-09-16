@@ -51,7 +51,7 @@ namespace FishMMO.RenderScratch
 		private static Page current;
 		private static int framesWaited;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Tooltip Gallery")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Tooltip Gallery", Section = "Renders", Order = 5)]
 		public static void Render()
 		{
 			try

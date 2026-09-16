@@ -108,9 +108,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		private VisualElement poiGroup;
 		private VisualElement itemGroup;
 
-		// ── Menu ──────────────────────────────────────────────────────
-
-		[MenuItem("FishMMO/Name Generator/Name Generator Test Window")]
+		// ── Opening (the dashboard embeds the window through BuildUI) ──
 		public static void ShowWindow()
 		{
 			NameGeneratorWindow window = GetWindow<NameGeneratorWindow>("Name Generator");

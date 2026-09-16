@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using FishMMO.Client;
 using FishMMO.Shared.Core;
+using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -41,7 +42,7 @@ namespace FishMMO.RenderScratch
 		/// Renders the Gameplay tab of the options panel, parked at the bottom where the nameplate
 		/// controls live, so the section can be looked at rather than only asserted about.
 		/// </summary>
-		[MenuItem("FishMMO/UI Toolkit/Render Nameplate Options Page")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Nameplate Options Page", Section = "Renders", Order = 0)]
 		public static void RenderOptionsPage()
 		{
 			GameObject optionsHost = null;
@@ -89,7 +90,7 @@ namespace FishMMO.RenderScratch
 					UnityEngine.Object.DestroyImmediate(optionsTexture);
 
 					Debug.Log($"[NameplateShot] wrote {OPTIONS_OUTPUT}");
-					EditorApplication.Exit(0);
+					EditorAutomation.Finish(0);
 				};
 
 				EditorApplication.update += optionsPump;
@@ -97,7 +98,7 @@ namespace FishMMO.RenderScratch
 			catch (Exception ex)
 			{
 				Debug.LogError($"[NameplateShot] options render failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -110,7 +111,7 @@ namespace FishMMO.RenderScratch
 		private static EditorApplication.CallbackFunction optionsPump;
 		private static int optionsFramesLeft;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Nameplate Example")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Nameplate Example", Section = "Renders", Order = 1)]
 		public static void Render()
 		{
 			try
@@ -121,8 +122,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[NameplateShot] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -141,13 +143,13 @@ namespace FishMMO.RenderScratch
 				Capture();
 				Teardown();
 				Debug.Log($"[NameplateShot] wrote {OUTPUT}");
-				EditorApplication.Exit(0);
+				EditorAutomation.Finish(0);
 			}
 			catch (Exception ex)
 			{
 				EditorApplication.update -= Pump;
 				Debug.LogError($"[NameplateShot] pump failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

@@ -64,7 +64,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reports any disagreement in network timing across the project's scenes.
 		/// </summary>
-		[MenuItem("FishMMO/Validate Network Timing", priority = 210)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Validate Network Timing", Section = "Networking", Order = 2, Tooltip = "Reports any disagreement in network timing across the project scenes. Changes nothing.")]
 		public static void ValidateNetworkTiming()
 		{
 			List<TimingConfig> configs = CollectConfigs();

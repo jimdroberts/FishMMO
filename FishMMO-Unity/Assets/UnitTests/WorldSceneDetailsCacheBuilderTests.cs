@@ -75,23 +75,17 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void TheRebuildIsReachableFromTheEditorMenu()
+		public void TheRebuildIsReachableFromTheDashboard()
 		{
-			/* The menu item was commented out, so the only way to run this was to know the type
-			 * name and call it by hand. A maintenance action nobody can find is one nobody runs. */
-			string source = File.ReadAllText(Path.Combine(
-				Directory.GetCurrentDirectory(),
-				"Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/WorldSceneDetailsCacheBuilder.cs"));
+			/* The menu item was once commented out, so the only way to run this was to know the type
+			 * name and call it by hand. A maintenance action nobody can find is one nobody runs. It
+			 * now lives on the dashboard's World Scene Details page. */
+			System.Reflection.MethodInfo method = typeof(WorldSceneDetailsCacheBuilder).GetMethod(nameof(WorldSceneDetailsCacheBuilder.RebuildFromDashboard));
+			LogAssert.IsTrue(method != null, "the dashboard entry point is gone");
 
-			int menu = source.IndexOf("[MenuItem(\"FishMMO/Rebuild World Scene Details", StringComparison.Ordinal);
-			LogAssert.IsTrue(menu >= 0, "the rebuild must be on the FishMMO menu");
-
-			// A commented-out attribute still contains the text, so the line has to be checked.
-			int lineStart = source.LastIndexOf('\n', menu) + 1;
-			string line = source.Substring(lineStart, menu - lineStart);
-
-			LogAssert.IsFalse(line.Contains("//"),
-				"the menu item must not be commented out");
+			DashboardToolAttribute tool = (DashboardToolAttribute)Attribute.GetCustomAttribute(method, typeof(DashboardToolAttribute));
+			LogAssert.IsTrue(tool != null, "the rebuild must be a dashboard tool");
+			LogAssert.AreEqual(DashboardToolAttribute.WorldSceneDetails, tool.Page, "the rebuild belongs on the World Scene Details page");
 		}
 
 		[Test]

@@ -9,7 +9,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 	/// <remarks>
 	/// Generated — never edit by hand. The baker rewrites it from the scene's
 	/// <see cref="ObjectSpawner"/> components whenever the scene is saved, when a build starts, or
-	/// from <c>FishMMO → Spawners → Bake Spawn Tables</c>. Referenced only from
+	/// from <c>FishMMO Dashboard → World → Spawn Tables → Rebuild Spawn Tables</c>. Referenced only from
 	/// <see cref="SpawnTableCatalogue"/>, which lives in a server-only addressable group.
 	/// </remarks>
 	public class SceneSpawnTable : ScriptableObject

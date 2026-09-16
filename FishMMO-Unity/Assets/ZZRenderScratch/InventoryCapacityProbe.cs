@@ -52,7 +52,7 @@ namespace FishMMO.RenderScratch
 		private static Job current;
 		private static int framesWaited;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Inventory Capacity + Currency")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Inventory Capacity + Currency", Section = "Renders", Order = 6)]
 		public static void Render()
 		{
 			try
@@ -89,8 +89,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[CapacityProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -117,7 +118,7 @@ namespace FishMMO.RenderScratch
 				{
 					EditorApplication.update -= Pump;
 					Release();
-					EditorApplication.Exit(0);
+					EditorAutomation.Finish(0);
 					return;
 				}
 
@@ -131,7 +132,7 @@ namespace FishMMO.RenderScratch
 				EditorApplication.update -= Pump;
 				Debug.LogError($"[CapacityProbe] pump failed on {current?.Name}: {ex}");
 				Release();
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

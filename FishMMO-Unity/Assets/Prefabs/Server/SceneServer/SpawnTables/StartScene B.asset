@@ -34,13 +34,13 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 10.47, y: 15.56, z: 25.5}
     Spawnables:
-    - rid: 4707557207935025186
-    - rid: 4707557207935025187
-    - rid: 4707557207935025188
+    - rid: 4707557208097292323
+    - rid: 4707557208097292324
+    - rid: 4707557208097292325
   references:
     version: 2
     RefIds:
-    - rid: 4707557207935025186
+    - rid: 4707557208097292323
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -60,7 +60,7 @@ MonoBehaviour:
         FactionOverride: {fileID: 0}
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 4707557207935025187
+    - rid: 4707557208097292324
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -80,7 +80,7 @@ MonoBehaviour:
         FactionOverride: {fileID: 0}
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 4707557207935025188
+    - rid: 4707557208097292325
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:

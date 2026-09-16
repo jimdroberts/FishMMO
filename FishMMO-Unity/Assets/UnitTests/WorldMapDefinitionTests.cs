@@ -17,7 +17,7 @@ namespace FishMMO.UnitTests
 	/// <para>
 	/// The world map is BAKED, unlike the minimap: the minimap is a live overhead camera, but a
 	/// client only ever holds the streamed part of a zone, so a live capture of a whole zone would
-	/// have holes in it wherever nothing had spawned. <c>FishMMO/World Map/Bake Maps</c>
+	/// have holes in it wherever nothing had spawned. <c>FishMMO Dashboard → World → World Map → Bake Maps</c>
 	/// photographs each scene in the editor and writes a <see cref="WorldMapDefinition"/> per scene.
 	/// </para>
 	/// <para>
@@ -70,7 +70,7 @@ namespace FishMMO.UnitTests
 		public void TheCommittedCache_CarriesNoBakeLeftovers()
 		{
 			Assert.IsFalse(AssetDatabase.IsValidFolder(WorldMapDefinition.BakedDirectory),
-				$"'{WorldMapDefinition.BakedDirectory}' exists outside a client build. Run FishMMO/World Map/Remove Baked Maps, then FishMMO/Rebuild World Scene Details.");
+				$"'{WorldMapDefinition.BakedDirectory}' exists outside a client build. Run FishMMO Dashboard → World → World Map → Remove Baked Maps, then FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details.");
 
 			WorldSceneDetailsCache cache = LoadCache();
 			if (cache?.Scenes == null)
@@ -100,7 +100,7 @@ namespace FishMMO.UnitTests
 		public void ClientBuildBake_GivesEveryWorldSceneAMap_AndCleansUpAfterItself()
 		{
 			Assume.That(!AssetDatabase.IsValidFolder(WorldMapDefinition.BakedDirectory),
-				"A bake is already present; remove it (FishMMO/World Map/Remove Baked Maps) before running this.");
+				"A bake is already present; remove it (FishMMO Dashboard → World → World Map → Remove Baked Maps) before running this.");
 
 			bool canCapture = SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
 			try

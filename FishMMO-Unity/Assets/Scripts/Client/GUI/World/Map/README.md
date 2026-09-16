@@ -59,8 +59,8 @@ hand-assigned, and the bake then fills that asset in place instead of creating o
 1. Drop `MapRegionLabel` and `MapPointOfInterest` components into the scene and place them on the
    terrain. Both draw gizmos, and neither exists at runtime — they are harvested into the
    definition.
-2. To see the result in the editor without a build, run **FishMMO/World Map/Bake Maps** and then
-   rebuild the world scene details cache. **FishMMO/World Map/Remove Baked Maps** undoes it.
+2. To see the result in the editor without a build, run **FishMMO Dashboard → World → World Map → Bake Maps** and then
+   rebuild the world scene details cache. **FishMMO Dashboard → World → World Map → Remove Baked Maps** undoes it.
 
 The bake needs a graphics device. Under `-nographics` everything except the photograph is still
 written, and the world map falls back to markers over a plain background; `xvfb-run` is the way to

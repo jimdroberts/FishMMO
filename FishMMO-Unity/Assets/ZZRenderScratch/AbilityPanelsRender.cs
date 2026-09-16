@@ -56,7 +56,7 @@ namespace FishMMO.RenderScratch
 		private static Job current;
 		private static int framesWaited;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Ability Panels")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Ability Panels", Section = "Renders", Order = 4)]
 		public static void Render()
 		{
 			try

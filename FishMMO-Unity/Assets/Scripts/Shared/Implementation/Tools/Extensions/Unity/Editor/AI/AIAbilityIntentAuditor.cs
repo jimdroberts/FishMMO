@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reports the derived intent of every <see cref="AbilityTemplate"/> in the project.
 		/// </summary>
-		[MenuItem("FishMMO/AI/Audit Ability Intents", priority = 205)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Audit Ability Intents", Section = "AI", Order = 2, Tooltip = "Reports the derived AI intent of every ability template. Changes nothing.")]
 		public static void AuditAbilityIntents()
 		{
 			// Templates may have been edited since the last run; never report a stale answer.

@@ -110,7 +110,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				sb.Append(" Baked but not live (the map draws these and every travel request is refused): ")
 				  .Append(string.Join(", ", bakedOnly)).Append('.');
 			}
-			sb.Append(" Rebuild the world scene details cache (FishMMO/Rebuild World Scene Details) and redeploy it with the scene.");
+			sb.Append(" Rebuild the world scene details cache (FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details) and redeploy it with the scene.");
 			Log.Error("WaypointSceneAudit", sb.ToString());
 			return false;
 		}

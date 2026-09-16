@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -54,7 +55,7 @@ namespace FishMMO.RenderScratch
 		private static readonly List<string> chrome = new List<string>();
 		private static readonly List<string> failed = new List<string>();
 
-		[MenuItem("FishMMO/UI Toolkit/Render All Panels Live")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render All Panels Live", Section = "Renders", Order = 8)]
 		public static void Render()
 		{
 			try
@@ -128,8 +129,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[All] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -203,7 +205,7 @@ namespace FishMMO.RenderScratch
 					EditorApplication.update -= Pump;
 					ReleaseTarget();
 					Report();
-					EditorApplication.Exit(0);
+					EditorAutomation.Finish(0);
 					return;
 				}
 

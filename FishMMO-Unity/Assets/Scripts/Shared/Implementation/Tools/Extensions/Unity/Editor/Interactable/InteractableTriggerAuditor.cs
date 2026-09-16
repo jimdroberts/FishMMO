@@ -34,7 +34,7 @@ namespace FishMMO.Shared
 		/// Reports every interactable in the project's prefabs and scenes that has no usable
 		/// interaction triggers.
 		/// </summary>
-		[MenuItem("FishMMO/Interactables/Audit Interact Triggers", priority = 220)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Audit Interact Triggers", Section = "Interactables", Order = 0, Tooltip = "Reports every interactable in prefabs and scenes with no usable interaction trigger. Changes nothing.")]
 		public static void AuditInteractTriggers()
 		{
 			List<string> problems = new List<string>();

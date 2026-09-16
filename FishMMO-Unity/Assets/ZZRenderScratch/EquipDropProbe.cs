@@ -109,7 +109,7 @@ namespace FishMMO.RenderScratch
 		private static int framesWaited;
 		private static int markerHits;
 
-		[MenuItem("FishMMO/UI Toolkit/Probe Bank Equip Drop")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Probe Bank Equip Drop", Section = "Probes", Order = 3)]
 		public static void Run()
 		{
 			try
@@ -151,8 +151,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[EquipDropProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -283,7 +284,7 @@ namespace FishMMO.RenderScratch
 						Capture();
 						WriteReport();
 						Release();
-						EditorApplication.Exit(0);
+						EditorAutomation.Finish(0);
 						return;
 				}
 
@@ -295,7 +296,7 @@ namespace FishMMO.RenderScratch
 				Debug.LogError($"[EquipDropProbe] pump failed: {ex}");
 				try { WriteReport(); } catch { }
 				Release();
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

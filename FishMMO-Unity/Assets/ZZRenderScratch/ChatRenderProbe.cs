@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -51,7 +52,7 @@ namespace FishMMO.RenderScratch
 		private static int framesWaited;
 		private static int stage;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Chat Messages")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Chat Messages", Section = "Renders", Order = 7)]
 		public static void Render()
 		{
 			try
@@ -91,8 +92,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[ChatProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -128,7 +130,7 @@ namespace FishMMO.RenderScratch
 
 					EditorApplication.update -= Pump;
 					Release();
-					EditorApplication.Exit(0);
+					EditorAutomation.Finish(0);
 					return;
 				}
 
@@ -139,7 +141,7 @@ namespace FishMMO.RenderScratch
 				EditorApplication.update -= Pump;
 				Debug.LogError($"[ChatProbe] pump failed: {ex}");
 				Release();
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

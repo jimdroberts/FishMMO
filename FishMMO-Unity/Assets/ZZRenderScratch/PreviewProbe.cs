@@ -48,7 +48,7 @@ namespace FishMMO.RenderScratch
 		private static CharacterSheetView sheet;
 		private static int framesWaited;
 
-		[MenuItem("FishMMO/UI Toolkit/Render Equipment Preview")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Equipment Preview", Section = "Renders", Order = 10)]
 		public static void Render()
 		{
 			try
@@ -99,8 +99,9 @@ namespace FishMMO.RenderScratch
 			}
 			catch (Exception ex)
 			{
+				EditorApplication.update -= Pump;
 				Debug.LogError($"[PreviewProbe] setup failed: {ex}");
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 
@@ -123,14 +124,14 @@ namespace FishMMO.RenderScratch
 				Report();
 				Capture();
 				Release();
-				EditorApplication.Exit(0);
+				EditorAutomation.Finish(0);
 			}
 			catch (Exception ex)
 			{
 				EditorApplication.update -= Pump;
 				Debug.LogError($"[PreviewProbe] pump failed: {ex}");
 				Release();
-				EditorApplication.Exit(1);
+				EditorAutomation.Finish(1);
 			}
 		}
 

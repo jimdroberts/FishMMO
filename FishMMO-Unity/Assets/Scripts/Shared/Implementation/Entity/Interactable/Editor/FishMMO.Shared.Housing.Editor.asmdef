@@ -3,7 +3,8 @@
     "rootNamespace": "FishMMO.Shared",
     "references": [
         "FishMMO.Shared",
-        "FishNet.Runtime"
+        "FishNet.Runtime",
+        "FishMMO.Shared.Tools.Editor"
     ],
     "includePlatforms": [
         "Editor"

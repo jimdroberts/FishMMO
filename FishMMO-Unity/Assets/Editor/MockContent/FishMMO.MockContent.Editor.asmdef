@@ -5,7 +5,8 @@
         "FishMMO.Shared",
         "Unity.Addressables",
         "Unity.Addressables.Editor",
-        "Unity.ResourceManager"
+        "Unity.ResourceManager",
+        "FishMMO.Shared.Tools.Editor"
     ],
     "includePlatforms": [
         "Editor"

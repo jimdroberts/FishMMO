@@ -49,6 +49,7 @@ namespace FishMMO.Shared
 
 			AIBrainCatalogue catalogue = ScriptableObject.CreateInstance<AIBrainCatalogue>();
 			AssetDatabase.CreateAsset(catalogue, DefaultPath);
+			ServerAddressables.Register(DefaultPath);
 			AssetDatabase.SaveAssets();
 			return catalogue;
 		}

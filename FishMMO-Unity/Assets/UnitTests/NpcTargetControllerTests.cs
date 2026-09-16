@@ -115,7 +115,7 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(offenders.Count == 0,
 				"an NPC that casts without a TargetController completes every cast and spawns " +
-				"nothing (issue #232). Run FishMMO > AI > Repair NPC Prefabs For Combat: " +
+				"nothing (issue #232). Run FishMMO Dashboard → NPCs → AI Tools → Repair NPC Prefabs For Combat: " +
 				string.Join(", ", offenders));
 		}
 

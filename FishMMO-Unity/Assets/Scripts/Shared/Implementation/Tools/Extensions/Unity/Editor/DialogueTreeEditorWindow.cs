@@ -50,9 +50,7 @@ namespace FishMMO.Shared
 			/// <summary>The fromchoiceindex value.</summary>
 			public int FromChoiceIndex;
 		}
-
-		[MenuItem("FishMMO/Dialogue Tree Editor")]
-		/// <summary>Opens the Dialogue Tree Editor window from the menu.</summary>
+		/// <summary>Opens an empty Dialogue Tree Editor window.</summary>
 		public static void ShowWindow()
 		{
 			var window = GetWindow<DialogueTreeEditorWindow>("Dialogue Tree Editor");

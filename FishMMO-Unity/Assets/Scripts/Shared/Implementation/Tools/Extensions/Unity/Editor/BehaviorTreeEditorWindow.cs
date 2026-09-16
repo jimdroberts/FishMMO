@@ -47,9 +47,7 @@ namespace FishMMO.Shared
 
 		private GUIStyle headerStyle;
 		private GUIStyle labelStyle;
-
-		[MenuItem("FishMMO/Behavior Tree Editor")]
-		/// <summary>Opens the Behavior Tree Editor window from the menu.</summary>
+		/// <summary>Opens an empty Behavior Tree Editor window.</summary>
 		public static void ShowWindow()
 		{
 			var window = GetWindow<BehaviorTreeEditorWindow>("Behavior Tree Editor");

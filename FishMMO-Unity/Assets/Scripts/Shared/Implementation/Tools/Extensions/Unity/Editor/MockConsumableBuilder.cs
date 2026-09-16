@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 		private const string ABILITY_FOLDER = "Assets/Templates/Entity/Abilities";
 		private const string ATTRIBUTE_FOLDER = "Assets/Templates/Entity/CharacterAttributes";
 
-		[MenuItem("FishMMO/Templates/Create Mock Consumables")]
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Create Mock Consumables", Section = "Mock Content", Order = 0, Tooltip = "Creates the mock consumable templates and registers them as addressables.")]
 		public static void Create()
 		{
 			EnsureFolder(OUTPUT_FOLDER);

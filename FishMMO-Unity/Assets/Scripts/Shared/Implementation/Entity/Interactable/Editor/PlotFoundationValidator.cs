@@ -15,17 +15,15 @@ namespace FishMMO.Shared
 	/// foundations onto one database row, and overlapping plots let two owners build into the same
 	/// space.
 	///
-	/// <para>Runs on demand from the menu, and again on save, because a check nobody remembers to
+	/// <para>Runs on demand from the FishMMO Dashboard (Core → Validate), and again on save, because a check nobody remembers to
 	/// run is a check that finds problems after they ship.</para>
 	/// </remarks>
 	public static class PlotFoundationValidator
 	{
-		private const string MenuPath = "FishMMO/Housing/Validate Plots In Open Scenes";
-
 		/// <summary>
 		/// Validates every open scene and reports the result to the console.
 		/// </summary>
-		[MenuItem(MenuPath)]
+		[DashboardTool(DashboardToolAttribute.Validate, "Validate Plots In Open Scenes", Section = "Housing", Tooltip = "Reports duplicate plot keys and overlapping plot footprints in the open scenes. Also runs on every scene save. Changes nothing.")]
 		public static void ValidateOpenScenes()
 		{
 			int problems = Validate(logClean: true);

@@ -62,7 +62,7 @@ for achievements, quest updates and dialogue.
 
 **An empty list therefore means the object does nothing when used.** It still shows its title, still
 accepts the interaction, and still passes every validation — it just has no implementation. The
-system logs a warning when this happens, and `FishMMO > Interactables > Audit Interact Triggers`
+system logs a warning when this happens, and `FishMMO Dashboard → Core → Validate → Audit Interact Triggers`
 reports it across every prefab and scene in the project.
 
 ### Shipped interaction triggers
@@ -199,7 +199,7 @@ can be claimed at all, is resolved by the server against the database and pushed
   server with housing off, nothing is listening and the request is dropped.
 - **Edit-time validation only.** Plots are placed by designers and never at runtime, which is what
   removes the need for runtime overlap tests — and also means edit time is the only chance to catch
-  a bad layout. `FishMMO > Housing > Validate Plots In Open Scenes` (`PlotFoundationValidator`)
+  a bad layout. `FishMMO Dashboard → Core → Validate → Validate Plots In Open Scenes` (`PlotFoundationValidator`)
   reports duplicate keys and overlapping plots, on demand and again on scene save. Both faults are
   silent at runtime: a duplicate key resolves two foundations onto one database row, and overlapping
   plots let two owners build into the same space.

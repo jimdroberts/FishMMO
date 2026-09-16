@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -47,7 +48,7 @@ namespace FishMMO.Client.Editor
 		/// <summary>
 		/// Validates every UXML and USS without rendering. Safe under -nographics.
 		/// </summary>
-		[MenuItem("FishMMO/UI Toolkit/Validate Panels")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Validate Panels", Section = "Panel Validation", Order = 0, Tooltip = "Mounts every UI Toolkit panel and reports markup and layout problems.")]
 		public static void Validate()
 		{
 			problems.Clear();
@@ -151,7 +152,7 @@ namespace FishMMO.Client.Editor
 		/// The caller must therefore <b>not</b> pass -quit; this exits the editor itself once the
 		/// queue is drained.
 		/// </remarks>
-		[MenuItem("FishMMO/UI Toolkit/Render Panel Previews")]
+		[DashboardTool(DashboardToolAttribute.UITests, "Render Panel Previews", Section = "Panel Validation", Order = 1, Tooltip = "Renders every panel to a PNG in Assets/UITKValidationImages (untracked; delete it afterwards).")]
 		public static void RenderPreviews()
 		{
 			problems.Clear();
