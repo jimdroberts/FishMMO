@@ -668,6 +668,7 @@ namespace FishMMO.Shared.WorldDesign
 			orrery.Hours = hours;
 			orrery.Selected = selected as CelestialBody;
 			orrery.Observer = observer;
+			orrery.ObserverLongitude = longitudeSlider != null ? longitudeSlider.value : 0f;
 			orrery.Refresh();
 
 			sky.System = profile;

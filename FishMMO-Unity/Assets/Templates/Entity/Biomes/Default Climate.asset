@@ -15,6 +15,7 @@ MonoBehaviour:
   GlobalTemperatureOffset: 0
   GlobalHumidityOffset: 0
   UsePlanetTemperature: 0
+  SeaLevelTemperature: 0.35
   ElevationLapseRate: 0.8
   LowlandHumidityBonus: 0.3
   HeatDryingThreshold: 0.5

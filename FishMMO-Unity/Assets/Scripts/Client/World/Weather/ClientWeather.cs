@@ -202,7 +202,7 @@ namespace FishMMO.Client
 			WorldBody body = SceneTime.BodyOf(settings);
 			if (system != null && body != null && WorldClock.Shared.HasAnchor)
 			{
-				CelestialMath.ClimateOffsets(system, body, WorldClock.Shared.WorldHoursAt(tick), out float bt, out float bh);
+				CelestialMath.ClimateOffsets(system, body, WorldClock.Shared.WorldHoursAt(tick), out float bt, out float bh, settings.Latitude);
 				temperature += bt;
 				humidity += bh;
 			}

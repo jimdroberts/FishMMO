@@ -312,7 +312,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			WorldBody body = SceneTime.BodyOf(sw.Settings);
 			if (system != null && body != null)
 			{
-				CelestialMath.ClimateOffsets(system, body, worldHours, out float bodyTemperature, out float bodyHumidity);
+				CelestialMath.ClimateOffsets(system, body, worldHours, out float bodyTemperature, out float bodyHumidity, sw.Settings.Latitude);
 				temperature += bodyTemperature;
 				humidity += bodyHumidity;
 			}

@@ -486,5 +486,39 @@ namespace FishMMO.UnitTests.Weather
 			DateTime utc = DateTimeOffset.FromUnixTimeSeconds(epoch).UtcDateTime.AddHours(2);
 			Assert.That(WorldClock.WorldSecondsFromUtc(utc, epoch), Is.EqualTo(7200.0).Within(1e-6));
 		}
+
+		// ── Climate by latitude ───────────────────────────────────────
+
+		[Test]
+		public void TheEquatorIsWarmerThanThePolesAndTheHomeOffsetIsZeroWithoutALatitude()
+		{
+			double hours = 10.0;
+			CelestialMath.ClimateOffsets(system, home, hours, out float none, out _);
+			Assert.That(none, Is.EqualTo(0f).Within(1e-4f), "no latitude: the old home offset");
+			CelestialMath.ClimateOffsets(system, home, hours, out float equator, out _, 0.0);
+			CelestialMath.ClimateOffsets(system, home, hours, out float mid, out _, 45.0);
+			CelestialMath.ClimateOffsets(system, home, hours, out float polar, out _, 85.0);
+			LogAssert.IsTrue(equator > -0.1f, $"the equator is barely cooled, got {equator}");
+			LogAssert.IsTrue(equator > mid && mid > polar, $"cooler toward the pole: {equator} > {mid} > {polar}");
+		}
+
+		[Test]
+		public void SeasonsAreOppositeInTheTwoHemispheres()
+		{
+			// Find the northern summer and winter solstices in the first year.
+			double year = CelestialMath.YearHours(system);
+			double summer = 0.0, winter = 0.0, highest = double.MinValue, lowest = double.MaxValue;
+			for (double h = 0; h < year; h += year / 730.0)
+			{
+				CelestialMath.SunEquatorial(system, home, h, out _, out double declination);
+				if (declination > highest) { highest = declination; summer = h; }
+				if (declination < lowest) { lowest = declination; winter = h; }
+			}
+			double T(double h, double lat) => CelestialMath.LatitudeTemperature(system, home, h, lat);
+			LogAssert.IsTrue(T(summer, 45.0) > T(winter, 45.0) + 0.15, $"45°N summer {T(summer, 45.0):0.00} vs winter {T(winter, 45.0):0.00}");
+			LogAssert.IsTrue(T(winter, -45.0) > T(summer, -45.0) + 0.15, "45°S has its summer in the northern winter");
+			Assert.That(T(summer, 45.0), Is.EqualTo(T(winter, -45.0)).Within(0.02), "mirror images");
+			Assert.That(T(winter, 80.0), Is.EqualTo(-CelestialMath.LatitudeCooling).Within(1e-6), "polar night is as cold as it gets");
+		}
 	}
 }

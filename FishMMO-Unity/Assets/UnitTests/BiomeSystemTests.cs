@@ -176,6 +176,26 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void Climate_SeaLevelIsTemperate_OnlyTheHighestPeaksFreeze()
+		{
+			ClimateSettings climate = MakeClimate();
+			float shore = climate.Evaluate(climate.WaterSurfaceHeight, 0.5f).Temperature;
+			Assert.That(shore, Is.EqualTo(climate.SeaLevelTemperature).Within(1e-4f), "the water line reads the sea-level temperature");
+			Assert.Greater(shore, 0.2f, "the default sea level is mild");
+			Assert.Greater(climate.Evaluate(0.6f, 0.5f).Temperature, 0.05f, "lowland hills are above freezing, so rain stays rain");
+			Assert.Less(climate.Evaluate(1f, 0.5f).Temperature, -0.05f, "the highest peaks are below freezing");
+		}
+
+		[Test]
+		public void Climate_AuthoredLowlandBiomesMatchTheirOwnHeight()
+		{
+			// The default grassland band (tier 4) was authored for -0.1..0.4: the model must reach it.
+			ClimateSettings climate = MakeClimate();
+			float grassland = climate.Evaluate(0.5f, 0.5f).Temperature;
+			Assert.That(grassland, Is.InRange(-0.1f, 0.4f));
+		}
+
+		[Test]
 		public void Climate_TiersFollowTheBoundaries()
 		{
 			ClimateSettings climate = MakeClimate();

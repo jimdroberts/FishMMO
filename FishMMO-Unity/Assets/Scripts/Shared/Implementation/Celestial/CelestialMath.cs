@@ -348,6 +348,26 @@ namespace FishMMO.Shared.Celestial
 			return total > 0 ? total : 1.0;
 		}
 
+		/// <summary>How much colder a latitude is than the equator at equinox, at most.</summary>
+		public const double LatitudeCooling = 0.6;
+
+		/// <summary>
+		/// The temperature shift of a latitude right now: from how high the sun climbs at noon,
+		/// which carries both the pole-ward chill and the seasons from the body's tilt. 0 with
+		/// the sun overhead; <see cref="LatitudeCooling"/> colder when it never rises.
+		/// </summary>
+		public static double LatitudeTemperature(SolarSystemProfile system, WorldBody body, double hours, double latitudeDegrees)
+		{
+			double declination = 0.0;
+			if (system != null && body != null)
+			{
+				SunEquatorial(system, body, hours, out _, out declination);
+			}
+			double noonAltitude = 90.0 - Math.Abs(latitudeDegrees - declination * Rad2Deg);
+			double height = Math.Max(0.0, Math.Sin(noonAltitude * Deg2Rad));
+			return LatitudeCooling * (height - 1.0);
+		}
+
 		/// <summary>Greenhouse contribution to the temperature offset for an atmosphere.</summary>
 		public static double Greenhouse(AtmosphereKind atmosphere)
 		{
@@ -368,7 +388,7 @@ namespace FishMMO.Shared.Celestial
 		/// Temperature follows the fourth root of starlight (equilibrium temperature), scaled so the
 		/// home world reads ≈0. With no atmosphere humidity is pinned to its minimum.
 		/// </remarks>
-		public static void ClimateOffsets(SolarSystemProfile system, WorldBody body, double hours, out float temperature, out float humidity)
+		public static void ClimateOffsets(SolarSystemProfile system, WorldBody body, double hours, out float temperature, out float humidity, double? latitudeDegrees = null)
 		{
 			if (system == null || body == null)
 			{
@@ -381,6 +401,10 @@ namespace FishMMO.Shared.Celestial
 			double relative = Insolation(system, body, hours) / Math.Max(1e-6, homeLight);
 			double homeGreenhouse = system.HomeWorld != null ? Greenhouse(system.HomeWorld.Atmosphere) : 0.0;
 			double t = 2.2 * (Math.Pow(relative, 0.25) - 1.0) + Greenhouse(body.Atmosphere) - homeGreenhouse;
+			if (latitudeDegrees.HasValue)
+			{
+				t += LatitudeTemperature(system, body, hours, latitudeDegrees.Value);
+			}
 			temperature = (float)Math.Max(-1.0, Math.Min(1.0, t));
 			if (body.Atmosphere == AtmosphereKind.None)
 			{

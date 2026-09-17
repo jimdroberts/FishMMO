@@ -36,6 +36,8 @@ namespace FishMMO.Shared.Biomes
 		public bool UsePlanetTemperature = false;
 
 		[Header("Temperature model")]
+		[Tooltip("Temperature at the water line (-1 frozen … +1 scorching). Land above it cools with the lapse rate; the sea floor below it is warmer. 0.35 is temperate: rain in the lowlands, snow only on the highest peaks.")]
+		[Range(-1f, 1f)] public float SeaLevelTemperature = 0.35f;
 		[Tooltip("How much temperature drops from sea floor to the highest peak.")]
 		[Range(0f, 2f)] public float ElevationLapseRate = 0.8f;
 
@@ -73,7 +75,9 @@ namespace FishMMO.Shared.Biomes
 			{
 				temperature -= Mathf.Abs(latitude01 - 0.5f) * 2f;
 			}
-			temperature -= height * ElevationLapseRate;
+			// Anchored at the water line: before this, sea level read -0.34 and almost every
+			// scene above it was below freezing, so most weather fell as snow.
+			temperature += SeaLevelTemperature - (height - WaterSurfaceHeight) * ElevationLapseRate;
 			temperature = Mathf.Clamp(temperature, -1f, 1f);
 
 			float humidity = (1f - height) * LowlandHumidityBonus;

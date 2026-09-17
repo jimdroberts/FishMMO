@@ -23,6 +23,8 @@ namespace FishMMO.Shared.WorldDesign
 		public double Hours { get; set; }
 		public CelestialBody Selected { get; set; }
 		public WorldBody Observer { get; set; }
+		/// <summary>The observer's longitude, in degrees: its facing arrow shows where that place faces.</summary>
+		public float ObserverLongitude { get; set; }
 		public float Zoom { get; set; } = 1f;
 
 		/// <summary>Raised when a body is clicked.</summary>
@@ -35,6 +37,16 @@ namespace FishMMO.Shared.WorldDesign
 			style.backgroundColor = new Color(0.06f, 0.07f, 0.1f, 1f);
 			style.overflow = Overflow.Hidden;
 			generateVisualContent += Draw;
+			var key = new Label("➤ which way longitude 0 faces (the observer: its own longitude; toward the sun is noon)   ↺ spin")
+			{
+				pickingMode = PickingMode.Ignore,
+			};
+			key.style.position = Position.Absolute;
+			key.style.left = 6f;
+			key.style.bottom = 4f;
+			key.style.fontSize = 10f;
+			key.style.color = new Color(0.75f, 0.8f, 0.9f, 0.8f);
+			Add(key);
 			RegisterCallback<PointerDownEvent>(OnPointerDown);
 			RegisterCallback<GeometryChangedEvent>(_ => Refresh());
 			RegisterCallback<WheelEvent>(evt =>
@@ -218,6 +230,10 @@ namespace FishMMO.Shared.WorldDesign
 					painter.Arc(p, radius + 3f, 0f, 360f);
 					painter.Stroke();
 				}
+				if (body is WorldBody world && (!IsMoon(body) || body == Selected || body == Observer))
+				{
+					DrawFacing(painter, world, p, radius);
+				}
 				if (body == Selected || body == Observer)
 				{
 					painter.strokeColor = body == Selected ? new Color(1f, 0.85f, 0.3f, 1f) : new Color(0.5f, 0.9f, 1f, 1f);
@@ -227,6 +243,72 @@ namespace FishMMO.Shared.WorldDesign
 					painter.Stroke();
 				}
 			}
+		}
+
+		/// <summary>
+		/// Which way a body faces right now, seen from above: an arrow from its centre toward the
+		/// direction longitude 0 faces (the observer's own longitude on the observer), and a short
+		/// curved arrow for the way it spins. When the arrow points at the sun it is noon there.
+		/// </summary>
+		private void DrawFacing(Painter2D painter, WorldBody body, Vector2 p, float radius)
+		{
+			double tilt = body.AxialTiltDegrees * CelestialMath.Deg2Rad;
+			bool observer = body == Observer;
+			double theta = CelestialMath.RotationAngle(System, body, Hours) + (observer ? ObserverLongitude * CelestialMath.Deg2Rad : 0.0);
+			// Where the meridian's plane (right ascension theta) cuts the orbital plane: the sun sits
+			// on that line at local noon whatever the tilt. Then onto the screen (y down).
+			var direction = new Vector2((float)(Math.Cos(theta) * Math.Cos(tilt)), -(float)Math.Sin(theta));
+			if (direction.sqrMagnitude < 1e-6f)
+			{
+				return;
+			}
+			direction.Normalize();
+			Color colour = observer ? new Color(0.5f, 0.9f, 1f, 1f) : new Color(1f, 1f, 1f, 0.75f);
+			float length = radius + (observer ? 16f : 10f);
+			Vector2 start = p + direction * radius;
+			Vector2 tip = p + direction * length;
+			painter.strokeColor = colour;
+			painter.fillColor = colour;
+			painter.lineWidth = observer ? 1.8f : 1.2f;
+			painter.BeginPath();
+			painter.MoveTo(start);
+			painter.LineTo(tip);
+			painter.Stroke();
+			var side = new Vector2(-direction.y, direction.x);
+			painter.BeginPath();
+			painter.MoveTo(tip + direction * 3f);
+			painter.LineTo(tip - direction * 2f + side * 2.5f);
+			painter.LineTo(tip - direction * 2f - side * 2.5f);
+			painter.ClosePath();
+			painter.Fill();
+
+			// Spin: counter-clockwise from above for a prograde (or locked) body, clockwise for a retrograde one.
+			float sense = body.Retrograde && !body.TidallyLocked ? -1f : 1f;
+			float ring = radius + 3.5f;
+			float startAngle = Mathf.Atan2(-direction.y, direction.x) + sense * 0.5f;
+			const int steps = 10;
+			float sweep = sense * 1.6f;
+			Vector2 At(float a) => p + new Vector2(Mathf.Cos(a), -Mathf.Sin(a)) * ring;
+			painter.lineWidth = 1f;
+			painter.strokeColor = new Color(colour.r, colour.g, colour.b, colour.a * 0.7f);
+			painter.BeginPath();
+			painter.MoveTo(At(startAngle));
+			for (int i = 1; i <= steps; i++)
+			{
+				painter.LineTo(At(startAngle + sweep * i / steps));
+			}
+			painter.Stroke();
+			float endAngle = startAngle + sweep;
+			Vector2 end = At(endAngle);
+			Vector2 along = (end - At(endAngle - sense * 0.15f)).normalized;
+			var across = new Vector2(-along.y, along.x);
+			painter.fillColor = painter.strokeColor;
+			painter.BeginPath();
+			painter.MoveTo(end + along * 2.5f);
+			painter.LineTo(end - along * 1.5f + across * 2f);
+			painter.LineTo(end - along * 1.5f - across * 2f);
+			painter.ClosePath();
+			painter.Fill();
 		}
 
 		private void DrawOrbit(Painter2D painter, CelestialBody body, Vector2 centre, float scale)
