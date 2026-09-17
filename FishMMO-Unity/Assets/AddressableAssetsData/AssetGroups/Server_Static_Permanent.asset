@@ -15,14 +15,14 @@ MonoBehaviour:
   m_GroupName: Server_Static_Permanent
   m_GUID: f2edf6310b68f6b4bae56ba99aeaeab9
   m_SerializeEntries:
-  - m_GUID: 52b7d40e4f9b4f8abf005afa870e8ad2
-    m_Address: Assets/Prefabs/Server/SceneServer/AISystem.asset
+  - m_GUID: 0000dcf078b2e49537af1fcaa7244eca
+    m_Address: Archer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Server_Static_Permanent
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 95f857a74d9b4f87a71060f2e717e0e2
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnerSystem.asset
+  - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
+    m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -39,14 +39,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23fab518843ac25c03488d568bf860ab
+    m_Address: Pet Melee Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2651c85903d94974e6e6e2bac6576e61
+    m_Address: Healer Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a68083bfef2f80fc8ca1af9c8369512
     m_Address: Assets/Prefabs/Server/SceneServer/CharacterSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b1405c322d7a2744a16faa08683d319
+    m_Address: Basic Patrol State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3cfe401ccb6fbd445a4d7da9c623957d
     m_Address: Assets/Prefabs/Server/WorldServer/WorldServerSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48e90ed169b30a433adb7716340a2cb0
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene B.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -63,11 +87,35 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51f855b3de8e6644eb22eee716657935
+    m_Address: Basic Idle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52b7d40e4f9b4f8abf005afa870e8ad2
+    m_Address: Assets/Prefabs/Server/SceneServer/AISystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 533ddb9bdb34b7440a63e47f786a58ab
+    m_Address: Basic PetIdle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 57662a393a0b3c42fb835c4b66b3710f
     m_Address: Assets/Prefabs/Server/LoginServer/CharacterSelectSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
+    m_Address: Basic Retreat State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6879c81059fb59d4aaae79190fc5c262
     m_Address: Assets/Prefabs/Server/LoginServer/AccountCreationSystem.asset
@@ -87,11 +135,35 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 782b351352c8d2b9b584e82c22d3dcf6
+    m_Address: Shared Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c1ca08ef1e69c690af41b67d7b5167e
     m_Address: Assets/Prefabs/Server/LoginServer/LoginServerSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d7c73381d0e7f4b5530f072f05cf0fa
+    m_Address: Crowd Controller Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 806e118c585a0f971e054f4730bb520b
+    m_Address: Rogue Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8751b24bf85f92efad896766fd2ace5e
+    m_Address: Combat Flee State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 877efcded03164f809a7843e58a6db91
     m_Address: Assets/Prefabs/Server/LoginServer/CharacterCreateSystem.asset
@@ -105,14 +177,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a6915836749a01333e29a4e009c4fde
+    m_Address: Pet Archer Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8b035132fe06520f09c29d98026d2a36
     m_Address: Assets/Prefabs/Server/SceneServer/FriendSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fea2bfc9cc7e67021f4258b5a5feaf9
+    m_Address: Brute Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93fb2e9d657c108f5e209832010309be
+    m_Address: Defender Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 95d362574f2bba4e38b44204babd6b65
     m_Address: Assets/Prefabs/Server/LoginServer/ServerSelectSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95f857a74d9b4f87a71060f2e717e0e2
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnerSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -123,17 +219,65 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 981218c27f282fe423a954a7d0bd7262
+    m_Address: Pet Defender Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ac234842ad51b3fbb1ed5c7598ba571
+    m_Address: Pet Healer Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9eff8c9262694279a2d40893e55c00ed
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/SpawnTableCatalogue.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a188e3de8a5794043903352f3ce4a57d
+    m_Address: Basic Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a4e7c324c4896a028eb1714c42f92c79
+    m_Address: Combat Flank State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ab11fc8547112b3f8b0737445814913c
     m_Address: Assets/Prefabs/Server/SceneServer/ChatSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
-    m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
+  - m_GUID: acce2c15167bca3468900e3963385b1e
+    m_Address: Basic GetBehind State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Server_Static_Permanent
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af5ca3927add4dd0594aa10c585672f4
+    m_Address: Combat Strafe State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b4bee0c12e3b92c48b285850bd5d47c1
+    m_Address: Basic Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b646a6d9bc4f07d428f12e255af67366
+    m_Address: Basic ReturnHome State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b71d352744ff0b27e8736d3f49fcc44f
     m_Address: Assets/Prefabs/Server/SceneServer/HotkeySystem.asset
@@ -141,17 +285,47 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b84f263b6aaadc40b9179f69c75abdf0
+    m_Address: Shared ReturnHome State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bfb81bf76967bb24098b2eb22e2a386e
+    m_Address: Basic Orbit State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c2da67465d50a8ed8b0a146bc785ce23
     m_Address: Assets/Prefabs/Server/SceneServer/InteractableSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb7473dde6a389f684e5e790b5eda8f0
+    m_Address: Combat Orbit State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cfab38130929316f08ac6e1f44fa64bd
     m_Address: Assets/Prefabs/Server/KickRequestSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfb923ff685794269056d51a4ae2e4b5
+    m_Address: Critter Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d821d4f4f560539ba889e64332e67a34
+    m_Address: Pet Rogue Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dc4f8795668c259a198bd41e7f1285e7
     m_Address: Assets/Prefabs/Server/ServerWindowTitleUpdater.asset
@@ -165,17 +339,17 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f854f419ab83b93908afd02eb77367aa
-    m_Address: Assets/Prefabs/Server/SceneServer/GuildSystem.asset
+  - m_GUID: e04a60db5b629dde0ab3ab264cdf946b
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Tutorial Spawners.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e6aebb0836c44c5ba11d0cf941ce0353
-    m_Address: Assets/Prefabs/Server/SceneServer/AIBrainCatalogue.asset
+  - m_GUID: e104c34faa16622bc33889b0c4991e34
+    m_Address: Melee Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Server_Static_Permanent
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e33fb943e3679306abf47876b2a7d872
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Dungeon.asset
@@ -183,11 +357,23 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9eff8c9262694279a2d40893e55c00ed
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/SpawnTableCatalogue.asset
+  - m_GUID: e44fb83268c5970a9182d915e579dad7
+    m_Address: Caster Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6aebb0836c44c5ba11d0cf941ce0353
+    m_Address: Assets/Prefabs/Server/SceneServer/AIBrainCatalogue.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ecd31ff07e929f6ee0b89178e183cb54
+    m_Address: Pet Caster Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f23e4e47e1bcac9b18d2d3bee4159f51
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene A.asset
@@ -195,14 +381,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 48e90ed169b30a433adb7716340a2cb0
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene B.asset
+  - m_GUID: f5b1bcb5c5de2a877d9877e43907f58d
+    m_Address: Pet Follow State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Server_Static_Permanent
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e04a60db5b629dde0ab3ab264cdf946b
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Tutorial Spawners.asset
+  - m_GUID: f854f419ab83b93908afd02eb77367aa
+    m_Address: Assets/Prefabs/Server/SceneServer/GuildSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

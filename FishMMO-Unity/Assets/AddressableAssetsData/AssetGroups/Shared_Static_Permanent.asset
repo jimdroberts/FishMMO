@@ -15,12 +15,6 @@ MonoBehaviour:
   m_GroupName: Shared_Static_Permanent
   m_GUID: 23636b54ceb43a03f93abc3987c4632a
   m_SerializeEntries:
-  - m_GUID: 0000dcf078b2e49537af1fcaa7244eca
-    m_Address: Archer Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 00a91c9335a0f6193bc9c0daacf916d8
     m_Address: Lightning
     m_ReadOnly: 0
@@ -609,12 +603,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 23fab518843ac25c03488d568bf860ab
-    m_Address: Pet Melee Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2453d93ac8d44114bbb19a5a4db9c96a
     m_Address: Fishfolk
     m_ReadOnly: 0
@@ -653,12 +641,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 25b2912dd9cd4ecfb7bbe73a27b5b476
     m_Address: Kelp Lurker
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2651c85903d94974e6e6e2bac6576e61
-    m_Address: Healer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -939,12 +921,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3b1405c322d7a2744a16faa08683d319
-    m_Address: Basic Patrol State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3c42f120216f44b28833de1504676c31
     m_Address: Ghost
     m_ReadOnly: 0
@@ -1191,12 +1167,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 51f855b3de8e6644eb22eee716657935
-    m_Address: Basic Idle State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5286009ee3224a96a9188580ad80eea9
     m_Address: Wyvern
     m_ReadOnly: 0
@@ -1223,12 +1193,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 531ed21f335ef6e4cab9440971452675
     m_Address: Sanctuary
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 533ddb9bdb34b7440a63e47f786a58ab
-    m_Address: Basic PetIdle State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1343,12 +1307,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5aa15889374b0092ba247f732346d5f4
     m_Address: Orc Slam Damage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
-    m_Address: Basic Retreat State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1647,12 +1605,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 782b351352c8d2b9b584e82c22d3dcf6
-    m_Address: Shared Wander State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 782ca4500bb24367945e5f4974825496
     m_Address: Swamp Cave
     m_ReadOnly: 0
@@ -1724,12 +1676,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7d7c73381d0e7f4b5530f072f05cf0fa
-    m_Address: Crowd Controller Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
     m_Address: Self Minor Armor
     m_ReadOnly: 0
@@ -1774,12 +1720,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8059e3921abe69355873881d4f42a867
     m_Address: Mist
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 806e118c585a0f971e054f4730bb520b
-    m_Address: Rogue Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1862,12 +1802,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8751b24bf85f92efad896766fd2ace5e
-    m_Address: Combat Flee State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8766246d673041191a07889157e01b58
     m_Address: Mock Random Bolts
     m_ReadOnly: 0
@@ -1900,12 +1834,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
     m_Address: Tier1 Sword Attack Speed
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8a6915836749a01333e29a4e009c4fde
-    m_Address: Pet Archer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1982,12 +1910,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8fea2bfc9cc7e67021f4258b5a5feaf9
-    m_Address: Brute Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9018bf3f57b34f6cab56c1bb65fce964
     m_Address: Sporeling
     m_ReadOnly: 0
@@ -2044,12 +1966,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 93f5daffd06e4f2cb1898ae8bc2e21f3
     m_Address: Cloud Giant
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 93fb2e9d657c108f5e209832010309be
-    m_Address: Defender Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2120,12 +2036,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 981218c27f282fe423a954a7d0bd7262
-    m_Address: Pet Defender Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 981ccbfcf1adc4a56a367c343a05319c
     m_Address: Orc Slam
     m_ReadOnly: 0
@@ -2164,12 +2074,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9aa49e0922d75f341a2be18b3000840a
     m_Address: Water Resistance
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9ac234842ad51b3fbb1ed5c7598ba571
-    m_Address: Pet Healer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2240,20 +2144,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a188e3de8a5794043903352f3ce4a57d
-    m_Address: Basic Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a4d8278c839b407dba6b461ed4b7ad42
     m_Address: Ashenfolk
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a4e7c324c4896a028eb1714c42f92c79
-    m_Address: Combat Flank State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2390,12 +2282,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: acce2c15167bca3468900e3963385b1e
-    m_Address: Basic GetBehind State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: acd7d4cddc0244d983c9397254bf1d71
     m_Address: Lionfolk
     m_ReadOnly: 0
@@ -2410,12 +2296,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ae496bfb85924c32ac54f280410b25fc
     m_Address: Succubus
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: af5ca3927add4dd0594aa10c585672f4
-    m_Address: Combat Strafe State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2491,12 +2371,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b4bee0c12e3b92c48b285850bd5d47c1
-    m_Address: Basic Wander State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b506f64ee95dca8438ce9f8e87bb0525
     m_Address: Water Damage
     m_ReadOnly: 0
@@ -2515,12 +2389,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b646a6d9bc4f07d428f12e255af67366
-    m_Address: Basic ReturnHome State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b64d9b9e63fd40bda1b6cf0a7a537a01
     m_Address: Beast Titles
     m_ReadOnly: 0
@@ -2529,12 +2397,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b7e83d5450cb49e4a4d9aee3f966452e
     m_Address: Beastfolk Titles
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b84f263b6aaadc40b9179f69c75abdf0
-    m_Address: Shared ReturnHome State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2631,12 +2493,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bf885e1abe304d3ba5a841222f4f93a9
     m_Address: Mummy
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bfb81bf76967bb24098b2eb22e2a386e
-    m_Address: Basic Orbit State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2803,12 +2659,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cb7473dde6a389f684e5e790b5eda8f0
-    m_Address: Combat Orbit State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cd247f59315b9d16782275ef9077806c
     m_Address: Blizzard
     m_ReadOnly: 0
@@ -2847,12 +2697,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cf6695c0536344e083dd0a871b0c7304
     m_Address: Earth Elemental
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cfb923ff685794269056d51a4ae2e4b5
-    m_Address: Critter Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3001,12 +2845,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d821d4f4f560539ba889e64332e67a34
-    m_Address: Pet Rogue Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d8f9f20cca284cbea1afe34b27829a1c
     m_Address: Rune Guardian
     m_ReadOnly: 0
@@ -3133,12 +2971,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e104c34faa16622bc33889b0c4991e34
-    m_Address: Melee Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e1d7a3c833fc4c429ebcf16586d3e4e1
     m_Address: Cave Drake
     m_ReadOnly: 0
@@ -3207,12 +3039,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e3e8b717b5d803248a6ff39ab30aa577
     m_Address: Mana Regeneration
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e44fb83268c5970a9182d915e579dad7
-    m_Address: Caster Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3315,12 +3141,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ec922487d2754e3e8ff896e7df229daa
     m_Address: Sea Hag
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ecd31ff07e929f6ee0b89178e183cb54
-    m_Address: Pet Caster Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3453,12 +3273,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f57436ec582443c29f11368cf14946ff
     m_Address: Wood Golem
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f5b1bcb5c5de2a877d9877e43907f58d
-    m_Address: Pet Follow State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
