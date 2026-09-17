@@ -541,6 +541,16 @@ namespace FishMMO.Shared
 
 			RegisterSpawnTablesCategory();
 			AddToolPageCategory(DashboardToolAttribute.WorldMap, "World");
+			RegisterWorldDesignCategories();
+
+			// ── Weather ──
+			AddCategory<FishMMO.Shared.Weather.WeatherPreset>("Weather Presets", "Weather",
+				FishMMO.Shared.WorldDesign.WeatherContentGenerator.PresetsFolder,
+				"FishMMO/Weather/Preset");
+			AddCategory<FishMMO.Shared.Weather.WeatherLayerTemplate>("Weather Layers", "Weather",
+				FishMMO.Shared.WorldDesign.WeatherContentGenerator.LayersFolder,
+				"FishMMO/Weather/Layer Template");
+			AddToolPageCategory(DashboardToolAttribute.Weather, "Weather");
 		}
 
 		/// <summary>
@@ -703,6 +713,10 @@ namespace FishMMO.Shared
 				else if (cat.DisplayName == NAME_GENERATION_CATEGORY)
 				{
 					ShowNameGenerationPage();
+				}
+				else if (IsWorldDesignPage(cat.DisplayName))
+				{
+					ShowWorldDesignPage(cat.DisplayName);
 				}
 				else if (IsToolPage(cat.DisplayName))
 				{

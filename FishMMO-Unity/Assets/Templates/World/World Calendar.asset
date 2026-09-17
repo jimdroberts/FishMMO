@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 391651b27068457797ecd68706abcccd, type: 3}
+  m_Name: World Calendar
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.CalendarProfile
+  CalendarBody: {fileID: 11400000, guid: 502a5864d965402358c527e42529b8bd, type: 2}
+  DaysPerYear: 365
+  Months:
+  - Name: Month 1
+    Days: 31
+  - Name: Month 2
+    Days: 28
+  - Name: Month 3
+    Days: 31
+  - Name: Month 4
+    Days: 30
+  - Name: Month 5
+    Days: 31
+  - Name: Month 6
+    Days: 30
+  - Name: Month 7
+    Days: 31
+  - Name: Month 8
+    Days: 31
+  - Name: Month 9
+    Days: 30
+  - Name: Month 10
+    Days: 31
+  - Name: Month 11
+    Days: 30
+  - Name: Month 12
+    Days: 31
+  Weekdays:
+  - Day 1
+  - Day 2
+  - Day 3
+  - Day 4
+  - Day 5
+  - Day 6
+  - Day 7
+  EpochYear: 1
+  EraName: 
+  WorldEpochUnixSeconds: 1767225600

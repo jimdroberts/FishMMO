@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -107,8 +108,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// The union of every <c>IBoundary</c> and <c>Terrain</c> in the currently loaded scenes.
+		/// The union of every <c>IBoundary</c> and <c>Terrain</c> in one loaded scene, or in all
+		/// loaded scenes when <paramref name="scene"/> is not valid.
 		/// </summary>
+		/// <param name="scene">The scene to measure; other loaded scenes are ignored.</param>
 		/// <returns>The union rectangle, or <see cref="Rect.zero"/> when nothing was found.</returns>
 		/// <remarks>
 		/// Used by the map baker, which has the scene open and has not yet written a definition to
@@ -116,8 +119,9 @@ namespace FishMMO.Shared
 		/// what the bake camera will actually photograph — a boundary that crops tighter than the
 		/// terrain would leave the map showing ground the rectangle claims is off the map.
 		/// </remarks>
-		public static Rect FromOpenScene()
+		public static Rect FromOpenScene(Scene scene = default)
 		{
+			bool onlyOne = scene.IsValid();
 			bool any = false;
 			float minX = float.MaxValue;
 			float minZ = float.MaxValue;
@@ -128,7 +132,7 @@ namespace FishMMO.Shared
 			for (int i = 0; i < boundaries.Length; ++i)
 			{
 				IBoundary boundary = boundaries[i];
-				if (boundary == null)
+				if (boundary == null || onlyOne && boundary.gameObject.scene != scene)
 				{
 					continue;
 				}
@@ -153,7 +157,7 @@ namespace FishMMO.Shared
 			for (int i = 0; i < terrains.Length; ++i)
 			{
 				Terrain terrain = terrains[i];
-				if (terrain == null || terrain.terrainData == null)
+				if (terrain == null || terrain.terrainData == null || onlyOne && terrain.gameObject.scene != scene)
 				{
 					continue;
 				}

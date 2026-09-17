@@ -169,6 +169,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			commands.AddRange(BuildAdminEconomyCommands());
 			commands.AddRange(BuildAdminCharacterCommands());
+			commands.AddRange(BuildAdminWeatherCommands());
 			return commands;
 		}
 

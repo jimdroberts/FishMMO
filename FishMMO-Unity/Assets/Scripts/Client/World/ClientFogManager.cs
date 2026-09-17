@@ -7,6 +7,10 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Manages fog transitions triggered by region changes. Extracted from Client.cs.
 	/// </summary>
+	/// <remarks>
+	/// Region fog is the base the weather is laid over, so this writes <see cref="FogComposer.Base"/>
+	/// rather than <see cref="RenderSettings"/>; the composer writes the scene's fog.
+	/// </remarks>
 	public class ClientFogManager
 	{
 		private class FogLerpState
@@ -20,7 +24,7 @@ namespace FishMMO.Client
 			/// <summary>Current fog end distance before the transition.</summary>
 			public float EndDist;
 			/// <summary>Captures the current RenderSettings fog values into this state snapshot.</summary>
-			public void Capture() { Color = RenderSettings.fogColor; Density = RenderSettings.fogDensity; StartDist = RenderSettings.fogStartDistance; EndDist = RenderSettings.fogEndDistance; }
+			public void Capture() { FogState b = FogComposer.Base; Color = b.Color; Density = b.Density; StartDist = b.StartDistance; EndDist = b.EndDistance; }
 		}
 
 		private FogLerpState initialState;
@@ -49,13 +53,15 @@ namespace FishMMO.Client
 		{
 			Stop();
 			if (initialState != null) initialState.Capture();
-			RenderSettings.fog = s.Enabled;
-			if (!s.Enabled) return;
-			RenderSettings.fogMode = s.Mode;
+			FogState fog = FogComposer.Base;
+			fog.Enabled = s.Enabled;
+			if (!s.Enabled) { FogComposer.Base = fog; return; }
+			fog.Mode = s.Mode;
+			FogComposer.SetRegionFog(fog);
 			if (initialState == null) { initialState = new FogLerpState(); initialState.Capture(); }
 			changeRate = s.ChangeRate; finalColor = s.Color; finalDensity = s.Density;
 			finalStartDist = s.StartDistance; finalEndDist = s.EndDistance;
-			if (initialState.Density == finalDensity) { RenderSettings.fogColor = finalColor; RenderSettings.fogDensity = finalDensity; RenderSettings.fogStartDistance = finalStartDist; RenderSettings.fogEndDistance = finalEndDist; }
+			if (initialState.Density == finalDensity) { Write(finalColor, finalDensity, finalStartDist, finalEndDist); }
 			else lerpRoutine = owner.StartCoroutine(Lerp());
 		}
 
@@ -64,12 +70,22 @@ namespace FishMMO.Client
 			for (float t = 0.01f; t < changeRate; t += 0.01f)
 			{
 				float lt = t / changeRate;
-				RenderSettings.fogColor = Color.Lerp(initialState.Color, finalColor, lt);
-				RenderSettings.fogDensity = Mathf.Lerp(initialState.Density, finalDensity, lt);
-				RenderSettings.fogStartDistance = Mathf.Lerp(initialState.StartDist, finalStartDist, lt);
-				RenderSettings.fogEndDistance = Mathf.Lerp(initialState.EndDist, finalEndDist, lt);
+				Write(Color.Lerp(initialState.Color, finalColor, lt),
+					Mathf.Lerp(initialState.Density, finalDensity, lt),
+					Mathf.Lerp(initialState.StartDist, finalStartDist, lt),
+					Mathf.Lerp(initialState.EndDist, finalEndDist, lt));
 				yield return null;
 			}
+		}
+
+		private static void Write(Color color, float density, float start, float end)
+		{
+			FogState fog = FogComposer.Base;
+			fog.Color = color;
+			fog.Density = density;
+			fog.StartDistance = start;
+			fog.EndDistance = end;
+			FogComposer.SetRegionFog(fog);
 		}
 	}
 }

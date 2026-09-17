@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Swamp Temple
   m_EditorClassIdentifier: 
   DisplayName: Swamp Temple
-  Description: 'Sacred site swallowed by swamp — drowned altars, defiled shrines'
+  Description: "Sacred site swallowed by swamp \u2014 drowned altars, defiled shrines"
   BiomeColorId: {r: 0.35, g: 0.45, b: 0.3, a: 1}
   GizmoColor: {r: 0.45, g: 0.55, b: 0.4, a: 1}
   ElevationTier: 4
@@ -106,14 +106,14 @@ MonoBehaviour:
       - The Putrid
       - The Plague-touched
       - The Fetid
-      - 'The Bog-spirit''s'
+      - The Bog-spirit's
       - The Corrupted
       - The Forsaken
       - The Profane
       - The Necromantic
       - The Miasmic
       - The Witch-haunted
-      - 'The Toad-god''s'
+      - The Toad-god's
       POISuffixes:
       - Drowned-altar
       - Bog-idol
@@ -158,7 +158,31 @@ MonoBehaviour:
       - Forbidden
       - Unholy
       - Pestilent
-      Description: 'Sacred site swallowed by swamp — drowned altars, defiled shrines'
+      Description: "Sacred site swallowed by swamp \u2014 drowned altars, defiled
+        shrines"
+  Weather:
+    Background:
+    - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
+      Intensity: 0.25
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
+      Weight: 1
+    Suitability:
+    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
+      Suitability: 0.05
+    Variants:
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Variant: {fileID: 11400000, guid: 6f63f0ccbfbfdc2e4bc4c4df3b494945, type: 2}
+    Forbidden: 32
+    CellsPerSquareKm: 0.55
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

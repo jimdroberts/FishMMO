@@ -1,7 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
+using FishMMO.Shared.Atlas;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared
 {
@@ -40,9 +44,21 @@ namespace FishMMO.Shared
 		/// edited into the scene YAML by hand or arriving from an older asset, so every consumer
 		/// clamps to <see cref="MaximumClientsPerScene"/> on read as well.
 		/// </remarks>
-		[Tooltip("The maximum number of clients allowed in this scene. Clamped to 200.")]
+		[Tooltip("The maximum number of clients allowed in this scene. Clamped to 200. The scene's world atlas entry may override it.")]
 		[Range(1, MaximumClientsPerScene)]
-		public int MaxClients = MaximumClientsPerScene;
+		[SerializeField, FormerlySerializedAs("MaxClients")]
+		private int maxClients = MaximumClientsPerScene;
+
+		/// <summary>The client cap: the atlas entry's, else the scene's own.</summary>
+		public int MaxClients
+		{
+			get
+			{
+				WorldAtlasScene entry = AtlasEntry;
+				return entry != null && entry.MaxClients > 0 ? entry.MaxClients : maxClients;
+			}
+			set => maxClients = value;
+		}
 
 		/// <summary>
 		/// Optional hand-made map definition, for a set of scenes that share one map (a dungeon and
@@ -67,15 +83,48 @@ namespace FishMMO.Shared
 		/// the built-in defaults.
 		/// </summary>
 		[Header("Climate")]
-		[Tooltip("Climate model for this scene. Shared between scenes with the same climate.")]
-		public ClimateSettings Climate;
+		[Tooltip("Climate model for this scene. Shared between scenes with the same climate. The world atlas entry, then the body's base climate, take precedence.")]
+		[SerializeField, FormerlySerializedAs("Climate")]
+		private ClimateSettings climate;
+
+		/// <summary>The climate: the atlas entry's, else the scene's own, else the body's base climate.</summary>
+		public ClimateSettings Climate
+		{
+			get
+			{
+				WorldAtlasScene entry = AtlasEntry;
+				if (entry != null && entry.Climate != null)
+				{
+					return entry.Climate;
+				}
+				if (climate != null)
+				{
+					return climate;
+				}
+				WorldBody body = Body;
+				return body != null ? body.BaseClimate : null;
+			}
+			set => climate = value;
+		}
 
 		/// <summary>
 		/// Which biome lies where, baked when the world was generated. Biomes are mixed through a
 		/// scene; the map is how anything asks what is under a position.
 		/// </summary>
-		[Tooltip("Baked biome grid for this scene, imported from the world generator's biome map.")]
-		public SceneBiomeMap BiomeMap;
+		[Tooltip("Baked biome grid for this scene, imported from the world generator's biome map. The world atlas entry may override it.")]
+		[SerializeField, FormerlySerializedAs("BiomeMap")]
+		private SceneBiomeMap biomeMap;
+
+		/// <summary>The biome map: the atlas entry's, else the scene's own.</summary>
+		public SceneBiomeMap BiomeMap
+		{
+			get
+			{
+				WorldAtlasScene entry = AtlasEntry;
+				return entry != null && entry.BiomeMap != null ? entry.BiomeMap : biomeMap;
+			}
+			set => biomeMap = value;
+		}
 
 		/// <summary>
 		/// Runtime shift on top of <see cref="Climate"/>'s global temperature offset. Mutable: a
@@ -90,6 +139,44 @@ namespace FishMMO.Shared
 		/// </summary>
 		[Tooltip("Runtime humidity shift on top of the climate asset. Driven by weather at runtime.")]
 		[Range(-2f, 2f)] public float RuntimeHumidityOffset;
+
+		// ── World placement: owned by the world atlas ─────────────────
+
+		/// <summary>This scene's world atlas entry, or null when it has not been added to the atlas.</summary>
+		public WorldAtlasScene AtlasEntry => WorldAtlasScene.Find(gameObject.scene.name);
+
+		/// <summary>
+		/// The planet or moon this scene stands on. Null means the home world. Its rotation and sun
+		/// give the scene its time of day; its distance from the star and its atmosphere shift the
+		/// climate and decide whether weather exists at all.
+		/// </summary>
+		public WorldBody Body => AtlasEntry != null ? AtlasEntry.Body : null;
+
+		/// <summary>Latitude the sun path and auroras use, in degrees.</summary>
+		public float Latitude => AtlasEntry != null ? (float)AtlasEntry.EffectiveSunLatitude : 0f;
+
+		/// <summary>Longitude the whole scene takes its time of day at, in degrees.</summary>
+		public float Longitude => AtlasEntry != null ? (float)AtlasEntry.TimeLongitude : 0f;
+
+		/// <summary>World time, or a developer-authored fixed time. Nothing changes it at runtime.</summary>
+		public SceneTimeMode TimeMode => AtlasEntry != null ? AtlasEntry.TimeMode : SceneTimeMode.World;
+
+		/// <summary>The time shown when <see cref="TimeMode"/> is Fixed. 0.5 is noon.</summary>
+		public float FixedTimeOfDay01 => AtlasEntry != null ? AtlasEntry.FixedTimeOfDay01 : 0.5f;
+
+		/// <summary>
+		/// How this scene gets weather. Auto gives dungeons none and everything else its own; a
+		/// dungeon that wants weather says so in its atlas entry.
+		/// </summary>
+		public WeatherSceneMode WeatherMode => AtlasEntry != null ? AtlasEntry.EffectiveWeather : WeatherSceneMode.Auto;
+
+		/// <summary>The preset used when <see cref="WeatherMode"/> is Fixed.</summary>
+		public WeatherPreset FixedWeather => AtlasEntry != null ? AtlasEntry.FixedWeather : null;
+
+		public float FixedWeatherIntensity => AtlasEntry != null ? AtlasEntry.FixedWeatherIntensity : 1f;
+
+		/// <summary>Whether the automatic director may start storm cells here. Admins can switch it at runtime.</summary>
+		public bool WeatherDirector => AtlasEntry == null || AtlasEntry.WeatherDirector;
 
 		private static readonly Dictionary<int, WorldSceneSettings> byScene = new Dictionary<int, WorldSceneSettings>();
 

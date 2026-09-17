@@ -1,0 +1,61 @@
+#ifndef FISHMMO_WEATHER_INCLUDED
+#define FISHMMO_WEATHER_INCLUDED
+
+// Weather state, set once per frame by WeatherShaderGlobals on the client. Every weather effect
+// reads these; nothing else writes them. See FishMMO.Client.WeatherShaderGlobals.
+
+// x cloud cover, y cloud density, z cloud base (0 low .. 1 high), w lightning flash (0..1)
+float4 _FishWeatherCloud;
+// x precipitation amount, y drop size, z snow share of what falls, w storm severity
+float4 _FishWeatherPrecip;
+// xy wind direction on the ground plane (world x, z), z speed (0..1 = 0..30 m/s), w gust
+float4 _FishWeatherWind;
+// x fog density, y fog height, z volumetric fog, w unused
+float4 _FishWeatherFog;
+// Surface cover: x snow, y wet, z ash, w sand
+float4 _FishWeatherCover;
+// x aurora, y local temperature (-1..1), z camera shelter (0..1), w weather time in seconds
+float4 _FishWeatherMisc;
+
+// Sky occlusion: a top-down height map of the highest surface around the camera.
+// Rect: xy = world x/z of the map's corner, zw = size in metres.
+float4 _FishOcclusionRect;
+// x lowest height, y height range, z 1 when the map is valid, w metres per texel
+float4 _FishOcclusionRange;
+TEXTURE2D(_FishOcclusionTex);
+SAMPLER(sampler_FishOcclusionTex);
+
+// The highest surface above a point, in world metres. Heights are stored in 16 bits across R and G.
+float FishSkyOcclusionHeight(float3 worldPos)
+{
+    float2 uv = (worldPos.xz - _FishOcclusionRect.xy) / max(_FishOcclusionRect.zw, 1e-3);
+    float4 texel = SAMPLE_TEXTURE2D_LOD(_FishOcclusionTex, sampler_FishOcclusionTex, uv, 0);
+    float encoded = texel.r * (255.0 / 256.0) + texel.g * (1.0 / 256.0);
+    return _FishOcclusionRange.x + encoded * _FishOcclusionRange.y;
+}
+
+// 1 where the sky is open above a point, 0 under a roof. Outside the map, or without one, open.
+float FishSkyOpen(float3 worldPos)
+{
+    if (_FishOcclusionRange.z < 0.5)
+    {
+        return 1.0;
+    }
+    float2 uv = (worldPos.xz - _FishOcclusionRect.xy) / max(_FishOcclusionRect.zw, 1e-3);
+    if (any(uv < 0.0) || any(uv > 1.0))
+    {
+        return 1.0;
+    }
+    float top = FishSkyOcclusionHeight(worldPos);
+    return saturate((worldPos.y - top) * 2.0 + 1.0);
+}
+
+// A cheap moving gust, 0..1, for vertex animation.
+float FishWindGust(float2 xz, float time)
+{
+    float2 dir = _FishWeatherWind.xy;
+    float phase = dot(xz, dir) * 0.08 - time * (0.6 + _FishWeatherWind.z * 2.0);
+    return (sin(phase) * 0.5 + 0.5) * (sin(phase * 0.37 + 1.7) * 0.5 + 0.5) * _FishWeatherWind.w;
+}
+
+#endif

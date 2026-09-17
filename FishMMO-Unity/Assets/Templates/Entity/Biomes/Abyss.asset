@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Abyss
   m_EditorClassIdentifier: 
   DisplayName: Abyss
-  Description: 'Unfathomable depths — darkness beyond darkness, madness at the edge'
+  Description: "Unfathomable depths \u2014 darkness beyond darkness, madness at the
+    edge"
   BiomeColorId: {r: 0.01, g: 0.02, b: 0.08, a: 1}
   GizmoColor: {r: 0.1, g: 0.1, b: 0.3, a: 1}
   ElevationTier: 0
@@ -56,7 +57,7 @@ MonoBehaviour:
       - void
       - abyss
       - deep
-      - 'null'
+      - null
       - gor
       - thr
       - vex
@@ -158,7 +159,15 @@ MonoBehaviour:
       - Yawning
       - Eternal
       - Suffocating
-      Description: 'Unfathomable depths — darkness beyond darkness, madness at the edge'
+      Description: "Unfathomable depths \u2014 darkness beyond darkness, madness
+        at the edge"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 1023
+    CellsPerSquareKm: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

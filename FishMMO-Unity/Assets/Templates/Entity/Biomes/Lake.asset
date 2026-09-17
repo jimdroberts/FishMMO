@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Lake
   m_EditorClassIdentifier: 
   DisplayName: Lake
-  Description: 'Still fresh water — mirror-calm shallows, reed beds, cold depths'
+  Description: "Still fresh water \u2014 mirror-calm shallows, reed beds, cold depths"
   BiomeColorId: {r: 0.25, g: 0.55, b: 0.8, a: 1}
   GizmoColor: {r: 0.25, g: 0.55, b: 0.8, a: 1}
   ElevationTier: 4
@@ -130,7 +130,27 @@ MonoBehaviour:
       - Clear-water
       - Sunken
       - Sheltered
-      Description: 'Still fresh water — mirror-calm shallows, reed beds, cold depths'
+      Description: "Still fresh water \u2014 mirror-calm shallows, reed beds, cold
+        depths"
+  Weather:
+    Background: []
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
+      Weight: 2
+    Suitability: []
+    Variants: []
+    Forbidden: 48
+    CellsPerSquareKm: 0.45
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 2ada0aee473c5c64f836dbc1cf387aa6, type: 3}
     normalTexture: {fileID: 0}
@@ -153,6 +173,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -176,6 +197,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -198,6 +220,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -221,6 +244,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

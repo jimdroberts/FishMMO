@@ -367,6 +367,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			RegisterAdminCommands();
 			RegisterGameMasterCommands();
 
+			// World clock and weather. See SceneServerSystem.Weather.
+			InitializeWeather(characterSystem, characterMappingData);
+
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
@@ -435,6 +438,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			UnregisterAdminCommands();
 			UnregisterGameMasterCommands();
+			DeinitializeWeather();
 
 			// A shutdown that has been carried out must not still be pending in the database, or
 			// an automatic restart stops again immediately. See ClearConsumedShutdownOnTeardown.
@@ -490,6 +494,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
+			UpdateWeather(deltaTime);
 		}
 
 		/// <summary>

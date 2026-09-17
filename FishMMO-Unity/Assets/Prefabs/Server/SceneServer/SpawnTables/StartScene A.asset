@@ -34,10 +34,10 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 50, y: 5, z: 25}
     Spawnables:
-    - rid: 4707557208097292316
-    - rid: 4707557208097292317
-    - rid: 4707557208097292318
-    - rid: 4707557208097292319
+    - rid: 1
+    - rid: 2
+    - rid: 3
+    - rid: 4
   - Name: OrcSpawner
     Position: {x: 138.42906, y: 15.113663, z: -0.58421326}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -57,13 +57,13 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 75, y: 15, z: 65}
     Spawnables:
-    - rid: 4707557208097292320
-    - rid: 4707557208097292321
-    - rid: 4707557208097292322
+    - rid: 5
+    - rid: 6
+    - rid: 7
   references:
     version: 2
     RefIds:
-    - rid: 4707557208097292316
+    - rid: 1
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -83,7 +83,7 @@ MonoBehaviour:
         FactionOverride: {fileID: 0}
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 4707557208097292317
+    - rid: 2
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -103,7 +103,7 @@ MonoBehaviour:
         FactionOverride: {fileID: 0}
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 4707557208097292318
+    - rid: 3
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -123,7 +123,7 @@ MonoBehaviour:
         FactionOverride: {fileID: 0}
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 4707557208097292319
+    - rid: 4
       type: {class: ItemSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -138,7 +138,7 @@ MonoBehaviour:
         MaximumAmount: 1
         RollTable: []
         AchievementTemplateID: 0
-    - rid: 4707557208097292320
+    - rid: 5
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -161,7 +161,7 @@ MonoBehaviour:
           type: 2}
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 4707557208097292321
+    - rid: 6
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -184,7 +184,7 @@ MonoBehaviour:
           type: 2}
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 4707557208097292322
+    - rid: 7
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:

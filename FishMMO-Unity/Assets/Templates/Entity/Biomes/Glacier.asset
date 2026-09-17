@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Glacier
   m_EditorClassIdentifier: 
   DisplayName: Glacier
-  Description: 'Glacial ice — crevasses, blue ice, grinding movement, deadly beauty'
+  Description: "Glacial ice \u2014 crevasses, blue ice, grinding movement, deadly
+    beauty"
   BiomeColorId: {r: 0.8, g: 0.9, b: 1, a: 1}
   GizmoColor: {r: 0.9, g: 0.95, b: 1, a: 1}
   ElevationTier: 8
@@ -158,7 +159,33 @@ MonoBehaviour:
       - Majestic
       - Unforgiving
       - Eternal
-      Description: 'Glacial ice — crevasses, blue ice, grinding movement, deadly beauty'
+      Description: "Glacial ice \u2014 crevasses, blue ice, grinding movement, deadly
+        beauty"
+  Weather:
+    Background:
+    - Template: {fileID: 11400000, guid: a6a57c019710ab6feb91bab672f0081c, type: 2}
+      Intensity: 0.2
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: ade9a108bb77fdcc4a0f194c4f2f1972, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 30c934f6fa91f8a34856ff851d8a619e, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: cd247f59315b9d16782275ef9077806c, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 34c72236249102d769568390b2af216c, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 1.5
+    Suitability:
+    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
+      Suitability: 0.2
+    Variants: []
+    Forbidden: 32
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 22c2e676d9b34e14b87e4b97acdc05ed, type: 3}
     normalTexture: {fileID: 0}

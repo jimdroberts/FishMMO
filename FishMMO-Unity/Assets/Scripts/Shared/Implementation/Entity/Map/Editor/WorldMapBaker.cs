@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -9,6 +10,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared.Core;
+using Object = UnityEngine.Object;
 
 namespace FishMMO.Shared.WorldMaps
 {
@@ -77,10 +79,137 @@ namespace FishMMO.Shared.WorldMaps
 		/// </remarks>
 		private static readonly string[] CaptureLayerNames = { "Default", "Ground", "Water" };
 
+		/// <summary>True while a bake is running. Tools that touch the bake must wait for it.</summary>
+		public static bool IsBusy => job != null;
+
+		/// <summary>Raised when a bake starts or finishes.</summary>
+		public static event Action BusyChanged;
+
+		private const string ProgressTitle = "Baking world maps";
+
+		/// <summary>One bake in progress: the scenes left, and the editor state to put back.</summary>
+		private sealed class BakeJob
+		{
+			public readonly List<string> Scenes = new List<string>();
+			public int Index;
+			public int Baked;
+			public SceneSetup[] Setup;
+			public Scene Holder;
+			public Scene ActiveUntitled;
+			public Action<string> Done;
+		}
+
+		private static BakeJob job;
+
 		/// <summary>
-		/// Bakes a map for every world scene.
+		/// Bakes a map for every world scene, start to finish, before returning. Used by the build.
 		/// </summary>
 		public static void BakeAll()
+		{
+			BakeJob bake = Begin();
+			if (bake == null)
+			{
+				return;
+			}
+			bool cancelled = false;
+			try
+			{
+				while (bake.Index < bake.Scenes.Count)
+				{
+					EditorUtility.DisplayProgressBar(ProgressTitle, ProgressText(bake), Progress(bake));
+					Step(bake);
+				}
+			}
+			catch
+			{
+				cancelled = true;
+				throw;
+			}
+			finally
+			{
+				Finish(bake, cancelled ? "failed" : null);
+			}
+		}
+
+		/// <summary>
+		/// Starts a bake that works through the scenes one editor update at a time, waiting for each
+		/// scene's capture and import to finish before opening the next, with a cancellable
+		/// progress bar. <paramref name="done"/> receives a one-line result. Returns false when
+		/// nothing was started (a bake is already running, or the user kept unsaved changes).
+		/// </summary>
+		public static bool StartBake(Action<string> done = null)
+		{
+			if (job != null)
+			{
+				done?.Invoke("A bake is already running.");
+				return false;
+			}
+			BakeJob bake = Begin();
+			if (bake == null)
+			{
+				done?.Invoke("Bake not started.");
+				return false;
+			}
+			bake.Done = done;
+			EditorApplication.update += Tick;
+			EditorApplication.playModeStateChanged += OnPlayMode;
+			return true;
+		}
+
+		private static void Tick()
+		{
+			BakeJob bake = job;
+			if (bake == null)
+			{
+				EditorApplication.update -= Tick;
+				return;
+			}
+			// The previous scene's import (and anything it triggered) must be done first.
+			if (EditorApplication.isUpdating || EditorApplication.isCompiling)
+			{
+				return;
+			}
+			if (bake.Index >= bake.Scenes.Count)
+			{
+				Finish(bake, null);
+				return;
+			}
+			if (EditorUtility.DisplayCancelableProgressBar(ProgressTitle, ProgressText(bake), Progress(bake)))
+			{
+				Finish(bake, "cancelled");
+				return;
+			}
+			try
+			{
+				Step(bake);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogException(ex);
+				Finish(bake, $"failed on {Path.GetFileNameWithoutExtension(bake.Scenes[Math.Max(0, bake.Index - 1)])}: {ex.Message}");
+			}
+		}
+
+		private static void OnPlayMode(PlayModeStateChange change)
+		{
+			if (change == PlayModeStateChange.ExitingEditMode && job != null)
+			{
+				Finish(job, "cancelled by entering play mode");
+			}
+		}
+
+		private static float Progress(BakeJob bake) => bake.Scenes.Count == 0 ? 1f : bake.Index / (float)bake.Scenes.Count;
+
+		private static string ProgressText(BakeJob bake) =>
+			$"{Path.GetFileNameWithoutExtension(bake.Scenes[Math.Min(bake.Index, bake.Scenes.Count - 1)])} ({Math.Min(bake.Index + 1, bake.Scenes.Count)} of {bake.Scenes.Count})";
+
+		/// <summary>
+		/// Finds the scenes and clears the editor down to one empty scene. Each scene is then baked
+		/// with nothing else loaded: the capture camera photographs every loaded scene and the
+		/// bounds search finds every loaded boundary, so a scene left open in the editor used to
+		/// appear in every other scene's map. Returns null when there is nothing to do.
+		/// </summary>
+		private static BakeJob Begin()
 		{
 			string worldScenePath = Constants.Configuration.WorldScenePath.Replace(@"\", @"/");
 
@@ -93,46 +222,139 @@ namespace FishMMO.Shared.WorldMaps
 			if (scenes.Count < 1)
 			{
 				Debug.LogWarning($"[WorldMapBaker] No scenes found under '{worldScenePath}'. Nothing to bake.");
-				return;
+				return null;
+			}
+
+			if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+			{
+				Debug.Log("[WorldMapBaker] Bake cancelled: the open scenes have unsaved changes.");
+				return null;
 			}
 
 			Directory.CreateDirectory(OutputDirectory);
 
-			Scene initialScene = EditorSceneManager.GetActiveScene();
-			string initialScenePath = initialScene.path;
-
-			int baked = 0;
-			foreach (string scenePath in scenes)
+			var bake = new BakeJob();
+			bake.Scenes.AddRange(scenes);
+			bake.Scenes.Sort(StringComparer.Ordinal);
+			// Saved scenes are closed and reopened afterwards; an untitled scene (a new scene, or the
+			// test runner's) cannot be reopened, so it stays loaded.
+			bake.Setup = Array.FindAll(EditorSceneManager.GetSceneManagerSetup(), s => !string.IsNullOrEmpty(s.path));
+			Scene active = SceneManager.GetActiveScene();
+			bake.ActiveUntitled = string.IsNullOrEmpty(active.path) ? active : default;
+			bake.Holder = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+			SceneManager.SetActiveScene(bake.Holder);
+			for (int i = SceneManager.sceneCount - 1; i >= 0; i--)
 			{
-				Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
-				if (!scene.IsValid())
+				Scene open = SceneManager.GetSceneAt(i);
+				if (open != bake.Holder && !string.IsNullOrEmpty(open.path))
 				{
-					continue;
+					EditorSceneManager.CloseScene(open, true);
 				}
+			}
 
-				try
+			job = bake;
+			// No script reload may pull the job out from under itself halfway.
+			EditorApplication.LockReloadAssemblies();
+			BusyChanged?.Invoke();
+			return bake;
+		}
+
+		/// <summary>Bakes the next scene: open it alone, make it active, capture, close.</summary>
+		private static void Step(BakeJob bake)
+		{
+			string scenePath = bake.Scenes[bake.Index++];
+			Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+			if (!scene.IsValid())
+			{
+				return;
+			}
+			try
+			{
+				// Its own lighting, skybox and fog settings, not the holder's.
+				SceneManager.SetActiveScene(scene);
+				if (BakeOpenScene(scene))
 				{
-					if (BakeOpenScene(scene))
+					++bake.Baked;
+				}
+			}
+			finally
+			{
+				// The bake only reads the scene; nothing it produces lives there.
+				SceneManager.SetActiveScene(bake.Holder);
+				EditorSceneManager.CloseScene(scene, true);
+			}
+		}
+
+		/// <summary>Reopens the scenes the editor had, makes the same one active, and drops the holder.</summary>
+		private static void RestoreScenes(BakeJob bake)
+		{
+			Scene active = bake.ActiveUntitled;
+			foreach (SceneSetup entry in bake.Setup)
+			{
+				Scene reopened = EditorSceneManager.OpenScene(entry.path, entry.isLoaded ? OpenSceneMode.Additive : OpenSceneMode.AdditiveWithoutLoading);
+				if (entry.isActive && entry.isLoaded)
+				{
+					active = reopened;
+				}
+			}
+			if (!active.IsValid() || !active.isLoaded)
+			{
+				for (int i = 0; i < SceneManager.sceneCount; i++)
+				{
+					Scene candidate = SceneManager.GetSceneAt(i);
+					if (candidate != bake.Holder && candidate.isLoaded)
 					{
-						++baked;
+						active = candidate;
+						break;
 					}
 				}
-				finally
+			}
+			if (active.IsValid() && active.isLoaded)
+			{
+				SceneManager.SetActiveScene(active);
+				if (bake.Holder.IsValid())
 				{
-					// The bake only reads the scene; nothing it produces lives there.
-					EditorSceneManager.CloseScene(scene, true);
+					EditorSceneManager.CloseScene(bake.Holder, true);
 				}
 			}
+		}
 
-			if (!string.IsNullOrEmpty(initialScenePath) && !initialScene.isLoaded)
+		/// <summary>Puts the editor's scenes back and reports. <paramref name="problem"/> is null on success.</summary>
+		private static void Finish(BakeJob bake, string problem)
+		{
+			EditorApplication.update -= Tick;
+			EditorApplication.playModeStateChanged -= OnPlayMode;
+			EditorUtility.ClearProgressBar();
+			try
 			{
-				EditorSceneManager.OpenScene(initialScenePath, OpenSceneMode.Additive);
+				if (!EditorApplication.isPlayingOrWillChangePlaymode)
+				{
+					RestoreScenes(bake);
+				}
+				AssetDatabase.SaveAssets();
+				AssetDatabase.Refresh();
 			}
-
-			AssetDatabase.SaveAssets();
-			AssetDatabase.Refresh();
-
-			Debug.Log($"[WorldMapBaker] Baked {baked} of {scenes.Count} world scene maps into '{OutputDirectory}'.");
+			finally
+			{
+				if (job == bake)
+				{
+					job = null;
+				}
+				EditorApplication.UnlockReloadAssemblies();
+				string result = problem == null
+					? $"Baked {bake.Baked} of {bake.Scenes.Count} world scene maps into '{OutputDirectory}'."
+					: $"Bake {problem} after {bake.Baked} of {bake.Scenes.Count} scene maps.";
+				if (problem == null)
+				{
+					Debug.Log($"[WorldMapBaker] {result}");
+				}
+				else
+				{
+					Debug.LogWarning($"[WorldMapBaker] {result}");
+				}
+				BusyChanged?.Invoke();
+				bake.Done?.Invoke(result);
+			}
 		}
 
 		/// <summary>
@@ -143,6 +365,11 @@ namespace FishMMO.Shared.WorldMaps
 		/// </summary>
 		public static void CleanBakedMaps()
 		{
+			if (job != null)
+			{
+				Debug.LogWarning("[WorldMapBaker] A bake is running; remove the baked maps after it finishes.");
+				return;
+			}
 			bool removedFolder = AssetDatabase.IsValidFolder(OutputDirectory) && AssetDatabase.DeleteAsset(OutputDirectory);
 			if (!removedFolder && Directory.Exists(OutputDirectory))
 			{
@@ -204,7 +431,7 @@ namespace FishMMO.Shared.WorldMaps
 
 			if (!definition.HasAuthoredBounds)
 			{
-				Rect derived = MapBoundsResolver.FromOpenScene();
+				Rect derived = MapBoundsResolver.FromOpenScene(scene);
 				if (derived.width > 0.0f && derived.height > 0.0f)
 				{
 					definition.SetDerivedBounds(derived);
@@ -309,7 +536,9 @@ namespace FishMMO.Shared.WorldMaps
 				camera.transform.position = new Vector3(rect.center.x, CaptureHeight, rect.center.y);
 				camera.transform.rotation = Quaternion.Euler(90.0f, definition.NorthOffsetDegrees, 0.0f);
 				camera.orthographic = true;
-				camera.orthographicSize = Mathf.Max(rect.width, rect.height) * 0.5f;
+				// Half the HEIGHT: with the aspect below, the image then covers exactly the map
+				// rectangle, which is what the world map and the atlas globe assume.
+				camera.orthographicSize = rect.height * 0.5f;
 				camera.aspect = rect.width / rect.height;
 				camera.nearClipPlane = 0.3f;
 				camera.farClipPlane = CaptureHeight + CaptureDepth;

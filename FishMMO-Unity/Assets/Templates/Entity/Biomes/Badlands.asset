@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Badlands
   m_EditorClassIdentifier: 
   DisplayName: Badlands
-  Description: 'Eroded terrain — red rock, mesas, hoodoos, deep gulches'
+  Description: "Eroded terrain \u2014 red rock, mesas, hoodoos, deep gulches"
   BiomeColorId: {r: 0.7, g: 0.4, b: 0.3, a: 1}
   GizmoColor: {r: 0.8, g: 0.5, b: 0.4, a: 1}
   ElevationTier: 6
@@ -158,7 +158,30 @@ MonoBehaviour:
       - Ancient
       - Tortured
       - Dramatic
-      Description: 'Eroded terrain — red rock, mesas, hoodoos, deep gulches'
+      Description: "Eroded terrain \u2014 red rock, mesas, hoodoos, deep gulches"
+  Weather:
+    Background:
+    - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
+      Intensity: 0.08
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
+      Weight: 4
+    - Preset: {fileID: 11400000, guid: 77ceb35e60107d4bfb9d84311ed6d380, type: 2}
+      Weight: 0.3
+    Suitability:
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Suitability: 0.3
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Suitability: 0.4
+    - Preset: {fileID: 11400000, guid: 6f63f0ccbfbfdc2e4bc4c4df3b494945, type: 2}
+      Suitability: 0.1
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.3
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 0b7ea11686b5ccf44bb4871d2facee3a, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +204,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +228,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +251,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +275,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

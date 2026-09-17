@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39aaa201d0124cd6a217bdb1a28fa474, type: 3}
+  m_Name: Moon 1
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.WorldBody
+  DisplayName: Moon 1
+  Parent: {fileID: 11400000, guid: 502a5864d965402358c527e42529b8bd, type: 2}
+  Orbit:
+    Distance: 384
+    Eccentricity: 0
+    InclinationDegrees: 5.1
+    OffsetDegrees: 0
+    PeriodMode: 1
+    PeriodDays: 7.5
+  SkyRadiusKm: 1737
+  Tint: {r: 0.78, g: 0.77, b: 0.74, a: 1}
+  SurfaceTexture: {fileID: 0}
+  HasRings: 0
+  Kind: 1
+  RotationHours: 6
+  Retrograde: 0
+  AxialTiltDegrees: 1.5
+  TidallyLocked: 1
+  RotationOffsetDegrees: 0
+  Atmosphere: 0
+  Water: 0
+  BaseClimate: {fileID: 0}
+  RadiusMode: 0
+  ManualRadiusKm: 30
+  MinimumRadiusKm: 10
+  MaxCoveragePercent: 35
+  CurrentRadiusKm: 10
+  Layers: []

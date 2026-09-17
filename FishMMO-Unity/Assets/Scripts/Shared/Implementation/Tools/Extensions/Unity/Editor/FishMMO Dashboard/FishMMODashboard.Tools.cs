@@ -39,6 +39,27 @@ namespace FishMMO.Shared
 			public string Confirm;
 			public int Order;
 			public Action Run;
+			/// <summary>
+			/// For long jobs that finish on later editor updates: starts the job, then calls the
+			/// callback with a one-line result. Returns false when nothing was started.
+			/// </summary>
+			public Func<Action<string>, bool> RunAsync;
+		}
+
+		/// <summary>True while a long-running tool is working; every tool button is locked meanwhile.</summary>
+		private static bool AnyToolBusy => FishMMO.Shared.WorldMaps.WorldMapBaker.IsBusy;
+
+		/// <summary>Tool buttons on the page being shown, relocked whenever a job starts or ends.</summary>
+		private readonly List<Button> toolButtons = new List<Button>();
+
+		private void RefreshToolButtons()
+		{
+			bool enabled = !EditorApplication.isPlayingOrWillChangePlaymode && !AnyToolBusy;
+			toolButtons.RemoveAll(b => b == null || b.panel == null);
+			foreach (Button button in toolButtons)
+			{
+				button.SetEnabled(enabled);
+			}
 		}
 
 		/// <summary>What each page is for, shown above its buttons.</summary>
@@ -50,6 +71,7 @@ namespace FishMMO.Shared
 			{ DashboardToolAttribute.Maintenance, "One-off wiring passes, mock content and test scene generators. Most of these write assets or scenes." },
 			{ DashboardToolAttribute.AITools, "Repairs and migrations for NPC prefabs and AI assets." },
 			{ DashboardToolAttribute.WorldSceneDetails, "The world scene details cache is rebuilt by every build; rebuild it here after changing a world scene's settings." },
+			{ DashboardToolAttribute.Weather, "Weather content and textures. The generator creates layer templates and presets and fills every biome and climate weather profile nobody has authored; the baker writes the precipitation and noise textures." },
 			{ DashboardToolAttribute.WorldMap, "World maps are build output. Client builds bake them, build, then remove them and rebuild the world scene details cache. A manual bake is for previewing; run Remove Baked Maps and rebuild World Scene Details before committing." },
 		};
 
@@ -73,8 +95,8 @@ namespace FishMMO.Shared
 				Section = "Bake",
 				Label = "Bake Maps",
 				Order = 0,
-				Tooltip = "Photographs every world scene and writes a map definition and image for each into the gitignored baked folder.",
-				Run = FishMMO.Shared.WorldMaps.WorldMapBaker.BakeAll,
+				Tooltip = "Photographs every world scene, one at a time with nothing else loaded, and writes a map definition and image for each into the gitignored baked folder. Shows progress and can be cancelled; the dashboard's tools are locked until it finishes.",
+				RunAsync = FishMMO.Shared.WorldMaps.WorldMapBaker.StartBake,
 			};
 			yield return new DashboardTool
 			{
@@ -229,7 +251,8 @@ namespace FishMMO.Shared
 				button.style.height = 24;
 				button.style.marginTop = 2;
 				button.style.unityTextAlign = TextAnchor.MiddleLeft;
-				button.SetEnabled(!EditorApplication.isPlayingOrWillChangePlaymode);
+				button.SetEnabled(!EditorApplication.isPlayingOrWillChangePlaymode && !AnyToolBusy);
+				toolButtons.Add(button);
 				section.Add(button);
 
 				if (!string.IsNullOrEmpty(tool.Tooltip))
@@ -256,6 +279,12 @@ namespace FishMMO.Shared
 				SetStatus($"{tool.Label}: not available in play mode.");
 				return;
 			}
+			if (AnyToolBusy)
+			{
+				// A click queued while the editor was busy must not start a second job.
+				SetStatus($"{tool.Label}: wait for the running job to finish.");
+				return;
+			}
 			if (!string.IsNullOrEmpty(tool.Confirm) &&
 				!EditorUtility.DisplayDialog(tool.Label, tool.Confirm, "Run", "Cancel"))
 			{
@@ -266,6 +295,22 @@ namespace FishMMO.Shared
 			SetStatus($"Running {tool.Label}…");
 			try
 			{
+				if (tool.RunAsync != null)
+				{
+					tool.RunAsync(result =>
+					{
+						// The window may have been closed while the job ran.
+						if (this == null)
+						{
+							return;
+						}
+						SetStatus($"{tool.Label}: {result}");
+						RefreshToolButtons();
+						ReloadCurrentCategory();
+					});
+					RefreshToolButtons();
+					return;
+				}
 				tool.Run();
 				SetStatus($"{tool.Label}: done. See the console for details.");
 			}

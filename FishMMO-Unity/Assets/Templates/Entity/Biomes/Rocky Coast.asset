@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Rocky Coast
   m_EditorClassIdentifier: 
   DisplayName: Rocky Coast
-  Description: 'Rugged rocky coastline — sea stacks, blowholes, crashing waves'
+  Description: "Rugged rocky coastline \u2014 sea stacks, blowholes, crashing waves"
   BiomeColorId: {r: 0.5, g: 0.5, b: 0.6, a: 1}
   GizmoColor: {r: 0.6, g: 0.6, b: 0.7, a: 1}
   ElevationTier: 3
@@ -158,7 +158,27 @@ MonoBehaviour:
       - Rugged
       - Weathered
       - Imposing
-      Description: 'Rugged rocky coastline — sea stacks, blowholes, crashing waves'
+      Description: "Rugged rocky coastline \u2014 sea stacks, blowholes, crashing
+        waves"
+  Weather:
+    Background: []
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
+      Weight: 2
+    Suitability: []
+    Variants: []
+    Forbidden: 48
+    CellsPerSquareKm: 0.45
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: e1655f0f7ac0ba9488e2df7b166e8715, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +201,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +225,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +248,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +272,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

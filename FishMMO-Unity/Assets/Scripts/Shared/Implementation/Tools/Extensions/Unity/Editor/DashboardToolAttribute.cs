@@ -39,8 +39,11 @@ namespace FishMMO.Shared
 		/// <summary>World → World Map.</summary>
 		public const string WorldMap = "World Map";
 
+		/// <summary>Weather → Weather Tools: content generation and texture bakes.</summary>
+		public const string Weather = "Weather Tools";
+
 		/// <summary>Every page a tool may name.</summary>
-		public static readonly string[] Pages = { Validate, UnitTests, UITests, Maintenance, AITools, WorldSceneDetails, SpawnTables, WorldMap };
+		public static readonly string[] Pages = { Validate, UnitTests, UITests, Maintenance, AITools, WorldSceneDetails, SpawnTables, WorldMap, Weather };
 
 		/// <summary>The dashboard page (sidebar entry) the button appears on.</summary>
 		public string Page { get; }

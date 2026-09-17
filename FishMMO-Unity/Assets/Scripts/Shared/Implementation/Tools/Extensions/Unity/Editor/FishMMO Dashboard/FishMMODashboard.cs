@@ -97,7 +97,10 @@ namespace FishMMO.Shared
 				OnCategorySelected(savedIndex);
 			}
 
-			SetStatus("Ready");
+			FishMMO.Shared.WorldMaps.WorldMapBaker.BusyChanged -= RefreshToolButtons;
+			FishMMO.Shared.WorldMaps.WorldMapBaker.BusyChanged += RefreshToolButtons;
+
+			SetStatus(FishMMO.Shared.WorldMaps.WorldMapBaker.IsBusy ? "Baking world maps…" : "Ready");
 		}
 
 		/// <summary>

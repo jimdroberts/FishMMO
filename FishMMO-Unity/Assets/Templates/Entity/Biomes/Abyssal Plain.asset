@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Abyssal Plain
   m_EditorClassIdentifier: 
   DisplayName: Abyssal Plain
-  Description: 'Deep ocean floor plains — featureless, silent, preserved in darkness'
+  Description: "Deep ocean floor plains \u2014 featureless, silent, preserved in
+    darkness"
   BiomeColorId: {r: 0.02, g: 0.05, b: 0.2, a: 1}
   GizmoColor: {r: 0.1, g: 0.1, b: 0.4, a: 1}
   ElevationTier: 0
@@ -53,7 +54,7 @@ MonoBehaviour:
       - ux
       Codas:
       - void
-      - 'null'
+      - null
       - deep
       - maw
       - abyss
@@ -158,7 +159,15 @@ MonoBehaviour:
       - Tomb-quiet
       - Abyssal
       - Isolated
-      Description: 'Deep ocean floor plains — featureless, silent, preserved in darkness'
+      Description: "Deep ocean floor plains \u2014 featureless, silent, preserved
+        in darkness"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 1023
+    CellsPerSquareKm: 0
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: f86c769a177b3e84085abaa1ddeefdc6, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +190,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +214,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +237,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +261,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

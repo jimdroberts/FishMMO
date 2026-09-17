@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.NameGeneration;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared.Biomes
 {
@@ -50,6 +51,10 @@ namespace FishMMO.Shared.Biomes
 
 		[Header("Naming")]
 		public BiomeNamingData Naming = new BiomeNamingData();
+
+		[Header("Weather")]
+		[Tooltip("Background weather, the storm cells this biome starts, and what it forbids. Empty uses the climate's default.")]
+		public BiomeWeatherProfile Weather = new BiomeWeatherProfile();
 
 		[Header("Main Texture Layer")]
 		[Tooltip("Primary base texture that covers the majority of the biome.")]

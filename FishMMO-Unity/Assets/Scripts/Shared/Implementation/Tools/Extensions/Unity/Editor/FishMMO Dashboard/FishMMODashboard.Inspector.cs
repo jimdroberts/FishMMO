@@ -207,6 +207,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnDisable()
 		{
+			FishMMO.Shared.WorldMaps.WorldMapBaker.BusyChanged -= RefreshToolButtons;
 			ClearFullPage();
 			DestroyActiveEditor();
 		}

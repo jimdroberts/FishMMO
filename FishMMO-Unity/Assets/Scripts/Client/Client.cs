@@ -45,6 +45,7 @@ namespace FishMMO.Client
 
 		/// <summary>Writes what observed characters are casting onto their nameplates.</summary>
 		private ClientCastNameplateDisplay castNameplateDisplay;
+		private ClientWeather weather;
 		/// <summary>
 		/// Manages client-side fog-of-war visibility.
 		/// </summary>
@@ -375,6 +376,10 @@ namespace FishMMO.Client
 			this.castNameplateDisplay = new ClientCastNameplateDisplay();
 			this.castNameplateDisplay.Initialize(NetworkManager);
 
+			// The world clock and the scene's weather, mirrored from the scene server.
+			this.weather = new ClientWeather();
+			this.weather.Initialize(NetworkManager);
+
 			this.fogManager = new ClientFogManager(this);
 			this.fogManager.Initialize();
 
@@ -403,6 +408,7 @@ namespace FishMMO.Client
 			 * own. Same reason it is driven from here: the sweep has no other caller. */
 			nameplateDisplay?.Tick();
 			castNameplateDisplay?.Tick();
+			weather?.Tick(Time.deltaTime);
 
 			TickDeathDialogFallback();
 			
@@ -439,6 +445,7 @@ namespace FishMMO.Client
 			this.combatDisplay?.Shutdown();
 			this.nameplateDisplay?.Shutdown();
 			this.castNameplateDisplay?.Shutdown();
+			this.weather?.Shutdown();
 			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
 			if (Connection != null)
@@ -594,6 +601,8 @@ namespace FishMMO.Client
 			this.fogManager?.Stop();
 			// Every object id these rows are keyed by is about to mean something else.
 			this.castNameplateDisplay?.Clear();
+			// A different scene server keeps its own clock anchor and weather.
+			this.weather?.Clear(resetClock: true);
 
 			/* Abandon any world-scene preload this session started. The flag is what stops a
 			 * second preload from being kicked off, and it is only ever cleared by the batch's
@@ -2273,6 +2282,8 @@ namespace FishMMO.Client
 			if (this.regionNameLabel != null && this.regionNameLabel.gameObject != null) this.regionNameLabel.gameObject.SetActive(false);
 			this.fogManager?.Stop();
 			this.castNameplateDisplay?.Clear();
+			// The next scene sends its own weather when the character arrives there.
+			this.weather?.Clear(resetClock: false);
 			if (c?.GameObject != null) Destroy(c.GameObject);
 		}
 		/// <summary>

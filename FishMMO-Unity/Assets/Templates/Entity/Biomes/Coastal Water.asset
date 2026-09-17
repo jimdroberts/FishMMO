@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Coastal Water
   m_EditorClassIdentifier: 
   DisplayName: Coastal Water
-  Description: 'Shallow coastal waters — tidal pools, kelp beds, submerged stone'
+  Description: "Shallow coastal waters \u2014 tidal pools, kelp beds, submerged stone"
   BiomeColorId: {r: 0.4, g: 0.7, b: 0.9, a: 1}
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
   ElevationTier: 2
@@ -158,7 +158,27 @@ MonoBehaviour:
       - Tropical
       - Azure
       - Calm
-      Description: 'Shallow coastal waters — tidal pools, kelp beds, submerged stone'
+      Description: "Shallow coastal waters \u2014 tidal pools, kelp beds, submerged
+        stone"
+  Weather:
+    Background: []
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
+      Weight: 2
+    Suitability: []
+    Variants: []
+    Forbidden: 48
+    CellsPerSquareKm: 0.45
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

@@ -102,7 +102,7 @@ MonoBehaviour:
       - The Ancient
       - The Blood-stained
       - The Forgotten
-      - 'The Serpent-god''s'
+      - The Serpent-god's
       - The Ruined
       - The Sacred
       - The Forbidden
@@ -159,6 +159,27 @@ MonoBehaviour:
       - Jade-inlaid
       - Monumental
       Description: Vine-choked temple ruins in dense jungle
+  Weather:
+    Background: []
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
+      Weight: 1
+    Suitability:
+    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
+      Suitability: 0.05
+    Variants:
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Variant: {fileID: 11400000, guid: ddea45bbac4a2bf6f86fe2fa1e24707b, type: 2}
+    Forbidden: 32
+    CellsPerSquareKm: 0.55
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared.Biomes
 {
@@ -59,6 +60,10 @@ namespace FishMMO.Shared.Biomes
 		[Header("Default climate variants")]
 		[Tooltip("Variants applied to any biome that lists none of its own, matched in order.")]
 		public List<BiomeClimateVariant> DefaultVariants = new List<BiomeClimateVariant>();
+
+		[Header("Default weather")]
+		[Tooltip("Weather for biomes whose own weather profile is empty.")]
+		public BiomeWeatherProfile DefaultWeather = new BiomeWeatherProfile();
 
 		/// <summary>Temperature and humidity at a normalised height and latitude (0 south edge … 1 north edge).</summary>
 		public ClimateSample Evaluate(float height, float latitude01)

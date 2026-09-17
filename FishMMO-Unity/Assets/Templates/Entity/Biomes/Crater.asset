@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Crater
   m_EditorClassIdentifier: 
   DisplayName: Crater
-  Description: 'Impact or volcanic craters — scarred earth, strange minerals, mystery'
+  Description: "Impact or volcanic craters \u2014 scarred earth, strange minerals,
+    mystery"
   BiomeColorId: {r: 0.5, g: 0.35, b: 0.25, a: 1}
   GizmoColor: {r: 0.65, g: 0.45, b: 0.35, a: 1}
   ElevationTier: 6
@@ -158,7 +159,25 @@ MonoBehaviour:
       - Otherworldly
       - Violent
       - Breathtaking
-      Description: 'Impact or volcanic craters — scarred earth, strange minerals, mystery'
+      Description: "Impact or volcanic craters \u2014 scarred earth, strange minerals,
+        mystery"
+  Weather:
+    Background:
+    - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
+      Intensity: 0.15
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
+      Weight: 4
+    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 1
+    Suitability: []
+    Variants:
+    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
+      Variant: {fileID: 11400000, guid: b2be23afeaddac6faa373ee751e2d988, type: 2}
+    Forbidden: 4
+    CellsPerSquareKm: 0.35
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: daf4be7380957be4198ece1e45559b2b, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +200,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +224,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +247,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +271,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

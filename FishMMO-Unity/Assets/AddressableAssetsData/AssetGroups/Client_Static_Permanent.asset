@@ -21,6 +21,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 130b504fa95c2fb3083e502c7ec3a367
+    m_Address: Sky
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 153116bad200a3444be96b22a65500ea
     m_Address: Camera
     m_ReadOnly: 0
@@ -39,6 +45,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1a49b80f27d38c4749bea1720d91bc32
+    m_Address: Precipitation
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 316068aec7de8294ba9429fc2bc910b9
     m_Address: DaySkybox
     m_ReadOnly: 0
@@ -47,6 +59,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 36866adaddfae0c4e975f65903f11405
     m_Address: fm_teleporter_PLACEHOLDER
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 36c3ad97fcb382889903e8b5ad9c0e58
+    m_Address: Sky Body
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -63,14 +81,56 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
+    m_Address: Weather Audio Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
     m_Address: MinimapRenderTexture
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 695281b44bcf6b527b3fb26e0dc8d4b5
+    m_Address: Precipitation Atlas
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69baeeda49ea89f268266955933d6961
+    m_Address: Weather Render Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9d03b89b0b5eb734eb6e3aea188b17bf
     m_Address: CharacterRenderTexture
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d7b4675c91149f25af0e2a82433630e
+    m_Address: Lightning Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a8061d0280b071f4e8dc1f2b753c048f
+    m_Address: Curtain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af5e17aec5ef22d38957933678513fa0
+    m_Address: Weather Noise
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bb1254a0f5ecb3b239b87631320dba90
+    m_Address: Cloud Cookie
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

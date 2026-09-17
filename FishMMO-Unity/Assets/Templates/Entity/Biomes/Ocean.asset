@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Ocean
   m_EditorClassIdentifier: 
   DisplayName: Ocean
-  Description: 'Deep ocean — crushing depths, sunken temples, bioluminescent wonder'
+  Description: "Deep ocean \u2014 crushing depths, sunken temples, bioluminescent
+    wonder"
   BiomeColorId: {r: 0.1, g: 0.3, b: 0.6, a: 1}
   GizmoColor: {r: 0, g: 0.4, b: 0.8, a: 1}
   ElevationTier: 1
@@ -138,7 +139,7 @@ MonoBehaviour:
       - The Silt-buried
       - The Kelp-choked
       - The Current-swept
-      - 'The Leviathan''s'
+      - The Leviathan's
       - The Pearl-encrusted
       - The Reef-hidden
       - The Storm-sunken
@@ -186,7 +187,27 @@ MonoBehaviour:
       - Dark
       - Fathomless
       - Turbulent
-      Description: 'Deep ocean — crushing depths, sunken temples, bioluminescent wonder'
+      Description: "Deep ocean \u2014 crushing depths, sunken temples, bioluminescent
+        wonder"
+  Weather:
+    Background: []
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
+      Weight: 2
+    Suitability: []
+    Variants: []
+    Forbidden: 48
+    CellsPerSquareKm: 0.45
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 2aaac07da5221414f8c52c54730d6aea, type: 3}
     normalTexture: {fileID: 0}

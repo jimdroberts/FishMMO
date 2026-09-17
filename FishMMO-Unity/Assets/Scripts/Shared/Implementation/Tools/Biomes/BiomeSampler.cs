@@ -13,8 +13,16 @@ namespace FishMMO.Shared.Biomes
 		public float Height;
 		/// <summary>True when the biome came from the scene's baked map rather than being chosen from height and climate.</summary>
 		public bool FromMap;
+		/// <summary>True when a terrain was under the position, so <see cref="Height"/> is measured rather than assumed.</summary>
+		public bool HeightKnown;
 
 		public bool HasBiome => Biome != null;
+
+		/// <summary>
+		/// True when the biome rests on something real: the baked map, or a measured terrain
+		/// height. Otherwise it was picked from a height of 0 — the sea floor — by default.
+		/// </summary>
+		public bool IsGrounded => FromMap || HeightKnown;
 	}
 
 	/// <summary>
@@ -46,6 +54,7 @@ namespace FishMMO.Shared.Biomes
 			if (TrySampleTerrainHeight(worldPosition, out float height))
 			{
 				reading.Height = height;
+				reading.HeightKnown = true;
 			}
 			else if (map != null && map.Contains(worldPosition))
 			{

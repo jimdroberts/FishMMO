@@ -1,89 +1,81 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Managing;
 using FishNet.Managing.Timing;
-using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
+	/// <summary>ECA event data for a sky event (full moon, eclipse, conjunction…). Initiator is null.</summary>
+	public class CelestialEventData : EventData
+	{
+		public CelestialEvent Event { get; }
+
+		public CelestialEventData(CelestialEvent celestialEvent)
+			: base(null)
+		{
+			Event = celestialEvent;
+		}
+	}
+
+	/// <summary>A trigger that runs when a kind of sky event begins.</summary>
+	[Serializable]
+	public class CelestialTrigger
+	{
+		public CelestialEventKind Kind;
+		public WorldSceneTrigger Trigger = new WorldSceneTrigger();
+	}
+
 	/// <summary>
-	/// MonoBehaviour for managing the day/night cycle in a scene. Handles skybox transitions,
-	/// object rotations, object activations/deactivations, and material alpha fading based on the
-	/// current game time of day. Supports ECA triggers for scene-load, day-start, and night-start events.
+	/// A scene's day and night: whether it is day, what the sky holds, objects that follow the
+	/// day, the night or the stars, and the triggers that run on day, night and sky events.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Time is the world clock, the same on every server and client. Day and night come from the
+	/// scene's body turning under its sun (<see cref="CelestialState"/>): a scene's latitude,
+	/// longitude and heading come from its world atlas entry, and a developer-fixed time shows the
+	/// sky at that local time.
+	/// </para>
+	/// <para>
+	/// Rebuilt for issue #238. The old component lerped two skybox materials across the whole
+	/// day (so noon was half night), only did so when it had objects to rotate, rotated those
+	/// objects incrementally from an assumed dawn, ran each scene server on its own clock,
+	/// refreshed ambient lighting every second and wrote the skybox from two places. The client's
+	/// SkySystem now owns the sky, lights and ambient; this owns time and triggers, and turns
+	/// <see cref="RotateObjects"/> absolutely with the stars.
+	/// </para>
+	/// </remarks>
 	public class WorldDayNightCycle : MonoBehaviour
 	{
-		/// <summary>
-		/// True if the day night cycle should run. False if not.
-		/// </summary>
 		[Tooltip("Enable/Disable the day night cycle.")]
 		public bool DayNightCycle = true;
-		/// <summary>
-		/// The duration of the day cycle in seconds.
-		/// </summary>
-		[Tooltip("The duration of the day cycle in seconds.")]
-		public int DayCycleDuration = 3 * 60 * 60; // 3 hours in seconds
-		/// <summary>
-		/// The duration of the night cycle in seconds.
-		/// </summary>
-		[Tooltip("The duration of the night cycle in seconds.")]
-		public int NightCycleDuration = 3 * 60 * 60; // 3 hours in seconds
-		/// <summary>
-		/// The skybox material used during the day cycle.
-		/// </summary>
-		public Material DaySkyboxMaterial;
-		/// <summary>
-		/// The skybox material used during the night cycle.
-		/// </summary>
-		public Material NightSkyBoxMaterial;
-		/// <summary>
-		/// These objects are constantly rotating based on current time of day.
-		/// </summary>
-		[Tooltip("Objects that will rotate constantly with the day night cycle.")]
+
+		[Header("Sky")]
+		[Tooltip("The sun's directional light. Empty: the scene's sun light (Lighting settings), or a directional light named Sun.")]
+		public Light SunLight;
+		[Tooltip("The moon's directional light. Empty: a directional light named Moon, or none.")]
+		public Light MoonLight;
+		[Tooltip("This scene's sky. Empty: the sky of the body the scene is on.")]
+		public SkyProfile SkyOverride;
+
+		[Tooltip("Objects that turn with the stars, keeping the rotation they were authored with.")]
 		public List<GameObject> RotateObjects = new List<GameObject>();
-		/// <summary>
-		/// These objects are enabled during the day and disabled at night.
-		/// </summary>
 		[Tooltip("These objects will be enabled during the day.")]
 		public List<GameObject> DayObjects = new List<GameObject>();
-		/// <summary>
-		/// These objects are enabled during the night and disabled during the day.
-		/// </summary>
 		[Tooltip("These objects will be enabled at night.")]
 		public List<GameObject> NightObjects = new List<GameObject>();
-		/// <summary>
-		/// The current fade time.
-		/// </summary>
-		private float fadeTime;
-		/// <summary>
-		/// Tracks the last applied rotation angle for objects affected by the day/night cycle.
-		/// </summary>
-		private float lastRotationAngle;
-		/// <summary>
-		/// Duration in seconds for fading.
-		/// </summary>
 		[Tooltip("The time in seconds that objects will take to fade in or out.")]
 		public float FadeThreshold = 1f;
-		/// <summary>
-		/// These objects slowly fade away during the day and return at night.
-		/// </summary>
-		[Tooltip("The objects that will fade away during the day.")]
+		[Tooltip("Objects shown by day, fading at dusk. Transparent materials fade; opaque ones switch at the midpoint.")]
 		public List<GameObject> DayFadeObjects = new List<GameObject>();
-		/// <summary>
-		/// These objects slowly fade away during the night and return during the day.
-		/// </summary>
-		[Tooltip("The objects that will fade away at night.")]
+		[Tooltip("Objects shown at night, fading at dawn.")]
 		public List<GameObject> NightFadeObjects = new List<GameObject>();
-		/// <summary>
-		/// True if it's currently day time in the game world.
-		/// </summary>
 		[ShowReadonly]
 		[SerializeField]
 		private bool isDaytime = true;
-
-		// ───── ECA Trigger Lists ────────────────────────────────────────────
 
 		[Header("ECA - Day/Night Triggers")]
 		[Tooltip("Triggers executed once when this scene loads (e.g. apply default fog). EventData: DayNightEventData.")]
@@ -98,57 +90,82 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private List<WorldSceneTrigger> onNightStartTriggers = new List<WorldSceneTrigger>();
 
-		// Runtime blend material — we lerp this instance so we never mutate the shared material assets.
-		private Material blendSkyboxMaterial;
+		[Header("ECA - Sky Event Triggers")]
+		[Tooltip("Triggers executed when a sky event begins in this scene's sky. EventData: CelestialEventData.")]
+		[SerializeField]
+		private List<CelestialTrigger> onCelestialEvents = new List<CelestialTrigger>();
+
+		/// <summary>Seconds between server-side sky evaluations.</summary>
+		public const float ServerEvaluationSeconds = 1f;
+
+		private static readonly List<WorldDayNightCycle> active = new List<WorldDayNightCycle>();
+
+		/// <summary>The most recently enabled cycle: the scene the client is in.</summary>
+		public static WorldDayNightCycle Current => active.Count > 0 ? active[active.Count - 1] : null;
+
+		/// <summary>A world time to show instead of the clock (test scenes and previews; never on a server).</summary>
+		public static double? PreviewHours;
+		/// <summary>A local time of day (0.5 noon) to show on the preview date instead of the clock's.</summary>
+		public static double? PreviewLocalTime01;
+		/// <summary>A latitude to show instead of the scene's.</summary>
+		public static double? PreviewLatitude;
+
+		/// <summary>The sky of this scene, as last computed.</summary>
+		public CelestialState State { get; } = new CelestialState();
+
+		/// <summary>The world time the state was computed for (moved to the fixed time of day, if any).</summary>
+		public double Hours { get; private set; }
+
+		/// <summary>
+		/// The world clock itself, never moved: what scheduled effects (lightning, meteors, cloud
+		/// drift) run on, so they keep going in a scene with a fixed time of day.
+		/// </summary>
+		public double ClockHours { get; private set; }
+
+		public bool IsDaytime => isDaytime;
+
 		private NetworkManager networkManager;
 		private TimeManager timeManager;
-		private float offlineElapsedSeconds;
 		private bool sceneLoadTriggersPending = true;
-
-		// Cached renderers for fade objects — avoids GetComponent<Renderer>() in Update.
+		private float serverTimer;
+		private readonly CelestialEventTracker tracker = new CelestialEventTracker();
+		private readonly List<CelestialEvent> events = new List<CelestialEvent>();
+		private readonly List<(Transform transform, Quaternion authored)> rotating = new List<(Transform, Quaternion)>();
 		private Renderer[] dayFadeRenderers;
 		private Renderer[] nightFadeRenderers;
-
-		private const float DynamicGIUpdateInterval = 1f;
-		private float dynamicGITimer;
-
-		// Cached MaterialPropertyBlock used by SetAlpha so we never instantiate per-renderer
-		// material clones (which would leak each frame and break batching).
+		private float fadeTime;
 		private MaterialPropertyBlock fadePropertyBlock;
 		private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
 		private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
-		/// <summary>
-		/// Unity Awake callback. Initializes the day/night cycle, sets the initial skybox,
-		/// creates the blend material, and fires scene-load ECA triggers.
-		/// </summary>
 		private void Awake()
 		{
-			DayCycleDuration = Mathf.Max(1, DayCycleDuration);
-			NightCycleDuration = Mathf.Max(1, NightCycleDuration);
 			networkManager = FindSceneNetworkManager();
 			timeManager = networkManager == null ? null : networkManager.TimeManager;
 			if (timeManager != null)
 			{
 				timeManager.OnTick += TimeManager_OnTick;
 			}
-
+			ResolveLights();
+			CacheRotating();
 #if !UNITY_SERVER
-			// Create a runtime copy of the day material for skybox blending.
-			// This prevents mutation of the shared DaySkyboxMaterial asset.
-			if (DaySkyboxMaterial != null)
-			{
-				blendSkyboxMaterial = new Material(DaySkyboxMaterial);
-				RenderSettings.skybox = blendSkyboxMaterial;
-			}
-
 			dayFadeRenderers = CacheRenderers(DayFadeObjects);
 			nightFadeRenderers = CacheRenderers(NightFadeObjects);
 #endif
-
-			// Initialize the day/night state based on synchronized network time when available.
-			UpdateDayNightState(GetGameTimeOfDay(), true);
+			Evaluate();
+			UpdateDayNightState(State.IsDaylight, true);
 			TryInvokeSceneLoadTriggers();
+		}
+
+		private void OnEnable()
+		{
+			active.Remove(this);
+			active.Add(this);
+		}
+
+		private void OnDisable()
+		{
+			active.Remove(this);
 		}
 
 		private void OnDestroy()
@@ -159,102 +176,196 @@ namespace FishMMO.Shared
 				timeManager = null;
 			}
 			networkManager = null;
-
-#if !UNITY_SERVER
-			if (blendSkyboxMaterial != null)
-			{
-				Destroy(blendSkyboxMaterial);
-			}
-#endif
 		}
 
-		/// <summary>
-		/// Unity Update callback. Advances the day/night cycle, updates object states, rotations, and fading each frame.
-		/// </summary>
-		void Update()
+		/// <summary>Finds the lights when none are assigned.</summary>
+		private void ResolveLights()
+		{
+			if (SunLight == null && RenderSettings.sun != null && RenderSettings.sun.gameObject.scene == gameObject.scene)
+			{
+				SunLight = RenderSettings.sun;
+			}
+			if (SunLight != null && MoonLight != null)
+			{
+				return;
+			}
+			foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+			{
+				foreach (Light light in root.GetComponentsInChildren<Light>(true))
+				{
+					if (light.type != LightType.Directional)
+					{
+						continue;
+					}
+					if (SunLight == null && light.name.IndexOf("sun", StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						SunLight = light;
+					}
+					else if (MoonLight == null && light.name.IndexOf("moon", StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						MoonLight = light;
+					}
+				}
+			}
+		}
+
+		/// <summary>Remembers each rotating object's authored rotation. Objects holding the sky's lights are left to the sky.</summary>
+		private void CacheRotating()
+		{
+			rotating.Clear();
+			foreach (GameObject obj in RotateObjects)
+			{
+				if (obj == null)
+				{
+					continue;
+				}
+				bool holdsLight = (SunLight != null && SunLight.transform.IsChildOf(obj.transform)) || (MoonLight != null && MoonLight.transform.IsChildOf(obj.transform));
+				if (holdsLight)
+				{
+					// The sky drives these lights directly; turning their parent too would double it.
+					continue;
+				}
+				rotating.Add((obj.transform, obj.transform.rotation));
+			}
+		}
+
+		/// <summary>The time, place and sky of this scene now.</summary>
+		private void Evaluate()
+		{
+			// A preview's clock still runs, from the chosen moment.
+			double hours = PreviewHours.HasValue ? PreviewHours.Value + Time.timeAsDouble / 3600.0 : WorldTime.CurrentHours(timeManager);
+			ClockHours = hours;
+			WorldSceneSettings settings = SceneSettings();
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			WorldBody body = SceneTime.BodyOf(settings);
+			double latitude = PreviewLatitude ?? (settings != null ? settings.Latitude : 0.0);
+			double longitude = settings != null ? settings.Longitude : 0.0;
+			float heading = settings != null && settings.AtlasEntry != null ? settings.AtlasEntry.HeadingDegrees : 0f;
+
+			double? fixedTime = PreviewLocalTime01 ?? (settings != null && settings.TimeMode == SceneTimeMode.Fixed ? settings.FixedTimeOfDay01 : (double?)null);
+			if (fixedTime.HasValue && system != null && body != null)
+			{
+				// Show the sky at the fixed local time: move to the nearest moment that has it.
+				double local = CelestialMath.LocalTime01(system, body, hours, longitude);
+				double shift = fixedTime.Value - local;
+				shift -= Math.Round(shift);
+				double day = CelestialMath.SolarDayHours(system, body);
+				if (!double.IsInfinity(day))
+				{
+					hours += shift * day;
+				}
+			}
+			Hours = hours;
+			State.Compute(system, body, hours, latitude, longitude, heading);
+			if (system == null || body == null)
+			{
+				// No solar system: fall back to the plain clock so day and night still happen.
+				bool day = SceneTime.IsDaylight(settings, hours);
+				SetFallbackDaylight(day);
+			}
+		}
+
+		private WorldSceneSettings sceneSettings;
+
+		/// <summary>This scene's settings (registered once enabled; searched for before that).</summary>
+		private WorldSceneSettings SceneSettings()
+		{
+			if (sceneSettings != null)
+			{
+				return sceneSettings;
+			}
+			if (WorldSceneSettings.TryGetForScene(gameObject.scene, out WorldSceneSettings registered))
+			{
+				return sceneSettings = registered;
+			}
+			foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+			{
+				WorldSceneSettings found = root.GetComponentInChildren<WorldSceneSettings>(true);
+				if (found != null)
+				{
+					return sceneSettings = found;
+				}
+			}
+			return null;
+		}
+
+		private bool fallbackDaylight = true;
+
+		private void SetFallbackDaylight(bool day) => fallbackDaylight = day;
+
+		/// <summary>Whether it is day now, by the sky or by the plain clock.</summary>
+		public bool DaylightNow => State.System != null && State.Observer != null ? State.IsDaylight : fallbackDaylight;
+
+		private void Update()
 		{
 			TryInvokeSceneLoadTriggers();
-
-			// Only update the cycle if enabled.
-			if (DayNightCycle)
+			if (!DayNightCycle)
 			{
-				float currentGameTimeOfDay = GetGameTimeOfDay();
-
-				if (!CanExecuteWorldTriggers())
-				{
-					UpdateDayNightState(currentGameTimeOfDay);
-				}
-
-				UpdateDayNightRotation(currentGameTimeOfDay, RotateObjects);
+				return;
+			}
+			bool server = CanExecuteWorldTriggers();
+			if (!server)
+			{
+				Evaluate();
+				UpdateDayNightState(DaylightNow);
+				ApplyRotations();
 				UpdateDayNightFading();
 			}
 		}
 
-		/// <summary>
-		/// FishNet tick callback used for authoritative day/night state transitions.
-		/// </summary>
 		private void TimeManager_OnTick()
 		{
 			TryInvokeSceneLoadTriggers();
-
 			if (!DayNightCycle || !CanExecuteWorldTriggers())
 			{
 				return;
 			}
-
-			UpdateDayNightState(GetGameTimeOfDay());
-		}
-
-		/// <summary>
-		/// Gets the current game time of day in seconds, wrapping after each full day/night cycle.
-		/// </summary>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private float GetGameTimeOfDay()
-		{
-			float secondsPerGameDay = DayCycleDuration + NightCycleDuration;
-			// TimeManager.TicksToTime(TickType.Tick) returns (tick * tickDelta) and is
-			// synchronized client<->server by FishNet's built-in tick-sync, so both sides
-			// compute identical currentGameTimeOfDay values. The offlineElapsedSeconds
-			// fallback only applies when no NetworkManager is present in the scene
-			// (offline / single-player editor testing).
-			if (timeManager != null && timeManager.TickDelta > 0.0d)
+			serverTimer -= (float)timeManager.TickDelta;
+			if (serverTimer > 0f)
 			{
-				return (float)(timeManager.TicksToTime(TickType.Tick) % secondsPerGameDay);
+				return;
 			}
-
-			offlineElapsedSeconds += Time.deltaTime;
-			return offlineElapsedSeconds % secondsPerGameDay;
+			serverTimer = ServerEvaluationSeconds;
+			Evaluate();
+			UpdateDayNightState(DaylightNow);
+			events.Clear();
+			tracker.Update(State, events);
+			foreach (CelestialEvent celestialEvent in events)
+			{
+				InvokeCelestialTriggers(celestialEvent);
+			}
 		}
 
-		/// <summary>
-		/// Executes pending scene-load triggers once the server is authoritative for this scene.
-		/// </summary>
+		private void ApplyRotations()
+		{
+			Quaternion sky = State.SkyRotation;
+			for (int i = 0; i < rotating.Count; i++)
+			{
+				if (rotating[i].transform != null)
+				{
+					rotating[i].transform.rotation = sky * rotating[i].authored;
+				}
+			}
+		}
+
 		private void TryInvokeSceneLoadTriggers()
 		{
 			if (!sceneLoadTriggersPending || !CanExecuteWorldTriggers())
 			{
 				return;
 			}
-
 			sceneLoadTriggersPending = false;
 			InvokeTriggers(onSceneLoadTriggers);
 		}
 
-		/// <summary>
-		/// Returns true when world-scene ECA triggers may execute authoritatively.
-		/// </summary>
 		private bool CanExecuteWorldTriggers()
 		{
 			return networkManager != null && networkManager.IsServerStarted;
 		}
 
-		/// <summary>
-		/// Finds the NetworkManager loaded in this component's scene.
-		/// </summary>
-		/// <returns>The scene-local NetworkManager, or null if none exists.</returns>
 		private NetworkManager FindSceneNetworkManager()
 		{
-			NetworkManager[] networkManagers = FindObjectsByType<NetworkManager>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+			NetworkManager[] networkManagers = FindObjectsByType<NetworkManager>(FindObjectsInactive.Include);
 			for (int i = 0; i < networkManagers.Length; i++)
 			{
 				NetworkManager candidate = networkManagers[i];
@@ -263,204 +374,89 @@ namespace FishMMO.Shared
 					return candidate;
 				}
 			}
-
-			return null;
+			// Scene servers and clients keep their NetworkManager in their bootstrap scene.
+			return networkManagers.Length > 0 ? networkManagers[0] : null;
 		}
 
-		/// <summary>
-		/// Updates the day/night state and fires ECA triggers on transitions.
-		/// </summary>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private void UpdateDayNightState(float currentGameTimeOfDay, bool ignoreCurrentState = false)
+		private void UpdateDayNightState(bool daylight, bool ignoreCurrentState = false)
 		{
-			if (currentGameTimeOfDay <= DayCycleDuration)
-			{
-				if (!isDaytime || ignoreCurrentState)
-				{
-					isDaytime = true;
-
-					UpdateDayNightActivations(true, DayObjects);
-					UpdateDayNightActivations(false, NightObjects);
-
-					fadeTime = FadeThreshold;
-
-					if (!ignoreCurrentState)
-					{
-						InvokeTriggers(onDayStartTriggers);
-					}
-				}
-			}
-			else
-			{
-				if (isDaytime || ignoreCurrentState)
-				{
-					isDaytime = false;
-
-					UpdateDayNightActivations(false, DayObjects);
-					UpdateDayNightActivations(true, NightObjects);
-
-					fadeTime = FadeThreshold;
-
-					if (!ignoreCurrentState)
-					{
-						InvokeTriggers(onNightStartTriggers);
-					}
-				}
-			}
-		}
-
-		/// <summary>
-		/// Rotates objects based on the current game time of day and lerps the skybox blend material.
-		/// </summary>
-		private void UpdateDayNightRotation(float currentGameTimeOfDay, List<GameObject> objects)
-		{
-			if (objects == null || objects.Count == 0)
+			if (daylight == isDaytime && !ignoreCurrentState)
 			{
 				return;
 			}
-
-			float lerpTime;
-			float rotationAngle;
-
-			if (currentGameTimeOfDay <= DayCycleDuration)
+			isDaytime = daylight;
+			UpdateDayNightActivations(daylight, DayObjects);
+			UpdateDayNightActivations(!daylight, NightObjects);
+			fadeTime = FadeThreshold;
+			if (!ignoreCurrentState)
 			{
-				lerpTime = currentGameTimeOfDay / DayCycleDuration;
-				rotationAngle = Mathf.Lerp(0f, 180f, lerpTime);
-
-#if !UNITY_SERVER
-				if (blendSkyboxMaterial != null &&
-					DaySkyboxMaterial != null &&
-					NightSkyBoxMaterial != null)
-				{
-					blendSkyboxMaterial.Lerp(DaySkyboxMaterial, NightSkyBoxMaterial, lerpTime);
-				}
-#endif
+				InvokeTriggers(daylight ? onDayStartTriggers : onNightStartTriggers);
 			}
-			else
-			{
-				lerpTime = (currentGameTimeOfDay - DayCycleDuration) / NightCycleDuration;
-				rotationAngle = Mathf.Lerp(180f, 360f, lerpTime);
-
-#if !UNITY_SERVER
-				if (blendSkyboxMaterial != null &&
-					DaySkyboxMaterial != null &&
-					NightSkyBoxMaterial != null)
-				{
-					blendSkyboxMaterial.Lerp(NightSkyBoxMaterial, DaySkyboxMaterial, lerpTime);
-				}
-#endif
-			}
-
-			float rotationDiff = rotationAngle - lastRotationAngle;
-
-			for (int i = 0; i < objects.Count; ++i)
-			{
-				GameObject obj = objects[i];
-				if (obj == null)
-				{
-					continue;
-				}
-				obj.transform.rotation *= Quaternion.AngleAxis(rotationDiff, Vector3.right);
-			}
-
-			lastRotationAngle = rotationAngle;
-
-#if !UNITY_SERVER
-			dynamicGITimer -= Time.deltaTime;
-			if (dynamicGITimer <= 0f)
-			{
-				dynamicGITimer = DynamicGIUpdateInterval;
-				DynamicGI.UpdateEnvironment();
-			}
-#endif
 		}
 
-		/// <summary>
-		/// Enables or disables all GameObjects in the provided list.
-		/// </summary>
-		private void UpdateDayNightActivations(bool enable, List<GameObject> objects)
+		private static void UpdateDayNightActivations(bool enable, List<GameObject> objects)
 		{
-			if (objects == null || objects.Count < 1)
+			if (objects == null)
 			{
 				return;
 			}
-
 			for (int i = 0; i < objects.Count; ++i)
 			{
-				GameObject obj = objects[i];
-				if (obj != null)
+				if (objects[i] != null)
 				{
-					obj.SetActive(enable);
+					objects[i].SetActive(enable);
 				}
 			}
 		}
 
-		/// <summary>
-		/// Fades objects in or out based on day/night status. Uses cached renderers and a
-		/// MaterialPropertyBlock so no per-frame allocations or shared-material mutations occur.
-		/// </summary>
 		private void UpdateDayNightFading()
 		{
 #if !UNITY_SERVER
-			float alpha = 0.0f;
-
-			if (fadeTime > 0)
+			float alpha = 0f;
+			if (fadeTime > 0f)
 			{
 				fadeTime -= Time.deltaTime;
-				alpha = (fadeTime / FadeThreshold).Clamp(0.0f, 1.0f);
+				alpha = Mathf.Clamp01(fadeTime / Mathf.Max(0.01f, FadeThreshold));
 			}
-
 			if (dayFadeRenderers != null && dayFadeRenderers.Length > 0)
 			{
-				SetAlpha(dayFadeRenderers, isDaytime ? 1 - alpha : alpha);
+				SetVisibility(dayFadeRenderers, isDaytime ? 1f - alpha : alpha);
 			}
-
 			if (nightFadeRenderers != null && nightFadeRenderers.Length > 0)
 			{
-				SetAlpha(nightFadeRenderers, isDaytime ? alpha : 1 - alpha);
+				SetVisibility(nightFadeRenderers, isDaytime ? alpha : 1f - alpha);
 			}
 #endif
 		}
 
-		/// <summary>
-		/// Caches renderers from the provided list of GameObjects.
-		/// </summary>
 		private static Renderer[] CacheRenderers(List<GameObject> objects)
 		{
 			if (objects == null || objects.Count < 1)
 			{
 				return Array.Empty<Renderer>();
 			}
-
-			List<Renderer> renderers = new List<Renderer>(objects.Count);
-			for (int i = 0; i < objects.Count; ++i)
+			var renderers = new List<Renderer>(objects.Count);
+			foreach (GameObject obj in objects)
 			{
-				if (objects[i] != null)
+				Renderer r = obj != null ? obj.GetComponent<Renderer>() : null;
+				if (r != null)
 				{
-					Renderer r = objects[i].GetComponent<Renderer>();
-					if (r != null)
-					{
-						renderers.Add(r);
-					}
+					renderers.Add(r);
 				}
 			}
 			return renderers.ToArray();
 		}
 
 		/// <summary>
-		/// Sets the alpha tint on each cached renderer using a <see cref="MaterialPropertyBlock"/>.
-		/// This avoids cloning the renderer's <c>sharedMaterial</c> (which would leak an instance
-		/// per renderer per frame and break SRP batching). Writes both <c>_BaseColor</c> (URP/Lit)
-		/// and <c>_Color</c> (legacy/built-in) so the same call works across shader variants.
+		/// Fades transparent renderers by alpha; opaque ones cannot show alpha, so they switch on
+		/// or off at the midpoint of the fade.
 		/// </summary>
-		private void SetAlpha(Renderer[] renderers, float alpha)
+		private void SetVisibility(Renderer[] renderers, float visibility)
 		{
-#if !UNITY_SERVER
 			if (fadePropertyBlock == null)
 			{
 				fadePropertyBlock = new MaterialPropertyBlock();
 			}
-
 			for (int i = 0; i < renderers.Length; ++i)
 			{
 				Renderer r = renderers[i];
@@ -468,63 +464,76 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-
-				r.GetPropertyBlock(fadePropertyBlock);
-
-				// Seed RGB from the shared material colour if available so we only mutate alpha.
-				Color baseColor = Color.white;
 				Material shared = r.sharedMaterial;
-				if (shared != null)
+				bool transparent = shared != null && shared.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.GeometryLast + 1;
+				if (!transparent)
 				{
-					if (shared.HasProperty(BaseColorPropertyId))
-					{
-						baseColor = shared.GetColor(BaseColorPropertyId);
-					}
-					else if (shared.HasProperty(ColorPropertyId))
-					{
-						baseColor = shared.GetColor(ColorPropertyId);
-					}
+					r.enabled = visibility >= 0.5f;
+					continue;
 				}
-				baseColor.a = alpha;
-
+				r.enabled = visibility > 0.001f;
+				r.GetPropertyBlock(fadePropertyBlock);
+				Color baseColor = Color.white;
+				if (shared.HasProperty(BaseColorPropertyId))
+				{
+					baseColor = shared.GetColor(BaseColorPropertyId);
+				}
+				else if (shared.HasProperty(ColorPropertyId))
+				{
+					baseColor = shared.GetColor(ColorPropertyId);
+				}
+				baseColor.a *= visibility;
 				fadePropertyBlock.SetColor(BaseColorPropertyId, baseColor);
 				fadePropertyBlock.SetColor(ColorPropertyId, baseColor);
 				r.SetPropertyBlock(fadePropertyBlock);
 			}
-#endif
 		}
 
-		/// <summary>
-		/// Executes all triggers in the list using a world-level DayNightEventData (null initiator).
-		/// </summary>
 		private void InvokeTriggers(List<WorldSceneTrigger> triggers)
 		{
 			if (!CanExecuteWorldTriggers() || triggers == null || triggers.Count == 0)
 			{
 				return;
 			}
-
-			DayNightEventData eventData = new DayNightEventData(isDaytime);
+			var eventData = new DayNightEventData(isDaytime);
 			for (int i = 0; i < triggers.Count; ++i)
 			{
-				if (triggers[i] != null)
+				triggers[i]?.Execute(eventData);
+			}
+		}
+
+		private void InvokeCelestialTriggers(CelestialEvent celestialEvent)
+		{
+			if (!CanExecuteWorldTriggers() || onCelestialEvents == null)
+			{
+				return;
+			}
+			CelestialEventData eventData = null;
+			for (int i = 0; i < onCelestialEvents.Count; ++i)
+			{
+				CelestialTrigger entry = onCelestialEvents[i];
+				if (entry == null || entry.Kind != celestialEvent.Kind || entry.Trigger == null)
 				{
-					triggers[i].Execute(eventData);
+					continue;
 				}
+				eventData ??= new CelestialEventData(celestialEvent);
+				entry.Trigger.Execute(eventData);
 			}
 		}
 
 #if UNITY_EDITOR
-		/// <summary>
-		/// Editor-only null-strip for every <see cref="WorldSceneTrigger"/> list, mirroring
-		/// <c>Core.Trigger.OnValidate</c>. Removes <c>SubclassSelector</c> remnants from
-		/// <c>Conditions</c>/action lists so designers never see lingering null elements.
-		/// </summary>
 		private void OnValidate()
 		{
 			SanitizeAll(onSceneLoadTriggers);
 			SanitizeAll(onDayStartTriggers);
 			SanitizeAll(onNightStartTriggers);
+			if (onCelestialEvents != null)
+			{
+				foreach (CelestialTrigger entry in onCelestialEvents)
+				{
+					entry?.Trigger?.Sanitize();
+				}
+			}
 		}
 
 		private static void SanitizeAll(List<WorldSceneTrigger> triggers)

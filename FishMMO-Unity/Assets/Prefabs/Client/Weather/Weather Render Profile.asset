@@ -1,0 +1,126 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ad0540f80eb2358fa8187f2cf48a0672, type: 3}
+  m_Name: Weather Render Profile
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.WeatherRenderProfile
+  PrecipitationMaterial: {fileID: 2100000, guid: 1a49b80f27d38c4749bea1720d91bc32,
+    type: 2}
+  PrecipitationAtlas: {fileID: 2800000, guid: 695281b44bcf6b527b3fb26e0dc8d4b5, type: 3}
+  Noise: {fileID: 2800000, guid: af5e17aec5ef22d38957933678513fa0, type: 3}
+  Rain:
+    AtlasRow: 0
+    Size: {x: 0.008, y: 0.016}
+    Stretch: 40
+    FallSpeed: {x: 7, y: 10}
+    Sway: 0
+    SwayFrequency: 1
+    WindResponse: 0.35
+    Tint: {r: 0.75, g: 0.8, b: 0.9, a: 1}
+    Alpha: 0.45
+    Brightness: 1
+    FogColor: {r: 0.55, g: 0.6, b: 0.66, a: 1}
+  Snow:
+    AtlasRow: 1
+    Size: {x: 0.03, y: 0.08}
+    Stretch: 1
+    FallSpeed: {x: 0.8, y: 1.4}
+    Sway: 0.35
+    SwayFrequency: 0.8
+    WindResponse: 0.9
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    Alpha: 0.9
+    Brightness: 1
+    FogColor: {r: 0.82, g: 0.85, b: 0.9, a: 1}
+  Hail:
+    AtlasRow: 2
+    Size: {x: 0.03, y: 0.06}
+    Stretch: 1
+    FallSpeed: {x: 10, y: 16}
+    Sway: 0
+    SwayFrequency: 1
+    WindResponse: 0.2
+    Tint: {r: 0.9, g: 0.95, b: 1, a: 1}
+    Alpha: 0.95
+    Brightness: 1
+    FogColor: {r: 0.6, g: 0.64, b: 0.7, a: 1}
+  Ash:
+    AtlasRow: 3
+    Size: {x: 0.08, y: 0.14}
+    Stretch: 1
+    FallSpeed: {x: 0.4, y: 0.8}
+    Sway: 0.5
+    SwayFrequency: 0.5
+    WindResponse: 0.6
+    Tint: {r: 0.55, g: 0.53, b: 0.5, a: 1}
+    Alpha: 0.95
+    Brightness: 1
+    FogColor: {r: 0.42, g: 0.4, b: 0.38, a: 1}
+  Sand:
+    AtlasRow: 4
+    Size: {x: 0.1, y: 0.18}
+    Stretch: 3
+    FallSpeed: {x: 0.5, y: 1}
+    Sway: 0.2
+    SwayFrequency: 2
+    WindResponse: 0.6
+    Tint: {r: 0.9, g: 0.78, b: 0.58, a: 1}
+    Alpha: 0.9
+    Brightness: 1
+    FogColor: {r: 0.78, g: 0.66, b: 0.46, a: 1}
+  SkyMaterial: {fileID: 2100000, guid: 130b504fa95c2fb3083e502c7ec3a367, type: 2}
+  SkyBodyMaterial: {fileID: 2100000, guid: 36c3ad97fcb382889903e8b5ad9c0e58, type: 2}
+  CurtainMaterial: {fileID: 2100000, guid: a8061d0280b071f4e8dc1f2b753c048f, type: 2}
+  BoltMaterial: {fileID: 2100000, guid: 9d7b4675c91149f25af0e2a82433630e, type: 2}
+  CloudCookieMaterial: {fileID: 2100000, guid: bb1254a0f5ecb3b239b87631320dba90, type: 2}
+  MistColor: {r: 0.7, g: 0.73, b: 0.76, a: 1}
+  MaxFogDensity: 0.06
+  MinFogEndDistance: 40
+  Performant:
+    Particles: 3000
+    BoxSize: 18
+    OcclusionResolution: 48
+    OcclusionTexelMeters: 2
+    OcclusionRaysPerFrame: 256
+    StarCubemapSize: 256
+    MeteorBudget: 16
+    Asteroids: 0
+    ReflectionResolution: 64
+    Curtains: 3
+    CloudShadows: 0
+  Balanced:
+    Particles: 8000
+    BoxSize: 24
+    OcclusionResolution: 64
+    OcclusionTexelMeters: 1.5
+    OcclusionRaysPerFrame: 512
+    StarCubemapSize: 512
+    MeteorBudget: 64
+    Asteroids: 1
+    ReflectionResolution: 128
+    Curtains: 6
+    CloudShadows: 1
+  HighFidelity:
+    Particles: 16000
+    BoxSize: 30
+    OcclusionResolution: 96
+    OcclusionTexelMeters: 1
+    OcclusionRaysPerFrame: 1024
+    StarCubemapSize: 1024
+    MeteorBudget: 256
+    Asteroids: 1
+    ReflectionResolution: 256
+    Curtains: 8
+    CloudShadows: 1
+  OcclusionLayers:
+    serializedVersion: 2
+    m_Bits: 129
+  Audio: {fileID: 11400000, guid: 53fa60808c930f3baaf43eed7423bc2a, type: 2}

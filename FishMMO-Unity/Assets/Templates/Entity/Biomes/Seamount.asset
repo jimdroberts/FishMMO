@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Seamount
   m_EditorClassIdentifier: 
   DisplayName: Seamount
-  Description: 'Underwater mountains — rising from the deep, teeming with life'
+  Description: "Underwater mountains \u2014 rising from the deep, teeming with life"
   BiomeColorId: {r: 0.2, g: 0.4, b: 0.5, a: 1}
   GizmoColor: {r: 0.3, g: 0.5, b: 0.6, a: 1}
   ElevationTier: 1
@@ -158,7 +158,15 @@ MonoBehaviour:
       - Massive
       - Fertile
       - Storm-swept
-      Description: 'Underwater mountains — rising from the deep, teeming with life'
+      Description: "Underwater mountains \u2014 rising from the deep, teeming with
+        life"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 1023
+    CellsPerSquareKm: 0
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: d74297414c89f90408f6c1700ed4f57e, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +189,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +213,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +236,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +260,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

@@ -67,6 +67,8 @@ namespace FishMMO.UnitTests
 			"IAchievementController",
 			"IQuestController",
 			"ICurrencyLedgerService",
+			"IWeatherService",
+			"weatherHost.",
 			"PersistAccessLevelAsync",
 			".Immortal",
 			".SetValue(",

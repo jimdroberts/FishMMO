@@ -126,7 +126,7 @@ namespace FishMMO.Shared
 					}
 
 					// Harvest the scene's authored map content into its definition.
-					RebuildMapDefinition(sceneDetails.MapDefinition, currentScene.name);
+					RebuildMapDefinition(sceneDetails.MapDefinition, currentScene);
 
 					// Search for initial spawn positions.
 					CharacterInitialSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsByType<CharacterInitialSpawnPosition>(FindObjectsSortMode.None);
@@ -297,7 +297,7 @@ namespace FishMMO.Shared
 		/// its map definition.
 		/// </summary>
 		/// <param name="definition">The scene's map definition. Null is ignored.</param>
-		/// <param name="sceneName">Name of the scene being scanned, for the definition's key.</param>
+		/// <param name="scene">The scene being scanned; its name is the definition's key.</param>
 		/// <remarks>
 		/// <para>Runs as part of the scene details rebuild rather than only from the map baker,
 		/// because labels and landmarks are cheap to harvest and cost nothing to look at, whereas
@@ -308,8 +308,9 @@ namespace FishMMO.Shared
 		/// set by hand describes a deliberate crop, and silently replacing it with the boundary
 		/// union on the next rebuild would undo that choice with nothing to show it happened.</para>
 		/// </remarks>
-		private static void RebuildMapDefinition(WorldMapDefinition definition, string sceneName)
+		private static void RebuildMapDefinition(WorldMapDefinition definition, Scene scene)
 		{
+			string sceneName = scene.name;
 			if (definition == null)
 			{
 				return;
@@ -335,7 +336,7 @@ namespace FishMMO.Shared
 
 			if (!definition.HasAuthoredBounds)
 			{
-				Rect derived = MapBoundsResolver.FromOpenScene();
+				Rect derived = MapBoundsResolver.FromOpenScene(scene);
 				if (derived.width > 0.0f && derived.height > 0.0f)
 				{
 					definition.SetDerivedBounds(derived);

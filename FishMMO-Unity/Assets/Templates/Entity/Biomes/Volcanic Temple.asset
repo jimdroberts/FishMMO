@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Volcanic Temple
   m_EditorClassIdentifier: 
   DisplayName: Volcanic Temple
-  Description: 'Temple built within a volcano — fire worship, lava channels, obsidian'
+  Description: "Temple built within a volcano \u2014 fire worship, lava channels,
+    obsidian"
   BiomeColorId: {r: 0.5, g: 0.2, b: 0.12, a: 1}
   GizmoColor: {r: 0.7, g: 0.3, b: 0.2, a: 1}
   ElevationTier: 6
@@ -107,7 +108,7 @@ MonoBehaviour:
       - The Lava-moated
       - The Sulfurous
       - The Smoke-shrouded
-      - 'The Fire-god''s'
+      - The Fire-god's
       - The Magma-hearted
       - The Pyroclastic
       - The Ember-crowned
@@ -158,7 +159,25 @@ MonoBehaviour:
       - Charred
       - Blistering
       - Glowing
-      Description: 'Temple built within a volcano — fire worship, lava channels, obsidian'
+      Description: "Temple built within a volcano \u2014 fire worship, lava channels,
+        obsidian"
+  Weather:
+    Background:
+    - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
+      Intensity: 0.15
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
+      Weight: 4
+    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
+      Weight: 1
+    Suitability: []
+    Variants:
+    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
+      Variant: {fileID: 11400000, guid: b2be23afeaddac6faa373ee751e2d988, type: 2}
+    Forbidden: 4
+    CellsPerSquareKm: 0.35
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Volcanic Cave
   m_EditorClassIdentifier: 
   DisplayName: Volcanic Cave
-  Description: 'Underground volcanic system — lava tubes, obsidian, choking heat'
+  Description: "Underground volcanic system \u2014 lava tubes, obsidian, choking
+    heat"
   BiomeColorId: {r: 0.4, g: 0.15, b: 0.1, a: 1}
   GizmoColor: {r: 0.6, g: 0.25, b: 0.15, a: 1}
   ElevationTier: 6
@@ -158,7 +159,15 @@ MonoBehaviour:
       - Slag-crusted
       - Toxic
       - Explosive
-      Description: 'Underground volcanic system — lava tubes, obsidian, choking heat'
+      Description: "Underground volcanic system \u2014 lava tubes, obsidian, choking
+        heat"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 1023
+    CellsPerSquareKm: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

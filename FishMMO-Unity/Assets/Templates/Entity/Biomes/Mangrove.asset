@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Mangrove
   m_EditorClassIdentifier: 
   DisplayName: Mangrove
-  Description: 'Coastal wetlands — tangled roots, brackish water, impenetrable growth'
+  Description: "Coastal wetlands \u2014 tangled roots, brackish water, impenetrable
+    growth"
   BiomeColorId: {r: 0.4, g: 0.6, b: 0.4, a: 1}
   GizmoColor: {r: 0.5, g: 0.7, b: 0.5, a: 1}
   ElevationTier: 3
@@ -158,7 +159,31 @@ MonoBehaviour:
       - Ancient
       - Serpentine
       - Claustrophobic
-      Description: 'Coastal wetlands — tangled roots, brackish water, impenetrable growth'
+      Description: "Coastal wetlands \u2014 tangled roots, brackish water, impenetrable
+        growth"
+  Weather:
+    Background:
+    - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
+      Intensity: 0.25
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 3
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
+      Weight: 1
+    Suitability:
+    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
+      Suitability: 0.05
+    Variants:
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Variant: {fileID: 11400000, guid: 6f63f0ccbfbfdc2e4bc4c4df3b494945, type: 2}
+    Forbidden: 32
+    CellsPerSquareKm: 0.55
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 3f19be6764f2bcd49b45e22b6ca8b2e8, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +206,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +230,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +253,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +277,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
