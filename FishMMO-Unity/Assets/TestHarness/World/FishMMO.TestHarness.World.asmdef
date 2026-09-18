@@ -1,6 +1,6 @@
 {
-    "name": "FishMMO.TestHarness.Weather",
-    "rootNamespace": "FishMMO.TestHarness.Weather",
+    "name": "FishMMO.TestHarness.World",
+    "rootNamespace": "FishMMO.TestHarness.World",
     "references": [
         "FishMMO.Client",
         "FishMMO.Shared",

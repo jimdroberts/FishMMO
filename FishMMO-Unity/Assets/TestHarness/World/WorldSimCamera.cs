@@ -1,17 +1,24 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace FishMMO.TestHarness.Sky
+namespace FishMMO.TestHarness.World
 {
 	/// <summary>
-	/// The sky test bed's camera: right mouse to look, WASD/QE to move, Shift to hurry, scroll to
-	/// change the field of view (a narrow view is how you check a moon's real size).
+	/// The world test bed's camera: right mouse to look, WASD/QE to move, Shift to hurry, scroll to
+	/// change the field of view (a narrow view is how you check a moon's real size), R to put it back.
 	/// </summary>
-	public sealed class SkySimCamera : MonoBehaviour
+	/// <remarks>
+	/// The weather bed had a plainer version of this with no zoom and no floor under it, which meant
+	/// the same fly-around behaved differently depending on which scene you happened to be in. This
+	/// is the one that could do everything both needed.
+	/// </remarks>
+	public sealed class WorldSimCamera : MonoBehaviour
 	{
 		public float Speed = 10f;
 		public float LookSpeed = 0.15f;
+		[Tooltip("The camera never sinks below this, so a fly-around cannot end up under the ground.")]
 		public float MinimumHeight = 0.5f;
+		public float DefaultFieldOfView = 60f;
 
 		private float yaw;
 		private float pitch;
@@ -64,7 +71,7 @@ namespace FishMMO.TestHarness.Sky
 			// The camera's own rotation stays level: the sky turns, not the horizon.
 			if (keyboard.rKey.wasPressedThisFrame && camera != null)
 			{
-				camera.fieldOfView = 60f;
+				camera.fieldOfView = DefaultFieldOfView;
 			}
 		}
 	}

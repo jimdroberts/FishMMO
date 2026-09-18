@@ -7,6 +7,8 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Client;
 using FishMMO.Shared;
+using FishMMO.TestHarness.World;
+using FishMMO.TestHarness.World.Editor;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
@@ -168,11 +170,11 @@ namespace FishMMO.TestHarness.Weather.Editor
 			Directory.CreateDirectory(outputDirectory);
 			SessionState.SetString(StateKey, outputDirectory);
 
-			if (!File.Exists(WeatherSimSceneGenerator.ScenePath) || Environment.GetEnvironmentVariable("FISHMMO_WEATHER_REGENERATE") == "1")
+			if (!File.Exists(WorldSimSceneGenerator.ScenePath) || Environment.GetEnvironmentVariable("FISHMMO_WEATHER_REGENERATE") == "1")
 			{
-				WeatherSimSceneGenerator.Generate();
+				WorldSimSceneGenerator.Generate();
 			}
-			EditorSceneManager.OpenScene(WeatherSimSceneGenerator.ScenePath, OpenSceneMode.Single);
+			EditorSceneManager.OpenScene(WorldSimSceneGenerator.ScenePath, OpenSceneMode.Single);
 			EditorApplication.playModeStateChanged -= OnPlayMode;
 			EditorApplication.playModeStateChanged += OnPlayMode;
 			EditorApplication.EnterPlaymode();
@@ -231,13 +233,13 @@ namespace FishMMO.TestHarness.Weather.Editor
 			EditorApplication.update += Pump;
 		}
 
-		private static WeatherSimController Controller() => UnityEngine.Object.FindFirstObjectByType<WeatherSimController>();
+		private static WorldSimController Controller() => UnityEngine.Object.FindFirstObjectByType<WorldSimController>();
 
 		private static void Pump()
 		{
 			try
 			{
-				WeatherSimController controller = Controller();
+				WorldSimController controller = Controller();
 				if (controller == null)
 				{
 					return;
@@ -296,7 +298,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			return true;
 		}
 
-		private static void Start(WeatherSimController controller, Stage stage)
+		private static void Start(WorldSimController controller, Stage stage)
 		{
 			QualitySettings.SetQualityLevel(Mathf.Clamp(stage.Quality, 0, QualitySettings.names.Length - 1), true);
 			controller.Camera.transform.position = stage.CameraPosition;
@@ -344,7 +346,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			stageStarted = EditorApplication.timeSinceStartup;
 		}
 
-		private static void Finish(WeatherSimController controller, Stage stage)
+		private static void Finish(WorldSimController controller, Stage stage)
 		{
 			string path = Path.Combine(outputDirectory, $"WeatherSim-{stageIndex:00}-{stage.Name}.png");
 			if (stage.AdvanceCover > 0f)
@@ -408,7 +410,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 		}
 
 		/// <summary>The first day whose midnight has the moon high and mostly lit, looking along the stage camera.</summary>
-		private static float MoonlitNight(WeatherSimController controller, float latitude, bool eclipse)
+		private static float MoonlitNight(WorldSimController controller, float latitude, bool eclipse)
 		{
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = system != null ? system.HomeWorld : null;
@@ -441,7 +443,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 		private static float moonAltitude;
 
 		/// <summary>Checks the sky owns the render settings and shows what the stage asked for.</summary>
-		private static string CheckSky(WeatherSimController controller, Stage stage, List<string> problems)
+		private static string CheckSky(WorldSimController controller, Stage stage, List<string> problems)
 		{
 			SkySystem sky = SkySystem.Instance;
 			if (sky == null || sky.State == null)
@@ -491,7 +493,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 		/// How much the cover varies across the map, and how deep it gets anywhere on it. A map that
 		/// is merely the scene's average repeated has no spread.
 		/// </summary>
-		private static float MeasureCoverSpread(WeatherSimController controller, out float highest)
+		private static float MeasureCoverSpread(WorldSimController controller, out float highest)
 		{
 			highest = 0f;
 			WeatherCoverMap map = controller.Presentation != null ? controller.Presentation.CoverMap : null;
@@ -514,7 +516,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 		}
 
 		/// <summary>How bright the lower half of the frame is: the ground the cover settles on.</summary>
-		private static float MeasureGround(WeatherSimController controller)
+		private static float MeasureGround(WorldSimController controller)
 		{
 			Camera camera = controller.Camera;
 			var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
@@ -552,7 +554,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			}
 		}
 
-		private static void Capture(WeatherSimController controller, string path)
+		private static void Capture(WorldSimController controller, string path)
 		{
 			Camera camera = controller.Camera;
 			var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
@@ -580,7 +582,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 		}
 
 		/// <summary>Redirects the panel into a texture (once) and blends the last panel frame over the image.</summary>
-		private static void OverlayPanel(WeatherSimController controller, Texture2D image)
+		private static void OverlayPanel(WorldSimController controller, Texture2D image)
 		{
 			UIDocument document = controller.GetComponent<UIDocument>();
 			if (document == null)

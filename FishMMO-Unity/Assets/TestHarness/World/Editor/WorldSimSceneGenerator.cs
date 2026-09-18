@@ -7,21 +7,30 @@ using UnityEngine.UIElements;
 using FishMMO.Client;
 using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 using FishMMO.Shared.WorldDesign;
 
-namespace FishMMO.TestHarness.Weather.Editor
+namespace FishMMO.TestHarness.World.Editor
 {
 	/// <summary>
-	/// Builds the weather test scene: open ground, a closed house (with a shelter volume), an open
-	/// pavilion to show rain stopping at a roof, a few trees, the fly camera, the sim controller and
-	/// its control panel.
+	/// Builds the world test scene: a wide ground so the horizon reads, a hill of real terrain, a
+	/// closed house and an open pavilion to stop rain with, trees, landmarks to catch the light, and
+	/// one camera, clock and control panel over the lot.
 	/// </summary>
-	public static class WeatherSimSceneGenerator
+	/// <remarks>
+	/// This is the two old scenes put together. What stopped them being one scene was never the
+	/// props — it was that each carried its own camera, sun, clock and scene settings, and two of
+	/// any of those fight. There is one of each here, and the props from both, because the sky bed
+	/// wanted somewhere for cloud shadows to land and the weather bed wanted a horizon.
+	/// </remarks>
+	public static class WorldSimSceneGenerator
 	{
-		public const string ScenePath = "Assets/Scenes/Test/WeatherSim.unity";
-		public const string GeneratedFolder = "Assets/TestHarness/Weather/Generated";
+		public const string ScenePath = "Assets/Scenes/Test/WorldSim.unity";
+		public const string GeneratedFolder = "Assets/TestHarness/World/Generated";
 		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
+		private const string TerrainDataPath = GeneratedFolder + "/World Sim Hill.asset";
+		private const string TerrainMaterialPath = "Assets/Prefabs/Client/Materials/Ground/Weather Terrain.mat";
 
 		private static readonly string[] PresetOrder =
 		{
@@ -29,9 +38,9 @@ namespace FishMMO.TestHarness.Weather.Editor
 			"Light Snow", "Heavy Snow", "Blizzard", "Hailstorm", "Ashfall", "Sandstorm", "Windy", "Aurora Night",
 		};
 
-		[DashboardTool(DashboardToolAttribute.Weather, "Generate Weather Sim scene", Section = "Test bed", Order = 10,
-			Tooltip = "Creates the weather content if missing and writes " + ScenePath + ": ground, a house, a pavilion, trees and the weather control panel.",
-			Confirm = "Generate the Weather Sim scene? The open scenes are closed (you are asked to save them first) and " + ScenePath + " is overwritten.")]
+		[DashboardTool(DashboardToolAttribute.Weather, "Generate World Sim scene", Section = "Test bed", Order = 10,
+			Tooltip = "Creates the weather content if missing and writes " + ScenePath + ": ground, terrain, a house, a pavilion, trees, landmarks and the world control panel.",
+			Confirm = "Generate the World Sim scene? The open scenes are closed (you are asked to save them first) and " + ScenePath + " is overwritten.")]
 		public static void GenerateFromDashboard()
 		{
 			if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
@@ -45,40 +54,48 @@ namespace FishMMO.TestHarness.Weather.Editor
 		{
 			WeatherContentGenerator.Generate(WeatherContentGenerator.Root, fillBiomes: false);
 			WeatherRenderProfile profile = WeatherRenderAssets.Ensure();
+			WeatherRenderAssets.EnsureSkyProfile();
 			WorldEditorAssets.EnsureFolder(GeneratedFolder);
 			WorldEditorAssets.EnsureFolder("Assets/Scenes/Test");
 
 			Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-			Material ground = MaterialAsset("Ground", new Color(0.32f, 0.36f, 0.28f));
+			Material ground = MaterialAsset("Ground", new Color(0.3f, 0.33f, 0.27f));
 			Material wall = MaterialAsset("Wall", new Color(0.62f, 0.58f, 0.52f));
 			Material roof = MaterialAsset("Roof", new Color(0.42f, 0.24f, 0.2f));
 			Material wood = MaterialAsset("Wood", new Color(0.35f, 0.25f, 0.16f));
 			Material leaves = MaterialAsset("Leaves", new Color(0.2f, 0.36f, 0.18f));
+			Material stone = MaterialAsset("Stone", new Color(0.55f, 0.54f, 0.5f));
+			Material white = MaterialAsset("White", new Color(0.86f, 0.86f, 0.86f));
 
 			var sunObject = new GameObject("Sun");
 			Light sun = sunObject.AddComponent<Light>();
 			sun.type = LightType.Directional;
 			sun.shadows = LightShadows.Soft;
 			sun.intensity = 1.1f;
-			sunObject.transform.rotation = Quaternion.Euler(50f, 30f, 0f);
+			sunObject.transform.rotation = Quaternion.Euler(48f, 30f, 0f);
 			RenderSettings.sun = sun;
+
 			var moonObject = new GameObject("Moon");
 			Light moonLight = moonObject.AddComponent<Light>();
 			moonLight.type = LightType.Directional;
 			moonLight.shadows = LightShadows.None;
 			moonLight.intensity = 0f;
+
 			RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
 			RenderSettings.ambientSkyColor = new Color(0.55f, 0.6f, 0.7f);
 			RenderSettings.ambientEquatorColor = new Color(0.4f, 0.42f, 0.45f);
 			RenderSettings.ambientGroundColor = new Color(0.2f, 0.2f, 0.2f);
 			RenderSettings.fog = false;
 
-			Box("Ground", new Vector3(0f, -0.5f, 0f), new Vector3(300f, 1f, 300f), ground, null);
+			// One ground, and it is the wide one: a cloud deck is only honest against a horizon, and
+			// the weather bed's 300 m pad had none. Its top sits a couple of centimetres under zero so
+			// the terrain beside it wins where the two overlap instead of z-fighting with it.
+			Primitive(PrimitiveType.Cylinder, "Ground", new Vector3(0f, -0.52f, 0f), new Vector3(2000f, 0.5f, 2000f), ground, null);
 
-			// A hill of real terrain beside the flat ground. The world's terrain is on its own
-			// shader — a fork of Unity's, with its own snow that lifts the ground it lies on — and
-			// none of that is exercised by boxes.
+			// A hill of real terrain. The world's terrain is on its own shader — a fork of Unity's,
+			// with its own snow that lifts the ground it lies on — and none of that is exercised by
+			// boxes.
 			BuildTerrain();
 
 			// A closed house: walls, a door gap, a roof, and a shelter volume inside.
@@ -119,6 +136,19 @@ namespace FishMMO.TestHarness.Weather.Editor
 				Primitive(PrimitiveType.Sphere, "Crown", at + new Vector3(0f, 4f, 0f), new Vector3(3f, 3f, 3f), leaves, trees.transform);
 			}
 
+			// Landmarks from the sky bed: plain shapes whose shading says what the light is doing,
+			// with nothing else on them to argue about. The ring sits wider than the trees so a cloud
+			// shadow crossing it is readable.
+			var landmarks = new GameObject("Landmarks");
+			Primitive(PrimitiveType.Sphere, "Sphere", new Vector3(16f, 1.5f, -12f), Vector3.one * 3f, white, landmarks.transform);
+			Primitive(PrimitiveType.Cube, "Block", new Vector3(-17f, 1.5f, -11f), new Vector3(3f, 3f, 3f), stone, landmarks.transform);
+			for (int i = 0; i < 8; i++)
+			{
+				float angle = i * Mathf.PI * 2f / 8f;
+				var at = new Vector3(Mathf.Sin(angle) * 34f, 2.5f, Mathf.Cos(angle) * 34f - 8f);
+				Primitive(PrimitiveType.Cylinder, "Pillar", at, new Vector3(1.2f, 2.5f, 1.2f), stone, landmarks.transform);
+			}
+
 			var settingsObject = new GameObject("World Scene Settings");
 			WorldSceneSettings settings = settingsObject.AddComponent<WorldSceneSettings>();
 			ClimateSettings climate = WorldEditorAssets.FindFirst<ClimateSettings>();
@@ -135,31 +165,34 @@ namespace FishMMO.TestHarness.Weather.Editor
 			var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
 			Camera camera = cameraObject.AddComponent<Camera>();
 			camera.nearClipPlane = 0.1f;
-			camera.farClipPlane = 1500f;
+			// The far plane is the sky bed's: the clouds are marched to tens of kilometres and the
+			// weather bed's 1.5 km would have clipped the horizon off them.
+			camera.farClipPlane = 5000f;
 			camera.clearFlags = CameraClearFlags.Skybox;
 			cameraObject.AddComponent<AudioListener>();
-			cameraObject.AddComponent<WeatherSimCamera>();
-			cameraObject.transform.position = new Vector3(-2f, 1.8f, -6f);
-			cameraObject.transform.rotation = Quaternion.Euler(4f, 20f, 0f);
+			cameraObject.AddComponent<WorldSimCamera>();
+			cameraObject.transform.position = new Vector3(-2f, 1.8f, -14f);
+			cameraObject.transform.rotation = Quaternion.Euler(-4f, 12f, 0f);
 
-			var controllerObject = new GameObject("Weather Sim");
-			WeatherSimController controller = controllerObject.AddComponent<WeatherSimController>();
+			var controllerObject = new GameObject("World Sim");
+			WorldSimController controller = controllerObject.AddComponent<WorldSimController>();
 			controller.Profile = profile;
 			controller.Camera = camera;
 			controller.Sun = sun;
 			controller.Settings = settings;
 			controller.DayNight = dayNight;
-			controller.SolarSystem = WorldEditorAssets.FindFirst<FishMMO.Shared.Celestial.SolarSystemProfile>();
+			controller.SolarSystem = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			controller.SkyProfiles = WorldEditorAssets.FindAll<SkyProfile>();
 			controller.Templates = WorldEditorAssets.FindAll<WeatherLayerTemplate>();
 			controller.Presets = OrderedPresets();
 			UIDocument document = controllerObject.AddComponent<UIDocument>();
 			document.panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			WeatherSimPanel panel = controllerObject.AddComponent<WeatherSimPanel>();
+			WorldSimPanel panel = controllerObject.AddComponent<WorldSimPanel>();
 			panel.Controller = controller;
 
 			EditorSceneManager.SaveScene(scene, ScenePath);
 			AssetDatabase.SaveAssets();
-			Debug.Log($"[Weather Sim] Wrote {ScenePath}.");
+			Debug.Log($"[World Sim] Wrote {ScenePath}.");
 			return scene;
 		}
 
@@ -221,7 +254,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 
 			GameObject terrainObject = Terrain.CreateTerrainGameObject(data);
 			terrainObject.name = "Terrain Hill";
-			terrainObject.transform.position = new Vector3(0f, 0f, 60f);
+			terrainObject.transform.position = new Vector3(-60f, 0f, 40f);
 			var terrain = terrainObject.GetComponent<Terrain>();
 			Material material = AssetDatabase.LoadAssetAtPath<Material>(TerrainMaterialPath);
 			if (material != null)
@@ -230,12 +263,9 @@ namespace FishMMO.TestHarness.Weather.Editor
 			}
 			else
 			{
-				Debug.LogWarning($"[Weather Sim] {TerrainMaterialPath} is missing, so the hill uses Unity's own terrain material and shows no weather. Weather Tools → Weather-proof terrain creates it.");
+				Debug.LogWarning($"[World Sim] {TerrainMaterialPath} is missing, so the hill uses Unity's own terrain material and shows no weather. Weather Tools → Weather-proof terrain creates it.");
 			}
 		}
-
-		private const string TerrainDataPath = GeneratedFolder + "/Weather Sim Hill.asset";
-		private const string TerrainMaterialPath = "Assets/Prefabs/Client/Materials/Ground/Weather Terrain.mat";
 
 		private static Material MaterialAsset(string name, Color color)
 		{

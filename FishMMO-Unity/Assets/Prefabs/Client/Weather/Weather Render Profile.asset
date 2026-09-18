@@ -85,17 +85,98 @@ MonoBehaviour:
   CloudShape: {fileID: 11700000, guid: 587eb95df510f9b08a4dd41eb07e4110, type: 2}
   CloudDetail: {fileID: 11700000, guid: 4b7ed807917a1943983786db26612d55, type: 2}
   Clouds:
-    BaseHeight: 1200
-    TopHeight: 5000
+    Layers:
+    - Name: Weather
+      Bottom: 0
+      Top: 800
+      BaseFollowsCondensation: 0
+      NoiseScale: 2600
+      DetailScale: 180
+      DetailStrength: 0.6
+      Stretch: 1
+      BaseSoftness: 0.5
+      TopSoftness: 0.75
+      Convection: 0.35
+      Density: 0.55
+      CoverageBias: 0
+      CoverageScale: 0
+      CoverageOnset: 0
+      WindScale: 0.6
+      CarriesRain: 0
+      GrowsStorms: 0
+      ShadedTint: {r: 0.78, g: 0.82, b: 0.88, a: 1}
+    - Name: Cumulus
+      Bottom: 800
+      Top: 1400
+      BaseFollowsCondensation: 1
+      NoiseScale: 4200
+      DetailScale: 380
+      DetailStrength: 0.45
+      Stretch: 1
+      BaseSoftness: 0.06
+      TopSoftness: 0.5
+      Convection: 0.8
+      Density: 1
+      CoverageBias: 0
+      CoverageScale: 1
+      CoverageOnset: 0
+      WindScale: 1
+      CarriesRain: 1
+      GrowsStorms: 1
+      ShadedTint: {r: 0.62, g: 0.68, b: 0.82, a: 1}
+    - Name: Alto
+      Bottom: 3600
+      Top: 4600
+      BaseFollowsCondensation: 0
+      NoiseScale: 9000
+      DetailScale: 700
+      DetailStrength: 0.25
+      Stretch: 1
+      BaseSoftness: 0.3
+      TopSoftness: 0.4
+      Convection: 0.2
+      Density: 0.5
+      CoverageBias: 0
+      CoverageScale: 1
+      CoverageOnset: 0.55
+      WindScale: 1.7
+      CarriesRain: 0
+      GrowsStorms: 0
+      ShadedTint: {r: 0.66, g: 0.7, b: 0.8, a: 1}
+    - Name: Cirrus
+      Bottom: 7500
+      Top: 8600
+      BaseFollowsCondensation: 0
+      NoiseScale: 14000
+      DetailScale: 1200
+      DetailStrength: 0.2
+      Stretch: 8
+      BaseSoftness: 0.35
+      TopSoftness: 0.45
+      Convection: 0
+      Density: 0.18
+      CoverageBias: 0.3
+      CoverageScale: -0.35
+      CoverageOnset: 0
+      WindScale: 3
+      CarriesRain: 0
+      GrowsStorms: 0
+      ShadedTint: {r: 0.8, g: 0.84, b: 0.92, a: 1}
     CurvatureRadiusKm: 6371
-    ShapeScale: 7000
-    DetailScale: 700
-    DetailStrength: 0.35
+    CoverageCutClear: 0.662
+    CoverageCutFull: 0.575
+    CoverageBend: 0.15
+    EdgeSoftness: 0.06
+    HazeDistance: 42000
+    DetailFadeStart: 2500
+    DetailFadeRange: 9000
     Density: 1.1
     LightSteps: 6
     Powder: 0.7
     ForwardScatter: 0.6
     Ambient: 1.2
+    ShadedTint: {r: 0.62, g: 0.68, b: 0.82, a: 1}
+    ShadedTintStrength: 0.55
     MaxDistance: 90000
     TemporalBlend: 0.9
     ShadowStrength: 0.8

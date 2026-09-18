@@ -7,6 +7,8 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Client;
 using FishMMO.Shared;
+using FishMMO.TestHarness.World;
+using FishMMO.TestHarness.World.Editor;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 using FishMMO.Shared.WorldDesign;
@@ -242,7 +244,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		/// The first day (within four years) whose local time <paramref name="time"/> satisfies the
 		/// stage's wish, or the stage's own day when nothing does.
 		/// </summary>
-		private static float FindDay(SkySimController controller, Stage stage)
+		private static float FindDay(WorldSimController controller, Stage stage)
 		{
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = controller.Body;
@@ -269,7 +271,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		/// <summary>The time of day whose sun sits nearest the wanted altitude, on the stage's day.</summary>
-		private static double FindTime(SkySimController controller, Stage stage)
+		private static double FindTime(WorldSimController controller, Stage stage)
 		{
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = controller.Body;
@@ -325,11 +327,11 @@ namespace FishMMO.TestHarness.Sky.Editor
 			Directory.CreateDirectory(outputDirectory);
 			SessionState.SetString(StateKey, outputDirectory);
 
-			if (!File.Exists(SkySimSceneGenerator.ScenePath) || Environment.GetEnvironmentVariable("FISHMMO_SKY_REGENERATE") == "1")
+			if (!File.Exists(WorldSimSceneGenerator.ScenePath) || Environment.GetEnvironmentVariable("FISHMMO_SKY_REGENERATE") == "1")
 			{
-				SkySimSceneGenerator.Generate();
+				WorldSimSceneGenerator.Generate();
 			}
-			EditorSceneManager.OpenScene(SkySimSceneGenerator.ScenePath, OpenSceneMode.Single);
+			EditorSceneManager.OpenScene(WorldSimSceneGenerator.ScenePath, OpenSceneMode.Single);
 			EditorApplication.playModeStateChanged -= OnPlayMode;
 			EditorApplication.playModeStateChanged += OnPlayMode;
 			EditorApplication.EnterPlaymode();
@@ -387,7 +389,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			EditorApplication.update += Pump;
 		}
 
-		private static SkySimController Controller() => UnityEngine.Object.FindFirstObjectByType<SkySimController>();
+		private static WorldSimController Controller() => UnityEngine.Object.FindFirstObjectByType<WorldSimController>();
 
 		/// <summary>
 		/// True when <c>FISHMMO_SKY_RENDER_ONLY</c> names other stages: a comma-separated list, for
@@ -414,7 +416,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		{
 			try
 			{
-				SkySimController controller = Controller();
+				WorldSimController controller = Controller();
 				if (controller == null)
 				{
 					return;
@@ -458,7 +460,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			}
 		}
 
-		private static void Start(SkySimController controller, Stage stage)
+		private static void Start(WorldSimController controller, Stage stage)
 		{
 			QualitySettings.SetQualityLevel(Mathf.Clamp(stage.Quality, 0, QualitySettings.names.Length - 1), true);
 			controller.Paused = true;
@@ -466,7 +468,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			controller.Latitude = stage.Latitude;
 			controller.DayOfYear = stage.Want != null ? FindDay(controller, stage) : stage.Day;
 			controller.TimeOfDay = stage.SunAltitudeWanted.HasValue ? FindTime(controller, stage) : stage.Time;
-			controller.Weather = stage.Weather;
+			controller.SkyWeather = stage.Weather;
 			controller.Temperature = stage.Temperature;
 			controller.Camera.transform.rotation = Quaternion.Euler(stage.CameraEuler);
 			if (stage.CameraHeight > 0f)
@@ -482,7 +484,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			stageStarted = EditorApplication.timeSinceStartup;
 		}
 
-		private static WorldBody BodyNamed(SkySimController controller, string name)
+		private static WorldBody BodyNamed(WorldSimController controller, string name)
 		{
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			if (string.IsNullOrEmpty(name))
@@ -500,7 +502,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		/// <summary>The first day whose local midnight has a lit, unshadowed moon well up.</summary>
-		private static float MoonlitNight(SkySimController controller, float latitude)
+		private static float MoonlitNight(WorldSimController controller, float latitude)
 		{
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = controller.Body;
@@ -531,7 +533,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		private static float moonAzimuth;
 		private static float moonAltitude;
 
-		private static void Finish(SkySimController controller, Stage stage)
+		private static void Finish(WorldSimController controller, Stage stage)
 		{
 			string path = Path.Combine(outputDirectory, $"SkySim-{stageIndex:00}-{stage.Name}.png");
 			if (stage.ExpectMoon)
@@ -648,7 +650,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		/// writes it for the Solar System page's Cost panel. The camera renders nothing but sky and
 		/// the test bed's few landmarks, so the number is the sky's own cost on this renderer.
 		/// </summary>
-		private static void MeasureCost(SkySimController controller)
+		private static void MeasureCost(WorldSimController controller)
 		{
 			const int WarmUp = 10;
 			const int Frames = 60;
@@ -663,7 +665,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			controller.Latitude = 20f;
 			controller.DayOfYear = 199f;
 			controller.TimeOfDay = 0.0;
-			controller.Weather = WeatherFrame.Clear;
+			controller.SkyWeather = WeatherFrame.Clear;
 			controller.Camera.transform.rotation = Quaternion.Euler(-30f, 180f, 0f);
 
 			var report = new SkyCostReport();
@@ -717,7 +719,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		private static bool skipped;
 
 		/// <summary>Whether a stage's content is absent, so it is skipped rather than failed.</summary>
-		private static bool Missing(SkySimController controller, Stage stage, out string why)
+		private static bool Missing(WorldSimController controller, Stage stage, out string why)
 		{
 			why = null;
 			if (!string.IsNullOrEmpty(stage.Requires) && NamedBody(controller, stage.Requires) == null)
@@ -734,7 +736,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		/// <summary>A body anywhere in the system by name: comets and stars are not stood on, so the controller does not list them.</summary>
-		private static CelestialBody NamedBody(SkySimController controller, string name)
+		private static CelestialBody NamedBody(WorldSimController controller, string name)
 		{
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			if (system == null)
@@ -771,7 +773,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		/// How bright the sky is in a ring around the sun: where shafts live, but outside the sun's
 		/// own disc and halo, so the measure is of the rays and not of the sun.
 		/// </summary>
-		private static float MeasureSunGlow(SkySimController controller)
+		private static float MeasureSunGlow(WorldSimController controller)
 		{
 			Camera camera = controller.Camera;
 			CelestialState state = controller.State;
@@ -844,7 +846,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		/// <summary>How mottled the ground is: the spread of brightness across the lower frame.</summary>
-		private static float MeasureGroundVariance(SkySimController controller)
+		private static float MeasureGroundVariance(WorldSimController controller)
 		{
 			Texture2D image = Shoot(controller);
 			try
@@ -877,7 +879,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		/// <summary>One frame from the sim camera, read back for measuring. The caller destroys it.</summary>
-		private static Texture2D Shoot(SkySimController controller)
+		private static Texture2D Shoot(WorldSimController controller)
 		{
 			Camera camera = controller.Camera;
 			var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
@@ -949,7 +951,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 
 		private static float lastCloudCover;
 
-		private static void Capture(SkySimController controller, string path)
+		private static void Capture(WorldSimController controller, string path)
 		{
 			Camera camera = controller.Camera;
 			var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
@@ -987,7 +989,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		/// <summary>Redirects the panel into a texture (once) and blends the last panel frame over the image.</summary>
-		private static void OverlayPanel(SkySimController controller, Texture2D image)
+		private static void OverlayPanel(WorldSimController controller, Texture2D image)
 		{
 			UIDocument document = controller.GetComponent<UIDocument>();
 			if (document == null || document.panelSettings == null)

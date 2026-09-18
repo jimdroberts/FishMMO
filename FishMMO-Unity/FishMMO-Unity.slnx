@@ -17,7 +17,7 @@
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="FishMMO.GeneratedFiles.Editor.csproj" />
   <Project Path="FishMMO.UnitTests.PlayMode.csproj" />
-  <Project Path="FishMMO.TestHarness.Sky.Editor.csproj" />
+  <Project Path="FishMMO.TestHarness.World.csproj" />
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
   <Project Path="FishMMO.TestHarness.Weather.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.csproj" />
@@ -26,8 +26,6 @@
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="FishMMO.Shared.NameGenerator.Editor.csproj" />
   <Project Path="FishMMO.Shared.Map.Editor.csproj" />
-  <Project Path="FishMMO.TestHarness.Weather.csproj" />
-  <Project Path="FishMMO.TestHarness.Sky.csproj" />
   <Project Path="FishMMO.MockContent.Editor.csproj" />
   <Project Path="FishMMO.Shared.Biomes.Editor.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
@@ -35,6 +33,8 @@
   <Project Path="FishMMO.Client.Weather.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
+  <Project Path="FishMMO.TestHarness.Sky.Editor.csproj" />
+  <Project Path="FishMMO.TestHarness.World.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.Editor.csproj" />
   <Project Path="FishMMO.Shared.Housing.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />

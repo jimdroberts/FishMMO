@@ -2,7 +2,8 @@
     "name": "FishMMO.TestHarness.Weather.Editor",
     "rootNamespace": "FishMMO.TestHarness.Weather.Editor",
     "references": [
-        "FishMMO.TestHarness.Weather",
+        "FishMMO.TestHarness.World.Editor",
+        "FishMMO.TestHarness.World",
         "FishMMO.Client",
         "FishMMO.Client.Weather.Editor",
         "FishMMO.Shared",
