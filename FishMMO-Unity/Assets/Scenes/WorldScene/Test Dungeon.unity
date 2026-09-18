@@ -42,7 +42,8 @@ RenderSettings:
 --- !u!157 &3
 LightmapSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 12
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
   m_GISettings:
     serializedVersion: 2
     m_BounceScale: 1
@@ -147,21 +148,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1dd7ed21472896145913b33dc80349f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxClients: 6
+  maxClients: 6
+  MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 0}
-  DefaultSceneFog: {fileID: 0}
-  DayNightCycle: 1
-  DayCycleDuration: 10800
-  NightCycleDuration: 10800
-  DaySkyboxMaterial: {fileID: 0}
-  NightSkyBoxMaterial: {fileID: 0}
-  RotateObjects: []
-  DayObjects: []
-  NightObjects: []
-  FadeThreshold: 1
-  DayFadeObjects: []
-  NightFadeObjects: []
-  isDaytime: 1
+  climate: {fileID: 0}
+  biomeMap: {fileID: 0}
+  RuntimeTemperatureOffset: 0
+  RuntimeHumidityOffset: 0
 --- !u!4 &56186322
 Transform:
   m_ObjectHideFlags: 0
@@ -244,7 +237,7 @@ Terrain:
   m_StaticShadowCaster: 0
   m_IgnoreQualitySettings: 0
   m_ReflectionProbeUsage: 1
-  m_MaterialTemplate: {fileID: 2100000, guid: 594ea882c5a793440b60ff72d896021e, type: 2}
+  m_MaterialTemplate: {fileID: 2100000, guid: 545226bc09f1e4c3795b4370bdecfd77, type: 2}
   m_BakeLightProbesForTrees: 1
   m_PreserveTreePrototypeLayers: 0
   m_DeringLightProbesForTrees: 1
@@ -256,6 +249,7 @@ Terrain:
   m_AllowAutoConnect: 1
   m_EnableHeightmapRayTracing: 1
   m_EnableTreesAndDetailsRayTracing: 0
+  m_EnableHeightmapLODFrustumCulling: 1
   m_TreeMotionVectorModeOverride: 3
 --- !u!4 &405169472
 Transform:
@@ -435,7 +429,7 @@ Transform:
   m_GameObject: {fileID: 2026090511}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 13.0, y: 4.4215527, z: -8.5}
+  m_LocalPosition: {x: 13, y: 4.4215527, z: -8.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -525,7 +519,7 @@ Transform:
   m_GameObject: {fileID: 2026090531}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 17.0, y: 4.4215527, z: -2.5}
+  m_LocalPosition: {x: 17, y: 4.4215527, z: -2.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -551,7 +545,7 @@ SceneRoots:
   - {fileID: 56186322}
   - {fileID: 405169472}
   - {fileID: 1530379426}
-  - {fileID: 2026090501}
-  - {fileID: 2026090511}
-  - {fileID: 2026090521}
-  - {fileID: 2026090531}
+  - {fileID: 2026090502}
+  - {fileID: 2026090512}
+  - {fileID: 2026090522}
+  - {fileID: 2026090532}

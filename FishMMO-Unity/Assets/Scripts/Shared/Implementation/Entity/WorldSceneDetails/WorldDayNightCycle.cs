@@ -109,6 +109,17 @@ namespace FishMMO.Shared
 		public static double? PreviewLocalTime01;
 		/// <summary>A latitude to show instead of the scene's.</summary>
 		public static double? PreviewLatitude;
+		/// <summary>A longitude to show instead of the scene's.</summary>
+		public static double? PreviewLongitude;
+		/// <summary>A scene heading to show instead of the atlas entry's.</summary>
+		public static float? PreviewHeading;
+		/// <summary>A planet or moon to stand on instead of the scene's (test scenes and previews).</summary>
+		public static WorldBody PreviewBody;
+		/// <summary>
+		/// Whether a preview's own clock runs on from <see cref="PreviewHours"/>. Off for a preview
+		/// that advances <see cref="PreviewHours"/> itself, so time does not run twice.
+		/// </summary>
+		public static bool PreviewClockAdvances = true;
 
 		/// <summary>The sky of this scene, as last computed.</summary>
 		public CelestialState State { get; } = new CelestialState();
@@ -136,6 +147,7 @@ namespace FishMMO.Shared
 		private float fadeTime;
 		private MaterialPropertyBlock fadePropertyBlock;
 		private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+		private static readonly int VisiblePropertyId = Shader.PropertyToID("_FishVisible");
 		private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
 		private void Awake()
@@ -233,14 +245,16 @@ namespace FishMMO.Shared
 		private void Evaluate()
 		{
 			// A preview's clock still runs, from the chosen moment.
-			double hours = PreviewHours.HasValue ? PreviewHours.Value + Time.timeAsDouble / 3600.0 : WorldTime.CurrentHours(timeManager);
+			double hours = PreviewHours.HasValue
+				? PreviewHours.Value + (PreviewClockAdvances ? Time.timeAsDouble / 3600.0 : 0.0)
+				: WorldTime.CurrentHours(timeManager);
 			ClockHours = hours;
 			WorldSceneSettings settings = SceneSettings();
 			SolarSystemProfile system = SolarSystemProfile.Active;
-			WorldBody body = SceneTime.BodyOf(settings);
+			WorldBody body = PreviewBody != null ? PreviewBody : SceneTime.BodyOf(settings);
 			double latitude = PreviewLatitude ?? (settings != null ? settings.Latitude : 0.0);
-			double longitude = settings != null ? settings.Longitude : 0.0;
-			float heading = settings != null && settings.AtlasEntry != null ? settings.AtlasEntry.HeadingDegrees : 0f;
+			double longitude = PreviewLongitude ?? (settings != null ? settings.Longitude : 0.0);
+			float heading = PreviewHeading ?? (settings != null && settings.AtlasEntry != null ? settings.AtlasEntry.HeadingDegrees : 0f);
 
 			double? fixedTime = PreviewLocalTime01 ?? (settings != null && settings.TimeMode == SceneTimeMode.Fixed ? settings.FixedTimeOfDay01 : (double?)null);
 			if (fixedTime.HasValue && system != null && body != null)
@@ -448,8 +462,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Fades transparent renderers by alpha; opaque ones cannot show alpha, so they switch on
-		/// or off at the midpoint of the fade.
+		/// Fades renderers out and in. A transparent material fades by alpha. An opaque one on a
+		/// weather shader dissolves through its dither pattern, pixel by pixel. An opaque material
+		/// on any other shader can do neither, so it switches at its own point in the fade, spread
+		/// deterministically across it: the group then thins out instead of popping at once.
 		/// </summary>
 		private void SetVisibility(Renderer[] renderers, float visibility)
 		{
@@ -468,7 +484,16 @@ namespace FishMMO.Shared
 				bool transparent = shared != null && shared.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.GeometryLast + 1;
 				if (!transparent)
 				{
-					r.enabled = visibility >= 0.5f;
+					if (shared != null && shared.HasProperty(VisiblePropertyId))
+					{
+						// A weather shader dissolves: it clips the pixels the pattern says are gone.
+						r.enabled = visibility > 0.001f;
+						r.GetPropertyBlock(fadePropertyBlock);
+						fadePropertyBlock.SetFloat(VisiblePropertyId, visibility);
+						r.SetPropertyBlock(fadePropertyBlock);
+						continue;
+					}
+					r.enabled = visibility >= SwitchPointOf(r);
 					continue;
 				}
 				r.enabled = visibility > 0.001f;
@@ -487,6 +512,16 @@ namespace FishMMO.Shared
 				fadePropertyBlock.SetColor(ColorPropertyId, baseColor);
 				r.SetPropertyBlock(fadePropertyBlock);
 			}
+		}
+
+		/// <summary>
+		/// Where in the fade one renderer switches, 0.15..0.85. Stable for a renderer, so the same
+		/// object always turns at the same moment and the group's dissolve does not shimmer.
+		/// </summary>
+		private static float SwitchPointOf(Renderer renderer)
+		{
+			uint hash = (uint)renderer.GetInstanceID() * 2654435761u;
+			return 0.15f + 0.7f * ((hash >> 8 & 0xFFFF) / 65535f);
 		}
 
 		private void InvokeTriggers(List<WorldSceneTrigger> triggers)

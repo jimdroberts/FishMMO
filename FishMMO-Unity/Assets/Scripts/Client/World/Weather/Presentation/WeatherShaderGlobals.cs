@@ -15,12 +15,23 @@ namespace FishMMO.Client
 		public static readonly int Fog = Shader.PropertyToID("_FishWeatherFog");
 		public static readonly int Cover = Shader.PropertyToID("_FishWeatherCover");
 		public static readonly int Misc = Shader.PropertyToID("_FishWeatherMisc");
+		public static readonly int Tier = Shader.PropertyToID("_FishWeatherTier");
+		public static readonly int Mix = Shader.PropertyToID("_FishWeatherMix");
 
 		/// <summary>The wind's ground-plane direction (world x, z) for a heading in degrees.</summary>
 		public static Vector2 WindDirection(float headingDegrees)
 		{
 			float h = headingDegrees * Mathf.Deg2Rad;
 			return new Vector2(Mathf.Sin(h), Mathf.Cos(h));
+		}
+
+		/// <summary>
+		/// What the quality tier allows a surface to do. Set apart from the weather itself, because
+		/// it changes when the player changes quality, not when the weather turns.
+		/// </summary>
+		public static void ApplyTier(bool terrainSnowDisplacement)
+		{
+			Shader.SetGlobalVector(Tier, new Vector4(terrainSnowDisplacement ? 1f : 0f, 0f, 0f, 0f));
 		}
 
 		public static void Apply(in WeatherFrame frame, in WeatherCover cover, float temperature, float shelter, float time, float lightningFlash)
@@ -32,6 +43,10 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(Fog, new Vector4(frame[WeatherChannel.FogDensity], frame[WeatherChannel.FogHeight], frame[WeatherChannel.VolumetricFog], 0f));
 			Shader.SetGlobalVector(Cover, new Vector4(cover.Snow, cover.Wet, cover.Ash, cover.Sand));
 			Shader.SetGlobalVector(Misc, new Vector4(frame[WeatherChannel.Aurora], temperature, shelter, time));
+			// What is falling, kind by kind. A surface needs to know: rain rings a puddle, hail does
+			// not, and snow does neither.
+			Shader.SetGlobalVector(Mix, new Vector4(frame[WeatherChannel.RainWeight], frame[WeatherChannel.SnowWeight],
+				frame[WeatherChannel.HailWeight], frame[WeatherChannel.AshWeight] + frame[WeatherChannel.SandWeight]));
 		}
 
 		/// <summary>Calm, dry, clear.</summary>

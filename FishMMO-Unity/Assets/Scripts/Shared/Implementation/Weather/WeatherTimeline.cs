@@ -37,7 +37,45 @@ namespace FishMMO.Shared.Weather
 		// ── Evaluation ────────────────────────────────────────────────
 
 		/// <summary>Adds the scene-wide layers (and a fixed preset) to an accumulator.</summary>
-		public void AccumulateSceneLayers(uint tick, ref WeatherAccumulator accumulator)
+		/// <summary>
+		/// How long the weather going out should hold on while the weather coming in rises, as a
+		/// share of the transition.
+		/// </summary>
+		/// <remarks>
+		/// Cloud cover and fog blend by taking the greater of the layers over them. Fade one layer
+		/// out while another fades in and the two ramps cross halfway down, so a sky going from
+		/// overcast to storm passes through half-clear on the way — weather, then nothing, then
+		/// weather. Holding the outgoing layer up while the incoming one rises hands the sky over
+		/// instead: the greater of the two is always most of one of them.
+		/// </remarks>
+		public const float HandoverHold = 0.55f;
+
+		/// <summary>The window the weather going out fades over, given the whole transition.</summary>
+		public static void OutgoingWindow(uint now, uint end, out uint start, out uint finish)
+		{
+			uint span = end > now ? end - now : 0u;
+			start = now + (uint)(span * HandoverHold);
+			finish = end;
+		}
+
+		/// <summary>The window the weather coming in rises over. It starts at once and finishes early.</summary>
+		public static void IncomingWindow(uint now, uint end, out uint start, out uint finish)
+		{
+			uint span = end > now ? end - now : 0u;
+			start = now;
+			finish = now + (uint)(span * (1f - HandoverHold * 0.5f));
+		}
+
+		/// <summary>
+		/// Adds the scene's own layers to an accumulator.
+		/// </summary>
+		/// <param name="temperature">
+		/// The local temperature, or NaN not to care. A layer whose template says it only applies
+		/// within a range of temperatures is left out when the scene is outside it: snow does not
+		/// fall on the desert, whatever a script asks for. Callers that only want to know what the
+		/// scene was told — a map, the lightning schedule — pass NaN.
+		/// </param>
+		public void AccumulateSceneLayers(uint tick, ref WeatherAccumulator accumulator, float temperature = float.NaN)
 		{
 			if (SceneMode == WeatherSceneMode.Fixed)
 			{
@@ -56,7 +94,7 @@ namespace FishMMO.Shared.Weather
 					continue;
 				}
 				WeatherLayerTemplate template = WeatherLayerTemplate.Get<WeatherLayerTemplate>(entry.TemplateID);
-				if (template != null)
+				if (template != null && (float.IsNaN(temperature) || template.AllowsTemperature(temperature)))
 				{
 					accumulator.Add(template.Evaluate(intensity), 1f);
 				}

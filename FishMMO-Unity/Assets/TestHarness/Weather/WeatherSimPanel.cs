@@ -25,6 +25,7 @@ namespace FishMMO.TestHarness.Weather
 		private Label readout;
 		private Label coverLabel;
 		private Slider transition;
+		private VisualElement cloudSection;
 		private readonly Dictionary<WeatherLayerKind, Slider> layerSliders = new Dictionary<WeatherLayerKind, Slider>();
 		private readonly List<Button> presetButtons = new List<Button>();
 		private float refresh;
@@ -167,6 +168,12 @@ namespace FishMMO.TestHarness.Weather
 				panel.Add(slider);
 			}
 
+			// Everything about the clouds, on live controls. Rebuilt in place when a band is added
+			// or removed, because the section's shape changes with the list.
+			cloudSection = new VisualElement();
+			panel.Add(cloudSection);
+			BuildCloudSection();
+
 			panel.Add(Heading("World"));
 			panel.Add(LabeledSlider("Temperature", -1f, 1f, Controller.Temperature, v => Controller.Temperature = v));
 			panel.Add(LabeledSlider("Time of day", 0f, 1f, (float)Controller.TimeOfDay, v => Controller.TimeOfDay = v));
@@ -176,11 +183,60 @@ namespace FishMMO.TestHarness.Weather
 			quality.labelElement.style.color = Text;
 			quality.RegisterValueChangedCallback(evt => QualitySettings.SetQualityLevel(Array.IndexOf(QualitySettings.names, evt.newValue), true));
 			panel.Add(quality);
+			// ── Ground ──
+			// Cover takes a quarter of an hour of weather to build, which is no way to look at a
+			// wet street or a snowed-in courtyard. These hold it at a depth instead, and the
+			// surfaces show it at once. "Let it settle" hands the ground back to the weather.
+			panel.Add(Heading("Ground (held)"));
+			panel.Add(LabeledSlider("Snow", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Snow = v)));
+			panel.Add(LabeledSlider("Wet", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Wet = v)));
+			panel.Add(LabeledSlider("Ash", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Ash = v)));
+			panel.Add(LabeledSlider("Sand", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Sand = v)));
+
+			var match = new Toggle("Match temperature to preset") { value = Controller.MatchTemperature };
+			match.labelElement.style.color = Text;
+			match.tooltip = "Clicking a snow preset in a warm scene otherwise gives rain: falling snow turns to rain above freezing, and a snow layer does not apply outside its own range at all.";
+			match.RegisterValueChangedCallback(evt => Controller.MatchTemperature = evt.newValue);
+			panel.Add(match);
+
 			var toolRow = new VisualElement();
 			toolRow.style.flexDirection = FlexDirection.Row;
 			toolRow.Add(SmallButton("Reset cover", Controller.ResetCover));
+			toolRow.Add(SmallButton("Let it settle", () => Controller.CoverOverride = null));
+			toolRow.Add(SmallButton("+15 min", () => Controller.AdvanceCover(900f)));
 			panel.Add(toolRow);
 
+		}
+
+		/// <summary>
+		/// Holds the ground's cover where the sliders put it. Changing one keeps the others, so a
+		/// wet, ash-dusted street is one drag away from a dry one.
+		/// </summary>
+		private void HoldCover(RefAction<WeatherCover> change)
+		{
+			WeatherCover cover = Controller.CoverOverride ?? Controller.Timeline.Cover;
+			change(ref cover);
+			Controller.CoverOverride = cover;
+		}
+
+		private delegate void RefAction<T>(ref T value);
+
+		/// <summary>Draws the cloud controls, and redraws them when the bands change.</summary>
+		private void BuildCloudSection()
+		{
+			if (cloudSection == null)
+			{
+				return;
+			}
+			cloudSection.Clear();
+			WeatherRenderProfile profile = Controller != null && Controller.Presentation != null ? Controller.Presentation.Profile : null;
+			profile = profile != null ? profile : WeatherRenderProfile.Active;
+			if (profile == null)
+			{
+				cloudSection.Add(new Label("No weather render profile in the scene, so there is nothing to tune."));
+				return;
+			}
+			CloudControls.Build(cloudSection, profile, BuildCloudSection);
 		}
 
 		private static string SkyLine(CultureInfo culture)
@@ -217,7 +273,9 @@ namespace FishMMO.TestHarness.Weather
 				$"Temperature {sample.Temperature.ToString("+0.00;-0.00", culture)} · {(sample.IsSheltered ? "sheltered" : "exposed")} · sky map {(occlusion ? "ready" : "building")} · {QualitySettings.names[QualitySettings.GetQualityLevel()]}\n" +
 				SkyLine(culture);
 			WeatherCover cover = Controller.Timeline.Cover;
-			coverLabel.text = $"Ground: snow {cover.Snow.ToString("0.00", culture)} · wet {cover.Wet.ToString("0.00", culture)} · ash {cover.Ash.ToString("0.00", culture)} · sand {cover.Sand.ToString("0.00", culture)}";
+			coverLabel.text = (Controller.PresetTemperature.HasValue
+				? $"The preset moved the scene to {Controller.PresetTemperature.Value.ToString("0.00", culture)}°.\n"
+				: string.Empty) + $"Ground: snow {cover.Snow.ToString("0.00", culture)} · wet {cover.Wet.ToString("0.00", culture)} · ash {cover.Ash.ToString("0.00", culture)} · sand {cover.Sand.ToString("0.00", culture)}";
 			foreach (Button button in presetButtons)
 			{
 				bool active = ReferenceEquals(button.userData, Controller.ActivePreset);

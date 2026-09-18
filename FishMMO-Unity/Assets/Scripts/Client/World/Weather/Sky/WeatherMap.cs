@@ -15,6 +15,12 @@ namespace FishMMO.Client
 	{
 		public const int DefaultResolution = 128;
 		public const float DefaultSizeMeters = 12000f;
+
+		/// <summary>
+		/// How far a cell's cloud reaches compared with its rain. A point this much nearer the
+		/// centre stands in for the real one, so the same falloff covers a wider circle.
+		/// </summary>
+		public const float CloudShieldScale = 0.55f;
 		public static readonly int TextureId = Shader.PropertyToID("_FishWeatherMap");
 		public static readonly int RectId = Shader.PropertyToID("_FishWeatherMapRect");
 		public static readonly int ParamsId = Shader.PropertyToID("_FishWeatherMapParams");
@@ -41,7 +47,16 @@ namespace FishMMO.Client
 				{
 					StormCell cell = timeline.Cells[i];
 					float weight = cell.InfluenceAt(position, tick, timeline.TickDelta);
-					if (weight <= 0f)
+					// A storm's cloud reaches well beyond its rain: the shield is drawn by asking
+					// the cell about a point pulled toward its centre, which is the same falloff
+					// over a wider circle. Without it a cell is a rain shaft under a clear sky.
+					Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
+					var shieldPoint = new Vector3(
+						centre.x + (position.x - centre.x) * CloudShieldScale,
+						position.y,
+						centre.y + (position.z - centre.y) * CloudShieldScale);
+					float shield = cell.InfluenceAt(shieldPoint, tick, timeline.TickDelta);
+					if (weight <= 0f && shield <= 0f)
 					{
 						continue;
 					}
@@ -51,7 +66,7 @@ namespace FishMMO.Client
 						continue;
 					}
 					WeatherFrame frame = preset.Evaluate();
-					cover = Mathf.Max(cover, frame[WeatherChannel.CloudCover] * weight);
+					cover = Mathf.Max(cover, frame[WeatherChannel.CloudCover] * shield);
 					float p = frame[WeatherChannel.Precipitation] * weight;
 					precipitation = 1f - (1f - precipitation) * (1f - p);
 					snow = Mathf.Max(snow, p * frame[WeatherChannel.SnowWeight]);

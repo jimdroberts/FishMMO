@@ -76,6 +76,11 @@ namespace FishMMO.TestHarness.Weather.Editor
 
 			Box("Ground", new Vector3(0f, -0.5f, 0f), new Vector3(300f, 1f, 300f), ground, null);
 
+			// A hill of real terrain beside the flat ground. The world's terrain is on its own
+			// shader — a fork of Unity's, with its own snow that lifts the ground it lies on — and
+			// none of that is exercised by boxes.
+			BuildTerrain();
+
 			// A closed house: walls, a door gap, a roof, and a shelter volume inside.
 			var house = new GameObject("House");
 			house.transform.position = new Vector3(8f, 0f, 10f);
@@ -180,6 +185,58 @@ namespace FishMMO.TestHarness.Weather.Editor
 			return ordered;
 		}
 
+		/// <summary>
+		/// A small terrain hill, on the project's weather terrain material. Its heights are a smooth
+		/// mound, so a slope, a shoulder and a flat top all show at once: snow settles on the top,
+		/// thins on the shoulder and sheds off the slope.
+		/// </summary>
+		private static void BuildTerrain()
+		{
+			const int Resolution = 129;
+			const float Size = 120f;
+			TerrainData data = AssetDatabase.LoadAssetAtPath<TerrainData>(TerrainDataPath);
+			if (data == null)
+			{
+				data = new TerrainData
+				{
+					heightmapResolution = Resolution,
+					size = new Vector3(Size, 18f, Size),
+				};
+				var heights = new float[Resolution, Resolution];
+				for (int z = 0; z < Resolution; z++)
+				{
+					for (int x = 0; x < Resolution; x++)
+					{
+						float u = (x / (float)(Resolution - 1)) * 2f - 1f;
+						float v = (z / (float)(Resolution - 1)) * 2f - 1f;
+						float distance = Mathf.Sqrt(u * u + v * v);
+						// A mound that reaches zero at the edge, so it meets the flat ground cleanly.
+						float mound = Mathf.Cos(Mathf.Clamp01(distance) * Mathf.PI) * 0.5f + 0.5f;
+						heights[z, x] = mound * mound * 0.55f;
+					}
+				}
+				data.SetHeights(0, 0, heights);
+				AssetDatabase.CreateAsset(data, TerrainDataPath);
+			}
+
+			GameObject terrainObject = Terrain.CreateTerrainGameObject(data);
+			terrainObject.name = "Terrain Hill";
+			terrainObject.transform.position = new Vector3(0f, 0f, 60f);
+			var terrain = terrainObject.GetComponent<Terrain>();
+			Material material = AssetDatabase.LoadAssetAtPath<Material>(TerrainMaterialPath);
+			if (material != null)
+			{
+				terrain.materialTemplate = material;
+			}
+			else
+			{
+				Debug.LogWarning($"[Weather Sim] {TerrainMaterialPath} is missing, so the hill uses Unity's own terrain material and shows no weather. Weather Tools → Weather-proof terrain creates it.");
+			}
+		}
+
+		private const string TerrainDataPath = GeneratedFolder + "/Weather Sim Hill.asset";
+		private const string TerrainMaterialPath = "Assets/Prefabs/Client/Materials/Ground/Weather Terrain.mat";
+
 		private static Material MaterialAsset(string name, Color color)
 		{
 			string path = $"{GeneratedFolder}/{name}.mat";
@@ -188,7 +245,10 @@ namespace FishMMO.TestHarness.Weather.Editor
 			{
 				return material;
 			}
-			Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+			// The bed is here to show what the game draws, and the game's world is on the weather
+			// shader: rain wets these boxes and snow settles on them. Falling back to URP's own Lit
+			// would quietly give the bed a world the weather cannot touch.
+			Shader shader = Shader.Find("FishMMO/Weather Lit") ?? Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
 			material = new Material(shader) { name = name };
 			material.SetColor("_BaseColor", color);
 			material.color = color;

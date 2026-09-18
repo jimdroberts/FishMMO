@@ -93,6 +93,8 @@ namespace FishMMO.Shared.WorldDesign
 			addMenu.menu.AppendAction("Meteor shower", _ => AddShower());
 			addMenu.menu.AppendAction("Asteroid belt", _ => AddBelt());
 			toolbar.Add(addMenu);
+			toolbar.Add(new ToolbarButton(OpenSkySim) { text = "Open Sky Sim", tooltip = "Opens the sky test scene: press Play to stand on any body and see the real sky shader, rather than this page's diagram." });
+			toolbar.Add(new ToolbarButton(AddExampleSkyObjects) { text = "Add example sky objects", tooltip = "Adds a big textured companion world, a comet with a tail, an asteroid belt and a meteor shower, so every kind of sky object has one to look at. Existing ones are kept." });
 			toolbar.Add(new ToolbarButton(RemoveSelected) { text = "Remove", tooltip = "Removes the selected body from the system; you are then asked whether to delete its asset." });
 			toolbar.Add(new ToolbarButton(() => { if (selected != null) EditorGUIUtility.PingObject(selected); }) { text = "Ping" });
 			toolbar.Add(new ToolbarSpacer { flex = true });
@@ -631,6 +633,39 @@ namespace FishMMO.Shared.WorldDesign
 			Select(profile);
 		}
 
+		private const string SkySimScenePath = "Assets/Scenes/Test/SkySim.unity";
+
+		/// <summary>
+		/// Opens the sky test bed. This page draws a diagram — fast, and it needs no play mode — so
+		/// the real shader is looked at there instead.
+		/// </summary>
+		private void OpenSkySim()
+		{
+			if (!System.IO.File.Exists(SkySimScenePath))
+			{
+				EditorUtility.DisplayDialog("No Sky Sim scene",
+					$"{SkySimScenePath} does not exist yet. Generate it from the Weather Tools page: Test bed → Generate Sky Sim scene.", "OK");
+				return;
+			}
+			if (!UnityEditor.SceneManagement.EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+			{
+				return;
+			}
+			UnityEditor.SceneManagement.EditorSceneManager.OpenScene(SkySimScenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+		}
+
+		private void AddExampleSkyObjects()
+		{
+			if (profile == null)
+			{
+				EditorUtility.DisplayDialog("No system", "Create the example system first.", "OK");
+				return;
+			}
+			WorldBody companion = SkyObjectExamples.Add(profile);
+			RebuildBodyList();
+			Select(companion != null ? (UnityEngine.Object)companion : profile);
+		}
+
 		private void RemoveSelected()
 		{
 			if (profile == null || !(selected is CelestialBody body))
@@ -859,7 +894,34 @@ namespace FishMMO.Shared.WorldDesign
 			double ms = 0.25 + discs * 0.004 + comets * 0.03 + texturedCount * 0.02 + texturedShare * 0.035 + asteroids * 0.00008 + meteorBuffer * 0.0004;
 			AddPair(costPanel, "In this sky", $"{discs} disc(s), {texturedCount} textured body(ies) covering {texturedShare:0.##}% of the sky");
 			AddPair(costPanel, "Estimated sky pass", $"Performant {ms * 1.8:0.00} ms · Balanced {ms:0.00} ms · High {ms * 0.8:0.00} ms (budget 0.50 / 0.75 / 1.00)");
-			AddLine(costPanel, "Estimate only. The measured cost per tier comes from the render probe once the sky shader exists (phase P2).", new Color(0.7f, 0.7f, 0.7f, 1f));
+			ShowMeasuredCost();
+		}
+
+		/// <summary>
+		/// What the sky last cost when it was really drawn, if this machine has measured it. The
+		/// numbers come from the Sky Sim render probe (UI Tests → Render Sky Sim), which times the
+		/// sky pass on each tier; they describe THIS machine's renderer, not a player's.
+		/// </summary>
+		private void ShowMeasuredCost()
+		{
+			SkyCostReport measured = SkyCostReport.Load();
+			if (measured == null)
+			{
+				AddLine(costPanel, "Estimate only. Run UI Tests → Render Sky Sim to measure the sky pass on each tier on this machine.", new Color(0.7f, 0.7f, 0.7f, 1f));
+				return;
+			}
+			var parts = new List<string>();
+			foreach (SkyCostReport.Entry entry in measured.Entries)
+			{
+				parts.Add($"{entry.Tier} {entry.Milliseconds:0.00} ms");
+			}
+			AddPair(costPanel, "Measured sky pass", string.Join(" · ", parts));
+			SkyCostReport.Entry busiest = measured.Entries.Count > 0 ? measured.Entries[measured.Entries.Count - 1] : null;
+			if (busiest != null)
+			{
+				AddPair(costPanel, "Measured sky held", $"{busiest.Quads} quad(s), {busiest.Textured} textured body(ies), {busiest.StarCubemapSize}² stars, over {busiest.Frames} frames");
+			}
+			AddLine(costPanel, $"Measured {measured.Age()} on {measured.Machine} ({measured.Renderer}). A software renderer or another machine says nothing about a player's GPU; re-measure where it matters.", new Color(0.7f, 0.7f, 0.7f, 1f));
 		}
 
 		private void CostLine(string label, int count, int limit)

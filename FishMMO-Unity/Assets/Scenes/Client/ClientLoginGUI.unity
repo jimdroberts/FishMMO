@@ -358,8 +358,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1dd7ed21472896145913b33dc80349f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxClients: 100
+  maxClients: 100
+  MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 0}
+  climate: {fileID: 0}
+  biomeMap: {fileID: 0}
+  RuntimeTemperatureOffset: 0
+  RuntimeHumidityOffset: 0
 --- !u!4 &196838690
 Transform:
   m_ObjectHideFlags: 0
@@ -423,8 +428,6 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 0
-  CanDrag: 0
-  ClampToScreen: 1
   RefreshRate: 5
 --- !u!114 &390645905
 MonoBehaviour:
@@ -444,8 +447,6 @@ MonoBehaviour:
   CloseOnQuitToMenu: 0
   ReleasesCursor: 1
   CloseOnEscape: 0
-  CanDrag: 0
-  ClampToScreen: 1
 --- !u!114 &524869722
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -464,8 +465,6 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 0
-  CanDrag: 0
-  ClampToScreen: 1
   CharacterName: 
   RaceIndex: -1
   ModelIndex: -1
@@ -535,8 +534,6 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 0
-  CanDrag: 0
-  ClampToScreen: 1
   CinematicCamera: {fileID: 0}
 --- !u!1 &897130956
 GameObject:
@@ -800,8 +797,7 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 0
-  CanDrag: 0
-  ClampToScreen: 1
+  discordInviteUrl: 
 --- !u!114 &1802493048
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -891,7 +887,7 @@ Terrain:
   m_StaticShadowCaster: 0
   m_IgnoreQualitySettings: 0
   m_ReflectionProbeUsage: 1
-  m_MaterialTemplate: {fileID: 2100000, guid: 594ea882c5a793440b60ff72d896021e, type: 2}
+  m_MaterialTemplate: {fileID: 2100000, guid: 545226bc09f1e4c3795b4370bdecfd77, type: 2}
   m_BakeLightProbesForTrees: 1
   m_PreserveTreePrototypeLayers: 0
   m_DeringLightProbesForTrees: 1
@@ -903,6 +899,7 @@ Terrain:
   m_AllowAutoConnect: 1
   m_EnableHeightmapRayTracing: 1
   m_EnableTreesAndDetailsRayTracing: 0
+  m_EnableHeightmapLODFrustumCulling: 1
   m_TreeMotionVectorModeOverride: 3
 --- !u!4 &1804527659
 Transform:
@@ -7118,7 +7115,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1313084549837288661}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -7170,7 +7167,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -7564,7 +7561,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6086499326991594126}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 1
   m_Color: {r: 0.38039216, g: 0.38039216, b: 0.6313726, a: 1}
   m_Intensity: 1
@@ -7616,7 +7613,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1

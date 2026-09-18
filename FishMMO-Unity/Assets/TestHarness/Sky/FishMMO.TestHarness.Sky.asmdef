@@ -1,0 +1,25 @@
+{
+    "name": "FishMMO.TestHarness.Sky",
+    "rootNamespace": "FishMMO.TestHarness.Sky",
+    "references": [
+        "FishMMO.Client",
+        "FishMMO.Shared",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -297,29 +297,49 @@ namespace FishMMO.Client
 	public sealed class CloudShadowPresenter
 	{
 		private static readonly int CookieParamsId = Shader.PropertyToID("_CookieParams");
+		private static readonly int ShadowAreaId = Shader.PropertyToID("_FishCloudShadowArea");
+		private static readonly int ShadowOriginId = Shader.PropertyToID("_FishCloudShadowOrigin");
+		private static readonly int ShadowRightId = Shader.PropertyToID("_FishCloudShadowRight");
+		private static readonly int ShadowUpId = Shader.PropertyToID("_FishCloudShadowUp");
 		private RenderTexture cookie;
 		private float drawnCover = -1f;
 		private Light boundLight;
 		private Vector2 offset;
 
-		public void Update(Light light, Texture noise, Material cookieMaterial, float cover, float density, Vector2 windDirection, float windSpeed, float deltaTime, bool enabled)
+		/// <summary>
+		/// Redraws the shadow the clouds throw on the world, by marching the same volume the sky
+		/// draws — from each patch of ground toward the light — into a cookie on the sun.
+		/// </summary>
+		/// <remarks>
+		/// The cookie is a window on the world, not a tiling pattern: it covers a square around the
+		/// camera and moves with it, so the shadow under a cloud is the shadow of that cloud.
+		/// </remarks>
+		public void Update(Light light, Material cloudMaterial, Vector3 viewer, float areaMeters, float strength, int steps, bool enabled)
 		{
-			if (light == null || noise == null || cookieMaterial == null || !enabled || cover < 0.02f)
+			if (light == null || cloudMaterial == null || !enabled || !SkySystem.CloudsReady)
 			{
 				Clear(light);
 				return;
 			}
 			if (cookie == null)
 			{
-				cookie = new RenderTexture(256, 256, 0, RenderTextureFormat.ARGB32) { name = "Cloud Shadows", wrapMode = TextureWrapMode.Repeat, useMipMap = true, autoGenerateMips = true, hideFlags = HideFlags.DontSave };
+				cookie = new RenderTexture(256, 256, 0, RenderTextureFormat.R8) { name = "Cloud Shadows", wrapMode = TextureWrapMode.Clamp, useMipMap = false, hideFlags = HideFlags.DontSave };
 				cookie.Create();
 			}
-			if (Mathf.Abs(cover - drawnCover) > 0.02f)
-			{
-				cookieMaterial.SetVector(CookieParamsId, new Vector4(cover, Mathf.Lerp(0.35f, 0.7f, density), 0.12f, 0f));
-				Graphics.Blit(noise, cookie, cookieMaterial);
-				drawnCover = cover;
-			}
+			// The window is in the light's own plane, because that is the plane the light reads a
+			// cookie in. Snapped to a texel, so the shadow does not crawl as the camera moves.
+			Transform lightTransform = light.transform;
+			Vector3 local = lightTransform.InverseTransformPoint(viewer);
+			float texel = areaMeters / cookie.width;
+			local.x = Mathf.Round(local.x / texel) * texel;
+			local.y = Mathf.Round(local.y / texel) * texel;
+			Vector3 centre = lightTransform.TransformPoint(new Vector3(local.x, local.y, 0f));
+			cloudMaterial.SetVector(ShadowAreaId, new Vector4(0f, 0f, areaMeters, steps));
+			cloudMaterial.SetVector(ShadowOriginId, centre);
+			cloudMaterial.SetVector(ShadowRightId, lightTransform.right);
+			cloudMaterial.SetVector(ShadowUpId, lightTransform.up);
+			Graphics.Blit(null, cookie, cloudMaterial, 3);
+
 			if (boundLight != light)
 			{
 				Clear(boundLight);
@@ -331,9 +351,11 @@ namespace FishMMO.Client
 			{
 				data = light.gameObject.AddComponent<UniversalAdditionalLightData>();
 			}
-			data.lightCookieSize = new Vector2(3200f, 3200f);
-			offset += windDirection * (1.5f + windSpeed * 20f) * deltaTime;
-			data.lightCookieOffset = offset;
+			data.lightCookieSize = new Vector2(areaMeters, areaMeters);
+			// The cookie follows the camera: the window's middle sits where the viewer stands, in
+			// the light's plane, so the offset is that point measured in windows.
+			data.lightCookieOffset = new Vector2(-local.x / areaMeters, -local.y / areaMeters);
+			drawnCover = strength;
 		}
 
 		public void Clear(Light light)

@@ -22,6 +22,8 @@ namespace FishMMO.Client
 		public double LocalTime01;
 		public bool IsDaylight;
 		public WeatherCover Cover;
+		/// <summary>The weather without the storm cells: what the sky shows in the far distance.</summary>
+		public WeatherFrame Background;
 		public float Shelter;
 		/// <summary>Local temperature at the viewer, -1..1.</summary>
 		public float Temperature;

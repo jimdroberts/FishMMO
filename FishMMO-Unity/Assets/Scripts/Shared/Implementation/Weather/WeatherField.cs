@@ -8,6 +8,12 @@ namespace FishMMO.Shared.Weather
 	public struct WeatherSample
 	{
 		public WeatherFrame Frame;
+		/// <summary>
+		/// The weather here without the storm cells: the biome's own background and whatever scene
+		/// layers are running. The sky uses it for the far distance, where the weather map does not
+		/// reach — a cell overhead must not raise the coverage of the whole sky.
+		/// </summary>
+		public WeatherFrame Background;
 		public BiomeTemplate Biome;
 		/// <summary>Local climate temperature, runtime offsets included.</summary>
 		public float Temperature;
@@ -76,7 +82,9 @@ namespace FishMMO.Shared.Weather
 			{
 				profile?.AccumulateBackground(ref accumulator);
 			}
-			timeline.AccumulateSceneLayers(tick, ref accumulator);
+			timeline.AccumulateSceneLayers(tick, ref accumulator, sample.Temperature);
+			// Everything but the cells is the background, and the sky needs it on its own.
+			sample.Background = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
 			if (mode == WeatherSceneMode.Own)
 			{
 				for (int i = 0; i < timeline.Cells.Count; i++)

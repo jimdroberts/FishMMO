@@ -299,17 +299,59 @@ namespace FishMMO.UnitTests.AI
 			Assert.Greater(checkedScenes, 0, "no world scene has spawners; the check is vacuous");
 		}
 
-		[Test]
-		public void ABuiltWorldScene_ReferencesNoSpawnerAndNoSpawnerData()
+		/// <summary>
+		/// The GUIDs of every prefab the spawners of <paramref name="scenePath"/> can produce.
+		/// </summary>
+		/// <remarks>
+		/// These are what a leaking spawner would drag into a client's scene bundle: the prefab, and
+		/// through it the NPC's AI archetype and state templates. Nothing else in a world scene names
+		/// them, so their absence from the built scene is the measurable form of "the spawner is gone".
+		/// </remarks>
+		private static HashSet<string> SpawnedPrefabGuids(string scenePath)
 		{
-			/* The dependency calculation the scriptable build pipeline runs for every scene bundle.
-			 * It processes the scene as a player would load it, EditorOnly objects removed, so what
-			 * it reports is what a client downloads. The spawner's script, and the prefabs only a
-			 * spawner names, must not be in it. */
-			string spawnerScript = AssetDatabase.AssetPathToGUID(
-				"Assets/Scripts/Server/Implementation/World/SceneServer/Spawner/ObjectSpawner.cs");
-			Assert.IsNotEmpty(spawnerScript);
+			HashSet<string> guids = new HashSet<string>();
+			Scene scene = EditorSceneManager.OpenPreviewScene(scenePath);
+			try
+			{
+				foreach (ObjectSpawner spawner in SpawnTableBaker.CollectSpawners(scene))
+				{
+					if (spawner.Spawnables == null)
+					{
+						continue;
+					}
 
+					foreach (SpawnableSettings settings in spawner.Spawnables)
+					{
+						if (settings?.NetworkObject == null)
+						{
+							continue;
+						}
+
+						string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(settings.NetworkObject));
+						if (!string.IsNullOrEmpty(guid))
+						{
+							guids.Add(guid);
+						}
+					}
+				}
+			}
+			finally
+			{
+				EditorSceneManager.ClosePreviewScene(scene);
+			}
+			return guids;
+		}
+
+		/// <summary>
+		/// Every GUID a client would receive in <paramref name="scenePath"/>'s bundle.
+		/// </summary>
+		/// <remarks>
+		/// This is the dependency calculation the scriptable build pipeline runs for each scene
+		/// bundle: it processes the scene as a player loads it, with EditorOnly objects removed. It
+		/// leaves the scene it processed open as the active scene, so callers put an empty one back.
+		/// </remarks>
+		private static HashSet<string> BuiltSceneDependencies(string scenePath)
+		{
 			BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
 			BuildSettings settings = new BuildSettings
 			{
@@ -317,75 +359,171 @@ namespace FishMMO.UnitTests.AI
 				group = BuildPipeline.GetBuildTargetGroup(target),
 			};
 
+			SceneDependencyInfo info = ContentBuildInterface.CalculatePlayerDependenciesForScene(scenePath, settings, new BuildUsageTagSet());
+			return new HashSet<string>(info.referencedObjects.Select(o => o.guid.ToString()));
+		}
+
+		[Test]
+		public void ABuiltWorldScene_ReferencesNoSpawnerDataAndNoServerScript()
+		{
+			/* What a client downloads for a world scene. Two things must be absent: the prefabs only
+			 * a spawner names, and any script from the server assembly — the second catches an NPC
+			 * prefab, AI archetype or state template reaching a client bundle through some other
+			 * reference, since a referenced asset brings its components' scripts with it.
+			 *
+			 * Note what this canNOT see, and why the check is shaped this way: the calculation does
+			 * not report the script of a component serialized directly into the scene, only the
+			 * scripts of assets the scene references. Asserting on ObjectSpawner.cs therefore always
+			 * passed no matter what the scene held, which is how this guard sat green while proving
+			 * nothing. TheDependencyCheck_WouldSeeSpawnerDataThatReachedTheBuild is the control. */
+			const string serverScripts = "Assets/Scripts/Server/";
+
 			int checkedScenes = 0;
 			try
 			{
 				foreach (string path in WorldScenesWithSpawners().ToList())
 				{
-					SceneDependencyInfo info = ContentBuildInterface.CalculatePlayerDependenciesForScene(path, settings, new BuildUsageTagSet());
-					HashSet<string> referenced = new HashSet<string>(info.referencedObjects.Select(o => o.guid.ToString()));
+					HashSet<string> spawned = SpawnedPrefabGuids(path);
+					Assert.IsNotEmpty(spawned, $"{path}: its spawners name no prefab, so the check is vacuous");
 
-					Assert.IsFalse(referenced.Contains(spawnerScript),
-						$"{path}: a built scene still carries the spawner component");
+					HashSet<string> referenced = BuiltSceneDependencies(path);
+
+					List<string> leaked = spawned.Where(referenced.Contains)
+						.Select(AssetDatabase.GUIDToAssetPath)
+						.ToList();
+					Assert.IsEmpty(leaked,
+						$"{path}: a client bundle carries prefabs only a spawner names — {string.Join(", ", leaked)}");
+
+					List<string> serverSide = referenced.Select(AssetDatabase.GUIDToAssetPath)
+						.Where(p => p.StartsWith(serverScripts, System.StringComparison.Ordinal))
+						.ToList();
+					Assert.IsEmpty(serverSide,
+						$"{path}: a client bundle carries server-assembly scripts — {string.Join(", ", serverSide)}");
+
 					checkedScenes++;
 				}
 			}
 			finally
 			{
-				/* The calculation leaves the last scene it processed open as the active scene. Every
-				 * later fixture would then build its rig on top of that scene's terrain and colliders,
-				 * so the empty scene the test runner started with is put back. */
+				/* Every later fixture would otherwise build its rig on the last processed scene's
+				 * terrain and colliders. */
 				EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 			}
 
 			Assert.Greater(checkedScenes, 0, "no world scene has spawners; the check is vacuous");
 		}
 
-		[Test]
-		public void TheDependencyCheck_WouldSeeASpawnerThatReachedTheBuild()
+		/// <summary>
+		/// Writes <paramref name="source"/> to <paramref name="destination"/> with every spawner's
+		/// GameObject untagged, and returns how many were untagged.
+		/// </summary>
+		/// <remarks>
+		/// The scene text is rewritten rather than edited through the editor, because
+		/// <c>SpawnerTagEnforcer</c> re-tags every spawner as its scene is saved — there is no way to
+		/// save an untagged one. A copy of a real scene is used rather than a scene built from
+		/// nothing: the dependency calculation reports only scene defaults for a scene whose contents
+		/// are a bare component, which is the shape that made the previous control fail and left the
+		/// guard above unproven.
+		/// </remarks>
+		private static int WriteSceneWithSpawnersUntagged(string source, string destination)
 		{
-			/* The control for the test above: an absence check is only worth something if the same
-			 * calculation reports the spawner when it IS there. An untagged spawner is reported;
-			 * the same spawner tagged EditorOnly is not. */
+			string spawnerScript = AssetDatabase.AssetPathToGUID(
+				"Assets/Scripts/Server/Implementation/World/SceneServer/Spawner/ObjectSpawner.cs");
+			Assert.IsNotEmpty(spawnerScript, "the spawner script has moved; this control cannot find it");
+
+			string text = System.IO.File.ReadAllText(source);
+
+			/* Each YAML document starts "--- !u!<classId> &<fileId>". Find the GameObject ids the
+			 * spawner components belong to, then retag those GameObjects' documents. */
+			string[] documents = System.Text.RegularExpressions.Regex.Split(text, @"(?m)^(?=--- !u!)");
+
+			HashSet<string> spawnerOwners = new HashSet<string>();
+			foreach (string document in documents)
+			{
+				if (!document.StartsWith("--- !u!114 ", System.StringComparison.Ordinal) ||
+					!document.Contains("guid: " + spawnerScript))
+				{
+					continue;
+				}
+
+				System.Text.RegularExpressions.Match owner =
+					System.Text.RegularExpressions.Regex.Match(document, @"m_GameObject: \{fileID: (\d+)\}");
+				if (owner.Success)
+				{
+					spawnerOwners.Add(owner.Groups[1].Value);
+				}
+			}
+
+			int untagged = 0;
+			for (int i = 0; i < documents.Length; ++i)
+			{
+				System.Text.RegularExpressions.Match header =
+					System.Text.RegularExpressions.Regex.Match(documents[i], @"^--- !u!1 &(\d+)");
+				if (!header.Success || !spawnerOwners.Contains(header.Groups[1].Value))
+				{
+					continue;
+				}
+
+				string retagged = System.Text.RegularExpressions.Regex.Replace(
+					documents[i], @"(?m)^(\s*m_TagString: ).*$", "${1}Untagged");
+				if (retagged != documents[i])
+				{
+					documents[i] = retagged;
+					untagged++;
+				}
+			}
+
+			System.IO.File.WriteAllText(destination, string.Concat(documents));
+			AssetDatabase.ImportAsset(destination, ImportAssetOptions.ForceSynchronousImport);
+			return untagged;
+		}
+
+		[Test]
+		public void TheDependencyCheck_WouldSeeSpawnerDataThatReachedTheBuild()
+		{
+			/* The control for the test above: an absence check is worth nothing unless the same
+			 * calculation reports the data when it IS there. The same scene, differing only in the
+			 * tag, is measured both ways. */
+			string source = WorldScenesWithSpawners().FirstOrDefault();
+			EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+			Assert.IsNotNull(source, "no world scene has spawners; the control is vacuous");
+
+			HashSet<string> spawned = SpawnedPrefabGuids(source);
+			Assert.IsNotEmpty(spawned, $"{source}: its spawners name no prefab");
+
+			/* Outside the world scene folder: a save there re-bakes a spawn table and would leave a
+			 * stray entry in the catalogue. */
 			const string folder = "Assets/UnitTests/Generated";
-			const string path = folder + "/SpawnerStripControl.unity";
+			const string copy = folder + "/SpawnerStripControl.unity";
 			bool folderExisted = AssetDatabase.IsValidFolder(folder);
 			if (!folderExisted)
 			{
 				AssetDatabase.CreateFolder("Assets/UnitTests", "Generated");
 			}
 
-			string spawnerScript = AssetDatabase.AssetPathToGUID(
-				"Assets/Scripts/Server/Implementation/World/SceneServer/Spawner/ObjectSpawner.cs");
-			BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
-			BuildSettings settings = new BuildSettings { target = target, group = BuildPipeline.GetBuildTargetGroup(target) };
-
 			try
 			{
-				Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-				GameObject go = new GameObject("ControlSpawner");
-				go.AddComponent<ObjectSpawner>();
-				go.tag = "Untagged";
-				EditorSceneManager.SaveScene(scene, path);
+				int untaggedCount = WriteSceneWithSpawnersUntagged(source, copy);
+				Assert.Greater(untaggedCount, 0, $"{source}: no spawner GameObject was untagged; the control is vacuous");
 
-				bool seenUntagged = ContentBuildInterface.CalculatePlayerDependenciesForScene(path, settings, new BuildUsageTagSet())
-					.referencedObjects.Any(o => o.guid.ToString() == spawnerScript);
+				HashSet<string> untagged = BuiltSceneDependencies(copy);
+				EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-				scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
-				GameObject reopened = scene.GetRootGameObjects().Single(g => g.name == "ControlSpawner");
-				reopened.tag = ObjectSpawner.EditorOnlyTag;
-				EditorSceneManager.SaveScene(scene);
+				Assert.IsNotEmpty(spawned.Where(untagged.Contains).ToList(),
+					"the dependency calculation must report the prefabs of a spawner that is not stripped, or the absence check proves nothing");
 
-				bool seenTagged = ContentBuildInterface.CalculatePlayerDependenciesForScene(path, settings, new BuildUsageTagSet())
-					.referencedObjects.Any(o => o.guid.ToString() == spawnerScript);
+				/* The same bytes with the tag left alone report none of them. */
+				System.IO.File.Copy(source, copy, true);
+				AssetDatabase.ImportAsset(copy, ImportAssetOptions.ForceSynchronousImport);
 
-				Assert.IsTrue(seenUntagged, "the dependency calculation must report a spawner that is not stripped, or the absence check proves nothing");
-				Assert.IsFalse(seenTagged, "an EditorOnly spawner must not reach a built scene");
+				HashSet<string> tagged = BuiltSceneDependencies(copy);
+				Assert.IsEmpty(spawned.Where(tagged.Contains).Select(AssetDatabase.GUIDToAssetPath).ToList(),
+					"an EditorOnly spawner must take its prefabs out of the built scene");
 			}
 			finally
 			{
 				EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-				AssetDatabase.DeleteAsset(path);
+				AssetDatabase.DeleteAsset(copy);
 				if (!folderExisted)
 				{
 					AssetDatabase.DeleteAsset(folder);

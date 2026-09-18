@@ -1,6 +1,5 @@
 // Moons, planets, comets, meteors and asteroids: camera-facing quads placed on the far sky,
-// lit by the real star direction (phase), reddened in eclipses, hidden by clouds and faded at
-// the horizon. Textured bodies are drawn one at a time with _BodyTex; the rest share one mesh.
+// lit by the real star direction (phase), reddened in eclipses, and faded at the horizon. Textured bodies are drawn one at a time with _BodyTex; the rest share one mesh.
 Shader "FishMMO/Sky Body"
 {
     Properties
@@ -107,10 +106,11 @@ Shader "FishMMO/Sky Body"
                 output.forward = -dir;
                 output.color = input.color;
 
-                float4 clouds = FishSkyClouds(dir, _WorldSpaceCameraPos.xyz);
+                // Clouds are not here to hide a body any more: the volume is composited over this
+                // pass, so a cloud in front covers it for free.
                 float horizon = saturate(dir.y * 20.0 + 0.5);
                 float fog = 1.0 - saturate(1.0 - dir.y * 7.0) * _FishSkyFogColor.a;
-                output.visibility = (1.0 - clouds.a) * horizon * fog;
+                output.visibility = horizon * fog;
                 return output;
             }
 
@@ -148,8 +148,16 @@ Shader "FishMMO/Sky Body"
                     // In a lit sky the air in front hides the dark side: only the lit part shows.
                     // Under a dark (or airless) sky the whole disc covers the stars.
                     float dark = max(_FishSkyParams.x, _FishSkyEclipse.z);
-                    float shown = saturate(max(dot(color, float3(0.3, 0.59, 0.11)) * 6.0, dark));
+                    // A body crossing the sun is a silhouette, not an absence: it must block the
+                    // light whatever the sky is doing, or an eclipse shows only its rings.
+                    float3 toSun = _FishSunDir[0].xyz;
+                    float sunAngle = acos(clamp(dot(normalize(input.forward * -1.0), toSun), -1.0, 1.0));
+                    float sunRadius = max(_FishSunDir[0].w, 0.002);
+                    float crossing = _FishSkyEclipse.x * (1.0 - smoothstep(sunRadius * 2.0, sunRadius * 6.0, sunAngle));
+                    float shown = saturate(max(max(dot(color, float3(0.3, 0.59, 0.11)) * 6.0, dark), crossing));
                     alpha *= shown;
+                    // The silhouette is the body's night side: no light comes off it.
+                    color = lerp(color, color * 0.05, crossing);
                 }
                 else if (kind < 1.5)
                 {

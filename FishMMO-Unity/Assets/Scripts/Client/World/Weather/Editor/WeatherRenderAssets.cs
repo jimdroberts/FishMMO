@@ -112,6 +112,7 @@ namespace FishMMO.Client
 			Material curtain = EnsureMaterial("Curtain", "FishMMO/Weather/Curtain");
 			Material bolt = EnsureMaterial("Lightning Bolt", "FishMMO/Weather/Bolt");
 			Material cookie = EnsureMaterial("Cloud Cookie", "Hidden/FishMMO/Weather/CloudCookie");
+			Material clouds = EnsureMaterial("Clouds", FishCloudsFeature.ShaderName);
 			if (skyBody != null)
 			{
 				skyBody.enableInstancing = false;
@@ -143,6 +144,11 @@ namespace FishMMO.Client
 			if (profile.CurtainMaterial == null) profile.CurtainMaterial = curtain;
 			if (profile.BoltMaterial == null) profile.BoltMaterial = bolt;
 			if (profile.CloudCookieMaterial == null) profile.CloudCookieMaterial = cookie;
+			if (profile.CloudMaterial == null) profile.CloudMaterial = clouds;
+			// The volumes the clouds are carved from, baked once and kept.
+			if (profile.CloudShape == null) profile.CloudShape = CloudNoiseBaker.Ensure(CloudNoiseBaker.ShapePath, CloudNoiseBaker.ShapeSize, CloudNoiseBaker.DefaultSeed, true);
+			if (profile.CloudDetail == null) profile.CloudDetail = CloudNoiseBaker.Ensure(CloudNoiseBaker.DetailPath, CloudNoiseBaker.DetailSize, CloudNoiseBaker.DefaultSeed + 17, false);
+			CloudRendererSetup.EnsureFeature(clouds);
 			EditorUtility.SetDirty(profile);
 			WorldEditorAssets.RegisterAddressable(profile, WorldEditorAssets.ClientStaticGroup);
 			AssetDatabase.SaveAssets();

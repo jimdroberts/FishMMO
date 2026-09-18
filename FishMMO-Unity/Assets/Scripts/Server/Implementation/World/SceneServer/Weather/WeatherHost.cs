@@ -600,12 +600,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			{
 				return false;
 			}
-			ClearLayers(scene, transitionSeconds);
+			// The weather going out holds on while the new weather rises: cloud and fog take the
+			// greater of the layers over them, so two straight ramps would cross halfway and the sky
+			// would pass through half-clear between one weather and the next.
+			ClearLayers(scene, transitionSeconds * (1f + WeatherTimeline.HandoverHold));
 			foreach (WeatherPresetLayer layer in preset.Layers)
 			{
 				if (layer?.Template != null)
 				{
-					AddLayer(scene, layer.Template, Mathf.Clamp01(layer.Intensity * intensity), transitionSeconds);
+					AddLayer(scene, layer.Template, Mathf.Clamp01(layer.Intensity * intensity), transitionSeconds * (1f - WeatherTimeline.HandoverHold * 0.5f));
 				}
 			}
 			return true;

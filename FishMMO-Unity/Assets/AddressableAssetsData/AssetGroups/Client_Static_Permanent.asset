@@ -81,6 +81,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b7ed807917a1943983786db26612d55
+    m_Address: Cloud Detail
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
     m_Address: Weather Audio Profile
     m_ReadOnly: 0
@@ -93,6 +99,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 587eb95df510f9b08a4dd41eb07e4110
+    m_Address: Cloud Shape
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 695281b44bcf6b527b3fb26e0dc8d4b5
     m_Address: Precipitation Atlas
     m_ReadOnly: 0
@@ -101,6 +113,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69baeeda49ea89f268266955933d6961
     m_Address: Weather Render Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 77d2de1e9c99042cb99592565ec65216
+    m_Address: Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

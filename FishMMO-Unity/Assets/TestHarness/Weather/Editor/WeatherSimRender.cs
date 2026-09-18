@@ -54,6 +54,29 @@ namespace FishMMO.TestHarness.Weather.Editor
 			public Vector3 CameraEuler = new Vector3(4f, 20f, 0f);
 			public PrecipitationKind Expect;
 			public bool ExpectFog;
+			/// <summary>Snow, wet, ash and sand held at this depth instead of accumulating.</summary>
+			public WeatherCover? Cover;
+			/// <summary>
+			/// The ground must look different with that cover than without it. The frame is rendered
+			/// twice, so a surface shader that quietly does nothing fails here.
+			/// </summary>
+			public bool ExpectSurface;
+			/// <summary>Longer than the usual settle, for anything that has to wait for an event.</summary>
+			public float Settle;
+			/// <summary>
+			/// A preset to apply first, before <see cref="Stage.Preset"/>. The stage then checks
+			/// that the sky really changed over to the second one: weather that is asked to hand
+			/// over to different weather must not keep the first one falling.
+			/// </summary>
+			public string PresetBefore;
+			/// <summary>Runs the cover forward this many seconds before the capture.</summary>
+			public float AdvanceCover;
+			/// <summary>
+			/// The cover map must differ from place to place: a storm passing over one field leaves
+			/// that field white and the next one bare. Without this, a scene-wide figure would pass
+			/// every other check while the ground told a lie.
+			/// </summary>
+			public bool ExpectCoverVariation;
 		}
 
 		private static readonly Stage[] Stages =
@@ -62,12 +85,56 @@ namespace FishMMO.TestHarness.Weather.Editor
 			new Stage { Name = "thunderstorm-performant", Preset = "Thunderstorm", Temperature = 0.3f, Quality = 0, Expect = PrecipitationKind.Rain },
 			new Stage { Name = "rain-under-pavilion", Preset = "Heavy Rain", Temperature = 0.3f, CameraPosition = new Vector3(-6f, 1.6f, 4.2f), CameraEuler = new Vector3(-5f, 10f, 0f), Expect = PrecipitationKind.Rain },
 			new Stage { Name = "same-storm-frozen", Preset = "Heavy Rain", Temperature = -0.8f, Expect = PrecipitationKind.Snow },
-			new Stage { Name = "blizzard", Preset = "Blizzard", Temperature = -0.6f, Quality = 2, Expect = PrecipitationKind.Snow, ExpectFog = true },
+			new Stage { Name = "blizzard", Preset = "Blizzard", Temperature = -1f, Quality = 2, Expect = PrecipitationKind.Snow, ExpectFog = true },
 			new Stage { Name = "hailstorm", Preset = "Hailstorm", Temperature = 0.1f, Expect = PrecipitationKind.Hail },
 			new Stage { Name = "sandstorm", Preset = "Sandstorm", Temperature = 0.7f, Time = 0.35, Expect = PrecipitationKind.Sand, ExpectFog = true },
 			new Stage { Name = "ashfall", Preset = "Ashfall", Temperature = 0.2f, Time = 0.32, Expect = PrecipitationKind.Ash, ExpectFog = true },
 			new Stage { Name = "mist", Preset = "Mist", Temperature = 0.1f, Time = 0.28, Expect = PrecipitationKind.None, ExpectFog = true },
 			new Stage { Name = "clear", Preset = "Clear", Temperature = 0.2f, Expect = PrecipitationKind.None },
+			new Stage
+			{
+				// The ground after rain: darker, shinier, with standing water in the hollows.
+				Name = "wet-ground", Preset = "Light Rain", Temperature = 0.4f, Time = 0.5, Sun = 1, Expect = PrecipitationKind.Rain,
+				CameraPosition = new Vector3(-2f, 1.4f, -6f), CameraEuler = new Vector3(28f, 20f, 0f),
+				Cover = new WeatherCover { Wet = 1f }, ExpectSurface = true,
+			},
+			new Stage
+			{
+				// Snow lying on everything level, and on nothing under the pavilion roof.
+				Name = "snow-cover", Preset = "Light Snow", Temperature = -1f, Time = 0.5, Sun = 1, Expect = PrecipitationKind.Snow,
+				CameraPosition = new Vector3(-2f, 1.4f, -6f), CameraEuler = new Vector3(24f, 20f, 0f),
+				Cover = new WeatherCover { Snow = 1f }, ExpectSurface = true,
+			},
+			new Stage
+			{
+				// Ash: the same settling, a different colour, and it does not shine.
+				Name = "ash-cover", Preset = "Ashfall", Temperature = 0.3f, Time = 0.5, Sun = 1, Expect = PrecipitationKind.Ash, ExpectFog = true,
+				CameraPosition = new Vector3(-2f, 1.4f, -6f), CameraEuler = new Vector3(24f, 20f, 0f),
+				Cover = new WeatherCover { Ash = 1f }, ExpectSurface = true,
+			},
+			new Stage
+			{
+				// Rain, then snow. The complaint this pins: the sky kept raining and no snow fell,
+				// because falling snow turns to rain above freezing and the bed was warm.
+				Name = "rain-then-snow", PresetBefore = "Heavy Rain", Preset = "Heavy Snow", Temperature = 0.4f, Time = 0.5, Sun = 1,
+				Settle = 9f, Expect = PrecipitationKind.Snow,
+			},
+			new Stage
+			{
+				// A blizzard cell drifts across one corner of the field. After a quarter of an hour
+				// of it, the ground under the cell is white and the ground outside it is not.
+				Name = "cover-under-cell", Preset = "Clear", Cell = "Blizzard", Temperature = -1f, Time = 0.5, Sun = 1,
+				CameraPosition = new Vector3(-2f, 12f, -26f), CameraEuler = new Vector3(22f, 12f, 0f),
+				AdvanceCover = 1200f, ExpectCoverVariation = true, Expect = PrecipitationKind.None,
+			},
+			new Stage
+			{
+				// The hill is real terrain on the forked terrain shader, and High is the tier where
+				// deep snow lifts the ground it lies on.
+				Name = "terrain-snow", Preset = "Light Snow", Temperature = -1f, Time = 0.5, Sun = 1, Quality = 2, Expect = PrecipitationKind.Snow,
+				CameraPosition = new Vector3(26f, 7f, 18f), CameraEuler = new Vector3(6f, 16f, 0f),
+				Cover = new WeatherCover { Snow = 1f }, ExpectSurface = true,
+			},
 			new Stage { Name = "sky-dawn", Preset = "Clear", Temperature = 0.2f, Time = 0.255, CameraEuler = new Vector3(-6f, 90f, 0f), Expect = PrecipitationKind.None },
 			new Stage { Name = "sky-noon", Preset = "Fair", Temperature = 0.3f, Time = 0.5, CameraEuler = new Vector3(-35f, 180f, 0f), Sun = 1, Expect = PrecipitationKind.None },
 			new Stage { Name = "sky-dusk", Preset = "Clear", Temperature = 0.2f, Time = 0.745, CameraEuler = new Vector3(-6f, 270f, 0f), Expect = PrecipitationKind.None },
@@ -75,7 +142,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			new Stage { Name = "sky-night-performant", Preset = "Clear", Temperature = 0.1f, Time = 0.0, Moonlit = true, Quality = 0, CameraEuler = new Vector3(-40f, 160f, 0f), Sun = -1, Expect = PrecipitationKind.None },
 			new Stage { Name = "sky-lunar-eclipse", Preset = "Clear", Temperature = 0.1f, Time = 0.0, Moonlit = true, Eclipse = true, CameraEuler = new Vector3(-40f, 160f, 0f), Sun = -1, Expect = PrecipitationKind.None },
 			new Stage { Name = "sky-storm-cell", Preset = "Clear", Cell = "Thunderstorm", Temperature = 0.3f, Time = 0.62, CameraEuler = new Vector3(-8f, 0f, 0f), Sun = 1, ExpectCurtain = true, Expect = PrecipitationKind.None },
-			new Stage { Name = "sky-lightning-night", Preset = "Thunderstorm", Temperature = 0.3f, Time = 0.95, CameraEuler = new Vector3(-20f, 30f, 0f), Sun = -1, ExpectStrikes = true, Expect = PrecipitationKind.Rain },
+			new Stage { Name = "sky-lightning-night", Settle = 14f, Preset = "Thunderstorm", Temperature = 0.3f, Time = 0.95, CameraEuler = new Vector3(-20f, 30f, 0f), Sun = -1, ExpectStrikes = true, Expect = PrecipitationKind.Rain },
 			new Stage { Name = "sky-aurora", Preset = "Aurora Night", Temperature = -0.6f, Time = 0.02, Day = 355f, Latitude = 72f, CameraEuler = new Vector3(-30f, 0f, 0f), Sun = -1, ExpectAurora = true, Expect = PrecipitationKind.None },
 		};
 
@@ -84,6 +151,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 		private static double stageStarted;
 		private static int failures;
 		private static int strikesAtStart;
+		private static int scheduledStrikes;
 		private static readonly List<string> report = new List<string>();
 		private static PanelSettings uiSettings;
 		private static RenderTexture uiTarget;
@@ -174,7 +242,8 @@ namespace FishMMO.TestHarness.Weather.Editor
 				{
 					return;
 				}
-				if (stageIndex >= 0 && EditorApplication.timeSinceStartup - stageStarted < SettleSeconds)
+				float settle = stageIndex >= 0 && Stages[stageIndex].Settle > 0f ? Stages[stageIndex].Settle : SettleSeconds;
+				if (stageIndex >= 0 && EditorApplication.timeSinceStartup - stageStarted < settle)
 				{
 					return;
 				}
@@ -183,6 +252,10 @@ namespace FishMMO.TestHarness.Weather.Editor
 					Finish(controller, Stages[stageIndex]);
 				}
 				stageIndex++;
+				while (stageIndex < Stages.Length && Skipped(Stages[stageIndex]))
+				{
+					stageIndex++;
+				}
 				if (stageIndex >= Stages.Length)
 				{
 					EditorApplication.update -= Pump;
@@ -202,6 +275,27 @@ namespace FishMMO.TestHarness.Weather.Editor
 			}
 		}
 
+		/// <summary>
+		/// True when <c>FISHMMO_WEATHER_RENDER_ONLY</c> names other stages: a comma-separated list,
+		/// for working on one weather without waiting for the rest.
+		/// </summary>
+		private static bool Skipped(Stage stage)
+		{
+			string only = Environment.GetEnvironmentVariable("FISHMMO_WEATHER_RENDER_ONLY");
+			if (string.IsNullOrEmpty(only))
+			{
+				return false;
+			}
+			foreach (string name in only.Split(','))
+			{
+				if (string.Equals(name.Trim(), stage.Name, StringComparison.OrdinalIgnoreCase))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
 		private static void Start(WeatherSimController controller, Stage stage)
 		{
 			QualitySettings.SetQualityLevel(Mathf.Clamp(stage.Quality, 0, QualitySettings.names.Length - 1), true);
@@ -217,8 +311,20 @@ namespace FishMMO.TestHarness.Weather.Editor
 			controller.TimeOfDay = stage.Time;
 			controller.Latitude = stage.Latitude;
 			controller.ClearAll(0f);
+			controller.ResetCover();
+			controller.CoverOverride = stage.Cover;
+			if (!string.IsNullOrEmpty(stage.PresetBefore))
+			{
+				WeatherPreset before = controller.Presets.Find(p => p != null && p.ResolvedName == stage.PresetBefore);
+				controller.ApplyPreset(before, 0f);
+				// Let it settle into the first weather, then hand over the way a player would.
+				controller.ForcePresent();
+			}
 			WeatherPreset preset = controller.Presets.Find(p => p != null && p.ResolvedName == stage.Preset);
-			controller.ApplyPreset(preset, 0f);
+			// A stage that hands over from another weather does it the way a player would, over a
+			// couple of seconds; the rest start where they mean to be.
+			controller.ApplyPreset(preset, string.IsNullOrEmpty(stage.PresetBefore) ? 0f : 2f);
+			scheduledStrikes = 0;
 			strikesAtStart = SkySystem.Instance != null && SkySystem.Instance.Lightning != null ? SkySystem.Instance.Lightning.TotalStrikes : 0;
 			if (!string.IsNullOrEmpty(stage.Cell))
 			{
@@ -241,6 +347,10 @@ namespace FishMMO.TestHarness.Weather.Editor
 		private static void Finish(WeatherSimController controller, Stage stage)
 		{
 			string path = Path.Combine(outputDirectory, $"WeatherSim-{stageIndex:00}-{stage.Name}.png");
+			if (stage.AdvanceCover > 0f)
+			{
+				controller.AdvanceCover(stage.AdvanceCover);
+			}
 			Capture(controller, path);
 
 			WeatherFrame shown = controller.Presentation.Shown;
@@ -260,7 +370,36 @@ namespace FishMMO.TestHarness.Weather.Editor
 			{
 				problems.Add("the pavilion roof is not in the sky map");
 			}
-			string sky = CheckSky(stage, problems);
+			if (stage.ExpectSurface)
+			{
+				// The same frame with the cover and without it: what the surface shaders do is the
+				// difference. A shader that ignores the weather shows none.
+				float covered = MeasureGround(controller);
+				WeatherCover? held = controller.CoverOverride;
+				controller.CoverOverride = default(WeatherCover);
+				controller.ForcePresent();
+				float bare = MeasureGround(controller);
+				controller.CoverOverride = held;
+				controller.ForcePresent();
+				float change = Mathf.Abs(covered - bare);
+				if (change < 0.01f)
+				{
+					problems.Add($"the ground looks the same covered and bare ({bare:0.000} → {covered:0.000}); are the world materials on FishMMO/Weather Lit?");
+				}
+			}
+			if (stage.ExpectCoverVariation)
+			{
+				float spread = MeasureCoverSpread(controller, out float highest);
+				if (highest < 0.15f)
+				{
+					problems.Add($"nothing settled anywhere: the deepest cover on the map is {highest:0.00}");
+				}
+				else if (spread < 0.03f)
+				{
+					problems.Add($"the cover map is flat ({spread:0.000} spread), so the ground does not follow the storm");
+				}
+			}
+			string sky = CheckSky(controller, stage, problems);
 			if (problems.Count > 0)
 			{
 				failures++;
@@ -302,7 +441,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 		private static float moonAltitude;
 
 		/// <summary>Checks the sky owns the render settings and shows what the stage asked for.</summary>
-		private static string CheckSky(Stage stage, List<string> problems)
+		private static string CheckSky(WeatherSimController controller, Stage stage, List<string> problems)
 		{
 			SkySystem sky = SkySystem.Instance;
 			if (sky == null || sky.State == null)
@@ -322,7 +461,21 @@ namespace FishMMO.TestHarness.Weather.Editor
 			if (stage.Sun > 0 && altitude <= 0f) problems.Add($"sun should be up, is at {altitude:0.0}°");
 			if (stage.Sun < 0 && altitude >= 0f) problems.Add($"sun should be down, is at {altitude:0.0}°");
 			int strikes = sky.Lightning != null ? sky.Lightning.TotalStrikes - strikesAtStart : 0;
-			if (stage.ExpectStrikes && strikes == 0) problems.Add("no lightning");
+			if (stage.ExpectStrikes && strikes == 0)
+			{
+				// A strike is scheduled into a slot of world time, so a short stage may simply fall
+				// between two of them. What must never happen is a storm that schedules none at all:
+				// ask the schedule over a minute of world time and fail on that instead of on luck.
+				var window = new List<LightningStrike>();
+				double now = SkySystem.Instance != null ? SkySystem.Instance.WorldSeconds : 0.0;
+				SkySchedule.Lightning(controller.Timeline, (uint)controller.Tick, now, now + 60.0,
+					controller.Camera != null ? controller.Camera.transform.position : Vector3.zero, window);
+				scheduledStrikes = window.Count;
+				if (window.Count == 0)
+				{
+					problems.Add("the storm schedules no lightning at all in the next minute of world time");
+				}
+			}
 			int curtains = sky.Curtains != null ? sky.Curtains.Drawn : 0;
 			if (stage.ExpectCurtain && curtains == 0) problems.Add("no rain curtain drawn");
 			float aurora = Shader.GetGlobalVector("_FishAuroraParams").x;
@@ -331,7 +484,72 @@ namespace FishMMO.TestHarness.Weather.Editor
 			float shadow = sky.State.LunarEclipse;
 			if (stage.Moonlit && stage.Eclipse && shadow < 0.5f) problems.Add($"the moon should be eclipsed, shadow {shadow:0.00}");
 			if (stage.Moonlit && !stage.Eclipse && shadow > 0.05f) problems.Add($"the moon should be clear, shadow {shadow:0.00}");
-			return $"sun {altitude:0.0}°, {strikes} strikes, {curtains} curtains, aurora {aurora:0.00}, lunar shadow {sky.State.LunarEclipse:0.00}, {sky.Bodies?.QuadCount ?? 0} body quads";
+			return $"sun {altitude:0.0}°, {strikes} strikes ({scheduledStrikes} scheduled), {curtains} curtains, aurora {aurora:0.00}, lunar shadow {sky.State.LunarEclipse:0.00}, {sky.Bodies?.QuadCount ?? 0} body quads";
+		}
+
+		/// <summary>
+		/// How much the cover varies across the map, and how deep it gets anywhere on it. A map that
+		/// is merely the scene's average repeated has no spread.
+		/// </summary>
+		private static float MeasureCoverSpread(WeatherSimController controller, out float highest)
+		{
+			highest = 0f;
+			WeatherCoverMap map = controller.Presentation != null ? controller.Presentation.CoverMap : null;
+			if (map == null || map.Texture == null || !map.IsValid)
+			{
+				return 0f;
+			}
+			Color[] pixels = map.Texture.GetPixels();
+			float sum = 0f, squares = 0f;
+			foreach (Color p in pixels)
+			{
+				// Snow is what this stage lays down; the other channels ride on the same map.
+				float value = p.r;
+				highest = Mathf.Max(highest, value);
+				sum += value;
+				squares += value * value;
+			}
+			float mean = sum / pixels.Length;
+			return Mathf.Sqrt(Mathf.Max(0f, squares / pixels.Length - mean * mean));
+		}
+
+		/// <summary>How bright the lower half of the frame is: the ground the cover settles on.</summary>
+		private static float MeasureGround(WeatherSimController controller)
+		{
+			Camera camera = controller.Camera;
+			var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
+			RenderTexture previousTarget = camera.targetTexture;
+			RenderTexture previousActive = RenderTexture.active;
+			try
+			{
+				camera.targetTexture = target;
+				camera.Render();
+				RenderTexture.active = target;
+				var image = new Texture2D(Width, Height, TextureFormat.RGBA32, false);
+				image.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
+				image.Apply();
+				Color[] pixels = image.GetPixels();
+				float sum = 0f;
+				int counted = 0;
+				for (int y = 0; y < Height / 2; y += 2)
+				{
+					for (int x = 0; x < Width; x += 2)
+					{
+						Color p = pixels[y * Width + x];
+						sum += p.r * 0.2126f + p.g * 0.7152f + p.b * 0.0722f;
+						counted++;
+					}
+				}
+				UnityEngine.Object.DestroyImmediate(image);
+				return counted > 0 ? sum / counted : 0f;
+			}
+			finally
+			{
+				camera.targetTexture = previousTarget;
+				RenderTexture.active = previousActive;
+				target.Release();
+				UnityEngine.Object.DestroyImmediate(target);
+			}
 		}
 
 		private static void Capture(WeatherSimController controller, string path)

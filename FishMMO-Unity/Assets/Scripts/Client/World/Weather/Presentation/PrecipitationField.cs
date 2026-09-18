@@ -173,7 +173,10 @@ namespace FishMMO.Client
 				block.SetVector(FallId, fall);
 				// Heavier rain reads as longer streaks: stretch follows the fall speed.
 				float stretch = look.Stretch > 1.01f ? look.Stretch * Mathf.Lerp(0.6f, 1f, drop) : 1f;
-				block.SetVector(ShapeId, new Vector4(amount, Mathf.Lerp(look.Size.x, look.Size.y, drop), stretch, look.AtlasRow));
+				// Heavier weather is made of bigger drops, not just more of them: a downpour that
+				// only adds particles reads as drizzle at any strength.
+				float size = Mathf.Lerp(look.Size.x, look.Size.y, drop) * Mathf.Lerp(0.85f, 1.5f, amount);
+				block.SetVector(ShapeId, new Vector4(amount, size, stretch, look.AtlasRow));
 				block.SetVector(FlutterId, new Vector4(look.Sway, look.SwayFrequency, look.Alpha, look.Brightness));
 				block.SetColor(ColorId, look.Tint);
 				Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);

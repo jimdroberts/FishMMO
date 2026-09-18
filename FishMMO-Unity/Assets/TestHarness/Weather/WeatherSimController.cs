@@ -159,12 +159,19 @@ namespace FishMMO.TestHarness.Weather
 				}
 				entry.From = entry.IntensityAt(now);
 				entry.To = 0f;
-				entry.StartTick = now;
-				entry.EndTick = end;
+				// The weather going out holds on while the new weather rises, or the sky passes
+				// through clear on its way from one to the other.
+				WeatherTimeline.OutgoingWindow(now, end, out uint outStart, out uint outEnd);
+				entry.StartTick = outStart;
+				entry.EndTick = outEnd;
 				entry.RemoveWhenDone = true;
 				timeline.Layers[i] = entry;
 			}
 			ActivePreset = preset;
+			if (MatchTemperature)
+			{
+				MatchTemperatureTo(preset);
+			}
 			if (preset != null)
 			{
 				foreach (WeatherPresetLayer layer in preset.Layers)
@@ -173,18 +180,105 @@ namespace FishMMO.TestHarness.Weather
 					{
 						continue;
 					}
+					WeatherTimeline.IncomingWindow(now, end, out uint inStart, out uint inEnd);
 					timeline.UpsertLayer(new WeatherLayerEntry
 					{
 						Handle = nextHandle++,
 						TemplateID = layer.Template.ID,
 						From = 0f,
 						To = layer.Intensity,
-						StartTick = now,
-						EndTick = end,
+						StartTick = inStart,
+						EndTick = inEnd,
 					});
 				}
 			}
 			timeline.Revision++;
+		}
+
+		/// <summary>
+		/// Whether applying a preset moves the scene to a temperature the preset can actually work
+		/// at. On by default: clicking Light Snow in a warm scene otherwise gives rain, because
+		/// falling snow turns to rain above freezing and a snow layer does not apply at all outside
+		/// its template's range. That is the model behaving correctly and a bed behaving unhelpfully.
+		/// </summary>
+		public bool MatchTemperature { get; set; } = true;
+
+		/// <summary>The temperature the last preset asked for, or null when it did not care.</summary>
+		public float? PresetTemperature { get; private set; }
+
+		/// <summary>
+		/// Moves the scene's temperature into a range where the preset's layers apply and what falls
+		/// is what the preset is named after.
+		/// </summary>
+		private void MatchTemperatureTo(WeatherPreset preset)
+		{
+			PresetTemperature = null;
+			if (preset == null)
+			{
+				return;
+			}
+			float low = -1f, high = 1f;
+			bool snow = false, warm = false;
+			foreach (WeatherPresetLayer layer in preset.Layers)
+			{
+				WeatherLayerTemplate template = layer?.Template;
+				if (template == null || layer.Intensity <= 0f)
+				{
+					continue;
+				}
+				low = Mathf.Max(low, template.MinTemperature);
+				high = Mathf.Min(high, template.MaxTemperature);
+				snow |= template.Kind == WeatherLayerKind.Snow;
+				// Rain and hail are water: they want a scene above freezing, or they arrive as snow.
+				warm |= template.Kind == WeatherLayerKind.Rain || template.Kind == WeatherLayerKind.Hail;
+			}
+			MatchTemperatureFor(snow, warm, low, high);
+		}
+
+		/// <summary>
+		/// Moves the scene to a temperature at which what is being asked for can actually fall as
+		/// itself, within what the templates involved allow.
+		/// </summary>
+		/// <remarks>
+		/// The model retypes what falls by the temperature it finds — water becomes snow below
+		/// freezing and snow becomes rain above it — so a scene left cold by an earlier snowfall
+		/// turns the next shower into more snow. Presets and hand-set layers both go through here,
+		/// because the rain slider is no less a request for rain than the Rain preset is.
+		/// </remarks>
+		private void MatchTemperatureFor(bool snow, bool warm, float low, float high)
+		{
+			if (high < low)
+			{
+				return;
+			}
+			// Start from the temperature the scene actually has, not from the offset: they are not
+			// the same number, and the offset is meaningless on its own.
+			float actual = lastSample.Temperature;
+			float wanted = actual;
+			// Past these the weather model turns what falls into the other thing entirely.
+			if (snow && wanted > -0.2f)
+			{
+				wanted = -0.4f;
+			}
+			else if (warm && wanted < 0.1f)
+			{
+				wanted = 0.3f;
+			}
+			wanted = Mathf.Clamp(wanted, low, high);
+			if (Mathf.Approximately(wanted, actual))
+			{
+				return;
+			}
+			// The slider is an offset on the scene's own climate, and every gate in the model reads
+			// the temperature that comes *out* of that. Setting the offset to -0.4 in a scene whose
+			// climate sits at +0.7 leaves it at +0.3, which is still no weather for snow.
+			float baseline = actual - Temperature;
+			float offset = Mathf.Clamp(wanted - baseline, -1f, 1f);
+			if (!Mathf.Approximately(offset, Temperature))
+			{
+				Temperature = offset;
+				PresetTemperature = wanted;
+			}
 		}
 
 		/// <summary>Sets a manual layer of one kind (0 removes it).</summary>
@@ -194,6 +288,13 @@ namespace FishMMO.TestHarness.Weather
 			if (template == null)
 			{
 				return;
+			}
+			// A hand-set layer has to be able to fall as what it is, exactly as a preset does.
+			if (MatchTemperature && intensity > 0f)
+			{
+				MatchTemperatureFor(kind == WeatherLayerKind.Snow,
+					kind == WeatherLayerKind.Rain || kind == WeatherLayerKind.Hail,
+					template.MinTemperature, template.MaxTemperature);
 			}
 			ushort handle = (ushort)(ManualHandleBase + (int)kind);
 			uint now = Tick;
@@ -263,6 +364,18 @@ namespace FishMMO.TestHarness.Weather
 			}
 			timeline.Cells.Clear();
 			timeline.Revision++;
+			// Clear means clear: the ground goes back to bare as well. Weather stopping does not dry
+			// the ground — that takes a quarter of an hour, and the panel can fast-forward it — but
+			// this button is the bed's reset, not a forecast.
+			ResetCover();
+			// And the climate goes back to the scene's own. A snow preset leaves the offset well
+			// below freezing, and leaving it there is what makes the next rain fall as snow.
+			Temperature = 0f;
+			PresetTemperature = null;
+			if (Presentation != null && Presentation.CoverMap != null)
+			{
+				Presentation.CoverMap.Hold(default);
+			}
 		}
 
 		public float Temperature
@@ -314,6 +427,46 @@ namespace FishMMO.TestHarness.Weather
 		public void ResetCover()
 		{
 			timeline.Cover = default;
+			CoverOverride = null;
+		}
+
+		/// <summary>
+		/// Snow, wet, ash and sand held at a chosen depth instead of accumulating. Cover takes
+		/// fifteen minutes of weather to build, which is no way to look at a wet street or a snowed
+		/// -in courtyard: set this and the surfaces show that depth at once.
+		/// </summary>
+		public WeatherCover? CoverOverride
+		{
+			get => coverOverride;
+			set
+			{
+				coverOverride = value;
+				// The ground is drawn from the cover map, not from this figure, so holding a depth
+				// has to reach the map or nothing changes on screen.
+				if (value.HasValue && Presentation != null && Presentation.CoverMap != null)
+				{
+					timeline.Cover = value.Value;
+					Presentation.CoverMap.Hold(value.Value);
+				}
+			}
+		}
+
+		private WeatherCover? coverOverride;
+
+		/// <summary>
+		/// Runs the ground's cover forward, everywhere the cover map reaches. Snow takes a quarter
+		/// of an hour of weather to lie; this is how a designer sees the end of that without
+		/// waiting for it, and how the probe checks that cover really follows the storm.
+		/// </summary>
+		public void AdvanceCover(float seconds)
+		{
+			WeatherCoverMap map = Presentation != null ? Presentation.CoverMap : null;
+			if (map == null)
+			{
+				return;
+			}
+			ForcePresent();
+			map.Advance(timeline, Settings, Tick, lastSample.Temperature, seconds);
 		}
 
 		// ── Loop ──
@@ -336,6 +489,42 @@ namespace FishMMO.TestHarness.Weather
 				return;
 			}
 			presentTimer = 0.1f;
+			Present();
+		}
+
+		/// <summary>
+		/// Samples the weather where the camera stands and hands it to the presenters at once,
+		/// instead of on the next tenth of a second. A probe that changes something and renders the
+		/// very next frame needs this, or it renders the state before the change.
+		/// </summary>
+		public void ForcePresent()
+		{
+			if (Camera == null)
+			{
+				return;
+			}
+			forcing = true;
+			try
+			{
+				Present();
+			}
+			finally
+			{
+				forcing = false;
+			}
+		}
+
+		private bool forcing;
+
+		private void Present()
+		{
+			uint tick = Tick;
+			// Held cover wins over what has accumulated, and it is applied here rather than in the
+			// loop so that setting it and presenting at once shows it.
+			if (CoverOverride.HasValue)
+			{
+				timeline.Cover = CoverOverride.Value;
+			}
 			Scene scene = gameObject.scene;
 			Vector3 viewer = Camera.transform.position;
 			lastSample = WeatherField.Sample(timeline, Settings, scene, viewer, tick);
@@ -347,12 +536,18 @@ namespace FishMMO.TestHarness.Weather
 				ViewerPosition = viewer,
 				Tick = tick,
 				Cover = timeline.Cover,
+				Background = lastSample.Background,
 				Shelter = lastSample.Shelter,
 				Temperature = lastSample.Temperature,
 				IsDaylight = DayNight == null || DayNight.DaylightNow,
 				LocalTime01 = timeOfDay,
 			};
 			WeatherClient.Present(lastSample.Frame, context);
+			if (forcing && Presentation != null)
+			{
+				// Apply only records; this is what writes the globals a render is about to read.
+				Presentation.Flush();
+			}
 			Presented?.Invoke(this);
 		}
 	}

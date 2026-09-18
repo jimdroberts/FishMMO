@@ -2299,7 +2299,7 @@ Terrain:
   m_StaticShadowCaster: 0
   m_IgnoreQualitySettings: 0
   m_ReflectionProbeUsage: 1
-  m_MaterialTemplate: {fileID: 2100000, guid: 594ea882c5a793440b60ff72d896021e, type: 2}
+  m_MaterialTemplate: {fileID: 2100000, guid: 545226bc09f1e4c3795b4370bdecfd77, type: 2}
   m_BakeLightProbesForTrees: 1
   m_PreserveTreePrototypeLayers: 0
   m_DeringLightProbesForTrees: 1
@@ -2502,12 +2502,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1dd7ed21472896145913b33dc80349f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxClients: 6
+  maxClients: 6
   MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
     type: 3}
-  Climate: {fileID: 0}
-  BiomeMap: {fileID: 0}
+  climate: {fileID: 0}
+  biomeMap: {fileID: 0}
   RuntimeTemperatureOffset: 0
   RuntimeHumidityOffset: 0
 --- !u!4 &1334146826
@@ -2538,10 +2538,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldDayNightCycle
   DayNightCycle: 1
-  DayCycleDuration: 10800
-  NightCycleDuration: 10800
-  DaySkyboxMaterial: {fileID: 0}
-  NightSkyBoxMaterial: {fileID: 0}
+  SunLight: {fileID: 1426385473}
+  MoonLight: {fileID: 1426385472}
+  SkyOverride: {fileID: 0}
   RotateObjects: []
   DayObjects: []
   NightObjects: []
@@ -2552,6 +2551,7 @@ MonoBehaviour:
   onSceneLoadTriggers: []
   onDayStartTriggers: []
   onNightStartTriggers: []
+  onCelestialEvents: []
   references:
     version: 2
     RefIds: []
@@ -2959,6 +2959,18 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d9b40c4bb7d3f5d4c965814c5433ce65, type: 3}
+--- !u!108 &1426385472 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 5183813577060795889, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
+    type: 3}
+  m_PrefabInstance: {fileID: 1426385471}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &1426385473 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 4218097068567984847, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
+    type: 3}
+  m_PrefabInstance: {fileID: 1426385471}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1427581217
 GameObject:
   m_ObjectHideFlags: 0

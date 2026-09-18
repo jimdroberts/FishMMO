@@ -8,6 +8,8 @@
 float4 _FishWeatherCloud;
 // x precipitation amount, y drop size, z snow share of what falls, w storm severity
 float4 _FishWeatherPrecip;
+// What is falling, as shares of the whole: x rain, y snow, z hail, w dust (ash and sand).
+float4 _FishWeatherMix;
 // xy wind direction on the ground plane (world x, z), z speed (0..1 = 0..30 m/s), w gust
 float4 _FishWeatherWind;
 // x fog density, y fog height, z volumetric fog, w unused
@@ -16,6 +18,30 @@ float4 _FishWeatherFog;
 float4 _FishWeatherCover;
 // x aurora, y local temperature (-1..1), z camera shelter (0..1), w weather time in seconds
 float4 _FishWeatherMisc;
+// x 1 when the quality tier lifts terrain under deep snow, 0 otherwise. y-w unused.
+float4 _FishWeatherTier;
+
+// Where the cover lies: a top-down map around the camera, r snow, g wet, b ash, a sand. The
+// scene-wide _FishWeatherCover is the average of it, and stands in wherever the map does not reach.
+float4 _FishCoverRect;      // xy world x/z of the map's corner, zw size in metres
+float4 _FishCoverParams;    // x 1 when the map is valid, y metres per texel
+TEXTURE2D(_FishCoverTex);
+SAMPLER(sampler_FishCoverTex);
+
+// The cover at a world position: from the map where it reaches, the scene's own figure elsewhere.
+float4 FishCoverAt(float3 worldPos)
+{
+    if (_FishCoverParams.x < 0.5)
+    {
+        return _FishWeatherCover;
+    }
+    float2 uv = (worldPos.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
+    if (any(uv < 0.0) || any(uv > 1.0))
+    {
+        return _FishWeatherCover;
+    }
+    return SAMPLE_TEXTURE2D_LOD(_FishCoverTex, sampler_FishCoverTex, uv, 0);
+}
 
 // Sky occlusion: a top-down height map of the highest surface around the camera.
 // Rect: xy = world x/z of the map's corner, zw = size in metres.

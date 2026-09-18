@@ -37,6 +37,7 @@ namespace FishMMO.Client
 		// refuses inside a MonoBehaviour's constructor (field initialisers run there).
 		private PrecipitationField precipitation;
 		private SkyOcclusionMap occlusion;
+		private WeatherCoverMap coverMap;
 		private WeatherAudioPresenter audioPresenter;
 		private WindZone wind;
 
@@ -48,6 +49,9 @@ namespace FishMMO.Client
 		public float LightningFlash { get; set; }
 		public WeatherFrame Shown => shown;
 		public SkyOcclusionMap Occlusion => occlusion;
+
+		/// <summary>Where snow lies and the ground is wet, around the camera.</summary>
+		public WeatherCoverMap CoverMap => coverMap;
 		public PrecipitationField Precipitation => precipitation;
 
 		/// <summary>Creates the presenter (once) and registers it.</summary>
@@ -72,17 +76,33 @@ namespace FishMMO.Client
 				return;
 			}
 			instance = this;
-			precipitation = new PrecipitationField();
-			occlusion = new SkyOcclusionMap();
-			audioPresenter = new WeatherAudioPresenter(transform);
-			var windObject = new GameObject("Weather Wind");
-			windObject.transform.SetParent(transform, false);
-			wind = windObject.AddComponent<WindZone>();
-			wind.mode = WindZoneMode.Directional;
-			wind.windMain = 0f;
+			EnsureParts();
 			WeatherClient.RegisterPresenter(this);
 			WeatherClient.AudioCue += OnAudioCue;
 			RenderPipelineManager.beginCameraRendering += OnBeginCamera;
+		}
+
+		/// <summary>
+		/// Builds the parts that are not serialized. Also called from Update, because a domain
+		/// reload (a script edited while playing) empties them without running Awake again.
+		/// </summary>
+		private void EnsureParts()
+		{
+			precipitation = precipitation ?? new PrecipitationField();
+			occlusion = occlusion ?? new SkyOcclusionMap();
+			coverMap = coverMap ?? new WeatherCoverMap();
+			audioPresenter = audioPresenter ?? new WeatherAudioPresenter(transform);
+			if (wind == null)
+			{
+				Transform existing = transform.Find("Weather Wind");
+				GameObject windObject = existing != null ? existing.gameObject : new GameObject("Weather Wind");
+				windObject.transform.SetParent(transform, false);
+				// Not ??: a missing component is Unity's "fake null", which ?? treats as a value.
+				WindZone found = windObject.GetComponent<WindZone>();
+				wind = found != null ? found : windObject.AddComponent<WindZone>();
+				wind.mode = WindZoneMode.Directional;
+				wind.windMain = 0f;
+			}
 		}
 
 		private void OnDestroy()
@@ -96,6 +116,7 @@ namespace FishMMO.Client
 			RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
 			precipitation?.Dispose();
 			occlusion?.Dispose();
+			coverMap?.Dispose();
 			audioPresenter?.Dispose();
 			FogComposer.SetWeather(0f, Color.gray, 0f, 1000f);
 			WeatherShaderGlobals.Clear();
@@ -115,6 +136,7 @@ namespace FishMMO.Client
 			shown = WeatherFrame.Clear;
 			hasContext = false;
 			occlusion?.Invalidate();
+			coverMap?.Clear();
 			audioPresenter?.Silence();
 			FogComposer.SetWeather(0f, Color.gray, 0f, 1000f);
 			FogComposer.Reset();
@@ -137,14 +159,30 @@ namespace FishMMO.Client
 
 		private void Update()
 		{
+			Step(Time.deltaTime);
+		}
+
+		/// <summary>
+		/// Pushes the weather into the globals and the presenters now, instead of on the next frame.
+		/// Apply only records what to show; a caller that changes the weather and renders in the same
+		/// frame — a probe, or an editor preview — would otherwise render the state before the change.
+		/// </summary>
+		public void Flush()
+		{
+			Step(0f);
+		}
+
+		private void Step(float deltaTime)
+		{
+			EnsureParts();
 			WeatherRenderProfile profile = ResolveProfile();
 			if (profile == null)
 			{
 				return;
 			}
-			float dt = Time.deltaTime;
+			float dt = deltaTime;
 			time += dt;
-			shown = WeatherFrame.Lerp(shown, target, 1f - Mathf.Exp(-dt / SmoothingSeconds));
+			shown = dt > 0f ? WeatherFrame.Lerp(shown, target, 1f - Mathf.Exp(-dt / SmoothingSeconds)) : shown;
 
 			Camera camera = TargetCamera != null ? TargetCamera : Camera.main;
 			WeatherTierSettings tier = profile.TierFor(QualitySettings.GetQualityLevel());
@@ -161,7 +199,25 @@ namespace FishMMO.Client
 				shelter = Mathf.Max(shelter, 1f);
 			}
 
+			// Where the cover lies, as opposed to how much of it the scene holds. The server's single
+			// figure anchors this map; the map is what the ground is actually drawn from.
+			if (camera != null && hasContext)
+			{
+				bool reseed = context.Timeline != null && context.Timeline.Revision != coverRevision;
+				coverMap.Update(context.Timeline, context.Settings, camera.transform.position, (uint)context.Tick,
+					context.Temperature, dt, context.Cover, reseed);
+				if (reseed)
+				{
+					coverRevision = context.Timeline.Revision;
+				}
+				else if (context.Cover.Snow + context.Cover.Wet + context.Cover.Ash + context.Cover.Sand > 0f)
+				{
+					coverMap.Anchor(context.Cover);
+				}
+			}
+
 			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash);
+			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
 			WeatherFogPresenter.Apply(shown, profile);
 			ApplyWind(shown);
 			currentTier = tier;
@@ -169,6 +225,7 @@ namespace FishMMO.Client
 		}
 
 		private WeatherTierSettings currentTier;
+		private uint coverRevision = uint.MaxValue;
 
 		/// <summary>
 		/// Precipitation is submitted as each camera starts rendering, so any render of the target
@@ -185,6 +242,10 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			// Rain used to be scaled by whichever cloud stood overhead. With the clouds a field
+			// rather than a list of objects there is nothing to ask; the scene's forecast is what
+			// falls, and a shower that follows the cloud above you wants the field sampled on the
+			// CPU, which is work for when the cloud system has settled.
 			precipitation.Render(shown, camera, currentTier, Profile, time);
 		}
 

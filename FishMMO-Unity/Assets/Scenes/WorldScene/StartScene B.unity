@@ -824,7 +824,7 @@ Terrain:
   m_StaticShadowCaster: 0
   m_IgnoreQualitySettings: 0
   m_ReflectionProbeUsage: 1
-  m_MaterialTemplate: {fileID: 2100000, guid: 594ea882c5a793440b60ff72d896021e, type: 2}
+  m_MaterialTemplate: {fileID: 2100000, guid: 545226bc09f1e4c3795b4370bdecfd77, type: 2}
   m_BakeLightProbesForTrees: 1
   m_PreserveTreePrototypeLayers: 0
   m_DeringLightProbesForTrees: 1
@@ -3940,12 +3940,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1dd7ed21472896145913b33dc80349f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxClients: 200
+  maxClients: 200
   MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
     type: 3}
-  Climate: {fileID: 0}
-  BiomeMap: {fileID: 0}
+  climate: {fileID: 0}
+  biomeMap: {fileID: 0}
   RuntimeTemperatureOffset: 0
   RuntimeHumidityOffset: 0
 --- !u!4 &1334146826
@@ -3976,10 +3976,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldDayNightCycle
   DayNightCycle: 1
-  DayCycleDuration: 10800
-  NightCycleDuration: 10800
-  DaySkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
-  NightSkyBoxMaterial: {fileID: 2100000, guid: 16eb23baeafad21469a3509842b500e3, type: 2}
+  SunLight: {fileID: 5871419508359712388}
+  MoonLight: {fileID: 5871419508359712387}
+  SkyOverride: {fileID: 0}
   RotateObjects:
   - {fileID: 5871419508359712386}
   - {fileID: 782950642}
@@ -4001,6 +4000,7 @@ MonoBehaviour:
   onSceneLoadTriggers: []
   onDayStartTriggers: []
   onNightStartTriggers: []
+  onCelestialEvents: []
   references:
     version: 2
     RefIds: []
@@ -6654,6 +6654,18 @@ PrefabInstance:
 --- !u!1 &5871419508359712386 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6291631714174163124, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
+    type: 3}
+  m_PrefabInstance: {fileID: 5871419508359712385}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &5871419508359712387 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 5183813577060795889, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
+    type: 3}
+  m_PrefabInstance: {fileID: 5871419508359712385}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &5871419508359712388 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 4218097068567984847, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
     type: 3}
   m_PrefabInstance: {fileID: 5871419508359712385}
   m_PrefabAsset: {fileID: 0}

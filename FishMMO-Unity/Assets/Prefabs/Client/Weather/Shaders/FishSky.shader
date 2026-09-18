@@ -1,5 +1,5 @@
 // The FishMMO sky: atmosphere colours from the sky profile, suns with halos, the star field
-// and Milky Way turning with the body, three cloud layers fed by the weather, aurora, rainbow
+// and Milky Way turning with the body, aurora, rainbow
 // and lightning flash, melting into the fog at the horizon. Moons, planets, comets and meteors
 // are drawn by FishMMO/Sky Body on top. No compute; runs on WebGPU, WebGL2 and desktop.
 Shader "FishMMO/Sky"
@@ -88,10 +88,25 @@ Shader "FishMMO/Sky"
                     float limb = sqrt(saturate(1.0 - pow(angle / radius, 2.0)));
                     float cover = (i == 0) ? eclipse : 0.0;
                     sunsLight += sc * disc * (0.6 + 0.4 * limb) * 18.0 * (1.0 - cover) * saturate(up * 40.0 + 1.0);
+
+                    // The corona: with the disc itself behind another body, what is still seen is a
+                    // ring of light around that body's limb. It is drawn at the covering body's own
+                    // radius, because that is where the edge is.
+                    if (i == 0 && cover > 0.02 && _FishSkyEclipseBody.w > 0.0)
+                    {
+                        // Around the covering body's own limb, not the sun's: a tight ring that
+                        // fades over a fraction of its radius.
+                        float ring = _FishSkyEclipseBody.w;
+                        float bodyAngle = acos(clamp(dot(dir, _FishSkyEclipseBody.xyz), -1.0, 1.0));
+                        float outside = max(0.0, bodyAngle - ring);
+                        float corona = exp(-outside / max(0.0005, ring * 0.12)) * step(ring, bodyAngle);
+                        corona *= smoothstep(0.1, 0.75, cover);
+                        sunsLight += sc * corona * 2.5 * saturate(up * 40.0 + 1.0);
+                    }
                 }
                 color *= lerp(1.0, 0.2, eclipse);
 
-                // Stars and the Milky Way, dimmed by the sky and the clouds.
+                // Stars and the Milky Way, dimmed by the sky.
                 float starVisibility = _FishSkyParams.x * saturate(up * 8.0 + 0.2);
                 if (starVisibility > 0.001)
                 {
@@ -100,8 +115,17 @@ Shader "FishMMO/Sky"
                     float twinkle = 1.0 + _FishSkyParams.z * (Hash31(floor(sd * 400.0) + floor(_FishWeatherMisc.w * 6.0)) - 0.5) * (1.0 - h);
                     float3 galacticPole = normalize(float3(0.46, -0.88, 0.12));
                     float band = exp(-pow(dot(sd, galacticPole), 2.0) * 30.0);
-                    float2 mwUv = float2(atan2(sd.z, sd.x) * 0.32, sd.y * 0.9);
-                    float dust = FishNoise(mwUv, 1) * FishNoise(mwUv * 2.7 + 0.3, 0);
+                    // The dust is taken from the direction itself, in the galaxy's own frame. It
+                    // used to come from atan2(sd.z, sd.x), which wraps at ±π and drew a hard seam
+                    // straight across the sky, while the cylindrical mapping pinched at the poles
+                    // into a fan of straight streaks — together they read as a torn grey sheet
+                    // hanging over the stars rather than as a galaxy.
+                    float3 galacticX = normalize(cross(galacticPole, float3(0.0, 0.0, 1.0)));
+                    float3 galacticY = cross(galacticPole, galacticX);
+                    float across = dot(sd, galacticPole);
+                    float2 mwUv = float2(dot(sd, galacticX), dot(sd, galacticY));
+                    float dust = FishNoise(mwUv * 5.0 + across * 2.0, 1)
+                               * FishNoise(mwUv * 11.0 - across * 3.0 + 0.3, 0);
                     float3 milkyWay = float3(0.55, 0.58, 0.72) * band * saturate(dust * 2.2 - 0.2) * _FishSkyParams.y * 0.35;
                     color += (stars * twinkle * 2.0 + milkyWay) * starVisibility;
                 }
@@ -125,10 +149,7 @@ Shader "FishMMO/Sky"
                     color += aurora * _FishAuroraParams.x * saturate(up * 3.0) * 0.6;
                 }
 
-                // Clouds cover everything above.
-                float4 clouds = FishSkyClouds(dir, _WorldSpaceCameraPos.xyz);
-                color = color * (1.0 - clouds.a) + clouds.rgb;
-                sunsLight *= (1.0 - saturate(clouds.a * 1.6));
+                // No clouds here: they are a volume, marched after the sky and composited over it.
 
                 // Rainbow: 42° from the point opposite the sun, while it rains and the sun is low.
                 if (_FishRainbow.x > 0.001)

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using UnityEngine;
 using FishMMO.Shared;
@@ -29,7 +30,7 @@ namespace FishMMO.Client
 		[Tooltip("Fog colour this kind of weather pushes toward.")]
 		public Color FogColor = new Color(0.6f, 0.65f, 0.7f, 1f);
 
-		public static PrecipitationLook Rain() => new PrecipitationLook { AtlasRow = 0, Size = new Vector2(0.008f, 0.016f), Stretch = 40f, FallSpeed = new Vector2(7f, 10f), WindResponse = 0.35f, Tint = new Color(0.75f, 0.8f, 0.9f, 1f), Alpha = 0.45f, FogColor = new Color(0.55f, 0.6f, 0.66f, 1f) };
+		public static PrecipitationLook Rain() => new PrecipitationLook { AtlasRow = 0, Size = new Vector2(0.018f, 0.045f), Stretch = 34f, FallSpeed = new Vector2(7f, 11f), WindResponse = 0.35f, Tint = new Color(0.78f, 0.83f, 0.92f, 1f), Alpha = 0.7f, FogColor = new Color(0.55f, 0.6f, 0.66f, 1f) };
 		public static PrecipitationLook Snow() => new PrecipitationLook { AtlasRow = 1, Size = new Vector2(0.03f, 0.08f), Stretch = 1f, FallSpeed = new Vector2(0.8f, 1.4f), Sway = 0.35f, SwayFrequency = 0.8f, WindResponse = 0.9f, Tint = Color.white, Alpha = 0.9f, FogColor = new Color(0.82f, 0.85f, 0.9f, 1f) };
 		public static PrecipitationLook Hail() => new PrecipitationLook { AtlasRow = 2, Size = new Vector2(0.03f, 0.06f), Stretch = 1f, FallSpeed = new Vector2(10f, 16f), WindResponse = 0.2f, Tint = new Color(0.9f, 0.95f, 1f, 1f), Alpha = 0.95f, FogColor = new Color(0.6f, 0.64f, 0.7f, 1f) };
 		public static PrecipitationLook Ash() => new PrecipitationLook { AtlasRow = 3, Size = new Vector2(0.08f, 0.14f), Stretch = 1f, FallSpeed = new Vector2(0.4f, 0.8f), Sway = 0.5f, SwayFrequency = 0.5f, WindResponse = 0.6f, Tint = new Color(0.55f, 0.53f, 0.5f, 1f), Alpha = 0.95f, FogColor = new Color(0.42f, 0.4f, 0.38f, 1f) };
@@ -61,12 +62,75 @@ namespace FishMMO.Client
 		[Range(0, 512)] public int ReflectionResolution = 128;
 		[Tooltip("Distant rain curtains under the nearest storm cells.")]
 		[Range(0, 16)] public int Curtains = 8;
-		[Tooltip("Cloud shadows on the ground (a cookie on the sun).")]
+		[Tooltip("Cloud shadows on the ground: the volume marched from the sun into a cookie.")]
 		public bool CloudShadows = true;
+		[Header("Volumetric clouds")]
+		[Tooltip("Share of the screen the clouds are marched at, before the upscale.")]
+		[Range(0.15f, 1f)] public float CloudResolution = 0.5f;
+		[Tooltip("Steps through the cloud layer along a view ray.")]
+		[Range(8, 160)] public int CloudSteps = 64;
+		[Tooltip("How much of the fine detail noise is used; 0 leaves the shapes smooth.")]
+		[Range(0f, 1f)] public float CloudDetail = 1f;
+		[Tooltip("Steady the clouds against the last frame. Off means more steps are needed for the same calm.")]
+		public bool CloudTemporal = true;
+		[Tooltip("Light shafts through the clouds, and around a body during an eclipse.")]
+		public bool GodRays = true;
 
-		public static WeatherTierSettings Performant() => new WeatherTierSettings { Particles = 3000, BoxSize = 18f, OcclusionResolution = 48, OcclusionTexelMeters = 2f, OcclusionRaysPerFrame = 256, StarCubemapSize = 256, MeteorBudget = 16, Asteroids = false, ReflectionResolution = 64, Curtains = 3, CloudShadows = false };
-		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, CloudShadows = true };
-		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, CloudShadows = true };
+		[Tooltip("Deep snow lifts the terrain it lies on. High Fidelity only (Q10).")]
+		public bool TerrainSnowDisplacement = false;
+
+		public static WeatherTierSettings Performant() => new WeatherTierSettings { Particles = 3000, BoxSize = 18f, OcclusionResolution = 48, OcclusionTexelMeters = 2f, OcclusionRaysPerFrame = 256, StarCubemapSize = 256, MeteorBudget = 16, Asteroids = false, ReflectionResolution = 64, Curtains = 3, CloudShadows = false, CloudResolution = 0.25f, CloudSteps = 28, CloudDetail = 0f, CloudTemporal = true, GodRays = false, TerrainSnowDisplacement = false };
+		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, CloudShadows = true, CloudResolution = 0.5f, CloudSteps = 56, CloudDetail = 0.6f, CloudTemporal = true, GodRays = true, TerrainSnowDisplacement = false };
+		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, CloudShadows = true, CloudResolution = 0.6f, CloudSteps = 96, CloudDetail = 1f, CloudTemporal = true, GodRays = true, TerrainSnowDisplacement = true };
+	}
+
+	/// <summary>
+	/// Where the cloud layer sits and what it is made of. The weather says how much cloud there is
+	/// and what kind; this says how a cloud is built.
+	/// </summary>
+	[System.Serializable]
+	public class VolumetricCloudSettings
+	{
+		[Tooltip("The bands of sky the clouds live in, lowest first. Each is a slice of atmosphere filled with 3D noise: sea level to the cloud base, the deck above it, and whatever is stacked over that.")]
+		public List<CloudLayer> Layers = CloudLayerDefaults.Sky();
+		[Tooltip("Planet radius used to curve the bands down to the horizon, in kilometres.")]
+		[Min(10f)] public float CurvatureRadiusKm = 6371f;
+		[Tooltip("Where the noise is cut when the forecast says no cloud. The field runs about 0.33 to 0.76, so these live in that window; outside it the sky is all or nothing.")]
+		[Range(0.2f, 0.9f)] public float CoverageCutClear = 0.662f;
+		[Tooltip("Where the noise is cut under a full overcast.")]
+		[Range(0.1f, 0.8f)] public float CoverageCutFull = 0.575f;
+		[Tooltip("How much further the cut drops over the last of the range, which is what closes the final gaps into an overcast.")]
+		[Range(0f, 0.4f)] public float CoverageBend = 0.15f;
+		[Tooltip("How soft a cloud's edge is: the width of the band where the noise thins to nothing. Clouds are fog, so this wants to be generous.")]
+		[Range(0.01f, 0.4f)] public float EdgeSoftness = 0.06f;
+		[Tooltip("Metres over which distance turns a cloud into haze. Smaller means the far sky greys out sooner.")]
+		[Min(2000f)] public float HazeDistance = 42000f;
+		[Tooltip("Metres out to which the fine detail noise is used in full. The detail tiles every few hundred metres and the march steps tens of metres, so past a point it is sampled far too coarsely and turns into speckle.")]
+		[Min(0f)] public float DetailFadeStart = 2500f;
+		[Tooltip("Metres over which that detail fades away entirely. Beyond it a cloud is its shape alone, which is what distance does to one anyway.")]
+		[Min(100f)] public float DetailFadeRange = 9000f;
+		[Tooltip("Optical density: higher is thicker and darker inside.")]
+		[Range(0.05f, 4f)] public float Density = 1.1f;
+		[Tooltip("Steps toward the sun when lighting a point in the cloud.")]
+		[Range(1, 12)] public int LightSteps = 6;
+		[Tooltip("The dark edge a sunlit cloud shows before it brightens (the powder effect).")]
+		[Range(0f, 1f)] public float Powder = 0.7f;
+		[Tooltip("How much light keeps going forward: the glow around the sun through thin cloud.")]
+		[Range(0f, 0.95f)] public float ForwardScatter = 0.6f;
+		[Tooltip("How much of the sky's own light fills the shaded side.")]
+		[Range(0f, 4f)] public float Ambient = 1.2f;
+		[Tooltip("The colour a shaded underside takes. Slate-blue reads as cloud; white reads as fog.")]
+		[ColorUsage(false, false)] public Color ShadedTint = new Color(0.62f, 0.68f, 0.82f);
+		[Tooltip("How much of that tint a fair-weather underside takes. A storm takes more.")]
+		[Range(0f, 1f)] public float ShadedTintStrength = 0.55f;
+		[Tooltip("How far the clouds are marched, in metres.")]
+		[Min(1000f)] public float MaxDistance = 90000f;
+		[Tooltip("How much the last frame is kept when the clouds are steadied.")]
+		[Range(0f, 0.98f)] public float TemporalBlend = 0.9f;
+		[Tooltip("How dark the ground goes under a cloud.")]
+		[Range(0f, 1f)] public float ShadowStrength = 0.8f;
+		[Tooltip("Metres across that the cloud shadow cookie covers.")]
+		[Min(200f)] public float ShadowAreaMeters = 4000f;
 	}
 
 	/// <summary>
@@ -88,10 +152,17 @@ namespace FishMMO.Client
 
 		[Header("Sky")]
 		public Material SkyMaterial;
+		public Material CloudMaterial;
 		public Material SkyBodyMaterial;
 		public Material CurtainMaterial;
 		public Material BoltMaterial;
 		public Material CloudCookieMaterial;
+
+		[Header("Volumetric clouds")]
+		[Tooltip("The shape and detail volumes the clouds are carved from (Weather Tools → Bake cloud noise).")]
+		public Texture3D CloudShape;
+		public Texture3D CloudDetail;
+		public VolumetricCloudSettings Clouds = new VolumetricCloudSettings();
 
 		[Header("Fog")]
 		[Tooltip("Colour of fog from the fog channel alone (mist).")]

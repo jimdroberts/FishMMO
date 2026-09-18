@@ -78,7 +78,7 @@ namespace FishMMO.Client
 		public void AddBodies(CelestialState state, SkyProfile profile, SkyLimits limits)
 		{
 			int moons = 0, planets = 0, comets = 0;
-			float scale = profile != null ? profile.BodyDiscScale : 1f;
+			float scale = profile != null ? profile.BodyScale : 1f;
 			foreach (SkyBodyState body in state.Bodies)
 			{
 				if (body.Kind == SkyBodyKind.Star || !body.AboveHorizon || body.Body == null)

@@ -77,10 +77,29 @@ MonoBehaviour:
     Brightness: 1
     FogColor: {r: 0.78, g: 0.66, b: 0.46, a: 1}
   SkyMaterial: {fileID: 2100000, guid: 130b504fa95c2fb3083e502c7ec3a367, type: 2}
+  CloudMaterial: {fileID: 2100000, guid: 77d2de1e9c99042cb99592565ec65216, type: 2}
   SkyBodyMaterial: {fileID: 2100000, guid: 36c3ad97fcb382889903e8b5ad9c0e58, type: 2}
   CurtainMaterial: {fileID: 2100000, guid: a8061d0280b071f4e8dc1f2b753c048f, type: 2}
   BoltMaterial: {fileID: 2100000, guid: 9d7b4675c91149f25af0e2a82433630e, type: 2}
   CloudCookieMaterial: {fileID: 2100000, guid: bb1254a0f5ecb3b239b87631320dba90, type: 2}
+  CloudShape: {fileID: 11700000, guid: 587eb95df510f9b08a4dd41eb07e4110, type: 2}
+  CloudDetail: {fileID: 11700000, guid: 4b7ed807917a1943983786db26612d55, type: 2}
+  Clouds:
+    BaseHeight: 1200
+    TopHeight: 5000
+    CurvatureRadiusKm: 6371
+    ShapeScale: 7000
+    DetailScale: 700
+    DetailStrength: 0.35
+    Density: 1.1
+    LightSteps: 6
+    Powder: 0.7
+    ForwardScatter: 0.6
+    Ambient: 1.2
+    MaxDistance: 90000
+    TemporalBlend: 0.9
+    ShadowStrength: 0.8
+    ShadowAreaMeters: 4000
   MistColor: {r: 0.7, g: 0.73, b: 0.76, a: 1}
   MaxFogDensity: 0.06
   MinFogEndDistance: 40
@@ -96,6 +115,12 @@ MonoBehaviour:
     ReflectionResolution: 64
     Curtains: 3
     CloudShadows: 0
+    CloudResolution: 0.25
+    CloudSteps: 28
+    CloudDetail: 0
+    CloudTemporal: 1
+    GodRays: 0
+    TerrainSnowDisplacement: 0
   Balanced:
     Particles: 8000
     BoxSize: 24
@@ -108,6 +133,12 @@ MonoBehaviour:
     ReflectionResolution: 128
     Curtains: 6
     CloudShadows: 1
+    CloudResolution: 0.5
+    CloudSteps: 56
+    CloudDetail: 0.6
+    CloudTemporal: 1
+    GodRays: 1
+    TerrainSnowDisplacement: 0
   HighFidelity:
     Particles: 16000
     BoxSize: 30
@@ -120,6 +151,12 @@ MonoBehaviour:
     ReflectionResolution: 256
     Curtains: 8
     CloudShadows: 1
+    CloudResolution: 0.6
+    CloudSteps: 96
+    CloudDetail: 1
+    CloudTemporal: 1
+    GodRays: 1
+    TerrainSnowDisplacement: 1
   OcclusionLayers:
     serializedVersion: 2
     m_Bits: 129

@@ -148,6 +148,65 @@ namespace FishMMO.Shared.WorldDesign
 			return new AnimationCurve(new Keyframe(0f, from, 0f, 0f), new Keyframe(1f, to, (to - from) * 2f, 0f));
 		}
 
+		[DashboardTool(DashboardToolAttribute.Weather, "Update layer curves and presets to the shipped ones", Section = "Content", Order = 4,
+			Tooltip = "Re-applies the built-in channel curves to every weather layer template, and the built-in layer sets to every preset. Use it after the shipped content changes; it OVERWRITES hand-tuning on both.",
+			Confirm = "Overwrite the curves on every layer template and the layers on every preset with the shipped ones? Hand-tuned values will be lost.")]
+		public static void RefreshLayerCurvesFromDashboard()
+		{
+			var changed = new List<string>();
+			foreach (string guid in AssetDatabase.FindAssets("t:WeatherLayerTemplate"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				var template = AssetDatabase.LoadAssetAtPath<WeatherLayerTemplate>(path);
+				if (template == null)
+				{
+					continue;
+				}
+				DefineTemplate(template);
+				EditorUtility.SetDirty(template);
+				changed.Add(template.name);
+			}
+			// The presets too: their layer sets are shipped content in the same way the curves are.
+			var templates = new Dictionary<WeatherLayerKind, WeatherLayerTemplate>();
+			foreach (string guid in AssetDatabase.FindAssets("t:WeatherLayerTemplate"))
+			{
+				var template = AssetDatabase.LoadAssetAtPath<WeatherLayerTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				if (template != null)
+				{
+					templates[template.Kind] = template;
+				}
+			}
+			var presets = new List<string>();
+			foreach (string guid in AssetDatabase.FindAssets("t:WeatherPreset"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				var preset = AssetDatabase.LoadAssetAtPath<WeatherPreset>(path);
+				if (preset == null)
+				{
+					continue;
+				}
+				PresetSpec spec = System.Array.Find(PresetSpecs, candidate => candidate.Name == preset.name);
+				if (spec == null || spec.Layers == null)
+				{
+					continue;
+				}
+				preset.Layers.Clear();
+				foreach ((WeatherLayerKind kind, float intensity) in spec.Layers)
+				{
+					if (templates.TryGetValue(kind, out WeatherLayerTemplate template))
+					{
+						preset.Layers.Add(new WeatherPresetLayer { Template = template, Intensity = intensity });
+					}
+				}
+				EditorUtility.SetDirty(preset);
+				presets.Add(preset.name);
+			}
+			AssetDatabase.SaveAssets();
+			Debug.Log($"[Weather content] {changed.Count} layer template(s) and {presets.Count} preset(s) back on the shipped content." +
+				(changed.Count > 0 ? $"\n  Templates: {string.Join(", ", changed)}" : string.Empty) +
+				(presets.Count > 0 ? $"\n  Presets: {string.Join(", ", presets)}" : string.Empty));
+		}
+
 		private static void Add(WeatherLayerTemplate t, WeatherChannel channel, AnimationCurve curve, float scale = 1f)
 		{
 			t.Channels.Add(new WeatherChannelCurve { Channel = channel, Curve = curve, Scale = scale });
@@ -170,8 +229,10 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 				case WeatherLayerKind.Rain:
 					Add(t, WeatherChannel.Precipitation, Ease(0f, 1f));
-					Add(t, WeatherChannel.DropSize, Line(0.2f, 0.8f));
-					Add(t, WeatherChannel.CloudCover, Line(0.5f, 1f));
+					Add(t, WeatherChannel.DropSize, Line(0.3f, 1f));
+					// Rain comes out of a deck of thick low cloud, not out of a lid over the world:
+					// a shower leaves plenty of sky, and only a downpour closes it over.
+					Add(t, WeatherChannel.CloudCover, Line(0.4f, 0.92f));
 					Add(t, WeatherChannel.CloudDensity, Line(0.4f, 1f));
 					Add(t, WeatherChannel.FogDensity, Ease(0f, 0.25f));
 					Add(t, WeatherChannel.WindGust, Line(0f, 0.3f));
@@ -180,7 +241,7 @@ namespace FishMMO.Shared.WorldDesign
 				case WeatherLayerKind.Snow:
 					Add(t, WeatherChannel.Precipitation, Ease(0f, 0.9f));
 					Add(t, WeatherChannel.DropSize, Line(0.1f, 0.6f));
-					Add(t, WeatherChannel.CloudCover, Line(0.6f, 1f));
+					Add(t, WeatherChannel.CloudCover, Line(0.5f, 0.95f));
 					Add(t, WeatherChannel.CloudDensity, Line(0.4f, 0.9f));
 					Add(t, WeatherChannel.FogDensity, Ease(0f, 0.4f));
 					Add(t, WeatherChannel.TemperatureOffset, Line(-0.05f, -0.2f));
@@ -268,17 +329,17 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			P("Clear", 60f, new Vector2(15f, 40f), new Vector2(400f, 900f), (Clouds, 0f)),
 			P("Fair", 60f, new Vector2(15f, 40f), new Vector2(300f, 800f), (Clouds, 0.3f), (Wind, 0.15f)),
-			P("Overcast", 60f, new Vector2(15f, 35f), new Vector2(300f, 800f), (Clouds, 0.9f), (Wind, 0.2f)),
-			P("Mist", 60f, new Vector2(10f, 25f), new Vector2(200f, 600f), (Fog, 0.5f), (Clouds, 0.4f)),
+			P("Overcast", 60f, new Vector2(15f, 35f), new Vector2(300f, 800f), (Clouds, 1f), (Wind, 0.2f)),
+			P("Mist", 60f, new Vector2(10f, 25f), new Vector2(200f, 600f), (Fog, 0.75f), (Clouds, 0.45f)),
 			P("Sprinkle", 30f, new Vector2(5f, 15f), new Vector2(150f, 400f), (Rain, 0.15f), (Clouds, 0.6f)),
 			P("Light Rain", 40f, new Vector2(10f, 25f), new Vector2(200f, 500f), (Rain, 0.35f), (Clouds, 0.75f), (Wind, 0.2f)),
 			P("Medium Rain", 40f, new Vector2(10f, 25f), new Vector2(200f, 550f), (Rain, 0.6f), (Clouds, 0.9f), (Wind, 0.3f)),
 			P("Heavy Rain", 45f, new Vector2(8f, 20f), new Vector2(200f, 550f), (Rain, 0.9f), (Clouds, 1f), (Wind, 0.45f), (Fog, 0.25f)),
-			P("Thunderstorm", 40f, new Vector2(8f, 20f), new Vector2(250f, 600f), (Rain, 0.85f), (Clouds, 1f), (Wind, 0.6f), (Lightning, 0.7f)),
+			P("Thunderstorm", 40f, new Vector2(8f, 20f), new Vector2(250f, 600f), (Rain, 0.85f), (Clouds, 1f), (Wind, 0.6f), (Lightning, 0.7f), (Fog, 0.2f)),
 			P("Light Snow", 60f, new Vector2(15f, 35f), new Vector2(250f, 600f), (Snow, 0.3f), (Clouds, 0.8f)),
 			P("Heavy Snow", 60f, new Vector2(12f, 30f), new Vector2(250f, 600f), (Snow, 0.8f), (Clouds, 1f), (Wind, 0.3f), (Fog, 0.3f)),
 			P("Blizzard", 45f, new Vector2(10f, 25f), new Vector2(300f, 650f), (Snow, 1f), (Wind, 0.85f), (Clouds, 0.95f), (Fog, 0.6f)),
-			P("Hailstorm", 20f, new Vector2(5f, 12f), new Vector2(150f, 350f), (Hail, 0.8f), (Clouds, 1f), (Wind, 0.5f), (Lightning, 0.3f)),
+			P("Hailstorm", 20f, new Vector2(5f, 12f), new Vector2(150f, 350f), (Hail, 0.8f), (Rain, 0.35f), (Clouds, 1f), (Wind, 0.5f), (Lightning, 0.3f)),
 			P("Ashfall", 90f, new Vector2(15f, 40f), new Vector2(300f, 700f), (Ash, 0.7f), (Fog, 0.4f), (Clouds, 0.6f)),
 			P("Sandstorm", 30f, new Vector2(8f, 20f), new Vector2(300f, 700f), (Sand, 0.9f), (Wind, 0.9f)),
 			P("Windy", 20f, new Vector2(8f, 20f), new Vector2(300f, 800f), (Wind, 0.7f), (Clouds, 0.35f)),

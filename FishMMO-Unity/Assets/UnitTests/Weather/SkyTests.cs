@@ -299,6 +299,35 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
+		public void DiscsAreDrawnLifeSizeUnlessAProfileAsksOtherwise()
+		{
+			// Jim's decision, 2026-09-17: life-size by default — a moon is as big as its radius and
+			// distance make it — with a toggle for a flattered sky.
+			SkyProfile profile = Make<SkyProfile>("Sky");
+			LogAssert.IsFalse(profile.LargerThanLife, "life-size is the default");
+			LogAssert.AreEqual(1f, profile.BodyScale, "moons and planets are drawn life-size");
+			LogAssert.AreEqual(1f, profile.SunScale, "and so is the sun");
+
+			profile.LargerThanLife = true;
+			LogAssert.AreEqual(profile.BodyDiscScale, profile.BodyScale, "switched on, the profile's scale applies");
+			LogAssert.AreEqual(profile.SunDiscScale, profile.SunScale);
+			LogAssert.IsTrue(profile.SunDiscScale > 1f && profile.BodyDiscScale > 1f, "and it flatters the sky");
+
+			try
+			{
+				SkyProfile.LargerThanLifeOverride = false;
+				LogAssert.AreEqual(1f, profile.BodyScale, "the override beats the profile, for the test beds");
+				SkyProfile.LargerThanLifeOverride = true;
+				SkyProfile plain = Make<SkyProfile>("Plain");
+				LogAssert.AreEqual(plain.BodyDiscScale, plain.BodyScale, "in both directions");
+			}
+			finally
+			{
+				SkyProfile.LargerThanLifeOverride = null;
+			}
+		}
+
+		[Test]
 		public void AnAirlessSkyIsBlackWithStarsAndHarshSun()
 		{
 			SkyProfile profile = Make<SkyProfile>("Moon Sky");

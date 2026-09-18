@@ -73,9 +73,11 @@ namespace FishMMO.Shared.Celestial
 		public Color MoonLight = new Color(0.62f, 0.7f, 0.9f);
 
 		[Header("Discs and stars")]
-		[Tooltip("Drawn size of suns against their true size.")]
+		[Tooltip("Off (the default): every disc is life-size — a moon is as big in the sky as its radius and distance make it. On: discs are drawn at the scales below, the way most games flatter the sky.")]
+		public bool LargerThanLife;
+		[Tooltip("Drawn size of suns, when Larger than life is on.")]
 		[Min(0.1f)] public float SunDiscScale = 1.6f;
-		[Tooltip("Drawn size of moons and planets against their true size.")]
+		[Tooltip("Drawn size of moons and planets, when Larger than life is on.")]
 		[Min(0.1f)] public float BodyDiscScale = 1.6f;
 		[Range(0f, 2f)] public float SunHalo = 0.6f;
 		[Range(0f, 4f)] public float StarBrightness = 1f;
@@ -98,6 +100,21 @@ namespace FishMMO.Shared.Celestial
 		[Header("No atmosphere")]
 		[Tooltip("Use a black sky with stars at noon (bodies without air).")]
 		public bool Airless;
+
+		/// <summary>
+		/// Forces <see cref="LargerThanLife"/> on or off for every profile, without touching the
+		/// assets: the test beds use it to compare the two. Null (the default) leaves each profile
+		/// to its own setting, which is what the game does.
+		/// </summary>
+		public static bool? LargerThanLifeOverride;
+
+		private bool Exaggerated => LargerThanLifeOverride ?? LargerThanLife;
+
+		/// <summary>How much bigger than life a sun is drawn: 1 unless the profile flatters the sky.</summary>
+		public float SunScale => Exaggerated ? SunDiscScale : 1f;
+
+		/// <summary>How much bigger than life a moon or planet is drawn.</summary>
+		public float BodyScale => Exaggerated ? BodyDiscScale : 1f;
 
 		public static float AltitudeKey(float altitudeDegrees) => Mathf.InverseLerp(LowestAltitude, HighestAltitude, altitudeDegrees);
 

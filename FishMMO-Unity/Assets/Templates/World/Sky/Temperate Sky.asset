@@ -406,6 +406,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   MoonLight: {r: 0.62, g: 0.7, b: 0.9, a: 1}
+  LargerThanLife: 0
   SunDiscScale: 1.6
   BodyDiscScale: 1.6
   SunHalo: 0.6
