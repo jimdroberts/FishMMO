@@ -29,6 +29,11 @@ Shader "FishMMO/Sky Body"
 
             TEXTURE2D(_BodyTex);
             SAMPLER(sampler_BodyTex);
+            // The cloud volume's own buffer: rgb scattered light, alpha the transmittance left
+            // along that ray. The bodies read it to know what stands in front of them.
+            TEXTURE2D(_FishCloudBuffer);
+            SAMPLER(sampler_FishCloudBuffer);
+            float4 _FishCloudScreen;   // x: 1 while the buffer holds this frame's clouds, else 0
             CBUFFER_START(UnityPerMaterial)
                 float4 _BodyTex_ST;
                 float _UseTexture;
@@ -106,8 +111,6 @@ Shader "FishMMO/Sky Body"
                 output.forward = -dir;
                 output.color = input.color;
 
-                // Clouds are not here to hide a body any more: the volume is composited over this
-                // pass, so a cloud in front covers it for free.
                 float horizon = saturate(dir.y * 20.0 + 0.5);
                 float fog = 1.0 - saturate(1.0 - dir.y * 7.0) * _FishSkyFogColor.a;
                 output.visibility = horizon * fog;
@@ -188,6 +191,20 @@ Shader "FishMMO/Sky Body"
                 }
 
                 alpha *= input.visibility;
+
+                // What the cloud in front of this body lets through. These quads sit in the
+                // transparent queue, and the cloud volume is composited before the transparent
+                // queue runs, so a body drawn now lands *on top* of the cloud that should be
+                // hiding it — a moon in front of an overcast. Reading the volume's own
+                // transmittance puts it back behind, and does it properly: thin cirrus dims a
+                // planet rather than either hiding it completely or not at all.
+                //
+                // The flag matters. With no clouds drawn this frame the buffer is unbound and
+                // samples as zero, which would mean "fully occluded" and take every body out of
+                // the sky, so nothing is applied unless the buffer is known to hold this frame.
+                float2 screenUV = input.positionCS.xy / _ScreenParams.xy;
+                float through = SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, screenUV).a;
+                alpha *= lerp(1.0, saturate(through), saturate(_FishCloudScreen.x));
                 return half4(color * alpha * _FishSkyParams.w, alpha);
             }
             ENDHLSL

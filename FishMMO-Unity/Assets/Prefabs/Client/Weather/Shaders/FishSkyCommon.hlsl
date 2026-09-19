@@ -27,6 +27,13 @@ float4 _FishWeatherMapParams; // x 1 when valid
 
 TEXTURECUBE(_FishStarCube);
 SAMPLER(sampler_FishStarCube);
+// The sky's own galaxy, when one is supplied. It lives in the same frame as the stars, so it
+// turns with them. _FishGalaxyParams.x says whether it is real: with none supplied the sky
+// draws its own Milky Way band instead, and this must not be sampled — an unbound cubemap
+// reads as black and would lay a dark patch across the night sky where the galaxy should be.
+TEXTURECUBE(_FishGalaxyCube);
+SAMPLER(sampler_FishGalaxyCube);
+float4 _FishGalaxyParams;
 TEXTURE2D(_FishWeatherNoise);
 SAMPLER(sampler_FishWeatherNoise);
 TEXTURE2D(_FishWeatherMap);

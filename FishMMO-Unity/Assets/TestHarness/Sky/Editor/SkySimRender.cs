@@ -69,6 +69,17 @@ namespace FishMMO.TestHarness.Sky.Editor
 			public float ExpectCloudCover;
 			/// <summary>The most of the frame the clouds may cover. 0 means no ceiling.</summary>
 			public float CloudCoverCeiling;
+			/// <summary>
+			/// How far the moon's disc must stand out from the sky around it. Above zero the moon has
+			/// to be visible; <see cref="MoonDiscCeiling"/> says it has to be hidden. The pair exists
+			/// because a body and a cloud can go wrong in both directions: the bodies are drawn in the
+			/// transparent queue, after the cloud volume is composited, so a moon can float in front of
+			/// an overcast — and the fix for that reads the cloud buffer's transmittance, which with no
+			/// clouds drawn samples as zero and would take every body out of the sky instead.
+			/// </summary>
+			public float MoonDiscContrast;
+			/// <summary>The most the moon's disc may stand out. 0 means no ceiling.</summary>
+			public float MoonDiscCeiling;
 			/// <summary>Puts the camera this far above the ground: the decks are a place you can fly to.</summary>
 			public float CameraHeight;
 			/// <summary>Aims the camera at this body once the moment is found.</summary>
@@ -111,7 +122,16 @@ namespace FishMMO.TestHarness.Sky.Editor
 			new Stage { Name = "home-storm-noon", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-20f, 180f, 0f), Weather = Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 1f), (WeatherChannel.Precipitation, 0.8f), (WeatherChannel.RainWeight, 1f), (WeatherChannel.LightningRate, 1f), (WeatherChannel.FogDensity, 0.3f)) },
 			new Stage { Name = "moon-day", Body = "Moon 1", Time = 0.5, Sun = 1, ExpectBlackSky = true, ExpectStars = true, CameraEuler = new Vector3(-25f, 180f, 0f) },
 			new Stage { Name = "moon-night", Body = "Moon 1", Time = 0.0, Sun = -1, ExpectBlackSky = true, ExpectStars = true, CameraEuler = new Vector3(-30f, 0f, 0f) },
-			new Stage { Name = "home-moonlit", Time = 0.0, Sun = -1, ExpectMoon = true, ExpectStars = true },
+			new Stage { Name = "home-moonlit", Time = 0.0, Sun = -1, ExpectMoon = true, ExpectStars = true, MoonDiscContrast = 0.004f },
+			new Stage
+			{
+				// The same moon under a closed sky. It must not be there: the bodies are drawn after the
+				// cloud volume is composited, so without something to put them back behind it a moon
+				// hangs in front of an overcast. Paired with the contrast asked of home-moonlit above,
+				// which fails the other way if the bodies are hidden when there is no cloud at all.
+				Name = "moon-behind-cloud", Time = 0.0, Sun = -1, ExpectMoon = true, MoonDiscCeiling = 0.002f,
+				Weather = Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 1f)),
+			},
 			new Stage { Name = "home-noon-performant", Time = 0.5, Sun = 1, Quality = 0, CameraEuler = new Vector3(-30f, 180f, 0f) },
 			new Stage
 			{
@@ -556,6 +576,8 @@ namespace FishMMO.TestHarness.Sky.Editor
 				}
 			}
 			Capture(controller, path);
+			// Per stage, so a stage that does not measure it cannot report the last one's number.
+			moonDisc = 0f;
 
 			var problems = new List<string>();
 			SkySystem sky = controller.Sky;
@@ -595,6 +617,18 @@ namespace FishMMO.TestHarness.Sky.Editor
 			if (stage.ExpectCloudCover > 0f && lastCloudCover < stage.ExpectCloudCover)
 			{
 				problems.Add($"the clouds should cover the sky, only {lastCloudCover * 100f:0}% of it looks cloudy");
+			}
+			if (stage.MoonDiscContrast > 0f || stage.MoonDiscCeiling > 0f)
+			{
+				moonDisc = MeasureMoonDisc(controller);
+				if (stage.MoonDiscContrast > 0f && moonDisc < stage.MoonDiscContrast)
+				{
+					problems.Add($"the moon does not stand out from the sky ({moonDisc:0.0000} < {stage.MoonDiscContrast:0.0000}); the clouds may be hiding bodies that nothing is in front of");
+				}
+				if (stage.MoonDiscCeiling > 0f && moonDisc > stage.MoonDiscCeiling)
+				{
+					problems.Add($"the moon shows through the cloud ({moonDisc:0.0000} > {stage.MoonDiscCeiling:0.0000}); a body is being drawn over the volume instead of behind it");
+				}
 			}
 			if (stage.CloudCoverCeiling > 0f && lastCloudCover > stage.CloudCoverCeiling)
 			{
@@ -642,7 +676,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 				failures++;
 			}
 			string moon = state.Moon >= 0 ? $"moon {state.Bodies[state.Moon].AltitudeDegrees:0}° {(state.Bodies[state.Moon].Illumination * 100f):0}%" : "no moon";
-			report.Add($"{stage.Name}: {(problems.Count == 0 ? "PASS" : "FAIL " + string.Join("; ", problems))} — {controller.Body?.ResolvedName} at {controller.Latitude:0}°, shown aurora {controller.Presentation?.Shown[WeatherChannel.Aurora] ?? 0f:0.00}/rain {controller.Presentation?.Shown[WeatherChannel.Precipitation] ?? 0f:0.00}, day {Mathf.FloorToInt(controller.DayOfYear)}, {SceneTime.Format(state.LocalTime01)}, sun {altitude:0.0}°, stars {stars:0.00}, aurora {aurora:0.00}, eclipse {state.SolarEclipse:0.00}, rainbow {rainbow:0.00}, {moon}, {state.Bodies.Count} bodies, {quads} quads, {textured} textured, cloud cover {lastCloudCover * 100f:0}%, quality {QualitySettings.names[QualitySettings.GetQualityLevel()]} → {Path.GetFileName(path)}");
+			report.Add($"{stage.Name}: {(problems.Count == 0 ? "PASS" : "FAIL " + string.Join("; ", problems))} — {controller.Body?.ResolvedName} at {controller.Latitude:0}°, shown aurora {controller.Presentation?.Shown[WeatherChannel.Aurora] ?? 0f:0.00}/rain {controller.Presentation?.Shown[WeatherChannel.Precipitation] ?? 0f:0.00}, day {Mathf.FloorToInt(controller.DayOfYear)}, {SceneTime.Format(state.LocalTime01)}, sun {altitude:0.0}°, stars {stars:0.00}, aurora {aurora:0.00}, eclipse {state.SolarEclipse:0.00}, rainbow {rainbow:0.00}, {moon}, {state.Bodies.Count} bodies, {quads} quads, {textured} textured, cloud cover {lastCloudCover * 100f:0}%, moon disc {moonDisc:0.0000}, quality {QualitySettings.names[QualitySettings.GetQualityLevel()]} → {Path.GetFileName(path)}");
 		}
 
 		/// <summary>
@@ -773,6 +807,78 @@ namespace FishMMO.TestHarness.Sky.Editor
 		/// How bright the sky is in a ring around the sun: where shafts live, but outside the sun's
 		/// own disc and halo, so the measure is of the rays and not of the sun.
 		/// </summary>
+		/// <summary>
+		/// How far the moon's disc stands out from the sky immediately around it, in luminance.
+		/// </summary>
+		/// <remarks>
+		/// A moon on a clear night is far brighter than the sky beside it; a moon behind an overcast
+		/// is not there at all. Comparing the disc against its own surroundings rather than against
+		/// an absolute brightness is what makes the same measure work for both, at any time of night
+		/// and whatever the cloud happens to be lit to.
+		/// </remarks>
+		private static float MeasureMoonDisc(WorldSimController controller)
+		{
+			Camera camera = controller.Camera;
+			CelestialState state = controller.State;
+			if (state == null || state.Moon < 0)
+			{
+				return 0f;
+			}
+			SkyBodyState moon = state.Bodies[state.Moon];
+			// Viewport, not screen. WorldToScreenPoint answers in the pixels the camera is currently
+			// sized to, which here is the game view, while the image below is Width x Height — so a
+			// screen-space answer lands a fifth of the frame away from where the moon actually is,
+			// and a disc this small is then measured against empty sky.
+			Vector3 view = camera.WorldToViewportPoint(camera.transform.position + moon.Direction * 10000f);
+			if (view.z <= 0f)
+			{
+				return 0f;
+			}
+			var screen = new Vector2(view.x * Width, view.y * Height);
+			// The disc, and a ring of sky well clear of it to compare against.
+			float radius = Mathf.Max(6f, moon.AngularRadius * Mathf.Rad2Deg / camera.fieldOfView * Height);
+			float inner = radius * 2.5f, outer = radius * 6f;
+			Texture2D image = Shoot(controller);
+			try
+			{
+				Color[] pixels = image.GetPixels();
+				float disc = 0f, sky = 0f;
+				int discCount = 0, skyCount = 0;
+				for (int y = 0; y < Height; y++)
+				{
+					for (int x = 0; x < Width; x++)
+					{
+						float distance = new Vector2(x - screen.x, y - screen.y).magnitude;
+						if (distance > outer)
+						{
+							continue;
+						}
+						Color p = pixels[y * Width + x];
+						float luminance = p.r * 0.2126f + p.g * 0.7152f + p.b * 0.0722f;
+						if (distance <= radius)
+						{
+							disc += luminance;
+							discCount++;
+						}
+						else if (distance >= inner)
+						{
+							sky += luminance;
+							skyCount++;
+						}
+					}
+				}
+				if (discCount == 0 || skyCount == 0)
+				{
+					return 0f;
+				}
+				return disc / discCount - sky / skyCount;
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(image);
+			}
+		}
+
 		private static float MeasureSunGlow(WorldSimController controller)
 		{
 			Camera camera = controller.Camera;
@@ -950,6 +1056,8 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		private static float lastCloudCover;
+		/// <summary>How far the moon stood out from the sky last time a stage asked.</summary>
+		private static float moonDisc;
 
 		private static void Capture(WorldSimController controller, string path)
 		{

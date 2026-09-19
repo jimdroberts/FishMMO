@@ -53,6 +53,8 @@ namespace FishMMO.Client
 		private static readonly int SunCountId = Shader.PropertyToID("_FishSunCount");
 		private static readonly int StarMatrixId = Shader.PropertyToID("_FishStarMatrix");
 		private static readonly int StarCubeId = Shader.PropertyToID("_FishStarCube");
+		private static readonly int GalaxyCubeId = Shader.PropertyToID("_FishGalaxyCube");
+		private static readonly int GalaxyParamsId = Shader.PropertyToID("_FishGalaxyParams");
 		private static readonly int NoiseId = Shader.PropertyToID("_FishWeatherNoise");
 		private static readonly int CloudLitId = Shader.PropertyToID("_FishCloudLit");
 		private static readonly int CloudShadowId = Shader.PropertyToID("_FishCloudShadow");
@@ -61,6 +63,7 @@ namespace FishMMO.Client
 		private static readonly int CloudShapeParamsId = Shader.PropertyToID("_FishCloudShapeParams");
 		private static readonly int CloudWindId = Shader.PropertyToID("_FishCloudWind");
 		private static readonly int CloudWindDirId = Shader.PropertyToID("_FishCloudWindDir");
+		private static readonly int CloudScreenId = Shader.PropertyToID("_FishCloudScreen");
 		private static readonly int CloudLightId = Shader.PropertyToID("_FishCloudLight");
 		private static readonly int CloudTypeParamsId = Shader.PropertyToID("_FishCloudTypeParams");
 		private static readonly int CloudSunDirId = Shader.PropertyToID("_FishCloudSunDir");
@@ -562,6 +565,12 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(EclipseId, new Vector4(eclipse, state.LunarEclipse, airless, 0f));
 			Shader.SetGlobalMatrix(StarMatrixId, state.EquatorialToScene.transpose);
 			Shader.SetGlobalTexture(StarCubeId, stars);
+			// A galaxy of the sky's own, if it has one. It sits in the same frame as the stars, so it
+			// turns with them; with none supplied the shader draws its own band instead. The flag is
+			// what chooses, and an unbound cubemap must never be sampled — it reads as black and
+			// would put a dark patch across the night sky where the galaxy should be.
+			Shader.SetGlobalTexture(GalaxyCubeId, sky.Galaxy != null ? (Texture)sky.Galaxy : stars);
+			Shader.SetGlobalVector(GalaxyParamsId, new Vector4(sky.Galaxy != null ? 1f : 0f, 0f, 0f, 0f));
 			if (profile.Noise != null)
 			{
 				Shader.SetGlobalTexture(NoiseId, profile.Noise);
@@ -807,6 +816,12 @@ namespace FishMMO.Client
 		{
 			VolumetricCloudSettings clouds = profile.Clouds;
 			cloudsReady = profile.CloudShape != null && profile.CloudDetail != null && cycle != null;
+			// Cleared here every frame, before anything renders, and raised again by the cloud
+			// feature only once it has actually published a buffer. The sky bodies attenuate
+			// themselves by that buffer, and an unbound one samples as zero — which would read as
+			// "fully occluded" and empty the sky of moons and planets — so the default has to be
+			// "do not attenuate".
+			Shader.SetGlobalVector(CloudScreenId, Vector4.zero);
 			CloudTier = new CloudTierSettings
 			{
 				Resolution = tier.CloudResolution,

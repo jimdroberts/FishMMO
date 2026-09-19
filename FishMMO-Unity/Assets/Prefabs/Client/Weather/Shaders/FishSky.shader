@@ -113,20 +113,30 @@ Shader "FishMMO/Sky"
                     float3 sd = mul((float3x3)_FishStarMatrix, dir);
                     float3 stars = SAMPLE_TEXTURECUBE_LOD(_FishStarCube, sampler_FishStarCube, sd, 0).rgb;
                     float twinkle = 1.0 + _FishSkyParams.z * (Hash31(floor(sd * 400.0) + floor(_FishWeatherMisc.w * 6.0)) - 0.5) * (1.0 - h);
-                    float3 galacticPole = normalize(float3(0.46, -0.88, 0.12));
-                    float band = exp(-pow(dot(sd, galacticPole), 2.0) * 30.0);
-                    // The dust is taken from the direction itself, in the galaxy's own frame. It
-                    // used to come from atan2(sd.z, sd.x), which wraps at ±π and drew a hard seam
-                    // straight across the sky, while the cylindrical mapping pinched at the poles
-                    // into a fan of straight streaks — together they read as a torn grey sheet
-                    // hanging over the stars rather than as a galaxy.
-                    float3 galacticX = normalize(cross(galacticPole, float3(0.0, 0.0, 1.0)));
-                    float3 galacticY = cross(galacticPole, galacticX);
-                    float across = dot(sd, galacticPole);
-                    float2 mwUv = float2(dot(sd, galacticX), dot(sd, galacticY));
-                    float dust = FishNoise(mwUv * 5.0 + across * 2.0, 1)
-                               * FishNoise(mwUv * 11.0 - across * 3.0 + 0.3, 0);
-                    float3 milkyWay = float3(0.55, 0.58, 0.72) * band * saturate(dust * 2.2 - 0.2) * _FishSkyParams.y * 0.35;
+                    float3 milkyWay;
+                    if (_FishGalaxyParams.x > 0.5)
+                    {
+                        // The sky's own galaxy, along the same direction the stars use so the two
+                        // turn together. The brightness slider scales it, as it does the band below.
+                        milkyWay = SAMPLE_TEXTURECUBE_LOD(_FishGalaxyCube, sampler_FishGalaxyCube, sd, 0).rgb * _FishSkyParams.y;
+                    }
+                    else
+                    {
+                        float3 galacticPole = normalize(float3(0.46, -0.88, 0.12));
+                        float band = exp(-pow(dot(sd, galacticPole), 2.0) * 30.0);
+                        // The dust is taken from the direction itself, in the galaxy's own frame. It
+                        // used to come from atan2(sd.z, sd.x), which wraps at ±π and drew a hard seam
+                        // straight across the sky, while the cylindrical mapping pinched at the poles
+                        // into a fan of straight streaks — together they read as a torn grey sheet
+                        // hanging over the stars rather than as a galaxy.
+                        float3 galacticX = normalize(cross(galacticPole, float3(0.0, 0.0, 1.0)));
+                        float3 galacticY = cross(galacticPole, galacticX);
+                        float across = dot(sd, galacticPole);
+                        float2 mwUv = float2(dot(sd, galacticX), dot(sd, galacticY));
+                        float dust = FishNoise(mwUv * 5.0 + across * 2.0, 1)
+                                   * FishNoise(mwUv * 11.0 - across * 3.0 + 0.3, 0);
+                        milkyWay = float3(0.55, 0.58, 0.72) * band * saturate(dust * 2.2 - 0.2) * _FishSkyParams.y * 0.35;
+                    }
                     color += (stars * twinkle * 2.0 + milkyWay) * starVisibility;
                 }
 

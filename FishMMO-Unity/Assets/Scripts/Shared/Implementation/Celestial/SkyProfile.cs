@@ -81,7 +81,10 @@ namespace FishMMO.Shared.Celestial
 		[Min(0.1f)] public float BodyDiscScale = 1.6f;
 		[Range(0f, 2f)] public float SunHalo = 0.6f;
 		[Range(0f, 4f)] public float StarBrightness = 1f;
+		[Tooltip("How bright the galaxy is in the night sky. It scales whichever galaxy is drawn: the supplied image, or the built-in band when there is none.")]
 		[Range(0f, 2f)] public float MilkyWay = 0.6f;
+		[Tooltip("Your own galaxy for the night sky. Left empty, the sky draws its own Milky Way band. A cubemap because the star field it sits in is one too, so it turns with the stars and has no seam or pinched pole; an equirectangular panorama works by setting its importer's Texture Shape to Cube (Latitude-Longitude).")]
+		public Cubemap Galaxy;
 		[Range(0f, 1f)] public float StarTwinkle = 0.4f;
 		[Tooltip("Sky exposure multiplier.")]
 		[Min(0f)] public float Exposure = 1f;

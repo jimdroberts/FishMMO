@@ -103,6 +103,7 @@ namespace FishMMO.Client
 			private static readonly int CurrentId = Shader.PropertyToID("_FishCloudCurrent");
 			private static readonly int HistoryId = Shader.PropertyToID("_FishCloudHistory");
 			private static readonly int BufferId = Shader.PropertyToID("_FishCloudBuffer");
+			private static readonly int ScreenId = Shader.PropertyToID("_FishCloudScreen");
 			private static readonly int RaySourceId = Shader.PropertyToID("_FishGodRaySource");
 			private static readonly int RayBufferId = Shader.PropertyToID("_FishGodRayBuffer");
 			private static readonly int RayCloudsId = Shader.PropertyToID("_FishGodRayClouds");
@@ -251,6 +252,26 @@ namespace FishMMO.Client
 				{
 					DrawGodRays(renderGraph, resourceData, sky, steadied, viewProjection, width / 2, height / 2);
 				}
+
+				// The sky bodies are drawn in the transparent queue, which runs after this composite,
+				// so a moon or a planet is otherwise painted over the cloud that should be in front
+				// of it. They read this buffer's transmittance to put themselves back behind it.
+				//
+				// Published here, on the CPU, and not with SetGlobalTexture inside the composite
+				// pass: binding a graph-managed target as a global from within a raster pass upsets
+				// RenderGraph's tracking of it and the whole frame comes out empty. The steadied
+				// result lives in an imported RTHandle, which is a plain texture the rest of the
+				// frame can read, so hand that over directly.
+				bool published = tier.Temporal && history[1 - historyIndex] != null && history[1 - historyIndex].rt != null;
+				if (published)
+				{
+					Shader.SetGlobalTexture(BufferId, history[1 - historyIndex].rt);
+				}
+				// SkySystem clears this each frame before anything renders; raising it here is what
+				// says the buffer above is real. Left at zero, the bodies do not attenuate at all,
+				// which is the right way to fail: an unbound buffer samples as zero and would
+				// otherwise read as "fully occluded" and empty the sky.
+				Shader.SetGlobalVector(ScreenId, new Vector4(published ? 1f : 0f, 0f, 0f, 0f));
 
 				previousViewProjection = viewProjection;
 				historyValid = tier.Temporal;
