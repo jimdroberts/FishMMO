@@ -240,10 +240,17 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // Slide down that ray to the ground, so the march always starts under the clouds.
                 origin -= toSun * (origin.y / max(0.02, toSun.y));
                 float jitter = frac(sin(dot(input.uv, float2(12.9898, 78.233))) * 43758.5453);
-                float density = FishCloudShadowDepth(origin, toSun, (int)max(2.0, _FishCloudShadowArea.w), jitter);
+                float density = FishCloudShadowDepth(origin, toSun, (int)max(2.0, _FishCloudShadowArea.w), jitter, _FishCloudShadowArea.x);
                 // A cookie: 1 in full sun, darker under a cloud, never black — what the ground still
-                // gets from the sky is the ambient term's job, not the cookie's.
-                return saturate(exp(-density * 0.3) * 0.75 + 0.25);
+                // gets from the sky is the ambient term's job, not the cookie's. How dark is the
+                // profile's shadow strength, which used to be handed to the presenter and then never
+                // read: the slider did nothing and the floor was a constant.
+                // A real optical depth, so the shadow of a heap is hard-edged and dark and the
+                // shadow of a wisp is faint — nothing softened, nothing floored. The strength is
+                // how dark the ground may go: at 1 a solid cloud's shadow is black and the ambient
+                // term is all that lights it, which is what a cloud shadow on a sunny day is.
+                float through = exp(-density);
+                return saturate(lerp(1.0, through, saturate(_FishCloudShadowArea.y)));
             }
             ENDHLSL
         }

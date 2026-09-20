@@ -99,6 +99,7 @@ namespace FishMMO.Client
 			private static readonly int InverseVPId = Shader.PropertyToID("_FishCloudInverseVP");
 			private static readonly int PreviousVPId = Shader.PropertyToID("_FishCloudPreviousVP");
 			private static readonly int MarchParamsId = Shader.PropertyToID("_FishCloudMarchParams");
+			private static readonly int LodParamsId = Shader.PropertyToID("_FishCloudLodParams");
 			private static readonly int TemporalId = Shader.PropertyToID("_FishCloudTemporal");
 			private static readonly int CurrentId = Shader.PropertyToID("_FishCloudCurrent");
 			private static readonly int HistoryId = Shader.PropertyToID("_FishCloudHistory");
@@ -175,6 +176,14 @@ namespace FishMMO.Client
 				material.SetMatrix(InverseVPId, viewProjection.inverse);
 				material.SetMatrix(PreviousVPId, previousViewProjection);
 				material.SetVector(MarchParamsId, new Vector4(tier.Steps, tier.Detail, frame, sky.CloudFarDistance));
+				// How wide one marched pixel's cone opens, in metres per metre of distance. The
+				// projection's [1][1] is 1/tan(halfFov), so 2/(m11 * height) is the height of one
+				// pixel a metre in front of the camera. It has to be worked out here and nowhere
+				// else: this is the only place that knows the buffer is a fraction of the screen,
+				// and a half-resolution march has pixels twice as wide as the display's.
+				float m11 = Mathf.Abs(cameraData.GetProjectionMatrix().m11);
+				float spread = m11 > 1e-4f ? 2f / (m11 * height) : 0f;
+				Shader.SetGlobalVector(LodParamsId, new Vector4(spread, sky.CloudMaxLod, 1f / sky.CloudLodSharpness, 0f));
 				bool temporal = tier.Temporal && historyValid;
 				material.SetVector(TemporalId, new Vector4(temporal ? tier.TemporalBlend : 0f, temporal ? 1f : 0f, sky.CloudLayerCentre, 0f));
 

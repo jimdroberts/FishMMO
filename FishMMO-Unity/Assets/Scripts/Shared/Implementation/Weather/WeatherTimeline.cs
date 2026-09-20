@@ -30,6 +30,38 @@ namespace FishMMO.Shared.Weather
 		public WeatherCover Cover;
 		public uint CoverTick;
 
+		/// <summary>
+		/// Where and when this scene is, for the weather driver.
+		/// </summary>
+		/// <remarks>
+		/// The driver is a pure function of the world clock and the place, so it needs both — and
+		/// both have to be the same number on the server and on every client or they compute
+		/// different weather. They live here because the timeline is the one piece of weather state
+		/// both sides already hold and keep in step.
+		/// </remarks>
+		/// <summary>
+		/// Whether the drifting weather field runs in this scene.
+		/// </summary>
+		/// <remarks>
+		/// On for a living world. Off where the weather has to be exactly what was asked for and
+		/// nothing else: a scene pinned to a fixed preset, and the probe stages that check a preset
+		/// looks right — a driver quietly adding its own cloud to those would make them test the
+		/// weather of whatever moment they happened to run at.
+		/// </remarks>
+		public bool Driver = true;
+
+		public double WorldSecondsAtTick;
+		/// <summary>The tick <see cref="WorldSecondsAtTick"/> was taken at.</summary>
+		public uint WorldSecondsTick;
+		/// <summary>The scene's latitude: it decides which way the weather comes from, and how hard.</summary>
+		public float LatitudeDegrees;
+		/// <summary>The scene's longitude, for working out its local hour from the world clock.</summary>
+		public float LongitudeDegrees;
+
+		/// <summary>World time at a tick, carried forward from the last anchor the server sent.</summary>
+		public double WorldSecondsAt(uint tick) =>
+			WorldSecondsAtTick + (double)((long)tick - WorldSecondsTick) * TickDelta;
+
 		public uint LeadTicks => (uint)Mathf.CeilToInt((float)(LeadSeconds / Math.Max(1e-6, TickDelta)));
 
 		public uint SecondsToTicks(float seconds) => (uint)Math.Max(0, Math.Round(seconds / Math.Max(1e-6, TickDelta)));
@@ -99,6 +131,39 @@ namespace FishMMO.Shared.Weather
 					accumulator.Add(template.Evaluate(intensity), 1f);
 				}
 			}
+		}
+
+		/// <summary>
+		/// The strongest scene layer running at a tick, 0..1: how far the scene's own weather has
+		/// been overridden. A preset or a layer is a request for *this* weather, not for this weather
+		/// on top of whatever the field was doing — so the driver's background is weighted by one
+		/// minus this, and returns as the layer fades out.
+		/// </summary>
+		/// <remarks>
+		/// Every channel blends by taking the greater, so with the driver left at full weight a
+		/// preset could only ever add: Clear could not clear a cloudy field, an overcast's cover was
+		/// whichever of the two was larger, and the sky's formations went on being taken out at the
+		/// camera as if the field owned a cover the preset did. Layers the temperature rules out are
+		/// not counted, for the same reason they are not applied.
+		/// </remarks>
+		public float OverrideAt(uint tick, float temperature = float.NaN)
+		{
+			float strongest = SceneMode == WeatherSceneMode.Fixed && FixedPresetID != 0 ? 1f : 0f;
+			for (int i = 0; i < Layers.Count; i++)
+			{
+				WeatherLayerEntry entry = Layers[i];
+				float intensity = entry.IntensityAt(tick);
+				if (intensity <= strongest)
+				{
+					continue;
+				}
+				WeatherLayerTemplate template = WeatherLayerTemplate.Get<WeatherLayerTemplate>(entry.TemplateID);
+				if (template != null && (float.IsNaN(temperature) || template.AllowsTemperature(temperature)))
+				{
+					strongest = intensity;
+				}
+			}
+			return Mathf.Clamp01(strongest);
 		}
 
 		/// <summary>The scene-wide climate shift at a tick, including temperature/humidity channels from scene layers.</summary>
@@ -175,6 +240,13 @@ namespace FishMMO.Shared.Weather
 				Climate = Climate,
 				Cover = Cover,
 				CoverTick = CoverTick,
+				// Where and when, so the client's driver computes the server's weather rather than
+				// the weather of world-time zero on the equator.
+				Driver = Driver,
+				WorldSecondsAtTick = WorldSecondsAtTick,
+				WorldSecondsTick = WorldSecondsTick,
+				LatitudeDegrees = LatitudeDegrees,
+				LongitudeDegrees = LongitudeDegrees,
 			};
 		}
 
@@ -194,6 +266,11 @@ namespace FishMMO.Shared.Weather
 			Climate = msg.Climate;
 			Cover = msg.Cover;
 			CoverTick = msg.CoverTick;
+			Driver = msg.Driver;
+			WorldSecondsAtTick = msg.WorldSecondsAtTick;
+			WorldSecondsTick = msg.WorldSecondsTick;
+			LatitudeDegrees = msg.LatitudeDegrees;
+			LongitudeDegrees = msg.LongitudeDegrees;
 		}
 
 		/// <summary>

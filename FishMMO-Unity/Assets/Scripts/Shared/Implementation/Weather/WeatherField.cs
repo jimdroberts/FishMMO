@@ -1,4 +1,5 @@
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Celestial;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -19,6 +20,14 @@ namespace FishMMO.Shared.Weather
 		public float Temperature;
 		/// <summary>0 in the open … 1 fully under cover.</summary>
 		public float Shelter;
+		/// <summary>What the driver says the air is doing here: pressure, humidity, instability, wind.</summary>
+		public WeatherDriver.Synoptic Air;
+		/// <summary>
+		/// How much of this weather the drifting field decided, 0..1. 1 is the field alone; 0 is a
+		/// preset or layer at full strength standing in for it. The sky scales the field's own
+		/// terms — the formations, the front's slope — by this, so a preset's sky is the preset's.
+		/// </summary>
+		public float DriverWeight;
 
 		public PrecipitationKind Precipitation => Frame.DominantPrecipitation;
 		public float StormSeverity => Frame.StormSeverity;
@@ -78,9 +87,57 @@ namespace FishMMO.Shared.Weather
 			// climate's default instead.
 			BiomeWeatherProfile profile = ProfileFor(reading.IsGrounded ? reading.Biome : null, settings);
 			var accumulator = new WeatherAccumulator();
-			if (mode == WeatherSceneMode.Own)
+			if (mode == WeatherSceneMode.Own && timeline.Driver)
 			{
-				profile?.AccumulateBackground(ref accumulator);
+				// What the weather is doing here and now, before anything the biome or a cell adds:
+				// the drifting field of highs and lows, worked out from the world clock. This is the
+				// part that actually makes weather happen — without it the background was one fixed
+				// frame per biome that never changed, and the sky only ever varied when a storm cell
+				// happened to pass. Both sides compute it from the same seed and the same clock, so
+				// it costs nothing on the wire and two machines never disagree.
+				// The season and the hour are worked out here, on both sides, from the clock anchor
+				// the server sent. Sending them instead would freeze them at whatever they were when
+				// the client joined.
+				double worldSeconds = timeline.WorldSecondsAt(tick);
+				double worldHours = worldSeconds / 3600.0;
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				WorldBody sceneBody = SceneTime.BodyOf(settings);
+				float season01 = system != null
+					? Mathf.Repeat((float)(worldHours / System.Math.Max(1e-6, CelestialMath.YearHours(system))), 1f)
+					: 0.5f;
+				float localTime01 = system != null && sceneBody != null
+					? (float)CelestialMath.LocalTime01(system, sceneBody, worldHours, timeline.LongitudeDegrees)
+					: 0.5f;
+
+				WeatherDriver.Synoptic air = WeatherDriver.Sample(
+					WeatherDriver.WorldSeed,
+					new Vector2(position.x, position.z),
+					worldSeconds,
+					timeline.LatitudeDegrees,
+					season01,
+					localTime01);
+				sample.Air = air;
+				// The field carries its own temperature anomaly on top of the biome's climate.
+				sample.Temperature = Mathf.Clamp(sample.Temperature + air.Temperature * 0.35f, -1f, 1f);
+				// A preset or a layer overrides the field rather than adding to it: everything
+				// blends by taking the greater, so at full weight the field would show through any
+				// weather that asked for less of something — Clear could never clear the sky. The
+				// field steps back by the strongest layer's strength and returns as it fades.
+				float driverWeight = 1f - timeline.OverrideAt(tick, sample.Temperature);
+				sample.DriverWeight = driverWeight;
+				if (driverWeight > 0f)
+				{
+					accumulator.Add(WeatherDriver.Background(air), driverWeight);
+					if (profile != null)
+					{
+						var biome = new WeatherAccumulator();
+						profile.AccumulateBackground(ref biome);
+						if (biome.HasAny)
+						{
+							accumulator.Add(biome.Resolve(), driverWeight);
+						}
+					}
+				}
 			}
 			timeline.AccumulateSceneLayers(tick, ref accumulator, sample.Temperature);
 			// Everything but the cells is the background, and the sky needs it on its own.

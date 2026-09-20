@@ -301,6 +301,11 @@ namespace FishMMO.TestHarness.Weather.Editor
 		private static void Start(WorldSimController controller, Stage stage)
 		{
 			QualitySettings.SetQualityLevel(Mathf.Clamp(stage.Quality, 0, QualitySettings.names.Length - 1), true);
+			// These stages check that a preset looks like itself, so the drifting weather field is
+			// held off: left running it would add its own cloud and rain on top, and every stage
+			// would then depend on the moment it happened to be rendered at. The driver has its own
+			// stages, which turn it back on.
+			controller.Timeline.Driver = false;
 			controller.Camera.transform.position = stage.CameraPosition;
 			controller.Camera.transform.rotation = Quaternion.Euler(stage.CameraEuler);
 			if (stage.Moonlit)

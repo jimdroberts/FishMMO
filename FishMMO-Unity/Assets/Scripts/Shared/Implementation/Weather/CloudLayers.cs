@@ -51,6 +51,8 @@ namespace FishMMO.Shared.Weather
 		[Range(0.02f, 0.9f)] public float BaseSoftness = 0.12f;
 		[Tooltip("How much of the band's top the cloud thins over. High gives ragged tops.")]
 		[Range(0.05f, 1f)] public float TopSoftness = 0.55f;
+		[Tooltip("How much the shape changes with height, as a multiple of the band's own thickness. The shape noise is otherwise sampled on the same scale going up as going along, and a band is far thinner than a cloud is wide — so a column came out as one value from floor to ceiling and every cloud was a flat slab. Around 2 gives half a turn of noise over the band's height, which is what puts lumps and hollows into it. Higher breaks a cloud into layers; lower flattens it again.")]
+		[Range(0.25f, 8f)] public float VerticalScale = 2f;
 		[Tooltip("How much the height a cloud reaches varies from place to place. A cloud's base is flat because condensation happens at one height across a region; its top is lumpy because each rising parcel of air runs out of lift somewhere different. 0 is a level sheet, high is cauliflower.")]
 		[Range(0f, 1f)] public float Convection = 0f;
 
@@ -114,13 +116,16 @@ namespace FishMMO.Shared.Weather
 				Density = 0.55f, CoverageScale = 0f, CoverageBias = 0f, WindScale = 0.6f,
 				ShadedTint = new Color(0.78f, 0.82f, 0.88f),
 			},
-			// The cloud deck: a flat base at 800 m building up to 1.4 km. This is the sky a fair
-			// day is made of, and the layer the rain comes out of.
+			// The cloud deck: a flat base at 800 m with room to build to 2.4 km. This is the sky a
+			// fair day is made of, and the layer the rain comes out of. The depth matters as much as
+			// the noise does — a 600 m band gives a cloud nowhere to grow, so every column reaches
+			// the ceiling and the deck comes out as a sheet however the convection is set. Given
+			// room, the convection decides how much of it each column actually uses.
 			new CloudLayer
 			{
-				Name = "Cumulus", Bottom = 800f, Top = 1400f, BaseFollowsCondensation = true,
-				NoiseScale = 4200f, DetailScale = 380f, DetailStrength = 0.45f,
-				BaseSoftness = 0.06f, TopSoftness = 0.5f, Convection = 0.8f,
+				Name = "Cumulus", Bottom = 800f, Top = 3200f, BaseFollowsCondensation = true,
+				NoiseScale = 12000f, DetailScale = 380f, DetailStrength = 0.45f,
+				BaseSoftness = 0.06f, TopSoftness = 0.65f, Convection = 0.8f,
 				Density = 1f, CoverageScale = 1f, WindScale = 1f,
 				CarriesRain = true, GrowsStorms = true,
 			},

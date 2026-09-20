@@ -95,22 +95,31 @@ namespace FishMMO.Client
 		public List<CloudLayer> Layers = CloudLayerDefaults.Sky();
 		[Tooltip("Planet radius used to curve the bands down to the horizon, in kilometres.")]
 		[Min(10f)] public float CurvatureRadiusKm = 6371f;
-		[Tooltip("Where the noise is cut when the forecast says no cloud. The field runs about 0.33 to 0.76, so these live in that window; outside it the sky is all or nothing.")]
+		[Tooltip("Where the noise is cut when the forecast says no cloud. The field runs about 0.33 to 0.76, so these live in that window; outside it the sky is all or nothing. Recalibrated when the bands gained vertical structure: the cut is on the noise TIMES the height profile, so giving a column real variation with height lowered the product and the old cut let far less cloud through.")]
 		[Range(0.2f, 0.9f)] public float CoverageCutClear = 0.662f;
 		[Tooltip("Where the noise is cut under a full overcast.")]
 		[Range(0.1f, 0.8f)] public float CoverageCutFull = 0.575f;
 		[Tooltip("How much further the cut drops over the last of the range, which is what closes the final gaps into an overcast.")]
 		[Range(0f, 0.4f)] public float CoverageBend = 0.15f;
 		[Tooltip("How soft a cloud's edge is: the width of the band where the noise thins to nothing. Clouds are fog, so this wants to be generous.")]
-		[Range(0.01f, 0.4f)] public float EdgeSoftness = 0.06f;
+		[Range(0.01f, 0.4f)] public float EdgeSoftness = 0.14f;
 		[Tooltip("Metres over which distance turns a cloud into haze. Smaller means the far sky greys out sooner.")]
-		[Min(2000f)] public float HazeDistance = 42000f;
+		[Min(2000f)] public float HazeDistance = 20000f;
+		[Tooltip("How far the shape lookup is bent to stop the noise repeating. The shape volume wraps, so without this a band tiles visibly; too much and the warp field's own structure is stamped onto the clouds as combed, hairy edges, because the lookup then moves faster from the warp than it does from going anywhere. Around 0.17 keeps the warp to about a quarter of the lookup's own motion. Zero turns it off and brings the tiling back.")]
+		[Range(0f, 0.5f)] public float ShapeWarp = 0.17f;
+		[Tooltip("How much the sky is allowed to tilt toward the weather that is coming. A front is a slope in cloud rather than a level of it, and this is what lets cloud arrive from upwind instead of appearing everywhere at once. Zero turns it off and the whole sky takes one cover again. It only applies where the drifting weather field is what decides the weather.")]
+		[Range(0f, 1f)] public float CoverageTilt = 0.6f;
 		[Tooltip("Metres out to which the fine detail noise is used in full. The detail tiles every few hundred metres and the march steps tens of metres, so past a point it is sampled far too coarsely and turns into speckle.")]
 		[Min(0f)] public float DetailFadeStart = 2500f;
 		[Tooltip("Metres over which that detail fades away entirely. Beyond it a cloud is its shape alone, which is what distance does to one anyway.")]
 		[Min(100f)] public float DetailFadeRange = 9000f;
-		[Tooltip("Optical density: higher is thicker and darker inside.")]
-		[Range(0.05f, 4f)] public float Density = 1.1f;
+
+		[Tooltip("How much cloud detail the far sky is allowed to keep. The march reads the noise at a mip chosen from how much world one sample stands for, so distant cloud is averaged rather than point-sampled — which is what stops it fizzing while the near sky keeps its edges. 1 filters to exactly what the sampling can carry, which is correct and slightly flattens the far sky; higher keeps more contrast and starts to shimmer. The near sky is unaffected at any setting.")]
+		[Range(0.25f, 4f)] public float LodSharpness = 1f;
+		[Tooltip("The coarsest mip the shape volume may be read at. Past about 5 the 128-cubed volume has averaged down to a flat grey and the far sky goes with it.")]
+		[Range(0f, 6f)] public float MaxCloudLod = 5f;
+		[Tooltip("Optical density: higher is thicker and darker inside. 1 is about three hundredths a metre of extinction, which is real cloud: a 300 m heap is opaque, a 60 m wisp lets a fifth of the light through, and an edge fades over the tens of metres it has. It used to be read as whole units a metre, which made every edge solid within a single step and the sky a thresholded noise field.")]
+		[Range(0.05f, 4f)] public float Density = 0.5f;
 		[Tooltip("Steps toward the sun when lighting a point in the cloud.")]
 		[Range(1, 12)] public int LightSteps = 6;
 		[Tooltip("The dark edge a sunlit cloud shows before it brightens (the powder effect).")]
@@ -118,7 +127,7 @@ namespace FishMMO.Client
 		[Tooltip("How much light keeps going forward: the glow around the sun through thin cloud.")]
 		[Range(0f, 0.95f)] public float ForwardScatter = 0.6f;
 		[Tooltip("How much of the sky's own light fills the shaded side.")]
-		[Range(0f, 4f)] public float Ambient = 1.2f;
+		[Range(0f, 4f)] public float Ambient = 0.85f;
 		[Tooltip("The colour a shaded underside takes. Slate-blue reads as cloud; white reads as fog.")]
 		[ColorUsage(false, false)] public Color ShadedTint = new Color(0.62f, 0.68f, 0.82f);
 		[Tooltip("How much of that tint a fair-weather underside takes. A storm takes more.")]

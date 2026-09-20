@@ -46,6 +46,17 @@ namespace FishMMO.Shared.WorldDesign
 			Texture3D existing = AssetDatabase.LoadAssetAtPath<Texture3D>(path);
 			if (existing != null)
 			{
+				// The march picks its own mip from how much world a sample stands for, and asks for a
+				// fractional one. Bilinear snaps that to the nearest level, so the sky grows visible
+				// rings where the chosen mip steps over — a volume baked before this was needed keeps
+				// the old setting, so fix it in place rather than making anyone re-bake nineteen
+				// megabytes of noise.
+				if (existing.filterMode != FilterMode.Trilinear)
+				{
+					existing.filterMode = FilterMode.Trilinear;
+					EditorUtility.SetDirty(existing);
+					AssetDatabase.SaveAssetIfDirty(existing);
+				}
 				return existing;
 			}
 			WorldEditorAssets.EnsureFolder(Folder);
@@ -63,7 +74,7 @@ namespace FishMMO.Shared.WorldDesign
 			var texture = new Texture3D(size, size, size, TextureFormat.RGBA32, true)
 			{
 				wrapMode = TextureWrapMode.Repeat,
-				filterMode = FilterMode.Bilinear,
+				filterMode = FilterMode.Trilinear,
 			};
 			var pixels = new Color32[size * size * size];
 			for (int z = 0; z < size; z++)
@@ -98,7 +109,7 @@ namespace FishMMO.Shared.WorldDesign
 			var texture = new Texture3D(size, size, size, TextureFormat.RGBA32, true)
 			{
 				wrapMode = TextureWrapMode.Repeat,
-				filterMode = FilterMode.Bilinear,
+				filterMode = FilterMode.Trilinear,
 			};
 			var pixels = new Color32[size * size * size];
 			for (int z = 0; z < size; z++)

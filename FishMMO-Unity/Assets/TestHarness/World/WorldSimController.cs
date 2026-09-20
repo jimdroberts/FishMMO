@@ -204,6 +204,27 @@ namespace FishMMO.TestHarness.World
 			}
 		}
 
+		/// <summary>
+		/// Moves the world clock to a time of day within the current day, and the sun with it.
+		/// </summary>
+		/// <remarks>
+		/// Separate from setting <see cref="TimeOfDay"/>, which only says where the sun is drawn. The
+		/// weather driver reads the world clock, so the panel's slider has to move the clock or
+		/// scrubbing the time slides the sun across a sky whose weather never changes. It cannot be
+		/// folded into the property, though: the probe sets a *fractional* day — a precise moment
+		/// found by searching for a moonlit night — and then sets the time of day, and a property
+		/// that rewrote the day from the time threw that search away and landed on whatever moment
+		/// happened to share the hour. Once, that was a total lunar eclipse, and the moon the stage
+		/// existed to photograph was not there at all.
+		/// </remarks>
+		public void ScrubTo(double localTime01)
+		{
+			timeOfDay = Mathf.Repeat((float)localTime01, 1f);
+			dayOfYear = Mathf.Floor(dayOfYear) + (float)timeOfDay;
+			hours = dayOfYear * DayHours;
+			ApplyClock();
+		}
+
 		/// <summary>Moves the clock to a time of day (0.5 noon) on the current date.</summary>
 		public void JumpTo(double localTime01)
 		{
@@ -789,6 +810,14 @@ namespace FishMMO.TestHarness.World
 			CelestialState now = State;
 			double localTime = now != null ? now.LocalTime01 : timeOfDay;
 
+			// Where and when the bed is, for the weather driver. In the game these come from the
+			// world clock and the scene's place on the atlas; here they come from the panel, so
+			// dragging the clock really does drive the weather forward.
+			timeline.WorldSecondsAtTick = hours * 3600.0;
+			timeline.WorldSecondsTick = tick;
+			timeline.LatitudeDegrees = latitude;
+			timeline.LongitudeDegrees = longitude;
+
 			WeatherFrame frame;
 			WeatherContext context;
 			if (DriveWeatherDirectly)
@@ -830,6 +859,7 @@ namespace FishMMO.TestHarness.World
 					WorldHours = hours,
 					Cover = timeline.Cover,
 					Background = lastSample.Background,
+					DriverWeight = lastSample.DriverWeight,
 					Shelter = lastSample.Shelter,
 					Temperature = lastSample.Temperature,
 					IsDaylight = DayNight == null || DayNight.DaylightNow,

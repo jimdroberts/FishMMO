@@ -28,6 +28,26 @@ namespace FishMMO.Shared
 		public WeatherCover Cover;
 		/// <summary>The server tick <see cref="Cover"/> was measured at.</summary>
 		public uint CoverTick;
+
+		/// <summary>
+		/// Where and when this scene is, so the client's weather driver lands on the server's answer.
+		/// </summary>
+		/// <remarks>
+		/// The driver computes every high, low and front from these and the world seed. They are
+		/// worth a couple of dozen bytes on join precisely because they replace sending the weather
+		/// itself: with them a client works out the same sky the server has, for now and for any
+		/// time after, and without them it would compute the weather of world-time zero at latitude
+		/// zero — a different planet.
+		///
+		/// Only what is stable travels. The season and the hour change every moment and would be
+		/// stale the instant they landed — a client that joined in spring would keep computing
+		/// spring weather all year — so both sides derive those from this clock anchor instead.
+		/// </remarks>
+		public bool Driver;
+		public double WorldSecondsAtTick;
+		public uint WorldSecondsTick;
+		public float LatitudeDegrees;
+		public float LongitudeDegrees;
 	}
 
 	/// <summary>

@@ -334,7 +334,10 @@ namespace FishMMO.Client
 			local.x = Mathf.Round(local.x / texel) * texel;
 			local.y = Mathf.Round(local.y / texel) * texel;
 			Vector3 centre = lightTransform.TransformPoint(new Vector3(local.x, local.y, 0f));
-			cloudMaterial.SetVector(ShadowAreaId, new Vector4(0f, 0f, areaMeters, steps));
+			// x is the cookie's own texel, which is the footprint its march reads the noise at: the
+			// shadow pattern cannot be finer than the map it is drawn into, and must not be blurred
+			// coarser than it either.
+			cloudMaterial.SetVector(ShadowAreaId, new Vector4(texel, Mathf.Clamp01(strength), areaMeters, steps));
 			cloudMaterial.SetVector(ShadowOriginId, centre);
 			cloudMaterial.SetVector(ShadowRightId, lightTransform.right);
 			cloudMaterial.SetVector(ShadowUpId, lightTransform.up);
@@ -352,9 +355,22 @@ namespace FishMMO.Client
 				data = light.gameObject.AddComponent<UniversalAdditionalLightData>();
 			}
 			data.lightCookieSize = new Vector2(areaMeters, areaMeters);
-			// The cookie follows the camera: the window's middle sits where the viewer stands, in
-			// the light's plane, so the offset is that point measured in windows.
-			data.lightCookieOffset = new Vector2(-local.x / areaMeters, -local.y / areaMeters);
+			// The cookie follows the camera: the window's middle sits where the viewer stands, in the
+			// light's plane. The offset is that point in WORLD units, and positive.
+			//
+			// Derived rather than guessed, from URP's own LightCookieManager. It builds
+			//     cookieMatrix = Ortho(-0.5..0.5) * uvTransform * worldToLight
+			// where uvTransform scales by 1/size and translates by -offset/size, and the shader then
+			// takes uv = positionLS * 0.5 + 0.5. Composing those gives
+			//     uv = (lightSpaceXY - offset) / size + 0.5
+			// so the window's middle lands at uv 0.5 exactly when offset equals it.
+			//
+			// This was "-local / areaMeters": negated, and four thousand times too small. The cookie
+			// therefore sat very nearly still in the light's plane while the window that was marched
+			// into it tracked the camera — so the shadow on the ground was some other part of the
+			// sky's shadow, it slid as the viewer moved rather than with the clouds, and which part
+			// you got depended on where you stood, including how high.
+			data.lightCookieOffset = new Vector2(local.x, local.y);
 			drawnCover = strength;
 		}
 

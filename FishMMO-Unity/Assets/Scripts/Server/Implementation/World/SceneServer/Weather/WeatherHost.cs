@@ -129,7 +129,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				return;
 			}
 			WeatherSceneMode mode = WeatherField.ResolveMode(settings, scene.name);
-			uint seed = unchecked((uint)(scene.name.GetDeterministicHashCode() ^ scene.handle ^ Environment.TickCount));
+			// The scene's own seed, and nothing else. It used to mix in the scene handle and
+			// Environment.TickCount, which meant the weather was different after every restart and
+			// could not be worked out from the clock — the opposite of what the driver needs. The
+			// name is stable, and the world seed on the solar system is what varies a world's
+			// climate history.
+			uint seed = unchecked((uint)scene.name.GetDeterministicHashCode() ^ WeatherDriver.WorldSeed);
 			var timeline = new WeatherTimeline
 			{
 				SceneName = scene.name,
@@ -290,6 +295,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 					}
 					sw.Timeline.Prune(now);
 					ApplyClimate(sw, now, worldHours);
+					DriveWeather(sw, now, worldHours);
 					if (sw.Timeline.SceneMode == WeatherSceneMode.None)
 					{
 						continue;
@@ -299,6 +305,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				}
 			}
 			Flush();
+		}
+
+		/// <summary>
+		/// Hands the weather driver where and when this scene is.
+		/// </summary>
+		/// <remarks>
+		/// The driver is a pure function of the world clock, the place and the season, so these five
+		/// numbers are the whole of what it needs — and they are carried on the timeline precisely
+		/// because the timeline is what the client already has. Given them, a client works out the
+		/// same highs, lows and fronts the server does without a byte being sent for the weather
+		/// itself, and a player who logs in tomorrow gets the weather that was always going to be
+		/// there rather than whatever the server happened to roll.
+		/// </remarks>
+		private static void DriveWeather(SceneWeather sw, uint tick, double worldHours)
+		{
+			WeatherTimeline timeline = sw.Timeline;
+			timeline.WorldSecondsAtTick = worldHours * 3600.0;
+			timeline.WorldSecondsTick = tick;
+			timeline.LatitudeDegrees = sw.Settings.Latitude;
+			timeline.LongitudeDegrees = sw.Settings.Longitude;
+			timeline.Driver = sw.Timeline.SceneMode == WeatherSceneMode.Own;
 		}
 
 		/// <summary>

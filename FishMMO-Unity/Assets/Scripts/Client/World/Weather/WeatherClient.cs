@@ -24,6 +24,8 @@ namespace FishMMO.Client
 		public WeatherCover Cover;
 		/// <summary>The weather without the storm cells: what the sky shows in the far distance.</summary>
 		public WeatherFrame Background;
+		/// <summary>How much of it the drifting field decided (1) against a preset or layer (0).</summary>
+		public float DriverWeight;
 		public float Shelter;
 		/// <summary>Local temperature at the viewer, -1..1.</summary>
 		public float Temperature;

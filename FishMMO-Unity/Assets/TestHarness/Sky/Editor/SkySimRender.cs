@@ -70,6 +70,21 @@ namespace FishMMO.TestHarness.Sky.Editor
 			/// <summary>The most of the frame the clouds may cover. 0 means no ceiling.</summary>
 			public float CloudCoverCeiling;
 			/// <summary>
+			/// Runs the weather driver instead of the stage's channels: the sky is whatever the
+			/// drifting field says it is at a moment chosen so that the camera stands under a
+			/// half-cloudy sky. This is the stage that sees formations, since with the channels
+			/// driven straight there are none.
+			/// </summary>
+			public bool Driver;
+			/// <summary>Applies this preset (by name) once the stage is set up, with no transition.</summary>
+			public string Preset;
+			/// <summary>
+			/// How unevenly the cloud must be spread across the sky: the spread of the cover between
+			/// the blocks of the frame. A noise field cut at one level is even everywhere and scores
+			/// low; a sky with banks and gaps scores high. 0 only reports the figure.
+			/// </summary>
+			public float ExpectFormationContrast;
+			/// <summary>
 			/// How far the moon's disc must stand out from the sky around it. Above zero the moon has
 			/// to be visible; <see cref="MoonDiscCeiling"/> says it has to be hidden. The pair exists
 			/// because a body and a cloud can go wrong in both directions: the bodies are drawn in the
@@ -199,6 +214,24 @@ namespace FishMMO.TestHarness.Sky.Editor
 			},
 			new Stage
 			{
+				// The Clear preset over the driver's own half-cloudy sky. A preset is an override:
+				// the field steps back by the preset's strength, so Clear has to actually clear it.
+				// It used to be a Clouds layer at zero, skipped as nothing, over a field left at
+				// full weight — so it cleared nothing and the two systems fought.
+				Name = "preset-clear-over-driver", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-28f, 150f, 0f),
+				Driver = true, Preset = "Clear", CloudCoverCeiling = 0.02f,
+			},
+			new Stage
+			{
+				// The driver's own sky, on a half-cloudy day: the one stage that shows formations.
+				// Every other cloud stage drives the channels straight, and a sky asked for one
+				// cover has the same cover everywhere by construction — which is fine for checking
+				// the cut and useless for checking whether the sky has banks and gaps in it.
+				Name = "clouds-formations", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-28f, 150f, 0f),
+				Driver = true, ExpectCloudCover = 0.03f,
+			},
+			new Stage
+			{
 				// Cloud at dawn, which is where a sky that only knows one colour gives itself away:
 				// the tops take the sun's red long before anything on the ground does.
 				Name = "clouds-dawn", SunAltitudeWanted = 3f, CameraEuler = new Vector3(-8f, 90f, 0f), LookAt = "Sun",
@@ -287,6 +320,37 @@ namespace FishMMO.TestHarness.Sky.Editor
 				}
 			}
 			Debug.LogWarning($"[SkySimRender] {stage.Name}: no day in four years matched; using day {stage.Day}.");
+			return stage.Day;
+		}
+
+		/// <summary>
+		/// The first day (within a year of the stage's) on which the weather driver puts between
+		/// two fifths and seven tenths cover over the camera at the stage's hour. The driver is a
+		/// pure function of the clock, so this is a lookup and not a simulation.
+		/// </summary>
+		private static float FindCloudyDay(WorldSimController controller, Stage stage)
+		{
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system == null)
+			{
+				return stage.Day;
+			}
+			double dayHours = CelestialMath.HomeSolarDayHours(system);
+			double yearHours = Math.Max(1e-6, CelestialMath.YearHours(system));
+			Vector3 at = controller.Camera.transform.position;
+			for (float d = 0f; d < 365f; d += 0.5f)
+			{
+				float day = stage.Day + d;
+				double hours = (day + stage.Time) * dayHours;
+				float season = Mathf.Repeat((float)(hours / yearHours), 1f);
+				float cover = WeatherDriver.CoverAt(WeatherDriver.WorldSeed, new Vector2(at.x, at.z), hours * 3600.0,
+					stage.Latitude, season, (float)stage.Time);
+				if (cover >= 0.4f && cover <= 0.7f)
+				{
+					return day;
+				}
+			}
+			Debug.LogWarning($"[SkySimRender] {stage.Name}: no half-cloudy day within a year; using day {stage.Day}.");
 			return stage.Day;
 		}
 
@@ -488,7 +552,30 @@ namespace FishMMO.TestHarness.Sky.Editor
 			controller.Latitude = stage.Latitude;
 			controller.DayOfYear = stage.Want != null ? FindDay(controller, stage) : stage.Day;
 			controller.TimeOfDay = stage.SunAltitudeWanted.HasValue ? FindTime(controller, stage) : stage.Time;
+			// Every stage starts from an empty timeline. A layer left by the stage before used to
+			// blend in unseen; now that a layer overrides the drifting field, a leftover Clear from
+			// the preset stage silenced the driver stage that followed it and it drew no cloud.
+			controller.ClearAll(0f);
 			controller.SkyWeather = stage.Weather;
+			if (stage.Driver)
+			{
+				// After the channels, which switch the driver off: the driver decides now, on a day
+				// the field puts a half-cloudy sky over the camera.
+				controller.DayOfYear = FindCloudyDay(controller, stage);
+				controller.DriveWeatherDirectly = false;
+			}
+			if (!string.IsNullOrEmpty(stage.Preset))
+			{
+				WeatherPreset preset = controller.Presets.Find(p => p != null && p.ResolvedName == stage.Preset);
+				if (preset == null)
+				{
+					Debug.LogWarning($"[SkySimRender] {stage.Name}: no preset named {stage.Preset} on the bed.");
+				}
+				else
+				{
+					controller.ApplyPreset(preset, 0f);
+				}
+			}
 			controller.Temperature = stage.Temperature;
 			controller.Camera.transform.rotation = Quaternion.Euler(stage.CameraEuler);
 			if (stage.CameraHeight > 0f)
@@ -614,9 +701,12 @@ namespace FishMMO.TestHarness.Sky.Editor
 			if (stage.ExpectMeteors && state.MeteorRate < 40f) problems.Add($"the shower should be falling, rate {state.MeteorRate:0}/h");
 			if (stage.ExpectAsteroids && quads < 50) problems.Add($"the belt should add points, only {quads} quads");
 			if (stage.ExpectEclipse && state.SolarEclipse < 0.5f) problems.Add($"eclipse only {state.SolarEclipse:0.00}");
-			if (stage.ExpectCloudCover > 0f && lastCloudCover < stage.ExpectCloudCover)
+			// The floor counts any cloud at all; the ceiling counts solid cloud. Cloud is translucent
+			// at its real extinction, and a fair-weather sky is mostly the thin kind: judged on solid
+			// cloud alone a quarter-covered sky measured two percent and looked exactly right.
+			if (stage.ExpectCloudCover > 0f && lastCloudAny < stage.ExpectCloudCover)
 			{
-				problems.Add($"the clouds should cover the sky, only {lastCloudCover * 100f:0}% of it looks cloudy");
+				problems.Add($"the clouds should cover the sky, only {lastCloudAny * 100f:0}% of it has any cloud in it");
 			}
 			if (stage.MoonDiscContrast > 0f || stage.MoonDiscCeiling > 0f)
 			{
@@ -633,6 +723,10 @@ namespace FishMMO.TestHarness.Sky.Editor
 			if (stage.CloudCoverCeiling > 0f && lastCloudCover > stage.CloudCoverCeiling)
 			{
 				problems.Add($"the clouds cover {lastCloudCover * 100f:0}% of the sky, which is more than this weather asked for");
+			}
+			if (stage.ExpectFormationContrast > 0f && lastCloudContrast < stage.ExpectFormationContrast)
+			{
+				problems.Add($"the cloud is spread evenly across the sky (block spread {lastCloudContrast:0.000} < {stage.ExpectFormationContrast:0.000}): noise, not formations");
 			}
 			if (stage.ExpectGodRays)
 			{
@@ -676,7 +770,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 				failures++;
 			}
 			string moon = state.Moon >= 0 ? $"moon {state.Bodies[state.Moon].AltitudeDegrees:0}° {(state.Bodies[state.Moon].Illumination * 100f):0}%" : "no moon";
-			report.Add($"{stage.Name}: {(problems.Count == 0 ? "PASS" : "FAIL " + string.Join("; ", problems))} — {controller.Body?.ResolvedName} at {controller.Latitude:0}°, shown aurora {controller.Presentation?.Shown[WeatherChannel.Aurora] ?? 0f:0.00}/rain {controller.Presentation?.Shown[WeatherChannel.Precipitation] ?? 0f:0.00}, day {Mathf.FloorToInt(controller.DayOfYear)}, {SceneTime.Format(state.LocalTime01)}, sun {altitude:0.0}°, stars {stars:0.00}, aurora {aurora:0.00}, eclipse {state.SolarEclipse:0.00}, rainbow {rainbow:0.00}, {moon}, {state.Bodies.Count} bodies, {quads} quads, {textured} textured, cloud cover {lastCloudCover * 100f:0}%, moon disc {moonDisc:0.0000}, quality {QualitySettings.names[QualitySettings.GetQualityLevel()]} → {Path.GetFileName(path)}");
+			report.Add($"{stage.Name}: {(problems.Count == 0 ? "PASS" : "FAIL " + string.Join("; ", problems))} — {controller.Body?.ResolvedName} at {controller.Latitude:0}°, shown aurora {controller.Presentation?.Shown[WeatherChannel.Aurora] ?? 0f:0.00}/rain {controller.Presentation?.Shown[WeatherChannel.Precipitation] ?? 0f:0.00}, day {Mathf.FloorToInt(controller.DayOfYear)}, {SceneTime.Format(state.LocalTime01)}, sun {altitude:0.0}°, stars {stars:0.00}, aurora {aurora:0.00}, eclipse {state.SolarEclipse:0.00}, rainbow {rainbow:0.00}, {moon}, {state.Bodies.Count} bodies, {quads} quads, {textured} textured, cloud cover {lastCloudCover * 100f:0}% solid / {lastCloudAny * 100f:0}% any (spread {lastCloudContrast:0.000}), moon disc {moonDisc:0.0000}, quality {QualitySettings.names[QualitySettings.GetQualityLevel()]} → {Path.GetFileName(path)}");
 		}
 
 		/// <summary>
@@ -1032,19 +1126,52 @@ namespace FishMMO.TestHarness.Sky.Editor
 				readable.ReadPixels(new Rect(0, 0, buffer.width, buffer.height), 0, 0);
 				readable.Apply();
 				Color[] pixels = readable.GetPixels();
-				int counted = 0, cloudy = 0;
-				// The upper half, and not the left third where the panel sits.
-				for (int y = buffer.height / 2; y < buffer.height; y++)
+				int counted = 0, cloudy = 0, any = 0;
+				// The upper half, and not the left third where the panel sits — and the same region
+				// cut into blocks, whose cover is compared block to block: a sky with banks and gaps
+				// has some blocks solid and some clear, a noise field cut at one level has every
+				// block about the same.
+				const int Columns = 6, Rows = 3;
+				int x0 = buffer.width / 3, y0 = buffer.height / 2;
+				int blockWidth = Mathf.Max(1, (buffer.width - x0) / Columns);
+				int blockHeight = Mathf.Max(1, (buffer.height - y0) / Rows);
+				var blockCloudy = new int[Columns * Rows];
+				var blockCounted = new int[Columns * Rows];
+				for (int y = y0; y < buffer.height; y++)
 				{
-					for (int x = buffer.width / 3; x < buffer.width; x++)
+					int row = Mathf.Min(Rows - 1, (y - y0) / blockHeight);
+					for (int x = x0; x < buffer.width; x++)
 					{
+						int column = Mathf.Min(Columns - 1, (x - x0) / blockWidth);
+						int block = row * Columns + column;
 						counted++;
-						if (pixels[y * buffer.width + x].a < 0.6f)
+						blockCounted[block]++;
+						float through = pixels[y * buffer.width + x].a;
+						if (through < 0.6f)
 						{
 							cloudy++;
+							blockCloudy[block]++;
+						}
+						if (through < 0.95f)
+						{
+							any++;
 						}
 					}
 				}
+				float mean = 0f;
+				for (int b = 0; b < blockCloudy.Length; b++)
+				{
+					mean += blockCounted[b] > 0 ? blockCloudy[b] / (float)blockCounted[b] : 0f;
+				}
+				mean /= blockCloudy.Length;
+				float spread = 0f;
+				for (int b = 0; b < blockCloudy.Length; b++)
+				{
+					float share = blockCounted[b] > 0 ? blockCloudy[b] / (float)blockCounted[b] : 0f;
+					spread += (share - mean) * (share - mean);
+				}
+				lastCloudContrast = Mathf.Sqrt(spread / blockCloudy.Length);
+				lastCloudAny = counted > 0 ? any / (float)counted : 0f;
 				return counted > 0 ? cloudy / (float)counted : 0f;
 			}
 			finally
@@ -1056,6 +1183,10 @@ namespace FishMMO.TestHarness.Sky.Editor
 		}
 
 		private static float lastCloudCover;
+		/// <summary>The share of the last capture with any cloud in it at all, however thin.</summary>
+		private static float lastCloudAny;
+		/// <summary>The block-to-block spread of the cover in the last capture: banks and gaps, or an even scatter.</summary>
+		private static float lastCloudContrast;
 		/// <summary>How far the moon stood out from the sky last time a stage asked.</summary>
 		private static float moonDisc;
 

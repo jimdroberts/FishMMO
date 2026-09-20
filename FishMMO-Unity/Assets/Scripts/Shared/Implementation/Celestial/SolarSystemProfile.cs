@@ -18,6 +18,10 @@ namespace FishMMO.Shared.Celestial
 		public List<CelestialBody> Bodies = new List<CelestialBody>();
 		[Tooltip("The world the calendar belongs to.")]
 		public WorldBody HomeWorld;
+		[Tooltip("The seed the world's weather grows from. Every high, low and front is a function of this and the world clock, so the same seed gives the same weather on the server and on every client, and the same weather again after a restart. Changing it gives the world a different climate history.")]
+		public uint WeatherSeed = 238;
+		[Tooltip("Roughly how long one weather system takes to pass, in world hours, at an ordinary wind. Judge it against the day length rather than against a real day: at 6 hours a day, five hours a system means the weather turns over about once a day. Lower it and the sky changes its mind several times a day; raise it for long settled spells. It sets how big the systems are, not how hard the wind blows, so the clouds keep moving at the same speed either way.")]
+		[Min(0.25f)] public float WeatherSystemHours = 5f;
 		public CalendarProfile Calendar;
 		[Header("Small bodies")]
 		public List<MeteorShower> MeteorShowers = new List<MeteorShower>();

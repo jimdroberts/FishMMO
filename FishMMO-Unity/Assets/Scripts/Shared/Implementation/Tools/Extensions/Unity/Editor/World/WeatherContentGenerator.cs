@@ -300,6 +300,11 @@ namespace FishMMO.Shared.WorldDesign
 					t.MaxTemperature = 0.2f;
 					t.DefaultTransitionSeconds = 120f;
 					break;
+				case WeatherLayerKind.ClearSky:
+					// No channels, on purpose: at full strength it overrides the drifting field and
+					// asks for nothing in its place, which is what a clear sky is.
+					t.DefaultTransitionSeconds = 60f;
+					break;
 			}
 		}
 
@@ -323,11 +328,14 @@ namespace FishMMO.Shared.WorldDesign
 
 		private const WeatherLayerKind Clouds = WeatherLayerKind.Clouds, Rain = WeatherLayerKind.Rain, Snow = WeatherLayerKind.Snow,
 			Hail = WeatherLayerKind.Hail, Ash = WeatherLayerKind.Ash, Sand = WeatherLayerKind.Sand, Wind = WeatherLayerKind.Wind,
-			Fog = WeatherLayerKind.Fog, Lightning = WeatherLayerKind.Lightning, Aurora = WeatherLayerKind.Aurora;
+			Fog = WeatherLayerKind.Fog, Lightning = WeatherLayerKind.Lightning, Aurora = WeatherLayerKind.Aurora,
+			ClearSky = WeatherLayerKind.ClearSky;
 
 		private static readonly PresetSpec[] PresetSpecs =
 		{
-			P("Clear", 60f, new Vector2(15f, 40f), new Vector2(400f, 900f), (Clouds, 0f)),
+			// A clear sky is a layer that asks for nothing at full strength, so it overrides the
+			// field. A Clouds layer at zero — what this was — is skipped as nothing at all.
+			P("Clear", 60f, new Vector2(15f, 40f), new Vector2(400f, 900f), (ClearSky, 1f)),
 			P("Fair", 60f, new Vector2(15f, 40f), new Vector2(300f, 800f), (Clouds, 0.3f), (Wind, 0.15f)),
 			P("Overcast", 60f, new Vector2(15f, 35f), new Vector2(300f, 800f), (Clouds, 1f), (Wind, 0.2f)),
 			P("Mist", 60f, new Vector2(10f, 25f), new Vector2(200f, 600f), (Fog, 0.75f), (Clouds, 0.45f)),

@@ -253,6 +253,7 @@ namespace FishMMO.Client
 				IsDaylight = SceneTime.IsDaylight(settings, hours),
 				Cover = timeline.Cover,
 				Background = sample.Background,
+				DriverWeight = sample.DriverWeight,
 				Shelter = sample.Shelter,
 				Temperature = sample.Temperature,
 			};

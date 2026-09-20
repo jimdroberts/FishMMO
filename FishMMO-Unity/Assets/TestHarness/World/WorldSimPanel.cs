@@ -247,7 +247,7 @@ namespace FishMMO.TestHarness.World
 			page.Add(places);
 
 			page.Add(Heading("Time"));
-			timeSlider = LabeledSlider("Time of day", 0f, 1f, (float)Controller.TimeOfDay, v => Controller.TimeOfDay = v);
+			timeSlider = LabeledSlider("Time of day", 0f, 1f, (float)Controller.TimeOfDay, v => Controller.ScrubTo(v));
 			page.Add(timeSlider);
 			daySlider = LabeledSlider("Day of year", 0f, 364f, Controller.DayOfYear, v => Controller.DayOfYear = v);
 			page.Add(daySlider);
@@ -328,7 +328,9 @@ namespace FishMMO.TestHarness.World
 				presetButtons.Add(button);
 				presets.Add(button);
 			}
-			presets.Add(SmallButton("Clear all", () =>
+			// Reset, not clear: every preset and hand-set layer fades out and the drifting field
+			// takes the sky back. A clear sky is the Clear preset, which overrides the field.
+			presets.Add(SmallButton("Reset to field", () =>
 			{
 				Controller.ClearAll(transition.value);
 				SyncChannelSliders();
@@ -609,8 +611,18 @@ namespace FishMMO.TestHarness.World
 				? "sliders"
 				: Controller.ActivePreset != null ? Controller.ActivePreset.ResolvedName : "no preset";
 
+			// What the driver says the air is doing. Without this the weather just changes and there
+			// is no telling whether a front is arriving or a slider was nudged.
+			WeatherDriver.Synoptic air = sample.Air;
+			string weatherDriver = Controller.DriveWeatherDirectly
+				? "driver off (sliders)"
+				: $"{(air.Pressure < -0.15f ? "low" : air.Pressure > 0.15f ? "high" : "slack")} {air.Pressure:+0.00;-0.00} · "
+					+ $"humidity {air.Humidity * 100f:0}% · instability {air.Instability * 100f:0}%"
+					+ (sample.DriverWeight < 0.999f ? $" · overridden {(1f - sample.DriverWeight) * 100f:0}% by the preset" : string.Empty);
+
 			readout.text =
 				$"{SceneTime.Format(state.LocalTime01)}  ·  day {Mathf.FloorToInt(Controller.DayOfYear)}  ·  {(state.IsDaylight ? "day" : "night")}\n" +
+				$"Air: {weatherDriver}\n" +
 				$"sun {state.SunAltitude.ToString("0.0", culture)}°  ·  stars {(stars * 100f).ToString("0", culture)}%  ·  meteors {state.MeteorRate.ToString("0", culture)}/h{eclipse}\n" +
 				$"Weather: {driving} · {Controller.Timeline.Cells.Count} cell(s) · {Controller.Timeline.Layers.Count} layer(s)\n" +
 				$"Falling {falling} {shown[WeatherChannel.Precipitation].ToString("0.00", culture)} · fog {WeatherFogPresenter.Amount(shown).ToString("0.00", culture)} · " +

@@ -174,6 +174,12 @@ namespace FishMMO.Client
 			}
 
 			text.AppendLine($"Forecast · cover {Pct(sky.CloudCover)} · precipitation {Pct(sky.CloudPrecipitation)} · storm {Pct(sky.CloudStorm)}");
+			// The formations: how far the bank or gap the camera stands under has moved the cover
+			// from the sky's own figure. Zero with the sliders or a pinned preset, which have none.
+			float meso = sky.CloudMesoscaleAtCamera;
+			text.AppendLine(Mathf.Abs(meso) > 0.0005f
+				? $"Formations · {(meso >= 0f ? "in a bank" : "in a gap")}, {meso * 100f:+0;-0}% cover here against the sky's mean · masses every ~{WeatherDriver.MesoscaleMetres / 1000f:0} km, up to ±{WeatherDriver.MesoscaleAmplitude * 100f:0}%"
+				: "Formations · none (the channels or a preset decide the weather, and they have no banks or gaps)");
 			text.AppendLine($"On screen · {(MeasuredCover >= 0f ? Pct(MeasuredCover) : "measuring…")} solid cloud · "
 				+ $"{(MeasuredAnyCloud >= 0f ? Pct(MeasuredAnyCloud) : "—")} any cloud at all");
 			text.AppendLine($"Stack · {active} of {count} band(s) drawing · {sky.CloudShellBottom:0}–{sky.CloudShellTop:0} m "

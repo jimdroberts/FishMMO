@@ -107,14 +107,14 @@ MonoBehaviour:
       ShadedTint: {r: 0.78, g: 0.82, b: 0.88, a: 1}
     - Name: Cumulus
       Bottom: 800
-      Top: 1400
+      Top: 3200
       BaseFollowsCondensation: 1
-      NoiseScale: 4200
+      NoiseScale: 12000
       DetailScale: 380
       DetailStrength: 0.45
       Stretch: 1
       BaseSoftness: 0.06
-      TopSoftness: 0.5
+      TopSoftness: 0.65
       Convection: 0.8
       Density: 1
       CoverageBias: 0
@@ -166,15 +166,15 @@ MonoBehaviour:
     CoverageCutClear: 0.662
     CoverageCutFull: 0.575
     CoverageBend: 0.15
-    EdgeSoftness: 0.06
-    HazeDistance: 42000
+    EdgeSoftness: 0.14
+    HazeDistance: 20000
     DetailFadeStart: 2500
     DetailFadeRange: 9000
-    Density: 1.1
+    Density: 0.5
     LightSteps: 6
     Powder: 0.7
     ForwardScatter: 0.6
-    Ambient: 1.2
+    Ambient: 0.85
     ShadedTint: {r: 0.62, g: 0.68, b: 0.82, a: 1}
     ShadedTintStrength: 0.55
     MaxDistance: 90000

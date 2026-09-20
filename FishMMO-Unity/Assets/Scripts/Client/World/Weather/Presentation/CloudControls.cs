@@ -65,10 +65,18 @@ namespace FishMMO.Client
 				"How far a cloud takes to thin to nothing. Clouds are fog, so this wants to be generous."));
 			parent.Add(Slider("Haze distance (m)", 2000f, 120000f, clouds.HazeDistance, v => clouds.HazeDistance = v,
 				"Metres over which distance turns a cloud into haze. Smaller greys out the far sky sooner."));
+			parent.Add(Slider("Front tilt", 0f, 1f, clouds.CoverageTilt, v => clouds.CoverageTilt = v,
+				"How much the sky tilts toward the weather that is coming, so cloud arrives from upwind instead of appearing everywhere at once. Zero gives the whole sky one cover. Only applies where the drifting weather field decides the weather."));
+			parent.Add(Slider("Shape warp", 0f, 0.5f, clouds.ShapeWarp, v => clouds.ShapeWarp = v,
+				"How far the shape lookup is bent so the noise does not visibly repeat. Too much and the warp field's own structure is printed on the clouds as combed, hairy edges; zero brings the tiling back."));
 			parent.Add(Slider("Detail out to (m)", 0f, 20000f, clouds.DetailFadeStart, v => clouds.DetailFadeStart = v,
 				"How far the fine detail is used in full. The detail is finer than the march's own steps, so past a point it is undersampled and turns into speckle."));
 			parent.Add(Slider("Detail fades over (m)", 100f, 40000f, clouds.DetailFadeRange, v => clouds.DetailFadeRange = v,
 				"Metres over which that detail thins away to nothing."));
+			parent.Add(Slider("Far detail", 0.25f, 4f, clouds.LodSharpness, v => clouds.LodSharpness = v,
+				"How much detail the far sky keeps. Each sample stands for a patch of world — as wide as the march's step, or as wide as the pixel's cone has opened, whichever is more — and the noise is read at a mip that size, so distant cloud is averaged instead of point-sampled and stops fizzing while the near sky keeps its edges. 1 matches the mip to the sample. Higher is sharper and starts to shimmer; lower is smoother and cheaper."));
+			parent.Add(Slider("Coarsest mip", 0f, 6f, clouds.MaxCloudLod, v => clouds.MaxCloudLod = v,
+				"How far down the mip chain the far sky may go. The shape volume is 128 a side, so past about 5 it has averaged itself to one grey."));
 			parent.Add(Slider("Draw distance (m)", 5000f, 200000f, clouds.MaxDistance, v => clouds.MaxDistance = v,
 				"How far the clouds are marched."));
 
@@ -203,6 +211,8 @@ namespace FishMMO.Client
 				"How much of the band's floor the cloud fills before it thins. Low is a flat-based deck."));
 			foldout.Add(Slider("Top softness", 0.05f, 1f, band.TopSoftness, v => band.TopSoftness = v,
 				"How much of the band's ceiling the cloud thins over. High gives ragged tops."));
+			foldout.Add(Slider("Vertical scale", 0.25f, 8f, band.VerticalScale, v => band.VerticalScale = v,
+				"How much the shape changes with height, as a multiple of the band's thickness. Low makes flat slabs, because the noise barely turns over between the floor and the ceiling; around 2 puts lumps and hollows in; high breaks the cloud into layers."));
 			foldout.Add(Slider("Convection", 0f, 1f, band.Convection, v => band.Convection = v,
 				"How much the height the cloud reaches varies from place to place. A base is flat because condensation happens at one height across a region; a top is lumpy because each rising parcel of air runs out of lift somewhere different. 0 is a level sheet, high is cauliflower."));
 

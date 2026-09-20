@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherPreset
   DisplayName: Clear
   Layers:
-  - Template: {fileID: 11400000, guid: f2151e1631aaf21ea99031fa54937f64, type: 2}
-    Intensity: 0
+  - Template: {fileID: 11400000, guid: 9a37d3ea163b41bc834a13ad562bb9d0, type: 2}
+    Intensity: 1
   TransitionSeconds: 60
   DurationMinutes: {x: 15, y: 40}
   CellRadiusMeters: {x: 400, y: 900}

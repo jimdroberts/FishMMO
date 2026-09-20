@@ -72,6 +72,14 @@ namespace FishMMO.Shared.Weather
 		Fog = 7,
 		Lightning = 8,
 		Aurora = 9,
+		/// <summary>
+		/// A layer that asks for nothing, at full strength. Every channel blends by taking the
+		/// greater, so a preset can only ever add to the drifting field — the field steps back by
+		/// the strongest layer's strength instead. A clear sky is therefore a layer too: one that
+		/// overrides the field and puts nothing in its place. "Clear" with a Clouds layer at zero
+		/// was skipped outright and cleared nothing.
+		/// </summary>
+		ClearSky = 10,
 	}
 
 	/// <summary>A set of <see cref="WeatherLayerKind"/>s.</summary>
@@ -90,6 +98,7 @@ namespace FishMMO.Shared.Weather
 		Fog = 128,
 		Lightning = 256,
 		Aurora = 512,
+		ClearSky = 1024,
 		Precipitation = Rain | Snow | Hail | Ash | Sand,
 		All = 0x3FF,
 	}
