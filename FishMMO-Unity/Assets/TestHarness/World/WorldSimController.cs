@@ -847,6 +847,10 @@ namespace FishMMO.TestHarness.World
 				// a hundred and eighty times real time, and a road that dried at the speed of the
 				// wall clock never seemed to dry at all.
 				WeatherCover.TimeScale = paused ? 1f : Mathf.Clamp(TimeScale * 3600f, 1f, Mathf.Max(1f, GroundTimeScale));
+				// The bolts are scheduled in world time, so the bed's fast clock would fire a
+				// storm's whole night of lightning in a few seconds. Scaled back to about what it
+				// would look like at the world's own pace.
+				SkySchedule.RateScale = paused ? 1f : 1f / Mathf.Max(1f, TimeScale * 3600f / Mathf.Max(1f, GroundTimeScale));
 				timeline.Cover.Integrate(lastSample.Frame, lastSample.Temperature, coverTimer, DayNight == null || DayNight.DaylightNow ? 1f : 0f);
 				timeline.CoverTick = tick;
 				coverTimer = 0f;

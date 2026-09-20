@@ -34,6 +34,21 @@ namespace FishMMO.Client
 	/// </summary>
 	public static class SkySchedule
 	{
+		/// <summary>
+		/// How often a rate of 1 strikes, per second of world time. A strike every eight seconds, so
+		/// a thunderstorm gives about five a minute and the heaviest rain about two and a half —
+		/// which is a strong storm. It was 0.5, twenty-one a minute, three times the busiest real
+		/// storm and closer to a strobe than to weather.
+		/// </summary>
+		public const float StrikesPerSecondAtFullRate = 0.12f;
+
+		/// <summary>
+		/// Scales every lightning rate. 1 in the game. A test bed running its clock at a hundred and
+		/// eighty times real time sets it to the reciprocal, or a storm there is sixty flashes a
+		/// second — true to the world clock, and unwatchable.
+		/// </summary>
+		public static float RateScale = 1f;
+
 		public const double LightningSlotSeconds = 0.2;
 		public const double MeteorSlotSeconds = 0.25;
 
@@ -81,7 +96,7 @@ namespace FishMMO.Client
 				for (long slot = first; slot <= last; slot++)
 				{
 					uint h = Hash(timeline.Seed, (uint)slot);
-					if (Unit(h) >= sceneRate * 0.5f * (float)LightningSlotSeconds)
+					if (Unit(h) >= sceneRate * StrikesPerSecondAtFullRate * Mathf.Max(0f, RateScale) * (float)LightningSlotSeconds)
 					{
 						continue;
 					}
@@ -124,7 +139,7 @@ namespace FishMMO.Client
 				for (long slot = first; slot <= last; slot++)
 				{
 					uint h = Hash(cell.Seed ^ ((uint)cell.ID << 16), (uint)slot);
-					if (Unit(h) >= rate * 0.5f * (float)LightningSlotSeconds)
+					if (Unit(h) >= rate * StrikesPerSecondAtFullRate * Mathf.Max(0f, RateScale) * (float)LightningSlotSeconds)
 					{
 						continue;
 					}

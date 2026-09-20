@@ -193,15 +193,30 @@ Shader "Hidden/FishMMO/Weather/Clouds"
 
             float4 Frag(Varyings input) : SV_Target
             {
-                // A small upscale filter: four taps, so the low-resolution buffer does not show its
-                // own pixels along a cloud edge.
+                // Four taps, and each weighed by whether it is looking at the same thing this pixel
+                // is. The clouds are marched at two fifths of the screen and every ray stops at the
+                // world, so a low-resolution texel that straddles the edge of a post holds the sky
+                // ray's answer — a long march full of scattered light — while the pixels of the post
+                // itself hold almost none. Averaged blindly, that light was smeared back over the
+                // post: a white rim around everything, brightest against a dark scene. Comparing
+                // depths keeps each pixel to the taps that belong to it.
                 float2 texel = _FishCloudBuffer_TexelSize.xy * 0.5;
-                float4 a = SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv + float2(-texel.x, -texel.y));
-                float4 b = SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv + float2(texel.x, -texel.y));
-                float4 c = SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv + float2(-texel.x, texel.y));
-                float4 d = SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv + float2(texel.x, texel.y));
-                float4 cloud = (a + b + c + d) * 0.25;
-                return cloud;
+                float here = LinearEyeDepth(SampleSceneDepth(input.uv), _ZBufferParams);
+                float4 sum = 0.0;
+                float total = 0.0;
+                [unroll] for (int t = 0; t < 4; t++)
+                {
+                    float2 at = input.uv + float2(t == 0 || t == 2 ? -texel.x : texel.x, t < 2 ? -texel.y : texel.y);
+                    float there = LinearEyeDepth(SampleSceneDepth(at), _ZBufferParams);
+                    // Both far away is both sky, whatever the numbers say.
+                    float weight = saturate(1.0 - abs(there - here) / max(12.0, here * 0.2));
+                    weight = max(weight, saturate(min(there, here) / 4000.0));
+                    sum += SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, at) * weight;
+                    total += weight;
+                }
+                return total > 1e-3
+                    ? sum / total
+                    : SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv);
             }
             ENDHLSL
         }
@@ -307,9 +322,20 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 #else
                     bool isSky = rawDepth >= 1.0 - 1e-6;
                 #endif
+                // How much a blocker here really blocks. What this pass draws is light scattering in
+                // the air between the camera and the sky, and a post three metres away shadows three
+                // metres of that — nothing. Treated as a full blocker, as it was, every near object
+                // carved a shaft the size of the sky: the fence post threw rays across the whole
+                // frame. Only something far off blocks a length of air worth seeing.
                 if (!isSky)
                 {
-                    return 0.0;
+                    float solid = LinearEyeDepth(rawDepth, _ZBufferParams);
+                    float blocks = saturate((solid - 60.0) / 900.0);
+                    if (blocks <= 0.001)
+                    {
+                        return 1.0;
+                    }
+                    return 1.0 - blocks;
                 }
                 // The cloud buffer's alpha is transmittance: 1 clear sky, 0 solid cloud.
                 float clear = SAMPLE_TEXTURE2D_LOD(_FishGodRayClouds, sampler_FishGodRayClouds, uv, 0).a;
@@ -374,10 +400,13 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // there was not rays but a bright disc of even glow over the clear sky — the larger
                 // part of what washed the clouds out. How mixed the way is, open here and blocked
                 // there, is the spread of what was seen along it: most of the light goes where that
-                // is high, and only a quarter where the way is simply clear.
+                // is high. But not only there: the even glow over open sky is the sun's own
+                // brightness as it is seen, and cut to a quarter — as this first did — the sun looked
+                // weak however good the rays were — and at seven tenths it was too much. Half where
+                // the way is simply clear, half for the rays.
                 float mean = saturate(shaft);
                 float mixed = saturate(sqrt(max(0.0, squares / max(1e-4, total) - mean * mean)) * 3.0);
-                shaft = pow(mean, max(1.0, _FishGodRayParams.y)) * (0.25 + 0.75 * mixed);
+                shaft = pow(mean, max(1.0, _FishGodRayParams.y)) * (0.5 + 0.5 * mixed);
                 return float4(shaft.xxx * (1.0 - spread * spread), 1.0);
             }
             ENDHLSL
@@ -387,6 +416,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         Pass
         {
             Name "CloudGodRayComposite"
+            // Depth-aware: see the air term in the fragment.
             // Screen, not add: result = frame + shafts x (1 - frame). The shafts were ADDED, to a sky
             // that is already nine tenths of white beside the sun and with no tonemapper to catch
             // the overflow, so wherever frame + shaft passed 1 everything became exactly white —
@@ -404,6 +434,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
             TEXTURE2D(_FishGodRayBuffer);
             SAMPLER(sampler_FishGodRayBuffer);
@@ -429,7 +460,17 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 float3 c = SAMPLE_TEXTURE2D(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(-texel.x, texel.y)).rgb;
                 float3 d = SAMPLE_TEXTURE2D(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(texel.x, texel.y)).rgb;
                 float3 rays = (a + b + c + d) * 0.25;
-                return float4(rays * _FishGodRayColor.rgb * _FishGodRayColor.a, 1.0);
+                // And only as much of it as there is air in front of this pixel to scatter in. The
+                // shafts used to be laid over the whole frame, so the ground at the camera's feet
+                // and the near face of a post were lit by shafts kilometres long.
+                float rawDepth = SampleSceneDepth(input.uv);
+                #if UNITY_REVERSED_Z
+                    bool isSky = rawDepth <= 1e-6;
+                #else
+                    bool isSky = rawDepth >= 1.0 - 1e-6;
+                #endif
+                float air = isSky ? 1.0 : saturate(LinearEyeDepth(rawDepth, _ZBufferParams) / 1200.0);
+                return float4(rays * _FishGodRayColor.rgb * _FishGodRayColor.a * air, 1.0);
             }
             ENDHLSL
         }

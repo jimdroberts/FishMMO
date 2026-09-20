@@ -1028,6 +1028,8 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // sample or two — at real extinction it has to be walked through — and a ray that has been
     // inside for dozens of steps is resolving nothing the first dozen did not: the step grows.
     float insideSamples = 0.0;
+    // Where the ray last came into air that can hold cloud.
+    float entered = near;
 
     UNITY_LOOP
     for (int i = 0; i < budget; i++)
@@ -1083,6 +1085,9 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // band's floor, every ray would sample it at the same depths, and samples in step with
             // one another across the screen are what draws rings in a cloud.
             travelled = max(travelled + stepHere, next - stepBase * (0.5 + jitter));
+            // Where this stretch of possible cloud was entered. The step back on first finding
+            // cloud must never go behind it: see there.
+            entered = travelled;
             continue;
         }
         // Scaled by the whole footprint and not just the cone: of the two terms the step is the
@@ -1121,7 +1126,16 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                 // Walk back over the stretch the stride jumped, and hold the fine steps at least
                 // until we are back here: the way in is where a cloud's edge lives.
                 insideUntil = travelled;
-                travelled = max(near, travelled - coarse);
+                // Back over the stretch a stride may have jumped — but never back out of the band.
+                // Cloud found within a stride's length of a band's floor used to be stepped back
+                // from to *below* that floor, into air where nothing can be; the skip there put the
+                // ray back at the floor with `inside` cleared, where it found the same cloud, took
+                // it for a fresh edge and stepped back again. Round and round until the iterations
+                // ran out, and the ray came home with nothing: a hole of sky through the cloud.
+                // Whether a ray was caught depended on how far past the floor its first hit fell —
+                // on the angle it looked up at and on its jitter — so the holes were speckled rings
+                // about the point overhead.
+                travelled = max(max(near, entered), travelled - coarse);
                 continue;
             }
             bool first = !found;
@@ -1146,7 +1160,13 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                 // sun's or the moon's full light times the cloud gain: a glowing band round the
                 // horizon at midnight, and a bright veil over the ground. A little of the light
                 // still gets in, which is what makes a sunlit mist pale.
-                colour = unity_FogColor.rgb + sunColour * scatter * 0.12;
+                // The far sky's own colour, which SkySystem works out every frame from the horizon
+                // and the fog together — not unity_FogColor, which means nothing at all unless a
+                // region has switched fog on and is otherwise whatever the scene was authored with
+                // (Unity's default is a mid grey, which at midnight is a pale band round the whole
+                // horizon). Taking the haze colour also means the mist at the horizon and the far
+                // sky behind it are the same colour, so there is no line where one ends.
+                colour = _FishCloudHaze.rgb + sunColour * scatter * 0.12;
             }
             colour += _FishWeatherCloud.w * float3(0.85, 0.9, 1.0) * 2.0;   // lightning lights the volume
             // Distance turns a cloud into the air in front of it: the far side of a sky is haze,

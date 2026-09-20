@@ -216,7 +216,7 @@ namespace FishMMO.Shared.Weather
 		/// <summary>How hard it has to be raining before it can thunder.</summary>
 		public const float HeavyRainStarts = 0.5f;
 		/// <summary>The lightning rate under the very heaviest rain. A rate of 1 is a strike about every two seconds.</summary>
-		public const float HeavyRainLightning = 0.7f;
+		public const float HeavyRainLightning = 0.35f;
 
 		/// <summary>The scene's weather mode once Auto is decided: dungeons get none, everything else its own.</summary>
 		public static WeatherSceneMode ResolveMode(WorldSceneSettings settings, string sceneName)

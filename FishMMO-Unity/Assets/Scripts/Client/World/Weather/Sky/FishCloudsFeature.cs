@@ -310,7 +310,12 @@ namespace FishMMO.Client
 				material.SetVector(RayParamsId, new Vector4(0.975f, 1.2f, reach, 28f));
 				material.SetVector(RayMaskId, new Vector4(0.25f, 0.2f, 0f, 0f));
 				Color colour = sky.GodRayColor;
-				colour.a = sky.GodRayIntensity * 1.5f;
+				// Driven harder than it was when the shafts were added to the frame. They are screened
+				// onto it now, and a screen gives a bright pixel only part of what it is handed — that
+				// is what stops it clipping into a hard ring round the sun — so the same look wants
+				// more behind it. It cannot overshoot: screened light approaches white and never
+				// passes it.
+				colour.a = sky.GodRayIntensity * 2.6f;
 				material.SetColor(RayColorId, colour);
 
 				var rayDesc = new TextureDesc(Mathf.Max(8, width), Mathf.Max(8, height))
