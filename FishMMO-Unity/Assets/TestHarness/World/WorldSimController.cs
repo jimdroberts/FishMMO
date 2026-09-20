@@ -111,16 +111,56 @@ namespace FishMMO.TestHarness.World
 			}
 		}
 
-		/// <summary>The home calendar day: the season, and where the moons are.</summary>
+		/// <summary>The home calendar day within its year: the season.</summary>
 		public float DayOfYear
 		{
 			get => dayOfYear;
 			set
 			{
-				dayOfYear = value;
-				hours = value * DayHours;
+				dayOfYear = Mathf.Clamp(value, 0f, DaysPerYear - 0.0001f);
+				ComposeHours();
 				ApplyClock();
 			}
+		}
+
+		/// <summary>
+		/// Which year of the world clock, counted from its start. With the day, this is the whole
+		/// date, and the whole date is what it takes to have a moment back.
+		/// </summary>
+		/// <remarks>
+		/// The day alone never was. The weather is a function of the world's seconds, so the same day
+		/// of another year is another sky entirely; and no moon, planet or comet goes round in a whole
+		/// fraction of the year, so day 172 finds them somewhere different every time — an eclipse
+		/// that falls on it in year three does not in year four. The bed only ever had year nought,
+		/// and a sky reported from a server that had been up longer than that could not be set up here.
+		/// </remarks>
+		public int Year
+		{
+			get => year;
+			set
+			{
+				year = Mathf.Max(0, value);
+				ComposeHours();
+				ApplyClock();
+			}
+		}
+
+		private int year;
+
+		private static int DaysPerYear => SolarSystemProfile.Active != null ? SolarSystemProfile.Active.DaysPerYear : 365;
+
+		/// <summary>The date into the clock. In double: a float day stops holding the hour after a few years.</summary>
+		private void ComposeHours()
+		{
+			hours = ((double)year * DaysPerYear + dayOfYear) * DayHours;
+		}
+
+		/// <summary>The clock into the date, after anything that moved the clock itself.</summary>
+		private void ReadCalendar()
+		{
+			double days = hours / Math.Max(1e-6, DayHours);
+			year = Math.Max(0, (int)Math.Floor(days / DaysPerYear));
+			dayOfYear = (float)(days - (double)year * DaysPerYear);
 		}
 
 		public float Latitude
@@ -302,7 +342,7 @@ namespace FishMMO.TestHarness.World
 		{
 			timeOfDay = Mathf.Repeat((float)localTime01, 1f);
 			dayOfYear = Mathf.Floor(dayOfYear) + (float)timeOfDay;
-			hours = dayOfYear * DayHours;
+			ComposeHours();
 			ApplyClock();
 		}
 
@@ -322,7 +362,8 @@ namespace FishMMO.TestHarness.World
 					double day = CelestialMath.SolarDayHours(system, body);
 					if (!double.IsInfinity(day))
 					{
-						hours += shift * day;
+						hours = Math.Max(0.0, hours + shift * day);
+						ReadCalendar();
 					}
 				}
 				ApplyClock();
@@ -686,7 +727,7 @@ namespace FishMMO.TestHarness.World
 		private void Awake()
 		{
 			Cache();
-			hours = dayOfYear * DayHours;
+			ComposeHours();
 			Body = body != null ? body : SolarSystemProfile.Active != null ? SolarSystemProfile.Active.HomeWorld : null;
 			Latitude = latitude;
 			Longitude = longitude;
@@ -830,7 +871,9 @@ namespace FishMMO.TestHarness.World
 			if (!paused)
 			{
 				hours += Time.deltaTime * TimeScale;
-				dayOfYear = (float)(hours / Math.Max(1e-6, DayHours));
+				// The day used to be the clock over the day's length and nothing more, so it ran on
+				// past the end of the year — day 365, 366 — off the end of its own slider.
+				ReadCalendar();
 				ApplyClock();
 				CelestialState state = State;
 				if (state != null)

@@ -43,6 +43,7 @@ namespace FishMMO.TestHarness.World
 		private Label coverLabel;
 		private Slider timeSlider;
 		private Slider daySlider;
+		private Slider yearSlider;
 		private Slider transition;
 		private Button playButton;
 		private Toggle directToggle;
@@ -249,8 +250,13 @@ namespace FishMMO.TestHarness.World
 			page.Add(Heading("Time"));
 			timeSlider = LabeledSlider("Time of day", 0f, 1f, (float)Controller.TimeOfDay, v => Controller.ScrubTo(v));
 			page.Add(timeSlider);
-			daySlider = LabeledSlider("Day of year", 0f, 364f, Controller.DayOfYear, v => Controller.DayOfYear = v);
+			int daysPerYear = SolarSystemProfile.Active != null ? SolarSystemProfile.Active.DaysPerYear : 365;
+			daySlider = LabeledSlider("Day of year", 0f, daysPerYear - 1f, Controller.DayOfYear, v => Controller.DayOfYear = v);
 			page.Add(daySlider);
+			yearSlider = LabeledSlider("Year", 0f, 100f, Controller.Year, v => Controller.Year = Mathf.RoundToInt(v));
+			yearSlider.tooltip = "Which year of the world clock. The weather and every orbit are worked out from the whole date, so the same day of another year is a different sky: this, the day and the time together are what reproduce a moment. The box takes years past the slider's end.";
+			page.Add(yearSlider);
+			page.Add(Small("The date is the whole clock: year, day and time. The header shows it as world hours, which is the number to take from a server to get its sky back here."));
 			page.Add(LabeledSlider("Hours / second", 0f, 3f, Controller.TimeScale, v => Controller.TimeScale = v));
 			var times = Row();
 			playButton = SmallButton(Controller.Paused ? "▶ Run" : "❚❚ Pause", () =>
@@ -615,6 +621,7 @@ namespace FishMMO.TestHarness.World
 			{
 				timeSlider?.SetValueWithoutNotify((float)state.LocalTime01);
 				daySlider?.SetValueWithoutNotify(Controller.DayOfYear);
+				yearSlider?.SetValueWithoutNotify(Controller.Year);
 			}
 			string eclipse = state.SolarEclipse > 0.01f
 				? $" · solar eclipse {(state.SolarEclipse * 100f).ToString("0", culture)}% ({state.EclipsingBody?.ResolvedName})"
@@ -638,7 +645,7 @@ namespace FishMMO.TestHarness.World
 					+ (sample.DriverWeight < 0.999f ? $" · overridden {(1f - sample.DriverWeight) * 100f:0}% by the preset" : string.Empty);
 
 			readout.text =
-				$"{SceneTime.Format(state.LocalTime01)}  ·  day {Mathf.FloorToInt(Controller.DayOfYear)}  ·  {(state.IsDaylight ? "day" : "night")}\n" +
+				$"{SceneTime.Format(state.LocalTime01)}  ·  year {Controller.Year}, day {Mathf.FloorToInt(Controller.DayOfYear)}  ·  {Controller.Hours.ToString("0.00", culture)} world h  ·  {(state.IsDaylight ? "day" : "night")}\n" +
 				$"Air: {weatherDriver}\n" +
 				$"sun {state.SunAltitude.ToString("0.0", culture)}°  ·  stars {(stars * 100f).ToString("0", culture)}%  ·  meteors {state.MeteorRate.ToString("0", culture)}/h{eclipse}\n" +
 				$"Weather: {driving} · {Controller.Timeline.Cells.Count} cell(s) · {Controller.Timeline.Layers.Count} layer(s)\n" +
