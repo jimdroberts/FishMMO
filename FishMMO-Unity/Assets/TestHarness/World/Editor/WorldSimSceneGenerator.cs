@@ -190,6 +190,10 @@ namespace FishMMO.TestHarness.World.Editor
 			UIDocument document = controllerObject.AddComponent<UIDocument>();
 			document.panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
 			WorldSimPanel panel = controllerObject.AddComponent<WorldSimPanel>();
+			// The game's theme and the panel's own layout. The panel finds them by path when they are
+			// missing, so a scene from before this still looks right; assigned here so it does not have to.
+			panel.Theme = AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/Scripts/Client/GUI/FishMMO-Theme.uss");
+			panel.Layout = AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/TestHarness/World/WorldSimPanel.uss");
 			panel.Controller = controller;
 
 			EditorSceneManager.SaveScene(scene, ScenePath);

@@ -1,0 +1,225 @@
+/*
+    The World Sim panel's layout. Loaded after FishMMO-Theme.uss, which declares every colour
+    used here as a token on :root and styles the .fish-* classes these sit beside.
+
+    Layout only. No colour literal appears in this file, by the same rule as every game panel:
+    a colour that is not a theme token does not follow the theme.
+
+    Every Label zeroes its own margin and padding. Unity's default theme gives a Label a box of
+    its own, and in rows this tight that box is most of the row.
+*/
+
+/* ── The panel ─────────────────────────────────────────────── */
+
+.ws-panel {
+    width: 372px;
+    height: 100%;
+    padding: 8px;
+    border-radius: 0;
+    border-left-width: 0;
+    border-bottom-width: 0;
+}
+
+.ws-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.ws-header > Label {
+    margin: 0;
+    padding: 0;
+}
+
+.ws-help {
+    margin: 0 0 6px 0;
+    padding: 0;
+    font-size: 9px;
+    white-space: normal;
+    color: var(--abyss-300);
+}
+
+/* ── Statistics: cards of aligned key / value rows ─────────── */
+
+.ws-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin: 0 -2px 6px -2px;
+}
+
+.ws-card {
+    width: 50%;
+    padding: 2px;
+}
+
+.ws-card--wide {
+    width: 100%;
+}
+
+.ws-card__body {
+    padding: 4px 6px 5px 6px;
+    flex-grow: 1;
+}
+
+.ws-card__title {
+    margin: 0 0 3px 0;
+    padding: 0 0 2px 0;
+    color: var(--brand-300);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--abyss-400);
+}
+
+.ws-card__grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.ws-stat {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+    min-height: 13px;
+}
+
+/* In a wide card the rows run two abreast, with a gutter between the columns. */
+.ws-card--wide .ws-stat {
+    width: 50%;
+    padding-right: 8px;
+}
+
+.ws-stat__key {
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    color: var(--abyss-300);
+    flex-shrink: 0;
+}
+
+.ws-stat__value {
+    margin: 0;
+    padding: 0 0 0 6px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: upper-right;
+    white-space: normal;
+    flex-shrink: 1;
+    color: var(--abyss-100);
+}
+
+.ws-stat__value--good {
+    color: var(--teal);
+}
+
+.ws-stat__value--warn {
+    color: var(--warn);
+}
+
+.ws-stat__value--dim {
+    color: var(--abyss-300);
+    -unity-font-style: normal;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────── */
+
+.ws-tabs {
+    flex-direction: row;
+    margin-bottom: 2px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--abyss-400);
+}
+
+.ws-tab {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin: 0;
+    padding: 5px 0 4px 0;
+}
+
+.ws-page {
+    padding-bottom: 12px;
+}
+
+/* ── Sections, notes, wells ────────────────────────────────── */
+
+.ws-section {
+    margin: 10px 0 4px 0;
+    padding: 0 0 3px 0;
+    font-size: 10px;
+}
+
+.ws-subsection {
+    margin: 6px 0 2px 0;
+    padding: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: var(--abyss-100);
+}
+
+.ws-note {
+    margin: 0 0 3px 0;
+    padding: 0;
+    font-size: 10px;
+    white-space: normal;
+    color: var(--abyss-300);
+}
+
+.ws-readout {
+    margin: 2px 0 4px 0;
+    padding: 4px 6px;
+    font-size: 10px;
+    white-space: normal;
+    color: var(--abyss-100);
+}
+
+/* ── Buttons: an even grid, one way of being "on" ──────────── */
+
+.ws-button-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin: 2px -1px;
+}
+
+.ws-button {
+    flex-grow: 1;
+    flex-basis: 22%;
+    min-height: 20px;
+    margin: 1px;
+    padding: 2px 4px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+
+/* Three to a row, for the longer names: presets, sky profiles, storm cells. */
+.ws-button-row--wide > .ws-button {
+    flex-basis: 30%;
+}
+
+.ws-button--active,
+Button.ws-button--active {
+    color: var(--brand-300);
+    border-color: var(--brand-500);
+    border-top-color: var(--brand-500);
+    border-bottom-color: var(--brand-500);
+    background-color: var(--brand-lo);
+}
+
+/* ── Fields ────────────────────────────────────────────────── */
+
+.ws-slider {
+    margin: 1px 0;
+}
+
+.ws-slider > .unity-base-field__label,
+.ws-toggle > .unity-base-field__label {
+    min-width: 104px;
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    color: var(--abyss-200);
+}
+
+.ws-toggle {
+    margin: 2px 0;
+}

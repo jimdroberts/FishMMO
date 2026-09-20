@@ -26,9 +26,9 @@ namespace FishMMO.Client
 	/// </remarks>
 	public static class CloudControls
 	{
-		private static readonly Color Text = new Color(0.9f, 0.92f, 0.95f, 1f);
-		private static readonly Color Muted = new Color(0.62f, 0.67f, 0.74f, 1f);
-		private static readonly Color Accent = new Color(0.45f, 0.7f, 0.95f, 1f);
+		// No colours of its own. These controls are hosted in a panel that carries FishMMO-Theme.uss
+		// and a layout sheet; everything here is dressed by class, the same classes the host uses for
+		// its own widgets, so this section is not the one part of the panel in a different blue.
 
 		/// <summary>
 		/// Builds the whole cloud section into <paramref name="parent"/>.
@@ -120,7 +120,7 @@ namespace FishMMO.Client
 			cookieView.style.height = 256;
 			cookieView.style.marginTop = 4;
 			cookieView.style.marginBottom = 4;
-			cookieView.style.backgroundColor = new Color(0f, 0f, 0f, 0.35f);
+			cookieView.AddToClassList("fish-well");
 			cookieView.tooltip = "The cloud shadow cookie: white is full sun, dark is under cloud, the camera is at the middle and the square is the shadow area across. Up is the sun light's own up axis.";
 			cookieView.schedule.Execute(() =>
 			{
@@ -149,7 +149,8 @@ namespace FishMMO.Client
 			}
 
 			var row = new VisualElement();
-			row.style.flexDirection = FlexDirection.Row;
+			row.AddToClassList("ws-button-row");
+			row.AddToClassList("ws-button-row--wide");
 			row.Add(Button("Add band", () =>
 			{
 				bands.Add(new CloudLayer { Name = $"Band {bands.Count + 1}", Bottom = 2000f, Top = 2600f });
@@ -177,11 +178,12 @@ namespace FishMMO.Client
 			Label title = foldout.Q<Label>();
 			if (title != null)
 			{
-				title.style.color = Accent;
+				title.AddToClassList("fish-label--accent");
 			}
 
 			var name = new TextField("Name") { value = band.Name };
-			name.labelElement.style.color = Text;
+			name.AddToClassList("fish-input");
+			name.AddToClassList("ws-slider");
 			name.RegisterValueChangedCallback(evt =>
 			{
 				band.Name = evt.newValue;
@@ -272,21 +274,16 @@ namespace FishMMO.Client
 
 		private static Label Heading(string text)
 		{
-			var label = new Label(text);
-			label.style.unityFontStyleAndWeight = FontStyle.Bold;
-			label.style.color = Accent;
-			label.style.marginTop = 10;
-			label.style.fontSize = 13;
+			var label = new Label(text.ToUpperInvariant());
+			label.AddToClassList("fish-section");
+			label.AddToClassList("ws-section");
 			return label;
 		}
 
 		private static Label Subheading(string text)
 		{
 			var label = new Label(text);
-			label.style.unityFontStyleAndWeight = FontStyle.Bold;
-			label.style.color = Text;
-			label.style.marginTop = 6;
-			label.style.fontSize = 11;
+			label.AddToClassList("ws-subsection");
 			return label;
 		}
 
@@ -301,15 +298,8 @@ namespace FishMMO.Client
 		private static Label Readout(Action<Label> refresh, bool measures)
 		{
 			var label = new Label();
-			label.style.color = Text;
-			label.style.fontSize = 10;
-			label.style.whiteSpace = WhiteSpace.Normal;
-			label.style.marginTop = 2;
-			label.style.marginBottom = 4;
-			label.style.paddingLeft = 4;
-			label.style.paddingTop = 3;
-			label.style.paddingBottom = 3;
-			label.style.backgroundColor = new Color(0f, 0f, 0f, 0.25f);
+			label.AddToClassList("fish-well");
+			label.AddToClassList("ws-readout");
 			refresh(label);
 			label.schedule.Execute(() =>
 			{
@@ -325,21 +315,15 @@ namespace FishMMO.Client
 		private static Label Note(string text)
 		{
 			var label = new Label(text);
-			label.style.color = Muted;
-			label.style.fontSize = 10;
-			label.style.whiteSpace = WhiteSpace.Normal;
-			label.style.marginBottom = 2;
+			label.AddToClassList("ws-note");
 			return label;
 		}
 
 		private static Slider Slider(string text, float low, float high, float value, Action<float> changed, string tooltip)
 		{
 			var slider = new Slider(text, low, high) { value = Mathf.Clamp(value, low, high), showInputField = true, tooltip = tooltip };
-			slider.style.marginTop = 1;
-			slider.style.marginBottom = 1;
-			slider.labelElement.style.minWidth = 118;
-			slider.labelElement.style.color = Text;
-			slider.labelElement.style.fontSize = 11;
+			slider.AddToClassList("fish-slider");
+			slider.AddToClassList("ws-slider");
 			slider.RegisterValueChangedCallback(evt => changed(evt.newValue));
 			return slider;
 		}
@@ -347,8 +331,8 @@ namespace FishMMO.Client
 		private static Toggle Toggle(string text, bool value, Action<bool> changed, string tooltip)
 		{
 			var toggle = new Toggle(text) { value = value, tooltip = tooltip };
-			toggle.labelElement.style.color = Text;
-			toggle.labelElement.style.fontSize = 11;
+			toggle.AddToClassList("fish-toggle");
+			toggle.AddToClassList("ws-toggle");
 			toggle.RegisterValueChangedCallback(evt => changed(evt.newValue));
 			return toggle;
 		}
@@ -356,8 +340,9 @@ namespace FishMMO.Client
 		private static Button Button(string text, Action clicked)
 		{
 			var button = new Button(clicked) { text = text };
-			button.style.fontSize = 11;
-			button.style.marginRight = 3;
+			button.AddToClassList("fish-button");
+			button.AddToClassList("fish-button--ghost");
+			button.AddToClassList("ws-button");
 			return button;
 		}
 	}

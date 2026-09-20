@@ -12,7 +12,7 @@ namespace FishMMO.TestHarness.World
 {
 	/// <summary>
 	/// The world test bed's controls: where you stand, when, under what weather, with what clouds,
-	/// on what ground — in four tabs over one live readout.
+	/// on what ground — in four tabs under the live figures.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -32,12 +32,15 @@ namespace FishMMO.TestHarness.World
 	{
 		public WorldSimController Controller;
 
-		private static readonly Color PanelColour = new Color(0.06f, 0.07f, 0.09f, 0.9f);
-		private static readonly Color TextColour = new Color(0.9f, 0.92f, 0.95f, 1f);
-		private static readonly Color MutedColour = new Color(0.62f, 0.67f, 0.74f, 1f);
-		private static readonly Color AccentColour = new Color(0.5f, 0.72f, 0.97f, 1f);
+		[Tooltip("FishMMO-Theme.uss: the game's own theme, so the bed looks like the game it is a bed for.")]
+		public StyleSheet Theme;
+		[Tooltip("WorldSimPanel.uss: this panel's layout, in the theme's tokens.")]
+		public StyleSheet Layout;
 
-		private Label readout;
+		private const string ThemePath = "Assets/Scripts/Client/GUI/FishMMO-Theme.uss";
+		private const string LayoutPath = "Assets/TestHarness/World/WorldSimPanel.uss";
+		private const string ActiveClass = "ws-button--active";
+
 		private Label bodyFacts;
 		private Label skyList;
 		private Label coverLabel;
@@ -48,13 +51,17 @@ namespace FishMMO.TestHarness.World
 		private Button playButton;
 		private Toggle directToggle;
 		private VisualElement cloudSection;
+		private VisualElement stats;
 
 		private readonly List<Button> bodyButtons = new List<Button>();
 		private readonly List<Button> presetButtons = new List<Button>();
+		private readonly List<Button> tierButtons = new List<Button>();
 		private readonly List<Button> tabButtons = new List<Button>();
 		private readonly List<VisualElement> tabPages = new List<VisualElement>();
 		private readonly Dictionary<WeatherChannel, Slider> channelSliders = new Dictionary<WeatherChannel, Slider>();
 		private readonly Dictionary<WeatherLayerKind, Slider> layerSliders = new Dictionary<WeatherLayerKind, Slider>();
+		/// <summary>The figures at the top, by name, so the refresh sets a value and never rebuilds a row.</summary>
+		private readonly Dictionary<string, Label> statValues = new Dictionary<string, Label>();
 		private float refresh;
 		private int activeTab;
 
@@ -68,57 +75,80 @@ namespace FishMMO.TestHarness.World
 			Build(document.rootVisualElement);
 		}
 
-		// ── Widgets ───────────────────────────────────────────────────
-
-		private static Label Heading(string text)
+		/// <summary>
+		/// The theme and then the layout, in that order: the layout is written in the theme's tokens.
+		/// </summary>
+		/// <remarks>
+		/// The generator assigns both. A scene generated before they existed has neither, and in the
+		/// editor — the only place this bed runs — they are found by path, so an old scene is themed
+		/// without being regenerated.
+		/// </remarks>
+		private void ApplyStyleSheets(VisualElement root)
 		{
-			var label = new Label(text);
-			label.style.unityFontStyleAndWeight = FontStyle.Bold;
-			label.style.color = AccentColour;
-			label.style.marginTop = 8;
-			label.style.marginBottom = 2;
-			label.style.fontSize = 13;
+#if UNITY_EDITOR
+			if (Theme == null)
+			{
+				Theme = UnityEditor.AssetDatabase.LoadAssetAtPath<StyleSheet>(ThemePath);
+			}
+			if (Layout == null)
+			{
+				Layout = UnityEditor.AssetDatabase.LoadAssetAtPath<StyleSheet>(LayoutPath);
+			}
+#endif
+			if (Theme != null && !root.styleSheets.Contains(Theme))
+			{
+				root.styleSheets.Add(Theme);
+			}
+			if (Layout != null && !root.styleSheets.Contains(Layout))
+			{
+				root.styleSheets.Add(Layout);
+			}
+		}
+
+		// ── Widgets ───────────────────────────────────────────────────
+		// Classes and no colours: what anything looks like is the theme's business.
+
+		private static Label Heading(string text, string tooltip = null)
+		{
+			var label = new Label(text.ToUpperInvariant()) { tooltip = tooltip };
+			label.AddToClassList("fish-section");
+			label.AddToClassList("ws-section");
 			return label;
 		}
 
 		private static Label Small(string text)
 		{
 			var label = new Label(text);
-			label.style.color = MutedColour;
-			label.style.fontSize = 11;
-			label.style.whiteSpace = WhiteSpace.Normal;
+			label.AddToClassList("ws-note");
 			return label;
 		}
 
 		private static Button SmallButton(string text, Action clicked)
 		{
 			var button = new Button(clicked) { text = text };
-			button.style.fontSize = 11;
-			button.style.marginLeft = 1;
-			button.style.marginRight = 1;
-			button.style.marginTop = 1;
-			button.style.marginBottom = 1;
-			button.style.paddingTop = 2;
-			button.style.paddingBottom = 2;
+			button.AddToClassList("fish-button");
+			button.AddToClassList("fish-button--ghost");
+			button.AddToClassList("ws-button");
 			return button;
 		}
 
-		private static VisualElement Row()
+		/// <summary>A row of buttons of one width each, so rows of them line up into a grid.</summary>
+		private static VisualElement Row(bool wide = false)
 		{
 			var row = new VisualElement();
-			row.style.flexDirection = FlexDirection.Row;
-			row.style.flexWrap = Wrap.Wrap;
+			row.AddToClassList("ws-button-row");
+			if (wide)
+			{
+				row.AddToClassList("ws-button-row--wide");
+			}
 			return row;
 		}
 
 		private static Slider LabeledSlider(string text, float low, float high, float value, Action<float> changed)
 		{
 			var slider = new Slider(text, low, high) { value = Mathf.Clamp(value, low, high), showInputField = true };
-			slider.style.marginTop = 1;
-			slider.style.marginBottom = 1;
-			slider.labelElement.style.minWidth = 96;
-			slider.labelElement.style.fontSize = 11;
-			slider.labelElement.style.color = TextColour;
+			slider.AddToClassList("fish-slider");
+			slider.AddToClassList("ws-slider");
 			slider.RegisterValueChangedCallback(evt => changed(evt.newValue));
 			return slider;
 		}
@@ -126,11 +156,72 @@ namespace FishMMO.TestHarness.World
 		private static Toggle LabeledToggle(string text, bool value, Action<bool> changed, string tooltip)
 		{
 			var toggle = new Toggle(text) { value = value, tooltip = tooltip };
-			toggle.labelElement.style.minWidth = 96;
-			toggle.labelElement.style.fontSize = 11;
-			toggle.labelElement.style.color = TextColour;
+			toggle.AddToClassList("fish-toggle");
+			toggle.AddToClassList("ws-toggle");
 			toggle.RegisterValueChangedCallback(evt => changed(evt.newValue));
 			return toggle;
+		}
+
+		/// <summary>A framed block for text that is read rather than clicked.</summary>
+		private static Label Well(string text)
+		{
+			var label = new Label(text);
+			label.AddToClassList("fish-well");
+			label.AddToClassList("ws-readout");
+			return label;
+		}
+
+		// ── Statistics ────────────────────────────────────────────────
+
+		/// <summary>One titled card of figures. Wide cards run their rows two abreast.</summary>
+		private VisualElement Card(string title, bool wide, params (string key, string label)[] rows)
+		{
+			var card = new VisualElement();
+			card.AddToClassList("ws-card");
+			if (wide)
+			{
+				card.AddToClassList("ws-card--wide");
+			}
+			var body = new VisualElement();
+			body.AddToClassList("fish-well");
+			body.AddToClassList("ws-card__body");
+			card.Add(body);
+
+			var heading = new Label(title.ToUpperInvariant());
+			heading.AddToClassList("fish-label--caption");
+			heading.AddToClassList("ws-card__title");
+			body.Add(heading);
+
+			var grid = new VisualElement();
+			grid.AddToClassList("ws-card__grid");
+			body.Add(grid);
+			foreach ((string key, string label) in rows)
+			{
+				var row = new VisualElement();
+				row.AddToClassList("ws-stat");
+				var name = new Label(label);
+				name.AddToClassList("ws-stat__key");
+				var value = new Label("—");
+				value.AddToClassList("ws-stat__value");
+				row.Add(name);
+				row.Add(value);
+				grid.Add(row);
+				statValues[key] = value;
+			}
+			return card;
+		}
+
+		/// <summary>Sets one figure, and how it should read: plain, good, a warning, or not applicable.</summary>
+		private void Stat(string key, string text, string tone = null)
+		{
+			if (!statValues.TryGetValue(key, out Label label))
+			{
+				return;
+			}
+			label.text = text;
+			label.EnableInClassList("ws-stat__value--good", tone == "good");
+			label.EnableInClassList("ws-stat__value--warn", tone == "warn");
+			label.EnableInClassList("ws-stat__value--dim", tone == "dim");
 		}
 
 		// ── Build ─────────────────────────────────────────────────────
@@ -139,37 +230,59 @@ namespace FishMMO.TestHarness.World
 		{
 			root.Clear();
 			root.style.flexDirection = FlexDirection.Row;
+			ApplyStyleSheets(root);
 
-			var panel = new VisualElement();
-			panel.name = "world-sim-panel";
-			panel.style.width = 360;
-			panel.style.height = Length.Percent(100);
-			panel.style.backgroundColor = PanelColour;
-			panel.style.paddingLeft = 8;
-			panel.style.paddingRight = 8;
-			panel.style.paddingTop = 6;
-			panel.style.paddingBottom = 8;
+			var panel = new VisualElement { name = "world-sim-panel" };
+			panel.AddToClassList("fish-panel");
+			panel.AddToClassList("ws-panel");
 			root.Add(panel);
 
-			var title = new Label("World Sim");
-			title.style.unityFontStyleAndWeight = FontStyle.Bold;
-			title.style.fontSize = 16;
-			title.style.color = TextColour;
-			panel.Add(title);
-			panel.Add(Small("Right-drag to look, scroll to zoom, WASD/QE to fly, Shift to hurry. Everything here is the real sky and the real weather model. Nothing reaches a server."));
+			var header = new VisualElement();
+			header.AddToClassList("ws-header");
+			var title = new Label("WORLD SIM");
+			title.AddToClassList("fish-label--title");
+			header.Add(title);
+			Button collapse = null;
+			collapse = SmallButton("Hide stats", () =>
+			{
+				bool hidden = stats.style.display == DisplayStyle.None;
+				stats.style.display = hidden ? DisplayStyle.Flex : DisplayStyle.None;
+				collapse.text = hidden ? "Hide stats" : "Show stats";
+			});
+			collapse.style.flexGrow = 0;
+			collapse.style.flexBasis = StyleKeyword.Auto;
+			header.Add(collapse);
+			panel.Add(header);
 
-			// The readout sits above the tabs, because what the sky is doing is worth seeing whichever
-			// set of controls happens to be open.
-			readout = Small(string.Empty);
-			readout.style.marginTop = 6;
-			readout.style.color = TextColour;
-			panel.Add(readout);
+			var help = new Label("Right-drag to look · scroll to zoom · WASD/QE to fly · Shift to hurry. The real sky and the real weather model; nothing reaches a server.");
+			help.AddToClassList("ws-help");
+			panel.Add(help);
 
-			var tabBar = Row();
-			tabBar.style.marginTop = 8;
+			// The figures sit above the tabs, because what the sky is doing is worth seeing whichever
+			// set of controls happens to be open. One card to a subject, so a number is found by
+			// where it is and not by reading a paragraph for it.
+			stats = new VisualElement();
+			stats.AddToClassList("ws-stats");
+			stats.Add(Card("Clock", false,
+				("clock.time", "Time"), ("clock.date", "Date"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
+			stats.Add(Card("Sun & sky", false,
+				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse")));
+			stats.Add(Card("Air — what drives the weather", true,
+				("air.pressure", "Pressure"), ("air.humidity", "Humidity"), ("air.instability", "Instability"), ("air.driver", "Driver")));
+			stats.Add(Card("Weather — what is shown", true,
+				("wx.source", "Source"), ("wx.timeline", "Timeline"), ("wx.falling", "Falling"), ("wx.fog", "Fog"),
+				("wx.wind", "Wind"), ("wx.temp", "Temperature"), ("wx.exposure", "Exposure")));
+			stats.Add(Card("Clouds — what is drawn", true,
+				("cl.bands", "Bands"), ("cl.shell", "Shell"), ("cl.resolution", "Resolution"), ("cl.steps", "Steps"),
+				("cl.history", "History"), ("cl.shafts", "Shafts")));
+			panel.Add(stats);
+
+			var tabBar = new VisualElement();
+			tabBar.AddToClassList("ws-tabs");
 			panel.Add(tabBar);
 
 			var scroll = new ScrollView();
+			scroll.AddToClassList("fish-scroll");
 			scroll.style.flexGrow = 1;
 			panel.Add(scroll);
 
@@ -186,14 +299,14 @@ namespace FishMMO.TestHarness.World
 		private void AddTab(VisualElement bar, VisualElement host, string name, Action<VisualElement> build)
 		{
 			int index = tabPages.Count;
-			Button button = SmallButton(name, () => ShowTab(index));
-			button.style.paddingLeft = 8;
-			button.style.paddingRight = 8;
-			button.style.fontSize = 12;
+			var button = new Button(() => ShowTab(index)) { text = name.ToUpperInvariant() };
+			button.AddToClassList("fish-tab");
+			button.AddToClassList("ws-tab");
 			bar.Add(button);
 			tabButtons.Add(button);
 
 			var page = new VisualElement();
+			page.AddToClassList("ws-page");
 			build(page);
 			host.Add(page);
 			tabPages.Add(page);
@@ -205,8 +318,7 @@ namespace FishMMO.TestHarness.World
 			for (int i = 0; i < tabPages.Count; i++)
 			{
 				tabPages[i].style.display = i == index ? DisplayStyle.Flex : DisplayStyle.None;
-				tabButtons[i].style.color = i == index ? AccentColour : TextColour;
-				tabButtons[i].style.unityFontStyleAndWeight = i == index ? FontStyle.Bold : FontStyle.Normal;
+				tabButtons[i].EnableInClassList("fish-tab--active", i == index);
 			}
 		}
 
@@ -214,7 +326,7 @@ namespace FishMMO.TestHarness.World
 
 		private void BuildSkyTab(VisualElement page)
 		{
-			page.Add(Heading("Body"));
+			page.Add(Heading("Where", "The body you stand on and where on it. Latitude sets the sun's path and the wind belt; longitude sets the local hour."));
 			var bodies = Row();
 			foreach (WorldBody body in Controller.Bodies)
 			{
@@ -233,7 +345,7 @@ namespace FishMMO.TestHarness.World
 				bodies.Add(Small("No solar system is loaded. Create the example system on the Solar System page."));
 			}
 			page.Add(bodies);
-			bodyFacts = Small(string.Empty);
+			bodyFacts = Well(string.Empty);
 			page.Add(bodyFacts);
 
 			page.Add(LabeledSlider("Latitude", -90f, 90f, Controller.Latitude, v => { Controller.Latitude = v; RefreshFacts(); }));
@@ -247,7 +359,7 @@ namespace FishMMO.TestHarness.World
 			places.Add(SmallButton("45°S", () => SetLatitude(-45f)));
 			page.Add(places);
 
-			page.Add(Heading("Time"));
+			page.Add(Heading("When", "Year, day and time together are the whole clock. The weather and every orbit are worked out from it, so all three are needed to have a moment back."));
 			timeSlider = LabeledSlider("Time of day", 0f, 1f, (float)Controller.TimeOfDay, v => Controller.ScrubTo(v));
 			page.Add(timeSlider);
 			int daysPerYear = SolarSystemProfile.Active != null ? SolarSystemProfile.Active.DaysPerYear : 365;
@@ -256,7 +368,6 @@ namespace FishMMO.TestHarness.World
 			yearSlider = LabeledSlider("Year", 0f, 100f, Controller.Year, v => Controller.Year = Mathf.RoundToInt(v));
 			yearSlider.tooltip = "Which year of the world clock. The weather and every orbit are worked out from the whole date, so the same day of another year is a different sky: this, the day and the time together are what reproduce a moment. The box takes years past the slider's end.";
 			page.Add(yearSlider);
-			page.Add(Small("The date is the whole clock: year, day and time. The header shows it as world hours, which is the number to take from a server to get its sky back here."));
 			page.Add(LabeledSlider("Hours / second", 0f, 3f, Controller.TimeScale, v => Controller.TimeScale = v));
 			var times = Row();
 			playButton = SmallButton(Controller.Paused ? "▶ Run" : "❚❚ Pause", () =>
@@ -264,6 +375,9 @@ namespace FishMMO.TestHarness.World
 				Controller.Paused = !Controller.Paused;
 				playButton.text = Controller.Paused ? "▶ Run" : "❚❚ Pause";
 			});
+			// The one button on the panel that starts and stops everything else.
+			playButton.RemoveFromClassList("fish-button--ghost");
+			playButton.AddToClassList("fish-button--primary");
 			times.Add(playButton);
 			times.Add(SmallButton("Dawn", () => Jump(0.25)));
 			times.Add(SmallButton("Noon", () => Jump(0.5)));
@@ -282,8 +396,7 @@ namespace FishMMO.TestHarness.World
 			SkyProfile sunProfile = Controller.Sky != null ? Controller.Sky.ActiveSky : null;
 			if (sunProfile != null)
 			{
-				page.Add(Heading("Sun brightness"));
-				page.Add(Small("Halo is the broad one: the light the air scatters forward at you, tens of degrees wide. Disc is the third of a degree the sun itself covers. Glow only shows toward a low sun near the horizon."));
+				page.Add(Heading("Sun", "Halo is the broad one: the light the air scatters forward at you, tens of degrees wide. Disc is the third of a degree the sun itself covers. Glow only shows toward a low sun near the horizon."));
 				page.Add(LabeledSlider("Halo", 0f, 2f, sunProfile.SunHalo, v => sunProfile.SunHalo = v));
 				page.Add(LabeledSlider("Disc", 0f, 40f, sunProfile.SunDisc, v => sunProfile.SunDisc = v));
 				page.Add(LabeledSlider("Horizon glow", 0f, 1f, sunProfile.SunGlow, v => sunProfile.SunGlow = v));
@@ -291,8 +404,8 @@ namespace FishMMO.TestHarness.World
 			page.Add(LabeledToggle("Light shafts", SkySystem.DrawGodRays, v => SkySystem.DrawGodRays = v,
 				"Off: the frame without the shaft pass at all, neither its light nor the shadowed lanes beside it. Anything still wrong with the sun's glow with this off is the sky's, not the shafts'."));
 
-			page.Add(Heading("Sky profile"));
-			var skies = Row();
+			page.Add(Heading("Sky profile", "A profile here is forced on whatever body you stand on, the way a region's Change Sky Profile action does."));
+			var skies = Row(true);
 			skies.Add(SmallButton("Body's own", () => Controller.SkyOverride = null));
 			foreach (SkyProfile profile in Controller.SkyProfiles)
 			{
@@ -300,21 +413,22 @@ namespace FishMMO.TestHarness.World
 				skies.Add(SmallButton(profile.name, () => Controller.SkyOverride = captured));
 			}
 			page.Add(skies);
-			page.Add(Small("A profile here is forced on whatever body you stand on, the way a region's Change Sky Profile action does."));
 			page.Add(LabeledToggle("Larger than life", Controller.LargerThanLife, v => Controller.LargerThanLife = v,
 				"Off (what ships): every disc is life-size. On: suns, moons and planets are drawn at the profile's scales, the way most games flatter the sky. This only changes what you see here; the assets keep their own setting."));
 
 			page.Add(Heading("Quality"));
-			var tiers = Row();
+			var tiers = Row(true);
 			for (int i = 0; i < QualitySettings.names.Length; i++)
 			{
 				int level = i;
-				tiers.Add(SmallButton(QualitySettings.names[i], () => QualitySettings.SetQualityLevel(level, true)));
+				Button tier = SmallButton(QualitySettings.names[i], () => QualitySettings.SetQualityLevel(level, true));
+				tierButtons.Add(tier);
+				tiers.Add(tier);
 			}
 			page.Add(tiers);
 
 			page.Add(Heading("In the sky"));
-			skyList = Small(string.Empty);
+			skyList = Well(string.Empty);
 			page.Add(skyList);
 			var looks = Row();
 			looks.Add(SmallButton("Look at sun", () => LookAtBody(true)));
@@ -331,7 +445,7 @@ namespace FishMMO.TestHarness.World
 			page.Add(Heading("Presets"));
 			transition = LabeledSlider("Transition s", 0f, 60f, 5f, _ => { });
 			page.Add(transition);
-			var presets = Row();
+			var presets = Row(true);
 			foreach (WeatherPreset preset in Controller.Presets)
 			{
 				if (preset == null)
@@ -358,9 +472,8 @@ namespace FishMMO.TestHarness.World
 			}));
 			page.Add(presets);
 
-			page.Add(Heading("Storm cells"));
-			page.Add(Small("A cell starts upwind and drifts across the camera."));
-			var cells = Row();
+			page.Add(Heading("Storm cells", "A cell starts upwind and drifts across the camera."));
+			var cells = Row(true);
 			foreach (string name in new[] { "Thunderstorm", "Blizzard", "Sandstorm", "Hailstorm", "Ashfall", "Heavy Rain" })
 			{
 				WeatherPreset preset = Controller.Presets.Find(p => p != null && p.ResolvedName == name);
@@ -371,7 +484,7 @@ namespace FishMMO.TestHarness.World
 			}
 			page.Add(cells);
 
-			page.Add(Heading("Layers (on top of the preset)"));
+			page.Add(Heading("Layers", "Laid on top of whatever preset is running."));
 			foreach (WeatherLayerKind kind in (WeatherLayerKind[])Enum.GetValues(typeof(WeatherLayerKind)))
 			{
 				WeatherLayerKind captured = kind;
@@ -393,7 +506,7 @@ namespace FishMMO.TestHarness.World
 			// The model cannot be asked for "exactly this much cloud and this much aurora" — no
 			// preset lands on those numbers — and that is a thing worth being able to ask for. So
 			// the channels can be set straight, and the toggle says which of the two is running.
-			page.Add(Heading("Set the sky directly"));
+			page.Add(Heading("Direct", "The model cannot be asked for exactly this much cloud and this much aurora, because no preset lands on those numbers. These set the channels straight. Applying a preset, a layer or a cell turns them back off."));
 			directToggle = LabeledToggle("Use these sliders", Controller.DriveWeatherDirectly,
 				v => Controller.DriveWeatherDirectly = v,
 				"On, these channels are the whole weather and the timeline above is ignored. Applying a preset, a layer or a cell turns it back off.");
@@ -482,7 +595,7 @@ namespace FishMMO.TestHarness.World
 			profile = profile != null ? profile : WeatherRenderProfile.Active;
 			if (profile == null)
 			{
-				cloudSection.Add(new Label("No weather render profile in the scene, so there is nothing to tune."));
+				cloudSection.Add(Small("No weather render profile in the scene, so there is nothing to tune."));
 				return;
 			}
 			CloudControls.Build(cloudSection, profile, BuildCloudSection);
@@ -495,18 +608,16 @@ namespace FishMMO.TestHarness.World
 			// Cover takes a quarter of an hour of weather to build, which is no way to look at a wet
 			// street or a snowed-in courtyard. These hold it at a depth instead, and the surfaces show
 			// it at once. "Let it settle" hands the ground back to the weather.
-			page.Add(Heading("Ground clock"));
-			page.Add(Small("How fast the ground wets and dries, against real time. The sky runs far faster than this by default; at the sky's own rate the ground is wet and dry again inside a second."));
+			page.Add(Heading("Ground clock", "How fast the ground wets and dries, against real time. The sky runs far faster than this by default; at the sky's own rate the ground is wet and dry again inside a second."));
 			page.Add(LabeledSlider("Ground clock ×", 1f, 200f, Controller.GroundTimeScale, v => Controller.GroundTimeScale = v));
-			page.Add(Heading("Held cover"));
-			page.Add(Small("Snow, wet, ash and sand held at a depth instead of accumulating."));
+			page.Add(Heading("Held cover", "Snow, wet, ash and sand held at a depth instead of accumulating, so a wet street can be looked at without a quarter of an hour of rain."));
 			page.Add(LabeledSlider("Snow", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Snow = v)));
 			page.Add(LabeledSlider("Wet", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Wet = v)));
 			page.Add(LabeledSlider("Ash", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Ash = v)));
 			page.Add(LabeledSlider("Sand", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Sand = v)));
 
-			page.Add(Heading("What is on the ground"));
-			coverLabel = Small(string.Empty);
+			page.Add(Heading("On the ground"));
+			coverLabel = Well(string.Empty);
 			page.Add(coverLabel);
 
 			var toolRow = Row();
@@ -570,9 +681,7 @@ namespace FishMMO.TestHarness.World
 		{
 			for (int i = 0; i < bodyButtons.Count && i < Controller.Bodies.Count; i++)
 			{
-				bool selected = Controller.Bodies[i] == Controller.Body;
-				bodyButtons[i].style.color = selected ? AccentColour : TextColour;
-				bodyButtons[i].style.unityFontStyleAndWeight = selected ? FontStyle.Bold : FontStyle.Normal;
+				bodyButtons[i].EnableInClassList(ActiveClass, Controller.Bodies[i] == Controller.Body);
 			}
 		}
 
@@ -604,7 +713,7 @@ namespace FishMMO.TestHarness.World
 		private void Update()
 		{
 			refresh -= Time.deltaTime;
-			if (refresh > 0f || Controller == null || readout == null)
+			if (refresh > 0f || Controller == null || stats == null)
 			{
 				return;
 			}
@@ -614,7 +723,7 @@ namespace FishMMO.TestHarness.World
 			SkySystem sky = Controller.Sky;
 			if (state == null)
 			{
-				readout.text = "No day/night cycle in the scene.";
+				Stat("clock.time", "no day/night cycle", "warn");
 				return;
 			}
 			if (!Controller.Paused)
@@ -623,35 +732,68 @@ namespace FishMMO.TestHarness.World
 				daySlider?.SetValueWithoutNotify(Controller.DayOfYear);
 				yearSlider?.SetValueWithoutNotify(Controller.Year);
 			}
-			string eclipse = state.SolarEclipse > 0.01f
-				? $" · solar eclipse {(state.SolarEclipse * 100f).ToString("0", culture)}% ({state.EclipsingBody?.ResolvedName})"
-				: state.LunarEclipse > 0.01f ? $" · lunar eclipse {(state.LunarEclipse * 100f).ToString("0", culture)}%" : string.Empty;
-			float stars = sky != null ? sky.Current.StarVisibility : 0f;
 
+			// Clock.
+			Stat("clock.time", $"{SceneTime.Format(state.LocalTime01)} · {(state.IsDaylight ? "day" : "night")}");
+			Stat("clock.date", $"year {Controller.Year}, day {Mathf.FloorToInt(Controller.DayOfYear)}");
+			Stat("clock.hours", Controller.Hours.ToString("0.00", culture));
+			Stat("clock.rate", Controller.Paused ? "paused" : $"{Controller.TimeScale.ToString("0.###", culture)} h/s", Controller.Paused ? "dim" : null);
+
+			// Sun and sky.
+			float stars = sky != null ? sky.Current.StarVisibility : 0f;
+			Stat("sky.sun", $"{state.SunAltitude.ToString("0.0", culture)}° up");
+			Stat("sky.stars", $"{(stars * 100f).ToString("0", culture)}%", stars <= 0.001f ? "dim" : null);
+			Stat("sky.meteors", $"{state.MeteorRate.ToString("0", culture)} / h");
+			if (state.SolarEclipse > 0.01f)
+			{
+				Stat("sky.eclipse", $"solar {(state.SolarEclipse * 100f).ToString("0", culture)}% ({state.EclipsingBody?.ResolvedName})", "warn");
+			}
+			else if (state.LunarEclipse > 0.01f)
+			{
+				Stat("sky.eclipse", $"lunar {(state.LunarEclipse * 100f).ToString("0", culture)}%", "warn");
+			}
+			else
+			{
+				Stat("sky.eclipse", "none", "dim");
+			}
+
+			// The air: what the driver says it is doing. Without this the weather just changes and
+			// there is no telling whether a front is arriving or a slider was nudged.
 			WeatherSample sample = Controller.LastSample;
 			WeatherFrame shown = Controller.Presentation != null ? Controller.Presentation.Shown : sample.Frame;
-			string falling = sample.Precipitation == PrecipitationKind.None ? "nothing" : sample.Precipitation.ToString().ToLowerInvariant();
-			string driving = Controller.DriveWeatherDirectly
-				? "sliders"
-				: Controller.ActivePreset != null ? Controller.ActivePreset.ResolvedName : "no preset";
-
-			// What the driver says the air is doing. Without this the weather just changes and there
-			// is no telling whether a front is arriving or a slider was nudged.
 			WeatherDriver.Synoptic air = sample.Air;
-			string weatherDriver = Controller.DriveWeatherDirectly
-				? "driver off (sliders)"
-				: $"{(air.Pressure < -0.15f ? "low" : air.Pressure > 0.15f ? "high" : "slack")} {air.Pressure:+0.00;-0.00} · "
-					+ $"humidity {air.Humidity * 100f:0}% · instability {air.Instability * 100f:0}%"
-					+ (sample.DriverWeight < 0.999f ? $" · overridden {(1f - sample.DriverWeight) * 100f:0}% by the preset" : string.Empty);
+			if (Controller.DriveWeatherDirectly)
+			{
+				Stat("air.pressure", "—", "dim");
+				Stat("air.humidity", "—", "dim");
+				Stat("air.instability", "—", "dim");
+				Stat("air.driver", "off (sliders)", "warn");
+			}
+			else
+			{
+				string system = air.Pressure < -0.15f ? "low" : air.Pressure > 0.15f ? "high" : "slack";
+				Stat("air.pressure", $"{system} {air.Pressure.ToString("+0.00;-0.00", culture)}");
+				Stat("air.humidity", $"{(air.Humidity * 100f).ToString("0", culture)}%");
+				Stat("air.instability", $"{(air.Instability * 100f).ToString("0", culture)}%");
+				bool overridden = sample.DriverWeight < 0.999f;
+				Stat("air.driver", overridden ? $"{((1f - sample.DriverWeight) * 100f).ToString("0", culture)}% overridden" : "running",
+					overridden ? "warn" : "good");
+			}
 
-			readout.text =
-				$"{SceneTime.Format(state.LocalTime01)}  ·  year {Controller.Year}, day {Mathf.FloorToInt(Controller.DayOfYear)}  ·  {Controller.Hours.ToString("0.00", culture)} world h  ·  {(state.IsDaylight ? "day" : "night")}\n" +
-				$"Air: {weatherDriver}\n" +
-				$"sun {state.SunAltitude.ToString("0.0", culture)}°  ·  stars {(stars * 100f).ToString("0", culture)}%  ·  meteors {state.MeteorRate.ToString("0", culture)}/h{eclipse}\n" +
-				$"Weather: {driving} · {Controller.Timeline.Cells.Count} cell(s) · {Controller.Timeline.Layers.Count} layer(s)\n" +
-				$"Falling {falling} {shown[WeatherChannel.Precipitation].ToString("0.00", culture)} · fog {WeatherFogPresenter.Amount(shown).ToString("0.00", culture)} · " +
-				$"wind {(shown[WeatherChannel.WindSpeed] * 30f).ToString("0.0", culture)} m/s · temp {sample.Temperature.ToString("+0.00;-0.00", culture)} · {(sample.IsSheltered ? "sheltered" : "exposed")}\n" +
-				CloudLine(sky, culture);
+			// The weather that is shown.
+			string falling = sample.Precipitation == PrecipitationKind.None ? "nothing" : sample.Precipitation.ToString().ToLowerInvariant();
+			float amount = shown[WeatherChannel.Precipitation];
+			Stat("wx.source", Controller.DriveWeatherDirectly ? "sliders" : Controller.ActivePreset != null ? Controller.ActivePreset.ResolvedName : "the field");
+			Stat("wx.timeline", $"{Controller.Timeline.Cells.Count} cell(s) · {Controller.Timeline.Layers.Count} layer(s)");
+			Stat("wx.falling", sample.Precipitation == PrecipitationKind.None ? "nothing" : $"{falling} {amount.ToString("0.00", culture)}",
+				sample.Precipitation == PrecipitationKind.None ? "dim" : null);
+			float fog = WeatherFogPresenter.Amount(shown);
+			Stat("wx.fog", fog.ToString("0.00", culture), fog <= 0.005f ? "dim" : null);
+			Stat("wx.wind", $"{(shown[WeatherChannel.WindSpeed] * 30f).ToString("0.0", culture)} m/s");
+			Stat("wx.temp", sample.Temperature.ToString("+0.00;-0.00", culture));
+			Stat("wx.exposure", sample.IsSheltered ? "sheltered" : "exposed");
+
+			RefreshCloudStats(sky, culture);
 
 			if (skyList != null && activeTab == 0)
 			{
@@ -668,35 +810,52 @@ namespace FishMMO.TestHarness.World
 			}
 			foreach (Button button in presetButtons)
 			{
-				bool active = !Controller.DriveWeatherDirectly && ReferenceEquals(button.userData, Controller.ActivePreset);
-				button.style.borderBottomColor = active ? AccentColour : new StyleColor(StyleKeyword.Null);
-				button.style.borderBottomWidth = active ? 2 : new StyleFloat(StyleKeyword.Null);
+				button.EnableInClassList(ActiveClass, !Controller.DriveWeatherDirectly && ReferenceEquals(button.userData, Controller.ActivePreset));
+			}
+			int quality = QualitySettings.GetQualityLevel();
+			for (int i = 0; i < tierButtons.Count; i++)
+			{
+				tierButtons[i].EnableInClassList(ActiveClass, i == quality);
 			}
 		}
 
 		/// <summary>
 		/// What the clouds are doing on this tier: the sky is drawn by a marched volume, and how
 		/// much of it runs — the steps, the shadow on the ground, the light shafts — changes with
-		/// quality. Without this line, a tier that quietly turns something off looks like a bug.
+		/// quality. Without these, a tier that quietly turns something off looks like a bug.
 		/// </summary>
-		private static string CloudLine(SkySystem sky, CultureInfo culture)
+		private void RefreshCloudStats(SkySystem sky, CultureInfo culture)
 		{
-			if (sky == null)
+			if (sky == null || !SkySystem.CloudsReady)
 			{
-				return "Clouds: no sky system";
-			}
-			if (!SkySystem.CloudsReady)
-			{
-				return "Clouds: not ready — bake the cloud noise (Weather Tools → Bake cloud noise)";
+				// Said where it will be seen, and said once: the rest of the card has nothing to show.
+				Stat("cl.bands", sky == null ? "no sky system" : "not baked — Weather Tools → Bake cloud noise", "warn");
+				Stat("cl.shell", "—", "dim");
+				Stat("cl.resolution", "—", "dim");
+				Stat("cl.steps", "—", "dim");
+				Stat("cl.history", "—", "dim");
+				Stat("cl.shafts", "—", "dim");
+				return;
 			}
 			CloudTierSettings tier = sky.CloudTier;
-			string rays = sky.GodRayIntensity > 0.001f
-				? $"shafts {sky.GodRayIntensity.ToString("0.00", culture)}{(sky.GodRayEclipse > 0.02f ? " (from the eclipsing body)" : string.Empty)}"
-				: "no shafts";
 			int bands = sky.CloudBands != null ? sky.CloudBands.Count : 0;
-			return $"Clouds: {bands} band(s), {sky.CloudShellBottom.ToString("0", culture)}–{sky.CloudShellTop.ToString("0", culture)} m · "
-				+ $"{(tier.Resolution * 100f).ToString("0", culture)}% of the screen · {tier.Steps} steps · detail {tier.Detail.ToString("0.0", culture)}"
-				+ $" · {(tier.Temporal ? "steadied" : "no history")} · {rays}";
+			Stat("cl.bands", bands.ToString(culture));
+			Stat("cl.shell", $"{sky.CloudShellBottom.ToString("0", culture)}–{sky.CloudShellTop.ToString("0", culture)} m");
+			Stat("cl.resolution", $"{(tier.Resolution * 100f).ToString("0", culture)}% of screen");
+			Stat("cl.steps", $"{tier.Steps} · detail {tier.Detail.ToString("0.0", culture)}");
+			Stat("cl.history", tier.Temporal ? "steadied" : "off", tier.Temporal ? null : "warn");
+			if (!SkySystem.DrawGodRays)
+			{
+				Stat("cl.shafts", "switched off", "warn");
+			}
+			else if (sky.GodRayIntensity > 0.001f)
+			{
+				Stat("cl.shafts", sky.GodRayIntensity.ToString("0.00", culture) + (sky.GodRayEclipse > 0.02f ? " (eclipse)" : string.Empty));
+			}
+			else
+			{
+				Stat("cl.shafts", "none", "dim");
+			}
 		}
 
 		private static string Describe(CelestialState state, CultureInfo culture)
