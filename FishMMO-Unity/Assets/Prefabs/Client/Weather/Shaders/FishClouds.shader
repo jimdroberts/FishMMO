@@ -67,7 +67,9 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 #else
                     bool isSky = rawDepth >= 1.0 - 1e-6;
                 #endif
-                float maxDistance = isSky ? _FishCloudMarchParams.w : depth / max(1e-4, dot(direction, -UNITY_MATRIX_V[2].xyz));
+                // Open sky runs to where the highest layer stops being drawn, which is several
+                // times the draw distance: that figure is the deck's, and grows with height.
+                float maxDistance = isSky ? _FishCloudMarchParams.w * 4.6 : depth / max(1e-4, dot(direction, -UNITY_MATRIX_V[2].xyz));
 
                 float jitter = Jitter(input.uv * _ScreenParams.xy, _FishCloudMarchParams.z);
                 // The world is fogged by the pipeline already; the volume's ground fog is for the sky.
@@ -311,6 +313,11 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 }
                 // The cloud buffer's alpha is transmittance: 1 clear sky, 0 solid cloud.
                 float clear = SAMPLE_TEXTURE2D_LOD(_FishGodRayClouds, sampler_FishGodRayClouds, uv, 0).a;
+                // Sharpened. A shaft is the difference between light that gets past and light that
+                // does not, and cloud at its real extinction lets a good deal past nearly
+                // everywhere: read as it stood, every pixel near the sun was "mostly clear" and
+                // there was no edge for a shaft to form along.
+                clear = smoothstep(0.15, 0.9, clear);
                 // A body in front of the light blocks it too, and a body has no depth to be found
                 // by: it is simply dark against a bright sky. This is what puts the rays around an
                 // eclipsing body instead of through it.
@@ -345,6 +352,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 }
                 float2 step = toLight / taps;
                 float sum = 0.0;
+                float squares = 0.0;
                 float total = 0.0;
                 float weight = 1.0;
                 float2 uv = input.uv;
@@ -352,14 +360,24 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 for (int i = 0; i < taps; i++)
                 {
                     uv += step;
-                    sum += Visible(uv) * weight;
+                    float seen = Visible(uv);
+                    sum += seen * weight;
+                    squares += seen * seen * weight;
                     total += weight;
                     weight *= _FishGodRayParams.x;
                 }
                 // Fades out with distance from the light, so the shafts have an end, and it takes
                 // a good run of clear line of sight to make one.
                 float shaft = sum / max(1e-4, total);
-                shaft = pow(saturate(shaft), max(1.0, _FishGodRayParams.y));
+                // A shaft is light that gets past beside light that does not. Where the whole way to
+                // the sun is open there is nothing to cut one out of, and what this used to draw
+                // there was not rays but a bright disc of even glow over the clear sky — the larger
+                // part of what washed the clouds out. How mixed the way is, open here and blocked
+                // there, is the spread of what was seen along it: most of the light goes where that
+                // is high, and only a quarter where the way is simply clear.
+                float mean = saturate(shaft);
+                float mixed = saturate(sqrt(max(0.0, squares / max(1e-4, total) - mean * mean)) * 3.0);
+                shaft = pow(mean, max(1.0, _FishGodRayParams.y)) * (0.25 + 0.75 * mixed);
                 return float4(shaft.xxx * (1.0 - spread * spread), 1.0);
             }
             ENDHLSL
@@ -369,7 +387,16 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         Pass
         {
             Name "CloudGodRayComposite"
-            Blend One One
+            // Screen, not add: result = frame + shafts x (1 - frame). The shafts were ADDED, to a sky
+            // that is already nine tenths of white beside the sun and with no tonemapper to catch
+            // the overflow, so wherever frame + shaft passed 1 everything became exactly white —
+            // lit cloud, veil and clear sky alike. The shafts fade smoothly toward the edge of their
+            // reach, but clipping turns a smooth falloff into a hard one: the white stopped dead on
+            // the contour where the sum fell below 1, a ring round the sun, and a cloud crossing it
+            // was visible outside the ring and gone inside it — cut along the ring. Screened, light
+            // added to a bright pixel tends toward white and never arrives, so nothing clips and
+            // the cloud keeps its edge all the way in.
+            Blend One OneMinusSrcColor
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag

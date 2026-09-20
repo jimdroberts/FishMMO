@@ -502,11 +502,28 @@ namespace FishMMO.Shared.Weather
 			// straight between them.
 			const float Step = 4000f;
 			cover = CoverAt(worldSeed, centreMetres, worldSeconds, latitudeDegrees, season01, localTime01);
-			float east = CoverAt(worldSeed, centreMetres + new Vector2(Step, 0f), worldSeconds, latitudeDegrees, season01, localTime01);
-			float west = CoverAt(worldSeed, centreMetres - new Vector2(Step, 0f), worldSeconds, latitudeDegrees, season01, localTime01);
-			float north = CoverAt(worldSeed, centreMetres + new Vector2(0f, Step), worldSeconds, latitudeDegrees, season01, localTime01);
-			float south = CoverAt(worldSeed, centreMetres - new Vector2(0f, Step), worldSeconds, latitudeDegrees, season01, localTime01);
+			// The slope of the LARGE-SCALE field only — the systems and fronts — and never of the
+			// formations. This is a straight line standing in for a field, and the renderer adds
+			// the formations themselves on top of it, exactly, place by place. Fitted to a cover
+			// that already had them in it, the line carried their slope as well: counted twice, and
+			// the fitted half of it planar. A bank's edge made the line ten times steeper than any
+			// front, so the first eighth of the cover — where a band goes from nothing to its whole
+			// share — was crossed in two kilometres instead of twenty-five, along a dead straight
+			// line, and the cirrus ended on a ruled edge across the sky.
+			float east = SynopticCoverAt(worldSeed, centreMetres + new Vector2(Step, 0f), worldSeconds, latitudeDegrees, season01, localTime01);
+			float west = SynopticCoverAt(worldSeed, centreMetres - new Vector2(Step, 0f), worldSeconds, latitudeDegrees, season01, localTime01);
+			float north = SynopticCoverAt(worldSeed, centreMetres + new Vector2(0f, Step), worldSeconds, latitudeDegrees, season01, localTime01);
+			float south = SynopticCoverAt(worldSeed, centreMetres - new Vector2(0f, Step), worldSeconds, latitudeDegrees, season01, localTime01);
 			gradientPerMetre = new Vector2((east - west) / (2f * Step), (north - south) / (2f * Step));
+		}
+
+		/// <summary>The cloud cover the systems and fronts ask for at one point, with the formations left out.</summary>
+		public static float SynopticCoverAt(uint worldSeed, Vector2 positionMetres, double worldSeconds,
+			float latitudeDegrees, float season01, float localTime01)
+		{
+			Synoptic air = Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, localTime01);
+			air.Mesoscale = 0f;
+			return Background(air)[WeatherChannel.CloudCover];
 		}
 
 		/// <summary>The field's cloud cover at one point.</summary>

@@ -171,8 +171,87 @@ namespace FishMMO.TestHarness.World
 			get => paused;
 			set
 			{
+				bool started = paused && !value;
 				paused = value;
 				ApplyClock();
+				if (started)
+				{
+					BeginRunTrace();
+				}
+			}
+		}
+
+		// ── The run trace ─────────────────────────────────────────────
+		// What the sky was doing, frame by frame, for the first seconds after Run is pressed. A
+		// cloud that swells and shrinks in that second was explained twice by reading the code and
+		// both explanations were wrong; this writes down every number that decides how much cloud
+		// is drawn and how tall, so the next explanation is read off a file instead.
+
+		/// <summary>Where the last run's trace was written, under the project's Logs folder.</summary>
+		public const string RunTracePath = "Logs/WorldSimRunTrace.csv";
+		private const float RunTraceSeconds = 8f;
+		private System.Text.StringBuilder runTrace;
+		private float runTraceElapsed;
+
+		private void BeginRunTrace()
+		{
+			runTrace = new System.Text.StringBuilder(64 * 1024);
+			runTraceElapsed = 0f;
+			runTrace.AppendLine("t,dt,timeOfDay,clockLocal01,hours,driftX,driftZ,driverWeight,"
+				+ "fieldCover,fieldFog,fieldRain,shownCover,shownFog,shownRain,instability,humidity,pressure,"
+				+ "skyCover,columnType,towerGain,towerHere,mesoHere,climb,shellBottom,shellTop,"
+				+ "cumulusCover,cumulusBase,altoCover,cirrusCover,measuredSolid,measuredAny");
+		}
+
+		private void WriteRunTrace(float dt)
+		{
+			if (runTrace == null)
+			{
+				return;
+			}
+			runTraceElapsed += dt;
+			SkySystem sky = SkySystem.Instance;
+			CelestialState state = State;
+			WeatherFrame shown = presentation != null ? presentation.Shown : lastSample.Frame;
+			var culture = System.Globalization.CultureInfo.InvariantCulture;
+			string F(double v) => v.ToString("0.#####", culture);
+			float Band(IReadOnlyList<float> list, int index) => list != null && index < list.Count ? list[index] : 0f;
+			runTrace.Append(F(runTraceElapsed)).Append(',').Append(F(dt)).Append(',')
+				.Append(F(timeOfDay)).Append(',').Append(F(state != null ? state.LocalTime01 : -1)).Append(',').Append(F(hours)).Append(',')
+				.Append(F(sky != null ? sky.CloudDrift.x : 0)).Append(',').Append(F(sky != null ? sky.CloudDrift.y : 0)).Append(',')
+				.Append(F(lastSample.DriverWeight)).Append(',')
+				.Append(F(lastSample.Background[WeatherChannel.CloudCover])).Append(',')
+				.Append(F(lastSample.Background[WeatherChannel.FogDensity])).Append(',')
+				.Append(F(lastSample.Background[WeatherChannel.Precipitation])).Append(',')
+				.Append(F(shown[WeatherChannel.CloudCover])).Append(',').Append(F(shown[WeatherChannel.FogDensity])).Append(',')
+				.Append(F(shown[WeatherChannel.Precipitation])).Append(',')
+				.Append(F(lastSample.Air.Instability)).Append(',').Append(F(lastSample.Air.Humidity)).Append(',').Append(F(lastSample.Air.Pressure)).Append(',');
+			if (sky != null)
+			{
+				runTrace.Append(F(sky.CloudCover)).Append(',').Append(F(sky.CloudColumnType)).Append(',').Append(F(sky.CloudTowerGain)).Append(',')
+					.Append(F(sky.CloudTowerAtCamera)).Append(',').Append(F(sky.CloudMesoscaleAtCamera)).Append(',').Append(F(sky.CloudClimbHeight)).Append(',')
+					.Append(F(sky.CloudShellBottom)).Append(',').Append(F(sky.CloudShellTop)).Append(',')
+					.Append(F(Band(sky.CloudBandCoverage, 1))).Append(',').Append(F(Band(sky.CloudBandBottom, 1))).Append(',')
+					.Append(F(Band(sky.CloudBandCoverage, 2))).Append(',').Append(F(Band(sky.CloudBandCoverage, 3))).Append(',');
+			}
+			else
+			{
+				runTrace.Append("0,0,0,0,0,0,0,0,0,0,0,0,");
+			}
+			runTrace.Append(F(CloudStats.MeasuredCover)).Append(',').Append(F(CloudStats.MeasuredAnyCloud)).AppendLine();
+			if (runTraceElapsed >= RunTraceSeconds || paused)
+			{
+				try
+				{
+					System.IO.Directory.CreateDirectory("Logs");
+					System.IO.File.WriteAllText(RunTracePath, runTrace.ToString());
+					Debug.Log($"[World Sim] Run trace written: {RunTracePath} ({runTraceElapsed:0.0} s).");
+				}
+				catch (Exception e)
+				{
+					Debug.LogWarning($"[World Sim] Could not write the run trace: {e.Message}");
+				}
+				runTrace = null;
 			}
 		}
 
@@ -759,6 +838,7 @@ namespace FishMMO.TestHarness.World
 
 			uint tick = Tick;
 			float dt = Time.deltaTime;
+			WriteRunTrace(dt);
 			coverTimer += dt;
 			if (coverTimer >= 1f)
 			{

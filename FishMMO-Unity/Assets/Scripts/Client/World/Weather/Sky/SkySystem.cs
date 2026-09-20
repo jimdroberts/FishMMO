@@ -64,6 +64,7 @@ namespace FishMMO.Client
 		private static readonly int CloudWindId = Shader.PropertyToID("_FishCloudWind");
 		private static readonly int CloudLayerEId = Shader.PropertyToID("_FishCloudLayerE");
 		private static readonly int CloudLayerFId = Shader.PropertyToID("_FishCloudLayerF");
+		private static readonly int CloudLayerGId = Shader.PropertyToID("_FishCloudLayerG");
 		private static readonly int CloudMesoId = Shader.PropertyToID("_FishCloudMeso");
 		private static readonly int CloudMesoParamsId = Shader.PropertyToID("_FishCloudMesoParams");
 		private static readonly int CloudMesoSeedId = Shader.PropertyToID("_FishCloudMesoSeed");
@@ -927,7 +928,10 @@ namespace FishMMO.Client
 				// Clamped: the clear-sky gate is steep just above nothing, and a formation put
 				// through an unclamped slope there would swing a band from empty to full.
 				float response = ground ? 0f : Mathf.Clamp((ahead - behind) / 0.02f, 0f, 2f);
-				Vector2 bandGradient = coverGradient * response;
+				// The slope of the SKY's cover, the same for every band: each band now answers the
+				// cover at a place with its own function, in the shader, rather than being handed the
+				// slope of that function at the camera and told to extrapolate.
+				Vector2 bandGradient = ground ? Vector2.zero : coverGradient;
 				layerD[i] = new Vector4(band.Convection, bandGradient.x, bandGradient.y, verticalScale);
 				// This band's drift, wrapped to its own period so the float is exact and the wrap is
 				// invisible: 42 tiles along the wind (the warp's period, which the shape's and the
@@ -944,7 +948,8 @@ namespace FishMMO.Client
 					(float)WrapMetres(driftY * scale, detailPeriod));
 				// z marks a column; w is the thinnest its cloud gets — the deck, seven hundredths of
 				// the band — which is what the march's stride must not be able to step over.
-				layerF[i] = new Vector4(response, response > 1e-4f ? 1f : 0f, band.Column ? 1f : 0f, band.Column ? band.Thickness * 0.07f : 0f);
+				layerF[i] = new Vector4(response, ground ? 0f : 1f, band.Column ? 1f : 0f, band.Column ? band.Thickness * 0.07f : 0f);
+				layerG[i] = new Vector4(band.CoverageOnset, band.CoverageScale, band.CoverageBias, 0f);
 				Color tint = band.ShadedTint;
 				layerTint[i] = new Vector4(tint.r, tint.g, tint.b, 1f);
 			}
@@ -956,6 +961,7 @@ namespace FishMMO.Client
 				layerD[i] = Vector4.zero;
 				layerE[i] = Vector4.zero;
 				layerF[i] = Vector4.zero;
+				layerG[i] = Vector4.zero;
 				layerTint[i] = Vector4.one;
 			}
 			Shader.SetGlobalVectorArray(CloudLayerAId, layerA);
@@ -964,6 +970,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVectorArray(CloudLayerDId, layerD);
 			Shader.SetGlobalVectorArray(CloudLayerEId, layerE);
 			Shader.SetGlobalVectorArray(CloudLayerFId, layerF);
+			Shader.SetGlobalVectorArray(CloudLayerGId, layerG);
 			Shader.SetGlobalVectorArray(CloudLayerTintId, layerTint);
 			Shader.SetGlobalInt(CloudLayerCountId, count);
 
@@ -1003,6 +1010,7 @@ namespace FishMMO.Client
 
 		private readonly Vector4[] layerE = new Vector4[MaxCloudLayers];
 		private readonly Vector4[] layerF = new Vector4[MaxCloudLayers];
+		private readonly Vector4[] layerG = new Vector4[MaxCloudLayers];
 		private float[] layerCoverage = new float[MaxCloudLayers];
 		private float[] layerBottom = new float[MaxCloudLayers];
 		private VolumetricCloudSettings cloudSettings;
@@ -1214,6 +1222,8 @@ namespace FishMMO.Client
 		}
 
 		private Vector2 cloudDrift;
+		/// <summary>How far the air has carried the clouds, wrapped for a float: for readouts and traces.</summary>
+		public Vector2 CloudDrift => cloudDrift;
 
 		private void AddSun(in SkyBodyState star, in SkySample sample, SkyProfile sky, float eclipse, ref int count)
 		{

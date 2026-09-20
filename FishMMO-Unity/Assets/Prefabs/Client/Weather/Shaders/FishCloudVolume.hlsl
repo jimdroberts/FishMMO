@@ -30,10 +30,14 @@ float4 _FishCloudLayerD[FISH_CLOUD_MAX_LAYERS];  // x convection, yz cover chang
 // (x along the wind, y across it) and already wrapped to the band's own period, so a float holds it
 // without losing metres. zw the same for the detail volume, on the world axes.
 float4 _FishCloudLayerE[FISH_CLOUD_MAX_LAYERS];
-// x how much of a change in the forecast reaches this band (the slope of its response), y 1 when
-// the band follows the forecast at all (0 for the fog band, which follows the fog), z 1 when the
-// band is a cloud column, w the thinnest a column's cloud gets (its deck), for the stride guard.
+// x unused, y 1 when the band follows the forecast (0 for the fog band, which follows the fog),
+// z 1 when the band is a cloud column, w the thinnest a column's cloud gets (its deck), for the
+// stride guard.
 float4 _FishCloudLayerF[FISH_CLOUD_MAX_LAYERS];
+// How a band turns the sky's cover into its own: x the cover it waits for, y how much of the cover
+// reaches it (negative for cirrus, which thins as the sky below fills), z what it has regardless.
+// CloudLayer.CoverageFor, exactly, so it can be asked about any place and not only the camera.
+float4 _FishCloudLayerG[FISH_CLOUD_MAX_LAYERS];
 // The cloud map's tall part. x how much of a tower the air allows, y metres one tile of the tower
 // lattice covers, z tiles per period, w the type every column starts from (0.1 deck .. 0.5 heaps).
 float4 _FishCloudColumn;
@@ -174,6 +178,26 @@ float FishCloudAltitude(float3 position)
     return length(position - float3(0.0, -radius, 0.0)) - radius;
 }
 
+/// A band's cover for a given sky cover: CloudLayer.CoverageFor, to the letter.
+///
+/// The shader used to be handed this function's *slope* at the camera's cover and told to
+/// extrapolate: cover here = cover at the camera + slope x (how different this place is). That is
+/// a fair likeness where the function is nearly straight and a wild one where it is not — and at
+/// the bottom of the range it is a steep gate, nothing to a band's whole share across the first
+/// eighth of the cover. With the camera in a formation's gap and the cover just coming up through
+/// that gate, the slope was at its limit and everywhere else in the sky was "more formation than
+/// here", so the whole sky was extrapolated to more than full cover — and then snapped back the
+/// moment the cover left the gate and the slope fell to nothing. Measured on the bed: 5% of the
+/// screen solid cloud, then 67%, then 24%, inside a second and a half, with every input rising
+/// smoothly throughout. Evaluated outright there is nothing to extrapolate.
+float FishCloudCoverageFor(float skyCover, float3 response)
+{
+    float above = response.x >= 1.0 ? 0.0 : saturate((skyCover - response.x) / (1.0 - response.x));
+    float asked = saturate(above * response.y + response.z);
+    // A forecast of no cloud means no cloud, whatever a band would keep on its own account.
+    return asked * smoothstep(0.0, 0.12, skyCover);
+}
+
 // Where in its band a height sits, and how much cloud that height can hold. A band is solid a
 // little way above its floor and thins toward its ceiling, which is what gives a deck a flat base
 // and a ragged top.
@@ -251,6 +275,57 @@ bool FishCloudPossibleAt(float altitude)
 float FishCloudLift(float altitude, float ground)
 {
     return ground * 0.6 * exp(-max(0.0, altitude - ground) / 2500.0);
+}
+
+/// How far along a ray the next place is where any cloud can be, from `travelled`; a very large
+/// number when there is none.
+///
+/// Empty air used to be walked: a stride, a test, another stride, each capped at half the thinnest
+/// cloud in the sky — 245 m with a deck up — so that none could be stepped over. A level ray has
+/// tens of kilometres of nothing to cross before it climbs into the cirrus, and on the middle
+/// quality tier the whole march is 192 iterations: it ran out 47 km from the camera having met
+/// nothing, and whatever lay past that was never drawn. Cirrus ten degrees above the horizon is 45
+/// km away. So every high layer ended along a cone, with no fade at all, which is what clouds
+/// "trimmed round a sphere at the horizon" was. The bands are shells about the planet's centre,
+/// so where a ray next meets one is a sphere intersection — one square root, exact, curvature
+/// included — and the empty air between costs one iteration however much of it there is.
+float FishCloudNextPossible(float3 origin, float3 direction, float travelled, float altitude)
+{
+    float radius = max(1000.0, _FishCloudLayer.z);
+    float3 fromCentre = origin - float3(0.0, -radius, 0.0);
+    float along = dot(fromCentre, direction);
+    float offset = dot(fromCentre, fromCentre);
+    float tallest = FishCloudColumnTop(saturate(_FishCloudColumn.w + _FishCloudColumn.x + 0.6));
+    float headroom = _FishCloudTerrainRect.w > 0.5 ? 1000.0 : 0.0;
+    float next = 1e9;
+    UNITY_LOOP
+    for (int i = 0; i < _FishCloudLayerCount; i++)
+    {
+        float4 a = _FishCloudLayerA[i];
+        float4 f = _FishCloudLayerF[i];
+        if (a.w <= 0.001 || (a.z <= 0.002 && f.y < 0.5))
+        {
+            continue;
+        }
+        bool column = f.z > 0.5;
+        float top = (column ? a.x + (a.y - a.x) * tallest : a.y) + headroom;
+        float bottom = column && (_FishCloudSub.x >= 0.01 || _FishCloudSub.y >= 0.01) ? 0.0 : a.x;
+        // Below the band: where the ray climbs through its floor. Above it: where it comes down
+        // through its ceiling, if it ever does — a ray that is already curving away never will.
+        float shell = radius + (altitude <= bottom ? bottom : top);
+        float disc = along * along - (offset - shell * shell);
+        if (disc < 0.0)
+        {
+            continue;
+        }
+        float root = sqrt(disc);
+        float hit = altitude <= bottom ? -along + root : -along - root;
+        if (hit > travelled)
+        {
+            next = min(next, hit);
+        }
+    }
+    return next;
 }
 
 // How air meets high ground: x the wind speed over the air's stability (U/N, metres) — the height of
@@ -422,7 +497,11 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // terrain, which is as far up as a hill's lift reaches.
         float overGround = trueAltitude - field.surface;
         float lifted01 = field.orographic * saturate(1.0 - (overGround - 300.0) / 1800.0);
-        float coverage = saturate(a.z + tilt + meso * f.x + lifted01 * min(1.0, f.x));
+        // The sky's cover HERE — the forecast at the camera, the slope of the front, the formation
+        // and what the ground does to the air — and then this band's own answer to that cover.
+        // A band that does not follow the forecast (the fog band) keeps the figure it was given.
+        float skyCoverHere = saturate(_FishCloudLayer.w + tilt + meso + lifted01);
+        float coverage = f.y > 0.5 ? FishCloudCoverageFor(skyCoverHere, _FishCloudLayerG[i].xyz) : a.z;
         // How tall this column grows: what the day starts every column at, the tower that stands
         // here if one does, and the storm cell overhead if there is one. A tower also brings its
         // own cloud — the air that goes all the way up is air that is condensing.
@@ -431,7 +510,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         {
             float towering = field.tower * _FishCloudColumn.x;
             type = saturate(_FishCloudColumn.w + towering + (growsStorms ? storm * 0.6 : 0.0));
-            coverage = saturate(coverage + towering * 0.5 * f.x);
+            coverage = saturate(coverage + towering * 0.5 * f.y);
         }
         // A storm makes its own cloud wherever the cell stands, whatever the day is doing.
         if (storm > 0.01 && growsStorms)
@@ -791,6 +870,32 @@ float3 FishCloudColour(float3 sunColour, float scatter, float high01, int layerI
     return lit + shaded * (0.5 + 0.5 * high01) * (1.0 - rain * 0.35);
 }
 
+/// A shoulder on the cloud's own brightness: untouched up to 0.8, then rolling off so that nothing
+/// reaches display white until it is several times over it.
+///
+/// Light scatters forward through cloud far more than any other way, so a cloud seen toward the
+/// sun is many times brighter than the same cloud seen side-on — that is the glare round the sun
+/// and it is right. But there is no tonemapping anywhere in this project, so the display simply
+/// clips: side-on a lit rim works out at 0.9, at forty-five degrees from the sun 1.2, at twenty
+/// 1.9 and straight toward it 2.7, and everything past 1 is the same white. Once the clouds were
+/// made as translucent as real ones, "thin enough to glow" described most of every cloud, and the
+/// whole sky within a wide cone of the sun went flat white — cloud, veil and rim alike, which read
+/// as the clouds dissolving into a sphere round the sun, and left the light shafts nothing to be
+/// cut out of. With the shoulder a rim toward the sun is 0.99, a veil 0.90 and a shaded core 0.63:
+/// still a glare, but one with the clouds in it. Applied to the brightness and not per channel,
+/// so a dawn cloud keeps its colour as it brightens. It stands in for a tonemapper; if the project
+/// gains one, this comes out.
+float3 FishCloudShoulder(float3 colour)
+{
+    float level = dot(colour, float3(0.2126, 0.7152, 0.0722));
+    if (level <= 0.8)
+    {
+        return colour;
+    }
+    float rolled = 0.8 + 0.2 * (1.0 - exp(-(level - 0.8) / 0.6));
+    return colour * (rolled / level);
+}
+
 // ── March ──────────────────────────────────────────────────────────────
 
 // Where a ray meets the whole stack of bands: the shell from the lowest floor to the highest ceiling.
@@ -958,24 +1063,26 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // The step here: small near the camera, the tier's full step far out — and half again
         // once the ray is well inside cloud, where what each sample adds is already dimmed by
         // everything in front of it and the edge that needed the fine steps is behind.
-        float stepBase = clamp(travelled * 0.006, fineNear, fine);
+        // Small near the camera, the tier's step across the middle distance, and growing again far
+        // out: a cloud a hundred kilometres off is a few pixels of haze and does not want ninety-
+        // metre steps.
+        float stepBase = max(clamp(travelled * 0.006, fineNear, fine), travelled * 0.004);
         float stepHere = stepBase * (transmittance < 0.5 ? 1.5 : 1.0) * min(2.5, 1.0 + insideSamples * (1.0 / 40.0));
-        if (!FishCloudPossibleAt(FishCloudAltitude(position)))
+        float altitudeHere = FishCloudAltitude(position);
+        if (!FishCloudPossibleAt(altitudeHere))
         {
-            // Nothing can be here. Stride on without paying for the cloud map.
-            if (inside)
+            // Nothing can be here: go straight to the next place something can, or stop.
+            float next = FishCloudNextPossible(origin, direction, travelled, altitudeHere);
+            if (next > far)
             {
-                emptyDistance += stepHere;
-                travelled += stepHere;
-                if (travelled > insideUntil && emptyDistance > fine * 4.0)
-                {
-                    inside = false;
-                }
+                break;
             }
-            else
-            {
-                travelled += coarse;
-            }
+            inside = false;
+            // A step or so short, so the way in is walked and not landed in the middle of — and by
+            // a different amount on every pixel and frame. Landed at one fixed offset from the
+            // band's floor, every ray would sample it at the same depths, and samples in step with
+            // one another across the screen are what draws rings in a cloud.
+            travelled = max(travelled + stepHere, next - stepBase * (0.5 + jitter));
             continue;
         }
         // Scaled by the whole footprint and not just the cone: of the two terms the step is the
@@ -994,8 +1101,15 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // cloud overhead — more, since these are the longest rays in the frame. It thins to nothing
         // over the last quarter of the draw distance, so the sky dissolves into the haze it was
         // already the colour of rather than stopping on an edge.
-        float drawn = _FishCloudLodParams.w > 1.0 ? _FishCloudLodParams.w : 1e9;
-        density *= 1.0 - smoothstep(drawn * 0.7, drawn, travelled);
+        // How far cloud is drawn, which depends on how high it is. One distance for the whole
+        // sky is a sphere round the camera, and a sphere cuts each layer along its own cone: set for
+        // the deck (44 km, where a cloud a kilometre up is already down at the horizon) it cut the
+        // cirrus off ten degrees up the sky. High cloud is seen from much further because it IS
+        // much further when it is low in the sky — eight kilometres up and five degrees above the
+        // horizon is eighty-five kilometres away — so the distance grows with the height.
+        float drawn = _FishCloudLodParams.w > 1.0 ? _FishCloudLodParams.w * (1.0 + max(0.0, altitudeHere) / 2500.0) : 1e9;
+        float leaving = smoothstep(drawn * 0.7, drawn, travelled);
+        density *= 1.0 - leaving;
         if (density > 0.0)
         {
             if (!inside)
@@ -1040,10 +1154,12 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // Full haze by four fifths of the draw distance whatever the haze distance says, so a
             // cloud is always the horizon's colour before it starts to dissolve.
             float haze = saturate(travelled / max(1.0, min(_FishCloudHaze.a, drawn * 0.8)));
-            // Never the whole way. A far cloud loses its contrast to the air, not its shape: taken
-            // all the way to the horizon's colour, every bank past the haze distance became one flat
-            // band and the clouds looked as if they were being switched off as they reached it.
-            colour = lerp(colour, _FishCloudHaze.rgb, haze * haze * 0.86);
+            // Not the whole way — a far cloud loses its contrast to the air, not its shape, and
+            // taken all the way every bank past the haze distance became one flat band — until it
+            // is actually leaving: through the dissolve it goes the rest of the way to the horizon's
+            // colour, so what thins out is already invisible against the sky behind it.
+            colour = lerp(colour, _FishCloudHaze.rgb, max(haze * haze * 0.86, leaving));
+            colour = FishCloudShoulder(colour);
             float clarity = exp(-density * stepHere);
             // Energy-conserving integration: what this step scatters, dimmed by what is in front.
             scattered += transmittance * colour * (1.0 - clarity);
