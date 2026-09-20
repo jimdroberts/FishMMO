@@ -46,6 +46,7 @@ namespace FishMMO.Client
 		private static readonly int GroundId = Shader.PropertyToID("_FishSkyGround");
 		private static readonly int FogColorId = Shader.PropertyToID("_FishSkyFogColor");
 		private static readonly int ParamsId = Shader.PropertyToID("_FishSkyParams");
+		private static readonly int SunShapeId = Shader.PropertyToID("_FishSunShape");
 		private static readonly int EclipseId = Shader.PropertyToID("_FishSkyEclipse");
 		private static readonly int EclipseBodyId = Shader.PropertyToID("_FishSkyEclipseBody");
 		private static readonly int SunDirId = Shader.PropertyToID("_FishSunDir");
@@ -141,6 +142,32 @@ namespace FishMMO.Client
 		public float GodRayEclipse { get; private set; }
 
 		/// <summary>
+		/// How much there is in the air for a shaft to light, 0..1. A shaft is sunlight scattered
+		/// toward the eye by haze, mist and rain; in clean dry air there is almost nothing to see.
+		/// </summary>
+		public float GodRayMedium { get; private set; }
+
+		/// <summary>The least the air ever carries, so a clean day still shows a faint shaft.</summary>
+		private const float GodRayMediumFloor = 0.25f;
+
+		/// <summary>
+		/// Turns post-processing on for a camera, which is what runs the tonemapper. The test beds
+		/// build their cameras from code and have no reference to URP of their own.
+		/// </summary>
+		public static void EnablePostProcessing(Camera camera, bool on = true)
+		{
+			if (camera == null)
+			{
+				return;
+			}
+			var data = UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(camera);
+			if (data != null)
+			{
+				data.renderPostProcessing = on;
+			}
+		}
+
+		/// <summary>
 		/// Held false, the shafts are not drawn even where the sky asks for them. The probe uses
 		/// this to render the same frame with and without them and measure the difference.
 		/// </summary>
@@ -166,6 +193,9 @@ namespace FishMMO.Client
 		private bool hasRegionSky;
 		private SkyProfile blendFrom;
 		private SkyProfile blendTo;
+
+		/// <summary>The sky profile being drawn, for a panel that wants to tune it.</summary>
+		public SkyProfile ActiveSky => blendTo;
 		private float blendElapsed;
 		private float blendSeconds;
 		private Cubemap stars;
@@ -451,7 +481,7 @@ namespace FishMMO.Client
 				presentation.LightningFlash = lightning.Flash;
 			}
 
-			SetGodRays(state, sample, weather, overcast, eclipse, tier);
+			SetGodRays(state, sample, weather, overcast, eclipse, tier, context);
 			SetSkyGlobals(state, sample, blendTo, weather, overcast, eclipse, context, tier, profile);
 			ApplyLights(state, sample, overcast, eclipse, weather, dt, profile, tier);
 			ApplyAmbient(sample, overcast, eclipse, lightning.Flash);
@@ -575,6 +605,10 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(FogColorId, fog);
 			float starVisibility = sample.StarVisibility * (1f - overcast * 0.9f);
 			Shader.SetGlobalVector(ParamsId, new Vector4(starVisibility * sky.StarBrightness, sky.MilkyWay, sky.StarTwinkle, sky.Exposure));
+			// How bright the sun is, in its three parts: the halo the air scatters at you, the disc
+			// itself, and the glow along the horizon toward a low sun. They were three constants in
+			// the shader, which is no use to anyone judging the sky by eye.
+			Shader.SetGlobalVector(SunShapeId, new Vector4(0f, sky.SunDisc, sky.SunGlow, 0f));
 			// Where the covering body is and how big it looks: the corona is drawn at its limb.
 			var covering = Vector4.zero;
 			if (eclipse > 0.02f)
@@ -1167,24 +1201,44 @@ namespace FishMMO.Client
 		/// During a solar eclipse the shafts come from the body covering the sun instead, so the
 		/// rays rake out around its silhouette the way a corona does.
 		/// </remarks>
-		private void SetGodRays(CelestialState state, in SkySample sample, in WeatherFrame weather, float overcast, float eclipse, WeatherTierSettings tier)
+		private void SetGodRays(CelestialState state, in SkySample sample, in WeatherFrame weather, float overcast, float eclipse, WeatherTierSettings tier, in WeatherContext context)
 		{
 			GodRayIntensity = 0f;
 			GodRayEclipse = 0f;
+			GodRayMedium = 0f;
 			if (!tier.GodRays || state == null || state.Sun < 0)
 			{
 				return;
 			}
-			float up = Mathf.Clamp01(state.SunAltitude / 4f);
+			// Crepuscular rays outlast the sun: it still lights the air overhead from a little below
+			// the horizon, which is when they are at their longest.
+			float up = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-3f, 1.5f, state.SunAltitude));
 			if (up <= 0f)
 			{
 				return;
 			}
-			// Broken cloud is what makes a shaft: nothing to shine between under a clear sky, and
-			// nothing to shine through under a solid one.
-			float broken = Mathf.Clamp01(1f - Mathf.Abs(overcast - 0.55f) / 0.55f);
-			float low = Mathf.Lerp(1f, 0.55f, Mathf.Clamp01(state.SunAltitude / 45f));
-			float strength = broken * low * up * sample.SunIntensity;
+			// The medium. Humidity itself does not reach the client, but everything it makes does:
+			// fog, rain, a wet ground steaming off, and the cloud that condensed out of it.
+			float fog = Mathf.Clamp01(weather[WeatherChannel.FogDensity]);
+			float rain = Mathf.Clamp01(weather[WeatherChannel.Precipitation]);
+			float medium = GodRayMediumFloor
+				+ 0.9f * Mathf.Sqrt(fog)
+				+ 0.35f * rain
+				+ 0.25f * Mathf.Clamp01(context.Cover.Wet)
+				+ 0.2f * overcast;
+			medium = Mathf.Clamp01(medium);
+
+			// Low sun: the light crosses far more air on its way, and rakes across it sideways to
+			// the eye, so the lit air is brightest at the horizon and nearly gone at noon.
+			float low = Mathf.Lerp(1f, 0.2f, Mathf.Clamp01(state.SunAltitude / 40f));
+			// No factor for "is there anything to interrupt it": the gather finds that for itself,
+			// pixel by pixel, and where nothing interrupts the light what is left is the glow of lit
+			// air round the sun, which is right. Scaling the whole pass by how broken the sky is
+			// took that glow away on exactly the clear mornings that show it best. Only a solid
+			// deck ends it, because under one the sun is not reaching the air below at all.
+			// Mathf.SmoothStep is an interpolation from a to b, not the shader's smoothstep(edge, edge, x):
+			// handed (0.85, 1, overcast) it returns about 0.86 whatever the sky is doing.
+			float strength = low * up * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.85f, 1f, overcast)));
 
 			Vector3 direction = state.SunDirection;
 			Color colour = sample.SunLight;
@@ -1193,12 +1247,14 @@ namespace FishMMO.Client
 				// The rays now come from around the body in front of the sun, and they are what is
 				// left of the sun to see, so the deeper the eclipse the more they carry.
 				direction = eclipsing;
-				strength = Mathf.Max(strength, up * sample.SunIntensity * 0.35f) + eclipse * 0.5f * up;
+				strength = Mathf.Max(strength, up * 0.35f) + eclipse * 0.5f * up;
+				medium = Mathf.Max(medium, 0.5f * eclipse);
 				GodRayEclipse = eclipse;
 				colour = Color.Lerp(colour, new Color(1f, 0.93f, 0.85f), eclipse * 0.6f);
 			}
 			GodRayDirection = direction;
 			GodRayColor = colour;
+			GodRayMedium = medium;
 			GodRayIntensity = Mathf.Clamp(strength, 0f, 3f);
 		}
 

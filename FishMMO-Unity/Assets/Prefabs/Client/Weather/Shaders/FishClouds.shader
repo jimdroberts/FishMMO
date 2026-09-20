@@ -296,8 +296,9 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             TEXTURE2D(_FishGodRayClouds);
             SAMPLER(sampler_FishGodRayClouds);
             float4 _FishGodRayDir;      // xyz direction to the light, w unused
-            float4 _FishGodRayParams;   // x decay, y how sharply a shaft narrows, z reach (uv), w taps
-            float4 _FishGodRayMask;     // x dark enough to block, y how soft that edge is
+            float4 _FishGodRayParams;   // x falloff per screen height, y metres nearer than which the world is ignored, z reach (screen heights), w taps
+            float4 _FishGodRayMask;     // x dark enough to block, y how soft that edge is, z eclipse 0..1
+            float4 _FishGodRayAir;      // x medium 0..1, y metres of air that fill a shaft in, z/w cloud transmittance that blocks / passes
             float4x4 _FishGodRayVP;
 
             struct Attributes { uint vertexID : SV_VertexID; };
@@ -311,10 +312,12 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 return output;
             }
 
-            // How much of the light gets past this pixel: nothing through the world, which has
-            // depth, and only what the clouds let through where they stand. This is the shaft
-            // itself — it does not depend on how bright the frame happens to be.
-            float Visible(float2 uv)
+            // How much of the light gets past this point of the frame, and whether the point says
+            // anything at all. Cloud blocks by how little it lets through; the world blocks only
+            // from far enough away to be a ridge and not a fence post, and anything nearer is left
+            // out of the count — what stands behind it is unknown, and guessing is what drew rays
+            // off every object.
+            float Visible(float2 uv, float veil, out float known)
             {
                 float rawDepth = SampleSceneDepth(uv);
                 #if UNITY_REVERSED_Z
@@ -322,35 +325,57 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 #else
                     bool isSky = rawDepth >= 1.0 - 1e-6;
                 #endif
-                // How much a blocker here really blocks. What this pass draws is light scattering in
-                // the air between the camera and the sky, and a post three metres away shadows three
-                // metres of that — nothing. Treated as a full blocker, as it was, every near object
-                // carved a shaft the size of the sky: the fence post threw rays across the whole
-                // frame. Only something far off blocks a length of air worth seeing.
                 if (!isSky)
                 {
-                    float solid = LinearEyeDepth(rawDepth, _ZBufferParams);
-                    float blocks = saturate((solid - 60.0) / 900.0);
-                    if (blocks <= 0.001)
-                    {
-                        return 1.0;
-                    }
-                    return 1.0 - blocks;
+                    float eye = LinearEyeDepth(rawDepth, _ZBufferParams);
+                    known = smoothstep(_FishGodRayParams.y * 0.5, _FishGodRayParams.y, eye);
+                    return 0.0;
                 }
-                // The cloud buffer's alpha is transmittance: 1 clear sky, 0 solid cloud.
+                known = 1.0;
+                // The cloud buffer's alpha is transmittance: 1 clear sky, 0 solid cloud. The clouds
+                // are translucent, so the raw figure hardly moves between a gap and a cloud; the
+                // contrast a shaft needs is drawn out of it here.
                 float clear = SAMPLE_TEXTURE2D_LOD(_FishGodRayClouds, sampler_FishGodRayClouds, uv, 0).a;
-                // Sharpened. A shaft is the difference between light that gets past and light that
-                // does not, and cloud at its real extinction lets a good deal past nearly
-                // everywhere: read as it stood, every pixel near the sun was "mostly clear" and
-                // there was no edge for a shaft to form along.
-                clear = smoothstep(0.15, 0.9, clear);
+                // Measured against the clearest sky in the frame and not against 1: fog and haze
+                // veil the whole sky evenly, and an even veil interrupts nothing. Read as a blocker
+                // it shut every shaft off at dawn and left only the darkening.
+                float open = smoothstep(_FishGodRayAir.z, _FishGodRayAir.w, saturate(clear / veil));
                 // A body in front of the light blocks it too, and a body has no depth to be found
-                // by: it is simply dark against a bright sky. This is what puts the rays around an
-                // eclipsing body instead of through it.
+                // by: it is simply dark against a bright sky. Only in an eclipse — a dusk sky is
+                // dark everywhere and would otherwise block every shaft of the day's best hour.
                 float3 colour = SAMPLE_TEXTURE2D_LOD(_FishGodRaySource, sampler_FishGodRaySource, uv, 0).rgb;
                 float luminance = dot(colour, float3(0.2126, 0.7152, 0.0722));
                 float lit = smoothstep(_FishGodRayMask.x, _FishGodRayMask.x + max(0.01, _FishGodRayMask.y), luminance);
-                return clear * lit;
+                return open * lerp(1.0, lit, saturate(_FishGodRayMask.z));
+            }
+
+            // The clearest the sky gets anywhere in the frame: what "open" means today. Nine looks
+            // across the picture, sky only — the clouds are not marched in front of near ground, so
+            // the ground always reads clear and would hide any veil.
+            float ClearestSky()
+            {
+                float clearest = 0.0;
+                float found = 0.0;
+                for (int y = 0; y < 3; y++)
+                {
+                    for (int x = 0; x < 3; x++)
+                    {
+                        float2 uv = float2(0.17 + 0.33 * x, 0.17 + 0.33 * y);
+                        float rawDepth = SampleSceneDepth(uv);
+                        #if UNITY_REVERSED_Z
+                            bool isSky = rawDepth <= 1e-6;
+                        #else
+                            bool isSky = rawDepth >= 1.0 - 1e-6;
+                        #endif
+                        if (isSky)
+                        {
+                            clearest = max(clearest, SAMPLE_TEXTURE2D_LOD(_FishGodRayClouds, sampler_FishGodRayClouds, uv, 0).a);
+                            found = 1.0;
+                        }
+                    }
+                }
+                // Floored, so a frame that is all cloud does not turn its thinnest cloud into a gap.
+                return found > 0.5 ? max(0.35, clearest) : 1.0;
             }
 
             float4 Frag(Varyings input) : SV_Target
@@ -366,67 +391,109 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     light.y = 1.0 - light.y;
                 #endif
 
-                // March from this pixel toward the light, gathering what is still shining through.
-                int taps = (int)max(4.0, _FishGodRayParams.w);
-                float2 toLight = light - input.uv;
-                // Aspect-correct, so the reach is a circle on screen and not an ellipse.
+                // Aspect-correct, so distances are in screen heights and the reach is a circle.
                 float aspect = _ScreenParams.x / max(1.0, _ScreenParams.y);
-                float spread = length(float2(toLight.x * aspect, toLight.y)) / max(1e-4, _FishGodRayParams.z);
-                if (spread > 1.0)
+                float2 scale = float2(aspect, 1.0);
+
+                // The light may stand outside the frame. The shafts it throws into the frame are
+                // still there, but less and less is known about what interrupts them, so they
+                // fade with how far out it is and are gone by about half a screen.
+                float2 outside = max(0.0, max(-light, light - 1.0)) * scale;
+                float framed = 1.0 - smoothstep(0.0, 0.6, length(outside));
+                if (framed <= 0.0)
+                {
+                    return 0.0;
+                }
+
+                float2 toLight = light - input.uv;
+                float span = length(toLight * scale);
+                float spread = span / max(1e-4, _FishGodRayParams.z);
+                if (spread >= 1.0)
                 {
                     return 0.0;      // too far from the light for a shaft to reach
                 }
-                float2 step = toLight / taps;
+
+                // March toward the light, but only as far as the frame goes.
+                float inFrame = 1.0;
+                if (toLight.x > 1e-5) inFrame = min(inFrame, (1.0 - input.uv.x) / toLight.x);
+                if (toLight.x < -1e-5) inFrame = min(inFrame, (0.0 - input.uv.x) / toLight.x);
+                if (toLight.y > 1e-5) inFrame = min(inFrame, (1.0 - input.uv.y) / toLight.y);
+                if (toLight.y < -1e-5) inFrame = min(inFrame, (0.0 - input.uv.y) / toLight.y);
+                inFrame = saturate(inFrame);
+
+                int taps = (int)max(4.0, _FishGodRayParams.w);
+                float2 hop = toLight * inFrame / taps;
+                float stride = span * inFrame / taps;
+                float falloff = _FishGodRayParams.x;
+                // A different start in every pixel turns the bands of a short march into grain,
+                // which the half-resolution upsample then smooths away.
+                float jitter = InterleavedGradientNoise(input.positionCS.xy, 0);
+
+                float veil = ClearestSky();
                 float sum = 0.0;
-                float squares = 0.0;
                 float total = 0.0;
-                float weight = 1.0;
-                float2 uv = input.uv;
+                float possible = 0.0;
+                float lastSeen = 1.0;
+                float lastKnown = 0.0;
                 UNITY_LOOP
                 for (int i = 0; i < taps; i++)
                 {
-                    uv += step;
-                    float seen = Visible(uv);
+                    float along = i + jitter;
+                    float known;
+                    float seen = Visible(input.uv + hop * along, veil, known);
+                    float reach = exp(-falloff * stride * along) * stride;
+                    float weight = reach * known;
                     sum += seen * weight;
-                    squares += seen * seen * weight;
                     total += weight;
-                    weight *= _FishGodRayParams.x;
+                    possible += reach;
+                    lastSeen = seen;
+                    lastKnown = known;
                 }
-                // Fades out with distance from the light, so the shafts have an end, and it takes
-                // a good run of clear line of sight to make one.
-                float shaft = sum / max(1e-4, total);
-                // A shaft is light that gets past beside light that does not. Where the whole way to
-                // the sun is open there is nothing to cut one out of, and what this used to draw
-                // there was not rays but a bright disc of even glow over the clear sky — the larger
-                // part of what washed the clouds out. How mixed the way is, open here and blocked
-                // there, is the spread of what was seen along it: most of the light goes where that
-                // is high. But not only there: the even glow over open sky is the sun's own
-                // brightness as it is seen, and cut to a quarter — as this first did — the sun looked
-                // weak however good the rays were — and at seven tenths it was too much. Half where
-                // the way is simply clear, half for the rays.
-                float mean = saturate(shaft);
-                float mixed = saturate(sqrt(max(0.0, squares / max(1e-4, total) - mean * mean)) * 3.0);
-                shaft = pow(mean, max(1.0, _FishGodRayParams.y)) * (0.5 + 0.5 * mixed);
-                return float4(shaft.xxx * (1.0 - spread * spread), 1.0);
+                // Past the frame's edge, what was last seen is taken to carry on: a bank of cloud
+                // at the edge of the picture usually does.
+                float reached = span * inFrame;
+                float beyond = (exp(-falloff * reached) - exp(-falloff * span)) / max(1e-4, falloff) * lastKnown;
+                sum += lastSeen * beyond;
+                total += beyond;
+                // With most of the way hidden behind something near, the few taps left decide the
+                // answer and the jitter decides which taps they are: beside a box that was a grid of
+                // dots in the cloud. The less of the way is known, the more the pixel's own sky
+                // stands in — open sky is lit, cloud is not — which is smooth and nearly always right.
+                float knownHere;
+                float here = Visible(input.uv, veil, knownHere);
+                here = lerp(1.0, here, knownHere);
+                float trust = saturate(total / max(1e-5, possible + beyond) * 2.0);
+                float lit = lerp(here, total > 1e-5 ? sum / total : here, trust);
+
+                // Forward scattering: brightest looking toward the light, gone at the reach.
+                float phase = pow(saturate(1.0 - spread * spread), 3.0);
+                // No silhouettes in here. How much air stands in front of a pixel is a hard edge at
+                // every object, and this buffer is half the screen's resolution: kept here, the edge
+                // came back up as stair-steps of light spilt onto the object and notches cut in the
+                // sky beside it. The composite applies it, at full resolution.
+                float glow = _FishGodRayAir.x * phase * framed;
+                // r: light the air scatters toward the eye where the sun reaches it.
+                // g: the air that would have glowed and is in shadow — the dark lane beside the shaft.
+                // The lanes keep clear of the light itself. Round the sun the frame's own glow is the
+                // sunrise, and a lane drawn there does not read as a shadow, only as the glow missing.
+                // The lane's depth does not follow the glow's falloff all the way: a shadow a long way
+                // from the sun is still a shadow, and it is out there, against plain sky, that a
+                // shaft is actually seen.
+                float laneReach = _FishGodRayAir.x * sqrt(phase) * framed;
+                float lane = laneReach * (1.0 - lit) * smoothstep(0.05, 0.25, spread);
+                return float4(glow * lit, lane, 0.0, 1.0);
             }
             ENDHLSL
         }
 
-        // ── 5: add the shafts to the frame ──
+        // ── 5: light the shafts and darken the lanes between them ──
+        // The frame is kept by the alpha and added to by the colour. A shaft is seen as much by
+        // the shadow beside it as by its own light, and light alone, added to a bright sky, only
+        // ever made an even disc round the sun.
         Pass
         {
             Name "CloudGodRayComposite"
-            // Depth-aware: see the air term in the fragment.
-            // Screen, not add: result = frame + shafts x (1 - frame). The shafts were ADDED, to a sky
-            // that is already nine tenths of white beside the sun and with no tonemapper to catch
-            // the overflow, so wherever frame + shaft passed 1 everything became exactly white —
-            // lit cloud, veil and clear sky alike. The shafts fade smoothly toward the edge of their
-            // reach, but clipping turns a smooth falloff into a hard one: the white stopped dead on
-            // the contour where the sum fell below 1, a ring round the sun, and a cloud crossing it
-            // was visible outside the ring and gone inside it — cut along the ring. Screened, light
-            // added to a bright pixel tends toward white and never arrives, so nothing clips and
-            // the cloud keeps its edge all the way in.
-            Blend One OneMinusSrcColor
+            Blend One SrcAlpha, Zero One
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
@@ -440,6 +507,8 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             SAMPLER(sampler_FishGodRayBuffer);
             float4 _FishGodRayBuffer_TexelSize;
             float4 _FishGodRayColor;    // rgb tint, a intensity
+            float4 _FishGodRayLane;     // x how dark a shadowed lane gets, 0..1
+            float4 _FishGodRayAir;      // y metres of air that fill a shaft in
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -454,23 +523,41 @@ Shader "Hidden/FishMMO/Weather/Clouds"
 
             float4 Frag(Varyings input) : SV_Target
             {
-                float2 texel = _FishGodRayBuffer_TexelSize.xy * 0.5;
-                float3 a = SAMPLE_TEXTURE2D(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(-texel.x, -texel.y)).rgb;
-                float3 b = SAMPLE_TEXTURE2D(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(texel.x, -texel.y)).rgb;
-                float3 c = SAMPLE_TEXTURE2D(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(-texel.x, texel.y)).rgb;
-                float3 d = SAMPLE_TEXTURE2D(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(texel.x, texel.y)).rgb;
-                float3 rays = (a + b + c + d) * 0.25;
-                // And only as much of it as there is air in front of this pixel to scatter in. The
-                // shafts used to be laid over the whole frame, so the ground at the camera's feet
-                // and the near face of a post were lit by shafts kilometres long.
+                // A tent over three by three of the buffer's texels. The gather is jittered so that a
+                // short march shows as grain and not as bands, and the grain has to be taken out
+                // here: four taps half a texel apart is only bilinear filtering, and left it in.
+                float2 texel = _FishGodRayBuffer_TexelSize.xy;
+                float2 rays = 0.0;
+                for (int y = -1; y <= 1; y++)
+                {
+                    for (int x = -1; x <= 1; x++)
+                    {
+                        float weight = (2.0 - abs(x)) * (2.0 - abs(y)) / 16.0;
+                        rays += SAMPLE_TEXTURE2D_LOD(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(x, y) * texel, 0).rg * weight;
+                    }
+                }
+                // How much air lies in front of this pixel to be lit or shadowed, read at the
+                // screen's own resolution so an object's edge stays the object's edge. The sky has
+                // all of it; a wall at arm's length has none.
                 float rawDepth = SampleSceneDepth(input.uv);
                 #if UNITY_REVERSED_Z
                     bool isSky = rawDepth <= 1e-6;
                 #else
                     bool isSky = rawDepth >= 1.0 - 1e-6;
                 #endif
-                float air = isSky ? 1.0 : saturate(LinearEyeDepth(rawDepth, _ZBufferParams) / 1200.0);
-                return float4(rays * _FishGodRayColor.rgb * _FishGodRayColor.a * air, 1.0);
+                float air = isSky ? 1.0 : 1.0 - exp(-LinearEyeDepth(rawDepth, _ZBufferParams) / max(1.0, _FishGodRayAir.y));
+                rays *= air;
+                // Rolled off so that however thick the air, the light arrives below 1: the display
+                // clips (a tonemapper was tried and measured — URP's Neutral maps 1.0 to 0.63 and
+                // took the brightness out of the whole frame), and added raw this reached white
+                // across a quarter of the sky.
+                float3 light = 1.0 - exp(-rays.r * _FishGodRayColor.rgb * _FishGodRayColor.a);
+                // Screened on, not added: the frame gives way to the light by the light's own
+                // brightness, so a bright sky does not push it over and the colour of the sunrise
+                // survives into the glow instead of going to white. The lanes ride the same factor.
+                float under = 1.0 - dot(light, float3(0.2126, 0.7152, 0.0722));
+                float keep = under * (1.0 - saturate(rays.g * _FishGodRayLane.x));
+                return float4(light, keep);
             }
             ENDHLSL
         }

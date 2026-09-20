@@ -409,11 +409,14 @@ MonoBehaviour:
   LargerThanLife: 0
   SunDiscScale: 1.6
   BodyDiscScale: 1.6
-  SunHalo: 0.6
   StarBrightness: 1
   MilkyWay: 0.6
+  Galaxy: {fileID: 0}
   StarTwinkle: 0.4
   Exposure: 1
+  SunHalo: 0.6
+  SunDisc: 18
+  SunGlow: 0.35
   CloudScale: 1
   CirrusAmount: 0.35
   AuroraA: {r: 0.2, g: 1, b: 0.45, a: 1}

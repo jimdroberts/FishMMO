@@ -1079,15 +1079,24 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             {
                 break;
             }
-            inside = false;
+            // Not while walking back over an edge just found. The step back can come out below a
+            // band's floor; cleared here, the flag let the ray find the same cloud again, take it
+            // for a fresh edge and step back again, for ever — see the step back, below.
+            if (travelled > insideUntil)
+            {
+                inside = false;
+            }
             // A step or so short, so the way in is walked and not landed in the middle of — and by
             // a different amount on every pixel and frame. Landed at one fixed offset from the
             // band's floor, every ray would sample it at the same depths, and samples in step with
             // one another across the screen are what draws rings in a cloud.
             travelled = max(travelled + stepHere, next - stepBase * (0.5 + jitter));
-            // Where this stretch of possible cloud was entered. The step back on first finding
-            // cloud must never go behind it: see there.
-            entered = travelled;
+            // Where this stretch of possible cloud begins. The step back on first finding cloud
+            // must never go behind it: see there. The boundary itself and not where the ray landed,
+            // which is deliberately short of it — recorded as the landing, the clamp it feeds sent
+            // rays back into the empty air below a solid deck, which has cloud at its very floor,
+            // and that was the rings overhead coming back under overcast.
+            entered = max(travelled, next + 1.0);
             continue;
         }
         // Scaled by the whole footprint and not just the cone: of the two terms the step is the

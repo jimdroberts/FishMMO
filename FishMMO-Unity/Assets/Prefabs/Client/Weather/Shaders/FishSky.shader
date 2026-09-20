@@ -80,14 +80,14 @@ Shader "FishMMO/Sky"
                     float cosSun = dot(dir, sd);
                     float sunUp = saturate(sd.y * 3.0 + 0.4);
                     float glow = pow(saturate(cosSun * 0.5 + 0.5), 5.0) * saturate(1.0 - abs(up) * 2.5) * saturate(1.0 - abs(sd.y) * 4.0);
-                    color += sc * glow * 0.35 * (1.0 - airless);
+                    color += sc * glow * _FishSunShape.z * (1.0 - airless);
                     color += sc * HenyeyGreenstein(cosSun, 0.78) * _FishSunColor[i].a * 0.08 * sunUp * (1.0 - airless * 0.8);
                     float angle = acos(clamp(cosSun, -1.0, 1.0));
                     float radius = max(_FishSunDir[i].w, 0.002);
                     float disc = 1.0 - smoothstep(radius * 0.92, radius, angle);
                     float limb = sqrt(saturate(1.0 - pow(angle / radius, 2.0)));
                     float cover = (i == 0) ? eclipse : 0.0;
-                    sunsLight += sc * disc * (0.6 + 0.4 * limb) * 18.0 * (1.0 - cover) * saturate(up * 40.0 + 1.0);
+                    sunsLight += sc * disc * (0.6 + 0.4 * limb) * _FishSunShape.y * (1.0 - cover) * saturate(up * 40.0 + 1.0);
 
                     // The corona: with the disc itself behind another body, what is still seen is a
                     // ring of light around that body's limb. It is drawn at the covering body's own

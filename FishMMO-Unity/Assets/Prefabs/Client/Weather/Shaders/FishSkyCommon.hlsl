@@ -9,6 +9,7 @@ float4 _FishSkyHorizon;     // rgb
 float4 _FishSkyGround;      // rgb
 float4 _FishSkyFogColor;    // rgb, a = how much the horizon melts into fog
 float4 _FishSkyParams;      // x star visibility, y milky way, z twinkle, w exposure
+float4 _FishSunShape;       // x unused (the halo is SunHalo, in the sun colour's alpha), y disc, z horizon glow
 float4 _FishSkyEclipseBody;  // xyz direction to the body covering the sun, w its angular radius (rad)
 float4 _FishSkyEclipse;     // x solar eclipse 0..1, y lunar eclipse 0..1, z airless (1 = black sky), w the covering body's angular radius (rad)
 float4 _FishSunDir[4];      // xyz direction, w drawn angular radius (radians)

@@ -79,7 +79,6 @@ namespace FishMMO.Shared.Celestial
 		[Min(0.1f)] public float SunDiscScale = 1.6f;
 		[Tooltip("Drawn size of moons and planets, when Larger than life is on.")]
 		[Min(0.1f)] public float BodyDiscScale = 1.6f;
-		[Range(0f, 2f)] public float SunHalo = 0.6f;
 		[Range(0f, 4f)] public float StarBrightness = 1f;
 		[Tooltip("How bright the galaxy is in the night sky. It scales whichever galaxy is drawn: the supplied image, or the built-in band when there is none.")]
 		[Range(0f, 2f)] public float MilkyWay = 0.6f;
@@ -88,6 +87,13 @@ namespace FishMMO.Shared.Celestial
 		[Range(0f, 1f)] public float StarTwinkle = 0.4f;
 		[Tooltip("Sky exposure multiplier.")]
 		[Min(0f)] public float Exposure = 1f;
+
+		[Tooltip("How bright the halo around the sun is: the light the air scatters forward at you, which is what makes the sky near the sun paler than the rest of it. This is the broad one — it reaches tens of degrees out and is most of what \"the sun is too bright\" means in a clear sky. The disc and the horizon glow are separate.")]
+		[Range(0f, 2f)] public float SunHalo = 0.6f;
+		[Tooltip("How bright the sun's own disc is. It is a third of a degree across, so this only decides how hard that spot clips to white.")]
+		[Range(0f, 40f)] public float SunDisc = 18f;
+		[Tooltip("The glow along the horizon toward a low sun. It only shows within about fourteen degrees of the horizon, on both the sun's side and the view's, so it is a sunset term and does nothing at midday.")]
+		[Range(0f, 1f)] public float SunGlow = 0.35f;
 
 		[Header("Clouds")]
 		[Tooltip("Size of the cloud pattern: larger is bigger clouds.")]

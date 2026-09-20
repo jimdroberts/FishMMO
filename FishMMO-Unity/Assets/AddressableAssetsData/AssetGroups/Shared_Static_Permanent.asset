@@ -2060,6 +2060,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a37d3ea163b41bc834a13ad562bb9d0
+    m_Address: ClearSky
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a571cab03b3f684da8436e4391abdbb
     m_Address: Lesser Fireball
     m_ReadOnly: 0
@@ -3219,12 +3225,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f2151e1631aaf21ea99031fa54937f64
     m_Address: Clouds
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9a37d3ea163b41bc834a13ad562bb9d0
-    m_Address: ClearSky
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

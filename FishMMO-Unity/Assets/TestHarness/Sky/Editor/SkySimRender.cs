@@ -63,6 +63,11 @@ namespace FishMMO.TestHarness.Sky.Editor
 			public bool ExpectRainbow;
 			/// <summary>The frame must be brighter around the sun with the light shafts than without.</summary>
 			public bool ExpectGodRays;
+			/// <summary>
+			/// Also photographs the frame without the shafts, without post-processing and without
+			/// either, so what each of them does to the sun's glow can be read off the pixels.
+			/// </summary>
+			public bool CompareGlow;
 			/// <summary>The ground must be more mottled with the clouds' shadow on it than without.</summary>
 			public bool ExpectCloudShadow;
 			/// <summary>The share of the frame the clouds must cover, judged from the capture itself.</summary>
@@ -144,7 +149,12 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// cloud volume is composited, so without something to put them back behind it a moon
 				// hangs in front of an overcast. Paired with the contrast asked of home-moonlit above,
 				// which fails the other way if the bodies are hidden when there is no cloud at all.
-				Name = "moon-behind-cloud", Time = 0.0, Sun = -1, ExpectMoon = true, MoonDiscCeiling = 0.002f,
+				// The ceiling is for ORDER, not opacity. An unobstructed moon measures 0.104 here, so
+				// a moon drawn over the volume reads near that. The clouds are deliberately
+				// translucent now — a full deck is some 480 m thick, an optical depth of about 2.5 —
+				// and 0.0035 of moon really does glow through one, as it does through thin overcast.
+				// 0.008 lets that be and still sits thirteen times under an ordering failure.
+				Name = "moon-behind-cloud", Time = 0.0, Sun = -1, ExpectMoon = true, MoonDiscCeiling = 0.008f,
 				Weather = Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 1f)),
 			},
 			new Stage { Name = "home-noon-performant", Time = 0.5, Sun = 1, Quality = 0, CameraEuler = new Vector3(-30f, 180f, 0f) },
@@ -252,6 +262,20 @@ namespace FishMMO.TestHarness.Sky.Editor
 				Name = "god-rays", SunAltitudeWanted = 14f, Sun = 1, LookAt = "Sun", ExpectGodRays = true,
 				CameraEuler = new Vector3(-4f, 90f, 0f),
 				Weather = Frame((WeatherChannel.CloudCover, 0.7f), (WeatherChannel.CloudDensity, 0.65f)),
+			},
+			new Stage
+			{
+				// The sun a hand above the horizon in a mostly clear sky: the glow round it is the
+				// whole picture, and it has been lost more than once to a pass that meant well.
+				Name = "sunrise-glow", SunAltitudeWanted = 8f, Sun = 1, LookAt = "Sun", ExpectGodRays = true, CompareGlow = true,
+				CameraEuler = new Vector3(-4f, 90f, 0f),
+				Weather = Frame((WeatherChannel.CloudCover, 0.25f), (WeatherChannel.CloudDensity, 0.5f)),
+			},
+			new Stage
+			{
+				Name = "sunrise-low", SunAltitudeWanted = 2f, Sun = 1, LookAt = "Sun", ExpectGodRays = true, CompareGlow = true,
+				CameraEuler = new Vector3(-4f, 90f, 0f),
+				Weather = Frame((WeatherChannel.CloudCover, 0.45f), (WeatherChannel.CloudDensity, 0.6f)),
 			},
 			new Stage
 			{
@@ -578,11 +602,14 @@ namespace FishMMO.TestHarness.Sky.Editor
 			}
 			controller.Temperature = stage.Temperature;
 			controller.Camera.transform.rotation = Quaternion.Euler(stage.CameraEuler);
-			if (stage.CameraHeight > 0f)
+			// Every stage, not only the ones that ask: a height that is only ever raised stays raised,
+			// and every sky after the one shot from above the clouds was being shot from up there too.
+			if (float.IsNaN(groundSeatHeight))
 			{
-				Vector3 seat = controller.Camera.transform.position;
-				controller.Camera.transform.position = new Vector3(seat.x, stage.CameraHeight, seat.z);
+				groundSeatHeight = controller.Camera.transform.position.y;
 			}
+			Vector3 seat = controller.Camera.transform.position;
+			controller.Camera.transform.position = new Vector3(seat.x, stage.CameraHeight > 0f ? stage.CameraHeight : groundSeatHeight, seat.z);
 			if (stage.ExpectMoon)
 			{
 				controller.DayOfYear = MoonlitNight(controller, stage.Latitude);
@@ -637,6 +664,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			return 0f;
 		}
 
+		private static float groundSeatHeight = float.NaN;
 		private static float moonAzimuth;
 		private static float moonAltitude;
 
@@ -662,7 +690,21 @@ namespace FishMMO.TestHarness.Sky.Editor
 					controller.LookAt(aim.Value.Direction);
 				}
 			}
+			SkySystem.EnablePostProcessing(controller.Camera, true);
 			Capture(controller, path);
+			if (stage.CompareGlow)
+			{
+				float cover = lastCloudCover;
+				string stem = path.Substring(0, path.Length - 4);
+				SkySystem.DrawGodRays = false;
+				Capture(controller, stem + "-norays.png");
+				SkySystem.EnablePostProcessing(controller.Camera, false);
+				Capture(controller, stem + "-nopost-norays.png");
+				SkySystem.DrawGodRays = true;
+				Capture(controller, stem + "-nopost.png");
+				SkySystem.EnablePostProcessing(controller.Camera, true);
+				lastCloudCover = cover;
+			}
 			// Per stage, so a stage that does not measure it cannot report the last one's number.
 			moonDisc = 0f;
 
@@ -730,18 +772,15 @@ namespace FishMMO.TestHarness.Sky.Editor
 			}
 			if (stage.ExpectGodRays)
 			{
-				// The same frame twice, with the shafts and without: what they add is the difference.
-				float with = MeasureSunGlow(controller);
-				SkySystem.DrawGodRays = false;
-				float without = MeasureSunGlow(controller);
-				SkySystem.DrawGodRays = true;
+				// The same frame twice, with the shafts and without: what they change is the difference.
+				float change = MeasureShaftChange(controller);
 				if (sky.GodRayIntensity <= 0.001f)
 				{
 					problems.Add("the sky asks for no light shafts here");
 				}
-				else if (with <= without * 1.02f)
+				else if (change < 0.01f)
 				{
-					problems.Add($"the light shafts add nothing around the sun ({without:0.0000} → {with:0.0000})");
+					problems.Add($"the light shafts change nothing around the sun (mean difference {change:0.0000} < 0.0100)");
 				}
 			}
 			if (stage.ExpectCloudShadow)
@@ -973,7 +1012,17 @@ namespace FishMMO.TestHarness.Sky.Editor
 			}
 		}
 
-		private static float MeasureSunGlow(WorldSimController controller)
+		/// <summary>
+		/// How much the light shafts change the picture round the sun: the mean difference, pixel
+		/// for pixel, between the frame with them and the frame without.
+		/// </summary>
+		/// <remarks>
+		/// Not how much brighter the ring gets. A shaft is lit air beside shadowed air, and the pass
+		/// draws both — it lights the one and darkens the other — so the average hardly moves while
+		/// the picture changes a great deal. Measured by the average, a sky full of shafts read as
+		/// "adds nothing".
+		/// </remarks>
+		private static float MeasureShaftChange(WorldSimController controller)
 		{
 			Camera camera = controller.Camera;
 			CelestialState state = controller.State;
@@ -986,13 +1035,24 @@ namespace FishMMO.TestHarness.Sky.Editor
 			{
 				return 0f;
 			}
-			Texture2D image = Shoot(controller);
+			bool drawn = SkySystem.DrawGodRays;
+			SkySystem.DrawGodRays = true;
+			Texture2D with = Shoot(controller);
+			SkySystem.DrawGodRays = false;
+			Texture2D without = Shoot(controller);
+			// And the same frame again, unchanged: two stills of one sky differ a little by the
+			// clouds' jitter, and that is the floor any real change has to stand clear of.
+			Texture2D again = Shoot(controller);
+			SkySystem.DrawGodRays = drawn;
 			try
 			{
-				Color[] pixels = image.GetPixels();
+				Color[] lit = with.GetPixels();
+				Color[] plain = without.GetPixels();
+				Color[] same = again.GetPixels();
 				float sum = 0f;
+				float floor = 0f;
 				int counted = 0;
-				float inner = Height * 0.12f, outer = Height * 0.4f;
+				float inner = Height * 0.06f, outer = Height * 0.45f;
 				for (int y = 0; y < Height; y += 2)
 				{
 					for (int x = 0; x < Width; x += 2)
@@ -1002,16 +1062,26 @@ namespace FishMMO.TestHarness.Sky.Editor
 						{
 							continue;
 						}
-						Color p = pixels[y * Width + x];
-						sum += p.r * 0.2126f + p.g * 0.7152f + p.b * 0.0722f;
+						Color p = lit[y * Width + x] - plain[y * Width + x];
+						sum += Mathf.Abs(p.r * 0.2126f + p.g * 0.7152f + p.b * 0.0722f);
+						Color q = same[y * Width + x] - plain[y * Width + x];
+						floor += Mathf.Abs(q.r * 0.2126f + q.g * 0.7152f + q.b * 0.0722f);
 						counted++;
 					}
 				}
-				return counted > 0 ? sum / counted : 0f;
+				if (counted == 0)
+				{
+					return 0f;
+				}
+				Debug.Log($"[SkySimRender] shafts change {sum / counted:0.0000}, floor {floor / counted:0.0000}");
+				// What is left once the floor is taken off, so a noisy sky cannot pass on noise.
+				return Mathf.Max(0f, (sum - floor) / counted);
 			}
 			finally
 			{
-				UnityEngine.Object.DestroyImmediate(image);
+				UnityEngine.Object.DestroyImmediate(again);
+				UnityEngine.Object.DestroyImmediate(with);
+				UnityEngine.Object.DestroyImmediate(without);
 			}
 		}
 

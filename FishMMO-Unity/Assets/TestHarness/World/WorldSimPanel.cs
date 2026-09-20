@@ -271,6 +271,20 @@ namespace FishMMO.TestHarness.World
 			seasons.Add(SmallButton("Winter", () => SetDay(0.97f)));
 			page.Add(seasons);
 
+			// The sun, in the three parts it is actually made of. On the panel because judging a sky
+			// by eye and changing a constant in a shader are not the same afternoon's work.
+			SkyProfile sunProfile = Controller.Sky != null ? Controller.Sky.ActiveSky : null;
+			if (sunProfile != null)
+			{
+				page.Add(Heading("Sun brightness"));
+				page.Add(Small("Halo is the broad one: the light the air scatters forward at you, tens of degrees wide. Disc is the third of a degree the sun itself covers. Glow only shows toward a low sun near the horizon."));
+				page.Add(LabeledSlider("Halo", 0f, 2f, sunProfile.SunHalo, v => sunProfile.SunHalo = v));
+				page.Add(LabeledSlider("Disc", 0f, 40f, sunProfile.SunDisc, v => sunProfile.SunDisc = v));
+				page.Add(LabeledSlider("Horizon glow", 0f, 1f, sunProfile.SunGlow, v => sunProfile.SunGlow = v));
+			}
+			page.Add(LabeledToggle("Light shafts", SkySystem.DrawGodRays, v => SkySystem.DrawGodRays = v,
+				"Off: the frame without the shaft pass at all, neither its light nor the shadowed lanes beside it. Anything still wrong with the sun's glow with this off is the sky's, not the shafts'."));
+
 			page.Add(Heading("Sky profile"));
 			var skies = Row();
 			skies.Add(SmallButton("Body's own", () => Controller.SkyOverride = null));

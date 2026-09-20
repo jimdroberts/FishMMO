@@ -707,6 +707,9 @@ namespace FishMMO.TestHarness.World
 			presentation = WeatherPresentation.Ensure();
 			presentation.Profile = Profile;
 			presentation.TargetCamera = Camera;
+			// The game's camera renders post-processing, which is where the frame is tonemapped; the
+			// bed's is built from code and would otherwise show a frame the game never does.
+			SkySystem.EnablePostProcessing(Camera);
 		}
 
 		private void Start()

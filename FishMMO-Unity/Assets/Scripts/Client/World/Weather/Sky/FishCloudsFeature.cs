@@ -113,6 +113,8 @@ namespace FishMMO.Client
 			private static readonly int RayColorId = Shader.PropertyToID("_FishGodRayColor");
 			private static readonly int RayMaskId = Shader.PropertyToID("_FishGodRayMask");
 			private static readonly int RayVPId = Shader.PropertyToID("_FishGodRayVP");
+			private static readonly int RayAirId = Shader.PropertyToID("_FishGodRayAir");
+			private static readonly int RayLaneId = Shader.PropertyToID("_FishGodRayLane");
 
 			private Material material;
 			private RTHandle[] history;
@@ -247,6 +249,15 @@ namespace FishMMO.Client
 					data.Source = steadied;
 					builder.SetRenderAttachment(resourceData.activeColorTexture, 0);
 					builder.UseTexture(steadied, AccessFlags.Read);
+					// The composite reads the depth to know which of its four taps belong to this
+					// pixel, so it has to ask for it. A pass that samples a texture it never declared
+					// gets whatever happens to be bound — in reversed Z an undeclared depth reads as
+					// the near plane, which is not a wrong answer so much as a confident one.
+					builder.UseAllGlobalTextures(true);
+					if (resourceData.cameraDepthTexture.IsValid())
+					{
+						builder.UseTexture(resourceData.cameraDepthTexture, AccessFlags.Read);
+					}
 					builder.AllowPassCulling(false);
 					builder.SetRenderFunc((MarchData d, RasterGraphContext context) =>
 					{
@@ -293,29 +304,33 @@ namespace FishMMO.Client
 			/// them to the frame.
 			/// </summary>
 			/// <remarks>
-			/// The shafts are gathered from the frame itself: a pixel contributes only where the sky
-			/// shows through, so the world blocks a shaft by being solid and a cloud blocks it by being
-			/// dark. During an eclipse the light comes from the ring around the body covering the sun,
-			/// which is exactly where the rays should rake out from.
+			/// A shaft is air lit by the sun beside air that is not. The gather finds, for each pixel,
+			/// how much of the way to the light is open — cloud blocks by how little it lets through,
+			/// the world only from far enough off to be a ridge — and the composite both lights the
+			/// open air and darkens the shadowed lane beside it. How much there is to light is the
+			/// medium: haze, mist and rain, with a small floor. During an eclipse the light comes from
+			/// the ring around the body covering the sun, which is where the rays should rake out from.
 			/// </remarks>
 			private void DrawGodRays(RenderGraph renderGraph, UniversalResourceData resourceData, SkySystem sky, TextureHandle clouds, Matrix4x4 viewProjection, int width, int height)
 			{
 				material.SetMatrix(RayVPId, viewProjection);
 				Vector3 direction = sky.GodRayDirection;
 				material.SetVector(RayDirId, new Vector4(direction.x, direction.y, direction.z, 0f));
-				// Decay per tap, how sharply a shaft narrows, how far across the screen it reaches, taps.
 				// An eclipse's rays belong around the body, not across the whole sky, so they reach a
 				// shorter way — what they rake around is the silhouette itself.
-				float reach = sky.GodRayEclipse > 0.02f ? 0.35f : 0.8f;
-				material.SetVector(RayParamsId, new Vector4(0.975f, 1.2f, reach, 28f));
-				material.SetVector(RayMaskId, new Vector4(0.25f, 0.2f, 0f, 0f));
+				float reach = sky.GodRayEclipse > 0.02f ? 0.35f : 0.9f;
+				float medium = sky.GodRayMedium;
+				// Falloff per screen height, how near the world has to be to be left out of it, reach, taps.
+				// Near things are left out on purpose: only cloud and distant terrain cast a shaft.
+				material.SetVector(RayParamsId, new Vector4(1.6f, 400f, reach, 32f));
+				material.SetVector(RayMaskId, new Vector4(0.25f, 0.2f, sky.GodRayEclipse, 0f));
+				// The thicker the air, the less of it a shaft needs in front of a hillside to show.
+				// The clouds are translucent: below 0.2 of the light they block, above 0.85 they pass.
+				material.SetVector(RayAirId, new Vector4(medium, Mathf.Lerp(8000f, 1200f, medium), 0.2f, 0.85f));
+				// The lanes answer to the same strength as the light: no shafts, no shadows of them.
+				material.SetVector(RayLaneId, new Vector4(0.9f * Mathf.Clamp01(sky.GodRayIntensity), 0f, 0f, 0f));
 				Color colour = sky.GodRayColor;
-				// Driven harder than it was when the shafts were added to the frame. They are screened
-				// onto it now, and a screen gives a bright pixel only part of what it is handed — that
-				// is what stops it clipping into a hard ring round the sun — so the same look wants
-				// more behind it. It cannot overshoot: screened light approaches white and never
-				// passes it.
-				colour.a = sky.GodRayIntensity * 2.6f;
+				colour.a = sky.GodRayIntensity * 3f;
 				material.SetColor(RayColorId, colour);
 
 				var rayDesc = new TextureDesc(Mathf.Max(8, width), Mathf.Max(8, height))
@@ -360,6 +375,14 @@ namespace FishMMO.Client
 					data.Source = rays;
 					builder.SetRenderAttachment(resourceData.activeColorTexture, 0);
 					builder.UseTexture(rays, AccessFlags.Read);
+					// This pass reads the depth too — how much air stands in front of each pixel, at the
+					// screen's own resolution — and an undeclared depth reads as the near plane, which
+					// would make every pixel "a wall at arm's length" and the shafts vanish without a word.
+					builder.UseAllGlobalTextures(true);
+					if (resourceData.cameraDepthTexture.IsValid())
+					{
+						builder.UseTexture(resourceData.cameraDepthTexture, AccessFlags.Read);
+					}
 					builder.AllowPassCulling(false);
 					builder.SetRenderFunc((MarchData d, RasterGraphContext context) =>
 					{
