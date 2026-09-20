@@ -203,15 +203,27 @@ namespace FishMMO.Client
 			// figure anchors this map; the map is what the ground is actually drawn from.
 			if (camera != null && hasContext)
 			{
-				bool reseed = context.Timeline != null && context.Timeline.Revision != coverRevision;
-				coverMap.Update(context.Timeline, context.Settings, camera.transform.position, (uint)context.Tick,
+				// The map starts over only when the timeline itself was replaced — a join, a resync,
+				// another scene — and is pulled toward the server's figure only when the server
+				// actually sent one. It used to start over on every change of revision, which is
+				// every delta: each cell that spawned or retired and each preset clicked redrew the
+				// whole ground from one number. And on every other frame it was anchored to that
+				// same number, which the anchor's own summary says is for "when a snapshot arrives,
+				// which is rarely" — so the ground never dried place by place at all. It tracked a
+				// single scene-wide figure, and went dry the instant that figure did.
+				WeatherTimeline ground = context.Timeline;
+				bool reseed = ground != null && (!ReferenceEquals(ground, coverTimeline) || ground.Generation != coverGeneration);
+				coverMap.Update(ground, context.Settings, camera.transform.position, (uint)context.Tick,
 					context.Temperature, dt, context.Cover, reseed, sunlight: context.IsDaylight ? 1f : 0f);
 				if (reseed)
 				{
-					coverRevision = context.Timeline.Revision;
+					coverTimeline = ground;
+					coverGeneration = ground.Generation;
+					coverSnapshots = ground.CoverSnapshots;
 				}
-				else if (context.Cover.Snow + context.Cover.Wet + context.Cover.Ash + context.Cover.Sand > 0f)
+				else if (ground != null && ground.CoverSnapshots != coverSnapshots)
 				{
+					coverSnapshots = ground.CoverSnapshots;
 					coverMap.Anchor(context.Cover);
 				}
 			}
@@ -225,7 +237,9 @@ namespace FishMMO.Client
 		}
 
 		private WeatherTierSettings currentTier;
-		private uint coverRevision = uint.MaxValue;
+		private WeatherTimeline coverTimeline;
+		private uint coverGeneration = uint.MaxValue;
+		private uint coverSnapshots = uint.MaxValue;
 
 		/// <summary>
 		/// Precipitation is submitted as each camera starts rendering, so any render of the target

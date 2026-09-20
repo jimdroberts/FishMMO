@@ -39,6 +39,10 @@ namespace FishMMO.Client
 		private Texture2D texture;
 		private float[] heights;
 		private float[] scratch;
+		private float[] smooth;
+		/// <summary>Three passes of a six-texel box: a spread of about six and a half texels, some 700 m.</summary>
+		private const int SmoothPasses = 3;
+		private const int SmoothRadius = 6;
 		private Color[] pixels;
 		private Vector2 corner = new Vector2(float.NaN, float.NaN);
 		private int terrainCount = -1;
@@ -104,22 +108,78 @@ namespace FishMMO.Client
 					heights[y * Resolution + x] = height;
 				}
 			}
-			// Blurred twice: it is the mountain that turns the air, not the rock on it.
+			// Two pictures of the same ground. The fog lies on the ground that is there, so it gets
+			// the terrain barely smoothed. The AIR is another matter: it is turned by the mountain,
+			// not by the gullies on it, and everything that bends the cloud field — the lift, the
+			// windward gathering, the turning aside — is read from the terrain smoothed over some
+			// seven hundred metres. That is not a nicety. The cloud field is looked up at a position
+			// these terms displace, and a displacement that changes faster than the distance it
+			// moves things folds the field onto itself: read from a terrain smoothed over two
+			// hundred metres, with every ridge in it, the sky overhead came out as concentric rings
+			// round the mountain — the same strip of noise read again and again along each contour.
 			Blur(heights, scratch);
 			Blur(scratch, heights);
+			smooth ??= new float[Resolution * Resolution];
+			System.Array.Copy(heights, smooth, heights.Length);
+			for (int pass = 0; pass < SmoothPasses; pass++)
+			{
+				BoxBlur(smooth, scratch, SmoothRadius);
+			}
 			for (int y = 0; y < Resolution; y++)
 			{
 				int up = Mathf.Min(Resolution - 1, y + 1), down = Mathf.Max(0, y - 1);
 				for (int x = 0; x < Resolution; x++)
 				{
 					int right = Mathf.Min(Resolution - 1, x + 1), left = Mathf.Max(0, x - 1);
-					float dx = (heights[y * Resolution + right] - heights[y * Resolution + left]) / ((right - left) * texel);
-					float dz = (heights[up * Resolution + x] - heights[down * Resolution + x]) / ((up - down) * texel);
-					pixels[y * Resolution + x] = new Color(heights[y * Resolution + x], dx, dz, 1f);
+					float dx = (smooth[y * Resolution + right] - smooth[y * Resolution + left]) / ((right - left) * texel);
+					float dz = (smooth[up * Resolution + x] - smooth[down * Resolution + x]) / ((up - down) * texel);
+					// r the mountain as the air feels it, gb which way that rises, a the ground itself.
+					pixels[y * Resolution + x] = new Color(smooth[y * Resolution + x], dx, dz, heights[y * Resolution + x]);
 				}
 			}
 			texture.SetPixels(pixels);
 			texture.Apply(false, false);
+		}
+
+		/// <summary>A box blur of the given radius, separable, in place (through a scratch buffer).</summary>
+		private static void BoxBlur(float[] data, float[] scratch, int radius)
+		{
+			for (int y = 0; y < Resolution; y++)
+			{
+				for (int x = 0; x < Resolution; x++)
+				{
+					float sum = 0f;
+					int count = 0;
+					for (int o = -radius; o <= radius; o++)
+					{
+						int sx = x + o;
+						if (sx >= 0 && sx < Resolution)
+						{
+							sum += data[y * Resolution + sx];
+							count++;
+						}
+					}
+					scratch[y * Resolution + x] = sum / count;
+				}
+			}
+			for (int y = 0; y < Resolution; y++)
+			{
+				for (int x = 0; x < Resolution; x++)
+				{
+					float sum = 0f;
+					int count = 0;
+					for (int o = -radius; o <= radius; o++)
+					{
+						int sy = y + o;
+						if (sy >= 0 && sy < Resolution)
+						{
+							sum += scratch[sy * Resolution + x];
+							count++;
+						}
+					}
+					data[y * Resolution + x] = sum / count;
+				}
+			}
 		}
 
 		private static void Blur(float[] from, float[] to)

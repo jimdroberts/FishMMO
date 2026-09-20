@@ -43,9 +43,10 @@ float4 _FishCloudTowerDrift;
 int _FishCloudTowerSeed;
 // What hangs below a column's base: x ground fog 0..1, y rain 0..1. zw unused.
 float4 _FishCloudSub;
-// The ground under the sky: a coarse, smoothed picture of the terrain round the viewer. r height
-// (m), gb how fast it rises toward +x and +z (metres a metre). Rect: xy corner, z size (m), w 1
-// when there is one.
+// The ground under the sky, twice over. r the mountain as the AIR feels it — the terrain smoothed
+// over some 700 m — and gb how fast that rises toward +x and +z (metres a metre): everything that
+// bends the cloud field reads these. a the ground itself, barely smoothed, for the fog that lies
+// on it. Rect: xy corner, z size (m), w 1 when there is one.
 TEXTURE2D(_FishCloudTerrain);
 SAMPLER(sampler_FishCloudTerrain);
 float4 _FishCloudTerrainRect;
@@ -263,7 +264,8 @@ struct FishCloudField
     float meso;         // the formation here, as a change in cover
     float tower;        // 0..1: how strongly a tower stands here
     float orographic;   // what the slope does to the cover here
-    float ground;       // how high the ground is (m)
+    float ground;       // how high the ground is as the air feels it: the mountain, smoothed (m)
+    float surface;      // how high the ground itself is, for what lies on it (m)
     float over;         // 1 the air goes over this ground, 0 it goes round it
     float2 deflect;     // how far the air here has been turned aside (m, on the ground plane)
 };
@@ -295,6 +297,7 @@ FishCloudField FishCloudFieldAt(float2 xz)
     field.tower = _FishCloudColumn.x > 0.001 ? FishCloudTower(xz - _FishCloudTowerDrift.xy) : 0.0;
     field.orographic = 0.0;
     field.ground = 0.0;
+    field.surface = 0.0;
     field.over = 1.0;
     field.deflect = float2(0.0, 0.0);
     if (_FishCloudTerrainRect.w > 0.5)
@@ -304,14 +307,19 @@ FishCloudField FishCloudFieldAt(float2 xz)
         float inside = saturate(min(toEdge.x, toEdge.y) / 0.08);
         if (inside > 0.0)
         {
-            float3 terrain = SAMPLE_TEXTURE2D_LOD(_FishCloudTerrain, sampler_FishCloudTerrain, saturate(uv), 0).rgb;
+            float4 terrain = SAMPLE_TEXTURE2D_LOD(_FishCloudTerrain, sampler_FishCloudTerrain, saturate(uv), 0);
             field.ground = terrain.r * inside;
+            field.surface = terrain.a * inside;
             float2 wind = dot(_FishCloudWindDir.xy, _FishCloudWindDir.xy) > 1e-6 ? _FishCloudWindDir.xy : float2(0.0, 1.0);
             float2 across = float2(-wind.y, wind.x);
 
             // Over, or round: the height this air can climb against the height that is here.
             float froude = max(1.0, _FishCloudFlow.x) / max(50.0, field.ground);
-            field.over = smoothstep(0.6, 1.4, froude);
+            // Over a wide band of heights, on purpose: where the regime flips is where the turning
+            // aside switches on, and switched on across a few hundred metres of slope it folded
+            // the cloud lookup into rings. From four tenths to nearly twice the height the air can
+            // climb, the change is spread across more than a kilometre of any real slope.
+            field.over = smoothstep(0.4, 1.8, froude);
 
             // Over: rising along the wind is the windward slope, where the cloud gathers; falling
             // along it is the lee, where it clears. A blocked flow still banks a little cloud
@@ -412,7 +420,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // put through this band's own response to a change in the forecast.
         // …and what the ground is doing to the air: only within a couple of kilometres above the
         // terrain, which is as far up as a hill's lift reaches.
-        float overGround = trueAltitude - field.ground;
+        float overGround = trueAltitude - field.surface;
         float lifted01 = field.orographic * saturate(1.0 - (overGround - 300.0) / 1800.0);
         float coverage = saturate(a.z + tilt + meso * f.x + lifted01 * min(1.0, f.x));
         // How tall this column grows: what the day starts every column at, the tower that stands
@@ -566,9 +574,15 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             // From the ground that is actually there, not from sea level: measured from zero, a
             // plateau three hundred metres up stood above its own fog and a valley floor was the
             // only place that ever had any.
-            float under = saturate((trueAltitude - field.ground) / max(1.0, a.x));   // 0 at the ground, 1 a base's height above it
+            float under = saturate((trueAltitude - field.surface) / max(1.0, a.x));   // 0 at the ground, 1 a base's height above it
             float mass = saturate((body - threshold + 0.10) / 0.20);
-            float fog = FishCloudGroundFogScale * _FishCloudSub.x * saturate(1.0 - under / max(0.05, _FishCloudSub.x * 1.2)) * (0.55 + 0.45 * mass);
+            // Squared. The horizon is a level ray, and a level ray stays inside even a thirty-metre
+            // fog layer for eighteen kilometres before the curve of the world lifts it out — so read
+            // in proportion, a fog of 0.03, which is a clear night, put a wall of mist right round
+            // the horizon (41% fogged at 0.02, 89% at 0.05). A trace of fog is clear air and a real
+            // fog is thick: squared, 0.05 fogs the horizon by a tenth, 0.3 closes it, and the
+            // thickest fog is exactly as thick as it was. The height it reaches stays in proportion.
+            float fog = FishCloudGroundFogScale * _FishCloudSub.x * _FishCloudSub.x * saturate(1.0 - under / max(0.05, _FishCloudSub.x * 1.2)) * (0.55 + 0.45 * mass);
             float hang = _FishCloudSub.y * saturate(type * 1.6) * mass * saturate((under - 0.3) / 0.7);
             density = saturate(fog * 0.2 + hang * 0.25);
             if (density <= 0.0)
@@ -1018,7 +1032,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                 // sun's or the moon's full light times the cloud gain: a glowing band round the
                 // horizon at midnight, and a bright veil over the ground. A little of the light
                 // still gets in, which is what makes a sunlit mist pale.
-                colour = unity_FogColor.rgb + sunColour * scatter * 0.35;
+                colour = unity_FogColor.rgb + sunColour * scatter * 0.12;
             }
             colour += _FishWeatherCloud.w * float3(0.85, 0.9, 1.0) * 2.0;   // lightning lights the volume
             // Distance turns a cloud into the air in front of it: the far side of a sky is haze,

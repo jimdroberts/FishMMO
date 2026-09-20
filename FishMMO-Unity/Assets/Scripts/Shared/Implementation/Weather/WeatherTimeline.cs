@@ -29,6 +29,15 @@ namespace FishMMO.Shared.Weather
 		public WeatherClimateEntry Climate;
 		public WeatherCover Cover;
 		public uint CoverTick;
+		/// <summary>
+		/// Counts the times this timeline was replaced whole — a join, a resync, a change of scene.
+		/// Not the revision, which moves on every delta: the ground map used to start itself over
+		/// whenever the revision changed, so every storm cell that spawned or retired, and every
+		/// preset clicked, threw away the ground it had been drying and redrew it from one number.
+		/// </summary>
+		public uint Generation;
+		/// <summary>Counts the cover snapshots the server has actually sent. Local integration does not move it.</summary>
+		public uint CoverSnapshots;
 
 		/// <summary>
 		/// Where and when this scene is, for the weather driver.
@@ -180,30 +189,6 @@ namespace FishMMO.Shared.Weather
 			}
 		}
 
-		/// <summary>
-		/// Every place two of this scene's cells are colliding at a tick, into <paramref name="into"/>
-		/// (cleared first). A dozen cells is sixty-six pairs and nearly all of them are rejected on
-		/// distance alone.
-		/// </summary>
-		public void CollisionsAt(uint tick, List<StormCollision> into)
-		{
-			into.Clear();
-			if (SceneMode != WeatherSceneMode.Own)
-			{
-				return;
-			}
-			for (int i = 0; i < Cells.Count; i++)
-			{
-				for (int j = i + 1; j < Cells.Count; j++)
-				{
-					if (StormCell.TryCollide(Cells[i], Cells[j], tick, TickDelta, out StormCollision collision))
-					{
-						into.Add(collision);
-					}
-				}
-			}
-		}
-
 		/// <summary>Forgets finished removals and dead cells. Both sides run it, so they stay equal without messages.</summary>
 		public void Prune(uint tick)
 		{
@@ -290,6 +275,8 @@ namespace FishMMO.Shared.Weather
 			Climate = msg.Climate;
 			Cover = msg.Cover;
 			CoverTick = msg.CoverTick;
+			Generation++;
+			CoverSnapshots++;
 			Driver = msg.Driver;
 			WorldSecondsAtTick = msg.WorldSecondsAtTick;
 			WorldSecondsTick = msg.WorldSecondsTick;
@@ -338,6 +325,7 @@ namespace FishMMO.Shared.Weather
 			{
 				Cover = msg.Cover;
 				CoverTick = msg.CoverTick;
+				CoverSnapshots++;
 			}
 			return true;
 		}

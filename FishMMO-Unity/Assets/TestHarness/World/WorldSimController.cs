@@ -52,6 +52,8 @@ namespace FishMMO.TestHarness.World
 		[Header("Start")]
 		[Tooltip("Hours per real second while the clock runs.")]
 		public float TimeScale = 0.05f;
+		[Tooltip("The most the ground's clock may run ahead of real time. The sky's clock defaults to a hundred and eighty times real time, and a ground kept to that is wet and dry again inside a second — true to the clock and useless to look at. Capped, a road takes half a minute or so to dry while the day races by overhead.")]
+		[Range(1f, 200f)] public float GroundTimeScale = 12f;
 		[Min(1f)] public float TickRate = 30f;
 		[Tooltip("Preset applied when the scene starts. Empty starts clear.")]
 		public string StartPreset = "";
@@ -764,7 +766,7 @@ namespace FishMMO.TestHarness.World
 				// The ground keeps the bed's clock, not the wall's: at the default rate the sky runs
 				// a hundred and eighty times real time, and a road that dried at the speed of the
 				// wall clock never seemed to dry at all.
-				WeatherCover.TimeScale = paused ? 1f : Mathf.Max(1f, TimeScale * 3600f);
+				WeatherCover.TimeScale = paused ? 1f : Mathf.Clamp(TimeScale * 3600f, 1f, Mathf.Max(1f, GroundTimeScale));
 				timeline.Cover.Integrate(lastSample.Frame, lastSample.Temperature, coverTimer, DayNight == null || DayNight.DaylightNow ? 1f : 0f);
 				timeline.CoverTick = tick;
 				coverTimer = 0f;

@@ -140,7 +140,19 @@ namespace FishMMO.Client
 			{
 				region.Color = skyColor;
 			}
-			Compose(region, weatherAmount, weatherColor, weatherDensity, weatherEnd).WriteToRenderSettings();
+			// The weather's fog is lit by the same sky as everything else. Its colour comes from the
+			// render profile as one pale daytime grey, and used as it stood that grey was the fog's
+			// colour at midnight too — so a night mist glowed, on the ground and (since the sky's
+			// own fog takes this colour) in a white band right round the horizon. Dimmed to the sky's
+			// own brightness, which is the horizon colour the sky hands over every frame.
+			Color weather = weatherColor;
+			if (hasSkyColor)
+			{
+				float skyLight = skyColor.r * 0.2126f + skyColor.g * 0.7152f + skyColor.b * 0.0722f;
+				float dim = Mathf.Clamp01(skyLight / 0.7f);
+				weather = new Color(weatherColor.r * dim, weatherColor.g * dim, weatherColor.b * dim, weatherColor.a);
+			}
+			Compose(region, weatherAmount, weather, weatherDensity, weatherEnd).WriteToRenderSettings();
 		}
 	}
 }

@@ -506,12 +506,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				{
 					continue;
 				}
-				// A wide spread on purpose. Cells that all ran at much the same speed on much the
-				// same heading kept their spacing for their whole lives and never met; a fast one
-				// overtaking a slow one, or two crossing, is what makes a collision — and a
-				// collision is where the towers and the lightning are.
-				float heading = (sw.WindHeadingDegrees + sw.Rng.Range(-50f, 50f)) * Mathf.Deg2Rad;
-				float speed = sw.Rng.Range(1.5f, 9f);
+				float heading = (sw.WindHeadingDegrees + sw.Rng.Range(-35f, 35f)) * Mathf.Deg2Rad;
+				float speed = sw.Rng.Range(2f, 6f);
 				float radius = sw.Rng.Range(preset.CellRadiusMeters.x, Mathf.Max(preset.CellRadiusMeters.x, preset.CellRadiusMeters.y));
 				float minutes = sw.Rng.Range(preset.DurationMinutes.x, Mathf.Max(preset.DurationMinutes.x, preset.DurationMinutes.y));
 				SpawnCellInternal(sw, preset, p, radius, new Vector2(Mathf.Sin(heading), Mathf.Cos(heading)) * speed, minutes * 60f, now);

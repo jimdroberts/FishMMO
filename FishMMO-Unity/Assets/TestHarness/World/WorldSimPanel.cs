@@ -475,6 +475,9 @@ namespace FishMMO.TestHarness.World
 			// Cover takes a quarter of an hour of weather to build, which is no way to look at a wet
 			// street or a snowed-in courtyard. These hold it at a depth instead, and the surfaces show
 			// it at once. "Let it settle" hands the ground back to the weather.
+			page.Add(Heading("Ground clock"));
+			page.Add(Small("How fast the ground wets and dries, against real time. The sky runs far faster than this by default; at the sky's own rate the ground is wet and dry again inside a second."));
+			page.Add(LabeledSlider("Ground clock ×", 1f, 200f, Controller.GroundTimeScale, v => Controller.GroundTimeScale = v));
 			page.Add(Heading("Held cover"));
 			page.Add(Small("Snow, wet, ash and sand held at a depth instead of accumulating."));
 			page.Add(LabeledSlider("Snow", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Snow = v)));

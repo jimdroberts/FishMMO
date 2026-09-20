@@ -28,8 +28,6 @@ namespace FishMMO.Shared.Weather
 		/// terms — the formations, the front's slope — by this, so a preset's sky is the preset's.
 		/// </summary>
 		public float DriverWeight;
-		/// <summary>0..1: how much of a collision between two storm cells reaches this place.</summary>
-		public float Collision;
 
 		public PrecipitationKind Precipitation => Frame.DominantPrecipitation;
 		public float StormSeverity => Frame.StormSeverity;
@@ -59,8 +57,6 @@ namespace FishMMO.Shared.Weather
 	/// </summary>
 	public static class WeatherField
 	{
-		[System.ThreadStatic] private static System.Collections.Generic.List<StormCollision> collisionScratch;
-
 		/// <summary>The profile a biome uses: its own when authored, else the climate's default.</summary>
 		public static BiomeWeatherProfile ProfileFor(BiomeTemplate biome, WorldSceneSettings settings)
 		{
@@ -149,6 +145,7 @@ namespace FishMMO.Shared.Weather
 			timeline.AccumulateSceneLayers(tick, ref accumulator, sample.Temperature);
 			// Everything but the cells is the background, and the sky needs it on its own.
 			sample.Background = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
+			StormsInHeavyRain(ref sample.Background, sample.Temperature);
 			if (mode == WeatherSceneMode.Own)
 			{
 				for (int i = 0; i < timeline.Cells.Count; i++)
@@ -174,30 +171,8 @@ namespace FishMMO.Shared.Weather
 			}
 
 			WeatherFrame frame = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
-			if (mode == WeatherSceneMode.Own && timeline.Cells.Count > 1)
-			{
-				// Where two cells meet. Whatever each was carrying, the boundary between them is
-				// where the air is forced up hardest: lightning whether or not either preset had any
-				// (two showers crossing make a thunderstorm, two snow cells make thundersnow), what
-				// was falling falls harder, and the gusts pick up.
-				collisionScratch ??= new System.Collections.Generic.List<StormCollision>();
-				timeline.CollisionsAt(tick, collisionScratch);
-				float clash = 0f;
-				for (int i = 0; i < collisionScratch.Count; i++)
-				{
-					clash = Mathf.Max(clash, collisionScratch[i].InfluenceAt(position));
-				}
-				if (clash > 0.001f)
-				{
-					sample.Collision = clash;
-					frame[WeatherChannel.LightningRate] = Mathf.Max(frame[WeatherChannel.LightningRate], clash);
-					frame[WeatherChannel.Precipitation] = 1f - (1f - frame[WeatherChannel.Precipitation]) * (1f - clash * 0.35f);
-					frame[WeatherChannel.WindGust] = Mathf.Max(frame[WeatherChannel.WindGust], clash * 0.7f);
-					frame[WeatherChannel.CloudCover] = Mathf.Max(frame[WeatherChannel.CloudCover], clash);
-					frame[WeatherChannel.CloudDensity] = Mathf.Max(frame[WeatherChannel.CloudDensity], clash);
-				}
-			}
 			frame.RetypeForTemperature(sample.Temperature);
+			StormsInHeavyRain(ref frame, sample.Temperature);
 			if (profile != null && profile.Forbidden != WeatherKindMask.None)
 			{
 				frame.Suppress(profile.Forbidden);
@@ -209,6 +184,39 @@ namespace FishMMO.Shared.Weather
 			sample.Shelter = shelter;
 			return sample;
 		}
+
+		/// <summary>
+		/// Heavy rain thunders. Wherever rain or hail is coming down hard, whatever brought it — the
+		/// drifting field, a preset, a storm cell — there is a chance of lightning, rising with how
+		/// hard it falls.
+		/// </summary>
+		/// <remarks>
+		/// One rule on the resolved weather, instead of lightning being something only a preset with
+		/// a lightning layer could have: a Heavy Rain preset had none, so the heaviest rain in the
+		/// game was always silent. It replaced a scheme that looked for storm cells running into one
+		/// another — every pair of cells tested wherever the weather was sampled — which cost far
+		/// more than it gave. Rain and hail only: snow, ash and sand fall hard without thunder. The
+		/// background has not been retyped for the temperature where it falls, so that is done on a
+		/// copy here, or a blizzard's unretyped "rain" would thunder.
+		/// </remarks>
+		public static void StormsInHeavyRain(ref WeatherFrame frame, float temperature)
+		{
+			float falling = frame[WeatherChannel.Precipitation];
+			if (falling <= HeavyRainStarts)
+			{
+				return;
+			}
+			WeatherFrame typed = frame;
+			typed.RetypeForTemperature(temperature);
+			float water = Mathf.Clamp01(typed[WeatherChannel.RainWeight] + typed[WeatherChannel.HailWeight]);
+			float heavy = Mathf.Clamp01((falling - HeavyRainStarts) / (1f - HeavyRainStarts)) * water;
+			frame[WeatherChannel.LightningRate] = Mathf.Max(frame[WeatherChannel.LightningRate], heavy * HeavyRainLightning);
+		}
+
+		/// <summary>How hard it has to be raining before it can thunder.</summary>
+		public const float HeavyRainStarts = 0.5f;
+		/// <summary>The lightning rate under the very heaviest rain. A rate of 1 is a strike about every two seconds.</summary>
+		public const float HeavyRainLightning = 0.7f;
 
 		/// <summary>The scene's weather mode once Auto is decided: dungeons get none, everything else its own.</summary>
 		public static WeatherSceneMode ResolveMode(WorldSceneSettings settings, string sceneName)

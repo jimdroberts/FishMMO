@@ -45,14 +45,14 @@ namespace FishMMO.Client
 			Flash = 0f;
 		}
 
-		public void Update(WeatherTimeline timeline, uint tick, double now, Vector3 viewer, Camera camera, Material material)
+		public void Update(WeatherTimeline timeline, uint tick, double now, Vector3 viewer, Camera camera, Material material, float ambientRate = 0f)
 		{
 			if (double.IsNaN(lastTime) || now < lastTime || now - lastTime > 5.0)
 			{
 				lastTime = now;
 			}
 			fresh.Clear();
-			SkySchedule.Lightning(timeline, tick, lastTime, now, viewer, fresh);
+			SkySchedule.Lightning(timeline, tick, lastTime, now, viewer, fresh, ambientRate);
 			lastTime = now;
 			foreach (LightningStrike strike in fresh)
 			{

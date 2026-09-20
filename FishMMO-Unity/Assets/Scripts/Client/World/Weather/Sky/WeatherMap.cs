@@ -25,7 +25,6 @@ namespace FishMMO.Client
 		public static readonly int RectId = Shader.PropertyToID("_FishWeatherMapRect");
 		public static readonly int ParamsId = Shader.PropertyToID("_FishWeatherMapParams");
 
-		private readonly System.Collections.Generic.List<StormCollision> collisions = new System.Collections.Generic.List<StormCollision>();
 		private Texture2D texture;
 		private Color32[] pixels;
 		private int resolution;
@@ -36,7 +35,7 @@ namespace FishMMO.Client
 		public Rect Area => new Rect(corner, new Vector2(size, size));
 
 		/// <summary>The weather at one map point, 0..1 per channel.</summary>
-		public static Color Sample(WeatherTimeline timeline, in WeatherFrame sceneLayers, Vector3 position, uint tick, System.Collections.Generic.List<StormCollision> collisions = null)
+		public static Color Sample(WeatherTimeline timeline, in WeatherFrame sceneLayers, Vector3 position, uint tick)
 		{
 			float cover = sceneLayers[WeatherChannel.CloudCover];
 			float precipitation = sceneLayers[WeatherChannel.Precipitation];
@@ -74,21 +73,6 @@ namespace FishMMO.Client
 					storm = Mathf.Max(storm, frame.StormSeverity * weight);
 				}
 			}
-			// Where two cells collide the map carries a storm of its own, and the sky reads a storm
-			// here as "this column goes all the way up": the tower stands on the boundary.
-			if (collisions != null)
-			{
-				for (int i = 0; i < collisions.Count; i++)
-				{
-					float clash = collisions[i].InfluenceAt(position);
-					if (clash > 0f)
-					{
-						cover = Mathf.Max(cover, clash);
-						storm = Mathf.Max(storm, clash);
-						precipitation = 1f - (1f - precipitation) * (1f - clash * 0.35f);
-					}
-				}
-			}
 			float snowShare = precipitation > 0.001f ? Mathf.Clamp01(snow / precipitation) : 0f;
 			return new Color(Mathf.Clamp01(cover), Mathf.Clamp01(precipitation), snowShare, Mathf.Clamp01(storm));
 		}
@@ -117,16 +101,12 @@ namespace FishMMO.Client
 			var accumulator = new WeatherAccumulator();
 			timeline?.AccumulateSceneLayers(tick, ref accumulator);
 			WeatherFrame sceneLayers = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
-			// Once for the whole map, not once a texel: sixteen thousand texels times sixty-six pairs
-			// is a million tests to find the one or two collisions there ever are.
-			collisions.Clear();
-			timeline?.CollisionsAt(tick, collisions);
 			for (int y = 0; y < resolution; y++)
 			{
 				for (int x = 0; x < resolution; x++)
 				{
 					var position = new Vector3(corner.x + (x + 0.5f) * texel, 0f, corner.y + (y + 0.5f) * texel);
-					pixels[y * resolution + x] = Sample(timeline, sceneLayers, position, tick, collisions);
+					pixels[y * resolution + x] = Sample(timeline, sceneLayers, position, tick);
 				}
 			}
 			texture.SetPixels32(pixels);

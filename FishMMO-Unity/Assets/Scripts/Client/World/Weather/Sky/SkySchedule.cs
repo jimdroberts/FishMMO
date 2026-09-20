@@ -34,8 +34,6 @@ namespace FishMMO.Client
 	/// </summary>
 	public static class SkySchedule
 	{
-		[System.ThreadStatic] private static List<StormCollision> collisionScratch;
-
 		public const double LightningSlotSeconds = 0.2;
 		public const double MeteorSlotSeconds = 0.25;
 
@@ -59,7 +57,13 @@ namespace FishMMO.Client
 		/// Strikes in [from, to) world seconds: from storm cells (at the cell) and from scene-wide
 		/// lightning (around the viewer). A rate of 1 is a strike about every two seconds.
 		/// </summary>
-		public static void Lightning(WeatherTimeline timeline, uint tick, double from, double to, Vector3 viewer, List<LightningStrike> into)
+		/// <param name="ambientRate">
+		/// The lightning rate of the weather at the viewer, storm cells left out. The schedule used
+		/// to read only the scene's layers and each cell's own preset, so lightning from anything
+		/// else — the drifting field's thunderstorms, heavy rain — was a number nothing ever struck
+		/// from: it could be calibrated for ever and never make a bolt or a clap of thunder.
+		/// </param>
+		public static void Lightning(WeatherTimeline timeline, uint tick, double from, double to, Vector3 viewer, List<LightningStrike> into, float ambientRate = 0f)
 		{
 			if (timeline == null || to <= from)
 			{
@@ -71,6 +75,7 @@ namespace FishMMO.Client
 			var accumulator = new WeatherAccumulator();
 			timeline.AccumulateSceneLayers(tick, ref accumulator);
 			float sceneRate = accumulator.HasAny ? accumulator.Resolve()[WeatherChannel.LightningRate] : 0f;
+			sceneRate = Mathf.Max(sceneRate, Mathf.Clamp01(ambientRate));
 			if (sceneRate > 0.001f)
 			{
 				for (long slot = first; slot <= last; slot++)
@@ -102,38 +107,6 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			// Where cells collide, whatever they were carrying: the strikes land in the zone the two
-			// share, and hard — a violent meeting is a strike every couple of seconds.
-			collisionScratch ??= new List<StormCollision>();
-			timeline.CollisionsAt(tick, collisionScratch);
-			for (int c = 0; c < collisionScratch.Count; c++)
-			{
-				StormCollision clash = collisionScratch[c];
-				for (long slot = first; slot <= last; slot++)
-				{
-					uint h = Hash(clash.Seed, (uint)slot);
-					if (Unit(h) >= clash.Intensity * 0.5f * (float)LightningSlotSeconds)
-					{
-						continue;
-					}
-					double time = (slot + Unit(Hash(h, 1))) * LightningSlotSeconds;
-					if (time < from || time >= to)
-					{
-						continue;
-					}
-					float angle = Unit(Hash(h, 2)) * Mathf.PI * 2f;
-					float distance = Mathf.Sqrt(Unit(Hash(h, 3))) * clash.Radius * 0.8f;
-					into.Add(new LightningStrike
-					{
-						Time = time,
-						Ground = new Vector3(clash.Centre.x + Mathf.Sin(angle) * distance, viewer.y - 2f, clash.Centre.y + Mathf.Cos(angle) * distance),
-						CloudHeight = Mathf.Lerp(1200f, 2400f, Unit(Hash(h, 4))),
-						Seed = h,
-						Intensity = Mathf.Lerp(0.8f, 1f, Unit(Hash(h, 5))),
-					});
-				}
-			}
-
 			for (int c = 0; c < timeline.Cells.Count; c++)
 			{
 				StormCell cell = timeline.Cells[c];

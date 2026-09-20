@@ -442,7 +442,9 @@ namespace FishMMO.Client
 
 			// Lightning first: its flash reaches the sky, the lights and the weather globals.
 			Vector3 viewer = camera != null ? camera.transform.position : Vector3.zero;
-			lightning.Update(timeline, tick, worldSeconds, viewer, camera, profile.BoltMaterial);
+			// With the lightning of the weather here — the field's storms and heavy rain — and not only
+			// the scene layers' and the cells'.
+			lightning.Update(timeline, tick, worldSeconds, viewer, camera, profile.BoltMaterial, context.Background[WeatherChannel.LightningRate]);
 			if (presentation != null)
 			{
 				presentation.LightningFlash = lightning.Flash;
@@ -796,7 +798,10 @@ namespace FishMMO.Client
 			Shader.SetGlobalInt(CloudTowerSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.TowerSeedMix)));
 			// What hangs below a column's base: the ground fog that rises into it, and the scud and
 			// rain haze under a wet one.
-			Shader.SetGlobalVector(CloudSubId, new Vector4(fog, cloudPrecipitation, 0f, 0f));
+			// From the frame the presentation is actually showing, which is eased, and not from the
+			// forecast, which is not: read off the forecast the fog in the sky cut in and out the
+			// instant a preset or a volume changed, while the fog on the ground eased in beside it.
+			Shader.SetGlobalVector(CloudSubId, new Vector4(shownFog, shownRain, 0f, 0f));
 			Shader.SetGlobalVector(CloudViewerId, new Vector4(viewerAt.x, viewerAt.y, viewerAt.z, 0f));
 			// The ground the clouds pass over: cloud gathers on the windward side of high terrain and
 			// clears in its lee, and the fog lies on the ground that is there. Rebuilt only when the
@@ -810,7 +815,13 @@ namespace FishMMO.Client
 			// an unsettled windy afternoon (14 m/s, N 0.005: nearly three kilometres) pours over a
 			// mountain. The second figure is how far a blocked flow is turned aside.
 			CloudClimbHeight = Mathf.Max(1f, cloudWindSpeed) / Mathf.Max(0.001f, stability);
-			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, 1800f, 0f, 0f));
+			// 250 m, not 1800. The lookup is moved by this times the slope across the wind, and a
+			// displacement that changes faster than the distance it moves folds the field: at 1800 m
+			// the fold factor over the bed's mountain worked out at 9.7 — anything over about a half
+			// smears — and the sky overhead was concentric rings. What "going round" mostly looks
+			// like is the other half of it anyway: the layer is not lifted, so the cloud banks
+			// against the slopes at its own level and the summit stands clear.
+			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, 250f, 0f, 0f));
 			Shader.SetGlobalVector(CloudMesoId, new Vector4((float)mesoDriftX, (float)mesoDriftY, mesoAtCamera, mesoContrast));
 			Shader.SetGlobalVector(CloudMesoParamsId, new Vector4(mesoAmplitude, WeatherDriver.MesoscaleMetres, WeatherDriver.MesoscalePeriodTiles, 0f));
 			Shader.SetGlobalInt(CloudMesoSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.MesoscaleSeedMix)));
@@ -983,6 +994,8 @@ namespace FishMMO.Client
 		/// <summary>The formations' share of the cover at the camera, in cover units, for readouts.</summary>
 		public float CloudMesoscaleAtCamera => cloudMesoscaleAtCamera;
 		private float cloudMesoscaleAtCamera;
+		private float shownFog;
+		private float shownRain;
 
 		/// <summary>The bottom and top of the whole stack of bands, in metres.</summary>
 		public float CloudShellBottom { get; private set; }
@@ -1080,6 +1093,8 @@ namespace FishMMO.Client
 			cloudDrift = WeatherDriver.Drift(WeatherDriver.WorldSeed, latitude, worldSeconds);
 			Shader.SetGlobalVector(CloudWindId, new Vector4(cloudDrift.x, cloudDrift.y, 2.5f, 1f));
 			Shader.SetGlobalVector(CloudWindDirId, new Vector4(axis.x, axis.y, speed, 0f));
+			shownFog = Mathf.Clamp01(weather[WeatherChannel.FogDensity]);
+			shownRain = Mathf.Clamp01(weather[WeatherChannel.Precipitation]);
 			// The bands themselves, and the shell they add up to.
 			SetCloudLayers(profile, background, driverActive, driverWeight, axis, driftX, driftY);
 			Shader.SetGlobalVector(CloudLightId, new Vector4(clouds.LightSteps, clouds.Powder, clouds.ForwardScatter, clouds.Ambient));
