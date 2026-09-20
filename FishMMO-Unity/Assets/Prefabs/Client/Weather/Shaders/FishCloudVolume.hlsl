@@ -521,7 +521,13 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // to be clear overhead is skipped outright — and then the cloud rolling in from upwind
         // cannot be drawn at all until it has already arrived, which is the popping this is meant
         // to cure.
-        if (coverage <= 0.002)
+        // Cloud only. The mist under the base shares this loop and must not share this test: fog
+        // lies on the ground whether or not there is cloud above it — a clear night is when it
+        // forms best — and skipped here it had holes cut in it the exact shape of the gaps between
+        // the formations, hard-edged because this is a yes or a no, and none at all round a camera
+        // standing under a clear patch. What the cloud above does to the fog is the `mass` term
+        // below, which falls to its floor smoothly as the cover goes to nothing.
+        if (coverage <= 0.002 && !below)
         {
             continue;
         }
@@ -662,7 +668,10 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             // fog is thick: squared, 0.05 fogs the horizon by a tenth, 0.3 closes it, and the
             // thickest fog is exactly as thick as it was. The height it reaches stays in proportion.
             float fog = FishCloudGroundFogScale * _FishCloudSub.x * _FishCloudSub.x * saturate(1.0 - under / max(0.05, _FishCloudSub.x * 1.2)) * (0.55 + 0.45 * mass);
-            float hang = _FishCloudSub.y * saturate(type * 1.6) * mass * saturate((under - 0.3) / 0.7);
+            // Tapered away over the last tenth below the base. It was densest AT the base and the
+            // cloud above starts from nothing there, so the base was a level sheet with haze on one
+            // side and clear air on the other — and a level sheet seen edge-on is a line.
+            float hang = _FishCloudSub.y * saturate(type * 1.6) * mass * saturate((under - 0.3) / 0.6) * saturate((1.0 - under) / 0.1);
             density = saturate(fog * 0.2 + hang * 0.25);
             if (density <= 0.0)
             {
@@ -981,6 +990,24 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // the cloud at the horizon. That is what made the level of detail look as if it ran backwards.
     float fine = clamp(distance / steps, 18.0, 90.0);
     float fineNear = max(18.0, fine * 0.5);
+    // Up among the clouds the march is at its dearest. From the ground most of a ray is empty air
+    // crossed in one stride and the cloud at its end is soon opaque; from the height of the cloud
+    // base upward every pixel starts in or beside cloud, looks along the layer rather than through
+    // it, and walks its whole budget with a light march on every sample. The steps lengthen as the
+    // camera climbs into the layer — by the camera's height alone, so it is one figure for the
+    // whole screen and draws no line across it.
+    float lowestBase = 1e6;
+    UNITY_LOOP
+    for (int q = 0; q < _FishCloudLayerCount; q++)
+    {
+        if (_FishCloudLayerA[q].w > 0.001)
+        {
+            lowestBase = min(lowestBase, _FishCloudLayerA[q].x);
+        }
+    }
+    float aloft = lowestBase < 1e5 ? smoothstep(0.6, 1.0, FishCloudAltitude(origin) / max(100.0, lowestBase)) : 0.0;
+    fine *= 1.0 + 0.8 * aloft;
+    fineNear *= 1.0 + 0.8 * aloft;
     // A stride must never be able to step over a whole band, or the pixels whose stride happens to
     // straddle a thin deck find nothing while their neighbours find cloud — which is a crosshatch
     // across the sky, not noise, and no amount of temporal averaging removes it.
@@ -1030,6 +1057,20 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     float insideSamples = 0.0;
     // Where the ray last came into air that can hold cloud.
     float entered = near;
+    // The camera is inside the cloud: the first cloud this ray met was at its own feet. What it
+    // sees then is a fog a few hundred metres deep, and the fine steps that keep an edge crisp
+    // from outside are resolving nothing — while every pixel on the screen is paying for them at
+    // once, which is the one view where the march cannot afford it.
+    // A measure and not a switch: a ray is more or less immersed by how near its first cloud was,
+    // so no line is drawn across the sky where rays change from one kind to the other.
+    float immersed = 0.0;
+    // Whether depthToSun holds a depth found in CLOUD on the sample before this one. Only that may
+    // be used again. Anything else — a value left from the mist under the base, from another cloud,
+    // from before a gap — lights this cloud with somewhere else's shadow, and because how many
+    // samples a ray has taken changes in shells with distance, so does which rays got the wrong
+    // one: hard-edged bright stripes stacked toward the horizon.
+    bool depthIsFresh = false;
+    bool wasUnderBase = false;
 
     UNITY_LOOP
     for (int i = 0; i < budget; i++)
@@ -1069,7 +1110,32 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // out: a cloud a hundred kilometres off is a few pixels of haze and does not want ninety-
         // metre steps.
         float stepBase = max(clamp(travelled * 0.006, fineNear, fine), travelled * 0.004);
-        float stepHere = stepBase * (transmittance < 0.5 ? 1.5 : 1.0) * min(2.5, 1.0 + insideSamples * (1.0 / 40.0));
+        // Immersion is about the fog at the camera's feet and wears off with distance: standing in
+        // a ground mist is also "the first thing the ray met was at its feet", and held for the whole
+        // ray it doubled the step through every cloud in the sky behind that mist.
+        float immersedHere = immersed * saturate(1.0 - (travelled - near) / 2000.0);
+        // The mist is smooth — no billows, no detail, no light march — and a smooth thing does not
+        // need an edge-finding step. It was walked as finely as cloud, and a ray looking down or
+        // along a fog layer spent its whole budget on it.
+        float mistStride = wasUnderBase && inside ? 2.5 : 1.0;
+        float stepHere = stepBase * (transmittance < 0.5 ? 1.5 : 1.0) * min(3.5, 1.0 + insideSamples * (1.0 / 20.0)) * (1.0 + immersedHere) * mistStride;
+        // Never longer than half the thinnest cloud in the sky, whatever has multiplied it. The
+        // multipliers are earned inside a medium and used to be carried into the next one: a ray
+        // that had walked a long mist reached the deck with steps as long as the deck is thick,
+        // and whether a sample fell inside it or stepped over it changed in shells with distance —
+        // hard-edged stripes, bright where the deck was missed.
+        stepHere = min(stepHere, max(stepBase, thinnest * 0.5));
+        // Every step its own length, not only the first. One offset at the start of the ray is a
+        // step's worth near the camera and a few hundredths of one far out, where the steps are
+        // hundreds of metres: the far samples of every ray on the screen stood in the same shells,
+        // and any sharp thing they crossed was drawn as rings. The golden ratio walks the jitter
+        // through the unit interval so a ray's steps are spread and not merely shifted; the mean
+        // is one, so the march goes as far as it did. The integration below uses this same length.
+        // 0.7 to 1.3. Wider took the bands out just as well but left more grain in any one frame,
+        // which shows wherever the history has been thrown away — looking down through thin mist
+        // while moving. The spread adds up step over step, so far out, where the lockstep was, it
+        // is several steps' worth whatever the range.
+        stepHere *= 0.7 + 0.6 * frac(jitter + i * 0.61803399);
         float altitudeHere = FishCloudAltitude(position);
         if (!FishCloudPossibleAt(altitudeHere))
         {
@@ -1079,6 +1145,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             {
                 break;
             }
+            depthIsFresh = false;
             // Not while walking back over an edge just found. The step back can come out below a
             // band's floor; cleared here, the flag let the ray find the same cloud again, take it
             // for a fresh edge and step back again, for ever — see the step back, below.
@@ -1144,7 +1211,14 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                 // Whether a ray was caught depended on how far past the floor its first hit fell —
                 // on the angle it looked up at and on its jitter — so the holes were speckled rings
                 // about the point overhead.
-                travelled = max(max(near, entered), travelled - coarse);
+                // And never onto the floor itself. Clamped to one exact distance, every ray that
+                // steps back starts from the same place and samples the cloud at the same depths
+                // from then on — the jitter it set out with is gone — and samples in step across
+                // the screen are smooth concentric bands: round the camera when it sits inside
+                // the cloud (every ray steps back to nought), round the point overhead under a
+                // deck (every ray steps back to the deck's floor). The floor is a step deep, and
+                // where in that step a ray lands is its own.
+                travelled = max(max(near, entered) + stepBase * jitter, travelled - coarse);
                 continue;
             }
             bool first = !found;
@@ -1152,13 +1226,46 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             {
                 cloudDistance = travelled;
                 found = true;
+                immersed = 1.0 - smoothstep(60.0, 300.0, travelled - near);
             }
-            depthToSun = FishCloudLightDepth(position, toSun, detailHere, footprint, field, travelled, transmittance < 0.3);
+            // The light march is most of what a sample costs, so it is spent where it shows.
+            // Not under the base: the mist there takes an eighth of the light, and is lit evenly.
+            // And once a ray is well into a cloud, on every other sample: the depth toward the sun
+            // changes slowly along a ray, and one step's worth of staleness is nothing like the
+            // old fault of freezing it for the rest of the cloud — there is no threshold for a
+            // contour to form on, and which samples are fresh differs from ray to ray.
+            // The depth this sample is lit with, which for mist is never the ray's running value.
+            float depthHere;
+            if (high01 < 0.0)
+            {
+                depthHere = 1.0;
+                depthIsFresh = false;
+            }
+            else
+            {
+                // Used again only from the cloud sample directly before, only once, and only while
+                // the step is short beside the light march's own 120 m: far out a single step is
+                // hundreds of metres and a depth that stale is a different part of the cloud.
+                bool reuse = depthIsFresh && !first && transmittance <= 0.6 && stepHere < 90.0;
+                if (!reuse)
+                {
+                    depthToSun = FishCloudLightDepth(position, toSun, detailHere, footprint, field, travelled, transmittance < 0.3);
+                }
+                depthIsFresh = !reuse;
+                depthHere = depthToSun;
+            }
             // How far this ray has already come through cloud: 0 at the near surface, toward 1
             // deep inside. That is what the powder term reads.
             float intoCloud = 1.0 - transmittance;
-            float scatter = FishCloudScatter(depthToSun, cosAngle, _FishCloudLight.z, intoCloud);
+            float scatter = FishCloudScatter(depthHere, cosAngle, _FishCloudLight.z, intoCloud);
             bool underBase = high01 < 0.0;
+            // Out of the mist and into the cloud, or the other way: what was learnt about how
+            // coarsely the last medium could be walked does not apply to this one.
+            if (underBase != wasUnderBase)
+            {
+                insideSamples = 0.0;
+            }
+            wasUnderBase = underBase;
             high01 = max(0.0, high01);
             float3 colour = FishCloudColour(sunColour, scatter, high01, layerIndex, rain, ambient);
             if (underBase)
@@ -1201,6 +1308,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         {
             emptyDistance += stepHere;
             travelled += stepHere;
+            depthIsFresh = false;
             // Out the far side and past the point the stride found: stride on.
             if (travelled > insideUntil && emptyDistance > fine * 4.0)
             {
@@ -1210,6 +1318,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         else
         {
             travelled += coarse;
+            depthIsFresh = false;
         }
     }
     // The march stops at a twentieth, so a twentieth is "nothing gets through". Remapped for every
