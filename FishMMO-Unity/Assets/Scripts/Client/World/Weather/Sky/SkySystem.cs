@@ -200,6 +200,7 @@ namespace FishMMO.Client
 		private float blendSeconds;
 		private Cubemap stars;
 		private int starSize;
+		private uint starSeed;
 		private Light sun;
 		private Light moon;
 		private Light createdSun;
@@ -589,11 +590,15 @@ namespace FishMMO.Client
 
 		private void SetSkyGlobals(CelestialState state, in SkySample sample, SkyProfile sky, in WeatherFrame weather, float overcast, float eclipse, in WeatherContext context, WeatherTierSettings tier, WeatherRenderProfile profile)
 		{
-			if (stars == null || starSize != tier.StarCubemapSize)
+			// The system's stars: one sky for every world and moon in it. Rebuilt when the system
+			// changes as well as when the tier does, or a second system would wear the first one's sky.
+			uint seed = state != null && state.System != null ? state.System.StarSeed : 238u;
+			if (stars == null || starSize != tier.StarCubemapSize || starSeed != seed)
 			{
 				DestroyOwned(stars);
 				starSize = tier.StarCubemapSize;
-				stars = StarfieldBuilder.Build(starSize, 238);
+				starSeed = seed;
+				stars = StarfieldBuilder.Build(starSize, seed);
 			}
 			float airless = sky.Airless ? 1f : 0f;
 			float fogBlend = Mathf.Clamp01((RenderSettings.fog ? 0.45f : 0f) + WeatherFogPresenter.Amount(weather) * 0.55f) * (1f - airless);
@@ -625,7 +630,9 @@ namespace FishMMO.Client
 			}
 			Shader.SetGlobalVector(EclipseBodyId, covering);
 			Shader.SetGlobalVector(EclipseId, new Vector4(eclipse, state.LunarEclipse, airless, 0f));
-			Shader.SetGlobalMatrix(StarMatrixId, state.EquatorialToScene.transpose);
+			// The system's frame and not the body's own: see CelestialState.StarsToScene. The galaxy
+			// below is read through the same matrix, so it keeps its place among the stars.
+			Shader.SetGlobalMatrix(StarMatrixId, state.StarsToScene.transpose);
 			Shader.SetGlobalTexture(StarCubeId, stars);
 			// A galaxy of the sky's own, if it has one. It sits in the same frame as the stars, so it
 			// turns with them; with none supplied the shader draws its own band instead. The flag is
@@ -780,9 +787,9 @@ namespace FishMMO.Client
 			CelestialState skyState = State;
 			float latitude = skyState != null ? (float)skyState.Latitude : 0f;
 			SolarSystemProfile solar = SolarSystemProfile.Active;
-			float season01 = solar != null
-				? Mathf.Repeat((float)(worldSeconds / 3600.0 / System.Math.Max(1e-6, CelestialMath.YearHours(solar))), 1f)
-				: 0.5f;
+			// The same season the weather field works out, by the same function: the clouds drawn and
+			// the weather sampled must never disagree about what time of year it is.
+			float season01 = CelestialMath.Season01(solar, skyState != null ? skyState.Observer : null, worldSeconds / 3600.0);
 			Camera viewCamera = TargetCamera != null ? TargetCamera : Camera.main;
 			Vector3 viewerAt = viewCamera != null ? viewCamera.transform.position : transform.position;
 

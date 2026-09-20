@@ -20,6 +20,8 @@ namespace FishMMO.Shared.Celestial
 		public WorldBody HomeWorld;
 		[Tooltip("The seed the world's weather grows from. Every high, low and front is a function of this and the world clock, so the same seed gives the same weather on the server and on every client, and the same weather again after a restart. Changing it gives the world a different climate history.")]
 		public uint WeatherSeed = 238;
+		[Tooltip("The seed the night sky is scattered from. The stars belong to the system: every world and moon in it sees these same constellations, each from the angle its own axis gives it. Change it and the whole system gets a different sky; two systems with different seeds have different skies.")]
+		public uint StarSeed = 238;
 		[Tooltip("Roughly how long one weather system takes to pass, in world hours, at an ordinary wind. Judge it against the day length rather than against a real day: at 6 hours a day, five hours a system means the weather turns over about once a day. Lower it and the sky changes its mind several times a day; raise it for long settled spells. It sets how big the systems are, not how hard the wind blows, so the clouds keep moving at the same speed either way.")]
 		[Min(0.25f)] public float WeatherSystemHours = 5f;
 		public CalendarProfile Calendar;

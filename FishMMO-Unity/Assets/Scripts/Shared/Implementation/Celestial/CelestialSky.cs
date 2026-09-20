@@ -46,7 +46,7 @@ namespace FishMMO.Shared.Celestial
 		public static void HorizontalOf(SolarSystemProfile system, WorldBody observer, Vector3d point, double hours, double latitude, double longitude, out double altitude, out double azimuth)
 		{
 			Vector3d direction = point - CelestialMath.Position(system, observer, hours);
-			CelestialMath.ToEquatorial(direction, (observer != null ? observer.AxialTiltDegrees : 0.0) * CelestialMath.Deg2Rad, out double ra, out double dec);
+			CelestialMath.ToEquatorial(direction, observer, out double ra, out double dec);
 			Horizontal(latitude, dec, CelestialMath.HourAngle(system, observer, hours, longitude, ra), out altitude, out azimuth);
 		}
 

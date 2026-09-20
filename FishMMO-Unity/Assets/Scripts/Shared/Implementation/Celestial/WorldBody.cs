@@ -32,6 +32,11 @@ namespace FishMMO.Shared.Celestial
 		public bool Retrograde;
 		[Tooltip("Tilt of the axis against the orbit. Seasons and changing day lengths come from this.")]
 		[Range(0f, 90f)] public float AxialTiltDegrees = 23.4f;
+		[Tooltip("Which way the axis leans: the direction in the orbital plane, in degrees from the world-epoch equinox, that the north pole tips toward. The tilt says how far the axis leans and this says where to. It decides WHEN the seasons fall — northern midsummer is when the sun stands in this direction — and which star the pole points at. Two worlds with the same tilt and different values here have their summers at different times of the year and different pole stars. 90 is where every axis used to lean, so existing worlds keep their seasons.")]
+		[Range(0f, 360f)] public float PoleLongitudeDegrees = DefaultPoleLongitudeDegrees;
+
+		/// <summary>Where every axis leaned before it could be chosen: toward +Y of the ecliptic.</summary>
+		public const float DefaultPoleLongitudeDegrees = 90f;
 		[Tooltip("Moons: turn once per orbit so the planet never moves in the sky.")]
 		public bool TidallyLocked;
 		[Tooltip("Which way longitude 0 faces at the world epoch, in degrees.")]

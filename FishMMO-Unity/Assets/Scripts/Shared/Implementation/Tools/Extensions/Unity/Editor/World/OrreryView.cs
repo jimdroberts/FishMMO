@@ -257,7 +257,13 @@ namespace FishMMO.Shared.WorldDesign
 			double theta = CelestialMath.RotationAngle(System, body, Hours) + (observer ? ObserverLongitude * CelestialMath.Deg2Rad : 0.0);
 			// Where the meridian's plane (right ascension theta) cuts the orbital plane: the sun sits
 			// on that line at local noon whatever the tilt. Then onto the screen (y down).
-			var direction = new Vector2((float)(Math.Cos(theta) * Math.Cos(tilt)), -(float)Math.Sin(theta));
+			// In the body's own frame that line is (cos θ · cos t, sin θ); the frame itself is turned
+			// about the ecliptic's pole by how far the axis's lean is from +Y.
+			double turn = (body.PoleLongitudeDegrees - WorldBody.DefaultPoleLongitudeDegrees) * CelestialMath.Deg2Rad;
+			double flatX = Math.Cos(theta) * Math.Cos(tilt), flatY = Math.Sin(theta);
+			var direction = new Vector2(
+				(float)(flatX * Math.Cos(turn) - flatY * Math.Sin(turn)),
+				-(float)(flatX * Math.Sin(turn) + flatY * Math.Cos(turn)));
 			if (direction.sqrMagnitude < 1e-6f)
 			{
 				return;

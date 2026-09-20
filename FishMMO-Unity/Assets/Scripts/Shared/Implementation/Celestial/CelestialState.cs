@@ -67,6 +67,31 @@ namespace FishMMO.Shared.Celestial
 		/// </summary>
 		public Matrix4x4 EquatorialToScene { get; private set; } = Matrix4x4.identity;
 
+		/// <summary>
+		/// Takes a direction in the SYSTEM's fixed frame — the ecliptic, which is where the stars are
+		/// pinned — into scene space. Its columns are where the ecliptic's X, Y and pole point.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The stars belong to the system, not to the world under your feet. They are far enough off
+		/// that going from one planet or moon of a system to another moves none of them by a pixel, so
+		/// the constellations are the same from every body in it. What is not the same is which way
+		/// that body's axis points among them: a world tilted twenty-three degrees has its pole star
+		/// twenty-three degrees from the ecliptic's pole, a world tilted sixty has it sixty away, and
+		/// an upright moon has the ecliptic's pole for its own.
+		/// </para>
+		/// <para>
+		/// The star field used to be turned by <see cref="EquatorialToScene"/>, which is the observer's
+		/// own equatorial frame. That frame is already tilted with the body, so the tilt cancelled:
+		/// every world in the system had the same star over its pole and the same constellations at
+		/// the same height — the sky of one world, worn by all of them. This goes through the same
+		/// rotation out of the ecliptic that every planet and moon in the sky already goes through,
+		/// so the stars and the bodies among them now agree about where the ecliptic is.
+		/// </para>
+		/// <para>Like <see cref="EquatorialToScene"/>, a reflection-rotation whose transpose is its inverse.</para>
+		/// </remarks>
+		public Matrix4x4 StarsToScene { get; private set; } = Matrix4x4.identity;
+
 		/// <summary>A proper rotation that turns with the stars, for objects that follow the sky.</summary>
 		public Quaternion SkyRotation { get; private set; } = Quaternion.identity;
 
@@ -110,7 +135,7 @@ namespace FishMMO.Shared.Celestial
 		/// <summary>A heliocentric direction (AU frame) as seen from the observer, in scene space.</summary>
 		public Vector3 HeliocentricDirection(Vector3d direction)
 		{
-			CelestialMath.ToEquatorial(direction, (Observer != null ? Observer.AxialTiltDegrees : 0.0) * CelestialMath.Deg2Rad, out double ra, out double dec);
+			CelestialMath.ToEquatorial(direction, Observer, out double ra, out double dec);
 			return EquatorialDirection(ra, dec);
 		}
 
@@ -135,6 +160,7 @@ namespace FishMMO.Shared.Celestial
 				IsDaylight = true;
 				LocalTime01 = 0.5;
 				EquatorialToScene = Matrix4x4.identity;
+				StarsToScene = Matrix4x4.identity;
 				SkyRotation = Quaternion.identity;
 				return;
 			}
@@ -144,6 +170,12 @@ namespace FishMMO.Shared.Celestial
 			Vector3 y = EquatorialDirection(Math.PI * 0.5, 0.0);
 			Vector3 z = EquatorialDirection(0.0, Math.PI * 0.5);
 			EquatorialToScene = Basis(x, y, z);
+			// And the system's own axes, carried out of the ecliptic by this body's tilt like anything
+			// else in the sky.
+			StarsToScene = Basis(
+				HeliocentricDirection(new Vector3d(1.0, 0.0, 0.0)),
+				HeliocentricDirection(new Vector3d(0.0, 1.0, 0.0)),
+				HeliocentricDirection(new Vector3d(0.0, 0.0, 1.0)));
 			SkyRotation = Basis(x, y, -z).rotation;
 
 			Vector3d observerPosition = CelestialMath.Position(system, observer, hours);
@@ -160,7 +192,7 @@ namespace FishMMO.Shared.Celestial
 				Vector3d position = CelestialMath.Position(system, body, hours);
 				Vector3d toBody = position - observerPosition;
 				double km = Math.Max(1.0, toBody.Magnitude * CelestialMath.AuKm);
-				CelestialMath.ToEquatorial(toBody, observer.AxialTiltDegrees * CelestialMath.Deg2Rad, out double ra, out double dec);
+				CelestialMath.ToEquatorial(toBody, observer, out double ra, out double dec);
 				double hourAngle = CelestialMath.HourAngle(system, observer, hours, longitude, ra);
 				CelestialSky.Horizontal(latitude, dec, hourAngle, out double alt, out double az);
 				double angularDiameter = CelestialMath.AngularDiameter(body.SkyRadiusKm, km);

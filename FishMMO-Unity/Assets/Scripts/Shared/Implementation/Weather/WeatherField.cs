@@ -101,10 +101,10 @@ namespace FishMMO.Shared.Weather
 				double worldSeconds = timeline.WorldSecondsAt(tick);
 				double worldHours = worldSeconds / 3600.0;
 				SolarSystemProfile system = SolarSystemProfile.Active;
-				WorldBody sceneBody = SceneTime.BodyOf(settings);
-				float season01 = system != null
-					? Mathf.Repeat((float)(worldHours / System.Math.Max(1e-6, CelestialMath.YearHours(system))), 1f)
-					: 0.5f;
+				WorldBody sceneBody = timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+				// The season of the body this scene is on, from where its sun stands — not the fraction
+				// of the home calendar gone. See CelestialMath.Season01.
+				float season01 = CelestialMath.Season01(system, sceneBody, worldHours);
 				float localTime01 = system != null && sceneBody != null
 					? (float)CelestialMath.LocalTime01(system, sceneBody, worldHours, timeline.LongitudeDegrees)
 					: 0.5f;

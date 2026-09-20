@@ -5,8 +5,17 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Generates the star field: a cubemap of a few thousand stars with real-looking brightness
-	/// and colour spreads, from a seed. Built once on the client; the sky turns it with the body.
+	/// and colour spreads, from a seed. Built on each client, in the solar system's own fixed frame;
+	/// the sky turns it for the body and the place it is seen from.
 	/// </summary>
+	/// <remarks>
+	/// Every client builds its own copy, so the same seed has to give the same stars on every one
+	/// of them, on every platform, for good. The numbers come from the project's own hash and not
+	/// from <see cref="System.Random"/>: that one happens to agree between Mono and IL2CPP today,
+	/// but what a seed produces is nowhere promised, and a sky that two players are meant to be able
+	/// to point at together is not the place to rely on a habit. The stars are drawn in the same
+	/// order whatever the size, so a lower quality tier is the same sky at a coarser resolution.
+	/// </remarks>
 	public static class StarfieldBuilder
 	{
 		public const int DefaultStars = 8000;
@@ -41,7 +50,10 @@ namespace FishMMO.Client
 			y = (tc / ma + 1f) * 0.5f * size;
 		}
 
-		public static Cubemap Build(int size, int seed, int stars = DefaultStars)
+		/// <summary>The n-th number, 0..1, of the sequence a seed gives. Stateless, so it cannot drift.</summary>
+		private static float Draw(uint seed, uint index) => SkySchedule.Unit(SkySchedule.Hash(seed ^ 0x57A25EEDu, index));
+
+		public static Cubemap Build(int size, uint seed, int stars = DefaultStars)
 		{
 			size = Mathf.ClosestPowerOfTwo(Mathf.Clamp(size, 64, 2048));
 			var faces = new Color32[6][];
@@ -53,16 +65,18 @@ namespace FishMMO.Client
 					faces[f][i] = new Color32(0, 0, 0, 255);
 				}
 			}
-			var random = new System.Random(seed);
 			for (int s = 0; s < stars; s++)
 			{
-				float z = (float)(random.NextDouble() * 2.0 - 1.0);
-				float angle = (float)(random.NextDouble() * Mathf.PI * 2f);
+				// Four numbers to a star, by its own index: a star's place and colour do not depend on
+				// how many came before it, so changing the count adds stars without moving any.
+				uint at = (uint)s * 4u;
+				float z = Draw(seed, at) * 2f - 1f;
+				float angle = Draw(seed, at + 1u) * Mathf.PI * 2f;
 				float r = Mathf.Sqrt(1f - z * z);
 				var direction = new Vector3(r * Mathf.Cos(angle), r * Mathf.Sin(angle), z);
 				// Most stars are faint; a few are bright.
-				float brightness = Mathf.Pow((float)random.NextDouble(), 6f) * 0.9f + 0.1f;
-				Color color = ColorOf(Mathf.Lerp(2800f, 11000f, (float)random.NextDouble())) * brightness;
+				float brightness = Mathf.Pow(Draw(seed, at + 2u), 6f) * 0.9f + 0.1f;
+				Color color = ColorOf(Mathf.Lerp(2800f, 11000f, Draw(seed, at + 3u))) * brightness;
 				FaceOf(direction, size, out CubemapFace face, out float px, out float py);
 				Splat(faces[(int)face], size, px, py, color, brightness > 0.6f ? 1.2f : 0.7f);
 			}

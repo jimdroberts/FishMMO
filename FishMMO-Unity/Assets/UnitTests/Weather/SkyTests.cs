@@ -122,6 +122,206 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(Mathf.Abs(stars.determinant), Is.EqualTo(1f).Within(1e-3f), "the star matrix keeps lengths");
 		}
 
+		// ── The stars belong to the system ───────────────────────────────
+
+		/// <summary>Where a body's celestial pole points, in the system's own star frame.</summary>
+		private Vector3 PoleAmongTheStars(WorldBody body, double hours, double latitude, double longitude)
+		{
+			var state = new CelestialState();
+			state.Compute(system, body, hours, latitude, longitude, 0f);
+			Vector3 poleInScene = state.EquatorialToScene.GetColumn(2);
+			return state.StarsToScene.transpose.MultiplyVector(poleInScene);
+		}
+
+		[Test]
+		public void AnUprightBodySeesTheStarsInItsOwnFrame()
+		{
+			home.AxialTiltDegrees = 0f;
+			var state = new CelestialState();
+			state.Compute(system, home, 40.25, 50.0, -60.0, 10f);
+			for (int column = 0; column < 3; column++)
+			{
+				AssertDirection(state.EquatorialToScene.GetColumn(column), state.StarsToScene.GetColumn(column), $"axis {column}", 0.05f);
+			}
+		}
+
+		[Test]
+		public void ABodysPoleStandsItsTiltFromTheEclipticsPole()
+		{
+			var state = new CelestialState();
+			foreach (float tilt in new[] { 0f, 23.4f, 60f, 97f })
+			{
+				home.AxialTiltDegrees = tilt;
+				state.Compute(system, home, 13.7, 35.0, 20.0, 30f);
+				float angle = Vector3.Angle(state.EquatorialToScene.GetColumn(2), state.StarsToScene.GetColumn(2));
+				Assert.That(angle, Is.EqualTo(tilt).Within(0.05f), $"a world tilted {tilt}° has its pole {tilt}° from the ecliptic's");
+				Assert.That(Mathf.Abs(state.StarsToScene.determinant), Is.EqualTo(1f).Within(1e-3f), "the star frame keeps lengths");
+			}
+		}
+
+		[Test]
+		public void TwoWorldsOfOneSystemSeeTheSameStarsFromDifferentAngles()
+		{
+			WorldBody other = Make<WorldBody>("Other");
+			other.Parent = sun;
+			other.Orbit = new OrbitSettings { Distance = 1.6f };
+			other.RotationHours = 10f;
+			other.AxialTiltDegrees = 60f;
+			system.Bodies.Add(other);
+
+			Vector3 homePole = PoleAmongTheStars(home, 13.7, 35.0, 20.0);
+			Vector3 otherPole = PoleAmongTheStars(other, 13.7, 35.0, 20.0);
+			// This is the test that failed before: with the stars turned by each body's own
+			// equatorial frame the tilt cancelled, and both poles came out on the same star.
+			Assert.That(Vector3.Angle(homePole, otherPole), Is.EqualTo(60f - 23.4f).Within(0.05f),
+				"two worlds tilted differently have different pole stars, the difference of their tilts apart");
+		}
+
+		[Test]
+		public void ABodysPoleStarDoesNotMoveWithTheHourOrThePlace()
+		{
+			Vector3 reference = PoleAmongTheStars(home, 13.7, 35.0, 20.0);
+			foreach ((double hours, double latitude, double longitude) in new[] { (0.0, 0.0, 0.0), (977.3, -62.0, 140.0), (50000.5, 80.0, -170.0) })
+			{
+				AssertDirection(reference, PoleAmongTheStars(home, hours, latitude, longitude),
+					$"the pole star at hour {hours}, latitude {latitude}, longitude {longitude}", 0.05f);
+			}
+		}
+
+		[Test]
+		public void TheSameSeedScattersTheSameStarsAndAnotherSeedOthers()
+		{
+			Cubemap first = StarfieldBuilder.Build(64, 238u);
+			Cubemap again = StarfieldBuilder.Build(64, 238u);
+			Cubemap different = StarfieldBuilder.Build(64, 239u);
+			try
+			{
+				bool anyDifference = false;
+				foreach (CubemapFace face in new[] { CubemapFace.PositiveX, CubemapFace.NegativeY, CubemapFace.PositiveZ })
+				{
+					Color[] a = first.GetPixels(face), b = again.GetPixels(face), c = different.GetPixels(face);
+					for (int i = 0; i < a.Length; i++)
+					{
+						Assert.That(b[i], Is.EqualTo(a[i]), $"{face} pixel {i} differs between two builds of one seed");
+						anyDifference |= c[i] != a[i];
+					}
+				}
+				Assert.That(anyDifference, Is.True, "a different seed gave the same sky");
+			}
+			finally
+			{
+				Object.DestroyImmediate(first);
+				Object.DestroyImmediate(again);
+				Object.DestroyImmediate(different);
+			}
+		}
+
+		// ── Which way the axis leans ─────────────────────────────────────
+
+		private WorldBody Twin(string name, float tilt, float poleLongitude)
+		{
+			WorldBody twin = Make<WorldBody>(name);
+			twin.Parent = sun;
+			twin.Orbit = home.Orbit;
+			twin.RotationHours = home.RotationHours;
+			twin.AxialTiltDegrees = tilt;
+			twin.PoleLongitudeDegrees = poleLongitude;
+			system.Bodies.Add(twin);
+			return twin;
+		}
+
+		[Test]
+		public void TheDefaultLeanIsTheRotationThereAlwaysWas()
+		{
+			// Every existing world keeps its sky and its seasons: 90° is where every axis leaned
+			// before the lean could be chosen.
+			Assert.That(home.PoleLongitudeDegrees, Is.EqualTo(90f));
+			foreach (var direction in new[] { new Vector3d(1, 0, 0), new Vector3d(0.3, -0.8, 0.5), new Vector3d(-0.6, 0.2, -0.77) })
+			{
+				double tilt = 23.4 * CelestialMath.Deg2Rad;
+				CelestialMath.ToEquatorial(direction, tilt, out double oldRa, out double oldDec);
+				CelestialMath.ToEquatorial(direction, tilt, 90.0 * CelestialMath.Deg2Rad, out double ra, out double dec);
+				Assert.That(ra, Is.EqualTo(oldRa).Within(1e-12));
+				Assert.That(dec, Is.EqualTo(oldDec).Within(1e-12));
+			}
+		}
+
+		[Test]
+		public void ThePoleLeansTowardItsLongitude()
+		{
+			foreach (float longitude in new[] { 0f, 90f, 200f, 315f })
+			{
+				home.AxialTiltDegrees = 30f;
+				home.PoleLongitudeDegrees = longitude;
+				double t = 30.0 * CelestialMath.Deg2Rad, l = longitude * CelestialMath.Deg2Rad;
+				var expected = new Vector3((float)(Math.Sin(t) * Math.Cos(l)), (float)(Math.Sin(t) * Math.Sin(l)), (float)Math.Cos(t));
+				AssertDirection(expected, PoleAmongTheStars(home, 13.7, 35.0, 20.0), $"the pole of a world leaning toward {longitude}°", 0.05f);
+			}
+		}
+
+		[Test]
+		public void TwoWorldsOfOneTiltThatLeanApartHaveDifferentPoleStars()
+		{
+			WorldBody one = Twin("One", 23.4f, 0f);
+			WorldBody other = Twin("Other", 23.4f, 180f);
+			// The case the tilt alone could never separate: the same tilt used to mean the same pole star.
+			Assert.That(Vector3.Angle(PoleAmongTheStars(one, 13.7, 35.0, 20.0), PoleAmongTheStars(other, 13.7, 35.0, 20.0)),
+				Is.EqualTo(46.8f).Within(0.05f), "leaning opposite ways, their poles are twice the tilt apart");
+		}
+
+		[Test]
+		public void WorldsThatLeanOppositeWaysHaveOppositeSeasons()
+		{
+			WorldBody one = Twin("One", 23.4f, 40f);
+			WorldBody other = Twin("Other", 23.4f, 220f);
+			double year = CelestialMath.OrbitHours(system, one);
+			for (int i = 0; i < 12; i++)
+			{
+				double hours = year * (i + 0.37) / 12.0;
+				float a = CelestialMath.Season01(system, one, hours), b = CelestialMath.Season01(system, other, hours);
+				Assert.That(Mathf.Abs(Mathf.DeltaAngle(a * 360f, b * 360f)), Is.EqualTo(180f).Within(1.5f),
+					$"at {hours:0} h one world is at {a:0.00} of its year and the other at {b:0.00}: half a year apart");
+			}
+		}
+
+		[Test]
+		public void TheWeathersMidsummerIsWhenTheSunStandsHighest()
+		{
+			// The defect this replaces: the weather took midsummer from the middle of the calendar,
+			// a quarter of a year before the sun of the same world actually stood highest.
+			double year = CelestialMath.OrbitHours(system, home);
+			double highest = double.MinValue, lowest = double.MaxValue, highestAt = 0, lowestAt = 0;
+			for (int i = 0; i < 2000; i++)
+			{
+				double hours = year * i / 2000.0;
+				CelestialMath.Equatorial(system, home, sun, hours, out _, out double declination);
+				if (declination > highest) { highest = declination; highestAt = hours; }
+				if (declination < lowest) { lowest = declination; lowestAt = hours; }
+			}
+			Assert.That(CelestialMath.Season01(system, home, highestAt), Is.EqualTo(0.5f).Within(0.02f), "midsummer at the sun's highest");
+			float midwinter = CelestialMath.Season01(system, home, lowestAt);
+			Assert.That(Mathf.Min(midwinter, 1f - midwinter), Is.LessThan(0.02f), "midwinter at the sun's lowest");
+		}
+
+		[Test]
+		public void AnUprightWorldHasNoSeasonsAndASteepOneHasThemHard()
+		{
+			WorldBody upright = Twin("Upright", 1.5f, 90f);
+			WorldBody steep = Twin("Steep", 60f, 90f);
+			double year = CelestialMath.OrbitHours(system, upright);
+			float uprightSwing = 0f, steepSwing = 0f;
+			for (int i = 0; i < 400; i++)
+			{
+				double hours = year * i / 400.0;
+				// What the weather driver makes of the figure: 0 midwinter, 1 midsummer.
+				float Summer(float season01) => Mathf.Sin(season01 * Mathf.PI * 2f - Mathf.PI * 0.5f) * 0.5f + 0.5f;
+				uprightSwing = Mathf.Max(uprightSwing, Mathf.Abs(Summer(CelestialMath.Season01(system, upright, hours)) - 0.5f));
+				steepSwing = Mathf.Max(steepSwing, Mathf.Abs(Summer(CelestialMath.Season01(system, steep, hours)) - 0.5f));
+			}
+			Assert.That(uprightSwing, Is.LessThan(0.04f), "a degree and a half of tilt is a degree and a half of season");
+			Assert.That(steepSwing, Is.EqualTo(0.5f).Within(0.001f), "sixty degrees reaches full summer and full winter");
+		}
+
 		[Test]
 		public void TheSunRisesAndSetsOncePerSolarDay()
 		{

@@ -67,6 +67,17 @@ namespace FishMMO.Shared.Weather
 		/// <summary>The scene's longitude, for working out its local hour from the world clock.</summary>
 		public float LongitudeDegrees;
 
+		/// <summary>
+		/// The body the weather is worked out for, when it is not the scene's own. Null in the game,
+		/// where a scene stands on the body the world atlas says it does.
+		/// </summary>
+		/// <remarks>
+		/// For the test bed, which stands one scene on any body in the system. The sky followed the
+		/// choice and the weather did not, so on a moon the sun kept the moon's season while the
+		/// weather kept the home world's. Local only: it is never sent, and a server never sets it.
+		/// </remarks>
+		[System.NonSerialized] public FishMMO.Shared.Celestial.WorldBody BodyOverride;
+
 		/// <summary>World time at a tick, carried forward from the last anchor the server sent.</summary>
 		public double WorldSecondsAt(uint tick) =>
 			WorldSecondsAtTick + (double)((long)tick - WorldSecondsTick) * TickDelta;

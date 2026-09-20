@@ -149,6 +149,43 @@ namespace FishMMO.TestHarness.World
 
 		private static int DaysPerYear => SolarSystemProfile.Active != null ? SolarSystemProfile.Active.DaysPerYear : 365;
 
+		/// <summary>The world hours at a day of the year the bed is in.</summary>
+		public double HoursOfDay(float day) => ((double)year * DaysPerYear + day) * DayHours;
+
+		/// <summary>
+		/// The day of this year on which the body stood on comes nearest a season, where the camera
+		/// is: 0 midwinter, 0.25 spring, 0.5 midsummer, 0.75 autumn.
+		/// </summary>
+		/// <remarks>
+		/// Searched for, because it cannot be known: when a body's midsummer falls follows which way
+		/// its axis leans and how long its year is, and south of the equator it is the other half of
+		/// the year. The season buttons used to jump to fixed fractions of the home calendar, which
+		/// was the right day for no body at all — the home world's own midsummer fell a quarter of a
+		/// year after the one the button chose.
+		/// </remarks>
+		public float DayOfSeason(float season01)
+		{
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system == null || Body == null)
+			{
+				return Mathf.Repeat(season01, 1f) * DaysPerYear;
+			}
+			// The figure is the northern hemisphere's; the southern has the opposite season.
+			float wanted = Mathf.Repeat(season01 + (latitude < 0f ? 0.5f : 0f), 1f);
+			float best = 0f, bestDistance = float.MaxValue;
+			for (int day = 0; day < DaysPerYear; day++)
+			{
+				float season = CelestialMath.Season01(system, Body, HoursOfDay(day + 0.5f));
+				float distance = Mathf.Abs(Mathf.DeltaAngle(season * 360f, wanted * 360f));
+				if (distance < bestDistance)
+				{
+					bestDistance = distance;
+					best = day;
+				}
+			}
+			return best;
+		}
+
 		/// <summary>The date into the clock. In double: a float day stops holding the hour after a few years.</summary>
 		private void ComposeHours()
 		{
@@ -953,6 +990,8 @@ namespace FishMMO.TestHarness.World
 			timeline.WorldSecondsTick = tick;
 			timeline.LatitudeDegrees = latitude;
 			timeline.LongitudeDegrees = longitude;
+			// And on which body, so the weather's season and hour are this body's and not the scene's.
+			timeline.BodyOverride = Body;
 
 			WeatherFrame frame;
 			WeatherContext context;

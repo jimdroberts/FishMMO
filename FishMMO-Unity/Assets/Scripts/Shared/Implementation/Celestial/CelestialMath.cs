@@ -176,21 +176,103 @@ namespace FishMMO.Shared.Celestial
 			return direction * TwoPi * hours / RotationHours(system, body) + body.RotationOffsetDegrees * Deg2Rad;
 		}
 
-		/// <summary>A direction from the ecliptic frame into a body's equatorial frame (rotation about +X by the tilt).</summary>
+		/// <summary>
+		/// A direction from the ecliptic frame into a body's equatorial frame, for an axis that leans
+		/// toward ecliptic longitude 90° (rotation about +X by the tilt).
+		/// </summary>
 		public static void ToEquatorial(Vector3d direction, double tiltRadians, out double rightAscension, out double declination)
 		{
+			ToEquatorial(direction, tiltRadians, WorldBody.DefaultPoleLongitudeDegrees * Deg2Rad, out rightAscension, out declination);
+		}
+
+		/// <summary>
+		/// A direction from the ecliptic frame into a body's equatorial frame: its axis tilted by
+		/// <paramref name="tiltRadians"/> toward ecliptic longitude <paramref name="poleLongitudeRadians"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Two turns. First about the ecliptic's pole, to bring the direction the axis leans round to
+		/// +Y; then about +X by the tilt, which is the rotation there always was. The pole of the body
+		/// is therefore at (sin t · cos L, sin t · sin L, cos t) in the ecliptic, and right ascension
+		/// is counted from the body's own equinox — where its equator crosses its orbit — which is
+		/// what makes every body's seasons its own.
+		/// </para>
+		/// <para>
+		/// With only the second turn every axis in a system leaned the same way: all its worlds and
+		/// moons had midsummer at the same moment, and any two with the same tilt shared a pole star.
+		/// </para>
+		/// </remarks>
+		public static void ToEquatorial(Vector3d direction, double tiltRadians, double poleLongitudeRadians, out double rightAscension, out double declination)
+		{
 			Vector3d d = direction.Normalized;
-			double y = d.Y * Math.Cos(tiltRadians) - d.Z * Math.Sin(tiltRadians);
-			double z = d.Y * Math.Sin(tiltRadians) + d.Z * Math.Cos(tiltRadians);
-			rightAscension = Math.Atan2(y, d.X);
+			// About the ecliptic's pole, by the lean's longitude back to +Y.
+			double turn = Math.PI * 0.5 - poleLongitudeRadians;
+			double x = d.X * Math.Cos(turn) - d.Y * Math.Sin(turn);
+			double yFlat = d.X * Math.Sin(turn) + d.Y * Math.Cos(turn);
+			double y = yFlat * Math.Cos(tiltRadians) - d.Z * Math.Sin(tiltRadians);
+			double z = yFlat * Math.Sin(tiltRadians) + d.Z * Math.Cos(tiltRadians);
+			rightAscension = Math.Atan2(y, x);
 			declination = Math.Asin(Math.Max(-1.0, Math.Min(1.0, z)));
+		}
+
+		/// <summary>A direction from the ecliptic frame into this body's own equatorial frame. No body, no tilt.</summary>
+		public static void ToEquatorial(Vector3d direction, WorldBody body, out double rightAscension, out double declination)
+		{
+			ToEquatorial(direction,
+				(body != null ? body.AxialTiltDegrees : 0.0) * Deg2Rad,
+				(body != null ? body.PoleLongitudeDegrees : WorldBody.DefaultPoleLongitudeDegrees) * Deg2Rad,
+				out rightAscension, out declination);
+		}
+
+		/// <summary>The tilt at which a world's seasons are as strong as the weather model's were tuned for.</summary>
+		public const double ReferenceTiltDegrees = 23.4;
+
+		/// <summary>
+		/// The season on a body, from where its sun actually stands in its sky: 0 midwinter, 0.25
+		/// spring, 0.5 midsummer, 0.75 autumn — for the NORTHERN hemisphere, as the weather driver
+		/// reads it (it turns the figure round itself for the southern).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The weather used to take its season from the fraction of the home calendar year gone, and
+		/// put midsummer at the middle of it. That is a calendar, not a season. It was a quarter of a
+		/// year out from the sky on the home world — the sun stood highest at 0.75 of the year while
+		/// the weather had midsummer at 0.5 — and it was the home world's on every world: a moon, or
+		/// a planet with a year three times as long, had the home world's seasons, at full strength,
+		/// whatever its own axis was doing.
+		/// </para>
+		/// <para>
+		/// Taken from the sun's declination, the season is the body's own: when it falls follows the
+		/// way the axis leans and how long the body's year is, and how strong it is follows the tilt.
+		/// A moon tilted a degree and a half has almost no seasons; a world tilted sixty has them
+		/// hard, with a long midsummer and a long midwinter. Shaped so that the driver's own
+		/// <c>sin(season · 2π − π/2)</c> gives back exactly the summer the declination asks for, so
+		/// nothing about the driver, its shader twin or its calibration has to know any of this.
+		/// </para>
+		/// </remarks>
+		public static float Season01(SolarSystemProfile system, WorldBody body, double hours)
+		{
+			if (system == null || body == null || system.PrimaryStar == null)
+			{
+				return 0.5f;
+			}
+			Equatorial(system, body, system.PrimaryStar, hours, out double rightAscension, out double declination);
+			// How far toward midsummer, -1..1: the sun's declination against the reference tilt.
+			double summer = Math.Max(-1.0, Math.Min(1.0, declination / (ReferenceTiltDegrees * Deg2Rad)));
+			// The driver's curve, inverted: 0.25 at the equinox, 0.5 at full summer, 0 at full winter.
+			double rising = (Math.Asin(summer) + Math.PI * 0.5) / TwoPi;
+			// Spring and autumn have the same declination; the sun's right ascension says which. It
+			// passes 90° at midsummer, so past that and before 270° the year is on its way down.
+			double ra = rightAscension - Math.Floor(rightAscension / TwoPi) * TwoPi;
+			bool falling = ra > Math.PI * 0.5 && ra < Math.PI * 1.5;
+			return (float)(falling ? 1.0 - rising : rising);
 		}
 
 		/// <summary>Where a target stands in a body's equatorial sky.</summary>
 		public static void Equatorial(SolarSystemProfile system, WorldBody observer, CelestialBody target, double hours, out double rightAscension, out double declination)
 		{
 			Vector3d toTarget = Position(system, target, hours) - Position(system, observer, hours);
-			ToEquatorial(toTarget, (observer != null ? observer.AxialTiltDegrees : 0) * Deg2Rad, out rightAscension, out declination);
+			ToEquatorial(toTarget, observer, out rightAscension, out declination);
 		}
 
 		/// <summary>The primary sun's right ascension and declination in a body's sky.</summary>

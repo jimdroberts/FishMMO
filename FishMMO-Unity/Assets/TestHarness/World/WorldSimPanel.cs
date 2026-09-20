@@ -236,6 +236,14 @@ namespace FishMMO.TestHarness.World
 			return card;
 		}
 
+		/// <summary>The season in words, for the hemisphere stood in. The figure itself is the northern one.</summary>
+		private static string SeasonName(float season01, float latitude)
+		{
+			float local = Mathf.Repeat(season01 + (latitude < 0f ? 0.5f : 0f), 1f);
+			string[] names = { "midwinter", "late winter", "spring", "late spring", "midsummer", "late summer", "autumn", "late autumn" };
+			return names[Mathf.RoundToInt(local * 8f) % 8];
+		}
+
 		/// <summary>Sets one figure, and how it should read: plain, good, a warning, or not applicable.</summary>
 		private void Stat(string key, string text, string tone = null)
 		{
@@ -313,7 +321,7 @@ namespace FishMMO.TestHarness.World
 			stats = new VisualElement();
 			stats.AddToClassList("ws-stats");
 			stats.Add(Card("Clock", false,
-				("clock.time", "Time"), ("clock.date", "Date"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
+				("clock.time", "Time"), ("clock.date", "Date"), ("clock.season", "Season"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
 			stats.Add(Card("Sun & sky", false,
 				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse")));
 			stats.Add(Card("Air — what drives the weather", true,
@@ -434,10 +442,11 @@ namespace FishMMO.TestHarness.World
 			times.Add(SmallButton("Midnight", () => Jump(0.0)));
 			page.Add(times);
 			var seasons = Row();
-			seasons.Add(SmallButton("Spring", () => SetDay(0.20f)));
-			seasons.Add(SmallButton("Summer", () => SetDay(0.47f)));
-			seasons.Add(SmallButton("Autumn", () => SetDay(0.72f)));
-			seasons.Add(SmallButton("Winter", () => SetDay(0.97f)));
+			// The season here, on this body: found from where its sun stands, not read off the calendar.
+			seasons.Add(SmallButton("Spring", () => SetSeason(0.25f)));
+			seasons.Add(SmallButton("Summer", () => SetSeason(0.5f)));
+			seasons.Add(SmallButton("Autumn", () => SetSeason(0.75f)));
+			seasons.Add(SmallButton("Winter", () => SetSeason(0f)));
 			page.Add(seasons);
 
 			// The sun, in the three parts it is actually made of. On the panel because judging a sky
@@ -697,11 +706,9 @@ namespace FishMMO.TestHarness.World
 			RefreshFacts();
 		}
 
-		private void SetDay(float yearFraction)
+		private void SetSeason(float season01)
 		{
-			SolarSystemProfile system = SolarSystemProfile.Active;
-			int days = system != null ? system.DaysPerYear : 365;
-			float day = Mathf.Round(yearFraction * days);
+			float day = Controller.DayOfSeason(season01);
 			Controller.DayOfYear = day;
 			daySlider?.SetValueWithoutNotify(day);
 		}
@@ -785,6 +792,13 @@ namespace FishMMO.TestHarness.World
 			// Clock.
 			Stat("clock.time", $"{SceneTime.Format(state.LocalTime01)} · {(state.IsDaylight ? "day" : "night")}");
 			Stat("clock.date", $"year {Controller.Year}, day {Mathf.FloorToInt(Controller.DayOfYear)}");
+			// An upright axis has no seasons, and the figure for "none" is the equinox's: said in words,
+			// or a moon reads as stuck in spring.
+			bool upright = Controller.Body != null && Controller.Body.AxialTiltDegrees < 3f;
+			Stat("clock.season", upright
+				? "none (upright axis)"
+				: SeasonName(CelestialMath.Season01(SolarSystemProfile.Active, Controller.Body, Controller.Hours), Controller.Latitude),
+				upright ? "dim" : null);
 			Stat("clock.hours", Controller.Hours.ToString("0.00", culture));
 			Stat("clock.rate", Controller.Paused ? "paused" : $"{Controller.TimeScale.ToString("0.###", culture)} h/s", Controller.Paused ? "dim" : null);
 
