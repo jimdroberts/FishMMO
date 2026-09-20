@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -146,18 +147,60 @@ namespace FishMMO.Client
 			return 0f;
 		}
 
-		/// <summary>The whole-sky figures, as lines for a readout.</summary>
-		public static string Sky(SkySystem sky, VolumetricCloudSettings clouds)
+		/// <summary>How a figure should read at a glance.</summary>
+		public enum Tone
 		{
+			Plain,
+			/// <summary>Working as intended and worth noticing.</summary>
+			Good,
+			/// <summary>Something is off, or switched off.</summary>
+			Warn,
+			/// <summary>Not applicable just now.</summary>
+			Dim,
+		}
+
+		/// <summary>
+		/// One figure: which group it belongs to, what it is, and what it reads.
+		/// </summary>
+		/// <remarks>
+		/// Figures and not a block of text. These used to be returned as one string of clauses joined
+		/// by dots, ten lines for the sky and five more for every band, and whoever showed them could
+		/// only show them as that: a paragraph to be read for a number. A figure has a name, so it has
+		/// a place, and the number is found by where it is.
+		/// </remarks>
+		public readonly struct Figure
+		{
+			public readonly string Group;
+			public readonly string Label;
+			public readonly string Value;
+			public readonly Tone Tone;
+			/// <summary>More than fits beside the label: shown on hover.</summary>
+			public readonly string Note;
+
+			public Figure(string group, string label, string value, Tone tone = Tone.Plain, string note = null)
+			{
+				Group = group;
+				Label = label;
+				Value = value;
+				Tone = tone;
+				Note = note;
+			}
+		}
+
+		/// <summary>The whole-sky figures. Always the same figures in the same order, whatever they read.</summary>
+		public static void Sky(SkySystem sky, VolumetricCloudSettings clouds, List<Figure> into)
+		{
+			into.Clear();
 			if (sky == null || clouds == null)
 			{
-				return "No sky system, so there is nothing to measure.";
+				into.Add(new Figure("Clouds", "State", "no sky system", Tone.Warn));
+				return;
 			}
 			if (!SkySystem.CloudsReady)
 			{
-				return "The cloud volumes are not baked: Weather Tools → Bake cloud noise.";
+				into.Add(new Figure("Clouds", "State", "not baked", Tone.Warn, "Weather Tools → Bake cloud noise."));
+				return;
 			}
-			var text = new StringBuilder();
 			CloudTierSettings tier = sky.CloudTier;
 			var bands = sky.CloudBands;
 			int count = bands != null ? bands.Count : 0;
@@ -173,17 +216,33 @@ namespace FishMMO.Client
 				}
 			}
 
-			text.AppendLine($"Forecast · cover {Pct(sky.CloudCover)} · precipitation {Pct(sky.CloudPrecipitation)} · storm {Pct(sky.CloudStorm)}");
+			// What the weather asked for.
+			into.Add(new Figure("Forecast", "Cover", Pct(sky.CloudCover)));
+			into.Add(new Figure("Forecast", "Precipitation", Pct(sky.CloudPrecipitation), sky.CloudPrecipitation <= 0.005f ? Tone.Dim : Tone.Plain));
+			into.Add(new Figure("Forecast", "Storm", Pct(sky.CloudStorm), sky.CloudStorm <= 0.005f ? Tone.Dim : Tone.Plain));
 			// The formations: how far the bank or gap the camera stands under has moved the cover
 			// from the sky's own figure. Zero with the sliders or a pinned preset, which have none.
 			float meso = sky.CloudMesoscaleAtCamera;
-			text.AppendLine(Mathf.Abs(meso) > 0.0005f
-				? $"Formations · {(meso >= 0f ? "in a bank" : "in a gap")}, {meso * 100f:+0;-0}% cover here against the sky's mean · masses every ~{WeatherDriver.MesoscaleMetres / 1000f:0} km, up to ±{WeatherDriver.MesoscaleAmplitude * 100f:0}%"
-				: "Formations · none (the channels or a preset decide the weather, and they have no banks or gaps)");
-			text.AppendLine($"On screen · {(MeasuredCover >= 0f ? Pct(MeasuredCover) : "measuring…")} solid cloud · "
-				+ $"{(MeasuredAnyCloud >= 0f ? Pct(MeasuredAnyCloud) : "—")} any cloud at all");
-			text.AppendLine($"Stack · {active} of {count} band(s) drawing · {sky.CloudShellBottom:0}–{sky.CloudShellTop:0} m "
-				+ $"({(sky.CloudShellTop - sky.CloudShellBottom) / 1000f:0.00} km of sky) · deepest band {deepest:0} m");
+			bool formed = Mathf.Abs(meso) > 0.0005f;
+			into.Add(new Figure("Forecast", "Here", formed ? $"{(meso >= 0f ? "in a bank" : "in a gap")} {meso * 100f:+0;-0}%" : "no formations",
+				formed ? Tone.Plain : Tone.Dim,
+				formed
+					? $"Cover here against the sky's mean. Masses every ~{WeatherDriver.MesoscaleMetres / 1000f:0} km, up to ±{WeatherDriver.MesoscaleAmplitude * 100f:0}%."
+					: "The channels or a preset decide the weather, and they have no banks or gaps."));
+
+			// What ended up on the screen.
+			into.Add(new Figure("On screen", "Solid cloud", MeasuredCover >= 0f ? Pct(MeasuredCover) : "measuring…", MeasuredCover >= 0f ? Tone.Plain : Tone.Dim));
+			into.Add(new Figure("On screen", "Any cloud", MeasuredAnyCloud >= 0f ? Pct(MeasuredAnyCloud) : "—", MeasuredAnyCloud >= 0f ? Tone.Plain : Tone.Dim));
+			float threshold = ThresholdAt(clouds, sky.CloudCover);
+			into.Add(new Figure("On screen", "Noise cut", threshold.ToString("0.000"), Tone.Plain, "Where the noise is cut at this cover. The field runs 0.33–0.76."));
+			into.Add(new Figure("On screen", "Field kept", Pct(FillForThreshold(threshold))));
+
+			// The stack.
+			into.Add(new Figure("Stack", "Bands drawing", $"{active} of {count}", active == 0 ? Tone.Dim : Tone.Plain));
+			into.Add(new Figure("Stack", "Shell", $"{sky.CloudShellBottom:0}–{sky.CloudShellTop:0} m"));
+			into.Add(new Figure("Stack", "Sky depth", $"{(sky.CloudShellTop - sky.CloudShellBottom) / 1000f:0.00} km"));
+			into.Add(new Figure("Stack", "Deepest band", $"{deepest:0} m", deepest <= 0f ? Tone.Dim : Tone.Plain));
+
 			// The columns: how far up the cloud of this sky gets. The same curve the shader uses.
 			float ColumnTop(float type)
 			{
@@ -199,42 +258,46 @@ namespace FishMMO.Client
 				var bottoms = sky.CloudBandBottom;
 				float floor = bottoms != null && i < bottoms.Count && bottoms[i] > 0.001f ? bottoms[i] : bands[i].Bottom;
 				float depth = bands[i].Thickness;
-				text.AppendLine($"Columns · base {floor:0} m · most cloud to {floor + depth * ColumnTop(sky.CloudColumnType):0} m "
-					+ $"(type {sky.CloudColumnType:0.00}) · towers to {floor + depth * ColumnTop(Mathf.Clamp01(sky.CloudColumnType + sky.CloudTowerGain)):0} m"
-					+ $"{(sky.CloudTowerGain < 0.01f ? " — none, the field is not deciding the weather" : string.Empty)}");
+				bool towers = sky.CloudTowerGain >= 0.01f;
+				into.Add(new Figure("Columns", "Base", $"{floor:0} m"));
+				into.Add(new Figure("Columns", "Most cloud to", $"{floor + depth * ColumnTop(sky.CloudColumnType):0} m", Tone.Plain, $"Column type {sky.CloudColumnType:0.00}."));
+				into.Add(new Figure("Columns", "Towers to", towers ? $"{floor + depth * ColumnTop(Mathf.Clamp01(sky.CloudColumnType + sky.CloudTowerGain)):0} m" : "none",
+					towers ? Tone.Plain : Tone.Dim, towers ? null : "The field is not deciding the weather, so nothing grows a tower."));
 				// A tower is a few kilometres across and the bed's default clock carries the sky at a
 				// kilometre and a half a second: one crossing the camera is there and gone in two
 				// seconds, which looks like cloud swelling up and shrinking away. This says when.
-				text.AppendLine($"Terrain · this air climbs about {sky.CloudClimbHeight:0} m: ground lower than that the cloud goes over, "
-					+ "higher it goes round");
-				text.AppendLine($"Overhead · tower {Pct(sky.CloudTowerAtCamera)}"
-					+ $"{(sky.CloudTowerAtCamera > 0.3f ? " — a tower is crossing the camera now" : string.Empty)}");
+				bool crossing = sky.CloudTowerAtCamera > 0.3f;
+				into.Add(new Figure("Columns", "Tower overhead", crossing ? $"{Pct(sky.CloudTowerAtCamera)} — crossing now" : Pct(sky.CloudTowerAtCamera),
+					crossing ? Tone.Warn : Tone.Plain));
+				into.Add(new Figure("Columns", "Air climbs", $"{sky.CloudClimbHeight:0} m", Tone.Plain, "Ground lower than this the cloud goes over; higher, it goes round."));
 				break;
 			}
-			float threshold = ThresholdAt(clouds, sky.CloudCover);
-			text.AppendLine($"Noise cut · {threshold:0.000} at this cover, keeping about {Pct(FillForThreshold(threshold))} of the field "
-				+ $"(which runs 0.33–0.76)");
-			text.AppendLine($"Wind · {sky.CloudWindSpeed:0.0} m/s toward {Bearing(sky.CloudWind)} · "
-				+ $"sun {Mathf.Asin(Mathf.Clamp(sky.CloudSunDirection.y, -1f, 1f)) * Mathf.Rad2Deg:0.0}° above the horizon");
-			text.Append($"Cost · {tier.Steps} steps at {(tier.Resolution * 100f):0}% of the screen"
-				+ $"{(BufferSize.x > 0 ? $" ({BufferSize.x}×{BufferSize.y})" : string.Empty)} · detail {tier.Detail:0.00} · "
-				+ $"{(tier.Temporal ? $"steadied {tier.TemporalBlend:0.00}" : "no history")} · "
-				+ $"shadows {(SkySystem.DrawCloudShadows ? "on" : "off")} · shafts {(SkySystem.DrawGodRays ? "on" : "off")}");
-			return text.ToString();
+
+			into.Add(new Figure("Air & light", "Wind", $"{sky.CloudWindSpeed:0.0} m/s"));
+			into.Add(new Figure("Air & light", "Toward", Bearing(sky.CloudWind)));
+			into.Add(new Figure("Air & light", "Sun", $"{Mathf.Asin(Mathf.Clamp(sky.CloudSunDirection.y, -1f, 1f)) * Mathf.Rad2Deg:0.0}° up"));
+
+			into.Add(new Figure("Cost", "Steps", tier.Steps.ToString()));
+			into.Add(new Figure("Cost", "Buffer", BufferSize.x > 0 ? $"{(tier.Resolution * 100f):0}% · {BufferSize.x}×{BufferSize.y}" : $"{(tier.Resolution * 100f):0}%"));
+			into.Add(new Figure("Cost", "Detail", tier.Detail.ToString("0.00")));
+			into.Add(new Figure("Cost", "History", tier.Temporal ? $"steadied {tier.TemporalBlend:0.00}" : "off", tier.Temporal ? Tone.Plain : Tone.Warn));
+			into.Add(new Figure("Cost", "Shadows", SkySystem.DrawCloudShadows ? "on" : "off", SkySystem.DrawCloudShadows ? Tone.Plain : Tone.Warn));
+			into.Add(new Figure("Cost", "Shafts", SkySystem.DrawGodRays ? "on" : "off", SkySystem.DrawGodRays ? Tone.Plain : Tone.Warn));
 		}
 
-		/// <summary>One band's figures, as a single line for its foldout.</summary>
-		public static string Band(SkySystem sky, VolumetricCloudSettings clouds, int index)
+		/// <summary>One band's figures, for its foldout.</summary>
+		public static void Band(SkySystem sky, VolumetricCloudSettings clouds, int index, List<Figure> into)
 		{
+			into.Clear();
 			if (sky == null || clouds == null)
 			{
-				return string.Empty;
+				return;
 			}
 			var bands = sky.CloudBands;
 			var coverage = sky.CloudBandCoverage;
 			if (bands == null || index >= bands.Count || bands[index] == null)
 			{
-				return string.Empty;
+				return;
 			}
 			CloudLayer band = bands[index];
 			float cover = coverage != null && index < coverage.Count ? coverage[index] : 0f;
@@ -251,6 +314,7 @@ namespace FishMMO.Client
 			// at a high density and a deep one at a low density look nothing alike on the sliders
 			// and much alike in the sky.
 			float depth = density * band.Thickness * fill;
+			bool drawing = cover > 0.001f && density > 0.001f && fill > 0.005f;
 			string state = cover <= 0.001f
 				? (band.CoverageOnset > 0.001f && sky.CloudCover < band.CoverageOnset
 					? $"empty — waits for cover {band.CoverageOnset:0.00}"
@@ -258,25 +322,27 @@ namespace FishMMO.Client
 				: density <= 0.001f ? "empty — density 0"
 				: fill <= 0.005f ? "empty — cut above the field"
 				: "drawing";
-
-			var text = new StringBuilder();
-			text.AppendLine($"  {state}");
-			text.AppendLine($"  coverage asked {Pct(cover)} → cut {threshold:0.000} → about {Pct(fill)} of the sky in this band");
 			float ceilingNow = floorNow + band.Thickness;
-			string moved = Mathf.Abs(floorNow - band.Bottom) > 1f
-				? $" (authored {band.Bottom:0} m, moved {floorNow - band.Bottom:+0;-0} m by the condensation level)"
-				: string.Empty;
-			text.AppendLine($"  {floorNow:0} – {ceilingNow:0} m ({band.Thickness:0} m deep, {band.Thickness / 1000f:0.00} km)   "
-				+ $"density {density:0.00}   optical depth {depth:0}{moved}");
-			text.AppendLine(band.Convection > 0.001f
-				? $"  flat base at {floorNow:0} m, tops between about {floorNow + band.Thickness * Mathf.Lerp(1f, 0.3f, band.Convection):0} "
-					+ $"and {ceilingNow:0} m (convection {band.Convection:0.00})"
-				: $"  level deck: base {floorNow:0} m, top {ceilingNow:0} m (no convection)");
-			text.Append($"  masses every {band.NoiseScale:0} m, wisps every {band.DetailScale:0} m"
-				+ $"{(band.Stretch > 1.01f ? $", drawn out {band.Stretch:0.0}× downwind" : string.Empty)}   "
-				+ $"drifts {sky.CloudWindSpeed * band.WindScale:0.0} m/s"
-				+ $"{(band.CarriesRain ? "   carries rain" : string.Empty)}{(band.GrowsStorms ? "   grows storms" : string.Empty)}");
-			return text.ToString();
+			bool moved = Mathf.Abs(floorNow - band.Bottom) > 1f;
+			const string Group = "This band";
+
+			into.Add(new Figure(Group, "State", state, drawing ? Tone.Good : Tone.Dim));
+			into.Add(new Figure(Group, "Sky filled", Pct(fill), drawing ? Tone.Plain : Tone.Dim, $"Coverage asked {Pct(cover)}, which cuts the noise at {threshold:0.000}."));
+			into.Add(new Figure(Group, "Floor", $"{floorNow:0} m", Tone.Plain,
+				moved ? $"Authored at {band.Bottom:0} m; moved {floorNow - band.Bottom:+0;-0} m by the condensation level." : null));
+			into.Add(new Figure(Group, "Ceiling", $"{ceilingNow:0} m"));
+			into.Add(new Figure(Group, "Depth", $"{band.Thickness:0} m"));
+			into.Add(new Figure(Group, "Optical depth", depth.ToString("0"), Tone.Plain, $"Density {density:0.00} through the band's depth, over the share of sky it fills. Whether it reads as haze or as a wall."));
+			into.Add(new Figure(Group, "Tops", band.Convection > 0.001f
+				? $"{floorNow + band.Thickness * Mathf.Lerp(1f, 0.3f, band.Convection):0}–{ceilingNow:0} m"
+				: "level deck", band.Convection > 0.001f ? Tone.Plain : Tone.Dim,
+				band.Convection > 0.001f ? $"Flat base, lumpy tops (convection {band.Convection:0.00})." : "No convection: a flat top as well as a flat base."));
+			into.Add(new Figure(Group, "Drift", $"{sky.CloudWindSpeed * band.WindScale:0.0} m/s"));
+			into.Add(new Figure(Group, "Masses every", $"{band.NoiseScale:0} m", Tone.Plain,
+				band.Stretch > 1.01f ? $"Drawn out {band.Stretch:0.0}× downwind." : null));
+			into.Add(new Figure(Group, "Wisps every", $"{band.DetailScale:0} m"));
+			into.Add(new Figure(Group, "Carries rain", band.CarriesRain ? "yes" : "no", band.CarriesRain ? Tone.Plain : Tone.Dim));
+			into.Add(new Figure(Group, "Grows storms", band.GrowsStorms ? "yes" : "no", band.GrowsStorms ? Tone.Plain : Tone.Dim));
 		}
 
 		private static string Pct(float value) => $"{Mathf.Clamp01(value) * 100f:0}%";

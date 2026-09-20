@@ -65,6 +65,18 @@ namespace FishMMO.TestHarness.World
 		private float refresh;
 		private int activeTab;
 
+		/// <summary>The pointer is over the panel: a scroll is for the panel's list, not the camera's zoom.</summary>
+		public static bool PointerOverPanel { get; private set; }
+
+		/// <summary>A value is being typed into one of the panel's boxes: the keys are text, not flight.</summary>
+		public static bool TypingInPanel { get; private set; }
+
+		private void OnDisable()
+		{
+			PointerOverPanel = false;
+			TypingInPanel = false;
+		}
+
 		private void Start()
 		{
 			UIDocument document = GetComponent<UIDocument>();
@@ -171,6 +183,19 @@ namespace FishMMO.TestHarness.World
 			return label;
 		}
 
+		/// <summary>Whether an element is the editable part of a value box — a slider's, or a text field's.</summary>
+		private static bool IsTextInput(VisualElement element)
+		{
+			for (VisualElement at = element; at != null; at = at.parent)
+			{
+				if (at is TextField || at is FloatField || at is IntegerField)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		// ── Statistics ────────────────────────────────────────────────
 
 		/// <summary>One titled card of figures. Wide cards run their rows two abreast.</summary>
@@ -236,6 +261,30 @@ namespace FishMMO.TestHarness.World
 			panel.AddToClassList("fish-panel");
 			panel.AddToClassList("ws-panel");
 			root.Add(panel);
+
+			// The keys that fly the camera are the keys UI Toolkit navigates with: W and S move the
+			// focus from control to control, A and D change the slider it lands on. So after one
+			// click anywhere on the panel, flying the camera also walked the focus up out of the Run
+			// button into the clock's own sliders and scrubbed them — the rate, the year, the day,
+			// the hour — and on the weather tab dragged the channel sliders about, which turns the
+			// time-driven weather off altogether. The panel is a mouse panel. Navigation is refused
+			// on the way down, before any control sees it; typing in a value box is not navigation
+			// and is untouched.
+			panel.RegisterCallback<NavigationMoveEvent>(evt =>
+			{
+				evt.StopPropagation();
+				panel.focusController?.IgnoreEvent(evt);
+			}, TrickleDown.TrickleDown);
+			panel.RegisterCallback<NavigationSubmitEvent>(evt =>
+			{
+				evt.StopPropagation();
+				panel.focusController?.IgnoreEvent(evt);
+			}, TrickleDown.TrickleDown);
+			// What the camera needs to know to keep out of the panel's way.
+			panel.RegisterCallback<PointerEnterEvent>(_ => PointerOverPanel = true);
+			panel.RegisterCallback<PointerLeaveEvent>(_ => PointerOverPanel = false);
+			panel.RegisterCallback<FocusInEvent>(evt => TypingInPanel = IsTextInput(evt.target as VisualElement));
+			panel.RegisterCallback<FocusOutEvent>(_ => TypingInPanel = false);
 
 			var header = new VisualElement();
 			header.AddToClassList("ws-header");

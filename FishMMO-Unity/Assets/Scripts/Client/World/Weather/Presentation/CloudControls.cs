@@ -49,7 +49,7 @@ namespace FishMMO.Client
 			// ── What the sky is actually doing ──
 			// First, because a slider says what was asked for and these say what came of it.
 			parent.Add(Subheading("Statistics"));
-			parent.Add(Readout(label => label.text = CloudStats.Sky(SkySystem.Instance, clouds), true));
+			parent.Add(Figures(into => CloudStats.Sky(SkySystem.Instance, clouds, into), true, false));
 
 			// ── What the renderer does ──
 			parent.Add(Subheading("Rendering"));
@@ -193,7 +193,7 @@ namespace FishMMO.Client
 
 			// What this band is doing right now, above its own sliders: whether it is drawing at
 			// all, what cut its coverage puts on the noise, how deep it is and how fast it runs.
-			foldout.Add(Readout(label => label.text = CloudStats.Band(SkySystem.Instance, clouds, index), false));
+			foldout.Add(Figures(into => CloudStats.Band(SkySystem.Instance, clouds, index, into), false, true));
 
 			foldout.Add(Note("Where the band sits. A band whose floor is near the ground is the weather's own: fog fills it, not the cloud forecast."));
 			foldout.Add(Slider("Bottom (m)", 0f, 14000f, band.Bottom, v =>
@@ -288,28 +288,108 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A block of live figures, refreshed four times a second.
+		/// Live figures as cards of aligned rows, one card to a group, refreshed four times a second.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Four times a second rather than every frame: these are numbers to read, and a readout
 		/// that changes on every frame is one nobody can. The whole-sky block also drives the
 		/// measurement of how much screen the clouds ended up on, which is why only it polls.
+		/// </para>
+		/// <para>
+		/// The rows are built once and then only their text is set. They are rebuilt when the set of
+		/// figures itself changes — a sky with no column band has no Columns card — and not
+		/// otherwise, so nothing flickers and a hovered tooltip stays up.
+		/// </para>
 		/// </remarks>
-		private static Label Readout(Action<Label> refresh, bool measures)
+		/// <param name="wide">One full-width card with its rows two abreast, for a single group.</param>
+		private static VisualElement Figures(Action<List<CloudStats.Figure>> gather, bool measures, bool wide)
 		{
-			var label = new Label();
-			label.AddToClassList("fish-well");
-			label.AddToClassList("ws-readout");
-			refresh(label);
-			label.schedule.Execute(() =>
+			var host = new VisualElement();
+			host.AddToClassList("ws-stats");
+			var figures = new List<CloudStats.Figure>();
+			var values = new List<Label>();
+			string shape = null;
+
+			void Refresh()
+			{
+				gather(figures);
+				var key = new System.Text.StringBuilder();
+				foreach (CloudStats.Figure figure in figures)
+				{
+					key.Append(figure.Group).Append('|').Append(figure.Label).Append(';');
+				}
+				string now = key.ToString();
+				if (now != shape)
+				{
+					shape = now;
+					Rebuild();
+				}
+				for (int i = 0; i < figures.Count && i < values.Count; i++)
+				{
+					CloudStats.Figure figure = figures[i];
+					Label value = values[i];
+					value.text = figure.Value;
+					value.parent.tooltip = figure.Note;
+					value.EnableInClassList("ws-stat__value--good", figure.Tone == CloudStats.Tone.Good);
+					value.EnableInClassList("ws-stat__value--warn", figure.Tone == CloudStats.Tone.Warn);
+					value.EnableInClassList("ws-stat__value--dim", figure.Tone == CloudStats.Tone.Dim);
+				}
+			}
+
+			void Rebuild()
+			{
+				host.Clear();
+				values.Clear();
+				VisualElement grid = null;
+				string group = null;
+				foreach (CloudStats.Figure figure in figures)
+				{
+					if (figure.Group != group)
+					{
+						group = figure.Group;
+						var card = new VisualElement();
+						card.AddToClassList("ws-card");
+						if (wide)
+						{
+							card.AddToClassList("ws-card--wide");
+						}
+						var body = new VisualElement();
+						body.AddToClassList("fish-well");
+						body.AddToClassList("ws-card__body");
+						card.Add(body);
+						var title = new Label(group.ToUpperInvariant());
+						title.AddToClassList("fish-label--caption");
+						title.AddToClassList("ws-card__title");
+						body.Add(title);
+						grid = new VisualElement();
+						grid.AddToClassList("ws-card__grid");
+						body.Add(grid);
+						host.Add(card);
+					}
+					var row = new VisualElement();
+					row.AddToClassList("ws-stat");
+					var name = new Label(figure.Label);
+					name.AddToClassList("ws-stat__key");
+					var value = new Label();
+					value.AddToClassList("ws-stat__value");
+					row.Add(name);
+					row.Add(value);
+					grid.Add(row);
+					values.Add(value);
+				}
+			}
+
+			Refresh();
+			host.schedule.Execute(() =>
 			{
 				if (measures)
 				{
 					CloudStats.Poll();
 				}
-				refresh(label);
+				Refresh();
 			}).Every(250);
-			return label;
+			return host;
 		}
 
 		private static Label Note(string text)

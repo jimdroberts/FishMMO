@@ -45,12 +45,15 @@ namespace FishMMO.TestHarness.World
 					transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
 				}
 				float scroll = mouse.scroll.ReadValue().y;
-				if (camera != null && Mathf.Abs(scroll) > 0.01f)
+				// Over the panel the wheel scrolls the panel. It used to do both.
+				if (camera != null && Mathf.Abs(scroll) > 0.01f && !WorldSimPanel.PointerOverPanel)
 				{
 					camera.fieldOfView = Mathf.Clamp(camera.fieldOfView - scroll * 0.02f, 8f, 90f);
 				}
 			}
-			if (keyboard == null)
+			// While a value is being typed the keys are digits and letters for the box, and R is not
+			// a request to reset the zoom.
+			if (keyboard == null || WorldSimPanel.TypingInPanel)
 			{
 				return;
 			}
