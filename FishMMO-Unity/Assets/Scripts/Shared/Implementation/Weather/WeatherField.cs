@@ -28,6 +28,8 @@ namespace FishMMO.Shared.Weather
 		/// terms — the formations, the front's slope — by this, so a preset's sky is the preset's.
 		/// </summary>
 		public float DriverWeight;
+		/// <summary>0..1: how much of a collision between two storm cells reaches this place.</summary>
+		public float Collision;
 
 		public PrecipitationKind Precipitation => Frame.DominantPrecipitation;
 		public float StormSeverity => Frame.StormSeverity;
@@ -57,6 +59,8 @@ namespace FishMMO.Shared.Weather
 	/// </summary>
 	public static class WeatherField
 	{
+		[System.ThreadStatic] private static System.Collections.Generic.List<StormCollision> collisionScratch;
+
 		/// <summary>The profile a biome uses: its own when authored, else the climate's default.</summary>
 		public static BiomeWeatherProfile ProfileFor(BiomeTemplate biome, WorldSceneSettings settings)
 		{
@@ -116,6 +120,9 @@ namespace FishMMO.Shared.Weather
 					timeline.LatitudeDegrees,
 					season01,
 					localTime01);
+				// Over this place: its biome's and its world's humidity lean on the air, so a desert
+				// stays mostly dry under a front that soaks the forest next door.
+				air = WeatherDriver.OverPlace(air, reading.Climate.Humidity);
 				sample.Air = air;
 				// The field carries its own temperature anomaly on top of the biome's climate.
 				sample.Temperature = Mathf.Clamp(sample.Temperature + air.Temperature * 0.35f, -1f, 1f);
@@ -167,6 +174,29 @@ namespace FishMMO.Shared.Weather
 			}
 
 			WeatherFrame frame = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
+			if (mode == WeatherSceneMode.Own && timeline.Cells.Count > 1)
+			{
+				// Where two cells meet. Whatever each was carrying, the boundary between them is
+				// where the air is forced up hardest: lightning whether or not either preset had any
+				// (two showers crossing make a thunderstorm, two snow cells make thundersnow), what
+				// was falling falls harder, and the gusts pick up.
+				collisionScratch ??= new System.Collections.Generic.List<StormCollision>();
+				timeline.CollisionsAt(tick, collisionScratch);
+				float clash = 0f;
+				for (int i = 0; i < collisionScratch.Count; i++)
+				{
+					clash = Mathf.Max(clash, collisionScratch[i].InfluenceAt(position));
+				}
+				if (clash > 0.001f)
+				{
+					sample.Collision = clash;
+					frame[WeatherChannel.LightningRate] = Mathf.Max(frame[WeatherChannel.LightningRate], clash);
+					frame[WeatherChannel.Precipitation] = 1f - (1f - frame[WeatherChannel.Precipitation]) * (1f - clash * 0.35f);
+					frame[WeatherChannel.WindGust] = Mathf.Max(frame[WeatherChannel.WindGust], clash * 0.7f);
+					frame[WeatherChannel.CloudCover] = Mathf.Max(frame[WeatherChannel.CloudCover], clash);
+					frame[WeatherChannel.CloudDensity] = Mathf.Max(frame[WeatherChannel.CloudDensity], clash);
+				}
+			}
 			frame.RetypeForTemperature(sample.Temperature);
 			if (profile != null && profile.Forbidden != WeatherKindMask.None)
 			{

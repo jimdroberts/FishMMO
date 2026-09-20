@@ -89,6 +89,7 @@ MonoBehaviour:
     - Name: Weather
       Bottom: 0
       Top: 800
+      Column: 0
       BaseFollowsCondensation: 0
       NoiseScale: 2600
       DetailScale: 180
@@ -96,6 +97,7 @@ MonoBehaviour:
       Stretch: 1
       BaseSoftness: 0.5
       TopSoftness: 0.75
+      VerticalScale: 2
       Convection: 0.35
       Density: 0.55
       CoverageBias: 0
@@ -107,7 +109,8 @@ MonoBehaviour:
       ShadedTint: {r: 0.78, g: 0.82, b: 0.88, a: 1}
     - Name: Cumulus
       Bottom: 800
-      Top: 3200
+      Top: 7800
+      Column: 1
       BaseFollowsCondensation: 1
       NoiseScale: 12000
       DetailScale: 380
@@ -115,6 +118,7 @@ MonoBehaviour:
       Stretch: 1
       BaseSoftness: 0.06
       TopSoftness: 0.65
+      VerticalScale: 2
       Convection: 0.8
       Density: 1
       CoverageBias: 0
@@ -127,6 +131,7 @@ MonoBehaviour:
     - Name: Alto
       Bottom: 3600
       Top: 4600
+      Column: 0
       BaseFollowsCondensation: 0
       NoiseScale: 9000
       DetailScale: 700
@@ -134,6 +139,7 @@ MonoBehaviour:
       Stretch: 1
       BaseSoftness: 0.3
       TopSoftness: 0.4
+      VerticalScale: 2
       Convection: 0.2
       Density: 0.5
       CoverageBias: 0
@@ -146,6 +152,7 @@ MonoBehaviour:
     - Name: Cirrus
       Bottom: 7500
       Top: 8600
+      Column: 0
       BaseFollowsCondensation: 0
       NoiseScale: 14000
       DetailScale: 1200
@@ -153,6 +160,7 @@ MonoBehaviour:
       Stretch: 8
       BaseSoftness: 0.35
       TopSoftness: 0.45
+      VerticalScale: 2
       Convection: 0
       Density: 0.18
       CoverageBias: 0.3
@@ -167,9 +175,12 @@ MonoBehaviour:
     CoverageCutFull: 0.575
     CoverageBend: 0.15
     EdgeSoftness: 0.14
-    HazeDistance: 20000
+    HazeDistance: 28000
+    ShapeWarp: 0.17
+    CoverageTilt: 0.6
     DetailFadeStart: 2500
     DetailFadeRange: 9000
+    Carve: 1
     Density: 0.5
     LightSteps: 6
     Powder: 0.7
@@ -177,7 +188,7 @@ MonoBehaviour:
     Ambient: 0.85
     ShadedTint: {r: 0.62, g: 0.68, b: 0.82, a: 1}
     ShadedTintStrength: 0.55
-    MaxDistance: 90000
+    MaxDistance: 44000
     TemporalBlend: 0.9
     ShadowStrength: 0.8
     ShadowAreaMeters: 4000
@@ -214,8 +225,8 @@ MonoBehaviour:
     ReflectionResolution: 128
     Curtains: 6
     CloudShadows: 1
-    CloudResolution: 0.5
-    CloudSteps: 56
+    CloudResolution: 0.4
+    CloudSteps: 48
     CloudDetail: 0.6
     CloudTemporal: 1
     GodRays: 1
@@ -232,8 +243,8 @@ MonoBehaviour:
     ReflectionResolution: 256
     Curtains: 8
     CloudShadows: 1
-    CloudResolution: 0.6
-    CloudSteps: 96
+    CloudResolution: 0.5
+    CloudSteps: 72
     CloudDetail: 1
     CloudTemporal: 1
     GodRays: 1

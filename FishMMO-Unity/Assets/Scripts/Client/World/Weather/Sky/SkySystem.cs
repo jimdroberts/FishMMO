@@ -67,6 +67,22 @@ namespace FishMMO.Client
 		private static readonly int CloudMesoId = Shader.PropertyToID("_FishCloudMeso");
 		private static readonly int CloudMesoParamsId = Shader.PropertyToID("_FishCloudMesoParams");
 		private static readonly int CloudMesoSeedId = Shader.PropertyToID("_FishCloudMesoSeed");
+		private static readonly int CloudColumnId = Shader.PropertyToID("_FishCloudColumn");
+		private static readonly int CloudTowerDriftId = Shader.PropertyToID("_FishCloudTowerDrift");
+		private static readonly int CloudTowerSeedId = Shader.PropertyToID("_FishCloudTowerSeed");
+		private static readonly int CloudSubId = Shader.PropertyToID("_FishCloudSub");
+		private static readonly int CloudViewerId = Shader.PropertyToID("_FishCloudViewer");
+		private static readonly int CloudFlowId = Shader.PropertyToID("_FishCloudFlow");
+
+		/// <summary>
+		/// The height of ground this air has the energy to climb, in metres: the wind's speed over
+		/// the air's stability (U/N). Ground lower than this is crossed — the cloud rides up and
+		/// over it; ground higher splits the flow and the cloud goes round.
+		/// </summary>
+		public float CloudClimbHeight { get; private set; } = 800f;
+
+		/// <summary>The cloud shadow as the light reads it, for a panel to show.</summary>
+		public Texture CloudShadowCookie => cloudShadows != null ? cloudShadows.Cookie : null;
 		private static readonly int CloudWindDirId = Shader.PropertyToID("_FishCloudWindDir");
 		private static readonly int CloudScreenId = Shader.PropertyToID("_FishCloudScreen");
 		private static readonly int CloudLightId = Shader.PropertyToID("_FishCloudLight");
@@ -110,12 +126,6 @@ namespace FishMMO.Client
 		/// <summary>Half way up the cloud layer: where a screen point is reprojected against.</summary>
 		public float CloudLayerCentre { get; private set; } = 3000f;
 
-		/// <summary>How much detail the far sky keeps, from the profile. Read by the cloud pass, which
-		/// is the only thing that knows how many pixels wide the marched buffer actually is.</summary>
-		public float CloudLodSharpness { get; private set; } = 1f;
-
-		/// <summary>The coarsest mip the shape volume may be read at.</summary>
-		public float CloudMaxLod { get; private set; } = 5f;
 
 		/// <summary>Where the light shafts come from: a direction into the sky, or zero for none.</summary>
 		public Vector3 GodRayDirection { get; private set; }
@@ -174,6 +184,7 @@ namespace FishMMO.Client
 		private LightningPresenter lightning;
 		private CurtainPresenter curtains;
 		private CloudShadowPresenter cloudShadows;
+		private CloudTerrainMap cloudTerrain;
 		private WeatherMap weatherMap;
 		private readonly Vector4[] layerA = new Vector4[MaxCloudLayers];
 		private readonly Vector4[] layerB = new Vector4[MaxCloudLayers];
@@ -316,6 +327,8 @@ namespace FishMMO.Client
 			lightning?.Dispose();
 			curtains?.Dispose();
 			cloudShadows?.Dispose();
+			cloudTerrain?.Dispose();
+			cloudTerrain = null;
 			weatherMap?.Dispose();
 			DestroyOwned(skyMaterial);
 			DestroyOwned(bodyMaterial);
@@ -746,6 +759,18 @@ namespace FishMMO.Client
 			float mesoAtCamera = 0f;
 			float mesoContrast = 0f;
 			float mesoAmplitude = 0f;
+			// The cloud map's tall part: how far up the columns of this sky get. What the day starts
+			// every column at comes from the air when the field decides the weather and from the
+			// weather's own density channel when a preset or the sliders do — that channel has always
+			// been described as "flat stratus to heaped cumulus" and was uploaded for exactly this,
+			// and nothing in the shader ever read it. The towers belong to the field alone.
+			CloudTowerAtCamera = 0f;
+			// How hard the air resists being lifted, as the buoyancy frequency N (per second): about
+			// 0.02 for a very stable layer, 0.004 for unsettled air. With no field to say, ordinary.
+			float stability = 0.01f;
+			float presetType = Mathf.Clamp01(background[WeatherChannel.CloudDensity]) * 0.5f;
+			float columnType = presetType;
+			float towerGain = 0f;
 			double mesoPeriod = WeatherDriver.MesoscaleMetres * WeatherDriver.MesoscalePeriodTiles;
 			double mesoDriftX = driftX - System.Math.Floor(driftX / mesoPeriod) * mesoPeriod;
 			double mesoDriftY = driftY - System.Math.Floor(driftY / mesoPeriod) * mesoPeriod;
@@ -756,8 +781,36 @@ namespace FishMMO.Client
 				mesoAmplitude = WeatherDriver.MesoscaleAmplitude * driverWeight;
 				mesoAtCamera = air.Mesoscale * mesoAmplitude;
 				mesoContrast = WeatherDriver.MesoscaleContrast(air.Instability);
+				columnType = Mathf.Lerp(presetType, WeatherDriver.BaseColumnType(air.Instability), driverWeight);
+				towerGain = WeatherDriver.TowerGain(air.Instability) * driverWeight;
+				CloudTowerAtCamera = air.Tower;
+				stability = Mathf.Lerp(0.02f, 0.004f, Mathf.Clamp01(air.Instability));
 			}
 			cloudMesoscaleAtCamera = mesoAtCamera;
+			CloudColumnType = columnType;
+			CloudTowerGain = towerGain;
+			double towerPeriod = WeatherDriver.TowerMetres * WeatherDriver.TowerPeriodTiles;
+			Shader.SetGlobalVector(CloudColumnId, new Vector4(towerGain, WeatherDriver.TowerMetres, WeatherDriver.TowerPeriodTiles, columnType));
+			Shader.SetGlobalVector(CloudTowerDriftId, new Vector4(
+				(float)WrapMetres(driftX, towerPeriod), (float)WrapMetres(driftY, towerPeriod), Mathf.Max(0f, clouds.Carve), 0f));
+			Shader.SetGlobalInt(CloudTowerSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.TowerSeedMix)));
+			// What hangs below a column's base: the ground fog that rises into it, and the scud and
+			// rain haze under a wet one.
+			Shader.SetGlobalVector(CloudSubId, new Vector4(fog, cloudPrecipitation, 0f, 0f));
+			Shader.SetGlobalVector(CloudViewerId, new Vector4(viewerAt.x, viewerAt.y, viewerAt.z, 0f));
+			// The ground the clouds pass over: cloud gathers on the windward side of high terrain and
+			// clears in its lee, and the fog lies on the ground that is there. Rebuilt only when the
+			// viewer has moved a few hundred metres.
+			cloudTerrain ??= new CloudTerrainMap();
+			cloudTerrain.Update(viewerAt);
+			// Over, or round. The Froude number, U / (N h), says whether air meeting high ground
+			// climbs it or is split by it; U/N is the sky's half of that — how high this air can
+			// climb — and the shader sets it against the ground's height place by place. So a calm
+			// stable morning (2 m/s, N 0.02: a hundred metres) goes round every hill there is, and
+			// an unsettled windy afternoon (14 m/s, N 0.005: nearly three kilometres) pours over a
+			// mountain. The second figure is how far a blocked flow is turned aside.
+			CloudClimbHeight = Mathf.Max(1f, cloudWindSpeed) / Mathf.Max(0.001f, stability);
+			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, 1800f, 0f, 0f));
 			Shader.SetGlobalVector(CloudMesoId, new Vector4((float)mesoDriftX, (float)mesoDriftY, mesoAtCamera, mesoContrast));
 			Shader.SetGlobalVector(CloudMesoParamsId, new Vector4(mesoAmplitude, WeatherDriver.MesoscaleMetres, WeatherDriver.MesoscalePeriodTiles, 0f));
 			Shader.SetGlobalInt(CloudMesoSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.MesoscaleSeedMix)));
@@ -838,6 +891,15 @@ namespace FishMMO.Client
 				}
 				float top = bottom + band.Thickness;
 				layerBottom[i] = bottom;
+				// A column is as deep as a tower and, most places, as thin as a deck. Its noise must
+				// turn over on the scale of a cloud, not of the band — tied to seven kilometres of
+				// band a deck would be one value floor to ceiling, the flat slab again — so its
+				// vertical tile follows its horizontal one instead.
+				float verticalScale = Mathf.Max(0.25f, band.VerticalScale);
+				if (band.Column)
+				{
+					verticalScale = band.NoiseScale * 0.2f * verticalScale / Mathf.Max(1f, band.Thickness);
+				}
 
 				lowest = Mathf.Min(lowest, bottom);
 				highest = Mathf.Max(highest, top);
@@ -855,7 +917,7 @@ namespace FishMMO.Client
 				// through an unclamped slope there would swing a band from empty to full.
 				float response = ground ? 0f : Mathf.Clamp((ahead - behind) / 0.02f, 0f, 2f);
 				Vector2 bandGradient = coverGradient * response;
-				layerD[i] = new Vector4(band.Convection, bandGradient.x, bandGradient.y, Mathf.Max(0.25f, band.VerticalScale));
+				layerD[i] = new Vector4(band.Convection, bandGradient.x, bandGradient.y, verticalScale);
 				// This band's drift, wrapped to its own period so the float is exact and the wrap is
 				// invisible: 42 tiles along the wind (the warp's period, which the shape's and the
 				// lift's divide) stretched by the band's own stretch, 42 across, and the detail
@@ -869,7 +931,9 @@ namespace FishMMO.Client
 					(float)WrapMetres(driftAcross * scale, acrossPeriod),
 					(float)WrapMetres(driftX * scale, detailPeriod),
 					(float)WrapMetres(driftY * scale, detailPeriod));
-				layerF[i] = new Vector4(response, response > 1e-4f ? 1f : 0f, 0f, 0f);
+				// z marks a column; w is the thinnest its cloud gets — the deck, seven hundredths of
+				// the band — which is what the march's stride must not be able to step over.
+				layerF[i] = new Vector4(response, response > 1e-4f ? 1f : 0f, band.Column ? 1f : 0f, band.Column ? band.Thickness * 0.07f : 0f);
 				Color tint = band.ShadedTint;
 				layerTint[i] = new Vector4(tint.r, tint.g, tint.b, 1f);
 			}
@@ -895,7 +959,11 @@ namespace FishMMO.Client
 			// The shell the march runs through, and the deck a reprojection has to be right about.
 			CloudShellBottom = lowest == float.MaxValue ? 0f : lowest;
 			CloudShellTop = Mathf.Max(CloudShellBottom + 100f, highest);
-			CloudLayerCentre = bands.Count > 1 ? (bands[1].Bottom + bands[1].Top) * 0.5f : (CloudShellBottom + CloudShellTop) * 0.5f;
+			// The depth a reprojection is right about: the deck, which is where most cloud is. A
+			// column's middle is kilometres above anything usually there.
+			CloudLayerCentre = bands.Count > 1
+				? (bands[1].Column ? bands[1].Bottom + 600f : (bands[1].Bottom + bands[1].Top) * 0.5f)
+				: (CloudShellBottom + CloudShellTop) * 0.5f;
 			Shader.SetGlobalVector(CloudLayerId, new Vector4(CloudShellBottom, CloudShellTop, clouds.CurvatureRadiusKm * 1000f, cover));
 		}
 
@@ -904,6 +972,13 @@ namespace FishMMO.Client
 		{
 			return period <= 0.0 ? metres : metres - System.Math.Floor(metres / period) * period;
 		}
+
+		/// <summary>What every column starts from here: 0.1 a flat deck, 0.5 a heaped sky.</summary>
+		public float CloudColumnType { get; private set; }
+		/// <summary>0..1: how strongly a tower stands over the camera right now.</summary>
+		public float CloudTowerAtCamera { get; private set; }
+		/// <summary>How much of a tower the air allows on top of that, 0..0.6.</summary>
+		public float CloudTowerGain { get; private set; }
 
 		/// <summary>The formations' share of the cover at the camera, in cover units, for readouts.</summary>
 		public float CloudMesoscaleAtCamera => cloudMesoscaleAtCamera;
@@ -944,8 +1019,6 @@ namespace FishMMO.Client
 				TemporalBlend = clouds.TemporalBlend,
 			};
 			CloudFarDistance = clouds.MaxDistance;
-			CloudLodSharpness = Mathf.Max(0.05f, clouds.LodSharpness);
-			CloudMaxLod = clouds.MaxCloudLod;
 			cloudSettings = clouds;
 			if (!cloudsReady)
 			{
@@ -1212,7 +1285,7 @@ namespace FishMMO.Client
 			VolumetricCloudSettings cloudSettings = profile.Clouds;
 			Vector3 viewer = TargetCamera != null ? TargetCamera.transform.position : transform.position;
 			cloudShadows.Update(sunLeads ? sun : moon, profile.CloudMaterial, viewer, cloudSettings.ShadowAreaMeters,
-				cloudSettings.ShadowStrength, Mathf.Max(4, tier.CloudSteps / 4), tier.CloudShadows && DrawCloudShadows);
+				cloudSettings.ShadowStrength, 8 * MaxCloudLayers, tier.CloudShadows && DrawCloudShadows);
 		}
 
 		/// <summary>A directional light shining along −direction.</summary>

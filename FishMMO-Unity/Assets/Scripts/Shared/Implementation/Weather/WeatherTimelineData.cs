@@ -107,6 +107,92 @@ namespace FishMMO.Shared.Weather
 		}
 
 		public bool IsDead(uint tick) => tick >= DeathTick;
+
+		/// <summary>
+		/// What happens where this cell and another overlap, or false when they do not touch.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Cells move at their own speeds on their own headings, so they overtake and cross one
+		/// another — and until now nothing came of it: two storms slid through each other and the
+		/// weather between them was just the greater of the two. Where storms meet is where the
+		/// violence is. Air forced up along the boundary between two cells is what builds the
+		/// tallest towers, and that is where the lightning comes from.
+		/// </para>
+		/// <para>
+		/// A pure function of the two cells and the tick, like everything else about a cell: the
+		/// server and every client work out the same collision in the same place from the timeline
+		/// they already share, so not a byte is sent for it and no two machines disagree about
+		/// where the bolt came down. The strength is how deep the overlap goes, how fast the two
+		/// are moving against each other — a cell overtaking another at walking pace is a merger,
+		/// two crossing at speed is a squall line — and how alive both cells are.
+		/// </para>
+		/// </remarks>
+		public static bool TryCollide(in StormCell a, in StormCell b, uint tick, double tickDelta, out StormCollision collision)
+		{
+			collision = default;
+			float alive = a.EnvelopeAt(tick) * a.PeakIntensity * b.EnvelopeAt(tick) * b.PeakIntensity;
+			if (alive <= 0.001f || a.RadiusMeters <= 0f || b.RadiusMeters <= 0f)
+			{
+				return false;
+			}
+			Vector2 ca = a.CentreAt(tick, tickDelta), cb = b.CentreAt(tick, tickDelta);
+			float distance = Vector2.Distance(ca, cb);
+			float reach = a.RadiusMeters + b.RadiusMeters;
+			if (distance >= reach)
+			{
+				return false;
+			}
+			float smaller = Mathf.Min(a.RadiusMeters, b.RadiusMeters);
+			float overlap = Mathf.Clamp01((reach - distance) / smaller);
+			// How fast they move against each other. The meander is left out: it is a slow wobble
+			// about the track, not the track.
+			float closing = new Vector2(a.VelocityX - b.VelocityX, a.VelocityZ - b.VelocityZ).magnitude;
+			float violence = Mathf.Lerp(0.3f, 1f, Mathf.Clamp01(closing / 5f));
+
+			// The lens the two discs share: its middle along the line between the centres, and its
+			// half-width. One cell wholly inside the other is the inner cell.
+			Vector2 centre;
+			float radius;
+			if (distance <= Mathf.Abs(a.RadiusMeters - b.RadiusMeters) || distance < 1f)
+			{
+				centre = a.RadiusMeters < b.RadiusMeters ? ca : cb;
+				radius = smaller;
+			}
+			else
+			{
+				float along = (distance * distance + a.RadiusMeters * a.RadiusMeters - b.RadiusMeters * b.RadiusMeters) / (2f * distance);
+				centre = ca + (cb - ca) / distance * along;
+				radius = Mathf.Sqrt(Mathf.Max(0f, a.RadiusMeters * a.RadiusMeters - along * along));
+			}
+			collision = new StormCollision
+			{
+				Centre = centre,
+				// A little wider than the lens itself: the boundary between two storms is a zone.
+				Radius = Mathf.Max(60f, radius * 1.15f),
+				Intensity = Mathf.Clamp01(Mathf.Pow(overlap, 0.7f) * violence * alive),
+				Seed = unchecked(a.Seed * 0x9E3779B1u ^ b.Seed ^ ((uint)a.ID << 16) ^ b.ID),
+			};
+			return collision.Intensity > 0.01f;
+		}
+	}
+
+	/// <summary>Where two storm cells meet: a zone of towers, lightning and harder weather.</summary>
+	public struct StormCollision
+	{
+		public Vector2 Centre;
+		public float Radius;
+		/// <summary>0..1: how violent the meeting is.</summary>
+		public float Intensity;
+		/// <summary>Stable for the pair, for scheduling strikes.</summary>
+		public uint Seed;
+
+		/// <summary>How much of the collision reaches a position, 0..1.</summary>
+		public float InfluenceAt(Vector3 position)
+		{
+			float distance = Vector2.Distance(new Vector2(position.x, position.z), Centre);
+			return Intensity * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(Radius * 0.5f, Radius, distance)));
+		}
 	}
 
 	/// <summary>A scene-wide climate shift moving from one value to another.</summary>
@@ -139,7 +225,15 @@ namespace FishMMO.Shared.Weather
 		/// <summary>Seconds to go from bare to fully covered at full rate.</summary>
 		public const float SnowFillSeconds = 900f;
 		public const float WetFillSeconds = 120f;
+		/// <summary>Seconds a soaked ground takes to dry in still, cool, overcast air: the slowest it goes.</summary>
 		public const float DrySeconds = 900f;
+		/// <summary>
+		/// How much faster than real time the ground's clock runs. 1 in the game, where the world's
+		/// clock is the real one. A test bed that runs the sky at a hundred and eighty times real time
+		/// sets this to match, or the weather races past overhead while the puddles dry at the
+		/// speed of the wall clock and nothing ever seems to dry at all.
+		/// </summary>
+		public static float TimeScale = 1f;
 		public const float MeltSeconds = 1200f;
 		public const float DustFillSeconds = 1200f;
 		public const float DustClearSeconds = 3600f;
@@ -148,20 +242,41 @@ namespace FishMMO.Shared.Weather
 		/// Advances cover by <paramref name="seconds"/> under a frame. Snow melts above freezing;
 		/// ground dries when the rain stops; ash and sand settle and slowly clear.
 		/// </summary>
-		public void Integrate(in WeatherFrame frame, float temperature, float seconds)
+		/// <param name="sunlight">
+		/// 0 at night, 1 by day. What actually reaches the ground is worked out here from the
+		/// frame's own cloud, so a caller only says whether the sun is up.
+		/// </param>
+		public void Integrate(in WeatherFrame frame, float temperature, float seconds, float sunlight = 0.5f)
 		{
+			seconds *= Mathf.Max(0f, TimeScale);
 			if (seconds <= 0f)
 			{
 				return;
 			}
+			// What dries a ground and takes the snow off it: the sun that gets through the cloud,
+			// the warmth of the air, and the wind across it. It used to dry at one rate whatever
+			// the sky was doing — a quarter of an hour from soaked, under a noon sun or at midnight
+			// in the rain's own overcast alike — which read as the ground never drying at all,
+			// because a shower had usually come round again first. Now a wet road under a clear
+			// warm breezy noon is dry in about two minutes, and at night under cloud it takes the
+			// full quarter hour.
+			float sun = Mathf.Clamp01(sunlight) * (1f - Mathf.Clamp01(frame[WeatherChannel.CloudCover]) * 0.8f);
+			float wind = Mathf.Clamp01(frame[WeatherChannel.WindSpeed]);
+			// And the damp of the air itself: nothing dries into air that is already full.
+			float damp = Mathf.Clamp01(0.5f + frame[WeatherChannel.HumidityOffset] * 2.5f);
+			float evaporation = (1f + sun * 4f) * (1f + Mathf.Max(0f, temperature)) * (1f + wind * 0.8f) * Mathf.Lerp(1.3f, 0.55f, damp);
+
 			float snowRate = frame[WeatherChannel.SnowCoverRate];
-			float melt = temperature > 0f ? Mathf.Lerp(0.3f, 3f, Mathf.Clamp01(temperature)) : 0f;
+			// Snow goes above freezing, and — slowly — just below it in direct sun: that is what
+			// takes the snow off a south slope on a bright cold day.
+			float thaw = temperature > 0f ? Mathf.Lerp(0.3f, 3f, Mathf.Clamp01(temperature)) : 0f;
+			float melt = thaw * (0.6f + sun * 0.9f) + (temperature > -0.12f ? sun * 0.25f : 0f);
 			Snow = Mathf.Clamp01(Snow + seconds * (snowRate / SnowFillSeconds - melt / MeltSeconds));
 
 			float wetTarget = Mathf.Max(frame[WeatherChannel.WetnessTarget], melt > 0f && Snow > 0f ? 0.4f : 0f);
 			Wet = Wet < wetTarget
 				? Mathf.MoveTowards(Wet, wetTarget, seconds / WetFillSeconds)
-				: Mathf.MoveTowards(Wet, wetTarget, seconds * (1f + Mathf.Max(0f, temperature)) / DrySeconds);
+				: Mathf.MoveTowards(Wet, wetTarget, seconds * evaporation / DrySeconds);
 
 			Ash = Mathf.Clamp01(Ash + seconds * (frame[WeatherChannel.AshCoverRate] / DustFillSeconds - (frame[WeatherChannel.AshCoverRate] <= 0f ? 1f / DustClearSeconds : 0f)));
 			Sand = Mathf.Clamp01(Sand + seconds * (frame[WeatherChannel.SandCoverRate] / DustFillSeconds - (frame[WeatherChannel.SandCoverRate] <= 0f ? 1f / DustClearSeconds : 0f)));

@@ -176,7 +176,8 @@ namespace FishMMO.Client
 			{
 				float seconds = Mathf.Min(120f, (float)((now - timeline.CoverTick) * timeline.TickDelta));
 				WeatherSample sample = WeatherField.Sample(timeline, settings, scene, ViewerPosition(), now);
-				timeline.Cover.Integrate(sample.Frame, sample.Temperature, seconds);
+				double coverHours = WorldClock.Shared.HasAnchor ? WorldClock.Shared.WorldHoursAt(now) : 0;
+				timeline.Cover.Integrate(sample.Frame, sample.Temperature, seconds, SceneTime.IsDaylight(settings, coverHours) ? 1f : 0f);
 				timeline.CoverTick = now;
 			}
 		}

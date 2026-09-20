@@ -184,6 +184,33 @@ namespace FishMMO.Client
 				+ $"{(MeasuredAnyCloud >= 0f ? Pct(MeasuredAnyCloud) : "—")} any cloud at all");
 			text.AppendLine($"Stack · {active} of {count} band(s) drawing · {sky.CloudShellBottom:0}–{sky.CloudShellTop:0} m "
 				+ $"({(sky.CloudShellTop - sky.CloudShellBottom) / 1000f:0.00} km of sky) · deepest band {deepest:0} m");
+			// The columns: how far up the cloud of this sky gets. The same curve the shader uses.
+			float ColumnTop(float type)
+			{
+				float low = Mathf.Lerp(0.07f, 0.30f, Mathf.Clamp01(type * 2f));
+				return Mathf.Lerp(low, 1f, Mathf.Clamp01(type * 2f - 1f));
+			}
+			for (int i = 0; i < count; i++)
+			{
+				if (bands[i] == null || !bands[i].Column)
+				{
+					continue;
+				}
+				var bottoms = sky.CloudBandBottom;
+				float floor = bottoms != null && i < bottoms.Count && bottoms[i] > 0.001f ? bottoms[i] : bands[i].Bottom;
+				float depth = bands[i].Thickness;
+				text.AppendLine($"Columns · base {floor:0} m · most cloud to {floor + depth * ColumnTop(sky.CloudColumnType):0} m "
+					+ $"(type {sky.CloudColumnType:0.00}) · towers to {floor + depth * ColumnTop(Mathf.Clamp01(sky.CloudColumnType + sky.CloudTowerGain)):0} m"
+					+ $"{(sky.CloudTowerGain < 0.01f ? " — none, the field is not deciding the weather" : string.Empty)}");
+				// A tower is a few kilometres across and the bed's default clock carries the sky at a
+				// kilometre and a half a second: one crossing the camera is there and gone in two
+				// seconds, which looks like cloud swelling up and shrinking away. This says when.
+				text.AppendLine($"Terrain · this air climbs about {sky.CloudClimbHeight:0} m: ground lower than that the cloud goes over, "
+					+ "higher it goes round");
+				text.AppendLine($"Overhead · tower {Pct(sky.CloudTowerAtCamera)}"
+					+ $"{(sky.CloudTowerAtCamera > 0.3f ? " — a tower is crossing the camera now" : string.Empty)}");
+				break;
+			}
 			float threshold = ThresholdAt(clouds, sky.CloudCover);
 			text.AppendLine($"Noise cut · {threshold:0.000} at this cover, keeping about {Pct(FillForThreshold(threshold))} of the field "
 				+ $"(which runs 0.33–0.76)");

@@ -205,7 +205,7 @@ namespace FishMMO.Client
 			{
 				bool reseed = context.Timeline != null && context.Timeline.Revision != coverRevision;
 				coverMap.Update(context.Timeline, context.Settings, camera.transform.position, (uint)context.Tick,
-					context.Temperature, dt, context.Cover, reseed);
+					context.Temperature, dt, context.Cover, reseed, sunlight: context.IsDaylight ? 1f : 0f);
 				if (reseed)
 				{
 					coverRevision = context.Timeline.Revision;

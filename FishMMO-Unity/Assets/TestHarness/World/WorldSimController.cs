@@ -761,7 +761,11 @@ namespace FishMMO.TestHarness.World
 			if (coverTimer >= 1f)
 			{
 				timeline.Prune(tick);
-				timeline.Cover.Integrate(lastSample.Frame, lastSample.Temperature, coverTimer);
+				// The ground keeps the bed's clock, not the wall's: at the default rate the sky runs
+				// a hundred and eighty times real time, and a road that dried at the speed of the
+				// wall clock never seemed to dry at all.
+				WeatherCover.TimeScale = paused ? 1f : Mathf.Max(1f, TimeScale * 3600f);
+				timeline.Cover.Integrate(lastSample.Frame, lastSample.Temperature, coverTimer, DayNight == null || DayNight.DaylightNow ? 1f : 0f);
 				timeline.CoverTick = tick;
 				coverTimer = 0f;
 			}

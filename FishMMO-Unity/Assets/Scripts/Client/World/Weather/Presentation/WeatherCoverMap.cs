@@ -79,7 +79,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public void Update(WeatherTimeline timeline, WorldSceneSettings settings, Vector3 centre, uint tick,
 			float temperature, float deltaTime, in WeatherCover anchor, bool reseed,
-			int res = DefaultResolution, float sizeMeters = DefaultSizeMeters)
+			int res = DefaultResolution, float sizeMeters = DefaultSizeMeters, float sunlight = 0.5f)
 		{
 			Ensure(res, sizeMeters);
 			Recentre(centre, anchor);
@@ -93,9 +93,7 @@ namespace FishMMO.Client
 			// Each row is advanced by how long it has been since its own turn came round.
 			float sweepSeconds = sinceRow * resolution / Mathf.Max(1, rows);
 
-			var accumulator = new WeatherAccumulator();
-			timeline?.AccumulateSceneLayers(tick, ref accumulator);
-			WeatherFrame sceneLayers = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
+			WeatherFrame sceneLayers = BaseFrame(timeline, settings, centre, tick);
 			float texel = TexelMeters;
 			for (int i = 0; i < rows; i++)
 			{
@@ -106,7 +104,9 @@ namespace FishMMO.Client
 					var position = new Vector3(corner.x + (x + 0.5f) * texel, 0f, corner.y + (y + 0.5f) * texel);
 					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, tick);
 					int index = y * resolution + x;
-					cover[index].Integrate(frame, temperature, sweepSeconds);
+					frame.RetypeForTemperature(temperature);
+					frame.DeriveSurfaceRates();
+					cover[index].Integrate(frame, temperature, sweepSeconds, sunlight);
 					pixels[index] = Encode(cover[index]);
 				}
 			}
@@ -175,9 +175,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			var accumulator = new WeatherAccumulator();
-			timeline?.AccumulateSceneLayers(tick, ref accumulator);
-			WeatherFrame sceneLayers = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
+			WeatherFrame sceneLayers = BaseFrame(timeline, settings, new Vector3(corner.x + size * 0.5f, 0f, corner.y + size * 0.5f), tick);
 			float texel = TexelMeters;
 			for (int y = 0; y < resolution; y++)
 			{
@@ -229,6 +227,22 @@ namespace FishMMO.Client
 		/// reach it. The biome's background is left out on purpose — it is the same everywhere the
 		/// eye can see from here, and the server's anchor already carries it.
 		/// </summary>
+		/// <summary>
+		/// Everything but the storm cells, at the middle of the map: the scene's own layers AND the
+		/// drifting field's weather. This used to be the scene layers alone, so the ground under a
+		/// field's rain never got wet on the map and nothing the field did — rain, snow, a clearing
+		/// sky — ever reached it; only presets and cells did. The field turns over across tens of
+		/// kilometres and the map is a kilometre or two, so one reading at its middle serves.
+		/// </summary>
+		private static WeatherFrame BaseFrame(WeatherTimeline timeline, WorldSceneSettings settings, Vector3 centre, uint tick)
+		{
+			if (timeline == null)
+			{
+				return WeatherFrame.Clear;
+			}
+			return WeatherField.Sample(timeline, settings, default, centre, tick).Background;
+		}
+
 		private static WeatherFrame FrameAt(WeatherTimeline timeline, in WeatherFrame sceneLayers, Vector3 position, uint tick)
 		{
 			WeatherFrame frame = sceneLayers;

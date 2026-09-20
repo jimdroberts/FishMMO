@@ -34,6 +34,8 @@ namespace FishMMO.Client
 	/// </summary>
 	public static class SkySchedule
 	{
+		[System.ThreadStatic] private static List<StormCollision> collisionScratch;
+
 		public const double LightningSlotSeconds = 0.2;
 		public const double MeteorSlotSeconds = 0.25;
 
@@ -100,6 +102,38 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			// Where cells collide, whatever they were carrying: the strikes land in the zone the two
+			// share, and hard — a violent meeting is a strike every couple of seconds.
+			collisionScratch ??= new List<StormCollision>();
+			timeline.CollisionsAt(tick, collisionScratch);
+			for (int c = 0; c < collisionScratch.Count; c++)
+			{
+				StormCollision clash = collisionScratch[c];
+				for (long slot = first; slot <= last; slot++)
+				{
+					uint h = Hash(clash.Seed, (uint)slot);
+					if (Unit(h) >= clash.Intensity * 0.5f * (float)LightningSlotSeconds)
+					{
+						continue;
+					}
+					double time = (slot + Unit(Hash(h, 1))) * LightningSlotSeconds;
+					if (time < from || time >= to)
+					{
+						continue;
+					}
+					float angle = Unit(Hash(h, 2)) * Mathf.PI * 2f;
+					float distance = Mathf.Sqrt(Unit(Hash(h, 3))) * clash.Radius * 0.8f;
+					into.Add(new LightningStrike
+					{
+						Time = time,
+						Ground = new Vector3(clash.Centre.x + Mathf.Sin(angle) * distance, viewer.y - 2f, clash.Centre.y + Mathf.Cos(angle) * distance),
+						CloudHeight = Mathf.Lerp(1200f, 2400f, Unit(Hash(h, 4))),
+						Seed = h,
+						Intensity = Mathf.Lerp(0.8f, 1f, Unit(Hash(h, 5))),
+					});
+				}
+			}
+
 			for (int c = 0; c < timeline.Cells.Count; c++)
 			{
 				StormCell cell = timeline.Cells[c];

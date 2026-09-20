@@ -301,8 +301,15 @@ namespace FishMMO.Client
 		private static readonly int ShadowOriginId = Shader.PropertyToID("_FishCloudShadowOrigin");
 		private static readonly int ShadowRightId = Shader.PropertyToID("_FishCloudShadowRight");
 		private static readonly int ShadowUpId = Shader.PropertyToID("_FishCloudShadowUp");
+		private static readonly int ShadowRawId = Shader.PropertyToID("_FishCloudShadowRaw");
 		private RenderTexture cookie;
+		private RenderTexture raw;
+		private Vector2 drawnCentre = new Vector2(float.NaN, float.NaN);
+		private int sinceDrawn = int.MaxValue;
 		private float drawnCover = -1f;
+
+		/// <summary>The shadow as the light reads it, for a panel to show: what is on the ground should look like this.</summary>
+		public Texture Cookie => cookie;
 		private Light boundLight;
 		private Vector2 offset;
 
@@ -323,8 +330,11 @@ namespace FishMMO.Client
 			}
 			if (cookie == null)
 			{
-				cookie = new RenderTexture(256, 256, 0, RenderTextureFormat.R8) { name = "Cloud Shadows", wrapMode = TextureWrapMode.Clamp, useMipMap = false, hideFlags = HideFlags.DontSave };
+				cookie = new RenderTexture(256, 256, 0, RenderTextureFormat.R8) { name = "Cloud Shadows", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
 				cookie.Create();
+				raw = new RenderTexture(256, 256, 0, RenderTextureFormat.R8) { name = "Cloud Shadows (raw)", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
+				raw.Create();
+				sinceDrawn = int.MaxValue;
 			}
 			// The window is in the light's own plane, because that is the plane the light reads a
 			// cookie in. Snapped to a texel, so the shadow does not crawl as the camera moves.
@@ -341,7 +351,23 @@ namespace FishMMO.Client
 			cloudMaterial.SetVector(ShadowOriginId, centre);
 			cloudMaterial.SetVector(ShadowRightId, lightTransform.right);
 			cloudMaterial.SetVector(ShadowUpId, lightTransform.up);
-			Graphics.Blit(null, cookie, cloudMaterial, 3);
+			// Marched when the window moves, and otherwise every third frame: a cloud crosses one of
+			// these texels in about two seconds, and this is a quarter of a million rays. The window
+			// and the offset below are always this frame's, so what is drawn late is only the
+			// clouds' own drift, by a few centimetres.
+			var centreNow = new Vector2(local.x, local.y);
+			sinceDrawn++;
+			if (sinceDrawn >= 3 || centreNow != drawnCentre || raw == null)
+			{
+				Graphics.Blit(null, raw, cloudMaterial, 3);
+				// Softened, and faded to nothing at the window's edge: the sun's half degree makes a
+				// cloud's shadow ten metres soft from a kilometre up, and a clamped lookup would
+				// otherwise drag the window's last texel out to the horizon as streaks.
+				cloudMaterial.SetTexture(ShadowRawId, raw);
+				Graphics.Blit(null, cookie, cloudMaterial, 6);
+				drawnCentre = centreNow;
+				sinceDrawn = 0;
+			}
 
 			if (boundLight != light)
 			{
@@ -391,6 +417,12 @@ namespace FishMMO.Client
 				cookie.Release();
 				if (Application.isPlaying) Object.Destroy(cookie); else Object.DestroyImmediate(cookie);
 				cookie = null;
+			}
+			if (raw != null)
+			{
+				raw.Release();
+				if (Application.isPlaying) Object.Destroy(raw); else Object.DestroyImmediate(raw);
+				raw = null;
 			}
 		}
 	}

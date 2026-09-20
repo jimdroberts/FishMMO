@@ -35,6 +35,9 @@ namespace FishMMO.Shared.Weather
 		[Tooltip("Top of the band, in metres above the ground.")]
 		[Min(1f)] public float Top = 1400f;
 
+		[Tooltip("Makes this band a cloud column: one field from its base to its top, in which how far up the cloud gets is decided place by place. A little way up is a flat deck, a third of the way a heaped cumulus, the whole depth a tower — and they share a base and are the same cloud, so a tower rises out of a deck instead of sitting in a different layer above it. The Top is then the most a tower can reach, not where every cloud stops.")]
+		public bool Column = false;
+
 		[Tooltip("Whether this band's floor follows the weather's condensation level. Air rising off the ground condenses where it cools to its dew point, and that height is lower when the air is damp and higher when it is dry and warm — so a fair-weather deck sits high and a rainy one sits low. The band carries its own thickness with it.")]
 		public bool BaseFollowsCondensation = false;
 
@@ -123,7 +126,9 @@ namespace FishMMO.Shared.Weather
 			// room, the convection decides how much of it each column actually uses.
 			new CloudLayer
 			{
-				Name = "Cumulus", Bottom = 800f, Top = 3200f, BaseFollowsCondensation = true,
+				// A column: the deck, the heaps and the towers are one field from the condensation
+				// level to 7.8 km, and how far up each place gets is the cloud map's to say.
+				Name = "Cumulus", Bottom = 800f, Top = 7800f, Column = true, BaseFollowsCondensation = true,
 				NoiseScale = 12000f, DetailScale = 380f, DetailStrength = 0.45f,
 				BaseSoftness = 0.06f, TopSoftness = 0.65f, Convection = 0.8f,
 				Density = 1f, CoverageScale = 1f, WindScale = 1f,

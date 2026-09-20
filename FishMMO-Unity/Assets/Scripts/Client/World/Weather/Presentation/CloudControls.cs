@@ -73,10 +73,6 @@ namespace FishMMO.Client
 				"How far the fine detail is used in full. The detail is finer than the march's own steps, so past a point it is undersampled and turns into speckle."));
 			parent.Add(Slider("Detail fades over (m)", 100f, 40000f, clouds.DetailFadeRange, v => clouds.DetailFadeRange = v,
 				"Metres over which that detail thins away to nothing."));
-			parent.Add(Slider("Far detail", 0.25f, 4f, clouds.LodSharpness, v => clouds.LodSharpness = v,
-				"How much detail the far sky keeps. Each sample stands for a patch of world — as wide as the march's step, or as wide as the pixel's cone has opened, whichever is more — and the noise is read at a mip that size, so distant cloud is averaged instead of point-sampled and stops fizzing while the near sky keeps its edges. 1 matches the mip to the sample. Higher is sharper and starts to shimmer; lower is smoother and cheaper."));
-			parent.Add(Slider("Coarsest mip", 0f, 6f, clouds.MaxCloudLod, v => clouds.MaxCloudLod = v,
-				"How far down the mip chain the far sky may go. The shape volume is 128 a side, so past about 5 it has averaged itself to one grey."));
 			parent.Add(Slider("Draw distance (m)", 5000f, 200000f, clouds.MaxDistance, v => clouds.MaxDistance = v,
 				"How far the clouds are marched."));
 
@@ -115,6 +111,28 @@ namespace FishMMO.Client
 				"How dark the ground goes under a cloud."));
 			parent.Add(Slider("Shadow area (m)", 200f, 12000f, clouds.ShadowAreaMeters, v => clouds.ShadowAreaMeters = v,
 				"How much ground the shadow cookie covers. Smaller is sharper and reaches less far."));
+			// The shadow as the light is handed it. What is on the ground should be this picture laid
+			// out around the camera: if this looks like the clouds and the ground does not, the fault
+			// is in how the light reads it; if this is speckle, the fault is in how it is marched.
+			// Three rounds of fixes to the shadow were made without ever looking at it.
+			var cookieView = new Image { scaleMode = ScaleMode.ScaleToFit };
+			cookieView.style.width = 256;
+			cookieView.style.height = 256;
+			cookieView.style.marginTop = 4;
+			cookieView.style.marginBottom = 4;
+			cookieView.style.backgroundColor = new Color(0f, 0f, 0f, 0.35f);
+			cookieView.tooltip = "The cloud shadow cookie: white is full sun, dark is under cloud, the camera is at the middle and the square is the shadow area across. Up is the sun light's own up axis.";
+			cookieView.schedule.Execute(() =>
+			{
+				SkySystem sky = SkySystem.Instance;
+				Texture cookie = sky != null ? sky.CloudShadowCookie : null;
+				if (cookieView.image != cookie)
+				{
+					cookieView.image = cookie;
+				}
+				cookieView.MarkDirtyRepaint();
+			}).Every(250);
+			parent.Add(cookieView);
 			parent.Add(Toggle("God rays", SkySystem.DrawGodRays, v => SkySystem.DrawGodRays = v,
 				"Shafts of light through broken cloud, and around a body during an eclipse."));
 

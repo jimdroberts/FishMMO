@@ -183,7 +183,7 @@ namespace FishMMO.Client
 				// and a half-resolution march has pixels twice as wide as the display's.
 				float m11 = Mathf.Abs(cameraData.GetProjectionMatrix().m11);
 				float spread = m11 > 1e-4f ? 2f / (m11 * height) : 0f;
-				Shader.SetGlobalVector(LodParamsId, new Vector4(spread, sky.CloudMaxLod, 1f / sky.CloudLodSharpness, 0f));
+				Shader.SetGlobalVector(LodParamsId, new Vector4(spread, 4f, 1f, sky.CloudFarDistance));
 				bool temporal = tier.Temporal && historyValid;
 				material.SetVector(TemporalId, new Vector4(temporal ? tier.TemporalBlend : 0f, temporal ? 1f : 0f, sky.CloudLayerCentre, 0f));
 

@@ -349,9 +349,44 @@ namespace FishMMO.Shared.Weather
 			return air.Mesoscale * MesoscaleAmplitude;
 		}
 
+		// ── Columns ───────────────────────────────────────────────────
+		// A cloud is one column of air from the condensation level up, and what differs from place
+		// to place is how far up it gets: a few hundred metres makes a deck, a couple of kilometres a
+		// heap, the whole depth a tower. That height is a property of the *place* — the deck, the
+		// heap and the tower share a base and are the same field — so it is a map, not a layer.
+		// This is the map's sparse part: where, within a sky, the air goes all the way up.
+
+		/// <summary>Metres one tile of the tower noise covers: towers are a few kilometres across.</summary>
+		public const float TowerMetres = 9000f;
+		/// <summary>The lattice repeats every this many tiles, so the renderer can wrap its drift.</summary>
+		public const int TowerPeriodTiles = 16;
+		/// <summary>Mixed into the world seed for the tower lattice; the shader is handed the mix.</summary>
+		public const uint TowerSeedMix = 0x2C1B3C6Du;
+
+		/// <summary>
+		/// 0..1: how strongly a tower wants to stand at a drifted position. Sparse on purpose — most
+		/// of a sky is deck or heap and only the peaks of this go up. Computed identically by
+		/// <c>FishCloudTower</c> in FishCloudVolume.hlsl; change one and change the other.
+		/// </summary>
+		public static float Tower(uint worldSeed, double driftedX, double driftedY)
+		{
+			float n = PeriodicNoise(driftedX / TowerMetres, driftedY / TowerMetres, TowerPeriodTiles, worldSeed ^ TowerSeedMix);
+			return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.6f, 0.85f, n));
+		}
+
+		/// <summary>How much of a tower the air allows: none in stable air, most of the way in unstable.</summary>
+		public static float TowerGain(float instability) => Mathf.Lerp(0.05f, 0.6f, Mathf.Clamp01(instability));
+
+		/// <summary>The type every column starts from before its tower: 0.1 a flat deck, 0.5 a heaped sky.</summary>
+		public static float BaseColumnType(float instability) => Mathf.Lerp(0.1f, 0.5f, Mathf.Clamp01(instability));
+
 		/// <summary>What the air is doing at a place and a moment.</summary>
 		public struct Synoptic
 		{
+			/// <summary>0..1: how strongly a tower stands here. The rain and the lightning come out of these.</summary>
+			public float Tower;
+			/// <summary>0 a flat deck, 0.5 a heap, 1 a tower through the whole depth: how tall the column here grows.</summary>
+			public float ColumnType;
 			/// <summary>−1..1: how much the local formation adds to or takes from the cover here.</summary>
 			public float Mesoscale;
 			/// <summary>−1 the middle of a deep low, +1 a settled high.</summary>
@@ -402,6 +437,8 @@ namespace FishMMO.Shared.Weather
 			return new Synoptic
 			{
 				Mesoscale = Mesoscale(worldSeed, driftedX, driftedY, instability),
+				Tower = Tower(worldSeed, driftedX, driftedY),
+				ColumnType = Mathf.Clamp01(BaseColumnType(instability) + Tower(worldSeed, driftedX, driftedY) * TowerGain(instability)),
 				LocalTime01 = Mathf.Repeat(localTime01, 1f),
 				Pressure = pressure,
 				Humidity = humidity,
@@ -409,6 +446,31 @@ namespace FishMMO.Shared.Weather
 				Instability = instability,
 				Wind = PrevailingWind(latitudeDegrees) * PrevailingSpeed(worldSeed, latitudeDegrees, worldSeconds),
 			};
+		}
+
+		/// <summary>
+		/// The same air over a particular place: a wet place makes it damper and a dry one drier.
+		/// </summary>
+		/// <remarks>
+		/// The field knows nothing about the ground it passes over, so a desert and a rainforest
+		/// under the same patch of it had exactly the same chance of cloud, rain and fog. The
+		/// place's own humidity — its biome and climate, plus what its world's water and heat add —
+		/// leans on the air here: a quarter of the range either way, which is enough to make a
+		/// desert's fronts pass over mostly dry and a jungle's afternoon towers rain nearly daily,
+		/// without ever letting the ground overrule the weather. Instability goes with it, since
+		/// damp air is what a tower is built out of. Both sides read the same climate from the same
+		/// assets, so this stays a pure function and costs nothing on the wire.
+		/// </remarks>
+		/// <param name="localHumidity">The place's humidity, −1 parched to +1 sodden.</param>
+		public static Synoptic OverPlace(in Synoptic air, float localHumidity)
+		{
+			Synoptic local = air;
+			float before = 0.4f + air.Humidity * 0.6f;
+			local.Humidity = Mathf.Clamp01(air.Humidity + Mathf.Clamp(localHumidity, -1f, 1f) * 0.25f);
+			float after = 0.4f + local.Humidity * 0.6f;
+			local.Instability = Mathf.Clamp01(air.Instability * after / Mathf.Max(0.01f, before));
+			local.ColumnType = Mathf.Clamp01(BaseColumnType(local.Instability) + air.Tower * TowerGain(local.Instability));
+			return local;
 		}
 
 		// ── What that looks like ──────────────────────────────────────
@@ -476,22 +538,36 @@ namespace FishMMO.Shared.Weather
 			// A damp low hangs its cloud base low; dry high air lifts it.
 			frame[WeatherChannel.CloudBase] = Mathf.Clamp01(0.8f - air.Humidity * 0.4f + air.Pressure * 0.15f);
 
-			// Rain only once the air is both damp and unsettled, and only in proportion.
-			// The gate and the ramp are set from the field's measured spread — humidity runs p50 0.51,
-			// p90 0.66, max 0.85 — so that real rain is reachable at all. Gated at 0.62 over a 0.38
-			// ramp, as it was first written, the wettest air in the world produced a drizzle and it
-			// never once rained hard.
-			// Under the bank, not in the gap: the formation leans on the gate a little, so a shower
-			// falls out of the mass overhead rather than evenly over a sky that is half clear.
-			float wet = Mathf.Clamp01((air.Humidity + air.Mesoscale * 0.06f - 0.55f) / 0.25f);
-			float precipitation = Mathf.Clamp01(wet * (0.3f + air.Instability * 0.7f));
+			// What falls, and from what. Measured over a simulated year (memory/tools/driverstats.py,
+			// a port of this file): as first written, lightning fired 0.00% of the year — its gate
+			// sat at an instability of 0.72 and instability never gets past 0.71 — hail was never
+			// emitted at all, heavy rain fell under 1% of the time and thick fog never formed. The
+			// weather was cloud and the odd drizzle. These gates are set from the field's measured
+			// spread (humidity p50 0.50 / p90 0.67; instability p50 0.24 / p90 0.44) to give, at mid
+			// latitudes: rain about a third of the time, steady rain a tenth, heavy 2-3%; thunder
+			// 3-4% of the year and nearly all of it under towers in summer; hail about one hour in
+			// two hundred; fog on 8-17% of the clock with real thick-fog mornings.
+			//
+			// Two sources. Frontal rain: damp air, in proportion to how unsettled it is. And the
+			// convective shower — a tower standing in unsettled air rains on its own account, which
+			// is what makes a summer afternoon's isolated downpour, and is where the thunder is.
+			float wet = Mathf.Clamp01((air.Humidity + air.Mesoscale * 0.06f - 0.52f) / 0.22f);
+			float convective = air.Tower * Mathf.Clamp01((air.Instability - 0.22f) / 0.30f);
+			float precipitation = Mathf.Clamp01(
+				wet * (0.3f + air.Instability * 0.7f) * Mathf.Lerp(0.6f, 1.6f, air.Tower)
+				+ convective * 0.55f * Mathf.Clamp01((air.Humidity - 0.35f) / 0.2f));
+			// Hail wants the strongest towers in properly unstable air: the updraught has to hold a
+			// stone up long enough to grow it.
+			float hail = Mathf.Clamp01((convective - 0.75f) / 0.25f) * Mathf.Clamp01((air.Instability - 0.4f) / 0.2f) * precipitation;
 			frame[WeatherChannel.Precipitation] = precipitation;
 			if (precipitation > 0f)
 			{
-				frame[WeatherChannel.DropSize] = Mathf.Clamp01(0.25f + air.Instability * 0.6f);
+				float hailShare = Mathf.Clamp01(hail / Mathf.Max(0.01f, precipitation));
+				frame[WeatherChannel.DropSize] = Mathf.Clamp01(0.25f + air.Instability * 0.6f + hailShare * 0.3f);
 				// Left as water here. The model retypes it for the temperature where it falls, which
-				// is the one place that decision belongs.
-				frame[WeatherChannel.RainWeight] = 1f;
+				// is the one place that decision belongs; the hail is hail whatever the ground is.
+				frame[WeatherChannel.RainWeight] = 1f - hailShare;
+				frame[WeatherChannel.HailWeight] = hailShare;
 			}
 
 			frame[WeatherChannel.WindSpeed] = Mathf.Clamp01(air.Wind.magnitude / 30f);
@@ -503,11 +579,17 @@ namespace FishMMO.Shared.Weather
 			// It must not also be asked for high pressure: humidity here is *anti*-correlated with
 			// pressure by construction, so "humid and settled" is a condition that cannot occur, and
 			// asking for it meant fog never formed once in a simulated week.
+			// It builds through the night and burns off by mid-morning, so the night counts as well
+			// as the dawn; and light rain does not clear a fog, it only thins it.
 			float still = Mathf.Clamp01(1f - (air.Wind.magnitude - 4f) / 10f);
 			float dawn = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(air.LocalTime01 - 0.25f + 0.5f, 1f) - 0.5f) * 5f);
-			frame[WeatherChannel.FogDensity] = Mathf.Clamp01((air.Humidity - 0.5f) / 0.35f) * still * (0.25f + dawn * 0.75f) * (1f - precipitation);
+			float night = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(air.LocalTime01 - 0.15f + 0.5f, 1f) - 0.5f) * 2.6f);
+			frame[WeatherChannel.FogDensity] = Mathf.Clamp01((air.Humidity - 0.42f) / 0.3f) * Mathf.Clamp01(still * 1.3f)
+				* (0.2f + Mathf.Max(dawn, night * 0.7f) * 0.8f) * (1f - precipitation * 0.7f);
 
-			frame[WeatherChannel.LightningRate] = Mathf.Clamp01((air.Instability - 0.72f) / 0.28f) * precipitation;
+			// Lightning is the tower's: a strong convective column that is actually raining. Gated on
+			// instability alone, at 0.72, it could not fire — the field never gets there.
+			frame[WeatherChannel.LightningRate] = Mathf.Clamp01(convective * 1.25f - 0.25f) * Mathf.Clamp01(precipitation * 3f);
 			frame[WeatherChannel.TemperatureOffset] = air.Temperature;
 			frame[WeatherChannel.HumidityOffset] = (air.Humidity - 0.5f) * 0.4f;
 			return frame;

@@ -180,6 +180,30 @@ namespace FishMMO.Shared.Weather
 			}
 		}
 
+		/// <summary>
+		/// Every place two of this scene's cells are colliding at a tick, into <paramref name="into"/>
+		/// (cleared first). A dozen cells is sixty-six pairs and nearly all of them are rejected on
+		/// distance alone.
+		/// </summary>
+		public void CollisionsAt(uint tick, List<StormCollision> into)
+		{
+			into.Clear();
+			if (SceneMode != WeatherSceneMode.Own)
+			{
+				return;
+			}
+			for (int i = 0; i < Cells.Count; i++)
+			{
+				for (int j = i + 1; j < Cells.Count; j++)
+				{
+					if (StormCell.TryCollide(Cells[i], Cells[j], tick, TickDelta, out StormCollision collision))
+					{
+						into.Add(collision);
+					}
+				}
+			}
+		}
+
 		/// <summary>Forgets finished removals and dead cells. Both sides run it, so they stay equal without messages.</summary>
 		public void Prune(uint tick)
 		{

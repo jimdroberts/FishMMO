@@ -80,8 +80,8 @@ namespace FishMMO.Client
 		public bool TerrainSnowDisplacement = false;
 
 		public static WeatherTierSettings Performant() => new WeatherTierSettings { Particles = 3000, BoxSize = 18f, OcclusionResolution = 48, OcclusionTexelMeters = 2f, OcclusionRaysPerFrame = 256, StarCubemapSize = 256, MeteorBudget = 16, Asteroids = false, ReflectionResolution = 64, Curtains = 3, CloudShadows = false, CloudResolution = 0.25f, CloudSteps = 28, CloudDetail = 0f, CloudTemporal = true, GodRays = false, TerrainSnowDisplacement = false };
-		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, CloudShadows = true, CloudResolution = 0.5f, CloudSteps = 56, CloudDetail = 0.6f, CloudTemporal = true, GodRays = true, TerrainSnowDisplacement = false };
-		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, CloudShadows = true, CloudResolution = 0.6f, CloudSteps = 96, CloudDetail = 1f, CloudTemporal = true, GodRays = true, TerrainSnowDisplacement = true };
+		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, CloudShadows = true, CloudResolution = 0.4f, CloudSteps = 48, CloudDetail = 0.6f, CloudTemporal = true, GodRays = true, TerrainSnowDisplacement = false };
+		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, CloudShadows = true, CloudResolution = 0.5f, CloudSteps = 72, CloudDetail = 1f, CloudTemporal = true, GodRays = true, TerrainSnowDisplacement = true };
 	}
 
 	/// <summary>
@@ -104,7 +104,7 @@ namespace FishMMO.Client
 		[Tooltip("How soft a cloud's edge is: the width of the band where the noise thins to nothing. Clouds are fog, so this wants to be generous.")]
 		[Range(0.01f, 0.4f)] public float EdgeSoftness = 0.14f;
 		[Tooltip("Metres over which distance turns a cloud into haze. Smaller means the far sky greys out sooner.")]
-		[Min(2000f)] public float HazeDistance = 20000f;
+		[Min(2000f)] public float HazeDistance = 28000f;
 		[Tooltip("How far the shape lookup is bent to stop the noise repeating. The shape volume wraps, so without this a band tiles visibly; too much and the warp field's own structure is stamped onto the clouds as combed, hairy edges, because the lookup then moves faster from the warp than it does from going anywhere. Around 0.17 keeps the warp to about a quarter of the lookup's own motion. Zero turns it off and brings the tiling back.")]
 		[Range(0f, 0.5f)] public float ShapeWarp = 0.17f;
 		[Tooltip("How much the sky is allowed to tilt toward the weather that is coming. A front is a slope in cloud rather than a level of it, and this is what lets cloud arrive from upwind instead of appearing everywhere at once. Zero turns it off and the whole sky takes one cover again. It only applies where the drifting weather field is what decides the weather.")]
@@ -114,10 +114,8 @@ namespace FishMMO.Client
 		[Tooltip("Metres over which that detail fades away entirely. Beyond it a cloud is its shape alone, which is what distance does to one anyway.")]
 		[Min(100f)] public float DetailFadeRange = 9000f;
 
-		[Tooltip("How much cloud detail the far sky is allowed to keep. The march reads the noise at a mip chosen from how much world one sample stands for, so distant cloud is averaged rather than point-sampled — which is what stops it fizzing while the near sky keeps its edges. 1 filters to exactly what the sampling can carry, which is correct and slightly flattens the far sky; higher keeps more contrast and starts to shimmer. The near sky is unaffected at any setting.")]
-		[Range(0.25f, 4f)] public float LodSharpness = 1f;
-		[Tooltip("The coarsest mip the shape volume may be read at. Past about 5 the 128-cubed volume has averaged down to a flat grey and the far sky goes with it.")]
-		[Range(0f, 6f)] public float MaxCloudLod = 5f;
+		[Tooltip("How hard the cauliflower is carved into a cloud: a second, finer read of the shape volume that eats the body back to its billows, harder toward the top of a column where a real cloud is most broken up. 0 leaves smooth masses; 1 is the shipped look; above that the cloud starts to come apart.")]
+		[Range(0f, 2f)] public float Carve = 1f;
 		[Tooltip("Optical density: higher is thicker and darker inside. 1 is about three hundredths a metre of extinction, which is real cloud: a 300 m heap is opaque, a 60 m wisp lets a fifth of the light through, and an edge fades over the tens of metres it has. It used to be read as whole units a metre, which made every edge solid within a single step and the sky a thresholded noise field.")]
 		[Range(0.05f, 4f)] public float Density = 0.5f;
 		[Tooltip("Steps toward the sun when lighting a point in the cloud.")]
@@ -132,8 +130,8 @@ namespace FishMMO.Client
 		[ColorUsage(false, false)] public Color ShadedTint = new Color(0.62f, 0.68f, 0.82f);
 		[Tooltip("How much of that tint a fair-weather underside takes. A storm takes more.")]
 		[Range(0f, 1f)] public float ShadedTintStrength = 0.55f;
-		[Tooltip("How far the clouds are marched, in metres.")]
-		[Min(1000f)] public float MaxDistance = 90000f;
+		[Tooltip("How far the clouds are drawn, in metres. They dissolve over the last quarter of it, and the haze is full by four fifths of it, so the sky ends in the colour of the horizon and not on an edge. It was 90 km: haze had turned a cloud flat by 20, so the other 70 were marched at full cost — along the longest rays in the frame — to draw a smear. A deck a kilometre up is three degrees above the horizon at 20 km; raise this only if a distant tower has to stand on the skyline.")]
+		[Min(1000f)] public float MaxDistance = 44000f;
 		[Tooltip("How much the last frame is kept when the clouds are steadied.")]
 		[Range(0f, 0.98f)] public float TemporalBlend = 0.9f;
 		[Tooltip("How dark the ground goes under a cloud.")]

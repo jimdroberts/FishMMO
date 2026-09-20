@@ -30,6 +30,7 @@ namespace FishMMO.TestHarness.World.Editor
 		public const string GeneratedFolder = "Assets/TestHarness/World/Generated";
 		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string TerrainDataPath = GeneratedFolder + "/World Sim Hill.asset";
+		private const string MountainDataPath = GeneratedFolder + "/World Sim Mountain.asset";
 		private const string TerrainMaterialPath = "Assets/Prefabs/Client/Materials/Ground/Weather Terrain.mat";
 
 		private static readonly string[] PresetOrder =
@@ -97,6 +98,7 @@ namespace FishMMO.TestHarness.World.Editor
 			// with its own snow that lifts the ground it lies on — and none of that is exercised by
 			// boxes.
 			BuildTerrain();
+			BuildMountain();
 
 			// A closed house: walls, a door gap, a roof, and a shelter volume inside.
 			var house = new GameObject("House");
@@ -264,6 +266,69 @@ namespace FishMMO.TestHarness.World.Editor
 			else
 			{
 				Debug.LogWarning($"[World Sim] {TerrainMaterialPath} is missing, so the hill uses Unity's own terrain material and shows no weather. Weather Tools → Weather-proof terrain creates it.");
+			}
+		}
+
+		/// <summary>
+		/// A mountain to the north, tall enough to stand through the cloud deck, so what the terrain
+		/// does to the sky can be seen: cloud gathering on its windward flank and clearing in its lee,
+		/// and the fog lying on its slopes instead of at sea level.
+		/// </summary>
+		/// <remarks>
+		/// Due north of the origin on purpose. At the bed's default latitude the trades blow out of
+		/// the east, so looking north from the origin the mountain is seen side-on to the wind: the
+		/// windward flank is on the right and the lee on the left, and the difference between them is
+		/// across the frame rather than hidden behind the peak. Its summit is at 1600 m — the deck's
+		/// base moves between about 500 and 1000 m with the weather, so the peak is always through
+		/// it — and its middle is 3.2 km out, inside the bed camera's five-kilometre far plane.
+		/// </remarks>
+		private static void BuildMountain()
+		{
+			const int Resolution = 257;
+			const float Size = 4400f;
+			const float Height = 1600f;
+			TerrainData data = AssetDatabase.LoadAssetAtPath<TerrainData>(MountainDataPath);
+			if (data == null)
+			{
+				data = new TerrainData
+				{
+					heightmapResolution = Resolution,
+					size = new Vector3(Size, Height, Size),
+				};
+				var heights = new float[Resolution, Resolution];
+				for (int z = 0; z < Resolution; z++)
+				{
+					for (int x = 0; x < Resolution; x++)
+					{
+						float u = (x / (float)(Resolution - 1)) * 2f - 1f;
+						float v = (z / (float)(Resolution - 1)) * 2f - 1f;
+						// A massif a little longer north to south than it is wide, so it stands
+						// broadside to an easterly.
+						float distance = Mathf.Sqrt(u * u / (0.8f * 0.8f) + v * v);
+						float mound = Mathf.Cos(Mathf.Clamp01(distance) * Mathf.PI) * 0.5f + 0.5f;
+						// Ridges and gullies, stronger toward the top; nothing at the rim, so it meets
+						// the flat ground cleanly.
+						float ridged = 1f - Mathf.Abs(Mathf.PerlinNoise(u * 3.1f + 7.3f, v * 3.1f + 2.9f) * 2f - 1f);
+						float fine = Mathf.PerlinNoise(u * 9.7f + 1.1f, v * 9.7f + 5.3f);
+						float shape = Mathf.Pow(mound, 1.35f);
+						heights[z, x] = Mathf.Clamp01(shape * (0.72f + 0.22f * ridged + 0.06f * fine));
+					}
+				}
+				data.SetHeights(0, 0, heights);
+				AssetDatabase.CreateAsset(data, MountainDataPath);
+			}
+
+			GameObject terrainObject = Terrain.CreateTerrainGameObject(data);
+			terrainObject.name = "Terrain Mountain";
+			terrainObject.transform.position = new Vector3(-Size * 0.5f, -1f, 1000f);
+			var terrain = terrainObject.GetComponent<Terrain>();
+			// Drawn to the far plane at full detail: it is the one distant thing in the bed.
+			terrain.heightmapPixelError = 8f;
+			terrain.basemapDistance = 6000f;
+			Material material = AssetDatabase.LoadAssetAtPath<Material>(TerrainMaterialPath);
+			if (material != null)
+			{
+				terrain.materialTemplate = material;
 			}
 		}
 

@@ -70,6 +70,8 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 float maxDistance = isSky ? _FishCloudMarchParams.w : depth / max(1e-4, dot(direction, -UNITY_MATRIX_V[2].xyz));
 
                 float jitter = Jitter(input.uv * _ScreenParams.xy, _FishCloudMarchParams.z);
+                // The world is fogged by the pipeline already; the volume's ground fog is for the sky.
+                FishCloudGroundFogScale = isSky ? 1.0 : 0.0;
                 float cloudDistance;
                 float4 result = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, maxDistance, jitter,
                     (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance);
@@ -239,8 +241,13 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 float3 origin = _FishCloudShadowOrigin.xyz + _FishCloudShadowRight.xyz * offset.x + _FishCloudShadowUp.xyz * offset.y;
                 // Slide down that ray to the ground, so the march always starts under the clouds.
                 origin -= toSun * (origin.y / max(0.02, toSun.y));
-                float jitter = frac(sin(dot(input.uv, float2(12.9898, 78.233))) * 43758.5453);
-                float density = FishCloudShadowDepth(origin, toSun, (int)max(2.0, _FishCloudShadowArea.w), jitter, _FishCloudShadowArea.x);
+                // The same offset for every texel, on purpose. Each texel's depth is a handful of
+                // samples, and with a random offset per texel the estimate differs texel to texel
+                // wherever the cloud is translucent — which, at real extinction, is most of any
+                // cloud. That variance is what the "scattered dots" were: not the shadow of anything,
+                // just the error of the estimate, redrawn identically every frame. A shared offset
+                // makes the error the same next door, so what is left is the shape of the cloud.
+                float density = FishCloudShadowDepth(origin, toSun, (int)max(2.0, _FishCloudShadowArea.w), 0.5, _FishCloudShadowArea.x);
                 // A cookie: 1 in full sun, darker under a cloud, never black — what the ground still
                 // gets from the sky is the ambient term's job, not the cookie's. How dark is the
                 // profile's shadow strength, which used to be handed to the presenter and then never
@@ -396,6 +403,60 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 float3 d = SAMPLE_TEXTURE2D(_FishGodRayBuffer, sampler_FishGodRayBuffer, input.uv + float2(texel.x, texel.y)).rgb;
                 float3 rays = (a + b + c + d) * 0.25;
                 return float4(rays * _FishGodRayColor.rgb * _FishGodRayColor.a, 1.0);
+            }
+            ENDHLSL
+        }
+
+        // ── 6: soften the shadow and end it at the window's edge ──
+        // Last in the file on purpose: the passes are called by number, and anything put before the
+        // light shafts would renumber them.
+        // The sun is half a degree across, so the shadow of an edge a kilometre up is ten metres
+        // soft on the ground; and the window is a square that follows the camera, whose last texel
+        // a clamped lookup would otherwise smear out to the horizon as streaks.
+        Pass
+        {
+            Name "CloudShadowSoften"
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+
+            TEXTURE2D(_FishCloudShadowRaw);
+            SAMPLER(sampler_FishCloudShadowRaw);
+            float4 _FishCloudShadowRaw_TexelSize;
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                output.uv = GetFullScreenTriangleTexCoord(input.vertexID);
+                return output;
+            }
+
+            float4 Frag(Varyings input) : SV_Target
+            {
+                float2 texel = _FishCloudShadowRaw_TexelSize.xy;
+                float sum = 0.0;
+                float total = 0.0;
+                [unroll] for (int x = -2; x <= 2; x++)
+                {
+                    [unroll] for (int y = -2; y <= 2; y++)
+                    {
+                        float weight = (3.0 - abs(x)) * (3.0 - abs(y));
+                        sum += SAMPLE_TEXTURE2D_LOD(_FishCloudShadowRaw, sampler_FishCloudShadowRaw, input.uv + float2(x, y) * texel, 0).r * weight;
+                        total += weight;
+                    }
+                }
+                float shadow = sum / total;
+                float2 toEdge = min(input.uv, 1.0 - input.uv);
+                float inside = saturate(min(toEdge.x, toEdge.y) / 0.06);
+                return lerp(1.0, shadow, inside);
             }
             ENDHLSL
         }
