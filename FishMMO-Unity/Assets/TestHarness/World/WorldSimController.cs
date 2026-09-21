@@ -36,7 +36,6 @@ namespace FishMMO.TestHarness.World
 	{
 		[Header("Scene")]
 		public Camera Camera;
-		public Light Sun;
 		public WorldDayNightCycle DayNight;
 		public WorldSceneSettings Settings;
 

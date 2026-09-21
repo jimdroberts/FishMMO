@@ -53,11 +53,13 @@ namespace FishMMO.Shared
 		[Tooltip("Enable/Disable the day night cycle.")]
 		public bool DayNightCycle = true;
 
+		// No sun and no moon here. This component says when and where a scene is; the solar system
+		// says where that puts its sun and moons, and the client's SkySystem makes the lights and
+		// drives them. It used to carry a Sun Light and a Moon Light — assigned, or found in the scene
+		// by their names — and hand them to the sky to be driven. That made every scene place two
+		// lights that did nothing of their own, on a component that also runs on the server, where a
+		// light means nothing at all.
 		[Header("Sky")]
-		[Tooltip("The sun's directional light. Empty: the scene's sun light (Lighting settings), or a directional light named Sun.")]
-		public Light SunLight;
-		[Tooltip("The moon's directional light. Empty: a directional light named Moon, or none.")]
-		public Light MoonLight;
 		[Tooltip("This scene's sky. Empty: the sky of the body the scene is on.")]
 		public SkyProfile SkyOverride;
 
@@ -158,7 +160,6 @@ namespace FishMMO.Shared
 			{
 				timeManager.OnTick += TimeManager_OnTick;
 			}
-			ResolveLights();
 			CacheRotating();
 #if !UNITY_SERVER
 			dayFadeRenderers = CacheRenderers(DayFadeObjects);
@@ -190,38 +191,7 @@ namespace FishMMO.Shared
 			networkManager = null;
 		}
 
-		/// <summary>Finds the lights when none are assigned.</summary>
-		private void ResolveLights()
-		{
-			if (SunLight == null && RenderSettings.sun != null && RenderSettings.sun.gameObject.scene == gameObject.scene)
-			{
-				SunLight = RenderSettings.sun;
-			}
-			if (SunLight != null && MoonLight != null)
-			{
-				return;
-			}
-			foreach (GameObject root in gameObject.scene.GetRootGameObjects())
-			{
-				foreach (Light light in root.GetComponentsInChildren<Light>(true))
-				{
-					if (light.type != LightType.Directional)
-					{
-						continue;
-					}
-					if (SunLight == null && light.name.IndexOf("sun", StringComparison.OrdinalIgnoreCase) >= 0)
-					{
-						SunLight = light;
-					}
-					else if (MoonLight == null && light.name.IndexOf("moon", StringComparison.OrdinalIgnoreCase) >= 0)
-					{
-						MoonLight = light;
-					}
-				}
-			}
-		}
-
-		/// <summary>Remembers each rotating object's authored rotation. Objects holding the sky's lights are left to the sky.</summary>
+		/// <summary>Remembers each rotating object's authored rotation.</summary>
 		private void CacheRotating()
 		{
 			rotating.Clear();
@@ -229,12 +199,6 @@ namespace FishMMO.Shared
 			{
 				if (obj == null)
 				{
-					continue;
-				}
-				bool holdsLight = (SunLight != null && SunLight.transform.IsChildOf(obj.transform)) || (MoonLight != null && MoonLight.transform.IsChildOf(obj.transform));
-				if (holdsLight)
-				{
-					// The sky drives these lights directly; turning their parent too would double it.
 					continue;
 				}
 				rotating.Add((obj.transform, obj.transform.rotation));

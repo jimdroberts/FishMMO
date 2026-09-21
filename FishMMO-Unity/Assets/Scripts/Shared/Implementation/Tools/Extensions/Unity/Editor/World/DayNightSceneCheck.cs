@@ -100,43 +100,23 @@ namespace FishMMO.Shared.WorldDesign
 				return false;
 			}
 
+			// Nothing to wire any more, and nothing is made. The sky creates its sun and its moon when
+			// the scene runs and drives them from the solar system; the cycle no longer takes lights.
+			// What is left to find is the opposite fault: a sun or a moon still sitting in the scene
+			// from when it did — the old SunAndMoon prefab, or the pair this tool used to create —
+			// which now lights the scene a second time, from wherever it was left pointing. Those are
+			// switched off, not deleted: a scene is somebody's work, and off can be put back.
 			bool changed = false;
-			if (cycle.SunLight == null)
+			foreach (Light light in lights)
 			{
-				Light sun = Pick(lights, "sun");
-				if (sun == null)
+				if (light == null || light.type != LightType.Directional || !light.enabled || !IsLegacySkyLight(light))
 				{
-					var go = new GameObject("Sun");
-					SceneManager.MoveGameObjectToScene(go, scene);
-					go.transform.rotation = Quaternion.Euler(50f, 30f, 0f);
-					sun = go.AddComponent<Light>();
-					sun.type = LightType.Directional;
-					sun.shadows = LightShadows.Soft;
-					sun.intensity = 1.1f;
-					notes.Add($"{name}: no directional light, so a Sun was created.");
+					continue;
 				}
-				else
-				{
-					notes.Add($"{name}: the sun is '{sun.name}', the scene's own directional light.");
-				}
-				cycle.SunLight = sun;
-				changed = true;
-			}
-			if (cycle.MoonLight == null)
-			{
-				Light moon = Pick(lights, "moon");
-				if (moon == null || moon == cycle.SunLight)
-				{
-					var go = new GameObject("Moon");
-					SceneManager.MoveGameObjectToScene(go, scene);
-					go.transform.rotation = Quaternion.Euler(-40f, 200f, 0f);
-					moon = go.AddComponent<Light>();
-					moon.type = LightType.Directional;
-					moon.shadows = LightShadows.None;
-					moon.intensity = 0f;
-					notes.Add($"{name}: a Moon light was created.");
-				}
-				cycle.MoonLight = moon;
+				Undo.RecordObject(light, "Switch off legacy sky light");
+				light.enabled = false;
+				EditorUtility.SetDirty(light);
+				notes.Add($"{name}: '{light.name}' was a sun or moon light from before the sky made its own. Switched off; delete it when you are happy with the scene.");
 				changed = true;
 			}
 			if (changed)
@@ -146,23 +126,20 @@ namespace FishMMO.Shared.WorldDesign
 			return changed;
 		}
 
-		/// <summary>A directional light whose name hints at the role, else any directional light.</summary>
-		private static Light Pick(List<Light> lights, string hint)
+		/// <summary>
+		/// A directional light that was standing in for the sun or the moon: named for one, which is
+		/// how the old cycle found them and what this tool and the SunAndMoon prefab both called them.
+		/// </summary>
+		/// <remarks>
+		/// By name and nothing cleverer, on purpose. A scene may well have a directional light that is
+		/// meant — a fill in a dungeon, a rim on a set piece — and those are not the sky's business.
+		/// Anything not called a sun or a moon is left alone and not reported.
+		/// </remarks>
+		private static bool IsLegacySkyLight(Light light)
 		{
-			Light any = null;
-			foreach (Light light in lights)
-			{
-				if (light == null || light.type != LightType.Directional)
-				{
-					continue;
-				}
-				if (light.name.IndexOf(hint, System.StringComparison.OrdinalIgnoreCase) >= 0)
-				{
-					return light;
-				}
-				any = any != null ? any : light;
-			}
-			return string.Equals(hint, "moon", System.StringComparison.OrdinalIgnoreCase) ? null : any;
+			string name = light.name;
+			return name.IndexOf("sun", System.StringComparison.OrdinalIgnoreCase) >= 0
+				|| name.IndexOf("moon", System.StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 
 		/// <summary>Reads every world scene and returns what is missing. Opens and closes each scene.</summary>
@@ -210,11 +187,19 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			WorldDayNightCycle cycle = null;
 			var skyboxWriters = new List<string>();
+			var legacyLights = new List<string>();
 			foreach (GameObject root in scene.GetRootGameObjects())
 			{
 				if (cycle == null)
 				{
 					cycle = root.GetComponentInChildren<WorldDayNightCycle>(true);
+				}
+				foreach (Light light in root.GetComponentsInChildren<Light>(true))
+				{
+					if (light.type == LightType.Directional && light.enabled && IsLegacySkyLight(light))
+					{
+						legacyLights.Add(light.gameObject.name);
+					}
 				}
 				foreach (Skybox skybox in root.GetComponentsInChildren<Skybox>(true))
 				{
@@ -238,17 +223,9 @@ namespace FishMMO.Shared.WorldDesign
 				problems.Add($"{name}: no WorldDayNightCycle, so nothing drives the sun, the moon or the day/night triggers.");
 				return;
 			}
-			if (cycle.SunLight == null)
+			foreach (string leftover in legacyLights)
 			{
-				problems.Add($"{name}: the day/night cycle has no Sun Light; the sky cannot light the scene.");
-			}
-			else if (cycle.SunLight.type != LightType.Directional)
-			{
-				problems.Add($"{name}: the cycle's Sun Light is a {cycle.SunLight.type} light; it must be Directional.");
-			}
-			if (cycle.MoonLight == null)
-			{
-				problems.Add($"{name}: the cycle has no Moon Light, so nights have no moonlight and no moon shadows.");
+				problems.Add($"{name}: '{leftover}' is a directional sun or moon light left in the scene. The sky makes and drives its own, so this one lights the scene a second time. Switch it off or delete it.");
 			}
 			foreach (string writer in skyboxWriters)
 			{

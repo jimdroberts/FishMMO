@@ -69,20 +69,8 @@ namespace FishMMO.TestHarness.World.Editor
 			Material stone = MaterialAsset("Stone", new Color(0.55f, 0.54f, 0.5f));
 			Material white = MaterialAsset("White", new Color(0.86f, 0.86f, 0.86f));
 
-			var sunObject = new GameObject("Sun");
-			Light sun = sunObject.AddComponent<Light>();
-			sun.type = LightType.Directional;
-			sun.shadows = LightShadows.Soft;
-			sun.intensity = 1.1f;
-			sunObject.transform.rotation = Quaternion.Euler(48f, 30f, 0f);
-			RenderSettings.sun = sun;
-
-			var moonObject = new GameObject("Moon");
-			Light moonLight = moonObject.AddComponent<Light>();
-			moonLight.type = LightType.Directional;
-			moonLight.shadows = LightShadows.None;
-			moonLight.intensity = 0f;
-
+			// No sun and no moon in the scene. The sky makes its own lights when the scene runs and
+			// drives them from the solar system; a light placed here would light the bed a second time.
 			RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
 			RenderSettings.ambientSkyColor = new Color(0.55f, 0.6f, 0.7f);
 			RenderSettings.ambientEquatorColor = new Color(0.4f, 0.42f, 0.45f);
@@ -161,8 +149,6 @@ namespace FishMMO.TestHarness.World.Editor
 
 			var dayNightObject = new GameObject("Day Night Cycle");
 			WorldDayNightCycle dayNight = dayNightObject.AddComponent<WorldDayNightCycle>();
-			dayNight.SunLight = sun;
-			dayNight.MoonLight = moonLight;
 
 			var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
 			Camera camera = cameraObject.AddComponent<Camera>();
@@ -180,7 +166,6 @@ namespace FishMMO.TestHarness.World.Editor
 			WorldSimController controller = controllerObject.AddComponent<WorldSimController>();
 			controller.Profile = profile;
 			controller.Camera = camera;
-			controller.Sun = sun;
 			controller.Settings = settings;
 			controller.DayNight = dayNight;
 			controller.SolarSystem = WorldEditorAssets.FindFirst<SolarSystemProfile>();

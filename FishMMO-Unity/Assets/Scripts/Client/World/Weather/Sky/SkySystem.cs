@@ -216,7 +216,92 @@ namespace FishMMO.Client
 		private Light sun;
 		private Light moon;
 		private Light createdSun;
+		private Light createdMoon;
+
+		/// <summary>One of the sky's own directional lights, made once and kept under the sky system.</summary>
+		private Light OwnLight(ref Light light, string name)
+		{
+			if (light == null)
+			{
+				var holder = new GameObject(name);
+				holder.transform.SetParent(transform, false);
+				light = holder.AddComponent<Light>();
+				light.type = LightType.Directional;
+				// Dark until the sky says otherwise: it sets colour, intensity and which of the two
+				// casts the shadows on every frame it runs.
+				light.intensity = 0f;
+				light.shadows = LightShadows.None;
+			}
+			light.enabled = true;
+			return light;
+		}
 		private readonly List<Light> companions = new List<Light>();
+		private readonly List<Light> companionMoons = new List<Light>();
+		private readonly List<(int index, float light)> moonOrder = new List<(int index, float light)>();
+
+		/// <summary>As many moons as light the ground at once. A forward renderer counts every extra light per object.</summary>
+		private const int MaxMoonLights = 4;
+
+		/// <summary>Our own moon's angular radius, in radians: the size the profile's moon intensity is authored for.</summary>
+		private const float ReferenceMoonRadius = 0.0045f;
+
+		/// <summary>What a star sends here, in arbitrary units: its luminosity over the square of its distance.</summary>
+		private static float Flux(in SkyBodyState star)
+		{
+			float luminosity = star.Body is StarBody body ? Mathf.Max(0f, body.Luminosity) : 1f;
+			double distance = System.Math.Max(1.0, star.DistanceKm);
+			return (float)(luminosity / (distance / 1.0e8 * (distance / 1.0e8)));
+		}
+
+		/// <summary>
+		/// What a moon sends down, before the weather takes its share: how much of it is lit, how much
+		/// of that the world's own shadow has taken, how high it stands, and its size against our own
+		/// moon's — twice as wide is four times the light.
+		/// </summary>
+		private static float MoonLight(in SkySample sample, in SkyBodyState body, float rampDegrees)
+		{
+			float up = Mathf.Clamp01(body.AltitudeDegrees / rampDegrees + 0.3f);
+			float size = Mathf.Clamp(body.AngularRadius / ReferenceMoonRadius, 0f, 1.75f);
+			return sample.MoonIntensity * body.Illumination * (1f - body.Shadowed * 0.9f) * up * size * size;
+		}
+
+		/// <summary>The moon giving the most light at this moment, or -1 when none is up.</summary>
+		private static int BrightestMoon(CelestialState state, in SkySample sample, float rampDegrees, out float light)
+		{
+			int best = -1;
+			light = 0f;
+			for (int i = 0; i < state.Bodies.Count; i++)
+			{
+				SkyBodyState body = state.Bodies[i];
+				if (body.Kind != SkyBodyKind.Moon || body.AltitudeDegrees <= -2f)
+				{
+					continue;
+				}
+				float sends = MoonLight(sample, body, rampDegrees);
+				if (sends > light)
+				{
+					light = sends;
+					best = i;
+				}
+			}
+			return best;
+		}
+
+		/// <summary>The n-th light of a pool of the sky's own, made when first wanted.</summary>
+		private Light Pooled(List<Light> pool, int index, string name)
+		{
+			while (pool.Count <= index)
+			{
+				var holder = new GameObject(name);
+				holder.transform.SetParent(transform, false);
+				Light light = holder.AddComponent<Light>();
+				light.type = LightType.Directional;
+				light.shadows = LightShadows.None;
+				light.intensity = 0f;
+				pool.Add(light);
+			}
+			return pool[index];
+		}
 		private ReflectionProbe probe;
 		private float probeTimer;
 		private Vector3 probeSun;
@@ -568,20 +653,14 @@ namespace FishMMO.Client
 			}
 			RenderSettings.skybox = skyMaterial;
 
-			sun = cycle.SunLight;
-			moon = cycle.MoonLight;
-			if (sun == null)
-			{
-				if (createdSun == null)
-				{
-					var sunObject = new GameObject("Sky Sun");
-					sunObject.transform.SetParent(transform, false);
-					createdSun = sunObject.AddComponent<Light>();
-					createdSun.type = LightType.Directional;
-				}
-				createdSun.enabled = true;
-				sun = createdSun;
-			}
+			// The sky's lights are the sky's own. Where the sun and the moon stand, what colour they
+			// are and how bright is worked out from the solar system every frame, so there is nothing
+			// for a scene to author in them. They used to be handed over by the scene's day/night
+			// cycle — a Sun and a Moon placed in every scene, found by their names if not assigned —
+			// which made the lighting depend on scene objects that did nothing but wait to be driven,
+			// and left a scene without them with no moonlight at all, since only a sun was ever made.
+			sun = OwnLight(ref createdSun, "Sky Sun");
+			moon = OwnLight(ref createdMoon, "Sky Moon");
 			RenderSettings.sun = sun;
 			RenderSettings.ambientMode = AmbientMode.Trilight;
 			lastAmbientSky = new Color(-1f, 0f, 0f);
@@ -605,6 +684,17 @@ namespace FishMMO.Client
 				{
 					companion.enabled = false;
 				}
+			}
+			foreach (Light companion in companionMoons)
+			{
+				if (companion != null)
+				{
+					companion.enabled = false;
+				}
+			}
+			if (createdMoon != null)
+			{
+				createdMoon.enabled = false;
 			}
 			if (createdSun != null)
 			{
@@ -1183,11 +1273,13 @@ namespace FishMMO.Client
 			Vector3 lightDirection = state.Sun >= 0 ? state.SunDirection : new Vector3(0.3f, 0.9f, 0.4f).normalized;
 			Color lightColour = sample.SunLight * sample.SunIntensity;
 			float strength = sunUp;
-			if (sunUp < 0.5f && state.Moon >= 0)
+			// The moon that is lighting the sky NOW, not the one with the biggest disc: the clouds have
+			// one light to be lit from, and with the big moon down it has to be the one that is up.
+			float moonLight = 0f;
+			int brightest = sunUp < 0.5f ? BrightestMoon(state, sample, 5f, out moonLight) : -1;
+			if (brightest >= 0)
 			{
-				SkyBodyState moonBody = state.Bodies[state.Moon];
-				float moonUp = Mathf.Clamp01(moonBody.AltitudeDegrees / 5f + 0.3f);
-				float moonLight = sample.MoonIntensity * moonBody.Illumination * (1f - moonBody.Shadowed * 0.9f) * moonUp;
+				SkyBodyState moonBody = state.Bodies[brightest];
 				if (moonLight > strength * 0.5f)
 				{
 					lightDirection = moonBody.Direction;
@@ -1344,64 +1436,134 @@ namespace FishMMO.Client
 			sun.color = Color.Lerp(sample.SunLight, new Color(0.8f, 0.85f, 1f), flash * 0.6f);
 			sun.intensity = sunIntensity + flash * 1.5f;
 
-			float moonIntensity = 0f;
-			if (moon != null)
-			{
-				if (state.Moon >= 0)
-				{
-					SkyBodyState body = state.Bodies[state.Moon];
-					moon.transform.rotation = LightRotation(body.Direction);
-					float up = Mathf.Clamp01(body.AltitudeDegrees / 3f + 0.3f);
-					moonIntensity = sample.MoonIntensity * body.Illumination * (1f - body.Shadowed * 0.9f) * up * (1f - overcast * 0.7f);
-				}
-				moon.color = sample.MoonLight;
-				moon.intensity = moonIntensity;
-				moon.enabled = moonIntensity > 0.001f;
-			}
-
-			// One light casts shadows: whichever is up and brighter. Hand over near the horizon.
-			bool sunLeads = sunAltitude > 0.5f || moon == null || moonIntensity <= 0.02f;
-			sun.shadows = sunLeads && sun.intensity > 0.02f ? LightShadows.Soft : LightShadows.None;
-			if (moon != null)
-			{
-				moon.shadows = !sunLeads ? LightShadows.Soft : LightShadows.None;
-			}
-			RenderSettings.sun = sunLeads || moon == null ? sun : moon;
-
-			// Extra suns add light without shadows.
-			int needed = 0;
+			// ── Every moon that is up ──
+			// Each lights the ground by what it sends: how much of it is lit, how much of that the
+			// world's own shadow has taken, how high it stands, and how big it is in the sky — a moon
+			// twice as wide is four times the light. The size is against our own moon's, which is
+			// what the profile's moon intensity was authored for, so a sky with one ordinary moon is
+			// exactly as it was.
+			//
+			// There used to be one moon light, and it was given to the moon with the LARGEST DISC,
+			// wherever that was. With the big moon under the horizon and a small one riding high and
+			// full, there was no moonlight at all; and a second moon never lit anything.
+			int moonsLit = 0;
+			float brightestMoon = 0f;
+			int moonLimit = Mathf.Clamp(state.System != null ? state.System.Limits.Moons : 4, 0, MaxMoonLights);
+			moonOrder.Clear();
 			for (int i = 0; i < state.Bodies.Count; i++)
+			{
+				SkyBodyState body = state.Bodies[i];
+				if (body.Kind != SkyBodyKind.Moon || body.AltitudeDegrees <= -2f)
+				{
+					continue;
+				}
+				float light = MoonLight(sample, body, 3f) * (1f - overcast * 0.7f);
+				if (light > 0.001f)
+				{
+					moonOrder.Add((i, light));
+				}
+			}
+			moonOrder.Sort((x, y) => y.light.CompareTo(x.light));
+			for (int n = 0; n < moonOrder.Count && n < moonLimit; n++)
+			{
+				SkyBodyState body = state.Bodies[moonOrder[n].index];
+				// The brightest is "the" moon light, the one the rest of the sky knows about; the
+				// others come from the pool.
+				Light lamp = n == 0 ? moon : Pooled(companionMoons, n - 1, "Sky Companion Moon");
+				if (lamp == null)
+				{
+					continue;
+				}
+				lamp.enabled = true;
+				lamp.transform.rotation = LightRotation(body.Direction);
+				lamp.intensity = moonOrder[n].light;
+				// Mostly the sky's moonlight, a little the moon's own colour.
+				Color tint = body.Body != null ? Color.Lerp(Color.white, body.Body.Tint, 0.35f) : Color.white;
+				lamp.color = Mul(sample.MoonLight, tint);
+				lamp.shadows = LightShadows.None;
+				moonsLit++;
+				brightestMoon = Mathf.Max(brightestMoon, moonOrder[n].light);
+			}
+			if (moon != null && moonsLit == 0)
+			{
+				moon.intensity = 0f;
+				moon.enabled = false;
+			}
+			for (int i = Mathf.Max(0, moonsLit - 1); i < companionMoons.Count; i++)
+			{
+				companionMoons[i].enabled = false;
+			}
+
+			// ── Every other sun that is up ──
+			// By its own height in the sky and by what actually arrives from it. It used to take the
+			// PRIMARY's intensity — so every companion went dark the moment the primary set, however
+			// high it stood itself — and its luminosity with no regard to distance, so a companion
+			// thirty times further off than the primary lit the ground six tenths as brightly. Light
+			// falls off as the square of the distance: that one is a thousandth.
+			SkyBodyState primaryStar = state.Sun >= 0 ? state.Bodies[state.Sun] : default;
+			float primaryFlux = state.Sun >= 0 ? Flux(primaryStar) : 0f;
+			int sunLimit = Mathf.Clamp((state.System != null ? state.System.Limits.Suns : 4) - 1, 0, 3);
+			int needed = 0;
+			float brightestCompanion = 0f;
+			Light brightestCompanionLight = null;
+			for (int i = 0; i < state.Bodies.Count && needed < sunLimit; i++)
 			{
 				if (i == state.Sun || state.Bodies[i].Kind != SkyBodyKind.Star)
 				{
 					continue;
 				}
 				SkyBodyState star = state.Bodies[i];
-				while (companions.Count <= needed)
-				{
-					var go = new GameObject("Sky Companion Sun");
-					go.transform.SetParent(transform, false);
-					Light light = go.AddComponent<Light>();
-					light.type = LightType.Directional;
-					light.shadows = LightShadows.None;
-					companions.Add(light);
-				}
-				Light companion = companions[needed++];
-				companion.enabled = star.AltitudeDegrees > -2f;
+				Light companion = Pooled(companions, needed++, "Sky Companion Sun");
+				float relative = primaryFlux > 1e-12f ? Mathf.Clamp(Flux(star) / primaryFlux, 0f, 2f) : 1f;
+				float own = blendTo != null ? Mathf.Max(0f, blendTo.SunIntensity.Evaluate(star.AltitudeDegrees)) : sample.SunIntensity;
 				companion.transform.rotation = LightRotation(star.Direction);
-				float strength = (star.Body as StarBody)?.Luminosity ?? 1f;
-				companion.intensity = sample.SunIntensity * Mathf.Clamp01(star.AltitudeDegrees / 10f + 0.2f) * Mathf.Clamp(strength, 0f, 2f) * 0.6f * (1f - overcast * 0.6f);
+				companion.intensity = own * relative * (1f - overcast * 0.6f);
 				companion.color = Mul(baseSunLight, ((StarBody)star.Body).SkyTint);
+				companion.shadows = LightShadows.None;
+				companion.enabled = star.AltitudeDegrees > -2f && companion.intensity > 0.001f;
+				if (companion.enabled && companion.intensity > brightestCompanion)
+				{
+					brightestCompanion = companion.intensity;
+					brightestCompanionLight = companion;
+				}
 			}
 			for (int i = needed; i < companions.Count; i++)
 			{
 				companions[i].enabled = false;
 			}
 
+			// ── One light casts the shadows: the brightest thing in the sky ──
+			// The primary while it is properly up, as before, so a day does not swap shadows about;
+			// after that whatever is lighting the scene most — a companion sun at the primary's dusk,
+			// the brightest moon at night. Nothing used to cast a shadow once the primary was down
+			// unless "the" moon happened to be the one that was up.
+			bool sunLeads = sunAltitude > 0.5f && sun.intensity > 0.02f;
+			Light leader = sunLeads ? sun : null;
+			if (leader == null)
+			{
+				float most = Mathf.Max(sun.intensity, 0.02f);
+				leader = sun.intensity > 0.02f ? sun : null;
+				if (brightestCompanionLight != null && brightestCompanion > most)
+				{
+					most = brightestCompanion;
+					leader = brightestCompanionLight;
+				}
+				if (moon != null && moonsLit > 0 && brightestMoon > most)
+				{
+					leader = moon;
+				}
+			}
+			sun.shadows = LightShadows.None;
+			if (leader != null)
+			{
+				leader.shadows = LightShadows.Soft;
+			}
+			RenderSettings.sun = leader != null ? leader : sun;
+
 			// The shadow is the volume's own, marched from the ground toward the light.
 			VolumetricCloudSettings cloudSettings = profile.Clouds;
 			Vector3 viewer = TargetCamera != null ? TargetCamera.transform.position : transform.position;
-			cloudShadows.Update(sunLeads ? sun : moon, profile.CloudMaterial, viewer, cloudSettings.ShadowAreaMeters,
+			cloudShadows.Update(leader != null ? leader : sun, profile.CloudMaterial, viewer, cloudSettings.ShadowAreaMeters,
 				cloudSettings.ShadowStrength, 8 * MaxCloudLayers, tier.CloudShadows && DrawCloudShadows);
 		}
 
