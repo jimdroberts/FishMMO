@@ -447,6 +447,21 @@ namespace FishMMO.Shared.WorldDesign
 						b.Tint = Color.HSVToRGB(dice.Range(0.02f, 0.12f), dice.Range(0.15f, 0.6f), dice.Range(0.45f, 0.85f));
 						b.HasRings = dice.Chance(0.04f);
 					}
+					// Dust: a dry world is a dusty one, and its dust is the colour of its ground. A wet
+					// world's haze is water, and white.
+					if (b.Atmosphere != AtmosphereKind.None && !isHome)
+					{
+						bool dry = b.Water < 0.15f;
+						b.Haze = giant ? dice.Range(1f, 4f) : dry ? dice.Range(2f, 7f) : dice.Range(0.6f, 1.8f);
+						b.HazeColor = dry && !giant ? Color.Lerp(Color.white, b.Tint, 0.8f) : giant ? Color.Lerp(Color.white, b.Tint, 0.5f) : Color.white;
+					}
+					// A field wants a molten, turning core: big worlds that spin have one, small ones have
+					// cooled, slow ones never wound one up. Giants have the strongest of all.
+					float spin = Mathf.Clamp01(12f / Mathf.Max(1f, b.RotationHours));
+					b.MagneticField = isHome ? dice.Range(0.8f, 1.2f)
+						: giant ? dice.Range(1.2f, 2f)
+						: b.SkyRadiusKm < 3200f ? (dice.Chance(0.75f) ? 0f : dice.Range(0.05f, 0.3f))
+						: Mathf.Clamp(dice.Range(0.2f, 1.3f) * Mathf.Lerp(0.3f, 1f, spin), 0f, 2f);
 					if (b.HasRings)
 					{
 						float inner = dice.Range(1.2f, 1.7f);
@@ -502,6 +517,8 @@ namespace FishMMO.Shared.WorldDesign
 						b.SkyRadiusKm = Mathf.Min(world.SkyRadiusKm * 0.35f, dice.Range(400f, 2600f));
 						// A moon big enough to hold air is the exception worth having.
 						b.Atmosphere = b.SkyRadiusKm > 2200f && dice.Chance(0.35f) ? AtmosphereKind.Thin : AtmosphereKind.None;
+						// Moons are small and mostly dead inside; the odd large one keeps a weak field.
+						b.MagneticField = b.SkyRadiusKm > 2000f && dice.Chance(0.3f) ? dice.Range(0.05f, 0.4f) : 0f;
 						b.Water = 0f;
 						float grey = dice.Range(0.5f, 0.85f);
 						b.Tint = new Color(grey, grey * dice.Range(0.92f, 1f), grey * dice.Range(0.85f, 1f), 1f);

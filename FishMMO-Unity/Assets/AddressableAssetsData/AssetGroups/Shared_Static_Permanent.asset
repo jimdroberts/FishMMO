@@ -639,12 +639,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 25ae79de239d98ddb90e729c4a8fc55a
-    m_Address: Calanx System - Wenuvar
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 25b2912dd9cd4ecfb7bbe73a27b5b476
     m_Address: Kelp Lurker
     m_ReadOnly: 0
@@ -665,6 +659,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 269a5d4d06bf47f2a3d738665f62501a
     m_Address: Goblin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2708ec0b5e59352ecaf6df6312bec979
+    m_Address: Yrois System - Soltha
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -929,12 +929,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a43eddc2e7096b9ba1e5d97c98932e0
     m_Address: Assets/Prefabs/Shared/TeleporterCache.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3ad88ef0ab31ee21ba922b08ef492427
-    m_Address: Calanx System
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1239,6 +1233,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 54a174a355e7d19c78975b8ed6e979a9
+    m_Address: Yrois System - Yrois
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 550dbf6c4faec814d90892a954354921
     m_Address: Alpine
     m_ReadOnly: 0
@@ -1265,6 +1265,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 55eeb6eb7bb54562bd2d01720b05bd03
     m_Address: Elder Giant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 55fa1100388c53d3a950774bbf7e22fa
+    m_Address: Yrois System - Uloris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1331,12 +1337,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5aa15889374b0092ba247f732346d5f4
     m_Address: Orc Slam Damage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5b7239b4463a1fa9ab9a83842b86f921
-    m_Address: Calanx System - Fenanmar
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1497,6 +1497,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6aae412e346a46aa1b995a45071ac5c7
+    m_Address: Yrois System - Narithis
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b029fc5cd40b8a399e98be3e09edb12
+    m_Address: Yrois System - Moraeis
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6b5f145ed34168d4b98f1410bd41b3ed
     m_Address: Alpine Meadow
     m_ReadOnly: 0
@@ -1617,8 +1629,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 743745924557ba80d88097abbc4822c3
-    m_Address: Calanx System - Helris
+  - m_GUID: 749ba1b6359807533857aba37ed808a4
+    m_Address: Yrois System - Ithiwyn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 76ab8206601b810beb83fc950b4bfcff
+    m_Address: Yrois System
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1661,12 +1679,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7b0b28f4064e4de6982f3ad5758bd9f5
     m_Address: Snow Troll
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7b937e3e18a8491b09ac4abee0ff83f8
-    m_Address: Calanx System - Elutha
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1840,6 +1852,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 86322762cdcb4a49b5df20cac7380af4
     m_Address: Sand Worm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86bfb4a1bb9fa70b5a5ffd88ba53dc25
+    m_Address: Yrois System - Elorlis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2084,6 +2102,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 988c4790e7cc158dab79dc7a7adccf99
+    m_Address: Yrois System - Ithiawyn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9997a2c2024a48ddb3a8f2545c3cafe1
     m_Address: Swamp Temple
     m_ReadOnly: 0
@@ -2192,12 +2216,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a1119cd056270fc83be51696070c3557
-    m_Address: Calanx System - Elis
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a4d8278c839b407dba6b461ed4b7ad42
     m_Address: Ashenfolk
     m_ReadOnly: 0
@@ -2212,12 +2230,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a533dfe86eec45baa4918cfb0af158ca
     m_Address: Poltergeist
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a5c3c7414f27eb40ba2907a81e1a4c1a
-    m_Address: Calanx System - Lorus
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2300,12 +2312,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a97848a0a16291749a577fcdbc841408
-    m_Address: Calanx System - Jorx
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a9b3f72b77d34056ac4e5220b59a0847
     m_Address: Jelly
     m_ReadOnly: 0
@@ -2330,14 +2336,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ab58a794badc2d47abe6273e8f066f5e
-    m_Address: Calanx System - Soloron
+  - m_GUID: abbb28ed1b194ad081aa07ccf765a487
+    m_Address: Moorfolk
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: abbb28ed1b194ad081aa07ccf765a487
-    m_Address: Moorfolk
+  - m_GUID: abe13e5c1e14f1bb4a66f6a1f6368ad8
+    m_Address: Yrois System - Mornos
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2425,12 +2431,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b32625d65bcc99769bd77992bf8b2498
-    m_Address: Calanx System - Fendor
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b3b00a0fbed363476a5f1d6ddccd20d7
     m_Address: Medium Rain
     m_ReadOnly: 0
@@ -2469,6 +2469,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b5787b08b68d4f16888d75ecc6c58ef7
     m_Address: Rootwalker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b58a9f32fc48c49a59879105e972eea0
+    m_Address: Yrois System - Calodor
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2571,6 +2577,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bd5d0e7e72ca4e1698a4cb404af3c2a3
     m_Address: Blightbloom
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: be25a097fd0e8228f87c0a220085ff0a
+    m_Address: Yrois System - Calron
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2685,6 +2697,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c70f6d8041358ed41bfaf8483b590e34
     m_Address: Disable Fog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c762dc112bd07b1989be629c53ce5641
+    m_Address: Yrois System - Yriais
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2821,12 +2839,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d0a8542b091e5285c9e58e4bbaf5bf4d
-    m_Address: Calanx System - Zelanlis
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d0c938b40047485b9f34956a35ac38a0
     m_Address: Redcap
     m_ReadOnly: 0
@@ -2923,12 +2935,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d66094d0f5050c2c888cd0fc135b9315
-    m_Address: Calanx System - Valus
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d6d32c919f2918f4f830933959878cae
     m_Address: Earth Resistance
     m_ReadOnly: 0
@@ -2937,12 +2943,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d75479b8ff8542e59ae83b3ac2d52676
     m_Address: Frost Drake
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d7969c44e2206a065b8a7357a0a22bd2
-    m_Address: Calanx System - Lorenlis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3043,8 +3043,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: df70c739d8814ebe99290616acf12bb2
-    m_Address: Calanx System - Caludor
+  - m_GUID: df30a0521124acc99bf0dc52b42eeb2d
+    m_Address: Yrois System - Helivar
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3145,12 +3145,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e3c5924a8b51c7f72a53e165c86eab79
-    m_Address: Calanx System - Calanx
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e3d29be775099b70ba79cc694121b638
     m_Address: Underworld
     m_ReadOnly: 0
@@ -3237,12 +3231,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ea0ff7b1f46f48959c9c3895367a2322
     m_Address: Giant Bat
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ea2d53eba59df6a7cb314c9a30618f9b
-    m_Address: Calanx System - Galowyn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3457,12 +3445,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f7f389cd9faa518d58eb9426bafd5dd1
-    m_Address: Calanx System - Lorux
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f8b602c7110e49d89081db59cbe45e09
     m_Address: Ice Ruin
     m_ReadOnly: 0
@@ -3525,6 +3507,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fa57ee5c30f78ef4c8bcdb6d4e23f423
     m_Address: Badlands
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: facce24b813b4b85a89423436b208340
+    m_Address: Yrois System - Lormar
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

@@ -401,6 +401,13 @@ namespace FishMMO.Shared.Weather
 			public Vector2 Wind;
 			/// <summary>The hour this air was sampled at, 0.5 noon. Fog and the daily swing need it.</summary>
 			public float LocalTime01;
+			/// <summary>
+			/// How far the sun has stopped setting here (0 it sets as usual, 1 it does not set at all):
+			/// the midnight sun, inside a polar circle in its summer.
+			/// </summary>
+			public float PolarDay;
+			/// <summary>How far the sun has stopped rising here: the polar night, in its winter.</summary>
+			public float PolarNight;
 		}
 
 		/// <summary>
@@ -435,6 +442,8 @@ namespace FishMMO.Shared.Weather
 					frame[WeatherChannel.FogDensity] *= 0.25f;
 					frame[WeatherChannel.VolumetricFog] *= 0.25f;
 					frame[WeatherChannel.LightningRate] *= 0.2f;
+					// An aurora is the upper air glowing, and there is less of it to glow.
+					frame[WeatherChannel.Aurora] *= 0.5f;
 					frame[WeatherChannel.WetnessTarget] *= 0.3f;
 					frame[WeatherChannel.SnowCoverRate] *= 0.3f;
 					frame[WeatherChannel.WindSpeed] = Mathf.Clamp01(frame[WeatherChannel.WindSpeed] * 1.2f);
@@ -531,6 +540,150 @@ namespace FishMMO.Shared.Weather
 			local.Humidity = Mathf.Clamp01(air.Humidity + Mathf.Clamp(localHumidity, -1f, 1f) * 0.25f);
 			float after = 0.4f + local.Humidity * 0.6f;
 			local.Instability = Mathf.Clamp01(air.Instability * after / Mathf.Max(0.01f, before));
+			local.ColumnType = Mathf.Clamp01(BaseColumnType(local.Instability) + air.Tower * TowerGain(local.Instability));
+			return local;
+		}
+
+		// ── Aurora ────────────────────────────────────────────────────
+
+		/// <summary>How long the star's activity takes to rise and fall, in world seconds: thirty days.</summary>
+		public const double StellarCycleSeconds = 30.0 * 86400.0;
+		/// <summary>How long a geomagnetic storm lasts, roughly: two days.</summary>
+		public const float AuroraStormSeconds = 2f * 86400f;
+		/// <summary>How long a single brightening within a storm lasts: three hours.</summary>
+		public const float AuroraSubstormSeconds = 3f * 3600f;
+
+		/// <summary>
+		/// How disturbed the body's magnetic field is right now, 0 quiet to 1 a great storm. One figure
+		/// for the whole world: a storm is the star's doing, and arrives everywhere at once.
+		/// </summary>
+		/// <remarks>
+		/// The star's activity rises and falls over a cycle, and storms come out of it: rare when it
+		/// is quiet, frequent near its peak, each lasting a day or two with brightenings of a few
+		/// hours inside it. They are also commoner round the equinoxes, when the body's field lies
+		/// best to catch the wind — which is why the season is asked for. From the seed and the clock
+		/// alone, so every machine has the same storm at the same moment.
+		/// </remarks>
+		public static float GeomagneticActivity(uint worldSeed, double worldSeconds, float season01)
+		{
+			float cycle = 0.5f + 0.5f * Mathf.Sin((float)(worldSeconds / StellarCycleSeconds % 1.0) * Mathf.PI * 2f + (worldSeed & 0xFFFF) * 0.0001f * Mathf.PI * 2f);
+			float storm = Field(worldSeconds, 0.0, AuroraStormSeconds, worldSeed ^ 0xA0205A17u);
+			float burst = Field(worldSeconds, 0.0, AuroraSubstormSeconds, worldSeed ^ 0x51AB07E5u);
+			// Mostly under the line, so mostly quiet; the cycle lowers the line. Measured over a year of
+			// the clock: quiet two thirds of the time, a minor disturbance a fifth, a proper storm one
+			// hour in eleven and a great one one in forty.
+			float disturbed = Mathf.Clamp01((storm * 0.65f + burst * 0.35f - (0.62f - 0.16f * cycle)) / 0.36f);
+			// 1 at the equinoxes (a quarter and three quarters of the way round the year), 0 at the solstices.
+			float equinox = Mathf.Abs(Mathf.Sin(season01 * Mathf.PI * 2f));
+			return Mathf.Clamp01(disturbed * (0.8f + 0.35f * equinox));
+		}
+
+		/// <summary>
+		/// How much aurora stands overhead at a latitude, 0..1 — before the night, the cloud and the
+		/// air have their say, which is the sky's business and the atmosphere's.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An aurora is the star's wind brought down by the body's magnetic field into its upper air,
+		/// so it needs all three and sits where the field puts it: in a ring round each magnetic pole,
+		/// some twenty-three degrees out. The ring is always there, faintly — at sixty-seven degrees a
+		/// clear dark night nearly always has something in it. A storm brightens it and pushes it
+		/// toward the equator, as far as fifty degrees in a great one, which is when the middle
+		/// latitudes see an aurora at all; and it widens as it goes. Poleward of the ring, inside the
+		/// polar cap, there is less, not more.
+		/// </para>
+		/// <para>
+		/// The magnetic pole is taken to be the pole. <paramref name="stellarWind"/> is how much of
+		/// its star's output the body gets, against the home world's at 1: a world close in is swept
+		/// harder. A body with no field has no ring and no aurora.
+		/// </para>
+		/// </remarks>
+		public static float Aurora(uint worldSeed, double worldSeconds, float latitudeDegrees, float season01, float magneticField, float stellarWind)
+		{
+			float field = Mathf.Clamp(magneticField, 0f, 2f);
+			if (field <= 0.001f)
+			{
+				return 0f;
+			}
+			float activity = GeomagneticActivity(worldSeed, worldSeconds, season01);
+			// A band, not a blob. A stronger field holds the ring nearer the pole. A storm does not MOVE
+			// it toward the equator, it WIDENS it that way: the equatorward edge is driven out — as far
+			// as the high forties in a great storm — while the poleward edge holds, so the far north has
+			// its best nights during the very storms that let the middle latitudes see one at all.
+			// Moved as one piece, the ring deserted the auroral zone whenever anything happened, and
+			// sixty-seven degrees never once had a bright night in a measured year.
+			//
+			// Measured, with a field of 1: something overhead on every dark clear night between about
+			// 64° and 72° and bright on one in eight; bright one night in ten at 57°, one in twenty-five
+			// at 52°, under one in a hundred at 47°, and never below 40° or above 80°.
+			float quiet = Mathf.Lerp(64f, 69f, Mathf.Clamp01(field));
+			float poleward = quiet + 3f;
+			float equatorward = quiet - 3f - 17f * activity;
+			float at = Mathf.Abs(latitudeDegrees);
+			float outside = at > poleward ? (at - poleward) / 3.5f
+				: at < equatorward ? (equatorward - at) / (3f + 2f * activity)
+				: 0f;
+			float ring = Mathf.Exp(-outside * outside);
+			float wind = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(0f, stellarWind)), 0.4f, 1.6f);
+			return Mathf.Clamp01((0.22f + 0.78f * activity) * ring * Mathf.Clamp01(field) * wind);
+		}
+
+		/// <summary>
+		/// Tells the air how much of a day it is having: the share of this body's day, here and now,
+		/// that the sun is up.
+		/// </summary>
+		/// <remarks>
+		/// From the latitude, the body's tilt and lean, and the season, so it is the body's own: a
+		/// world tilted sixty degrees has a polar circle that comes down to thirty, and an upright
+		/// one has none. Eased in over the last of the daylight and the last of the dark, so a place
+		/// crossing into its midnight sun does not have its weather change on one particular day.
+		/// </remarks>
+		public static Synoptic UnderSun(in Synoptic air, float daylightShare)
+		{
+			Synoptic local = air;
+			float share = Mathf.Clamp01(daylightShare);
+			local.PolarDay = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.85f, 1f, share));
+			local.PolarNight = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.15f, 0f, share));
+			return local;
+		}
+
+		/// <summary>
+		/// What the warmth of a place does to the air over it: how much water that air can carry, and
+		/// so how much cloud, rain and storm there is to be had.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Warm air holds far more water than cold — about twice as much for every ten degrees — and
+		/// it is water that makes weather. The temperature here is the climate's: the biome, the
+		/// latitude and the season, and above all how far the world is from its suns, which is the
+		/// largest single thing in it (a world twice as far out reads about −0.64 on this scale, and
+		/// four times as far is frozen at −1). It used to decide only WHAT fell, rain or snow. How
+		/// MUCH was the field's alone, so a world frozen solid at the edge of its system had the home
+		/// world's summer thunderstorms, falling as snow.
+		/// </para>
+		/// <para>
+		/// At the temperate zero the field was tuned at, this does nothing at all. Colder, the air
+		/// thins out toward a polar desert: little cloud, light dry snow, no convection to build a
+		/// storm on. Warmer, it carries more and is livelier — but only as far as there is water to
+		/// take up, which is <see cref="OverPlace"/>'s business and already says a hot dry world is dry.
+		/// </para>
+		/// </remarks>
+		public static Synoptic InClimate(in Synoptic air, float temperature)
+		{
+			float t = Mathf.Clamp(temperature, -1f, 1f);
+			// 0.4 of the water at −1, all of it at 0, a quarter more at +1.
+			float carries = t < 0f ? Mathf.Lerp(1f, 0.4f, -t) : Mathf.Lerp(1f, 1.25f, t);
+			if (Mathf.Approximately(carries, 1f))
+			{
+				return air;
+			}
+			Synoptic local = air;
+			float before = 0.4f + air.Humidity * 0.6f;
+			local.Humidity = Mathf.Clamp01(air.Humidity * carries);
+			float after = 0.4f + local.Humidity * 0.6f;
+			// Convection needs warmth as well as water: cold air is stable air.
+			float lively = t < 0f ? Mathf.Lerp(1f, 0.35f, -t) : 1f;
+			local.Instability = Mathf.Clamp01(air.Instability * after / Mathf.Max(0.01f, before) * lively);
 			local.ColumnType = Mathf.Clamp01(BaseColumnType(local.Instability) + air.Tower * TowerGain(local.Instability));
 			return local;
 		}
@@ -663,8 +816,17 @@ namespace FishMMO.Shared.Weather
 			float still = Mathf.Clamp01(1f - (air.Wind.magnitude - 4f) / 10f);
 			float dawn = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(air.LocalTime01 - 0.25f + 0.5f, 1f) - 0.5f) * 5f);
 			float night = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(air.LocalTime01 - 0.15f + 0.5f, 1f) - 0.5f) * 2.6f);
+			// The night is the sun's, not the clock's. Inside a polar circle the clock still goes
+			// round but the sun may not: in the summer it never sets, the ground never gets its hours
+			// of cooling, and there is no night for a fog to build through — and in the winter it
+			// never rises, there is no morning to burn a fog off, and one that forms can sit for days.
+			// By the hour alone the pole had a fog at four every "morning" of a sunlit summer, clearing
+			// at ten on a winter's day that was pitch dark.
+			float nightly = Mathf.Max(dawn, night * 0.7f);
+			nightly = Mathf.Lerp(nightly, 0f, Mathf.Clamp01(air.PolarDay));
+			nightly = Mathf.Lerp(nightly, 0.7f, Mathf.Clamp01(air.PolarNight));
 			frame[WeatherChannel.FogDensity] = Mathf.Clamp01((air.Humidity - 0.42f) / 0.3f) * Mathf.Clamp01(still * 1.3f)
-				* (0.2f + Mathf.Max(dawn, night * 0.7f) * 0.8f) * (1f - precipitation * 0.7f);
+				* (0.2f + nightly * 0.8f) * (1f - precipitation * 0.7f);
 
 			// Lightning is the tower's: a strong convective column that is actually raining. Gated on
 			// instability alone, at 0.72, it could not fire — the field never gets there.

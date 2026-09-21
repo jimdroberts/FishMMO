@@ -493,6 +493,151 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(WeatherDriver.FormationScale(AtmosphereKind.None), Is.EqualTo(0f));
 		}
 
+		// ── How far from its suns ────────────────────────────────────────
+
+		[Test]
+		public void AWorldFurtherFromItsSunIsColderAndItsAirCarriesLess()
+		{
+			WorldBody far = Make<WorldBody>("Far");
+			far.Parent = sun;
+			far.Orbit = new OrbitSettings { Distance = 4f };
+			far.RotationHours = 6f;
+			system.Bodies.Add(far);
+
+			CelestialMath.ClimateOffsets(system, home, 100.0, out float homeTemperature, out _);
+			CelestialMath.ClimateOffsets(system, far, 100.0, out float farTemperature, out _);
+			Assert.That(Mathf.Abs(homeTemperature), Is.LessThan(0.1f), "the home world is what the scale is measured from");
+			Assert.That(farTemperature, Is.EqualTo(-1f).Within(0.001f), "four times as far out is a sixteenth of the light: frozen");
+
+			// And the weather follows: the same unsettled air is a storm at home and thin dry snow out there.
+			var unsettled = new WeatherDriver.Synoptic { Humidity = 0.8f, Instability = 0.7f, Pressure = -0.5f };
+			WeatherDriver.Synoptic atHome = WeatherDriver.InClimate(unsettled, homeTemperature);
+			WeatherDriver.Synoptic outThere = WeatherDriver.InClimate(unsettled, farTemperature);
+			Assert.That(WeatherDriver.InClimate(unsettled, 0f).Humidity, Is.EqualTo(unsettled.Humidity), "at the temperate zero the field is as it was tuned");
+			Assert.That(outThere.Humidity, Is.LessThan(atHome.Humidity * 0.55f), "cold air holds well under half the water");
+			Assert.That(outThere.Instability, Is.LessThan(atHome.Instability * 0.4f), "and cold air is stable air");
+			WeatherFrame homeSky = WeatherDriver.Background(atHome), farSky = WeatherDriver.Background(outThere);
+			Assert.That(farSky[WeatherChannel.Precipitation], Is.LessThan(homeSky[WeatherChannel.Precipitation]));
+			Assert.That(farSky[WeatherChannel.CloudCover], Is.LessThan(homeSky[WeatherChannel.CloudCover]));
+		}
+
+		// ── The sky the air gives ────────────────────────────────────────
+
+		[Test]
+		public void StandardAirGivesTheSkyThatWasPainted()
+		{
+			// The model's free numbers were fitted to the Temperate Sky's gradients, so that the home
+			// world keeps its look. These are that asset's own values; if the model drifts, this says so.
+			SkySample noon = AtmosphereModel.Evaluate(AtmosphereKind.Standard, 1f, Color.white, 90f);
+			Assert.That(noon.Zenith.r, Is.EqualTo(0.20f).Within(0.1f));
+			Assert.That(noon.Zenith.g, Is.EqualTo(0.42f).Within(0.1f));
+			Assert.That(noon.Zenith.b, Is.EqualTo(0.86f).Within(0.1f));
+			Assert.That(noon.Horizon.r, Is.EqualTo(0.70f).Within(0.1f));
+			Assert.That(noon.Horizon.b, Is.EqualTo(0.95f).Within(0.1f));
+			Assert.That(noon.SunIntensity, Is.EqualTo(1.3f).Within(0.05f), "a clear noon is as bright as it was");
+			Assert.That(noon.StarVisibility, Is.EqualTo(0f), "no stars through our own air by day");
+
+			SkySample sunset = AtmosphereModel.Evaluate(AtmosphereKind.Standard, 1f, Color.white, 0f);
+			Assert.That(sunset.Horizon.r / sunset.Horizon.b, Is.GreaterThan(noon.Horizon.r / noon.Horizon.b * 2f), "the horizon goes orange as the sun goes down");
+			Assert.That(sunset.SunLight.b, Is.LessThan(noon.SunLight.b), "and so does the sunlight");
+
+			SkySample night = AtmosphereModel.Evaluate(AtmosphereKind.Standard, 1f, Color.white, -18f);
+			Assert.That(night.Zenith.b, Is.EqualTo(0.03f).Within(0.005f), "deep night is the airglow and nothing else");
+			Assert.That(night.SunIntensity, Is.EqualTo(0f));
+			Assert.That(night.StarVisibility, Is.EqualTo(1f));
+		}
+
+		[Test]
+		public void TheAirDecidesTheSky()
+		{
+			SkySample home = AtmosphereModel.Evaluate(AtmosphereKind.Standard, 1f, Color.white, 60f);
+			SkySample thin = AtmosphereModel.Evaluate(AtmosphereKind.Thin, 1f, Color.white, 60f);
+			SkySample dusty = AtmosphereModel.Evaluate(AtmosphereKind.Thin, 6f, new Color(0.85f, 0.55f, 0.3f), 60f);
+			SkySample thick = AtmosphereModel.Evaluate(AtmosphereKind.Thick, 1f, Color.white, 60f);
+			SkySample none = AtmosphereModel.Evaluate(AtmosphereKind.None, 1f, Color.white, 60f);
+
+			Assert.That(thin.Zenith.b, Is.LessThan(home.Zenith.b * 0.4f), "thin air: a dark sky");
+			Assert.That(thin.StarVisibility, Is.GreaterThan(0.1f), "through which the stars show by day");
+			Assert.That(thin.SunIntensity, Is.GreaterThan(home.SunIntensity), "and a harder sun");
+			// The case that scaling the dust by the gas got wrong: every thin-aired world came out blue.
+			Assert.That(dusty.Zenith.r, Is.GreaterThan(dusty.Zenith.b), "thin air full of rust dust is tan, not blue");
+			Assert.That(thin.Zenith.b, Is.GreaterThan(thin.Zenith.r), "while clean thin air is still blue");
+			Assert.That(thick.Zenith.maxColorComponent, Is.LessThanOrEqualTo(1f), "no sky is brighter than what lights it");
+			Assert.That(thick.Zenith.r / thick.Zenith.b, Is.GreaterThan(home.Zenith.r / home.Zenith.b), "thick air is paler, not bluer");
+			Assert.That(thick.SunIntensity, Is.LessThan(home.SunIntensity), "and its sun is dimmer");
+			Assert.That(none.Zenith.maxColorComponent, Is.LessThan(0.01f), "no air, a black sky");
+			Assert.That(none.StarVisibility, Is.EqualTo(1f));
+		}
+
+		[Test]
+		public void APaintedSkyIsUsedOnlyWhenAskedFor()
+		{
+			SkyProfile profile = Make<SkyProfile>("Cursed");
+			profile.Zenith = SkyProfile.Make(Color.magenta, Color.magenta, Color.magenta, Color.magenta, Color.magenta);
+			WorldBody dusty = Make<WorldBody>("Dusty");
+			dusty.Atmosphere = AtmosphereKind.Thin;
+
+			Assert.That(profile.Evaluate(60f, dusty).Zenith, Is.Not.EqualTo(Color.magenta), "by default the air decides");
+			profile.UseAuthoredColours = true;
+			Assert.That(profile.Evaluate(60f, dusty).Zenith, Is.EqualTo(Color.magenta), "painted colours, exactly as painted, when the profile says so");
+			dusty.Atmosphere = AtmosphereKind.None;
+			Assert.That(profile.Evaluate(60f, dusty).Zenith.maxColorComponent, Is.LessThan(0.01f), "but no paint stands in for no air");
+		}
+
+		// ── Aurora ───────────────────────────────────────────────────────
+
+		[Test]
+		public void TheAuroraStandsInARingRoundThePolesAndAStormDrivesItOut()
+		{
+			const uint Seed = 238u;
+			double quietAt = double.NaN, stormAt = double.NaN;
+			for (int i = 0; i < 40000 && (double.IsNaN(quietAt) || double.IsNaN(stormAt)); i++)
+			{
+				double t = i * 1800.0;
+				float activity = WeatherDriver.GeomagneticActivity(Seed, t, 0.25f);
+				if (double.IsNaN(quietAt) && activity < 0.01f) quietAt = t;
+				if (double.IsNaN(stormAt) && activity > 0.8f) stormAt = t;
+			}
+			Assert.That(double.IsNaN(quietAt) || double.IsNaN(stormAt), Is.False, "a year of the clock has both a quiet hour and a great storm in it");
+
+			float At(double t, float latitude, float field = 1f) => WeatherDriver.Aurora(Seed, t, latitude, 0.25f, field, 1f);
+			// Quiet: a faint ring in the auroral zone and nothing anywhere else.
+			Assert.That(At(quietAt, 67f), Is.GreaterThan(0.15f), "the ring is always there, faintly");
+			Assert.That(At(quietAt, 50f), Is.LessThan(0.01f), "and the middle latitudes see nothing on a quiet night");
+			Assert.That(At(quietAt, 88f), Is.LessThan(0.01f), "nor the polar cap, inside the ring");
+			// A great storm: bright in the zone AND reaching the middle latitudes.
+			Assert.That(At(stormAt, 67f), Is.GreaterThan(0.7f), "the far north has its best night in the same storm");
+			Assert.That(At(stormAt, 52f), Is.GreaterThan(0.5f), "which is what brings it down to fifty degrees");
+			Assert.That(At(stormAt, 30f), Is.LessThan(0.01f), "but never to the tropics");
+			Assert.That(At(stormAt, -67f), Is.EqualTo(At(stormAt, 67f)), "and there is a ring round the other pole");
+			// Needs a field, and the air does the rest.
+			Assert.That(At(stormAt, 67f, 0f), Is.EqualTo(0f), "no magnetic field, no aurora");
+			var lit = new WeatherFrame();
+			lit[WeatherChannel.Aurora] = 1f;
+			Assert.That(WeatherDriver.UnderAtmosphere(lit, AtmosphereKind.None)[WeatherChannel.Aurora], Is.EqualTo(0f), "no air to glow");
+			Assert.That(WeatherDriver.UnderAtmosphere(lit, AtmosphereKind.Thin)[WeatherChannel.Aurora], Is.EqualTo(0.5f));
+		}
+
+		// ── Toward the poles ─────────────────────────────────────────────
+
+		[Test]
+		public void FogKeepsTheSunsHoursNotTheClocks()
+		{
+			// Damp, still air: a fog if the night allows one.
+			WeatherDriver.Synoptic At(float localTime01) => new WeatherDriver.Synoptic { Humidity = 0.8f, LocalTime01 = localTime01 };
+			float Fog(WeatherDriver.Synoptic air) => WeatherDriver.Background(air)[WeatherChannel.FogDensity];
+
+			float dawnFog = Fog(At(0.25f)), noonFog = Fog(At(0.5f));
+			Assert.That(dawnFog, Is.GreaterThan(noonFog * 2f), "an ordinary day: thick at dawn, thin by noon");
+
+			// The midnight sun: the clock says four in the morning, the sun has not set for a month.
+			Assert.That(Fog(WeatherDriver.UnderSun(At(0.25f), 1f)), Is.EqualTo(noonFog).Within(1e-4f), "no night, so no night's fog");
+			// The polar night: the clock says noon, and there is no sun to burn anything off.
+			Assert.That(Fog(WeatherDriver.UnderSun(At(0.5f), 0f)), Is.GreaterThan(noonFog * 2f), "no morning, so the fog stays");
+			// And an ordinary place is left exactly alone.
+			Assert.That(Fog(WeatherDriver.UnderSun(At(0.25f), 0.5f)), Is.EqualTo(dawnFog).Within(1e-6f));
+		}
+
 		[Test]
 		public void TheSunRisesAndSetsOncePerSolarDay()
 		{
@@ -701,9 +846,11 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void AnAirlessSkyIsBlackWithStarsAndHarshSun()
 		{
+			// No air is the BODY's to say, not a profile's: any profile, on an airless body.
 			SkyProfile profile = Make<SkyProfile>("Moon Sky");
-			profile.Airless = true;
-			SkySample noon = profile.Evaluate(60f);
+			WorldBody airless = Make<WorldBody>("Airless");
+			airless.Atmosphere = AtmosphereKind.None;
+			SkySample noon = profile.Evaluate(60f, airless);
 			LogAssert.AreEqual(1f, noon.StarVisibility);
 			LogAssert.IsTrue(noon.Zenith.maxColorComponent < 0.01f, "black at noon");
 			LogAssert.IsTrue(noon.SunIntensity > 1f, "the sun is harsher");

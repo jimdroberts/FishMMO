@@ -122,6 +122,19 @@ namespace FishMMO.Shared.Weather
 				// Over this place: its biome's and its world's humidity lean on the air, so a desert
 				// stays mostly dry under a front that soaks the forest next door.
 				air = WeatherDriver.OverPlace(air, reading.Climate.Humidity);
+				// And how warm it is here — the biome, the latitude, the season and, most of all, how
+				// far this world is from its suns — decides how much water that air can carry at all.
+				air = WeatherDriver.InClimate(air, reading.Climate.Temperature);
+				// And how much of a day it is having. Toward the poles the sun stops setting for part
+				// of the year and stops rising for another, and the weather's daily rhythm is the sun's.
+				if (system != null && sceneBody != null)
+				{
+					double day = CelestialMath.SolarDayHours(system, sceneBody);
+					if (!double.IsInfinity(day) && day > 1e-6)
+					{
+						air = WeatherDriver.UnderSun(air, (float)(CelestialMath.DaylightHours(system, sceneBody, worldHours, timeline.LatitudeDegrees) / day));
+					}
+				}
 				sample.Air = air;
 				// The field carries its own temperature anomaly on top of the biome's climate.
 				sample.Temperature = Mathf.Clamp(sample.Temperature + air.Temperature * 0.35f, -1f, 1f);
@@ -133,7 +146,16 @@ namespace FishMMO.Shared.Weather
 				sample.DriverWeight = driverWeight;
 				if (driverWeight > 0f)
 				{
-					accumulator.Add(WeatherDriver.UnderAtmosphere(WeatherDriver.Background(air), atmosphere), driverWeight);
+					WeatherFrame natural = WeatherDriver.Background(air);
+					// The aurora is weather too, of a kind: the star's doing, the body's field's and its
+					// air's, at this latitude. How much of the star's output reaches this body stands in
+					// for how hard its wind blows here.
+					if (system != null && sceneBody != null)
+					{
+						float wind = (float)(CelestialMath.Insolation(system, sceneBody, worldHours) / System.Math.Max(1e-6, CelestialMath.MeanHomeInsolation(system)));
+						natural[WeatherChannel.Aurora] = WeatherDriver.Aurora(WeatherDriver.WorldSeed, worldSeconds, timeline.LatitudeDegrees, season01, sceneBody.MagneticField, wind);
+					}
+					accumulator.Add(WeatherDriver.UnderAtmosphere(natural, atmosphere), driverWeight);
 					if (profile != null)
 					{
 						var biome = new WeatherAccumulator();

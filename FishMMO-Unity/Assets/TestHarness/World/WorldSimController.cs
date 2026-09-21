@@ -477,13 +477,46 @@ namespace FishMMO.TestHarness.World
 		/// </summary>
 		public float Temperature
 		{
-			get => Settings != null ? Settings.RuntimeTemperatureOffset : 0f;
+			get => temperatureOffset;
 			set
 			{
-				if (Settings != null)
-				{
-					Settings.RuntimeTemperatureOffset = value;
-				}
+				temperatureOffset = value;
+				ApplyClimate();
+			}
+		}
+
+		private float temperatureOffset;
+
+		/// <summary>What the body stood on adds to the scene's temperature and humidity, now: see <see cref="ApplyClimate"/>.</summary>
+		public float BodyTemperature { get; private set; }
+		public float BodyHumidity { get; private set; }
+
+		/// <summary>
+		/// The scene's runtime climate: the panel's own offset, plus what the body stood on gets from
+		/// its suns. The same sum the server and the client make in the game.
+		/// </summary>
+		/// <remarks>
+		/// The bed used to write the slider straight into the scene and nothing else, so the body's
+		/// share was never added: standing on a world four times as far from its sun as the home world
+		/// — frozen solid, in the game — was exactly as warm here as standing at home. How far a world
+		/// is from its suns, what air it has and how much water, the latitude and the season: all of
+		/// that arrives through this one call, and the bed is for seeing it.
+		/// </remarks>
+		private void ApplyClimate()
+		{
+			BodyTemperature = 0f;
+			BodyHumidity = 0f;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system != null && Body != null)
+			{
+				CelestialMath.ClimateOffsets(system, Body, hours, out float bodyTemperature, out float bodyHumidity, latitude);
+				BodyTemperature = bodyTemperature;
+				BodyHumidity = bodyHumidity;
+			}
+			if (Settings != null)
+			{
+				Settings.RuntimeTemperatureOffset = Mathf.Clamp(temperatureOffset + BodyTemperature, -2f, 2f);
+				Settings.RuntimeHumidityOffset = Mathf.Clamp(BodyHumidity, -2f, 2f);
 			}
 		}
 
@@ -989,6 +1022,10 @@ namespace FishMMO.TestHarness.World
 			timeline.WorldSecondsTick = tick;
 			timeline.LatitudeDegrees = latitude;
 			timeline.LongitudeDegrees = longitude;
+			// Every time, not only when the slider moves: the body's share changes with the clock — an
+			// eccentric orbit swings a world nearer and further, a second sun comes and goes, and the
+			// season moves the sun up and down this latitude's sky.
+			ApplyClimate();
 			// And on which body, so the weather's season and hour are this body's and not the scene's.
 			timeline.BodyOverride = Body;
 

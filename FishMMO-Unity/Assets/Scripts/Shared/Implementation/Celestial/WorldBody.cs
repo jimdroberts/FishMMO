@@ -44,6 +44,12 @@ namespace FishMMO.Shared.Celestial
 
 		[Header("Climate")]
 		public AtmosphereKind Atmosphere = AtmosphereKind.Standard;
+		[Tooltip("How much dust and haze hangs in the air, against a clear day on the home world at 1. It scatters every colour about alike, so more of it pales the sky, whitens the horizon and dims and reddens a low sun. A desert world or one with active volcanoes is several times this; a clean cold one is less.")]
+		[Range(0f, 8f)] public float Haze = 1f;
+		[Tooltip("What colour that dust is. White for water haze; tan or rust for a desert world, which is what gives such a world a butterscotch sky under thin air, where there is too little gas to make it blue.")]
+		public Color HazeColor = Color.white;
+		[Tooltip("How strong the body's magnetic field is, against the home world's at 1. It is what an aurora needs besides air: the field catches the star's wind and brings it down in a ring round each pole. None, and there is no aurora however active the star — a small dead world, or one whose core has cooled. Strong, and the aurora is bright and keeps close to the poles; weak, and it is dim.")]
+		[Range(0f, 2f)] public float MagneticField = 1f;
 		[Tooltip("0 dry … 1 ocean world. Feeds the humidity offset.")]
 		[Range(0f, 1f)] public float Water = 0.7f;
 		[Tooltip("Base climate model for scenes on this body. Scene settings may still name their own.")]

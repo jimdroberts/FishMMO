@@ -323,7 +323,7 @@ namespace FishMMO.TestHarness.World
 			stats.Add(Card("Clock", false,
 				("clock.time", "Time"), ("clock.date", "Date"), ("clock.season", "Season"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
 			stats.Add(Card("Sun & sky", false,
-				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse")));
+				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse"), ("sky.aurora", "Aurora")));
 			stats.Add(Card("Air — what drives the weather", true,
 				("air.pressure", "Pressure"), ("air.humidity", "Humidity"), ("air.instability", "Instability"), ("air.driver", "Driver")));
 			stats.Add(Card("Weather — what is shown", true,
@@ -471,6 +471,12 @@ namespace FishMMO.TestHarness.World
 				skies.Add(SmallButton(profile.name, () => Controller.SkyOverride = captured));
 			}
 			page.Add(skies);
+			SkyProfile painted = Controller.Sky != null ? Controller.Sky.ActiveSky : null;
+			if (painted != null)
+			{
+				page.Add(LabeledToggle("Painted colours", painted.UseAuthoredColours, v => painted.UseAuthoredColours = v,
+					"Off (what ships): the sky's colours are worked out from the air of the body stood on — how much of it there is and how dusty. On: this profile's painted gradients, as they were. Flip it to compare the two on any body; on an airless one the sky is black either way."));
+			}
 			page.Add(LabeledToggle("Larger than life", Controller.LargerThanLife, v => Controller.LargerThanLife = v,
 				"Off (what ships): every disc is life-size. On: suns, moons and planets are drawn at the profile's scales, the way most games flatter the sky. This only changes what you see here; the assets keep their own setting."));
 
@@ -820,6 +826,28 @@ namespace FishMMO.TestHarness.World
 				Stat("sky.eclipse", "none", "dim");
 			}
 
+			// The aurora, and why: how disturbed the field is, and whether this latitude is under the ring.
+			{
+				SolarSystemProfile solar = SolarSystemProfile.Active;
+				WorldBody standing = Controller.Body;
+				float season = CelestialMath.Season01(solar, standing, Controller.Hours);
+				float activity = WeatherDriver.GeomagneticActivity(WeatherDriver.WorldSeed, Controller.Hours * 3600.0, season);
+				string storm = activity < 0.05f ? "quiet" : activity < 0.4f ? "unsettled" : activity < 0.75f ? "storm" : "great storm";
+				if (standing != null && (standing.MagneticField <= 0.001f || !standing.HasWeather))
+				{
+					Stat("sky.aurora", standing.HasWeather ? "none (no magnetic field)" : "none (no air)", "dim");
+				}
+				else
+				{
+					// The same wind the weather field uses, so this reads what is drawn.
+					float wind = solar != null && standing != null
+						? (float)(CelestialMath.Insolation(solar, standing, Controller.Hours) / Math.Max(1e-6, CelestialMath.MeanHomeInsolation(solar)))
+						: 1f;
+					float overhead = WeatherDriver.Aurora(WeatherDriver.WorldSeed, Controller.Hours * 3600.0, Controller.Latitude, season, standing != null ? standing.MagneticField : 1f, wind);
+					Stat("sky.aurora", $"{storm} · {(overhead * 100f).ToString("0", culture)}% here", overhead > 0.5f ? "good" : overhead < 0.05f ? "dim" : null);
+				}
+			}
+
 			// The air: what the driver says it is doing. Without this the weather just changes and
 			// there is no telling whether a front is arriving or a slider was nudged.
 			WeatherSample sample = Controller.LastSample;
@@ -853,7 +881,12 @@ namespace FishMMO.TestHarness.World
 			float fog = WeatherFogPresenter.Amount(shown);
 			Stat("wx.fog", fog.ToString("0.00", culture), fog <= 0.005f ? "dim" : null);
 			Stat("wx.wind", $"{(shown[WeatherChannel.WindSpeed] * 30f).ToString("0.0", culture)} m/s");
-			Stat("wx.temp", sample.Temperature.ToString("+0.00;-0.00", culture));
+			// The whole, and the part of it that is the body's: how far this world is from its suns,
+			// its air, this latitude and the season. Frozen and scorched are said so, since the scale
+			// stops at one either way and a world can be well past it.
+			string body = Controller.BodyTemperature <= -0.999f ? "frozen" : Controller.BodyTemperature >= 0.999f ? "scorched" : Controller.BodyTemperature.ToString("+0.00;-0.00", culture);
+			Stat("wx.temp", $"{sample.Temperature.ToString("+0.00;-0.00", culture)} (body {body})",
+				Mathf.Abs(Controller.BodyTemperature) >= 0.999f ? "warn" : null);
 			Stat("wx.exposure", sample.IsSheltered ? "sheltered" : "exposed");
 
 			RefreshCloudStats(sky, culture);

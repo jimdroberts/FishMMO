@@ -59,7 +59,6 @@ namespace FishMMO.Client
 		private static readonly int NoiseId = Shader.PropertyToID("_FishWeatherNoise");
 		private static readonly int CloudLitId = Shader.PropertyToID("_FishCloudLit");
 		private static readonly int CloudShadowId = Shader.PropertyToID("_FishCloudShadow");
-		private static readonly int CloudParamsId = Shader.PropertyToID("_FishCloudParams");
 		private static readonly int CloudLayerId = Shader.PropertyToID("_FishCloudLayer");
 		private static readonly int CloudShapeParamsId = Shader.PropertyToID("_FishCloudShapeParams");
 		private static readonly int CloudWindId = Shader.PropertyToID("_FishCloudWind");
@@ -198,7 +197,6 @@ namespace FishMMO.Client
 		private Material skyMaterial;
 		private Material bodyMaterial;
 		private SkyProfile defaultSky;
-		private SkyProfile airlessSky;
 		private SkyProfile regionSky;
 		private bool hasRegionSky;
 		private SkyProfile blendFrom;
@@ -431,13 +429,6 @@ namespace FishMMO.Client
 				defaultSky.hideFlags = HideFlags.DontSave;
 				defaultSky.name = "Default Sky";
 			}
-			if (airlessSky == null)
-			{
-				airlessSky = ScriptableObject.CreateInstance<SkyProfile>();
-				airlessSky.hideFlags = HideFlags.DontSave;
-				airlessSky.name = "Airless Sky";
-				airlessSky.Airless = true;
-			}
 		}
 
 		private void OnDestroy()
@@ -462,7 +453,6 @@ namespace FishMMO.Client
 			DestroyOwned(skyMaterial);
 			DestroyOwned(bodyMaterial);
 			DestroyOwned(defaultSky);
-			DestroyOwned(airlessSky);
 			DestroyOwned(stars);
 			instance = null;
 		}
@@ -513,7 +503,9 @@ namespace FishMMO.Client
 			{
 				return body.Sky;
 			}
-			return body != null && !body.HasWeather ? airlessSky : defaultSky;
+			// One default for every body. Whether there is air, how much and what is in it are the
+			// body's, and the sample is worked out from them; a profile is only how it is presented.
+			return defaultSky;
 		}
 
 		private void Update()
@@ -566,11 +558,11 @@ namespace FishMMO.Client
 				blendElapsed = 0f;
 			}
 			float sunAltitude = state.SunAltitude;
-			SkySample sample = blendTo.Evaluate(sunAltitude);
+			SkySample sample = blendTo.Evaluate(sunAltitude, state.Observer);
 			if (blendFrom != null && blendSeconds > 0f && blendElapsed < blendSeconds)
 			{
 				blendElapsed += dt;
-				sample = SkySample.Lerp(blendFrom.Evaluate(sunAltitude), sample, Mathf.SmoothStep(0f, 1f, blendElapsed / blendSeconds));
+				sample = SkySample.Lerp(blendFrom.Evaluate(sunAltitude, state.Observer), sample, Mathf.SmoothStep(0f, 1f, blendElapsed / blendSeconds));
 			}
 			// The profile is authored for the reference sun; the suns that are up recolour it.
 			baseSunLight = sample.SunLight;
@@ -718,7 +710,9 @@ namespace FishMMO.Client
 				starSeed = seed;
 				stars = StarfieldBuilder.Build(starSize, seed);
 			}
-			float airless = sky.Airless ? 1f : 0f;
+			// From the body, not from the profile: a profile that forgot to say so gave an airless
+			// moon a blue noon.
+			float airless = state.Observer != null && !state.Observer.HasWeather ? 1f : 0f;
 			float fogBlend = Mathf.Clamp01((RenderSettings.fog ? 0.45f : 0f) + WeatherFogPresenter.Amount(weather) * 0.55f) * (1f - airless);
 			Shader.SetGlobalVector(ZenithId, sample.Zenith);
 			Shader.SetGlobalVector(HorizonId, sample.Horizon);
@@ -794,7 +788,6 @@ namespace FishMMO.Client
 
 			Shader.SetGlobalVector(CloudLitId, sample.CloudLit);
 			Shader.SetGlobalVector(CloudShadowId, sample.CloudShadow);
-			Shader.SetGlobalVector(CloudParamsId, new Vector4(sky.CloudScale, sky.CirrusAmount, (float)(worldSeconds % 100000.0), 1f));
 
 			// The far sky follows the background forecast; the weather map draws the cells onto it.
 			// A context that carries no background at all (an adapter, an old caller) falls back to
@@ -805,14 +798,14 @@ namespace FishMMO.Client
 				: weather;
 			SetCloudGlobals(state, sample, weather, background, profile, tier, context);
 
-			// Aurora: needs the weather's aurora, night, a high latitude and the cold.
-			float latitudeGate = Mathf.InverseLerp(sky.AuroraMinLatitude - 10f, sky.AuroraMinLatitude + 5f, Mathf.Abs((float)state.Latitude));
-			if (state.Observer == null)
-			{
-				latitudeGate = 1f;
-			}
-			float cold = Mathf.InverseLerp(0.35f, 0f, context.Temperature);
-			float aurora = weather[WeatherChannel.Aurora] * sample.StarVisibility * latitudeGate * cold * (1f - overcast);
+			// Dark and clear. WHERE an aurora stands is the aurora's own business now — a ring round each
+			// magnetic pole that a storm widens toward the equator — and the profile's flat "not below
+			// this latitude" laid over that cut a great storm's display off in the low forties, exactly
+			// where it is rarest and most worth seeing. Nor "cold": an aurora
+			// is a hundred kilometres up and has nothing to do with the ground's temperature. That gate
+			// dated from when the only aurora was one a preset asked for, in scenes made cold for it; it
+			// would have put out a storm's aurora over any mild country it reached.
+			float aurora = weather[WeatherChannel.Aurora] * sample.StarVisibility * (1f - overcast);
 			Shader.SetGlobalVector(AuroraParamsId, new Vector4(aurora, (float)(worldSeconds % 100000.0), 0f, 0f));
 			Shader.SetGlobalVector(AuroraAId, sky.AuroraA);
 			Shader.SetGlobalVector(AuroraBId, sky.AuroraB);

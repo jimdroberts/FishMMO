@@ -259,6 +259,7 @@ namespace FishMMO.Shared.WorldDesign
 				b.Orbit = new OrbitSettings { Distance = 384f, InclinationDegrees = 5.1f, PeriodMode = OrbitPeriodMode.Authored, PeriodDays = 7.5f };
 				b.SkyRadiusKm = 1737f;
 				b.Atmosphere = AtmosphereKind.None;
+				b.MagneticField = 0f;
 				b.Water = 0f;
 				b.Tint = new Color(0.78f, 0.77f, 0.74f, 1f);
 				b.MinimumRadiusKm = 10f;

@@ -43,17 +43,41 @@ namespace FishMMO.Shared.Celestial
 	}
 
 	/// <summary>
-	/// How a sky looks: colours for every sun altitude from deep night (−18°) to noon (90°),
-	/// light colours and strengths, disc sizes, stars, clouds and aurora. A body's sky, a
-	/// scene's override, or a region's (through ChangeSkyProfileAction).
+	/// How a sky is presented: the look, not the facts. A body's sky, a scene's override, or a
+	/// region's (through ChangeSkyProfileAction).
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// What is in the sky, and where, is the solar system's. What the weather is doing is the
+	/// weather's. And the sky's COLOURS are, by default, the air's: worked out by
+	/// <see cref="AtmosphereModel"/> from how much atmosphere the body stood on has and how much dust
+	/// is in it, so a thin-aired world has a dark sky and a dusty one a tan one without anybody
+	/// painting either. What is left to a profile is what no physics decides — how bright the stars
+	/// are drawn, how much the discs are flattered, the exposure, the aurora's colours, a galaxy.
+	/// </para>
+	/// <para>
+	/// The painted gradients are still here, for a sky that is MEANT to be wrong: a cursed valley, a
+	/// dream, a place under an enchantment. Tick <see cref="UseAuthoredColours"/> and the profile's
+	/// own colours are used as they are, whatever the air.
+	/// </para>
+	/// <para>
+	/// A profile no longer says whether there is air at all (the body does: its atmosphere), where an
+	/// aurora may be seen (the aurora's own ring does, from the body's magnetic field and the star's
+	/// activity), or anything about the old flat cloud layer, which nothing has drawn since the
+	/// clouds became a volume.
+	/// </para>
+	/// </remarks>
 	[CreateAssetMenu(fileName = "Sky Profile", menuName = "FishMMO/World/Sky Profile", order = 17)]
 	public class SkyProfile : CachedScriptableObject<SkyProfile>, ICachedObject
 	{
 		public const float LowestAltitude = -18f;
 		public const float HighestAltitude = 90f;
 
-		[Header("Colours by sun altitude (left: −18°, right: +90°)")]
+		[Header("Painted colours (an override)")]
+		[Tooltip("Off (the default): the sky's colours come from the air of the body stood on — how much atmosphere it has and how dusty it is — so every world has the sky its air would give it. On: the gradients below are used exactly as painted, whatever the air. For a sky that is meant to be unnatural: a cursed region, a dream.")]
+		public bool UseAuthoredColours;
+
+		[Header("Colours by sun altitude (left: −18°, right: +90°) — used only when painted colours are on")]
 		public Gradient Zenith = Make(new Color(0.01f, 0.012f, 0.03f), new Color(0.06f, 0.08f, 0.2f), new Color(0.22f, 0.32f, 0.58f), new Color(0.25f, 0.45f, 0.85f), new Color(0.2f, 0.42f, 0.86f));
 		public Gradient Horizon = Make(new Color(0.02f, 0.025f, 0.05f), new Color(0.35f, 0.22f, 0.3f), new Color(0.98f, 0.55f, 0.3f), new Color(0.72f, 0.8f, 0.92f), new Color(0.7f, 0.82f, 0.95f));
 		public Gradient Ground = Make(new Color(0.01f, 0.01f, 0.012f), new Color(0.08f, 0.07f, 0.08f), new Color(0.25f, 0.22f, 0.2f), new Color(0.36f, 0.36f, 0.35f), new Color(0.4f, 0.4f, 0.38f));
@@ -95,20 +119,9 @@ namespace FishMMO.Shared.Celestial
 		[Tooltip("The glow along the horizon toward a low sun. It only shows within about fourteen degrees of the horizon, on both the sun's side and the view's, so it is a sunset term and does nothing at midday.")]
 		[Range(0f, 1f)] public float SunGlow = 0.35f;
 
-		[Header("Clouds")]
-		[Tooltip("Size of the cloud pattern: larger is bigger clouds.")]
-		[Min(0.1f)] public float CloudScale = 1f;
-		[Range(0f, 1f)] public float CirrusAmount = 0.35f;
-
 		[Header("Aurora")]
 		public Color AuroraA = new Color(0.2f, 1f, 0.45f);
 		public Color AuroraB = new Color(0.55f, 0.25f, 1f);
-		[Tooltip("Aurora needs at least this latitude (either hemisphere), in degrees.")]
-		[Range(0f, 90f)] public float AuroraMinLatitude = 45f;
-
-		[Header("No atmosphere")]
-		[Tooltip("Use a black sky with stars at noon (bodies without air).")]
-		public bool Airless;
 
 		/// <summary>
 		/// Forces <see cref="LargerThanLife"/> on or off for every profile, without touching the
@@ -127,36 +140,46 @@ namespace FishMMO.Shared.Celestial
 
 		public static float AltitudeKey(float altitudeDegrees) => Mathf.InverseLerp(LowestAltitude, HighestAltitude, altitudeDegrees);
 
-		/// <summary>Colours at a sun altitude, in degrees.</summary>
-		public SkySample Evaluate(float sunAltitude)
+		/// <summary>
+		/// The sky at a sun altitude, in degrees, for the body stood on. No body is a standard
+		/// atmosphere, which is the home world's.
+		/// </summary>
+		public SkySample Evaluate(float sunAltitude, WorldBody body = null)
 		{
-			float t = AltitudeKey(sunAltitude);
-			var sample = new SkySample
+			AtmosphereKind air = body != null ? body.Atmosphere : AtmosphereKind.Standard;
+			SkySample sample;
+			if (UseAuthoredColours && air != AtmosphereKind.None)
 			{
-				Zenith = Zenith.Evaluate(t) * Exposure,
-				Horizon = Horizon.Evaluate(t) * Exposure,
-				Ground = Ground.Evaluate(t),
-				Fog = Fog.Evaluate(t),
-				AmbientSky = AmbientSky.Evaluate(t),
-				AmbientEquator = AmbientEquator.Evaluate(t),
-				AmbientGround = AmbientGround.Evaluate(t),
-				SunLight = SunLight.Evaluate(t),
-				SunIntensity = Mathf.Max(0f, SunIntensity.Evaluate(sunAltitude)),
-				MoonLight = MoonLight,
-				MoonIntensity = Mathf.Max(0f, MoonIntensity.Evaluate(sunAltitude)),
-				CloudLit = CloudLit.Evaluate(t),
-				CloudShadow = CloudShadow.Evaluate(t),
-				StarVisibility = Mathf.Clamp01(Mathf.InverseLerp(-2f, -14f, sunAltitude)),
-			};
-			if (Airless)
-			{
-				sample.Zenith = new Color(0.003f, 0.003f, 0.006f);
-				sample.Horizon = new Color(0.006f, 0.006f, 0.01f);
-				sample.Fog = sample.Horizon;
-				sample.StarVisibility = 1f;
-				sample.SunLight = Color.white;
-				sample.SunIntensity = sunAltitude > -1f ? 1.4f : 0f;
+				float t = AltitudeKey(sunAltitude);
+				sample = new SkySample
+				{
+					Zenith = Zenith.Evaluate(t),
+					Horizon = Horizon.Evaluate(t),
+					Ground = Ground.Evaluate(t),
+					Fog = Fog.Evaluate(t),
+					AmbientSky = AmbientSky.Evaluate(t),
+					AmbientEquator = AmbientEquator.Evaluate(t),
+					AmbientGround = AmbientGround.Evaluate(t),
+					SunLight = SunLight.Evaluate(t),
+					SunIntensity = Mathf.Max(0f, SunIntensity.Evaluate(sunAltitude)),
+					CloudLit = CloudLit.Evaluate(t),
+					CloudShadow = CloudShadow.Evaluate(t),
+					StarVisibility = Mathf.Clamp01(Mathf.InverseLerp(-2f, -14f, sunAltitude)),
+				};
 			}
+			else
+			{
+				// The air's own sky. A painted one cannot stand in for no air at all: with nothing to
+				// scatter the light there is nothing to paint, and the sky is black whatever the
+				// profile says.
+				sample = AtmosphereModel.Evaluate(air, body != null ? body.Haze : 1f, body != null ? body.HazeColor : Color.white, sunAltitude);
+			}
+			sample.Zenith *= Exposure;
+			sample.Horizon *= Exposure;
+			// The moon's light is not the air's to decide: how dark it has to be before the moon
+			// matters, and what colour moonlight is, are the profile's.
+			sample.MoonLight = MoonLight;
+			sample.MoonIntensity = Mathf.Max(0f, MoonIntensity.Evaluate(sunAltitude));
 			return sample;
 		}
 

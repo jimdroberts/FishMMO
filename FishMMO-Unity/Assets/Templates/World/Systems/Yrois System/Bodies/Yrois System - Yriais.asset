@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39aaa201d0124cd6a217bdb1a28fa474, type: 3}
+  m_Name: Yrois System - Yriais
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.WorldBody
+  DisplayName: Yriais
+  Parent: {fileID: 11400000, guid: be25a097fd0e8228f87c0a220085ff0a, type: 2}
+  Orbit:
+    Distance: 3130.471
+    Eccentricity: 0.025627842
+    InclinationDegrees: -3.5362864
+    OffsetDegrees: 189.49828
+    PeriodMode: 1
+    PeriodDays: 186.32037
+  SkyRadiusKm: 955.3278
+  Tint: {r: 0.71279913, g: 0.6683984, b: 0.62948596, a: 1}
+  SurfaceTexture: {fileID: 0}
+  HasRings: 0
+  Rings:
+    InnerRadius: 1.3
+    OuterRadius: 2.3
+    Bands: 5
+    Opacity: 0.6
+    Tint: {r: 0.86, g: 0.8, b: 0.68, a: 1}
+    Texture: {fileID: 0}
+  Kind: 1
+  RotationHours: 45.739536
+  Retrograde: 0
+  AxialTiltDegrees: 2.8562207
+  PoleLongitudeDegrees: 143.63097
+  TidallyLocked: 0
+  RotationOffsetDegrees: 0
+  Atmosphere: 0
+  MagneticField: 0
+  Water: 0
+  BaseClimate: {fileID: 0}
+  Sky: {fileID: 0}
+  RadiusMode: 0
+  ManualRadiusKm: 30
+  MinimumRadiusKm: 10
+  MaxCoveragePercent: 35
+  CurrentRadiusKm: 10
+  Layers: []

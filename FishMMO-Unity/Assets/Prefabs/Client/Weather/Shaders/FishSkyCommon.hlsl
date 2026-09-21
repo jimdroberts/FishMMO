@@ -31,7 +31,6 @@ TEXTURE2D(_FishOwnRingTex);
 SAMPLER(sampler_FishOwnRingTex);
 float4 _FishCloudLit;       // rgb
 float4 _FishCloudShadow;    // rgb
-float4 _FishCloudParams;    // x pattern scale, y cirrus, z time (s), w wind drift scale
 float4 _FishAuroraParams;   // x strength, y time
 float4 _FishAuroraA;
 float4 _FishAuroraB;
