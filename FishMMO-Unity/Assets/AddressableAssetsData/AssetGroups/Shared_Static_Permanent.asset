@@ -723,6 +723,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a90e9a4654dca6ed8aa1752628adf7d
+    m_Address: Moon 5
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a9915922f5a42b194cbd2e087d53ed8
     m_Address: Bog Wyrm
     m_ReadOnly: 0
@@ -941,6 +947,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3dd24d27fad4b54e8bffb2b3c47197e5
     m_Address: Mock Piercing Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3eecfff349832b1fbb74cd8067cfc40b
+    m_Address: Planet 4
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2222,6 +2234,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a84c9321eb21a97058c6d100aaf9a279
+    m_Address: Comet 7
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a85d1368011a475b94ed5eba33ff393f
     m_Address: Duergar
     m_ReadOnly: 0
@@ -2871,6 +2889,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: da0784a63e774c6583670b281a304ae3
     m_Address: Undead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: da7f609f5623f22e093087d609f80c6b
+    m_Address: Moon 6
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

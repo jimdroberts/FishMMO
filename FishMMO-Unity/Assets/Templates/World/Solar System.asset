@@ -16,7 +16,14 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c657b9f3adc3333b5a8bcdf77cb71741, type: 2}
   - {fileID: 11400000, guid: 502a5864d965402358c527e42529b8bd, type: 2}
   - {fileID: 11400000, guid: 486b421eb65995e34a39f15cf3d209d3, type: 2}
+  - {fileID: 11400000, guid: 3eecfff349832b1fbb74cd8067cfc40b, type: 2}
+  - {fileID: 11400000, guid: 2a90e9a4654dca6ed8aa1752628adf7d, type: 2}
+  - {fileID: 11400000, guid: da7f609f5623f22e093087d609f80c6b, type: 2}
+  - {fileID: 11400000, guid: a84c9321eb21a97058c6d100aaf9a279, type: 2}
   HomeWorld: {fileID: 11400000, guid: 502a5864d965402358c527e42529b8bd, type: 2}
+  WeatherSeed: 238
+  StarSeed: 238
+  WeatherSystemHours: 5
   Calendar: {fileID: 11400000, guid: b90f2d3c09077e97099fd6461c29802a, type: 2}
   MeteorShowers: []
   SporadicMeteorsPerHour: 6
