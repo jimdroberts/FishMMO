@@ -28,6 +28,9 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		private SolarSystemProfile profile;
+		private TextField nameField;
+		private Label nameStatus;
+		private ToolbarButton activeButton;
 		private UnityEngine.Object selected;
 		private double hours;
 		private double speed;
@@ -83,7 +86,10 @@ namespace FishMMO.Shared.WorldDesign
 			profileField.style.minWidth = 220f;
 			profileField.RegisterValueChangedCallback(evt => SetProfile(evt.newValue as SolarSystemProfile));
 			toolbar.Add(profileField);
-			toolbar.Add(new ToolbarButton(CreateExample) { text = "Create example system", tooltip = "Creates Sun, Home, Moon 1, the calendar and the world atlas under " + WorldEditorAssets.Root + ". Reuses a system that already exists." });
+			toolbar.Add(new ToolbarButton(CreateExample) { text = "New", tooltip = "Makes another solar system — the example Sun, Home and Moon 1 — in a folder of its own under " + WorldEditorAssets.SystemsFolder + ". The systems you have are not touched, and the game keeps using the active one. Asks first." });
+			toolbar.Add(new ToolbarButton(CreateRandom) { text = "Random", tooltip = "Replaces the system selected here with a randomly generated one: one to three suns, rocky worlds close in and giants further out, moons, rings, comets, a belt and meteor showers, every world with its own tilt and lean. The old system goes to the trash. Asks first. With no system selected it simply makes one." });
+			activeButton = new ToolbarButton(MakeActive) { text = "Make active", tooltip = "Makes the selected system the one the game is set in: the world atlas names it, and the calendar counts its home world's days. A project can hold several systems; exactly one is active." };
+			toolbar.Add(activeButton);
 			var addMenu = new ToolbarMenu { text = "Add body" };
 			addMenu.menu.AppendAction("Star", _ => AddBody<StarBody>("Star"));
 			addMenu.menu.AppendAction("Planet", _ => AddBody<WorldBody>("Planet"));
@@ -100,6 +106,26 @@ namespace FishMMO.Shared.WorldDesign
 			toolbar.Add(new ToolbarSpacer { flex = true });
 			toolbar.Add(new ToolbarButton(() => { Selection.activeObject = WorldEditorAssets.FindFirst<Atlas.WorldAtlas>(); }) { text = "Select atlas" });
 			Add(toolbar);
+
+			// ── The system's name ──
+			// Its own row: renaming moves a folder and every asset in it, which is not something to
+			// hang off a field that commits on every keystroke.
+			var naming = new Toolbar();
+			naming.Add(new Label("System name") { style = { unityTextAlign = TextAnchor.MiddleLeft, marginLeft = 4f, marginRight = 4f } });
+			nameField = new TextField { isDelayed = true };
+			nameField.style.minWidth = 220f;
+			nameField.RegisterCallback<KeyDownEvent>(evt =>
+			{
+				if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+				{
+					RenameSystem();
+				}
+			});
+			naming.Add(nameField);
+			naming.Add(new ToolbarButton(RenameSystem) { text = "Rename", tooltip = "Renames the system, its folder, and the system's name at the front of each of its bodies' asset names. Refused if another system or folder already has the name." });
+			nameStatus = new Label { style = { unityTextAlign = TextAnchor.MiddleLeft, marginLeft = 8f } };
+			naming.Add(nameStatus);
+			Add(naming);
 
 			var columns = new VisualElement();
 			columns.style.flexDirection = FlexDirection.Row;
@@ -213,7 +239,10 @@ namespace FishMMO.Shared.WorldDesign
 			RegisterCallback<AttachToPanelEvent>(_ => Attach());
 			RegisterCallback<DetachFromPanelEvent>(_ => Detach());
 
-			SetProfile(WorldEditorAssets.FindFirst<SolarSystemProfile>());
+			// The active system, when the atlas names one: with several in the project "the first found"
+			// is whichever the asset database lists first.
+			Atlas.WorldAtlas openingAtlas = WorldEditorAssets.FindFirst<Atlas.WorldAtlas>();
+			SetProfile(openingAtlas != null && openingAtlas.SolarSystem != null ? openingAtlas.SolarSystem : WorldEditorAssets.FindFirst<SolarSystemProfile>());
 		}
 
 		// ── Layout helpers ──
@@ -345,6 +374,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			profile = value;
 			profileField.SetValueWithoutNotify(value);
+			RefreshNaming();
 			selected = value;
 			dirtyStamp = -1;
 			RebuildBodyList();
@@ -415,7 +445,7 @@ namespace FishMMO.Shared.WorldDesign
 			bodyList.Clear();
 			if (profile == null)
 			{
-				AddLine(bodyList, "No solar system yet. Pick one above or press Create example system.");
+				AddLine(bodyList, "No solar system yet. Pick one above or press New for the example system, or Random to roll one.");
 				return;
 			}
 			bodyList.Add(ListItem(profile, "Solar System", 0, profile == selected));
@@ -515,8 +545,66 @@ namespace FishMMO.Shared.WorldDesign
 
 		private void CreateExample()
 		{
-			SolarSystemProfile system = WorldEditorAssets.CreateExampleSystem();
-			SetProfile(system);
+			SolarSystemProfile system = SolarSystemGenerator.NewExample();
+			if (system != null)
+			{
+				SetProfile(system);
+			}
+		}
+
+		private void CreateRandom()
+		{
+			SolarSystemProfile system = SolarSystemGenerator.ReplaceWithRandom(profile);
+			if (system != null)
+			{
+				SetProfile(system);
+			}
+		}
+
+		private void MakeActive()
+		{
+			if (profile == null)
+			{
+				return;
+			}
+			SolarSystemGenerator.MakeActive(profile);
+			RefreshNaming();
+		}
+
+		private void RenameSystem()
+		{
+			if (profile == null || nameField == null)
+			{
+				return;
+			}
+			string problem = SolarSystemGenerator.Rename(profile, nameField.value);
+			RefreshNaming();
+			if (problem != null)
+			{
+				// After the refresh, which puts the real name back in the field: the reason stays up.
+				nameStatus.text = problem;
+				return;
+			}
+			dirtyStamp = -1;
+			RebuildBodyList();
+		}
+
+		/// <summary>The name row and the active marker, for whichever system is selected.</summary>
+		private void RefreshNaming()
+		{
+			if (nameField == null)
+			{
+				return;
+			}
+			nameField.SetValueWithoutNotify(profile != null ? profile.name : string.Empty);
+			nameField.SetEnabled(profile != null);
+			Atlas.WorldAtlas atlas = WorldEditorAssets.FindFirst<Atlas.WorldAtlas>();
+			bool active = profile != null && atlas != null && atlas.SolarSystem == profile;
+			int systems = WorldEditorAssets.FindAll<SolarSystemProfile>().Count;
+			nameStatus.text = profile == null ? string.Empty
+				: active ? "● Active: the system the game is set in"
+				: systems > 1 ? "○ Not active: a system for testing" : "○ Not active";
+			activeButton?.SetEnabled(profile != null && !active);
 		}
 
 		private void AddBody<T>(string role) where T : CelestialBody
@@ -658,7 +746,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			if (profile == null)
 			{
-				EditorUtility.DisplayDialog("No system", "Create the example system first.", "OK");
+				EditorUtility.DisplayDialog("No system", "Make a solar system first: press New on the Solar System page.", "OK");
 				return;
 			}
 			WorldBody companion = SkyObjectExamples.Add(profile);

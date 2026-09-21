@@ -24,7 +24,7 @@ MonoBehaviour:
   SkyRadiusKm: 1200
   Tint: {r: 0.7, g: 0.7, b: 0.72, a: 1}
   SurfaceTexture: {fileID: 0}
-  HasRings: 0
+  HasRings: 1
   Kind: 1
   RotationHours: 6
   Retrograde: 0

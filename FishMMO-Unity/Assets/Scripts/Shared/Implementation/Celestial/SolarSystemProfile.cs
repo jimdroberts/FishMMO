@@ -36,8 +36,23 @@ namespace FishMMO.Shared.Celestial
 		[Tooltip("Share of the visible sky, in percent, above which a body is drawn with its texture.")]
 		[Range(0.001f, 5f)] public float TextureAboveSkyPercent = 0.1f;
 
-		/// <summary>The loaded profile, if any. There is one per world.</summary>
-		public static SolarSystemProfile Active => GetFirst<SolarSystemProfile>();
+		/// <summary>
+		/// The system the game is set in: the one the world atlas names, or failing that the first found.
+		/// </summary>
+		/// <remarks>
+		/// A project can hold several systems — one to ship and others to try things in — and "the
+		/// first one loaded" is then whichever the asset loader happened to reach first. The atlas is
+		/// the one asset that already says which system its scenes stand in, so it decides. With no
+		/// atlas, or an atlas that names none, this is what it always was.
+		/// </remarks>
+		public static SolarSystemProfile Active
+		{
+			get
+			{
+				FishMMO.Shared.Atlas.WorldAtlas atlas = FishMMO.Shared.Atlas.WorldAtlas.Active;
+				return atlas != null && atlas.SolarSystem != null ? atlas.SolarSystem : GetFirst<SolarSystemProfile>();
+			}
+		}
 
 		/// <summary>The first star in <see cref="Bodies"/>, or null.</summary>
 		public StarBody PrimaryStar

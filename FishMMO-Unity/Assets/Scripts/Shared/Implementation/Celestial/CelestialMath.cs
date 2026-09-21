@@ -51,9 +51,13 @@ namespace FishMMO.Shared.Celestial
 		/// <summary>A body's orbital period in real hours. Infinite for a star.</summary>
 		public static double OrbitHours(SolarSystemProfile system, CelestialBody body)
 		{
-			if (body == null || body is StarBody)
+			if (body == null)
 			{
 				return double.PositiveInfinity;
+			}
+			if (body is StarBody star)
+			{
+				return StarOrbitHours(system, star);
 			}
 			if (system != null && ReferenceEquals(body, system.HomeWorld))
 			{
@@ -113,11 +117,154 @@ namespace FishMMO.Shared.Celestial
 		// ── Positions ──────────────────────────────────────────────────
 
 		/// <summary>Heliocentric position in AU at a world time.</summary>
-		public static Vector3d Position(SolarSystemProfile system, CelestialBody body, double hours)
+		// ── Stars that orbit one another ───────────────────────────────
+
+		/// <summary>
+		/// A star's mass in suns, from how bright it is: on the main sequence luminosity goes as about
+		/// the 3.5th power of mass. A star has no mass field, and the one thing the mass is wanted for —
+		/// which of a pair swings wide and which hardly moves — follows the brightness closely enough.
+		/// </summary>
+		public static double StarMass(StarBody star) => star != null ? Math.Pow(Math.Max(1e-4, star.Luminosity), 1.0 / 3.5) : 1.0;
+
+		/// <summary>The star a companion goes round: the star it is parented to, or for a star at the root, the primary.</summary>
+		private static StarBody PartnerOf(SolarSystemProfile system, StarBody star)
 		{
-			if (body == null || body is StarBody && (system == null || ReferenceEquals(body, system.PrimaryStar) || body.Parent == null))
+			if (star == null || system == null)
+			{
+				return null;
+			}
+			if (star.Parent is StarBody parent)
+			{
+				return parent;
+			}
+			StarBody primary = system.PrimaryStar;
+			return star.Parent == null && !ReferenceEquals(star, primary) ? primary : null;
+		}
+
+		/// <summary>
+		/// How long a star takes to go round its partner; infinite for a star that has none. The
+		/// primary of a system of several takes its first companion's period, since that is the
+		/// swing it makes.
+		/// </summary>
+		public static double StarOrbitHours(SolarSystemProfile system, StarBody star)
+		{
+			if (system == null || star == null)
+			{
+				return double.PositiveInfinity;
+			}
+			StarBody partner = PartnerOf(system, star);
+			if (partner == null)
+			{
+				foreach (CelestialBody candidate in system.Bodies)
+				{
+					if (candidate is StarBody other && !ReferenceEquals(other, star) && ReferenceEquals(PartnerOf(system, other), star))
+					{
+						return StarOrbitHours(system, other);
+					}
+				}
+				return double.PositiveInfinity;
+			}
+			if (star.Orbit.Distance <= 1e-9f)
+			{
+				return double.PositiveInfinity;
+			}
+			if (star.Orbit.PeriodMode == OrbitPeriodMode.Authored)
+			{
+				return Math.Max(0.001, star.Orbit.PeriodDays) * HomeSolarDayHours(system);
+			}
+			// Kepler, against the home world's year: the same law the planets use, with the pair's
+			// combined mass in place of the one star the home year was measured round.
+			double homeDistance = system.HomeWorld != null ? Math.Max(1e-6, system.HomeWorld.Orbit.Distance) : 1.0;
+			double reference = Math.Max(1e-6, StarMass(system.PrimaryStar));
+			double pair = Math.Max(1e-6, StarMass(star) + StarMass(partner));
+			return YearHours(system) * Math.Pow(star.Orbit.Distance / homeDistance, 1.5) / Math.Sqrt(pair / reference);
+		}
+
+		/// <summary>Where a companion star stands from its partner (AU): its own orbit, as authored.</summary>
+		private static Vector3d StarSeparation(SolarSystemProfile system, StarBody star, double hours)
+		{
+			OrbitSettings orbit = star.Orbit;
+			double period = StarOrbitHours(system, star);
+			if (orbit.Distance <= 1e-9f || double.IsInfinity(period))
 			{
 				return new Vector3d(0, 0, 0);
+			}
+			double e = Math.Min(0.99, Math.Max(0.0, orbit.Eccentricity));
+			double eccentric = SolveKepler(TwoPi * hours / period + orbit.OffsetDegrees * Deg2Rad, e);
+			double trueAnomaly = 2.0 * Math.Atan2(Math.Sqrt(1 + e) * Math.Sin(eccentric / 2), Math.Sqrt(1 - e) * Math.Cos(eccentric / 2));
+			double radius = orbit.Distance * (1 - e * Math.Cos(eccentric));
+			double inclination = orbit.InclinationDegrees * Deg2Rad;
+			double x = Math.Cos(trueAnomaly) * radius, y = Math.Sin(trueAnomaly) * radius;
+			return new Vector3d(x, y * Math.Cos(inclination), y * Math.Sin(inclination));
+		}
+
+		/// <summary>
+		/// Where a star is. One star alone is the centre of its system. Several at the root go round
+		/// the centre of mass they share, which is what stays at the origin.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The first star is the primary. Every other star at the root is its companion: that star's
+		/// own orbit is where it stands from the primary and how long it takes. The primary is pushed
+		/// the other way by each companion in proportion to their masses, so the two of a pair swing
+		/// round the point between them — the heavier close in, the lighter wide — and face each other
+		/// across it all the way round. With more than two this is a hierarchy about the primary and
+		/// not an n-body solution, which is what a sky needs and all it needs.
+		/// </para>
+		/// <para>
+		/// Stars used not to move at all: every root star was pinned to the origin, on top of the
+		/// others, and a star parented to another took the planets' branch with an infinite period
+		/// and hung at one fixed point for ever.
+		/// </para>
+		/// </remarks>
+		private static Vector3d StarPosition(SolarSystemProfile system, StarBody star, double hours)
+		{
+			if (system == null || star == null)
+			{
+				return new Vector3d(0, 0, 0);
+			}
+			if (star.Parent is StarBody parent)
+			{
+				return Position(system, parent, hours) + StarSeparation(system, star, hours);
+			}
+			if (star.Parent != null)
+			{
+				return new Vector3d(0, 0, 0);
+			}
+			StarBody primary = system.PrimaryStar;
+			if (primary == null)
+			{
+				return new Vector3d(0, 0, 0);
+			}
+			// The primary's swing: away from each companion, by that companion's share of the mass.
+			double total = StarMass(primary);
+			foreach (CelestialBody candidate in system.Bodies)
+			{
+				if (candidate is StarBody other && other.Parent == null && !ReferenceEquals(other, primary))
+				{
+					total += StarMass(other);
+				}
+			}
+			var primaryAt = new Vector3d(0, 0, 0);
+			foreach (CelestialBody candidate in system.Bodies)
+			{
+				if (candidate is StarBody other && other.Parent == null && !ReferenceEquals(other, primary))
+				{
+					primaryAt = primaryAt - StarSeparation(system, other, hours) * (StarMass(other) / total);
+				}
+			}
+			return ReferenceEquals(star, primary) ? primaryAt : primaryAt + StarSeparation(system, star, hours);
+		}
+
+		public static Vector3d Position(SolarSystemProfile system, CelestialBody body, double hours)
+		{
+			if (body == null)
+			{
+				return new Vector3d(0, 0, 0);
+			}
+			if (body is StarBody asStar)
+			{
+				return StarPosition(system, asStar, hours);
 			}
 			OrbitSettings orbit = body.Orbit;
 			double inclination = orbit.InclinationDegrees * Deg2Rad;
@@ -135,7 +282,12 @@ namespace FishMMO.Shared.Celestial
 			double trueAnomaly = 2.0 * Math.Atan2(Math.Sqrt(1 + e) * Math.Sin(eccentric / 2), Math.Sqrt(1 - e) * Math.Cos(eccentric / 2));
 			double radius = Math.Max(1e-6, orbit.Distance) * (1 - e * Math.Cos(eccentric));
 			var flat = new Vector3d(Math.Cos(trueAnomaly) * radius, Math.Sin(trueAnomaly) * radius, 0);
-			return new Vector3d(flat.X, flat.Y * Math.Cos(inclination), flat.Y * Math.Sin(inclination));
+			var around = new Vector3d(flat.X, flat.Y * Math.Cos(inclination), flat.Y * Math.Sin(inclination));
+			// Round the star it belongs to, wherever that star is: one star of a pair carries its own
+			// planets with it. A body with no parent goes round the system's centre of mass — round
+			// both stars of a close pair. A lone star is at the origin, so nothing moves for a system
+			// of one.
+			return body.Parent is StarBody host ? Position(system, host, hours) + around : around;
 		}
 
 		/// <summary>Eccentric anomaly for a mean anomaly (Newton's method).</summary>
@@ -213,6 +365,20 @@ namespace FishMMO.Shared.Celestial
 			double z = yFlat * Math.Sin(tiltRadians) + d.Z * Math.Cos(tiltRadians);
 			rightAscension = Math.Atan2(y, x);
 			declination = Math.Asin(Math.Max(-1.0, Math.Min(1.0, z)));
+		}
+
+		/// <summary>
+		/// Where a body's north pole points, in the ecliptic frame. Its rings lie in the plane this is
+		/// the normal of. A body that is not a world has no tilt of its own and stands upright.
+		/// </summary>
+		public static Vector3d PoleOf(CelestialBody body)
+		{
+			if (!(body is WorldBody world))
+			{
+				return new Vector3d(0, 0, 1);
+			}
+			double t = world.AxialTiltDegrees * Deg2Rad, l = world.PoleLongitudeDegrees * Deg2Rad;
+			return new Vector3d(Math.Sin(t) * Math.Cos(l), Math.Sin(t) * Math.Sin(l), Math.Cos(t));
 		}
 
 		/// <summary>A direction from the ecliptic frame into this body's own equatorial frame. No body, no tilt.</summary>

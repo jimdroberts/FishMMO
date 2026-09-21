@@ -177,7 +177,11 @@ namespace FishMMO.Client
 				Matrix4x4 viewProjection = projection * view;
 				material.SetMatrix(InverseVPId, viewProjection.inverse);
 				material.SetMatrix(PreviousVPId, previousViewProjection);
-				material.SetVector(MarchParamsId, new Vector4(tier.Steps, tier.Detail, frame, sky.CloudFarDistance));
+				// The frame, wrapped. It feeds the jitter as a float multiplied by 5.6 and added to a pixel
+				// coordinate: left to count for ever it passes a million inside an hour, where a float no
+				// longer tells one pixel from the next, and the jitter every ray's phase depends on goes
+				// coarse the longer the game has been running. Sixty-four frames is the noise's own period.
+				material.SetVector(MarchParamsId, new Vector4(tier.Steps, tier.Detail, frame % 64, sky.CloudFarDistance));
 				// How wide one marched pixel's cone opens, in metres per metre of distance. The
 				// projection's [1][1] is 1/tan(halfFov), so 2/(m11 * height) is the height of one
 				// pixel a metre in front of the camera. It has to be worked out here and nowhere

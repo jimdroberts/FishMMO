@@ -70,6 +70,13 @@ Shader "FishMMO/Sky"
                 float3 color = lerp(horizon, zenith, pow(h, 0.5));
                 color = lerp(color, _FishSkyGround.rgb, saturate(-up * 5.0));
 
+                // The ring of the world underfoot, asked about once: how much of this direction it covers
+                // and what light comes off it. What is BEHIND the ring — the stars, the galaxy, the
+                // sun's disc — is dimmed by it below; what is in FRONT of it, the air's own glow and
+                // the aurora, is not.
+                float3 ownRingLight;
+                float ownRing = FishOwnRing(dir, ownRingLight);
+
                 // Suns: glow near the horizon toward them, a halo, and the disc.
                 float3 sunsLight = 0;
                 int count = (int)_FishSunCount;
@@ -137,7 +144,7 @@ Shader "FishMMO/Sky"
                                    * FishNoise(mwUv * 11.0 - across * 3.0 + 0.3, 0);
                         milkyWay = float3(0.55, 0.58, 0.72) * band * saturate(dust * 2.2 - 0.2) * _FishSkyParams.y * 0.35;
                     }
-                    color += (stars * twinkle * 2.0 + milkyWay) * starVisibility;
+                    color += (stars * twinkle * 2.0 + milkyWay) * starVisibility * (1.0 - ownRing);
                 }
 
                 // Aurora curtains.
@@ -172,7 +179,13 @@ Shader "FishMMO/Sky"
                 // Lightning brightens the whole sky a little.
                 color += _FishWeatherCloud.w * float3(0.35, 0.37, 0.42) * (1.0 - airless);
 
-                color += sunsLight;
+                // The ring of the world underfoot, over everything that is behind it. By night the lit
+                // ring is as bright as a moon; by day the air in front of it is brighter than it is,
+                // and it shows as a moon does at noon — pale, and only where it outshines the sky.
+                color = lerp(color, max(color, ownRingLight), ownRing);
+
+                // The sun's disc is a great deal further off than the ring, and goes behind it.
+                color += sunsLight * (1.0 - ownRing);
 
                 // Melt into the fog at the horizon, so terrain and sky meet without a seam.
                 float fogBand = saturate(1.0 - up * 7.0) * _FishSkyFogColor.a;

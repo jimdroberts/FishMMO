@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b380eea130c440dfb8cacd64c7ed281f, type: 3}
+  m_Name: Calanx System - Calanx
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.StarBody
+  DisplayName: Calanx
+  Parent: {fileID: 0}
+  Orbit:
+    Distance: 1
+    Eccentricity: 0
+    InclinationDegrees: 0
+    OffsetDegrees: 0
+    PeriodMode: 0
+    PeriodDays: 27.3
+  SkyRadiusKm: 1004088.44
+  Tint: {r: 0.7325068, g: 0.80265105, b: 0.9786745, a: 1}
+  SurfaceTexture: {fileID: 0}
+  HasRings: 0
+  Rings:
+    InnerRadius: 1.3
+    OuterRadius: 2.3
+    Bands: 5
+    Opacity: 0.6
+    Tint: {r: 0.86, g: 0.8, b: 0.68, a: 1}
+    Texture: {fileID: 0}
+  Luminosity: 23.955793
+  TemperatureK: 10683.148

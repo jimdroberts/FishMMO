@@ -172,10 +172,63 @@ float FishCloudColumnTop(float type)
 
 // Height above the ground, in metres, on a curved world. The bands are shells around the planet, so
 // they meet the horizon by curving away rather than by running out.
+// ── The planet, in numbers a float can hold ───────────────────────────
+//
+// The bands are shells about the planet's centre, which is 6,371 km under the origin. Height above
+// the ground was length(position − centre) − radius: a number of a few hundred, got by taking one
+// number of six million from another. A float has about seven figures. At six million it counts
+// in HALF METRES — so every sample's altitude was rounded to the nearest 0.5 m, and the camera's
+// own height above the centre was too, which is why a camera at y = 0.74 and one at y = 0.75 drew
+// different skies: 0.75 is exactly half way between the two heights a float can tell apart there,
+// and a centimetre's move tipped it from one to the other. The ray–shell intersections were
+// worse: b² − (c − r²) takes numbers of 4×10¹³ from each other to leave one of a thousand, and
+// came out a metre or more wrong. The band logic then compared the one imprecise figure with the
+// other across a margin of a metre. The error is a fine sawtooth in the angle of view, and a fine
+// sawtooth read off a grid of pixels is a bullseye round the point overhead.
+//
+// Nothing here forms the large numbers at all. For a point p near the origin and a centre
+// (0, −R, 0):   |p − centre|² − R²  =  p·p + 2R·p.y   — every term of which is small. Call it
+// `over`; then for a height h,  over = h(2R + h),  so  h = over / (R + √(R² + over)),  which adds
+// where the old form subtracted.
+
+/// |position − centre|² − R², without forming either.
+float FishCloudOver(float3 position, float radius)
+{
+    return dot(position, position) + 2.0 * radius * position.y;
+}
+
 float FishCloudAltitude(float3 position)
 {
     float radius = max(1000.0, _FishCloudLayer.z);
-    return length(position - float3(0.0, -radius, 0.0)) - radius;
+    float over = FishCloudOver(position, radius);
+    return over / (radius + sqrt(max(0.0, radius * radius + over)));
+}
+
+/// Where a ray meets the shell at a given height, nearest first (either may be behind the ray).
+/// False when it misses.
+///
+/// |o + d·t − centre|² = (R + h)²  is  t² + 2B·t + C = 0  with  B = o·d + R·d.y  and
+/// C = over(o) − h(2R + h). Of its two roots −B ± √(B² − C), one adds and one subtracts; the one
+/// that adds is taken, and the other is had from it as C over it, since the two multiply to C. So
+/// neither is ever the small difference of two large numbers, whichever way the ray points.
+bool FishCloudShell(float3 origin, float3 direction, float height, out float first, out float second)
+{
+    float radius = max(1000.0, _FishCloudLayer.z);
+    float B = dot(origin, direction) + radius * direction.y;
+    float C = FishCloudOver(origin, radius) - height * (2.0 * radius + height);
+    float disc = B * B - C;
+    first = 0.0;
+    second = 0.0;
+    if (disc < 0.0)
+    {
+        return false;
+    }
+    float root = sqrt(disc);
+    float sure = B >= 0.0 ? -(B + root) : root - B;
+    float other = abs(sure) > 1e-12 ? C / sure : 0.0;
+    first = min(sure, other);
+    second = max(sure, other);
+    return true;
 }
 
 /// A band's cover for a given sky cover: CloudLayer.CoverageFor, to the letter.
@@ -291,10 +344,6 @@ float FishCloudLift(float altitude, float ground)
 /// included — and the empty air between costs one iteration however much of it there is.
 float FishCloudNextPossible(float3 origin, float3 direction, float travelled, float altitude)
 {
-    float radius = max(1000.0, _FishCloudLayer.z);
-    float3 fromCentre = origin - float3(0.0, -radius, 0.0);
-    float along = dot(fromCentre, direction);
-    float offset = dot(fromCentre, fromCentre);
     float tallest = FishCloudColumnTop(saturate(_FishCloudColumn.w + _FishCloudColumn.x + 0.6));
     float headroom = _FishCloudTerrainRect.w > 0.5 ? 1000.0 : 0.0;
     float next = 1e9;
@@ -310,16 +359,16 @@ float FishCloudNextPossible(float3 origin, float3 direction, float travelled, fl
         bool column = f.z > 0.5;
         float top = (column ? a.x + (a.y - a.x) * tallest : a.y) + headroom;
         float bottom = column && (_FishCloudSub.x >= 0.01 || _FishCloudSub.y >= 0.01) ? 0.0 : a.x;
-        // Below the band: where the ray climbs through its floor. Above it: where it comes down
-        // through its ceiling, if it ever does — a ray that is already curving away never will.
-        float shell = radius + (altitude <= bottom ? bottom : top);
-        float disc = along * along - (offset - shell * shell);
-        if (disc < 0.0)
+        // Below the band: where the ray climbs through its floor — the far side of that shell,
+        // since the ray starts inside it. Above it: where it comes down through its ceiling, the
+        // near side, if it ever does — a ray that is already curving away never will.
+        bool under = altitude <= bottom;
+        float first, second;
+        if (!FishCloudShell(origin, direction, under ? bottom : top, first, second))
         {
             continue;
         }
-        float root = sqrt(disc);
-        float hit = altitude <= bottom ? -along + root : -along - root;
+        float hit = under ? second : first;
         if (hit > travelled)
         {
             next = min(next, hit);
@@ -910,44 +959,32 @@ float3 FishCloudShoulder(float3 colour)
 // Where a ray meets the whole stack of bands: the shell from the lowest floor to the highest ceiling.
 bool FishCloudRange(float3 origin, float3 direction, out float near, out float far)
 {
-    float radius = max(1000.0, _FishCloudLayer.z);
-    float3 centre = float3(0.0, -radius, 0.0);
-    float3 toCentre = origin - centre;
-    float b = dot(toCentre, direction);
-    float c = dot(toCentre, toCentre);
-    float inner = radius + _FishCloudLayer.x;
-    float outer = radius + _FishCloudLayer.y;
-
-    float innerDisc = b * b - (c - inner * inner);
-    float outerDisc = b * b - (c - outer * outer);
     near = 0.0;
     far = 0.0;
-    if (outerDisc < 0.0)
+    float innerNear, innerFar, outerNear, outerFar;
+    bool meetsInner = FishCloudShell(origin, direction, _FishCloudLayer.x, innerNear, innerFar);
+    if (!FishCloudShell(origin, direction, _FishCloudLayer.y, outerNear, outerFar) || outerFar < 0.0)
     {
         return false;
     }
-    float outerNear = -b - sqrt(outerDisc);
-    float outerFar = -b + sqrt(outerDisc);
-    if (outerFar < 0.0)
-    {
-        return false;
-    }
-    float height = length(toCentre) - radius;
+    float height = FishCloudAltitude(origin);
     if (height < _FishCloudLayer.x)
     {
-        near = innerDisc < 0.0 ? 0.0 : -b + sqrt(innerDisc);
+        // Under the stack: in through its floor, out through its ceiling.
+        near = meetsInner ? innerFar : 0.0;
         far = outerFar;
     }
     else if (height > _FishCloudLayer.y)
     {
+        // Over it: in through the ceiling, and out through the floor if the ray gets that far down.
         near = max(0.0, outerNear);
-        far = innerDisc < 0.0 ? outerFar : -b - sqrt(innerDisc);
+        far = meetsInner ? innerNear : outerFar;
     }
     else
     {
         // Inside the stack: flying between the bands, or standing in the weather band itself.
         near = 0.0;
-        far = innerDisc < 0.0 || -b + sqrt(innerDisc) < 0.0 ? outerFar : -b - sqrt(innerDisc);
+        far = !meetsInner || innerFar < 0.0 ? outerFar : innerNear;
         far = max(far, 0.0);
     }
     return far > near;
@@ -1027,6 +1064,22 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         }
     }
     float coarse = max(fine, min(fine * 6.0, thinnest * 0.5));
+    // What a stride must not do is CLIMB more than half the thinnest cloud, and "the thinnest cloud"
+    // is not the band. `thinnest` is a band's nominal depth — 480 m for a deck — but the slab that
+    // is really there is what is left of it after the ceiling's roughening (down to six tenths), the
+    // profile's taper at top and bottom, and the cut: a hundred and fifty metres, sometimes less. A
+    // stride of two hundred and forty, taken straight up, is two hundred and forty metres of height,
+    // and went clean over it. So the zenith was a disc of holes; and because the path through a slab
+    // lengthens as the ray leans over, whether a stride landed inside alternated with the angle —
+    // rings round the disc. Where the ground lifts the air the slab is deeper than a stride, which
+    // is why the rings went away toward the mountain.
+    //
+    // Bounded by height gained, not by length: a level ray may stride as far as it ever did, since
+    // it is inside a thin slab for a long way; a vertical one takes short strides through a band it
+    // is only in for a few of them. About forty strides cross the whole band at any angle.
+    float slab = thinnest * 0.3;
+    float climb = max(abs(direction.y), 0.05);
+    float stride = min(coarse, max(fineNear, slab * 0.5 / climb));
 
     float3 toSun = _FishCloudSunDir.xyz;
     float3 sunColour = _FishCloudSunColor.rgb * _FishCloudSunDir.w;
@@ -1039,7 +1092,13 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // Offset by a whole stride, not a fine step: the jitter has to cover the phase of the grid the
     // march actually walks, or five sixths of that phase is the same on every pixel and whatever
     // the stride misses it misses in a fixed pattern.
-    float travelled = near + coarse * jitter;
+    //
+    // A whole `stride`, which is bounded by height — not `coarse`, which is not. `near` is where the
+    // ray comes INTO the band, so this offset is taken inside it, before a single sample: at up to
+    // two hundred and forty metres it put the first sample of a ray looking up above a thin slab
+    // altogether, and nothing steps back for cloud that was never found. Which rays went by their
+    // jitter (the speckle) and by how steeply they looked up (the rings).
+    float travelled = near + stride * jitter;
     bool found = false;
     bool inside = false;
     float emptyDistance = 0.0;
@@ -1070,6 +1129,8 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // samples a ray has taken changes in shells with distance, so does which rays got the wrong
     // one: hard-edged bright stripes stacked toward the horizon.
     bool depthIsFresh = false;
+    // How much of this ray's phase offset has been applied so far, in metres: see the step, below.
+    float phaseHeld = stride * jitter;
     bool wasUnderBase = false;
 
     UNITY_LOOP
@@ -1125,17 +1186,26 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // and whether a sample fell inside it or stepped over it changed in shells with distance —
         // hard-edged stripes, bright where the deck was missed.
         stepHere = min(stepHere, max(stepBase, thinnest * 0.5));
-        // Every step its own length, not only the first. One offset at the start of the ray is a
-        // step's worth near the camera and a few hundredths of one far out, where the steps are
-        // hundreds of metres: the far samples of every ray on the screen stood in the same shells,
-        // and any sharp thing they crossed was drawn as rings. The golden ratio walks the jitter
-        // through the unit interval so a ray's steps are spread and not merely shifted; the mean
-        // is one, so the march goes as far as it did. The integration below uses this same length.
-        // 0.7 to 1.3. Wider took the bands out just as well but left more grain in any one frame,
-        // which shows wherever the history has been thrown away — looking down through thin mist
-        // while moving. The spread adds up step over step, so far out, where the lockstep was, it
-        // is several steps' worth whatever the range.
-        stepHere *= 0.7 + 0.6 * frac(jitter + i * 0.61803399);
+        // Where in its own step this ray samples: one number for the whole ray, `jitter`, uniform
+        // from pixel to pixel and frame to frame. A march that samples at t0 + k·step with t0 uniform
+        // across ONE FULL step is an unbiased estimate of what lies along the ray, however thin; its
+        // noise averages away. Anything less than a full step's worth of phase, or a phase that is
+        // not uniform, is a BIAS: a thin layer is over- or under-counted by an amount that depends
+        // on exactly how far off it is, the same in every frame, and no averaging removes it —
+        // smooth rings round the point overhead, one for each step of distance.
+        //
+        // Two ways of getting that wrong have both been tried here. The phase was first a single
+        // near step (18 m) while the step itself grew to several times that, so far out it covered
+        // a fraction of a step. Then every step was given a nudge of its own from a golden-ratio
+        // sequence, on the reasoning that the spread would add up: it does not — such a sequence is
+        // built so that its running sum stays within a fixed error of the mean — and being driven
+        // by the same number as the start, it made the phase less uniform than it had been.
+        //
+        // So: one phase, kept. The offset this ray carries is always `jitter` of the step it is now
+        // taking. When the step grows the ray is moved on by the difference, and when it shrinks,
+        // moved on by less; it is never given a new random number.
+        float phaseWanted = stepHere * jitter;
+        float advance = max(stepHere * 0.25, stepHere + phaseWanted - phaseHeld);
         float altitudeHere = FishCloudAltitude(position);
         if (!FishCloudPossibleAt(altitudeHere))
         {
@@ -1157,13 +1227,18 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // a different amount on every pixel and frame. Landed at one fixed offset from the
             // band's floor, every ray would sample it at the same depths, and samples in step with
             // one another across the screen are what draws rings in a cloud.
-            travelled = max(travelled + stepHere, next - stepBase * (0.5 + jitter));
+            // Half a step short of the floor, plus this ray's phase of a STRIDE — the grid it is about
+            // to walk the band on. It used to be a phase of a fine step, a quarter of a stride, so
+            // the strides that followed covered a quarter of their own phase.
+            travelled = max(travelled + stepHere, next - stepBase * 0.5 + stride * jitter);
             // Where this stretch of possible cloud begins. The step back on first finding cloud
             // must never go behind it: see there. The boundary itself and not where the ray landed,
             // which is deliberately short of it — recorded as the landing, the clamp it feeds sent
             // rays back into the empty air below a solid deck, which has cloud at its very floor,
             // and that was the rings overhead coming back under overcast.
-            entered = max(travelled, next + 1.0);
+            // The floor, whatever was landed on: the landing can now be a stride inside the band, and
+            // the step back has to be able to reach the cloud between the floor and it.
+            entered = next + 1.0;
             continue;
         }
         // Scaled by the whole footprint and not just the cone: of the two terms the step is the
@@ -1218,7 +1293,8 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                 // the cloud (every ray steps back to nought), round the point overhead under a
                 // deck (every ray steps back to the deck's floor). The floor is a step deep, and
                 // where in that step a ray lands is its own.
-                travelled = max(max(near, entered) + stepBase * jitter, travelled - coarse);
+                travelled = max(max(near, entered) + stepBase * jitter, travelled - stride);
+                phaseHeld = stepBase * jitter;
                 continue;
             }
             bool first = !found;
@@ -1300,14 +1376,16 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // Energy-conserving integration: what this step scatters, dimmed by what is in front.
             scattered += transmittance * colour * (1.0 - clarity);
             transmittance *= clarity;
-            travelled += stepHere;
+            travelled += advance;
+            phaseHeld = phaseWanted;
             emptyDistance = 0.0;
             insideSamples += 1.0;
         }
         else if (inside)
         {
             emptyDistance += stepHere;
-            travelled += stepHere;
+            travelled += advance;
+            phaseHeld = phaseWanted;
             depthIsFresh = false;
             // Out the far side and past the point the stride found: stride on.
             if (travelled > insideUntil && emptyDistance > fine * 4.0)
@@ -1317,7 +1395,17 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         }
         else
         {
-            travelled += coarse;
+            // The stride through a band's empty air, and the last loop here to have a fixed length.
+            // A ray from the ground reaches the base jittered by a step — some twenty-five metres —
+            // and then crossed the band in strides of up to two hundred and forty, all the same: so
+            // where its samples fell inside the band was the same for every ray at that distance.
+            // In thick cloud a stride always lands in something. In thin cloud, wisps shallower than
+            // a stride, whether one did or stepped clean over went by distance from the camera —
+            // rings of missing cloud round the point overhead, speckled by what jitter there was.
+            // A fixed stride from a start that is this ray's own: the phase is set once, where the
+            // ray comes into the band, and is uniform across a whole stride. `stride` is sized above
+            // so that it cannot climb over the thinnest slab, and that has to stay true.
+            travelled += stride;
             depthIsFresh = false;
         }
     }

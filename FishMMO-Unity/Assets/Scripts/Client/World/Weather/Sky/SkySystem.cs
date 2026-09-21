@@ -117,7 +117,17 @@ namespace FishMMO.Client
 		/// True when the volumetric clouds can be drawn: a sky is bound, the volumes are baked and
 		/// the globals have been set at least once. The renderer feature asks before doing anything.
 		/// </summary>
-		public static bool CloudsReady => instance != null && instance.cloudsReady;
+		/// <remarks>
+		/// False on a body with no air, whatever else is ready: the cloud pass asks this before it
+		/// does anything, so an airless moon pays for no march at all and cannot show a cloud.
+		/// </remarks>
+		public static bool CloudsReady => instance != null && instance.cloudsReady && !instance.airless;
+
+		/// <summary>The body stood on has no atmosphere: no cloud, no weather, nothing in the sky but the sky.</summary>
+		private bool airless;
+
+		/// <summary>How much air the body stood on has.</summary>
+		private AtmosphereKind atmosphere = AtmosphereKind.Standard;
 
 		/// <summary>What the clouds cost on the quality level being drawn.</summary>
 		public CloudTierSettings CloudTier { get; private set; }
@@ -200,6 +210,8 @@ namespace FishMMO.Client
 		private float blendSeconds;
 		private Cubemap stars;
 		private int starSize;
+		/// <summary>The body in front of the sun, by the discs as drawn. Null when nothing is.</summary>
+		private CelestialBody drawnEclipsingBody;
 		private uint starSeed;
 		private Light sun;
 		private Light moon;
@@ -446,6 +458,17 @@ namespace FishMMO.Client
 			WeatherPresentation presentation = WeatherPresentation.Instance;
 			WeatherFrame weather = presentation != null ? presentation.Shown : WeatherFrame.Clear;
 			WeatherContext context = presentation != null ? presentation.Context : default;
+			// No air, no weather. The weather field already says so for a scene on an airless body;
+			// the sky did not ask, and drew the driver's cloud over a moon all the same. Said here as
+			// well as there, so nothing that hands the sky a frame — a preset, the bed's sliders —
+			// can rain on a world with nothing to rain out of.
+			atmosphere = state != null && state.Observer != null ? state.Observer.Atmosphere : AtmosphereKind.Standard;
+			airless = atmosphere == AtmosphereKind.None;
+			if (airless)
+			{
+				weather = WeatherFrame.Clear;
+				context.Background = WeatherFrame.Clear;
+			}
 			WeatherTimeline timeline = presentation != null && presentation.HasContext ? context.Timeline : null;
 			uint tick = presentation != null && presentation.HasContext ? (uint)context.Tick : 0u;
 
@@ -470,7 +493,9 @@ namespace FishMMO.Client
 			current = sample;
 
 			float overcast = Mathf.Clamp01(weather[WeatherChannel.CloudCover] * (0.4f + 0.6f * weather[WeatherChannel.CloudDensity]));
-			float eclipse = state.SolarEclipse;
+			// The eclipse of the discs as they are drawn. Life-size that is the true one; larger than
+			// life the discs meet sooner and part later, and the sky has to go dark with what it shows.
+			float eclipse = state.SolarEclipseAsDrawn(blendTo != null ? blendTo.SunScale : 1f, blendTo != null ? blendTo.BodyScale : 1f, out drawnEclipsingBody);
 
 			// Lightning first: its flash reaches the sky, the lights and the weather globals.
 			Vector3 viewer = camera != null ? camera.transform.position : Vector3.zero;
@@ -513,14 +538,17 @@ namespace FishMMO.Client
 					SkySchedule.Meteors(state, from, meteorsUntil, profile.TierFor(QualitySettings.GetQualityLevel()).MeteorBudget, meteors);
 				}
 			}
+			// In the order they are drawn, furthest first: a belt's specks, then the bodies by their own
+			// distances, then the meteors, which burn in this world's air and are nearer than anything.
 			bodies.Clear();
-			bodies.AddBodies(state, blendTo, state.System != null ? state.System.Limits : new SkyLimits());
 			if (tier.Asteroids)
 			{
 				bodies.AddAsteroids(state, state.System != null ? state.System.Limits : new SkyLimits());
 			}
+			bodies.AddBodies(state, blendTo, state.System != null ? state.System.Limits : new SkyLimits());
 			bodies.AddMeteors(meteors, worldSeconds);
 			bodies.Upload();
+			UploadOccluders();
 		}
 
 		private void Bind(WorldDayNightCycle next, WeatherRenderProfile profile)
@@ -620,7 +648,7 @@ namespace FishMMO.Client
 			{
 				for (int i = 0; i < state.Bodies.Count; i++)
 				{
-					if (state.Bodies[i].Body == state.EclipsingBody)
+					if (state.Bodies[i].Body == drawnEclipsingBody)
 					{
 						Vector3 direction = state.Bodies[i].Direction;
 						covering = new Vector4(direction.x, direction.y, direction.z, state.Bodies[i].AngularRadius * sky.BodyScale);
@@ -633,6 +661,7 @@ namespace FishMMO.Client
 			// The system's frame and not the body's own: see CelestialState.StarsToScene. The galaxy
 			// below is read through the same matrix, so it keeps its place among the stars.
 			Shader.SetGlobalMatrix(StarMatrixId, state.StarsToScene.transpose);
+			SetOwnRing(state);
 			Shader.SetGlobalTexture(StarCubeId, stars);
 			// A galaxy of the sky's own, if it has one. It sits in the same frame as the stars, so it
 			// turns with them; with none supplied the shader draws its own band instead. The flag is
@@ -822,7 +851,7 @@ namespace FishMMO.Client
 			{
 				WeatherDriver.Synoptic air = WeatherDriver.Sample(WeatherDriver.WorldSeed,
 					new Vector2(viewerAt.x, viewerAt.z), worldSeconds, latitude, season01, (float)(skyState != null ? skyState.LocalTime01 : 0.5));
-				mesoAmplitude = WeatherDriver.MesoscaleAmplitude * driverWeight;
+				mesoAmplitude = WeatherDriver.MesoscaleAmplitude * driverWeight * WeatherDriver.FormationScale(atmosphere);
 				mesoAtCamera = air.Mesoscale * mesoAmplitude;
 				mesoContrast = WeatherDriver.MesoscaleContrast(air.Instability);
 				columnType = Mathf.Lerp(presetType, WeatherDriver.BaseColumnType(air.Instability), driverWeight);
@@ -1082,7 +1111,7 @@ namespace FishMMO.Client
 			};
 			CloudFarDistance = clouds.MaxDistance;
 			cloudSettings = clouds;
-			if (!cloudsReady)
+			if (!cloudsReady || airless)
 			{
 				// Nothing to march: make sure no stale coverage is left behind.
 				Shader.SetGlobalVector(CloudLayerId, Vector4.zero);
@@ -1249,7 +1278,7 @@ namespace FishMMO.Client
 
 			Vector3 direction = state.SunDirection;
 			Color colour = sample.SunLight;
-			if (eclipse > 0.02f && TryFindBody(state, state.EclipsingBody, out Vector3 eclipsing))
+			if (eclipse > 0.02f && TryFindBody(state, drawnEclipsingBody, out Vector3 eclipsing))
 			{
 				// The rays now come from around the body in front of the sun, and they are what is
 				// left of the sun to see, so the deeper the eclipse the more they carry.
@@ -1465,16 +1494,9 @@ namespace FishMMO.Client
 				return;
 			}
 			WeatherRenderProfile profile = Profile;
-			if (bodyMaterial != null && bodies.Mesh != null && bodies.Mesh.vertexCount > 0)
+			if (bodyMaterial != null)
 			{
-				block.Clear();
-				block.SetFloat(UseTextureId, 0f);
-				var rp = new RenderParams(bodyMaterial) { camera = camera, matProps = block, worldBounds = new Bounds(camera.transform.position, Vector3.one * 20000f), shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false };
-				Graphics.RenderMesh(rp, bodies.Mesh, 0, Matrix4x4.identity);
-			}
-			if (bodyMaterial != null && bodies.Textured.Count > 0)
-			{
-				DrawTextured(camera);
+				DrawBodies(camera);
 			}
 			if (profile != null)
 			{
@@ -1492,27 +1514,172 @@ namespace FishMMO.Client
 		private readonly List<SkyBodyMesh> texturedMeshes = new List<SkyBodyMesh>();
 		private readonly List<MaterialPropertyBlock> texturedBlocks = new List<MaterialPropertyBlock>();
 
-		private void DrawTextured(Camera camera)
+		private static readonly int RingMatrixId = Shader.PropertyToID("_FishRingMatrix");
+		private static readonly int OwnRingId = Shader.PropertyToID("_FishOwnRing");
+		private static readonly int OwnRingTintId = Shader.PropertyToID("_FishOwnRingTint");
+		private static readonly int OwnRingZenithId = Shader.PropertyToID("_FishOwnRingZenith");
+		private static readonly int OwnRingSunId = Shader.PropertyToID("_FishOwnRingSun");
+		private static readonly int OwnRingTexId = Shader.PropertyToID("_FishOwnRingTex");
+
+		/// <summary>
+		/// The rings of the world stood on, for the sky shader: an arc along the celestial equator.
+		/// </summary>
+		/// <remarks>
+		/// In the observer's own equatorial frame, where the ring plane is simply z = 0 and the
+		/// observer stands one body radius out along "straight up". Which way the world has turned
+		/// does not matter to a ring that is the same all the way round, so no hour angle comes into
+		/// it: up and the sun, both taken into that frame, are all the shader needs.
+		/// </remarks>
+		private void SetOwnRing(CelestialState state)
 		{
-			float scale = blendTo != null ? blendTo.BodyScale : 1f;
-			for (int i = 0; i < bodies.Textured.Count; i++)
+			CelestialBody observer = state != null ? state.Observer : null;
+			RingSettings rings = observer != null && observer.HasRings ? observer.Rings : null;
+			if (rings == null || rings.Opacity <= 0.001f)
 			{
-				while (texturedMeshes.Count <= i)
+				Shader.SetGlobalVector(OwnRingId, Vector4.zero);
+				return;
+			}
+			Matrix4x4 toEquatorial = state.EquatorialToScene.transpose;
+			Vector3 zenith = toEquatorial.MultiplyVector(Vector3.up).normalized;
+			Vector3 sun = toEquatorial.MultiplyVector(state.SunDirection).normalized;
+			Shader.SetGlobalMatrix(RingMatrixId, toEquatorial);
+			Shader.SetGlobalVector(OwnRingId, new Vector4(rings.Inner, rings.Outer, rings.Bands, rings.Opacity));
+			Shader.SetGlobalVector(OwnRingTintId, rings.Tint);
+			Shader.SetGlobalVector(OwnRingZenithId, new Vector4(zenith.x, zenith.y, zenith.z, rings.Texture != null ? 1f : 0f));
+			Shader.SetGlobalVector(OwnRingSunId, new Vector4(sun.x, sun.y, sun.z, 0f));
+			if (rings.Texture != null)
+			{
+				Shader.SetGlobalTexture(OwnRingTexId, rings.Texture);
+			}
+		}
+
+		private readonly List<SkyBodyMesh> ringMeshes = new List<SkyBodyMesh>();
+		private readonly List<MaterialPropertyBlock> ringBlocks = new List<MaterialPropertyBlock>();
+
+		private static readonly int OccludersId = Shader.PropertyToID("_FishOccluders");
+		private static readonly int OccluderRanksId = Shader.PropertyToID("_FishOccluderRanks");
+		private static readonly int OccluderCountId = Shader.PropertyToID("_FishOccluderCount");
+		private readonly Vector4[] occluders = new Vector4[SkyBodyMesh.MaxOccluders];
+		private readonly Vector4[] occluderRanks = new Vector4[SkyBodyMesh.MaxOccluders];
+
+		/// <summary>
+		/// The discs that hide what is behind them, for the body shader. The list is furthest first,
+		/// so when there are more than the shader tests, the ones kept are the last: the nearest,
+		/// which are the largest in the sky and the ones whose dark limbs anything is seen through.
+		/// </summary>
+		private void UploadOccluders()
+		{
+			int total = bodies.Occluders.Count;
+			int count = Mathf.Min(total, SkyBodyMesh.MaxOccluders);
+			for (int i = 0; i < count; i++)
+			{
+				occluders[i] = bodies.Occluders[total - count + i];
+				occluderRanks[i] = bodies.OccluderRanks[total - count + i];
+			}
+			// Arrays are sized by their first upload, so the whole of each goes up every time.
+			Shader.SetGlobalVectorArray(OccludersId, occluders);
+			Shader.SetGlobalVectorArray(OccluderRanksId, occluderRanks);
+			Shader.SetGlobalFloat(OccluderCountId, count);
+		}
+
+		/// <summary>
+		/// Draws the sky's bodies in the sequence the mesh worked out, furthest first.
+		/// </summary>
+		/// <remarks>
+		/// Every draw carries a rising priority. They all share one material and one set of bounds
+		/// round the camera, so the pipeline's own back-to-front sort measures them all the same
+		/// distance away and is free to put them in any order it likes; the priority is sorted on
+		/// before distance, and makes the order the sequence's.
+		/// </remarks>
+		private void DrawBodies(Camera camera)
+		{
+			CelestialState state = State;
+			float scale = blendTo != null ? blendTo.BodyScale : 1f;
+			var bounds = new Bounds(camera.transform.position, Vector3.one * 20000f);
+			int textured = 0, ringed = 0;
+			for (int i = 0; i < bodies.Steps.Count; i++)
+			{
+				SkyBodyMesh.Step step = bodies.Steps[i];
+				MaterialPropertyBlock properties;
+				Mesh mesh;
+				int subMesh = 0;
+				switch (step.Kind)
 				{
-					texturedMeshes.Add(new SkyBodyMesh());
-					texturedBlocks.Add(new MaterialPropertyBlock());
+					case SkyBodyMesh.StepKind.Quads:
+					{
+						if (bodies.Mesh == null || bodies.Mesh.vertexCount == 0 || step.SubMesh >= bodies.Mesh.subMeshCount)
+						{
+							continue;
+						}
+						block.Clear();
+						block.SetFloat(UseTextureId, 0f);
+						properties = block;
+						mesh = bodies.Mesh;
+						subMesh = step.SubMesh;
+						break;
+					}
+					case SkyBodyMesh.StepKind.Textured:
+					{
+						while (texturedMeshes.Count <= textured)
+						{
+							texturedMeshes.Add(new SkyBodyMesh());
+							texturedBlocks.Add(new MaterialPropertyBlock());
+						}
+						SkyBodyState body = step.Body;
+						SkyBodyMesh quad = texturedMeshes[textured];
+						quad.Clear();
+						Color tint = body.Body.Tint;
+						tint.a = body.Body is WorldBody world && world.HasWeather ? 0.4f : 1f;
+						quad.AddQuad(body.Direction, SkyBodyMesh.Kind.Disc, body.AngularRadius * scale, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, step.Rank);
+						properties = texturedBlocks[textured];
+						properties.Clear();
+						properties.SetTexture(BodyTexId, body.Body.SurfaceTexture);
+						properties.SetFloat(UseTextureId, 1f);
+						mesh = quad.Upload();
+						textured++;
+						break;
+					}
+					default:
+					{
+						if (state == null)
+						{
+							continue;
+						}
+						while (ringMeshes.Count <= ringed)
+						{
+							ringMeshes.Add(new SkyBodyMesh());
+							ringBlocks.Add(new MaterialPropertyBlock());
+						}
+						SkyBodyState body = step.Body;
+						RingSettings rings = body.Body.Rings;
+						SkyBodyMesh quad = ringMeshes[ringed];
+						quad.Clear();
+						// The ring plane's normal is the body's own pole, brought from the ecliptic into
+						// this sky the way every other direction in it is.
+						Vector3 pole = state.HeliocentricDirection(CelestialMath.PoleOf(body.Body));
+						quad.AddRing(body.Direction, body.AngularRadius * scale, pole, rings, body.LightDirection, step.Rank);
+						properties = ringBlocks[ringed];
+						properties.Clear();
+						properties.SetFloat(UseTextureId, rings.Texture != null ? 1f : 0f);
+						if (rings.Texture != null)
+						{
+							properties.SetTexture(BodyTexId, rings.Texture);
+						}
+						mesh = quad.Upload();
+						ringed++;
+						break;
+					}
 				}
-				SkyBodyState body = bodies.Textured[i];
-				SkyBodyMesh mesh = texturedMeshes[i];
-				mesh.Clear();
-				Color tint = body.Body.Tint;
-				tint.a = body.Body is WorldBody world && world.HasWeather ? 0.4f : 1f;
-				mesh.AddQuad(body.Direction, SkyBodyMesh.Kind.Disc, body.AngularRadius * scale, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint);
-				MaterialPropertyBlock properties = texturedBlocks[i];
-				properties.SetTexture(BodyTexId, body.Body.SurfaceTexture);
-				properties.SetFloat(UseTextureId, 1f);
-				var rp = new RenderParams(bodyMaterial) { camera = camera, matProps = properties, worldBounds = new Bounds(camera.transform.position, Vector3.one * 20000f), shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false };
-				Graphics.RenderMesh(rp, mesh.Upload(), 0, Matrix4x4.identity);
+				var rp = new RenderParams(bodyMaterial)
+				{
+					camera = camera,
+					matProps = properties,
+					worldBounds = bounds,
+					shadowCastingMode = ShadowCastingMode.Off,
+					receiveShadows = false,
+					rendererPriority = i,
+				};
+				Graphics.RenderMesh(rp, mesh, subMesh, Matrix4x4.identity);
 			}
 		}
 	}

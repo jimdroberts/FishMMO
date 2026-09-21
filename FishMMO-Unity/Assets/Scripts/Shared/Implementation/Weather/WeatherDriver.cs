@@ -404,6 +404,68 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
+		/// What the amount of air on a world does to the weather the field gives it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The field describes how air behaves; how much of it there is decides what that amounts to.
+		/// No air, no weather: nothing to carry water, hold a cloud, blow, or scatter light into a
+		/// fog — an airless moon has a black sky and a bare ground whatever the field says, and this
+		/// returns a clear frame for it. Thin air holds little water and lets what it has go quickly:
+		/// cloud is sparse and high and thin, rain is rare and light, fog barely forms, and storms
+		/// have nothing to build with — though the wind, with so little to slow it, runs faster.
+		/// Thick air is the opposite way: a heavy, humid blanket that is rarely clear, rains more and
+		/// harder, never quite loses its haze, breeds lightning, and moves sluggishly.
+		/// </para>
+		/// <para>
+		/// Applied to what the field and the biome give, not to a preset, a layer or a storm cell:
+		/// those are somebody asking for that weather by name, and they get what they asked for.
+		/// </para>
+		/// </remarks>
+		public static WeatherFrame UnderAtmosphere(WeatherFrame frame, FishMMO.Shared.Celestial.AtmosphereKind air)
+		{
+			switch (air)
+			{
+				case FishMMO.Shared.Celestial.AtmosphereKind.None:
+					return WeatherFrame.Clear;
+				case FishMMO.Shared.Celestial.AtmosphereKind.Thin:
+					frame[WeatherChannel.CloudCover] *= 0.45f;
+					frame[WeatherChannel.CloudDensity] *= 0.6f;
+					frame[WeatherChannel.Precipitation] *= 0.3f;
+					frame[WeatherChannel.FogDensity] *= 0.25f;
+					frame[WeatherChannel.VolumetricFog] *= 0.25f;
+					frame[WeatherChannel.LightningRate] *= 0.2f;
+					frame[WeatherChannel.WetnessTarget] *= 0.3f;
+					frame[WeatherChannel.SnowCoverRate] *= 0.3f;
+					frame[WeatherChannel.WindSpeed] = Mathf.Clamp01(frame[WeatherChannel.WindSpeed] * 1.2f);
+					return frame;
+				case FishMMO.Shared.Celestial.AtmosphereKind.Thick:
+					// Toward overcast, not merely more: a thick air's clear days are hazy ones.
+					frame[WeatherChannel.CloudCover] = 1f - (1f - Mathf.Clamp01(frame[WeatherChannel.CloudCover])) * 0.6f;
+					frame[WeatherChannel.CloudDensity] = Mathf.Clamp01(frame[WeatherChannel.CloudDensity] * 1.2f);
+					frame[WeatherChannel.Precipitation] = Mathf.Clamp01(frame[WeatherChannel.Precipitation] * 1.25f);
+					frame[WeatherChannel.FogDensity] = Mathf.Clamp01(Mathf.Max(frame[WeatherChannel.FogDensity] * 1.5f, 0.06f));
+					frame[WeatherChannel.LightningRate] = Mathf.Clamp01(frame[WeatherChannel.LightningRate] * 1.4f);
+					frame[WeatherChannel.WindSpeed] *= 0.8f;
+					return frame;
+				default:
+					return frame;
+			}
+		}
+
+		/// <summary>How far the banks and gaps of the formations swing the cover, for this much air.</summary>
+		public static float FormationScale(FishMMO.Shared.Celestial.AtmosphereKind air)
+		{
+			switch (air)
+			{
+				case FishMMO.Shared.Celestial.AtmosphereKind.None: return 0f;
+				case FishMMO.Shared.Celestial.AtmosphereKind.Thin: return 0.45f;
+				case FishMMO.Shared.Celestial.AtmosphereKind.Thick: return 0.8f;
+				default: return 1f;
+			}
+		}
+
+		/// <summary>
 		/// Samples the weather field. Pure: the same arguments give the same answer on any machine,
 		/// at any time, without having watched the weather get there.
 		/// </summary>

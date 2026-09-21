@@ -76,7 +76,10 @@ namespace FishMMO.Shared.Weather
 			sample.Temperature = reading.Climate.Temperature;
 
 			WeatherSceneMode mode = timeline != null ? timeline.SceneMode : WeatherSceneMode.None;
-			bool airless = settings != null && settings.Body != null && !settings.Body.HasWeather;
+			// The body this weather is for: the scene's own, or the one a test bed stands the scene on.
+			WorldBody weatherBody = timeline != null && timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+			FishMMO.Shared.Celestial.AtmosphereKind atmosphere = weatherBody != null ? weatherBody.Atmosphere : FishMMO.Shared.Celestial.AtmosphereKind.Standard;
+			bool airless = atmosphere == FishMMO.Shared.Celestial.AtmosphereKind.None;
 			if (timeline == null || mode == WeatherSceneMode.None || mode == WeatherSceneMode.Auto || airless)
 			{
 				return sample;
@@ -101,7 +104,7 @@ namespace FishMMO.Shared.Weather
 				double worldSeconds = timeline.WorldSecondsAt(tick);
 				double worldHours = worldSeconds / 3600.0;
 				SolarSystemProfile system = SolarSystemProfile.Active;
-				WorldBody sceneBody = timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+				WorldBody sceneBody = weatherBody;
 				// The season of the body this scene is on, from where its sun stands — not the fraction
 				// of the home calendar gone. See CelestialMath.Season01.
 				float season01 = CelestialMath.Season01(system, sceneBody, worldHours);
@@ -130,14 +133,14 @@ namespace FishMMO.Shared.Weather
 				sample.DriverWeight = driverWeight;
 				if (driverWeight > 0f)
 				{
-					accumulator.Add(WeatherDriver.Background(air), driverWeight);
+					accumulator.Add(WeatherDriver.UnderAtmosphere(WeatherDriver.Background(air), atmosphere), driverWeight);
 					if (profile != null)
 					{
 						var biome = new WeatherAccumulator();
 						profile.AccumulateBackground(ref biome);
 						if (biome.HasAny)
 						{
-							accumulator.Add(biome.Resolve(), driverWeight);
+							accumulator.Add(WeatherDriver.UnderAtmosphere(biome.Resolve(), atmosphere), driverWeight);
 						}
 					}
 				}

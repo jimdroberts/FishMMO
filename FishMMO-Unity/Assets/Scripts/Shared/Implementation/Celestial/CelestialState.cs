@@ -265,16 +265,44 @@ namespace FishMMO.Shared.Celestial
 		/// <summary>How much of the primary sun's disc other bodies cover.</summary>
 		private void ComputeSolarEclipse()
 		{
-			if (Sun < 0)
+			SolarEclipse = SolarEclipseAsDrawn(1f, 1f, out CelestialBody covering);
+			EclipsingBody = covering;
+		}
+
+		/// <summary>
+		/// How much of the primary sun's disc other bodies cover when the discs are drawn larger than
+		/// life: the sun's by <paramref name="sunScale"/>, everything else's by <paramref name="bodyScale"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An eclipse is a fact about two discs overlapping, and which discs is the question. The true
+		/// ones decide when an eclipse happens in the world. But a sky that flatters its bodies draws
+		/// them bigger about the same centres, so on the screen they meet well before the true discs
+		/// do and part well after — and everything that makes an eclipse look like one hung on the
+		/// true figure. Through that whole stretch it read nought: the body in front was not drawn as
+		/// a silhouette, the lit sky hid its dark side as it does for any new moon, and the sun simply
+		/// shone through where it stood, until the true discs finally touched and it snapped dark.
+		/// </para>
+		/// <para>
+		/// What is drawn has to be asked about what is drawn. With both scales at one this is the true
+		/// eclipse, which is how <see cref="SolarEclipse"/> is now computed.
+		/// </para>
+		/// </remarks>
+		public float SolarEclipseAsDrawn(float sunScale, float bodyScale, out CelestialBody covering)
+		{
+			covering = null;
+			if (Sun < 0 || Sun >= Bodies.Count)
 			{
-				return;
+				return 0f;
 			}
 			SkyBodyState sun = Bodies[Sun];
-			double sunArea = Math.PI * sun.AngularRadius * sun.AngularRadius;
+			double sunRadius = sun.AngularRadius * Math.Max(0.01f, sunScale);
+			double sunArea = Math.PI * sunRadius * sunRadius;
 			if (sunArea <= 0.0)
 			{
-				return;
+				return 0f;
 			}
+			float most = 0f;
 			for (int i = 0; i < Bodies.Count; i++)
 			{
 				if (i == Sun || Bodies[i].Kind == SkyBodyKind.Star || Bodies[i].Kind == SkyBodyKind.Comet || Bodies[i].DistanceKm >= sun.DistanceKm)
@@ -282,13 +310,14 @@ namespace FishMMO.Shared.Celestial
 					continue;
 				}
 				double separation = Vector3.Angle(Bodies[i].Direction, sun.Direction) * CelestialMath.Deg2Rad;
-				double covered = CircleOverlap(sun.AngularRadius, Bodies[i].AngularRadius, separation) / sunArea;
-				if (covered > SolarEclipse)
+				double covered = CircleOverlap(sunRadius, Bodies[i].AngularRadius * Math.Max(0.01f, bodyScale), separation) / sunArea;
+				if (covered > most)
 				{
-					SolarEclipse = (float)Math.Min(1.0, covered);
-					EclipsingBody = Bodies[i].Body;
+					most = (float)Math.Min(1.0, covered);
+					covering = Bodies[i].Body;
 				}
 			}
+			return most;
 		}
 
 		/// <summary>Area of the intersection of two circles with radii a and b whose centres are d apart.</summary>

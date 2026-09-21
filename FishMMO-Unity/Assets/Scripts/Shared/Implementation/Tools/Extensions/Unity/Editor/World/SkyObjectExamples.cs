@@ -31,7 +31,7 @@ namespace FishMMO.Shared.WorldDesign
 			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
 			if (system == null)
 			{
-				Debug.LogWarning("[Sky objects] No solar system yet. Create the example system on the Solar System page first.");
+				Debug.LogWarning("[Sky objects] No solar system yet. Press New on the Solar System page first.");
 				return;
 			}
 			Add(system);

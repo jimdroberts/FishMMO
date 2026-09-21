@@ -322,6 +322,177 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(steepSwing, Is.EqualTo(0.5f).Within(0.001f), "sixty degrees reaches full summer and full winter");
 		}
 
+		// ── Stars that orbit one another ─────────────────────────────────
+
+		[Test]
+		public void ALoneStarStaysAtTheCentre()
+		{
+			foreach (double hours in new[] { 0.0, 123.4, 99999.0 })
+			{
+				Vector3d at = CelestialMath.Position(system, sun, hours);
+				Assert.That(Math.Sqrt(at.X * at.X + at.Y * at.Y + at.Z * at.Z), Is.EqualTo(0.0).Within(1e-12), "a system of one star is centred on it");
+			}
+			Assert.That(double.IsInfinity(CelestialMath.OrbitHours(system, sun)), Is.True, "and that star goes round nothing");
+		}
+
+		[Test]
+		public void TwoStarsAtTheRootGoRoundThePointBetweenThem()
+		{
+			StarBody companion = Make<StarBody>("Companion");
+			companion.Luminosity = 0.2f;
+			companion.Orbit = new OrbitSettings { Distance = 0.4f, PeriodMode = OrbitPeriodMode.Authored, PeriodDays = 30f };
+			system.Bodies.Add(companion);
+
+			double massA = CelestialMath.StarMass(sun), massB = CelestialMath.StarMass(companion);
+			double period = CelestialMath.OrbitHours(system, companion);
+			Assert.That(double.IsInfinity(period), Is.False, "a companion has a period");
+			Assert.That(CelestialMath.OrbitHours(system, sun), Is.EqualTo(period).Within(1e-9), "and the primary swings in the same time");
+
+			Vector3d first = CelestialMath.Position(system, companion, 0.0);
+			bool moved = false;
+			for (int i = 0; i < 16; i++)
+			{
+				double hours = period * i / 16.0;
+				Vector3d a = CelestialMath.Position(system, sun, hours), b = CelestialMath.Position(system, companion, hours);
+				// The centre of mass stays put: that is what "orbit each other" means.
+				Assert.That(a.X * massA + b.X * massB, Is.EqualTo(0.0).Within(1e-9), "centre of mass, x");
+				Assert.That(a.Y * massA + b.Y * massB, Is.EqualTo(0.0).Within(1e-9), "centre of mass, y");
+				Vector3d apart = b - a;
+				Assert.That(Math.Sqrt(apart.X * apart.X + apart.Y * apart.Y + apart.Z * apart.Z), Is.EqualTo(0.4).Within(1e-6), "they stay their separation apart");
+				Vector3d shift = b - first;
+				moved |= Math.Sqrt(shift.X * shift.X + shift.Y * shift.Y) > 0.1;
+			}
+			Assert.That(moved, Is.True, "the companion used to hang at one point for ever");
+			// The brighter, heavier star is the one that hardly moves.
+			Vector3d heavy = CelestialMath.Position(system, sun, period * 0.3), light = CelestialMath.Position(system, companion, period * 0.3);
+			Assert.That(heavy.X * heavy.X + heavy.Y * heavy.Y, Is.LessThan(light.X * light.X + light.Y * light.Y));
+		}
+
+		[Test]
+		public void APlanetGoesWithTheStarItBelongsTo()
+		{
+			StarBody companion = Make<StarBody>("Companion");
+			companion.Orbit = new OrbitSettings { Distance = 0.4f, PeriodMode = OrbitPeriodMode.Authored, PeriodDays = 30f };
+			system.Bodies.Add(companion);
+			double hours = 777.7;
+			Vector3d planet = CelestialMath.Position(system, home, hours) - CelestialMath.Position(system, sun, hours);
+			Assert.That(Math.Sqrt(planet.X * planet.X + planet.Y * planet.Y + planet.Z * planet.Z), Is.EqualTo(1.0).Within(1e-6),
+				"home is parented to the sun, so it keeps its distance from the sun wherever the pair has swung it");
+		}
+
+		// ── What is in front of what ─────────────────────────────────────
+
+		[Test]
+		public void TheSkysBodiesAreDrawnFurthestFirstWhateverOrderTheyWereListedIn()
+		{
+			WorldBody near = Make<WorldBody>("Near");
+			near.HasRings = true;
+			WorldBody far = Make<WorldBody>("Far");
+			far.HasRings = true;
+			var state = new CelestialState();
+			// Listed nearest first: the order that used to put the far one on top.
+			state.Bodies.Add(new SkyBodyState { Body = near, Kind = SkyBodyKind.Moon, Direction = Vector3.up, LightDirection = Vector3.right, AngularRadius = 0.02f, AltitudeDegrees = 40f, Illumination = 1f, DistanceKm = 4.0e5 });
+			state.Bodies.Add(new SkyBodyState { Body = far, Kind = SkyBodyKind.Planet, Direction = Vector3.up, LightDirection = Vector3.right, AngularRadius = 0.02f, AltitudeDegrees = 40f, Illumination = 1f, DistanceKm = 9.0e8 });
+
+			var mesh = new SkyBodyMesh();
+			try
+			{
+				mesh.Clear();
+				mesh.AddBodies(state, null, new SkyLimits());
+				mesh.Upload();
+				var rings = new List<CelestialBody>();
+				var kinds = new List<SkyBodyMesh.StepKind>();
+				foreach (SkyBodyMesh.Step step in mesh.Steps)
+				{
+					kinds.Add(step.Kind);
+					if (step.Kind == SkyBodyMesh.StepKind.Ring)
+					{
+						rings.Add(step.Body.Body);
+					}
+				}
+				// Disc, its ring, the nearer disc, its ring: each ring straight after its own body,
+				// and the nearer pair after — so over — the further one.
+				Assert.That(kinds, Is.EqualTo(new[] { SkyBodyMesh.StepKind.Quads, SkyBodyMesh.StepKind.Ring, SkyBodyMesh.StepKind.Quads, SkyBodyMesh.StepKind.Ring }));
+				Assert.That(rings, Is.EqualTo(new CelestialBody[] { far, near }), "the far body's ring is drawn first, the near one's last");
+				Assert.That(mesh.Mesh.subMeshCount, Is.EqualTo(2), "one sub-mesh to each run of plain quads");
+				// And the nearer one hides what is behind its disc whichever part of it is lit: it is
+				// listed as an occluder, ranked above the far body, so the far body's pixels inside
+				// its disc are not drawn and the sky shows in its dark limb instead of the planet.
+				Assert.That(mesh.Occluders.Count, Is.EqualTo(2));
+				Assert.That(mesh.OccluderRanks[0].x, Is.EqualTo(0f), "the far body is ranked furthest");
+				Assert.That(mesh.OccluderRanks[1].x, Is.EqualTo(1f), "the near body is ranked above it");
+				Assert.That(mesh.Steps[1].Rank, Is.EqualTo(0f), "and a ring carries its own body's rank, so its body does not hide it");
+			}
+			finally
+			{
+				mesh.Dispose();
+			}
+		}
+
+		// ── Eclipses as they are drawn ───────────────────────────────────
+
+		[Test]
+		public void LargerThanLifeDiscsAreInEclipseForAsLongAsTheyOverlapOnScreen()
+		{
+			Moon();
+			var state = new CelestialState();
+			// Find a moment the true discs are close but not touching: no eclipse, yet at 1.6 times
+			// the size the drawn discs overlap. That is the stretch in which the sun shone through
+			// the body in front of it.
+			bool found = false;
+			for (int i = 0; i < 40000 && !found; i++)
+			{
+				double hours = i * 0.05;
+				state.Compute(system, home, hours, 0.0, 0.0, 0f);
+				if (state.Sun < 0 || state.Moon < 0 || state.SolarEclipse > 0f)
+				{
+					continue;
+				}
+				float drawn = state.SolarEclipseAsDrawn(1.6f, 1.6f, out CelestialBody covering);
+				if (drawn > 0.02f)
+				{
+					found = true;
+					Assert.That(covering, Is.Not.Null, "and it names the body in front");
+					Assert.That(state.SolarEclipseAsDrawn(1f, 1f, out _), Is.EqualTo(state.SolarEclipse), "life-size, it is the true eclipse");
+				}
+			}
+			if (!found)
+			{
+				// About the fixture's orbit, not about the code under test: nothing to conclude.
+				Assert.Inconclusive("no near miss between the sun and the moon in the hours searched, so there was nothing to test with");
+			}
+		}
+
+		// ── How much air ─────────────────────────────────────────────────
+
+		[Test]
+		public void NoAirNoWeatherAndThinAirLittle()
+		{
+			var storm = new WeatherFrame();
+			storm[WeatherChannel.CloudCover] = 0.9f;
+			storm[WeatherChannel.CloudDensity] = 0.9f;
+			storm[WeatherChannel.Precipitation] = 0.8f;
+			storm[WeatherChannel.FogDensity] = 0.4f;
+			storm[WeatherChannel.LightningRate] = 0.6f;
+			storm[WeatherChannel.WindSpeed] = 0.5f;
+
+			WeatherFrame none = WeatherDriver.UnderAtmosphere(storm, AtmosphereKind.None);
+			foreach (WeatherChannel channel in new[] { WeatherChannel.CloudCover, WeatherChannel.Precipitation, WeatherChannel.FogDensity, WeatherChannel.LightningRate, WeatherChannel.WindSpeed })
+			{
+				Assert.That(none[channel], Is.EqualTo(0f), $"an airless world has no {channel}");
+			}
+			WeatherFrame thin = WeatherDriver.UnderAtmosphere(storm, AtmosphereKind.Thin);
+			WeatherFrame same = WeatherDriver.UnderAtmosphere(storm, AtmosphereKind.Standard);
+			WeatherFrame thick = WeatherDriver.UnderAtmosphere(storm, AtmosphereKind.Thick);
+			Assert.That(same[WeatherChannel.CloudCover], Is.EqualTo(storm[WeatherChannel.CloudCover]), "standard air is what the field was tuned for");
+			Assert.That(thin[WeatherChannel.Precipitation], Is.LessThan(same[WeatherChannel.Precipitation] * 0.5f));
+			Assert.That(thin[WeatherChannel.CloudCover], Is.LessThan(same[WeatherChannel.CloudCover]));
+			Assert.That(thin[WeatherChannel.WindSpeed], Is.GreaterThan(same[WeatherChannel.WindSpeed]), "thin air runs faster");
+			Assert.That(thick[WeatherChannel.CloudCover], Is.GreaterThan(same[WeatherChannel.CloudCover]));
+			Assert.That(WeatherDriver.UnderAtmosphere(new WeatherFrame(), AtmosphereKind.Thick)[WeatherChannel.FogDensity], Is.GreaterThan(0f), "thick air never quite loses its haze");
+			Assert.That(WeatherDriver.FormationScale(AtmosphereKind.None), Is.EqualTo(0f));
+		}
+
 		[Test]
 		public void TheSunRisesAndSetsOncePerSolarDay()
 		{

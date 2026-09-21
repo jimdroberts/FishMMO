@@ -639,6 +639,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 25ae79de239d98ddb90e729c4a8fc55a
+    m_Address: Calanx System - Wenuvar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 25b2912dd9cd4ecfb7bbe73a27b5b476
     m_Address: Kelp Lurker
     m_ReadOnly: 0
@@ -923,6 +929,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a43eddc2e7096b9ba1e5d97c98932e0
     m_Address: Assets/Prefabs/Shared/TeleporterCache.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3ad88ef0ab31ee21ba922b08ef492427
+    m_Address: Calanx System
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1323,6 +1335,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b7239b4463a1fa9ab9a83842b86f921
+    m_Address: Calanx System - Fenanmar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5d10e1ac3658ab248970a19c84e5eefb
     m_Address: Wind Resistance
     m_ReadOnly: 0
@@ -1599,6 +1617,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 743745924557ba80d88097abbc4822c3
+    m_Address: Calanx System - Helris
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7703fa3a9f5544d7b7e44f39c2d6c081
     m_Address: Bog Goblin
     m_ReadOnly: 0
@@ -1637,6 +1661,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7b0b28f4064e4de6982f3ad5758bd9f5
     m_Address: Snow Troll
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7b937e3e18a8491b09ac4abee0ff83f8
+    m_Address: Calanx System - Elutha
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2162,6 +2192,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1119cd056270fc83be51696070c3557
+    m_Address: Calanx System - Elis
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a4d8278c839b407dba6b461ed4b7ad42
     m_Address: Ashenfolk
     m_ReadOnly: 0
@@ -2176,6 +2212,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a533dfe86eec45baa4918cfb0af158ca
     m_Address: Poltergeist
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a5c3c7414f27eb40ba2907a81e1a4c1a
+    m_Address: Calanx System - Lorus
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2258,6 +2300,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a97848a0a16291749a577fcdbc841408
+    m_Address: Calanx System - Jorx
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a9b3f72b77d34056ac4e5220b59a0847
     m_Address: Jelly
     m_ReadOnly: 0
@@ -2278,6 +2326,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aacb655df54e41b88ec41c8c762abae4
     m_Address: Dust Wraith
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab58a794badc2d47abe6273e8f066f5e
+    m_Address: Calanx System - Soloron
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2367,6 +2421,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b2be23afeaddac6faa373ee751e2d988
     m_Address: Eruption Ashfall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b32625d65bcc99769bd77992bf8b2498
+    m_Address: Calanx System - Fendor
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2581,6 +2641,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2d9a07da40e8fd26bc62be41e584c84
+    m_Address: Moon 8
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3968d4b8d505f44f927a401902775b9
     m_Address: Crater
     m_ReadOnly: 0
@@ -2755,6 +2821,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d0a8542b091e5285c9e58e4bbaf5bf4d
+    m_Address: Calanx System - Zelanlis
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d0c938b40047485b9f34956a35ac38a0
     m_Address: Redcap
     m_ReadOnly: 0
@@ -2851,6 +2923,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d66094d0f5050c2c888cd0fc135b9315
+    m_Address: Calanx System - Valus
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d6d32c919f2918f4f830933959878cae
     m_Address: Earth Resistance
     m_ReadOnly: 0
@@ -2859,6 +2937,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d75479b8ff8542e59ae83b3ac2d52676
     m_Address: Frost Drake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d7969c44e2206a065b8a7357a0a22bd2
+    m_Address: Calanx System - Lorenlis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2959,6 +3043,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: df70c739d8814ebe99290616acf12bb2
+    m_Address: Calanx System - Caludor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: df79c6fb87b84576a987639703bcc8f5
     m_Address: Forgekin
     m_ReadOnly: 0
@@ -3055,6 +3145,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3c5924a8b51c7f72a53e165c86eab79
+    m_Address: Calanx System - Calanx
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e3d29be775099b70ba79cc694121b638
     m_Address: Underworld
     m_ReadOnly: 0
@@ -3141,6 +3237,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ea0ff7b1f46f48959c9c3895367a2322
     m_Address: Giant Bat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea2d53eba59df6a7cb314c9a30618f9b
+    m_Address: Calanx System - Galowyn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3351,6 +3453,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f795a206c140498b849eb633836ec427
     m_Address: Ghoul
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f7f389cd9faa518d58eb9426bafd5dd1
+    m_Address: Calanx System - Lorux
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

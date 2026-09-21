@@ -270,7 +270,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			if (Atlas == null)
 			{
-				Add(AtlasProblemSeverity.Error, "There is no World Atlas asset. Create the example system on the Solar System page, or create one under FishMMO/World.");
+				Add(AtlasProblemSeverity.Error, "There is no World Atlas asset. Press New on the Solar System page, or create one under FishMMO/World.");
 			}
 			foreach (string message in SolarSystemChecks.Problems(System))
 			{

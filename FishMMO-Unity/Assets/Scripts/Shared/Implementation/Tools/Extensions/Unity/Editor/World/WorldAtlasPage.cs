@@ -358,7 +358,7 @@ namespace FishMMO.Shared.WorldDesign
 			bodyChips.Clear();
 			if (bodies.Count == 0)
 			{
-				bodyChips.Add(new Label("No planets yet — create the example system on the Solar System page.") { style = { unityTextAlign = TextAnchor.MiddleLeft } });
+				bodyChips.Add(new Label("No planets yet — press New on the Solar System page.") { style = { unityTextAlign = TextAnchor.MiddleLeft } });
 			}
 			foreach (WorldBody b in bodies)
 			{
@@ -626,7 +626,7 @@ namespace FishMMO.Shared.WorldDesign
 			List<WorldAtlasScene> unplaced = model.Unplaced();
 			if (model.Atlas == null)
 			{
-				Line(library, "No atlas yet. Create the example system on the Solar System page.", 0.8f);
+				Line(library, "No atlas yet. Press New on the Solar System page.", 0.8f);
 				return;
 			}
 			if (unplaced.Count == 0)
@@ -817,7 +817,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			if (body == null)
 			{
-				EditorUtility.DisplayDialog("No body", "There is no planet to place scenes on. Create the example system on the Solar System page first.", "OK");
+				EditorUtility.DisplayDialog("No body", "There is no planet to place scenes on. Press New on the Solar System page first.", "OK");
 				return;
 			}
 			Vector3d wanted = at ?? (globe.Pick(globe.contentRect.center, out Vector3d middle) ? middle : new Vector3d(0, 0, 1));

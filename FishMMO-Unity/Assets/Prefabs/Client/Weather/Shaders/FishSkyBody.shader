@@ -47,6 +47,7 @@ Shader "FishMMO/Sky Body"
                 float4 shape : TEXCOORD1;        // x angular radius (rad), y kind, z illumination, w eclipse shadow
                 float4 lighting : TEXCOORD2;     // xyz direction to the star, w brightness
                 float4 axis : TEXCOORD3;         // xyz streak direction, w streak length (rad)
+                float4 extra : TEXCOORD4;        // x rank in the far-to-near order: hidden by any disc ranked above it
                 float4 color : COLOR;
             };
 
@@ -61,6 +62,8 @@ Shader "FishMMO/Sky Body"
                 float3 forward : TEXCOORD5;
                 float4 color : COLOR;
                 float visibility : TEXCOORD6;
+                float rank : TEXCOORD8;
+                float4 ring : TEXCOORD7;         // rings only: x how open (signed), y inner rim / outer, z bands, w outer rim in body radii
             };
 
             Varyings Vert(Attributes input)
@@ -89,10 +92,31 @@ Shader "FishMMO/Sky Body"
                     right = side;
                     upAxis = along;
                 }
+                else if (kind > 0.5 && kind < 1.5)
+                {
+                    // Rings: a square as wide as the outer rim, turned so that its up is the body's
+                    // pole as it appears on the sky. The ring plane is the body's equator; seen from
+                    // here it is an ellipse whose long axis lies across the pole and whose short one
+                    // is as long as the viewer stands above the plane — edge-on a line, face-on a
+                    // circle. The fragment stage draws that ellipse inside this square.
+                    //
+                    // It used to be a fixed 2.3 by 0.7 ellipse, always level with the horizon, with
+                    // its band at 0.78 of the quad: whichever way the planet's axis pointed and
+                    // wherever it was seen from, the same shape, laid over the whole disc.
+                    float3 pole = normalize(input.axis.xyz);
+                    float outer = max(1.0, input.axis.w);
+                    float3 across = pole - dir * dot(pole, dir);
+                    // Pole straight at the viewer: the ring is a circle and any up will do.
+                    float3 ringUp = dot(across, across) > 1e-6 ? normalize(across) : upAxis;
+                    float3 ringRight = normalize(cross(ringUp, dir));
+                    offset = (ringRight * input.corner.x + ringUp * input.corner.y) * size * outer;
+                    right = ringRight;
+                    upAxis = ringUp;
+                    output.ring = float4(dot(pole, -dir), input.shape.w / outer, input.shape.z, outer);
+                }
                 else
                 {
-                    float2 stretch = kind > 0.5 && kind < 1.5 ? float2(2.3, 0.7) : float2(1, 1);
-                    offset = (right * input.corner.x * stretch.x + upAxis * input.corner.y * stretch.y) * size * (kind > 3.5 ? 1.0 : 1.0);
+                    offset = (right * input.corner.x + upAxis * input.corner.y) * size;
                 }
 
                 float4 clip = TransformWorldToHClip(centre + offset);
@@ -110,6 +134,7 @@ Shader "FishMMO/Sky Body"
                 output.up = upAxis;
                 output.forward = -dir;
                 output.color = input.color;
+                output.rank = input.extra.x;
 
                 float horizon = saturate(dir.y * 20.0 + 0.5);
                 float fog = 1.0 - saturate(1.0 - dir.y * 7.0) * _FishSkyFogColor.a;
@@ -164,10 +189,35 @@ Shader "FishMMO/Sky Body"
                 }
                 else if (kind < 1.5)
                 {
-                    // Rings: an ellipse band.
-                    float r = length(c);
-                    alpha = saturate(1.0 - abs(r - 0.78) / 0.14) * 0.55 * (abs(c.y) > 0.28 || r > 0.62 ? 1.0 : 0.25);
-                    color *= input.lighting.w;
+                    // Rings. c runs -1..1 across a square as wide as the outer rim: x along the ring's
+                    // long axis, y along the body's pole as it lies on the sky.
+                    float opening = input.ring.x;                    // sine of the viewer's height above the ring plane
+                    float squash = max(abs(opening), 0.015);            // never quite a line: a pixel of ring stays a pixel
+                    // Where this pixel is ON the ring plane, in units of the outer rim.
+                    float onPlane = length(float2(c.x, c.y / squash));
+                    float t = (onPlane - input.ring.y) / max(1e-4, 1.0 - input.ring.y);
+                    float solid;
+                    float3 material = color;
+                    if (_UseTexture > 0.5)
+                    {
+                        // A strip read across the rings: inner rim on the left, outer on the right.
+                        float4 strip = SAMPLE_TEXTURE2D(_BodyTex, sampler_BodyTex, float2(saturate(t), 0.5));
+                        material *= strip.rgb;
+                        solid = strip.a * step(0.0, t) * step(t, 1.0);
+                    }
+                    else
+                    {
+                        solid = FishRingBands(t, input.ring.z);
+                    }
+                    // The far half goes behind the planet. Looking down on the north face the pole
+                    // leans toward the viewer, and the half of the ellipse up the pole's side is the
+                    // far one; looking up at the south face it is the other half. Inside the body's
+                    // own disc the far half is hidden and the near half crosses in front.
+                    float bodyRadius = 1.0 / max(1.0, input.ring.w);
+                    bool farHalf = c.y * opening > 0.0;
+                    bool behind = farHalf && dot(c, c) < bodyRadius * bodyRadius;
+                    alpha = behind ? 0.0 : solid * input.lighting.w;
+                    color = material;
                 }
                 else if (kind < 2.5)
                 {
@@ -191,6 +241,34 @@ Shader "FishMMO/Sky Body"
                 }
 
                 alpha *= input.visibility;
+
+                // Behind the ring of the world underfoot, which is nearer than anything else up here.
+                // Asked per pixel and not once for the body: a ring's edge crossing a big planet's
+                // disc has to cut across the disc, not switch the whole planet off. A meteor is the
+                // one thing drawn here that is nearer still — it burns in the air — and is left alone.
+                if (kind < 2.5 || kind > 3.5)
+                {
+                    float reachAcross = tan(min(input.shape.x, 1.2)) * (kind > 0.5 && kind < 1.5 ? max(1.0, input.ring.w) : 1.0);
+                    float3 toPixel = normalize(-input.forward + (input.right * c.x + input.up * c.y) * (kind < 1.5 ? reachAcross : 0.0));
+                    float3 unusedLight;
+                    alpha *= 1.0 - FishOwnRing(toPixel, unusedLight);
+
+                    // Behind any nearer body's disc, lit or not. Drawing the nearest last puts a lit
+                    // disc on top, but by day a body's unlit side is drawn clear — what is seen there
+                    // is the air in front of it — so a far planet drawn first showed straight through
+                    // the dark limb of a nearer crescent. It is behind that moon whichever part of the
+                    // moon is lit. Not drawn there, what is left is the sky that was behind them both.
+                    int occluders = (int)min(_FishOccluderCount, 32.0);
+                    for (int o = 0; o < occluders; o++)
+                    {
+                        if (_FishOccluderRanks[o].x > input.rank + 0.5)
+                        {
+                            float across = acos(clamp(dot(toPixel, _FishOccluders[o].xyz), -1.0, 1.0));
+                            float limb = _FishOccluders[o].w;
+                            alpha *= smoothstep(limb * 0.985, limb, across);
+                        }
+                    }
+                }
 
                 // What the cloud in front of this body lets through. These quads sit in the
                 // transparent queue, and the cloud volume is composited before the transparent

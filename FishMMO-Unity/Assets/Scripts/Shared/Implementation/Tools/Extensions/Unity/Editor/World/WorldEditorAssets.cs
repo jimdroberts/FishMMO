@@ -159,21 +159,85 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static SolarSystemProfile CreateExampleSystem()
 		{
-			SolarSystemProfile system = FindFirst<SolarSystemProfile>();
-			if (system != null)
+			SolarSystemProfile existing = FindFirst<SolarSystemProfile>();
+			return existing != null ? existing : CreateExampleSystem(UniqueSystemName("Solar System"));
+		}
+
+		// ── Systems in folders of their own ───────────────────────────
+
+		/// <summary>Where systems made by the tools live, one folder to a system.</summary>
+		public const string SystemsFolder = Root + "/Systems";
+
+		public static string SystemFolder(string systemName) => SystemsFolder + "/" + Sanitize(systemName);
+
+		public static string SystemBodiesFolder(string systemName) => SystemFolder(systemName) + "/Bodies";
+
+		/// <summary>
+		/// A body's asset name inside a system: the system's name, then the body's. Assets are
+		/// identified at runtime by a hash of their type and their NAME, not their path, so two
+		/// systems that each had a "Home.asset" — in different folders, which the project window
+		/// allows — would be one entry in the cache, with whichever loaded last winning. The plain
+		/// name goes in the body's DisplayName, which is what anybody sees.
+		/// </summary>
+		public static string BodyAssetName(string systemName, string bodyName) => $"{systemName} - {bodyName}";
+
+		/// <summary>A system name no existing system or system folder already has.</summary>
+		public static string UniqueSystemName(string wanted)
+		{
+			wanted = Sanitize(wanted);
+			string name = wanted;
+			for (int n = 2; SystemNameProblem(name, null) != null; n++)
 			{
-				return system;
+				name = $"{wanted} {n}";
 			}
+			return name;
+		}
+
+		/// <summary>Why a system cannot be called this, or null when it can. <paramref name="except"/> is the system being renamed.</summary>
+		public static string SystemNameProblem(string name, SolarSystemProfile except)
+		{
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				return "A system needs a name.";
+			}
+			if (name != Sanitize(name) || name.Trim() != name)
+			{
+				return "That name has characters a file cannot have, or spaces at its ends.";
+			}
+			foreach (SolarSystemProfile other in FindAll<SolarSystemProfile>())
+			{
+				if (other != except && string.Equals(other.name, name, StringComparison.OrdinalIgnoreCase))
+				{
+					return $"There is already a system called \"{other.name}\".";
+				}
+			}
+			// A folder left behind by a system that was deleted by hand would be silently adopted.
+			string folder = SystemFolder(name);
+			bool ownFolder = except != null && AssetDatabase.GetAssetPath(except).StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase);
+			if (!ownFolder && AssetDatabase.IsValidFolder(folder))
+			{
+				return $"There is already a folder at {folder}.";
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Creates the small, neutral example system under its own folder, whatever else exists.
+		/// </summary>
+		public static SolarSystemProfile CreateExampleSystem(string systemName)
+		{
+			string bodies = SystemBodiesFolder(systemName);
+			SolarSystemProfile system;
 
 			CalendarProfile calendar = FindFirst<CalendarProfile>() ?? Create<CalendarProfile>(Root, "World Calendar");
-			StarBody sun = Create<StarBody>(BodiesFolder, "Sun", s =>
+			StarBody sun = Create<StarBody>(bodies, BodyAssetName(systemName, "Sun"), s =>
 			{
 				s.DisplayName = "Sun";
 				s.SkyRadiusKm = 696000f;
 				s.Tint = new Color(1f, 0.96f, 0.86f, 1f);
 				s.Orbit = new OrbitSettings { Distance = 1f, PeriodDays = 27.3f };
 			});
-			WorldBody home = Create<WorldBody>(BodiesFolder, "Home", b =>
+			WorldBody home = Create<WorldBody>(bodies, BodyAssetName(systemName, "Home"), b =>
 			{
 				b.DisplayName = "Home";
 				b.Kind = WorldBodyKind.Planet;
@@ -185,7 +249,7 @@ namespace FishMMO.Shared.WorldDesign
 				b.Tint = new Color(0.35f, 0.55f, 0.85f, 1f);
 				b.CurrentRadiusKm = 30f;
 			});
-			WorldBody moon = Create<WorldBody>(BodiesFolder, "Moon 1", b =>
+			WorldBody moon = Create<WorldBody>(bodies, BodyAssetName(systemName, "Moon 1"), b =>
 			{
 				b.DisplayName = "Moon 1";
 				b.Kind = WorldBodyKind.Moon;
@@ -201,7 +265,7 @@ namespace FishMMO.Shared.WorldDesign
 				b.CurrentRadiusKm = 10f;
 			});
 
-			system = Create<SolarSystemProfile>(Root, "Solar System", p =>
+			system = Create<SolarSystemProfile>(SystemFolder(systemName), systemName, p =>
 			{
 				p.Bodies.Add(sun);
 				p.Bodies.Add(home);

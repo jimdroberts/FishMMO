@@ -1000,7 +1000,9 @@ namespace FishMMO.TestHarness.World
 				// The channels are the whole weather: no timeline, no cells, nothing sampled. This is
 				// the sky bed's old behaviour, kept because asking for exactly this much cloud is a
 				// thing a designer needs and no preset lands on it.
-				frame = skyWeather;
+				// Even the sliders cannot rain on a world with no air: they go round the weather field,
+				// which is where that is otherwise refused.
+				frame = Body != null && !Body.HasWeather ? WeatherFrame.Clear : skyWeather;
 				lastSample = new WeatherSample
 				{
 					Frame = frame,

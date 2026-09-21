@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39aaa201d0124cd6a217bdb1a28fa474, type: 3}
+  m_Name: Calanx System - Helris
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.WorldBody
+  DisplayName: Helris
+  Parent: {fileID: 11400000, guid: a97848a0a16291749a577fcdbc841408, type: 2}
+  Orbit:
+    Distance: 140.54195
+    Eccentricity: 0.008564009
+    InclinationDegrees: 3.0468607
+    OffsetDegrees: 338.71674
+    PeriodMode: 1
+    PeriodDays: 1.8612282
+  SkyRadiusKm: 478.42386
+  Tint: {r: 0.6665999, g: 0.631933, b: 0.57499546, a: 1}
+  SurfaceTexture: {fileID: 0}
+  HasRings: 0
+  Rings:
+    InnerRadius: 1.3
+    OuterRadius: 2.3
+    Bands: 5
+    Opacity: 0.6
+    Tint: {r: 0.86, g: 0.8, b: 0.68, a: 1}
+    Texture: {fileID: 0}
+  Kind: 1
+  RotationHours: 51.428688
+  Retrograde: 0
+  AxialTiltDegrees: 3.1315098
+  PoleLongitudeDegrees: 258.99384
+  TidallyLocked: 1
+  RotationOffsetDegrees: 0
+  Atmosphere: 0
+  Water: 0
+  BaseClimate: {fileID: 0}
+  Sky: {fileID: 0}
+  RadiusMode: 0
+  ManualRadiusKm: 30
+  MinimumRadiusKm: 10
+  MaxCoveragePercent: 35
+  CurrentRadiusKm: 10
+  Layers: []

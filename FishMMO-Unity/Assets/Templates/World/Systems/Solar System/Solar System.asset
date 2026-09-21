@@ -20,6 +20,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 2a90e9a4654dca6ed8aa1752628adf7d, type: 2}
   - {fileID: 11400000, guid: da7f609f5623f22e093087d609f80c6b, type: 2}
   - {fileID: 11400000, guid: a84c9321eb21a97058c6d100aaf9a279, type: 2}
+  - {fileID: 11400000, guid: c2d9a07da40e8fd26bc62be41e584c84, type: 2}
   HomeWorld: {fileID: 11400000, guid: 502a5864d965402358c527e42529b8bd, type: 2}
   WeatherSeed: 238
   StarSeed: 238
