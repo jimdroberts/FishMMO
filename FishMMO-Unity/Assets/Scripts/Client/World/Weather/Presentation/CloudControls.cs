@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -138,7 +139,14 @@ namespace FishMMO.Client
 
 			// ── The bands ──
 			parent.Add(Subheading("Bands"));
-			List<CloudLayer> bands = clouds.Layers;
+			// The stack that is being DRAWN: the stood-on body's own when it has one. Editing the render
+			// profile's while a body's is in use would move sliders that move nothing.
+			SkySystem drawing = SkySystem.Instance;
+			WorldBody owner = drawing != null ? drawing.CloudStackOwner : null;
+			parent.Add(Note(owner != null
+				? $"These are {owner.ResolvedName}'s own bands (its Cloud Stack asset). Changes are made to that asset."
+				: "These are the default bands, from the Weather Render Profile. A body with a Cloud Stack of its own uses that instead."));
+			List<CloudLayer> bands = owner != null ? owner.Clouds.Layers : clouds.Layers;
 			if (bands == null)
 			{
 				bands = clouds.Layers = CloudLayerDefaults.Sky();

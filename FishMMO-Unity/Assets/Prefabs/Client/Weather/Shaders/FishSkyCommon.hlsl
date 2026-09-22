@@ -11,7 +11,10 @@ float4 _FishSkyFogColor;    // rgb, a = how much the horizon melts into fog
 float4 _FishSkyParams;      // x star visibility, y milky way, z twinkle, w exposure
 float4 _FishSunShape;       // x unused (the halo is SunHalo, in the sun colour's alpha), y disc, z horizon glow
 float4 _FishSkyEclipseBody;  // xyz direction to the body covering the sun, w its angular radius (rad)
-float4 _FishSkyEclipse;     // x solar eclipse 0..1, y lunar eclipse 0..1, z airless (1 = black sky), w the covering body's angular radius (rad)
+float4 _FishSkyEclipse;     // x how dark the solar eclipse looks 0..1 (the adapted eye), y lunar eclipse: share of the moon in the umbra, z airless (1 = black sky), w totality 0..1
+float4 _FishSkyEclipseCover; // x share of the sun's area covered, y magnitude (of its diameter), z phase (0 none, 1 partial, 2 annular, 3 total), w how much air the covering body has (0 none .. ~3 thick)
+float4 _FishLunarShadow;    // xyz direction to the centre of the planet's shadow at the moon, w the umbra's angular radius (rad)
+float4 _FishLunarShadowEdge; // x the penumbra's angular radius (rad), y 1 while a moon is in the shadow at all
 float4 _FishSunDir[4];      // xyz direction, w drawn angular radius (radians)
 float4 _FishSunColor[4];    // rgb colour × intensity, a halo strength
 float  _FishSunCount;

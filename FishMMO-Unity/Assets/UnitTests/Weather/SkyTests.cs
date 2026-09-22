@@ -432,6 +432,93 @@ namespace FishMMO.UnitTests.Weather
 		// ── Eclipses as they are drawn ───────────────────────────────────
 
 		[Test]
+		public void AnEclipseLooksLikeAnOrdinaryDayUntilTheLastTenth()
+		{
+			// The adapted eye: half the sun gone is barely a tenth darker; the plunge is at the end.
+			Assert.That(SolarEclipseInfo.DarknessOf(0f), Is.EqualTo(0f));
+			Assert.That(SolarEclipseInfo.DarknessOf(0.5f), Is.LessThan(0.15f));
+			Assert.That(SolarEclipseInfo.DarknessOf(0.9f), Is.EqualTo(0.4f).Within(0.02f));
+			Assert.That(SolarEclipseInfo.DarknessOf(0.99f), Is.EqualTo(0.8f).Within(0.02f));
+			Assert.That(SolarEclipseInfo.DarknessOf(1f), Is.EqualTo(1f));
+		}
+
+		[Test]
+		public void TheEclipseHasPhasesAndAnAnnularOneIsNeverTotal()
+		{
+			Moon();
+			var state = new CelestialState();
+			bool partial = false, total = false;
+			for (int i = 0; i < 40000 && !(partial && total); i++)
+			{
+				state.Compute(system, home, i * 0.05, 0.0, 0.0, 0f);
+				SolarEclipseInfo drawn = state.SolarEclipseAsDrawn(1f, 1f);
+				if (drawn.Phase == SolarEclipsePhase.Partial)
+				{
+					partial = true;
+					Assert.That(drawn.Obscuration, Is.GreaterThan(0f).And.LessThan(1f));
+					Assert.That(drawn.Totality, Is.LessThan(1f));
+				}
+				if (drawn.Phase == SolarEclipsePhase.Total)
+				{
+					total = true;
+					Assert.That(drawn.Obscuration, Is.EqualTo(1f).Within(1e-4f));
+					Assert.That(drawn.Totality, Is.EqualTo(1f).Within(1e-4f), "wholly covered is totality");
+					Assert.That(drawn.Darkness, Is.EqualTo(1f));
+					Assert.That(drawn.Magnitude, Is.GreaterThanOrEqualTo(1f));
+				}
+			}
+			if (!partial || !total)
+			{
+				Assert.Inconclusive("no total eclipse in the hours searched from this fixture's orbit");
+			}
+			// A cover smaller than the sun: the discs meet, but a ring of sun is always left.
+			WorldBody moon = (WorldBody)state.Bodies[state.Moon].Body;
+			moon.SkyRadiusKm *= 0.85f;
+			for (int i = 0; i < 40000; i++)
+			{
+				state.Compute(system, home, i * 0.05, 0.0, 0.0, 0f);
+				SolarEclipseInfo drawn = state.SolarEclipseAsDrawn(1f, 1f);
+				Assert.That(drawn.Phase, Is.Not.EqualTo(SolarEclipsePhase.Total));
+				Assert.That(drawn.Totality, Is.EqualTo(0f), "an annular eclipse is broad daylight");
+				if (drawn.Phase == SolarEclipsePhase.Annular)
+				{
+					Assert.That(drawn.Obscuration, Is.LessThan(0.999f));
+					return;
+				}
+			}
+			Assert.Inconclusive("no annular eclipse in the hours searched");
+		}
+
+		[Test]
+		public void APlanetsShadowNarrowsWithDistanceAndTheMoonTakesABite()
+		{
+			WorldBody moon = Moon();
+			var state = new CelestialState();
+			CelestialState.PlanetShadowAt(system, moon, 100.0, new Vector3d(0, 0, 0), out double umbra, out double penumbra, out _, out double along);
+			if (along > 0.0)
+			{
+				Assert.That(umbra, Is.LessThan(home.SkyRadiusKm), "the umbra is narrower than the planet by the time it reaches the moon");
+				Assert.That(penumbra, Is.GreaterThan(home.SkyRadiusKm), "and the penumbra is wider");
+			}
+			// Across a whole orbit the moon is never MORE in the umbra than a whole disc, and the phase
+			// names follow the umbral share.
+			double period = CelestialMath.OrbitHours(system, moon);
+			for (int i = 0; i < 400; i++)
+			{
+				state.Compute(system, home, period * i / 400.0, 0.0, 0.0, 0f);
+				if (state.Moon < 0) continue;
+				SkyBodyState body = state.Bodies[state.Moon];
+				Assert.That(body.Shadowed, Is.InRange(0f, 1f));
+				if (body.ShadowPhase == LunarEclipsePhase.Total) Assert.That(body.Shadowed, Is.GreaterThan(0.99f));
+				if (body.ShadowPhase == LunarEclipsePhase.Penumbral) Assert.That(body.Shadowed, Is.EqualTo(0f));
+				if (body.ShadowPhase != LunarEclipsePhase.None)
+				{
+					Assert.That(body.UmbraRadius, Is.GreaterThan(0f).And.LessThan(body.PenumbraRadius), "the shadow has an umbra inside its penumbra");
+				}
+			}
+		}
+
+		[Test]
 		public void LargerThanLifeDiscsAreInEclipseForAsLongAsTheyOverlapOnScreen()
 		{
 			Moon();
@@ -448,12 +535,12 @@ namespace FishMMO.UnitTests.Weather
 				{
 					continue;
 				}
-				float drawn = state.SolarEclipseAsDrawn(1.6f, 1.6f, out CelestialBody covering);
-				if (drawn > 0.02f)
+				SolarEclipseInfo drawn = state.SolarEclipseAsDrawn(1.6f, 1.6f);
+				if (drawn.Obscuration > 0.02f)
 				{
 					found = true;
-					Assert.That(covering, Is.Not.Null, "and it names the body in front");
-					Assert.That(state.SolarEclipseAsDrawn(1f, 1f, out _), Is.EqualTo(state.SolarEclipse), "life-size, it is the true eclipse");
+					Assert.That(drawn.Covering, Is.Not.Null, "and it names the body in front");
+					Assert.That(state.SolarEclipseAsDrawn(1f, 1f).Obscuration, Is.EqualTo(state.SolarEclipse), "life-size, it is the true eclipse");
 				}
 			}
 			if (!found)
@@ -702,12 +789,12 @@ namespace FishMMO.UnitTests.Weather
 		{
 			WorldBody moon = Moon();
 			Vector3d star = CelestialMath.Position(system, sun, 0.0);
-			LogAssert.AreEqual(0f, CelestialState.ShadowDepth(system, home, 0.0, star), "planets are never shadowed");
+			LogAssert.AreEqual(0f, CelestialState.ShadowDepth(system, home, 0.0, star, out _), "planets are never shadowed");
 			double period = CelestialMath.OrbitHours(system, moon);
 			float deepest = 0f;
 			for (double h = 0; h < period; h += period / 2000.0)
 			{
-				deepest = Mathf.Max(deepest, CelestialState.ShadowDepth(system, moon, h, CelestialMath.Position(system, sun, h)));
+				deepest = Mathf.Max(deepest, CelestialState.ShadowDepth(system, moon, h, CelestialMath.Position(system, sun, h), out _));
 			}
 			LogAssert.IsTrue(deepest >= 0f && deepest <= 1f, "depth stays in 0..1");
 		}

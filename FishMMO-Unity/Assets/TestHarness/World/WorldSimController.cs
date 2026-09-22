@@ -185,6 +185,58 @@ namespace FishMMO.TestHarness.World
 			return best;
 		}
 
+		/// <summary>Sets the clock to a world hour outright, and the date to match.</summary>
+		public void JumpToHours(double worldHours)
+		{
+			hours = Math.Max(0.0, worldHours);
+			ReadCalendar();
+			ApplyClock();
+			CelestialState state = State;
+			if (state != null)
+			{
+				timeOfDay = state.LocalTime01;
+			}
+		}
+
+		/// <summary>
+		/// The next eclipse from now, as seen from where the camera stands: the world hour of first
+		/// contact. Searched, a few minutes at a time, over the next few years.
+		/// </summary>
+		/// <remarks>
+		/// With the discs as they are drawn, so what is found is what will be seen; and a solar
+		/// eclipse only counts with the sun up, since one below the horizon is not an eclipse to
+		/// anybody here. A lunar one counts with the moon up.
+		/// </remarks>
+		public bool FindNextEclipse(bool solar, out double hoursAtFirstContact)
+		{
+			hoursAtFirstContact = 0.0;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system == null || Body == null)
+			{
+				return false;
+			}
+			var probe = new CelestialState();
+			float sunScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.SunScale : 1f;
+			float bodyScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.BodyScale : 1f;
+			double step = 2.0 / 60.0;
+			double limit = hours + CelestialMath.YearHours(system) * 4.0;
+			bool wasIn = true;
+			for (double at = hours; at < limit; at += step)
+			{
+				probe.Compute(system, Body, at, latitude, longitude, heading);
+				bool isIn = solar
+					? probe.Sun >= 0 && probe.SunAltitude > -0.5f && probe.SolarEclipseAsDrawn(sunScale, bodyScale).Obscuration > 0f
+					: probe.Moon >= 0 && probe.Bodies[probe.Moon].AltitudeDegrees > -0.5f && probe.LunarPhase != LunarEclipsePhase.None;
+				if (isIn && !wasIn)
+				{
+					hoursAtFirstContact = at;
+					return true;
+				}
+				wasIn = isIn;
+			}
+			return false;
+		}
+
 		/// <summary>The date into the clock. In double: a float day stops holding the hour after a few years.</summary>
 		private void ComposeHours()
 		{

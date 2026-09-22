@@ -1215,6 +1215,13 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
+    m_Address: Weather Audio Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 54289926029243edb820a4761fd60d94
     m_Address: Duskherald
     m_ReadOnly: 0
@@ -1483,6 +1490,13 @@ MonoBehaviour:
     m_Address: Thunderstorm
     m_ReadOnly: 0
     m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69baeeda49ea89f268266955933d6961
+    m_Address: Weather Render Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69de0afedec049ceaa7dfafe0242db29

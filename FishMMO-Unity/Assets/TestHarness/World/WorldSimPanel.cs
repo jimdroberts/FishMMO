@@ -441,6 +441,11 @@ namespace FishMMO.TestHarness.World
 			times.Add(SmallButton("Dusk", () => Jump(0.75)));
 			times.Add(SmallButton("Midnight", () => Jump(0.0)));
 			page.Add(times);
+			var eclipses = Row();
+			eclipses.Add(SmallButton("Next solar eclipse", () => JumpToEclipse(true)));
+			eclipses.Add(SmallButton("Next lunar eclipse", () => JumpToEclipse(false)));
+			page.Add(eclipses);
+			page.Add(Small("Jumps to a minute before first contact and slows the clock to a hundredth of an hour a second, so the phases can be watched: the whole of a solar eclipse here is about twenty real minutes at the bed's usual rate, and its totality a few seconds."));
 			var seasons = Row();
 			// The season here, on this body: found from where its sun stands, not read off the calendar.
 			seasons.Add(SmallButton("Spring", () => SetSeason(0.25f)));
@@ -719,6 +724,22 @@ namespace FishMMO.TestHarness.World
 			daySlider?.SetValueWithoutNotify(day);
 		}
 
+		/// <summary>The next eclipse of the chosen kind from now, from here, with the clock set to watch it.</summary>
+		private void JumpToEclipse(bool solar)
+		{
+			if (!Controller.FindNextEclipse(solar, out double hoursAtFirstContact))
+			{
+				Debug.LogWarning($"[World Sim] No {(solar ? "solar" : "lunar")} eclipse found in the next few years from this place.");
+				return;
+			}
+			Controller.Paused = true;
+			Controller.JumpToHours(hoursAtFirstContact - 1.0 / 60.0);
+			Controller.TimeScale = 0.01f;
+			timeSlider?.SetValueWithoutNotify((float)Controller.TimeOfDay);
+			daySlider?.SetValueWithoutNotify(Controller.DayOfYear);
+			yearSlider?.SetValueWithoutNotify(Controller.Year);
+		}
+
 		private void Jump(double localTime01)
 		{
 			Controller.JumpTo(localTime01);
@@ -813,13 +834,16 @@ namespace FishMMO.TestHarness.World
 			Stat("sky.sun", $"{state.SunAltitude.ToString("0.0", culture)}° up");
 			Stat("sky.stars", $"{(stars * 100f).ToString("0", culture)}%", stars <= 0.001f ? "dim" : null);
 			Stat("sky.meteors", $"{state.MeteorRate.ToString("0", culture)} / h");
-			if (state.SolarEclipse > 0.01f)
+			SolarEclipseInfo drawnEclipse = sky != null ? sky.DrawnEclipse : state.Solar;
+			if (drawnEclipse.Phase != SolarEclipsePhase.None)
 			{
-				Stat("sky.eclipse", $"solar {(state.SolarEclipse * 100f).ToString("0", culture)}% ({state.EclipsingBody?.ResolvedName})", "warn");
+				string phase = drawnEclipse.Phase.ToString().ToLowerInvariant();
+				Stat("sky.eclipse", $"solar {phase} · {(drawnEclipse.Obscuration * 100f).ToString("0", culture)}% covered · looks {(drawnEclipse.Darkness * 100f).ToString("0", culture)}% dark"
+					+ (drawnEclipse.Totality > 0.01f ? $" · totality {(drawnEclipse.Totality * 100f).ToString("0", culture)}%" : string.Empty), "warn");
 			}
-			else if (state.LunarEclipse > 0.01f)
+			else if (state.LunarPhase != LunarEclipsePhase.None)
 			{
-				Stat("sky.eclipse", $"lunar {(state.LunarEclipse * 100f).ToString("0", culture)}%", "warn");
+				Stat("sky.eclipse", $"lunar {state.LunarPhase.ToString().ToLowerInvariant()} · {(state.LunarEclipse * 100f).ToString("0", culture)}% in the umbra", "warn");
 			}
 			else
 			{

@@ -12,6 +12,71 @@ namespace FishMMO.Shared.Celestial
 		Comet = 3,
 	}
 
+	/// <summary>What stage a solar eclipse is at.</summary>
+	public enum SolarEclipsePhase : byte
+	{
+		None = 0,
+		/// <summary>The covering body has taken a bite out of the sun.</summary>
+		Partial = 1,
+		/// <summary>The covering body stands wholly inside the sun's disc, leaving a ring of it: too small to darken the day.</summary>
+		Annular = 2,
+		/// <summary>The sun is wholly covered: night in the middle of the day, the corona, the horizon lit all round.</summary>
+		Total = 3,
+	}
+
+	/// <summary>What stage a lunar eclipse is at.</summary>
+	public enum LunarEclipsePhase : byte
+	{
+		None = 0,
+		/// <summary>The moon is in the planet's penumbra only: a little dimmer, hard to notice.</summary>
+		Penumbral = 1,
+		/// <summary>The umbra has taken a bite out of the moon.</summary>
+		Partial = 2,
+		/// <summary>The whole moon is in the umbra: dark red.</summary>
+		Total = 3,
+	}
+
+	/// <summary>
+	/// A solar eclipse in the terms the sky needs: how much is covered, how much of the diameter, what
+	/// phase, and how dark it should look.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The whole sky used to darken in step with the covered AREA. That is the physics of the light,
+	/// and it is why an eclipse looked like a switch: a camera at fixed exposure shows half the light
+	/// as half the brightness, so the day dimmed visibly from first contact and was well on its way
+	/// to dark long before totality, which then had nothing left to add. An eye does not see it that
+	/// way, and neither does anyone who has stood under one: the day looks quite ordinary until the
+	/// sun is nine tenths gone, strange in the last few minutes, and then, in a moment, night — the
+	/// eye adapts, over about two and a half decades of light. <see cref="Darkness"/> is that
+	/// response, and is what the sky, the ambient and the lights are dimmed by. Totality is its own
+	/// thing on top, keyed to the last few per cent: the corona, the twilight sky, the stars.
+	/// </para>
+	/// </remarks>
+	public struct SolarEclipseInfo
+	{
+		/// <summary>The share of the sun's area that is covered, 0..1.</summary>
+		public float Obscuration;
+		/// <summary>The share of the sun's DIAMETER that is covered, 0..1 (past 1 when the cover is bigger than the sun).</summary>
+		public float Magnitude;
+		public SolarEclipsePhase Phase;
+		/// <summary>0..1 over the last few per cent of a total eclipse: how much of totality's own look is on.</summary>
+		public float Totality;
+		/// <summary>0..1: how dark the day looks, as an adapted eye would have it.</summary>
+		public float Darkness;
+		/// <summary>The body in front of the sun, or null.</summary>
+		public CelestialBody Covering;
+
+		public static readonly SolarEclipseInfo None = default;
+
+		/// <summary>How dark a covered share of the sun looks: a log response over 2.5 decades, 1 at totality.</summary>
+		public static float DarknessOf(float obscuration)
+		{
+			float uncovered = Mathf.Max(1f - Mathf.Clamp01(obscuration), 1e-4f);
+			return Mathf.Clamp01(-Mathf.Log10(uncovered) / 2.5f);
+		}
+	}
+
 	/// <summary>One body in a scene's sky, in scene space.</summary>
 	public struct SkyBodyState
 	{
@@ -27,6 +92,12 @@ namespace FishMMO.Shared.Celestial
 		public float Illumination;
 		/// <summary>0 … 1: how deep the body is in another body's shadow (a lunar eclipse).</summary>
 		public float Shadowed;
+		/// <summary>Which stage of a lunar eclipse this moon is in.</summary>
+		public LunarEclipsePhase ShadowPhase;
+		/// <summary>Where its planet's shadow falls at its distance: the umbra's angular radius from the observer (rad), and the penumbra's.</summary>
+		public float UmbraRadius, PenumbraRadius;
+		/// <summary>Direction from the observer to the centre of that shadow at the moon's distance.</summary>
+		public Vector3 ShadowDirection;
 		public float AltitudeDegrees;
 		public bool Textured;
 		/// <summary>Comets: tail direction in scene space and its angular length in radians.</summary>
@@ -105,12 +176,15 @@ namespace FishMMO.Shared.Celestial
 		public bool IsDaylight { get; private set; }
 		public double LocalTime01 { get; private set; }
 
-		/// <summary>0 … 1: how much of the primary sun is covered by another body.</summary>
-		public float SolarEclipse { get; private set; }
+		/// <summary>0 … 1: how much of the primary sun's AREA is covered by another body, with the discs life-size.</summary>
+		public float SolarEclipse => Solar.Obscuration;
 		/// <summary>The body covering the sun, when <see cref="SolarEclipse"/> is above 0.</summary>
-		public CelestialBody EclipsingBody { get; private set; }
-		/// <summary>0 … 1: how deep the biggest moon is in its planet's shadow.</summary>
+		public CelestialBody EclipsingBody => Solar.Covering;
+		/// <summary>The solar eclipse in full, with the discs life-size: phase, magnitude, how dark it looks.</summary>
+		public SolarEclipseInfo Solar { get; private set; }
+		/// <summary>0 … 1: how much of the biggest moon's disc is in its planet's umbra.</summary>
 		public float LunarEclipse => Moon >= 0 ? Bodies[Moon].Shadowed : 0f;
+		public LunarEclipsePhase LunarPhase => Moon >= 0 ? Bodies[Moon].ShadowPhase : LunarEclipsePhase.None;
 
 		/// <summary>Meteors per hour right now (showers plus sporadic), 0 without air.</summary>
 		public float MeteorRate { get; private set; }
@@ -151,8 +225,7 @@ namespace FishMMO.Shared.Celestial
 			Bodies.Clear();
 			Sun = -1;
 			Moon = -1;
-			SolarEclipse = 0f;
-			EclipsingBody = null;
+			Solar = SolarEclipseInfo.None;
 			MeteorRate = 0f;
 
 			if (system == null || observer == null)
@@ -214,7 +287,23 @@ namespace FishMMO.Shared.Celestial
 					state.Illumination = (float)CelestialMath.Illumination(system, observer, body, hours);
 					state.LightDirection = HeliocentricDirection(starPosition - position).normalized;
 					state.Textured = CelestialMath.SkyFraction(angularDiameter) * 100.0 >= system.TextureAboveSkyPercent;
-					state.Shadowed = ShadowDepth(system, body, hours, starPosition);
+					state.Shadowed = ShadowDepth(system, body, hours, starPosition, out state.ShadowPhase);
+					if (IsMoon(body) && state.ShadowPhase != LunarEclipsePhase.None)
+					{
+						// Where the shadow falls, for the moon to be darkened against pixel by pixel: the
+						// shadow's centre is on the axis from the sun through the planet, at the moon's
+						// distance along it. Seen from the observer, who stands a planet's radius off that
+						// axis, it is NOT exactly opposite the sun — the difference is about a degree at
+						// our own moon, which is more than the umbra's radius there.
+						PlanetShadowAt(system, body, hours, starPosition, out double umbraKm, out double penumbraKm, out _, out double alongKm);
+						Vector3d planetPosition = CelestialMath.Position(system, body.Parent, hours);
+						Vector3d axis = (planetPosition - starPosition).Normalized;
+						Vector3d shadowCentre = planetPosition + axis * (alongKm / CelestialMath.AuKm);
+						state.ShadowDirection = HeliocentricDirection(shadowCentre - observerPosition).normalized;
+						double toShadowKm = (shadowCentre - observerPosition).Magnitude * CelestialMath.AuKm;
+						state.UmbraRadius = (float)Math.Atan2(umbraKm, Math.Max(1.0, toShadowKm));
+						state.PenumbraRadius = (float)Math.Atan2(penumbraKm, Math.Max(1.0, toShadowKm));
+					}
 				}
 				if (body is CometBody comet)
 				{
@@ -262,62 +351,62 @@ namespace FishMMO.Shared.Celestial
 			return m;
 		}
 
-		/// <summary>How much of the primary sun's disc other bodies cover.</summary>
+		/// <summary>The solar eclipse with the discs life-size: the true one, for the world.</summary>
 		private void ComputeSolarEclipse()
 		{
-			SolarEclipse = SolarEclipseAsDrawn(1f, 1f, out CelestialBody covering);
-			EclipsingBody = covering;
+			Solar = SolarEclipseAsDrawn(1f, 1f);
 		}
 
 		/// <summary>
-		/// How much of the primary sun's disc other bodies cover when the discs are drawn larger than
-		/// life: the sun's by <paramref name="sunScale"/>, everything else's by <paramref name="bodyScale"/>.
+		/// The solar eclipse as the discs are drawn: the sun's scaled by <paramref name="sunScale"/>,
+		/// everything else's by <paramref name="bodyScale"/>. Life-size at 1 and 1.
 		/// </summary>
 		/// <remarks>
-		/// <para>
-		/// An eclipse is a fact about two discs overlapping, and which discs is the question. The true
-		/// ones decide when an eclipse happens in the world. But a sky that flatters its bodies draws
-		/// them bigger about the same centres, so on the screen they meet well before the true discs
-		/// do and part well after — and everything that makes an eclipse look like one hung on the
-		/// true figure. Through that whole stretch it read nought: the body in front was not drawn as
-		/// a silhouette, the lit sky hid its dark side as it does for any new moon, and the sun simply
-		/// shone through where it stood, until the true discs finally touched and it snapped dark.
-		/// </para>
-		/// <para>
-		/// What is drawn has to be asked about what is drawn. With both scales at one this is the true
-		/// eclipse, which is how <see cref="SolarEclipse"/> is now computed.
-		/// </para>
+		/// A sky that flatters its bodies draws them bigger about the same centres, so on the screen
+		/// they meet before the true discs do and part after; everything that makes an eclipse look
+		/// like one has to be asked about the discs that are drawn, or the sun shines through the
+		/// body in front of it for the whole of that stretch.
 		/// </remarks>
-		public float SolarEclipseAsDrawn(float sunScale, float bodyScale, out CelestialBody covering)
+		public SolarEclipseInfo SolarEclipseAsDrawn(float sunScale, float bodyScale)
 		{
-			covering = null;
+			var info = SolarEclipseInfo.None;
 			if (Sun < 0 || Sun >= Bodies.Count)
 			{
-				return 0f;
+				return info;
 			}
 			SkyBodyState sun = Bodies[Sun];
-			double sunRadius = sun.AngularRadius * Math.Max(0.01f, sunScale);
-			double sunArea = Math.PI * sunRadius * sunRadius;
+			double a = sun.AngularRadius * Math.Max(0.01f, sunScale);
+			double sunArea = Math.PI * a * a;
 			if (sunArea <= 0.0)
 			{
-				return 0f;
+				return info;
 			}
-			float most = 0f;
 			for (int i = 0; i < Bodies.Count; i++)
 			{
 				if (i == Sun || Bodies[i].Kind == SkyBodyKind.Star || Bodies[i].Kind == SkyBodyKind.Comet || Bodies[i].DistanceKm >= sun.DistanceKm)
 				{
 					continue;
 				}
-				double separation = Vector3.Angle(Bodies[i].Direction, sun.Direction) * CelestialMath.Deg2Rad;
-				double covered = CircleOverlap(sunRadius, Bodies[i].AngularRadius * Math.Max(0.01f, bodyScale), separation) / sunArea;
-				if (covered > most)
+				double b = Bodies[i].AngularRadius * Math.Max(0.01f, bodyScale);
+				double d = Vector3.Angle(Bodies[i].Direction, sun.Direction) * CelestialMath.Deg2Rad;
+				float covered = (float)Math.Min(1.0, CircleOverlap(a, b, d) / sunArea);
+				if (covered <= info.Obscuration)
 				{
-					most = (float)Math.Min(1.0, covered);
-					covering = Bodies[i].Body;
+					continue;
 				}
+				info.Obscuration = covered;
+				info.Covering = Bodies[i].Body;
+				info.Magnitude = (float)Math.Max(0.0, (a + b - d) / (2.0 * a));
+				// Wholly inside the sun and smaller than it: a ring of sun is left, and that is never
+				// dark. Wholly covering it: total. Anything else with a bite out of it: partial.
+				bool inside = d <= Math.Abs(a - b);
+				info.Phase = !inside ? SolarEclipsePhase.Partial : b < a ? SolarEclipsePhase.Annular : SolarEclipsePhase.Total;
+				// Totality comes on over the last few per cent, and only where the cover CAN cover
+				// the sun: an annular eclipse peaks at 96% and stays broad daylight.
+				info.Totality = b >= a * 0.98 ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.93f, 1f, covered)) : 0f;
+				info.Darkness = SolarEclipseInfo.DarknessOf(covered);
 			}
-			return most;
+			return info;
 		}
 
 		/// <summary>Area of the intersection of two circles with radii a and b whose centres are d apart.</summary>
@@ -338,29 +427,67 @@ namespace FishMMO.Shared.Celestial
 		}
 
 		/// <summary>
-		/// How deep a moon is in its planet's shadow: 1 in the umbra, fading to 0 at the edge of
-		/// the penumbra. Planets are never shadowed here.
+		/// Where a planet's shadow falls at one of its moons: the umbra's and the penumbra's radii there,
+		/// in kilometres, and how far the moon's centre stands from the shadow's axis.
 		/// </summary>
-		public static float ShadowDepth(SolarSystemProfile system, CelestialBody body, double hours, Vector3d starPosition)
+		/// <remarks>
+		/// The umbra narrows with distance from the planet (the sun is bigger than the planet) and the
+		/// penumbra widens; at our own moon they come to about 0.72 and 1.28 of the planet's radius,
+		/// which is what these give. The moon used to be treated as a point with a made-up shadow
+		/// profile between 0.75 and 1.35 radii, so the whole disc reddened a little as soon as it
+		/// touched the penumbra — where a real eclipse is nearly invisible — and there was never a bite.
+		/// </remarks>
+		public static void PlanetShadowAt(SolarSystemProfile system, CelestialBody moon, double hours, Vector3d starPosition, out double umbraKm, out double penumbraKm, out double offAxisKm, out double alongKm)
 		{
+			CelestialBody planet = moon.Parent;
+			Vector3d planetPosition = CelestialMath.Position(system, planet, hours);
+			Vector3d toPlanet = planetPosition - starPosition;
+			double sunDistanceKm = toPlanet.Magnitude * CelestialMath.AuKm;
+			Vector3d axis = toPlanet.Normalized;
+			Vector3d offset = CelestialMath.Position(system, moon, hours) - planetPosition;
+			alongKm = Vector3d.Dot(offset, axis) * CelestialMath.AuKm;
+			offAxisKm = (offset - axis * (alongKm / CelestialMath.AuKm)).Magnitude * CelestialMath.AuKm;
+			double sunRadiusKm = system != null && system.PrimaryStar != null ? system.PrimaryStar.SkyRadiusKm : 696000.0;
+			double planetRadiusKm = planet.SkyRadiusKm;
+			double reach = Math.Max(0.0, alongKm) / Math.Max(1.0, sunDistanceKm);
+			umbraKm = Math.Max(0.0, planetRadiusKm - reach * (sunRadiusKm - planetRadiusKm));
+			penumbraKm = planetRadiusKm + reach * (sunRadiusKm + planetRadiusKm);
+		}
+
+		/// <summary>
+		/// How much of a moon's disc is in its planet's umbra, 0..1, and which phase that is. Planets
+		/// are never shadowed here.
+		/// </summary>
+		public static float ShadowDepth(SolarSystemProfile system, CelestialBody body, double hours, Vector3d starPosition, out LunarEclipsePhase phase)
+		{
+			phase = LunarEclipsePhase.None;
 			if (!IsMoon(body))
 			{
 				return 0f;
 			}
-			CelestialBody planet = body.Parent;
-			Vector3d planetPosition = CelestialMath.Position(system, planet, hours);
-			Vector3d axis = (planetPosition - starPosition).Normalized;
-			Vector3d offset = CelestialMath.Position(system, body, hours) - planetPosition;
-			double along = Vector3d.Dot(offset, axis);
+			PlanetShadowAt(system, body, hours, starPosition, out double umbra, out double penumbra, out double off, out double along);
 			if (along <= 0.0)
 			{
 				return 0f;
 			}
-			double perpendicular = (offset - axis * along).Magnitude * CelestialMath.AuKm;
-			double radius = planet.SkyRadiusKm;
-			double inner = radius * 0.75, outer = radius * 1.35;
-			double depth = 1.0 - (perpendicular - inner) / (outer - inner);
-			return (float)Math.Max(0.0, Math.Min(1.0, depth));
+			double moonRadius = Math.Max(1.0, body.SkyRadiusKm);
+			double moonArea = Math.PI * moonRadius * moonRadius;
+			float inUmbra = (float)(CircleOverlap(umbra, moonRadius, off) / moonArea);
+			float inPenumbra = (float)(CircleOverlap(penumbra, moonRadius, off) / moonArea);
+			if (inUmbra >= 0.999f)
+			{
+				phase = LunarEclipsePhase.Total;
+			}
+			else if (inUmbra > 0f)
+			{
+				phase = LunarEclipsePhase.Partial;
+			}
+			else if (inPenumbra > 0f)
+			{
+				phase = LunarEclipsePhase.Penumbral;
+			}
+			return Mathf.Clamp01(inUmbra);
 		}
 	}
+
 }

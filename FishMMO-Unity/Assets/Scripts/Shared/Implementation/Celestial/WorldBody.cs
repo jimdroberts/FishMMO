@@ -56,6 +56,8 @@ namespace FishMMO.Shared.Celestial
 		public ClimateSettings BaseClimate;
 		[Tooltip("How this body's sky looks. Empty: the default sky (black if there is no air).")]
 		public SkyProfile Sky;
+		[Tooltip("The bands of sky this world's clouds live in: how high its deck sits, how deep, and what stands above it. Empty: the default stack, which is the home world's. How the clouds are RENDERED — materials, quality budgets — is not a body's business and stays in the client's Weather Render Profile.")]
+		public CloudStackProfile Clouds;
 
 		[Header("Atlas")]
 		[Tooltip("Auto grows the globe to fit its scenes and never shrinks it below the minimum. Manual fixes it.")]

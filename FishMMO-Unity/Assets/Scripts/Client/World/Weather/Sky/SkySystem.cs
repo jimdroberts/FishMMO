@@ -47,6 +47,9 @@ namespace FishMMO.Client
 		private static readonly int FogColorId = Shader.PropertyToID("_FishSkyFogColor");
 		private static readonly int ParamsId = Shader.PropertyToID("_FishSkyParams");
 		private static readonly int SunShapeId = Shader.PropertyToID("_FishSunShape");
+		private static readonly int EclipseCoverId = Shader.PropertyToID("_FishSkyEclipseCover");
+		private static readonly int LunarShadowId = Shader.PropertyToID("_FishLunarShadow");
+		private static readonly int LunarShadowEdgeId = Shader.PropertyToID("_FishLunarShadowEdge");
 		private static readonly int EclipseId = Shader.PropertyToID("_FishSkyEclipse");
 		private static readonly int EclipseBodyId = Shader.PropertyToID("_FishSkyEclipseBody");
 		private static readonly int SunDirId = Shader.PropertyToID("_FishSunDir");
@@ -210,6 +213,9 @@ namespace FishMMO.Client
 		private int starSize;
 		/// <summary>The body in front of the sun, by the discs as drawn. Null when nothing is.</summary>
 		private CelestialBody drawnEclipsingBody;
+
+		/// <summary>The solar eclipse as the discs are drawn: what the sky is showing.</summary>
+		public SolarEclipseInfo DrawnEclipse { get; private set; }
 		private uint starSeed;
 		private Light sun;
 		private Light moon;
@@ -348,7 +354,36 @@ namespace FishMMO.Client
 		public const int MaxCloudLayers = 6;
 
 		/// <summary>The bands the sky is made of, as the renderer last saw them.</summary>
-		public IReadOnlyList<CloudLayer> CloudBands => cloudSettings != null ? cloudSettings.Layers : null;
+		public IReadOnlyList<CloudLayer> CloudBands => ActiveCloudLayers;
+
+		/// <summary>
+		/// The bands being drawn: the stood-on body's own stack when it has one, the render profile's
+		/// otherwise. The same list the tools edit, so a band moved in the bed moves in the right asset.
+		/// </summary>
+		public List<CloudLayer> ActiveCloudLayers
+		{
+			get
+			{
+				CelestialState state = State;
+				WorldBody body = state != null ? state.Observer : null;
+				if (body != null && body.Clouds != null && body.Clouds.HasLayers)
+				{
+					return body.Clouds.Layers;
+				}
+				return cloudSettings != null ? cloudSettings.Layers : null;
+			}
+		}
+
+		/// <summary>The body whose cloud stack is in use, or null when it is the render profile's.</summary>
+		public WorldBody CloudStackOwner
+		{
+			get
+			{
+				CelestialState state = State;
+				WorldBody body = state != null ? state.Observer : null;
+				return body != null && body.Clouds != null && body.Clouds.HasLayers ? body : null;
+			}
+		}
 
 		/// <summary>How much of each band the weather is asking for, in band order.</summary>
 		public IReadOnlyList<float> CloudBandCoverage => layerCoverage;
@@ -572,7 +607,27 @@ namespace FishMMO.Client
 			float overcast = Mathf.Clamp01(weather[WeatherChannel.CloudCover] * (0.4f + 0.6f * weather[WeatherChannel.CloudDensity]));
 			// The eclipse of the discs as they are drawn. Life-size that is the true one; larger than
 			// life the discs meet sooner and part later, and the sky has to go dark with what it shows.
-			float eclipse = state.SolarEclipseAsDrawn(blendTo != null ? blendTo.SunScale : 1f, blendTo != null ? blendTo.BodyScale : 1f, out drawnEclipsingBody);
+			SolarEclipseInfo solar = state.SolarEclipseAsDrawn(blendTo != null ? blendTo.SunScale : 1f, blendTo != null ? blendTo.BodyScale : 1f);
+			drawnEclipsingBody = solar.Covering;
+			DrawnEclipse = solar;
+			// What the day is dimmed by: the adapted eye's darkness, not the covered area. A partial
+			// eclipse is an ordinary-looking day with a bite out of the sun until the last tenth.
+			float eclipse = solar.Darkness;
+			if (solar.Totality > 0f)
+			{
+				// Totality is a twilight in the middle of the day: the sky overhead goes deep blue, the
+				// horizon all round takes the colour of dusk from the sunlit air beyond the shadow,
+				// and the brighter stars come out. The sample for a sun six degrees down is all of that,
+				// and everything that reads the sample — fog, ambient, the clouds — follows it.
+				SkySample twilight = blendTo.Evaluate(-6f, state.Observer);
+				twilight = TintBySuns(state, twilight, out _);
+				twilight.SunLight = sample.SunLight;
+				twilight.SunIntensity = 0f;
+				twilight.MoonLight = sample.MoonLight;
+				twilight.MoonIntensity = sample.MoonIntensity;
+				sample = SkySample.Lerp(sample, twilight, solar.Totality);
+				current = sample;
+			}
 
 			// Lightning first: its flash reaches the sky, the lights and the weather globals.
 			Vector3 viewer = camera != null ? camera.transform.position : Vector3.zero;
@@ -728,7 +783,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(SunShapeId, new Vector4(0f, sky.SunDisc, sky.SunGlow, 0f));
 			// Where the covering body is and how big it looks: the corona is drawn at its limb.
 			var covering = Vector4.zero;
-			if (eclipse > 0.02f)
+			if (DrawnEclipse.Obscuration > 0.02f)
 			{
 				for (int i = 0; i < state.Bodies.Count; i++)
 				{
@@ -741,7 +796,24 @@ namespace FishMMO.Client
 				}
 			}
 			Shader.SetGlobalVector(EclipseBodyId, covering);
-			Shader.SetGlobalVector(EclipseId, new Vector4(eclipse, state.LunarEclipse, airless, 0f));
+			// x how dark the day looks (the adapted eye), y the lunar eclipse's umbral share, z airless,
+			// w totality: the corona, the last of the disc.
+			Shader.SetGlobalVector(EclipseId, new Vector4(eclipse, state.LunarEclipse, airless, DrawnEclipse.Totality));
+			// And how much air the covering body has: a world's atmosphere lit from behind is the
+			// bright rim round it, which an airless moon does not have.
+			float coveringAir = DrawnEclipse.Covering is WorldBody coveringWorld ? AtmosphereModel.Density(coveringWorld.Atmosphere) : 0f;
+			Shader.SetGlobalVector(EclipseCoverId, new Vector4(DrawnEclipse.Obscuration, DrawnEclipse.Magnitude, (float)DrawnEclipse.Phase, coveringAir));
+			// The planet's shadow at the moon, for the moon to be darkened against pixel by pixel.
+			if (state.Moon >= 0 && state.Bodies[state.Moon].ShadowPhase != LunarEclipsePhase.None)
+			{
+				SkyBodyState shadowed = state.Bodies[state.Moon];
+				Shader.SetGlobalVector(LunarShadowId, new Vector4(shadowed.ShadowDirection.x, shadowed.ShadowDirection.y, shadowed.ShadowDirection.z, shadowed.UmbraRadius * sky.BodyScale));
+				Shader.SetGlobalVector(LunarShadowEdgeId, new Vector4(shadowed.PenumbraRadius * sky.BodyScale, 1f, 0f, 0f));
+			}
+			else
+			{
+				Shader.SetGlobalVector(LunarShadowEdgeId, Vector4.zero);
+			}
 			// The system's frame and not the body's own: see CelestialState.StarsToScene. The galaxy
 			// below is read through the same matrix, so it keeps its place among the stars.
 			Shader.SetGlobalMatrix(StarMatrixId, state.StarsToScene.transpose);
@@ -887,7 +959,9 @@ namespace FishMMO.Client
 		private void SetCloudLayers(WeatherRenderProfile profile, in WeatherFrame background, bool driverActive, float driverWeight, Vector2 axis, double driftX, double driftY)
 		{
 			VolumetricCloudSettings clouds = profile.Clouds;
-			List<CloudLayer> bands = clouds.Layers;
+			// The body's own stack where it has one: where a world's clouds stand is a fact about the
+			// world. Everything else in `clouds` is how they are drawn, and stays the profile's.
+			List<CloudLayer> bands = ActiveCloudLayers ?? clouds.Layers;
 			if (bands == null || bands.Count == 0)
 			{
 				Shader.SetGlobalInt(CloudLayerCountId, 0);
@@ -1135,7 +1209,14 @@ namespace FishMMO.Client
 			CloudLayerCentre = bands.Count > 1
 				? (bands[1].Column ? bands[1].Bottom + 600f : (bands[1].Bottom + bands[1].Top) * 0.5f)
 				: (CloudShellBottom + CloudShellTop) * 0.5f;
-			Shader.SetGlobalVector(CloudLayerId, new Vector4(CloudShellBottom, CloudShellTop, clouds.CurvatureRadiusKm * 1000f, cover));
+			// The bands curve down to the horizon over the radius of the world they are on. It was one
+			// number on the render profile — 6,371 km, our own — for every world: a moon a tenth the
+			// size had the home world's far, flat horizon, and its clouds ran out to it as though the
+			// ground did not fall away. The body's own radius is already known; the profile's figure is
+			// what is used when there is no body to ask.
+			CelestialState curved = State;
+			float radiusKm = curved != null && curved.Observer != null ? Mathf.Max(10f, curved.Observer.SkyRadiusKm) : clouds.CurvatureRadiusKm;
+			Shader.SetGlobalVector(CloudLayerId, new Vector4(CloudShellBottom, CloudShellTop, radiusKm * 1000f, cover));
 		}
 
 		/// <summary>A drift reduced to one period, in double, so that the float it becomes is exact.</summary>
@@ -1363,15 +1444,16 @@ namespace FishMMO.Client
 
 			Vector3 direction = state.SunDirection;
 			Color colour = sample.SunLight;
-			if (eclipse > 0.02f && TryFindBody(state, drawnEclipsingBody, out Vector3 eclipsing))
+			float totality = DrawnEclipse.Totality;
+			if (totality > 0.02f && TryFindBody(state, drawnEclipsingBody, out Vector3 eclipsing))
 			{
 				// The rays now come from around the body in front of the sun, and they are what is
 				// left of the sun to see, so the deeper the eclipse the more they carry.
 				direction = eclipsing;
-				strength = Mathf.Max(strength, up * 0.35f) + eclipse * 0.5f * up;
-				medium = Mathf.Max(medium, 0.5f * eclipse);
-				GodRayEclipse = eclipse;
-				colour = Color.Lerp(colour, new Color(1f, 0.93f, 0.85f), eclipse * 0.6f);
+				strength = Mathf.Max(strength, up * 0.35f) + totality * 0.5f * up;
+				medium = Mathf.Max(medium, 0.5f * totality);
+				GodRayEclipse = totality;
+				colour = Color.Lerp(colour, new Color(1f, 0.93f, 0.85f), totality * 0.6f);
 			}
 			GodRayDirection = direction;
 			GodRayColor = colour;
@@ -1411,7 +1493,8 @@ namespace FishMMO.Client
 			Color color = Mul(baseSunLight, tint) * (0.8f + 0.2f * Mathf.Sqrt(luminosity));
 			float radius = Mathf.Max(star.AngularRadius * sky.SunScale, 0.0015f);
 			sunDirections[count] = new Vector4(star.Direction.x, star.Direction.y, star.Direction.z, radius);
-			sunColors[count] = new Vector4(color.r, color.g, color.b, sky.SunHalo * (1f - eclipse));
+			// The halo is scattered sunlight, and there is as much of it as there is sun uncovered.
+			sunColors[count] = new Vector4(color.r, color.g, color.b, sky.SunHalo * (1f - DrawnEclipse.Obscuration));
 			count++;
 		}
 
@@ -1424,7 +1507,9 @@ namespace FishMMO.Client
 			float flash = lightning.Flash;
 			Vector3 sunDirection = state.Sun >= 0 ? state.SunDirection : new Vector3(0.3f, 0.8f, 0.5f).normalized;
 			float sunAltitude = state.Sun >= 0 ? state.SunAltitude : 50f;
-			float sunIntensity = sample.SunIntensity * (1f - eclipse * 0.95f) * (1f - overcast * 0.6f);
+			// The light is dimmed as the eye would have it (an ordinary day until the last tenth), and
+			// goes out at totality: the sample's own intensity is already lerped to nought there.
+			float sunIntensity = sample.SunIntensity * (1f - eclipse * 0.9f) * (1f - overcast * 0.6f);
 			sun.transform.rotation = LightRotation(sunDirection);
 			sun.color = Color.Lerp(sample.SunLight, new Color(0.8f, 0.85f, 1f), flash * 0.6f);
 			sun.intensity = sunIntensity + flash * 1.5f;

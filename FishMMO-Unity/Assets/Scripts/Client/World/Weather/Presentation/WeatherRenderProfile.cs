@@ -91,9 +91,9 @@ namespace FishMMO.Client
 	[System.Serializable]
 	public class VolumetricCloudSettings
 	{
-		[Tooltip("The bands of sky the clouds live in, lowest first. Each is a slice of atmosphere filled with 3D noise: sea level to the cloud base, the deck above it, and whatever is stacked over that.")]
+		[Tooltip("The DEFAULT bands of sky the clouds live in — the home world's. A body with a Cloud Stack of its own uses that instead. Lowest first. Each is a slice of atmosphere filled with 3D noise: sea level to the cloud base, the deck above it, and whatever is stacked over that.")]
 		public List<CloudLayer> Layers = CloudLayerDefaults.Sky();
-		[Tooltip("Planet radius used to curve the bands down to the horizon, in kilometres.")]
+		[Tooltip("Planet radius used to curve the bands down to the horizon, in kilometres — when there is no body to ask. A scene stands on a body of the solar system and the body's own radius is used; this is what a scene without one falls back to.")]
 		[Min(10f)] public float CurvatureRadiusKm = 6371f;
 		[Tooltip("Where the noise is cut when the forecast says no cloud. The field runs about 0.33 to 0.76, so these live in that window; outside it the sky is all or nothing. Recalibrated when the bands gained vertical structure: the cut is on the noise TIMES the height profile, so giving a column real variation with height lowered the product and the old cut let far less cloud through.")]
 		[Range(0.2f, 0.9f)] public float CoverageCutClear = 0.662f;

@@ -93,25 +93,66 @@ Shader "FishMMO/Sky"
                     float radius = max(_FishSunDir[i].w, 0.002);
                     float disc = 1.0 - smoothstep(radius * 0.92, radius, angle);
                     float limb = sqrt(saturate(1.0 - pow(angle / radius, 2.0)));
-                    float cover = (i == 0) ? eclipse : 0.0;
-                    sunsLight += sc * disc * (0.6 + 0.4 * limb) * _FishSunShape.y * (1.0 - cover) * saturate(up * 40.0 + 1.0);
+                    // The disc is not dimmed by the eclipse: the body in front of it is drawn as a
+                    // silhouette, and what is left showing is the sun at its own brightness — the
+                    // bite. Dimmed as well, the crescent faded to nothing before it was covered. Only
+                    // in the last of totality, when the silhouette's edge and the disc's edge are one
+                    // pixel apart, is it taken down, so the corona is not fighting a rim of disc.
+                    float totality = (i == 0) ? _FishSkyEclipse.w : 0.0;
+                    sunsLight += sc * disc * (0.6 + 0.4 * limb) * _FishSunShape.y * (1.0 - totality) * saturate(up * 40.0 + 1.0);
 
-                    // The corona: with the disc itself behind another body, what is still seen is a
-                    // ring of light around that body's limb. It is drawn at the covering body's own
-                    // radius, because that is where the edge is.
-                    if (i == 0 && cover > 0.02 && _FishSkyEclipseBody.w > 0.0)
+                    if (i == 0 && _FishSkyEclipseBody.w > 0.0 && _FishSkyEclipseCover.x > 0.001)
                     {
-                        // Around the covering body's own limb, not the sun's: a tight ring that
-                        // fades over a fraction of its radius.
                         float ring = _FishSkyEclipseBody.w;
-                        float bodyAngle = acos(clamp(dot(dir, _FishSkyEclipseBody.xyz), -1.0, 1.0));
-                        float outside = max(0.0, bodyAngle - ring);
-                        float corona = exp(-outside / max(0.0005, ring * 0.12)) * step(ring, bodyAngle);
-                        corona *= smoothstep(0.1, 0.75, cover);
-                        sunsLight += sc * corona * 2.5 * saturate(up * 40.0 + 1.0);
+                        float3 bodyDir = _FishSkyEclipseBody.xyz;
+                        float bodyAngle = acos(clamp(dot(dir, bodyDir), -1.0, 1.0));
+                        float outsideBody = smoothstep(ring * 0.995, ring * 1.005, bodyAngle);
+                        float dark = smoothstep(0.55, 0.95, _FishSkyEclipse.x);
+
+                        // The corona: the SUN's own outer atmosphere, centred on the sun and reaching
+                        // beyond its disc. Seen only against a dark sky and never through the body in
+                        // front, so a same-sized moon shows it on one side going in, all round at
+                        // totality, and on the other side coming out. A body much bigger than the sun
+                        // hides the whole of it, which is right: there is no corona to be seen from a
+                        // moon when its planet crosses the sun.
+                        float beyond = max(0.0, angle - radius);
+                        // Streamers. A corona is not a smooth glow: it is combed out into rays and
+                        // plumes by the sun's field, brighter and longer at its equator. Two octaves
+                        // of noise round the sun, stretched along the radius so each streamer runs
+                        // outward, over a smooth inner glow that the streamers stand out of.
+                        float3 sunRight = normalize(cross(sd, abs(sd.y) < 0.9 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0)));
+                        float3 sunUp = cross(sd, sunRight);
+                        // Round the sun as 0..1, then whole numbers of the noise's tiles, so there is
+                        // no seam where the angle wraps.
+                        float theta = atan2(dot(dir, sunUp), dot(dir, sunRight)) / (2.0 * PI) + 0.5;
+                        float radial = beyond / max(0.0005, radius);
+                        float streamers = FishNoise(float2(theta * 3.0, radial * 0.4), 0) * 0.6 + FishNoise(float2(theta * 8.0 + 0.37, radial * 0.7 + 0.5), 1) * 0.4;
+                        streamers = 0.45 + 1.1 * saturate(streamers * 1.6 - 0.4);
+                        float corona = exp(-beyond / max(0.0005, radius * 0.25)) * 0.5
+                            + exp(-beyond / max(0.0005, radius * 0.9)) * 0.5 * streamers;
+                        sunsLight += sc * corona * 2.5 * dark * outsideBody * saturate(up * 40.0 + 1.0);
+
+                        // Baily's beads. The last of the sun going in, and the first coming out, is
+                        // not a smooth sliver: it shows through the valleys of the covering body's
+                        // limb as a string of points, and a single last bead with the corona already
+                        // out round it is the diamond ring. The limb's roughness is noise round the
+                        // body, fine enough to be beads and not a bite.
+                        float behindSun = 1.0 - smoothstep(radius * 0.96, radius * 1.02, angle);
+                        float atLimb = exp(-max(0.0, bodyAngle - ring) / max(0.0005, ring * 0.03));
+                        float3 bodyRight = normalize(cross(bodyDir, abs(bodyDir.y) < 0.9 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0)));
+                        float limbTheta = atan2(dot(dir, cross(bodyDir, bodyRight)), dot(dir, bodyRight)) / (2.0 * PI) + 0.5;
+                        float valleys = saturate(FishNoise(float2(limbTheta * 24.0, 0.5), 2) * 2.2 - 0.9);
+                        float beads = behindSun * atLimb * valleys * smoothstep(0.35, 0.9, _FishSkyEclipse.x);
+                        sunsLight += sc * beads * 8.0 * outsideBody * saturate(up * 40.0 + 1.0);
+
+                        // The covering body's own lit rim is the body's, and is drawn on its quad by
+                        // the sky-body shader, where it can sit on top of the silhouette.
                     }
                 }
-                color *= lerp(1.0, 0.2, eclipse);
+                // As dark as it looks, not as dark as it is: an eye adapts, and a half-covered sun is
+                // an ordinary day. The plunge is in the last tenth, and totality has already turned
+                // the sky's own colours to twilight before this is applied.
+                color *= lerp(1.0, 0.45, eclipse);
 
                 // Stars and the Milky Way, dimmed by the sky.
                 float starVisibility = _FishSkyParams.x * saturate(up * 8.0 + 0.2);

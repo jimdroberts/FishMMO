@@ -1018,8 +1018,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldDayNightCycle
   DayNightCycle: 1
-  SunLight: {fileID: 0}
-  MoonLight: {fileID: 0}
   SkyOverride: {fileID: 0}
   RotateObjects: []
   DayObjects: []
@@ -3015,11 +3013,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FishMMO.TestHarness.World::FishMMO.TestHarness.World.WorldSimController
   Camera: {fileID: 1064588182}
-  Sun: {fileID: 0}
   DayNight: {fileID: 346022001}
   Settings: {fileID: 473463839}
   Profile: {fileID: 11400000, guid: 69baeeda49ea89f268266955933d6961, type: 2}
-  SolarSystem: {fileID: 11400000, guid: 3ad88ef0ab31ee21ba922b08ef492427, type: 2}
+  SolarSystem: {fileID: 11400000, guid: e9472bdc60c3d6c49a901f7d540508d1, type: 2}
   SkyProfiles:
   - {fileID: 11400000, guid: f912d7b5e0f01a262b3653ce45ad1fc6, type: 2}
   Presets:

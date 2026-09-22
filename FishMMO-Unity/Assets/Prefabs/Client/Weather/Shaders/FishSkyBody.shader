@@ -116,7 +116,10 @@ Shader "FishMMO/Sky Body"
                 }
                 else
                 {
-                    offset = (right * input.corner.x + upAxis * input.corner.y) * size;
+                    // A world with air (a tint alpha under 1 says so) gets room outside its disc for
+                    // the halo its atmosphere throws when the sun is behind it.
+                    float reach = kind < 0.5 && input.color.a < 0.999 ? 1.18 : 1.0;
+                    offset = (right * input.corner.x + upAxis * input.corner.y) * size * reach;
                 }
 
                 float4 clip = TransformWorldToHClip(centre + offset);
@@ -149,11 +152,78 @@ Shader "FishMMO/Sky Body"
                 float alpha;
                 float3 color = input.color.rgb;
 
+                float3 backlitHalo = 0.0;
+                float haloAlpha = 0.0;
+                float edgeGlow = 0.0;
                 if (kind < 0.5)
                 {
-                    // A lit sphere.
+                    // A lit sphere. The quad is wider than the disc for a world with air (see the
+                    // vertex stage), so `c` is first put back into disc radii.
+                    bool hasAir = input.color.a < 0.999;
+                    float reach = hasAir ? 1.18 : 1.0;
+                    c *= reach;
                     float r2 = dot(c, c);
-                    if (r2 > 1.0) discard;
+
+                    // The atmosphere lit from behind. With the sun behind a world, its air passes the
+                    // light round the edge — refracted and scattered through the whole depth of it —
+                    // and the limb glows, bright enough to show by day: a crescent of light on the
+                    // side the sun is behind as the world moves in front of it, a full ring when the
+                    // sun is centred, a crescent on the far side going out. This is what the rim of a
+                    // planet crossing the sun looks like from one of its moons. It is drawn here, on
+                    // the world's own quad, on both sides of the limb: inside as the atmosphere's
+                    // edge, outside as a halo, and it wants nothing from the sky shader.
+                    if (hasAir)
+                    {
+                        float3 toSun = _FishSunDir[0].xyz;
+                        float3 dir = -input.forward;
+                        float sunRadius = max(_FishSunDir[0].w, 0.002);
+                        float bodyRadius = min(input.shape.x, 1.2);
+                        float sunAngle = acos(clamp(dot(dir, toSun), -1.0, 1.0));
+                        // On while the sun is behind the world, fading as it comes out past the limb.
+                        float sunBehind = 1.0 - smoothstep(bodyRadius, bodyRadius + sunRadius * 2.0, sunAngle);
+                        if (sunBehind > 0.001)
+                        {
+                            // Where the sun stands in the quad's own plane, in disc radii; where this
+                            // pixel's limb point is; how far the two are apart. Every limb point is the
+                            // same distance from a sun dead behind the centre — a uniform ring — and
+                            // the near side is much nearer than the far side otherwise — a crescent.
+                            float2 sunAt = float2(dot(toSun, input.right), dot(toSun, input.up)) / max(1e-4, tan(bodyRadius));
+                            float2 limbPoint = c / max(1e-5, length(c));
+                            float limbToSun = length(limbPoint - sunAt);
+                            float nearSun = exp(-max(0.0, limbToSun - 1.0) / 0.35);
+                            // A thin bright edge just inside the limb and a softer halo just outside.
+                            float r = sqrt(r2);
+                            float edge = exp(-abs(r - 1.0) / 0.03);
+                            // The halo must be gone before the quad's edge is, or it stops on the
+                            // edge and draws the quad: a square of grey round the world, with the
+                            // corners cut where the falloff had at last reached nothing. Windowed to
+                            // nought at the quad's edge as well as falling off.
+                            float window = saturate((reach - r) / (reach - 1.0));
+                            float halo = exp(-max(0.0, r - 1.0) / 0.06) * window * window * step(1.0, r);
+                            float strength = sunBehind * nearSun * (1.0 - input.color.a) * 2.5;
+                            // Two colours, as the air has: the edge itself is the light that has come
+                            // through the whole depth of the atmosphere, and it comes out red, the
+                            // way every sunset does; the halo outside it is the light the upper air
+                            // scatters, and that is blue-white. Together they are the ring the
+                            // moon's astronauts saw round the earth.
+                            float3 deep = _FishSunColor[0].rgb * float3(1.0, 0.45, 0.22);
+                            float3 high = _FishSunColor[0].rgb * float3(0.85, 0.92, 1.0);
+                            float outward = saturate((r - 1.0) / 0.08);
+                            backlitHalo = lerp(deep, high, outward) * strength;
+                            haloAlpha = saturate(halo * strength);
+                            edgeGlow = edge * strength;
+                        }
+                    }
+                    if (r2 > 1.0)
+                    {
+                        // Outside the disc: only the halo, over whatever the sky drew. It goes on
+                        // through the same fades and hidings as the disc below.
+                        if (haloAlpha <= 0.001) discard;
+                        alpha = haloAlpha;
+                        color = backlitHalo;
+                    }
+                    else
+                    {
                     float aa = fwidth(r2) + 1e-4;
                     alpha = 1.0 - smoothstep(1.0 - aa * 2.0, 1.0, r2);
                     float z = sqrt(saturate(1.0 - r2));
@@ -168,8 +238,23 @@ Shader "FishMMO/Sky Body"
                     }
                     float limb = lerp(0.75, 1.0, z);
                     float3 lit = surface * (lambert * limb * input.lighting.w + 0.015);
-                    // An eclipse turns the moon dark red.
-                    lit = lerp(lit, surface * float3(0.28, 0.07, 0.03) * 0.35, input.shape.w);
+                    // A lunar eclipse, pixel by pixel: the planet's shadow is a circle on the sky at
+                    // the moon's distance, and the moon is darkened where it is INSIDE that circle —
+                    // a bite of dark red creeping across the disc, then the whole of it — and only a
+                    // little where it is in the penumbra round it, which is barely visible in life.
+                    // One red for the whole moon by how deep it was, which is what this was, gave a
+                    // moon that reddened evenly as it touched the penumbra and never showed a bite.
+                    if (_FishLunarShadowEdge.y > 0.5)
+                    {
+                        float3 toHere = normalize(-input.forward + (input.right * c.x + input.up * c.y) * tan(min(input.shape.x, 1.2)));
+                        float fromShadow = acos(clamp(dot(toHere, _FishLunarShadow.xyz), -1.0, 1.0));
+                        float umbra = _FishLunarShadow.w;
+                        float penumbra = max(_FishLunarShadowEdge.x, umbra * 1.05);
+                        float inUmbra = 1.0 - smoothstep(umbra * 0.96, umbra * 1.02, fromShadow);
+                        float inPenumbra = 1.0 - smoothstep(umbra, penumbra, fromShadow);
+                        lit *= 1.0 - inPenumbra * 0.35;
+                        lit = lerp(lit, surface * float3(0.28, 0.07, 0.03) * 0.35, inUmbra);
+                    }
                     // Atmosphere rim for bodies with air (colour alpha < 1 marks it).
                     float rim = pow(1.0 - z, 3.0) * (1.0 - input.color.a) * saturate(lambert * 3.0 + 0.2);
                     color = lit + float3(0.45, 0.6, 1.0) * rim;
@@ -181,11 +266,21 @@ Shader "FishMMO/Sky Body"
                     float3 toSun = _FishSunDir[0].xyz;
                     float sunAngle = acos(clamp(dot(normalize(input.forward * -1.0), toSun), -1.0, 1.0));
                     float sunRadius = max(_FishSunDir[0].w, 0.002);
-                    float crossing = _FishSkyEclipse.x * (1.0 - smoothstep(sunRadius * 2.0, sunRadius * 6.0, sunAngle));
+                    // Solid the moment any of the sun is covered, not by how dark the day looks: that
+                    // peaks at a half for an annular eclipse, and a half-drawn silhouette let the sun
+                    // show through the moon as a dimmed blob instead of being bitten. The bite is the
+                    // whole picture — the crescent on the way in, the ring of sun round the moon at
+                    // an annular eclipse's middle, the crescent on the way out — and it is drawn by
+                    // this silhouette over the sun's own disc, which is now left at full brightness.
+                    float crossing = saturate(_FishSkyEclipseCover.x * 40.0) * (1.0 - smoothstep(sunRadius * 2.0, sunRadius * 6.0, sunAngle));
                     float shown = saturate(max(max(dot(color, float3(0.3, 0.59, 0.11)) * 6.0, dark), crossing));
                     alpha *= shown;
                     // The silhouette is the body's night side: no light comes off it.
                     color = lerp(color, color * 0.05, crossing);
+                    }
+                    // The lit edge of the atmosphere, just inside the limb, over the silhouette: it is
+                    // the one part of a world in front of the sun that is not dark.
+                    color += backlitHalo * edgeGlow;
                 }
                 else if (kind < 1.5)
                 {
