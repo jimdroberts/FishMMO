@@ -78,14 +78,23 @@ float2 FishRippleSlope(float3 worldPos, float time, float strength)
     for (int i = 0; i < 3; i++)
     {
         float scale = 1.7 + i * 1.3;
-        float2 p = worldPos.xz * scale;
+        // Each layer's grid turned its own way, so the three lattices never line up with one
+        // another or with the world's axes.
+        float turn = 0.6 + i * 1.1;
+        float2 rotated = float2(worldPos.x * cos(turn) - worldPos.z * sin(turn), worldPos.x * sin(turn) + worldPos.z * cos(turn));
+        float2 p = rotated * scale;
         float2 cell = floor(p);
-        float2 local = frac(p) - 0.5;
-        // One drop per cell, landing at its own moment.
+        // One drop per cell, landing where IT lands and at its own moment. The drop used to land
+        // dead centre in every cell, which put the rings on a perfect lattice — a pattern on the
+        // ground wherever it rained, plain as a tiled floor.
         float seed = FishSurfaceHash(cell + i * 7.3);
+        float2 landing = (float2(FishSurfaceHash(cell + 3.1 + i), FishSurfaceHash(cell + 9.7 + i)) - 0.5) * 0.8;
+        float2 local = frac(p) - 0.5 - landing;
         float phase = frac(time * (0.9 + seed * 0.6) + seed);
         float distance = length(local);
-        float ring = sin((distance - phase) * 28.0) * exp(-distance * 6.0) * (1.0 - phase);
+        // Rings a little different in size and pitch from drop to drop.
+        float pitch = 22.0 + seed * 14.0;
+        float ring = sin((distance - phase) * pitch) * exp(-distance * (5.0 + seed * 3.0)) * (1.0 - phase);
         slope += normalize(local + 1e-4) * ring / scale;
     }
     return slope * strength * 0.35;

@@ -273,7 +273,8 @@ namespace FishMMO.Client
 				float radius = cell.RadiusMeters * 1.3f;
 				float height = 1300f;
 				Matrix4x4 matrix = Matrix4x4.TRS(new Vector3(centre.x, viewer.y - 30f, centre.y), Quaternion.identity, new Vector3(radius, height, radius));
-				Color color = look.FogColor;
+				bool water = kind == PrecipitationKind.Rain || kind == PrecipitationKind.Snow || kind == PrecipitationKind.Hail;
+				Color color = water && SkySystem.Instance != null ? SkySystem.Instance.InAir(look.FogColor) : look.FogColor;
 				color.a = Mathf.Clamp01(amount * (kind == PrecipitationKind.Sand ? 0.75f : 0.45f));
 				block.SetColor(ColorId, color);
 				block.SetVector(ParamsId, new Vector4(kind == PrecipitationKind.Snow ? 0.08f : 0.6f, time, kind == PrecipitationKind.Rain ? 40f : 16f, kind == PrecipitationKind.Snow ? 1f : 0f));
@@ -302,8 +303,14 @@ namespace FishMMO.Client
 		private static readonly int ShadowRightId = Shader.PropertyToID("_FishCloudShadowRight");
 		private static readonly int ShadowUpId = Shader.PropertyToID("_FishCloudShadowUp");
 		private static readonly int ShadowRawId = Shader.PropertyToID("_FishCloudShadowRaw");
+		private static readonly int OverheadDrawId = Shader.PropertyToID("_FishCloudOverheadDraw");
+		private static readonly int OverheadRectId = Shader.PropertyToID("_FishCloudOverheadRect");
+		private static readonly int OverheadId = Shader.PropertyToID("_FishCloudOverhead");
 		private RenderTexture cookie;
 		private RenderTexture raw;
+		private RenderTexture overhead;
+		private Vector2 overheadCentre = new Vector2(float.NaN, float.NaN);
+		private int sinceOverhead = int.MaxValue;
 		private Vector2 drawnCentre = new Vector2(float.NaN, float.NaN);
 		private int sinceDrawn = int.MaxValue;
 		private float drawnCover = -1f;
@@ -323,6 +330,16 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void Update(Light light, Material cloudMaterial, Vector3 viewer, float areaMeters, float strength, int steps, bool enabled)
 		{
+			// The overhead map whenever there are clouds to map, whether or not their shadow is drawn:
+			// the rain needs it on every tier, and it is a quarter of a cookie's cost.
+			if (cloudMaterial != null && SkySystem.CloudsReady)
+			{
+				DrawOverhead(cloudMaterial, viewer, areaMeters, Mathf.Max(2, steps / 2));
+			}
+			else
+			{
+				Shader.SetGlobalVector(OverheadRectId, Vector4.zero);
+			}
 			if (light == null || cloudMaterial == null || !enabled || !SkySystem.CloudsReady)
 			{
 				Clear(light);
@@ -330,9 +347,18 @@ namespace FishMMO.Client
 			}
 			if (cookie == null)
 			{
-				cookie = new RenderTexture(256, 256, 0, RenderTextureFormat.R8) { name = "Cloud Shadows", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
+				// A single channel, and a LINEAR one, said so. Asked for as RenderTextureFormat.R8 in a
+				// linear-colour project, Unity took it to mean R8_SRGB, which this platform has not got,
+				// and fell back to a full RGBA target with a warning on every frame. A shadow is a
+				// number, not a colour: R8_UNorm is what it always meant.
+				var format = UnityEngine.Experimental.Rendering.GraphicsFormat.R8_UNorm;
+				if (!SystemInfo.IsFormatSupported(format, UnityEngine.Experimental.Rendering.GraphicsFormatUsage.Render))
+				{
+					format = UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_UNorm;
+				}
+				cookie = new RenderTexture(256, 256, 0, format) { name = "Cloud Shadows", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
 				cookie.Create();
-				raw = new RenderTexture(256, 256, 0, RenderTextureFormat.R8) { name = "Cloud Shadows (raw)", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
+				raw = new RenderTexture(256, 256, 0, format) { name = "Cloud Shadows (raw)", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
 				raw.Create();
 				sinceDrawn = int.MaxValue;
 			}
@@ -400,6 +426,38 @@ namespace FishMMO.Client
 			drawnCover = strength;
 		}
 
+		/// <summary>
+		/// The map of what stands over each patch of ground round the camera, for the rain and the
+		/// snow to fall only under cloud. The same window as the cookie, marched straight up instead
+		/// of toward the light, and redrawn on the same cadence.
+		/// </summary>
+		private void DrawOverhead(Material cloudMaterial, Vector3 viewer, float areaMeters, int steps)
+		{
+			if (overhead == null)
+			{
+				var format = UnityEngine.Experimental.Rendering.GraphicsFormat.R8_UNorm;
+				if (!SystemInfo.IsFormatSupported(format, UnityEngine.Experimental.Rendering.GraphicsFormatUsage.Render))
+				{
+					format = UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_UNorm;
+				}
+				overhead = new RenderTexture(256, 256, 0, format) { name = "Cloud Overhead", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
+				overhead.Create();
+				sinceOverhead = int.MaxValue;
+			}
+			float texel = areaMeters / overhead.width;
+			var centre = new Vector2(Mathf.Round(viewer.x / texel) * texel, Mathf.Round(viewer.z / texel) * texel);
+			sinceOverhead++;
+			if (sinceOverhead >= 3 || centre != overheadCentre)
+			{
+				cloudMaterial.SetVector(OverheadDrawId, new Vector4(centre.x, centre.y, areaMeters, steps));
+				Graphics.Blit(null, overhead, cloudMaterial, 7);
+				overheadCentre = centre;
+				sinceOverhead = 0;
+			}
+			Shader.SetGlobalTexture(OverheadId, overhead);
+			Shader.SetGlobalVector(OverheadRectId, new Vector4(centre.x, centre.y, areaMeters, 1f));
+		}
+
 		public void Clear(Light light)
 		{
 			if (light != null && light.cookie == cookie && cookie != null)
@@ -423,6 +481,12 @@ namespace FishMMO.Client
 				raw.Release();
 				if (Application.isPlaying) Object.Destroy(raw); else Object.DestroyImmediate(raw);
 				raw = null;
+			}
+			if (overhead != null)
+			{
+				overhead.Release();
+				if (Application.isPlaying) Object.Destroy(overhead); else Object.DestroyImmediate(overhead);
+				overhead = null;
 			}
 		}
 	}

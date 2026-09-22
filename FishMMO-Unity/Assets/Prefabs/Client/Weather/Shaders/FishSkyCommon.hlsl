@@ -25,10 +25,12 @@ float4x4 _FishRingMatrix;   // scene direction → the observer's equatorial fra
 float4 _FishOwnRing;        // x inner rim, y outer rim (body radii), z bands, w how solid — 0 when there is no ring
 float4 _FishOwnRingTint;    // rgb the ring material
 float4 _FishOwnRingZenith;  // xyz where the observer stands (unit: straight up, in that frame), w 1 with a texture
-float4 _FishOwnRingSun;     // xyz the direction to the sun, in that frame
+float4 _FishOwnRingSun;     // xyz the direction to the sun, in that frame, w the world's radius in thousands of km
 // The discs in the sky that hide what is behind them, nearest last.
 float4 _FishOccluders[32];      // xyz direction, w drawn angular radius (rad)
 float4 _FishOccluderRanks[32];  // x rank in the far-to-near order
+float4 _FishOccluderRings[32];  // xyz the rings' pole (scene), w outer rim (rad); zero without rings
+float4 _FishOccluderRingShapes[32]; // x inner rim over outer, y bands, z opacity, w 1 with rings
 float _FishOccluderCount;
 TEXTURE2D(_FishOwnRingTex);
 SAMPLER(sampler_FishOwnRingTex);
@@ -113,9 +115,10 @@ float FishRingBands(float t, float bands)
 // is the NEAREST thing in the sky — a few of the world's own radii off, where every moon and
 // planet is thousands — so whatever else is drawn has to ask it too, and step behind. Drawn by the
 // sky alone it was the furthest-back thing there is, with every body in the sky painted over it.
-float FishOwnRing(float3 dir, out float3 ringLight)
+float FishOwnRingAt(float3 dir, out float3 ringLight, out float reachRadii)
 {
     ringLight = float3(0.0, 0.0, 0.0);
+    reachRadii = 1e9;
     if (_FishOwnRing.w <= 0.001 || dir.y <= 0.0)
     {
         return 0.0;
@@ -132,6 +135,7 @@ float FishOwnRing(float3 dir, out float3 ringLight)
         return 0.0;
     }
     float3 hit = stand + ray * reach;
+    reachRadii = reach;
     float t = (length(hit.xy) - _FishOwnRing.x) / max(1e-4, _FishOwnRing.y - _FishOwnRing.x);
     float solid;
     float3 material = _FishOwnRingTint.rgb;
@@ -154,6 +158,32 @@ float FishOwnRing(float3 dir, out float3 ringLight)
     float lit = (sunward < 0.0 && dot(aside, aside) < 1.0) ? 0.03 : 1.0;
     ringLight = material * lit * 0.85;
     return solid * _FishOwnRing.w * saturate(dir.y * 25.0);
+}
+
+float FishOwnRing(float3 dir, out float3 ringLight)
+{
+    float unused;
+    return FishOwnRingAt(dir, ringLight, unused);
+}
+
+// How much a body's RINGS cover a direction, 0..1: the annulus in the plane of the body's equator,
+// seen from here as an ellipse, banded the way the ring quad draws it.
+float FishRingCover(float3 dir, float3 bodyDir, float4 ring, float4 shape)
+{
+    if (shape.w < 0.5)
+    {
+        return 0.0;
+    }
+    float3 pole = normalize(ring.xyz);
+    float outer = max(1e-5, ring.w);
+    float3 across = pole - bodyDir * dot(pole, bodyDir);
+    float3 ringUp = dot(across, across) > 1e-6 ? normalize(across) : normalize(cross(bodyDir, abs(bodyDir.y) < 0.9 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0)));
+    float3 ringRight = normalize(cross(ringUp, bodyDir));
+    float2 c = float2(dot(dir, ringRight), dot(dir, ringUp)) / outer;
+    float squash = max(abs(dot(pole, -bodyDir)), 0.015);
+    float onPlane = length(float2(c.x, c.y / squash));
+    float t = (onPlane - shape.x) / max(1e-4, 1.0 - shape.x);
+    return FishRingBands(t, shape.y) * shape.z;
 }
 
 

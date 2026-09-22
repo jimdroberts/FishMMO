@@ -697,6 +697,14 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(At(stormAt, 52f), Is.GreaterThan(0.5f), "which is what brings it down to fifty degrees");
 			Assert.That(At(stormAt, 30f), Is.LessThan(0.01f), "but never to the tropics");
 			Assert.That(At(stormAt, -67f), Is.EqualTo(At(stormAt, 67f)), "and there is a ring round the other pole");
+			// The magnetic pole stands off the turning pole: at the same geographic latitude a place on
+			// the side the pole leans toward is nearer the ring than one on the far side.
+			home.MagneticPoleTiltDegrees = 11f;
+			home.MagneticPoleLongitudeDegrees = 250f;
+			Assert.That(home.MagneticLatitude(60f, 250f), Is.EqualTo(71f).Within(0.01f), "under the lean, eleven degrees nearer the magnetic pole");
+			Assert.That(home.MagneticLatitude(60f, 70f), Is.EqualTo(49f).Within(0.01f), "on the far side, eleven degrees further");
+			home.MagneticPoleTiltDegrees = 0f;
+			Assert.That(home.MagneticLatitude(60f, 70f), Is.EqualTo(60f).Within(1e-4f), "no tilt, no difference");
 			// Needs a field, and the air does the rest.
 			Assert.That(At(stormAt, 67f, 0f), Is.EqualTo(0f), "no magnetic field, no aurora");
 			var lit = new WeatherFrame();

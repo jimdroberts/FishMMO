@@ -76,6 +76,27 @@ float FishSkyOpen(float3 worldPos)
     return saturate((worldPos.y - top) * 2.0 + 1.0);
 }
 
+// How much cloud stands over a point, 0 clear sky to 1 solid: the sky's own overhead map, a window
+// round the camera. Outside it, or without one, everything is under cloud — the old behaviour, so a
+// scene with no cloud map at all still gets its rain.
+float4 _FishCloudOverheadRect;  // xy the window's centre (world xz), z its size (m), w 1 when there is a map
+TEXTURE2D(_FishCloudOverhead);
+SAMPLER(sampler_FishCloudOverhead);
+
+float FishCloudOver(float3 worldPos)
+{
+    if (_FishCloudOverheadRect.w < 0.5)
+    {
+        return 1.0;
+    }
+    float2 uv = (worldPos.xz - _FishCloudOverheadRect.xy) / max(_FishCloudOverheadRect.z, 1e-3) + 0.5;
+    if (any(uv < 0.0) || any(uv > 1.0))
+    {
+        return 1.0;
+    }
+    return SAMPLE_TEXTURE2D_LOD(_FishCloudOverhead, sampler_FishCloudOverhead, uv, 0).r;
+}
+
 // A cheap moving gust, 0..1, for vertex animation.
 float FishWindGust(float2 xz, float time)
 {

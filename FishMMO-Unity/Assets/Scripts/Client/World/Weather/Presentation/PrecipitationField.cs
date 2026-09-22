@@ -172,13 +172,27 @@ namespace FishMMO.Client
 				block.SetVector(BoxId, new Vector4(tier.BoxSize, tier.BoxSize * 0.75f, tier.BoxSize, 0.6f));
 				block.SetVector(FallId, fall);
 				// Heavier rain reads as longer streaks: stretch follows the fall speed.
-				float stretch = look.Stretch > 1.01f ? look.Stretch * Mathf.Lerp(0.6f, 1f, drop) : 1f;
+				float heavy = Mathf.Pow(Mathf.Clamp01(amount), 1.5f);
+				float storm = Mathf.Clamp01(frame[WeatherChannel.LightningRate] * 1.5f);
+				float growth = (0.85f + 2.3f * heavy) * (1f + 0.6f * storm);
+				// The streak's length is size times stretch, so it grew with the drops — three times
+				// as long as well as three times as wide, which was a curtain of rods. The width is
+				// the drop's; the length grows only as the square root of it.
+				float stretch = look.Stretch > 1.01f ? look.Stretch * Mathf.Lerp(0.6f, 1f, drop) / Mathf.Sqrt(growth) : 1f;
 				// Heavier weather is made of bigger drops, not just more of them: a downpour that
 				// only adds particles reads as drizzle at any strength.
-				float size = Mathf.Lerp(look.Size.x, look.Size.y, drop) * Mathf.Lerp(0.85f, 1.5f, amount);
+				// And a storm's drops are bigger again: a thunderstorm's updraught holds a drop up
+				// until it is several times a shower's. The storm is read off the lightning, which is
+				// the tower's, so a heavy frontal rain is heavy and a storm is heavy AND coarse.
+				// A downpour's drops are several times a drizzle's, not half again: the growth is steep
+				// toward the top of the range — a shower at half strength is only a little coarser,
+				// heavy rain is three times the size, and a storm on top of that is nearly five.
+				float size = Mathf.Lerp(look.Size.x, look.Size.y, drop) * growth;
 				block.SetVector(ShapeId, new Vector4(amount, size, stretch, look.AtlasRow));
 				block.SetVector(FlutterId, new Vector4(look.Sway, look.SwayFrequency, look.Alpha, look.Brightness));
-				block.SetColor(ColorId, look.Tint);
+				// Rain, snow and hail are lit by this world's sky; ash and sand are their own colour.
+				bool water = kind == WeatherChannel.RainWeight || kind == WeatherChannel.SnowWeight || kind == WeatherChannel.HailWeight;
+				block.SetColor(ColorId, water && SkySystem.Instance != null ? SkySystem.Instance.InAir(look.Tint) : look.Tint);
 				Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);
 			}
 		}

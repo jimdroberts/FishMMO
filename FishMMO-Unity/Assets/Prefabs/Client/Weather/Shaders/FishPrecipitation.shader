@@ -80,10 +80,20 @@ Shader "FishMMO/Weather/Precipitation"
 
                 // Each particle falls at its own speed; positions wrap inside a box that follows the
                 // camera, but in world space, so walking does not drag the particles along.
-                float speed = lerp(0.8, 1.2, input.random.z);
+                // Each drop's own fall. The field used to move as one sheet — every particle carried
+                // by the same vector, speeds within a fifth of each other, every streak parallel and
+                // the same length — which the eye reads as a pattern sliding past. A big drop falls
+                // faster than a small one (the same random that sets its size sets its speed, so the
+                // two agree), the air it falls through is never still, and no two streaks are quite
+                // alike.
+                float speed = lerp(0.55, 1.35, input.random.y) * lerp(0.9, 1.1, input.random.z);
                 float3 travelled = _PrecipFall.xyz * speed * time;
+                // Turbulence: a slow lateral wander, its own phase and rate to every drop, scaled by
+                // the wind — a still day's rain falls straight, a gusty one's is thrown about.
+                float gustiness = 0.15 + 0.25 * saturate(length(_PrecipFall.xz) / max(1.0, abs(_PrecipFall.y)));
+                float2 wander = float2(sin(time * lerp(0.7, 1.9, input.random.z) + input.random.w * 6.2831), cos(time * lerp(0.9, 2.3, input.random.w) + input.random.x * 6.2831)) * gustiness;
                 float3 local = frac(input.seed + (travelled - _PrecipOrigin.xyz) / box) * box - box * 0.5;
-                float3 centre = _PrecipOrigin.xyz + local;
+                float3 centre = _PrecipOrigin.xyz + local + float3(wander.x, 0.0, wander.y);
 
                 // Sway for snow and ash.
                 float phase = input.random.w * 6.2831 + time * _PrecipFlutter.y;
@@ -99,10 +109,12 @@ Shader "FishMMO/Weather/Precipitation"
                 float length01 = size;
                 if (_PrecipShape.z > 1.01)
                 {
-                    // Streaks: along the fall direction, facing the camera.
-                    axis = normalize(_PrecipFall.xyz + float3(0, -1e-3, 0));
+                    // Streaks: along the fall direction, facing the camera — each leaning a little its
+                    // own way, and its own length, since a drop's streak is its speed over the frame.
+                    float3 lean = float3(input.random.z - 0.5, 0.0, input.random.w - 0.5) * 0.12 * length(_PrecipFall.xyz);
+                    axis = normalize(_PrecipFall.xyz + lean + float3(0, -1e-3, 0));
                     side = normalize(cross(axis, view) + float3(1e-4, 0, 0));
-                    length01 = size * _PrecipShape.z;
+                    length01 = size * _PrecipShape.z * lerp(0.85, 1.15, (speed - 0.5) / 0.9);
                 }
                 else
                 {
@@ -116,6 +128,10 @@ Shader "FishMMO/Weather/Precipitation"
                 float nearFade = saturate((distance - 0.3) / max(_PrecipBox.w, 0.1));
                 float farFade = saturate((box.x * 0.5 - distance) / (box.x * 0.2));
                 float open = FishSkyOpen(centre);
+                // And only under cloud: the amount says how hard it is raining where it rains, the
+                // cloud overhead says where. A gap in the deck is a gap in the rain, and a cell's
+                // rain moves with the cell.
+                float underCloud = smoothstep(0.08, 0.35, FishCloudOver(centre));
 
                 // Soft ambient light from above plus a little of the main light.
                 Light mainLight = GetMainLight();
@@ -126,7 +142,7 @@ Shader "FishMMO/Weather/Precipitation"
                 float tile = floor(frac(input.random.w * 7.13) * 4.0);
                 float row = _PrecipShape.w;
                 output.uv = float2((input.corner.x + tile) * 0.25, 1.0 - (row + 1.0 - input.corner.y) * 0.125);
-                output.color = float4(_PrecipColor.rgb * _Tint.rgb * light * _PrecipFlutter.w, _PrecipColor.a * _Tint.a * _PrecipFlutter.z * nearFade * farFade * open * visible);
+                output.color = float4(_PrecipColor.rgb * _Tint.rgb * light * _PrecipFlutter.w, _PrecipColor.a * _Tint.a * _PrecipFlutter.z * nearFade * farFade * open * underCloud * visible);
                 output.fogCoord = ComputeFogFactor(output.positionCS.z);
                 return output;
             }

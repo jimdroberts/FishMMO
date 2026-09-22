@@ -616,6 +616,49 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             ENDHLSL
         }
 
+
+        // ── 7: what cloud stands over each patch of ground ──
+        // Appended last, like everything after the shafts: the passes are called by number.
+        // A top-down window round the camera, each texel one ray straight up through the same
+        // volume the sky draws, carrying how much cloud it met (0 clear sky, 1 solid). Rain and
+        // snow read it to fall only under cloud: they used to fall from the whole sky at once,
+        // wherever the deck's gaps were, and a storm cell's rain stayed on after the cell had
+        // drifted past because the amount was one number for the scene.
+        Pass
+        {
+            Name "CloudOverhead"
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "FishCloudVolume.hlsl"
+
+            float4 _FishCloudOverheadDraw;   // xy the window's centre (world xz), z its size (m), w march steps
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                output.uv = GetFullScreenTriangleTexCoord(input.vertexID);
+                return output;
+            }
+
+            float4 Frag(Varyings input) : SV_Target
+            {
+                float2 xz = _FishCloudOverheadDraw.xy + (input.uv - 0.5) * _FishCloudOverheadDraw.z;
+                float3 origin = float3(xz.x, 0.0, xz.y);
+                float texel = _FishCloudOverheadDraw.z / 256.0;
+                float density = FishCloudShadowDepth(origin, float3(0.0, 1.0, 0.0), (int)max(2.0, _FishCloudOverheadDraw.w), 0.5, texel);
+                return 1.0 - exp(-density);
+            }
+            ENDHLSL
+        }
     }
     Fallback Off
 }

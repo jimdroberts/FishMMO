@@ -867,7 +867,8 @@ namespace FishMMO.TestHarness.World
 					float wind = solar != null && standing != null
 						? (float)(CelestialMath.Insolation(solar, standing, Controller.Hours) / Math.Max(1e-6, CelestialMath.MeanHomeInsolation(solar)))
 						: 1f;
-					float overhead = WeatherDriver.Aurora(WeatherDriver.WorldSeed, Controller.Hours * 3600.0, Controller.Latitude, season, standing != null ? standing.MagneticField : 1f, wind);
+					float magneticLatitude = standing != null ? standing.MagneticLatitude(Controller.Latitude, Controller.Longitude) : Controller.Latitude;
+					float overhead = WeatherDriver.Aurora(WeatherDriver.WorldSeed, Controller.Hours * 3600.0, magneticLatitude, season, standing != null ? standing.MagneticField : 1f, wind);
 					Stat("sky.aurora", $"{storm} · {(overhead * 100f).ToString("0", culture)}% here", overhead > 0.5f ? "good" : overhead < 0.05f ? "dim" : null);
 				}
 			}

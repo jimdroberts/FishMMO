@@ -216,6 +216,47 @@ namespace FishMMO.Client
 
 		/// <summary>The solar eclipse as the discs are drawn: what the sky is showing.</summary>
 		public SolarEclipseInfo DrawnEclipse { get; private set; }
+
+		/// <summary>
+		/// The colours of this world's air, for what is drawn in it: mist, the haze of rain and snow,
+		/// the shaded side of a cloud. Derived from the sky sample, so a dusty world's mist is tan and
+		/// a dusk mist is warm; the render profile's colours are what a standard noon gives.
+		/// </summary>
+		/// <remarks>
+		/// Each is a CHROMA — a colour scaled to a fixed brightness — because the brightness is
+		/// somebody else's: the fog composer dims mist by the sky's light, and the cloud shader lights
+		/// a shaded side by the sky it faces. Handed a colour that was already dark at dusk, both
+		/// darkened it again.
+		/// </remarks>
+		public Color AirChroma { get; private set; } = new Color(0.7f, 0.73f, 0.76f, 1f);
+		public Color CloudShadeChroma { get; private set; } = new Color(0.62f, 0.68f, 0.82f, 1f);
+
+		private static Color Chroma(Color c, float brightness)
+		{
+			float lum = Mathf.Max(1e-4f, c.r * 0.2126f + c.g * 0.7152f + c.b * 0.0722f);
+			return new Color(c.r / lum * brightness, c.g / lum * brightness, c.b / lum * brightness, 1f);
+		}
+
+		/// <summary>A cloud's shaded colour recoloured by the skylight: its own brightness, the sky's hue.</summary>
+		public Color InCloudShade(Color authored)
+		{
+			float lum = authored.r * 0.2126f + authored.g * 0.7152f + authored.b * 0.0722f;
+			Color chroma = Chroma(CloudShadeChroma, 1f);
+			float chromaLum = chroma.r * 0.2126f + chroma.g * 0.7152f + chroma.b * 0.0722f;
+			Color recoloured = new Color(authored.r * chroma.r, authored.g * chroma.g, authored.b * chroma.b, 1f) * (1f / Mathf.Max(1e-4f, chromaLum));
+			recoloured.a = authored.a;
+			return recoloured;
+		}
+
+		/// <summary>A profile colour recoloured by the air: its own brightness, the air's hue.</summary>
+		public Color InAir(Color authored)
+		{
+			Color chroma = Chroma(AirChroma, 1f);
+			float chromaLum = chroma.r * 0.2126f + chroma.g * 0.7152f + chroma.b * 0.0722f;
+			Color recoloured = new Color(authored.r * chroma.r, authored.g * chroma.g, authored.b * chroma.b, 1f) * (1f / Mathf.Max(1e-4f, chromaLum));
+			recoloured.a = authored.a;
+			return recoloured;
+		}
 		private uint starSeed;
 		private Light sun;
 		private Light moon;
@@ -603,6 +644,11 @@ namespace FishMMO.Client
 			baseSunLight = sample.SunLight;
 			sample = TintBySuns(state, sample, out primaryTint);
 			current = sample;
+
+			// The air's colours, from the sample as it now stands: the fog is what mist looks like,
+			// and the skylight is what a cloud's underside is lit by.
+			AirChroma = Chroma(sample.Fog, 0.73f);
+			CloudShadeChroma = Chroma(sample.AmbientSky, 0.68f);
 
 			float overcast = Mathf.Clamp01(weather[WeatherChannel.CloudCover] * (0.4f + 0.6f * weather[WeatherChannel.CloudDensity]));
 			// The eclipse of the discs as they are drawn. Life-size that is the true one; larger than
@@ -1177,7 +1223,7 @@ namespace FishMMO.Client
 				// the band — which is what the march's stride must not be able to step over.
 				layerF[i] = new Vector4(response, ground ? 0f : 1f, band.Column ? 1f : 0f, band.Column ? band.Thickness * 0.07f : 0f);
 				layerG[i] = new Vector4(band.CoverageOnset, band.CoverageScale, band.CoverageBias, 0f);
-				Color tint = band.ShadedTint;
+				Color tint = InCloudShade(band.ShadedTint);
 				layerTint[i] = new Vector4(tint.r, tint.g, tint.b, 1f);
 			}
 			for (int i = count; i < MaxCloudLayers; i++)
@@ -1389,7 +1435,9 @@ namespace FishMMO.Client
 
 			// What an underside is made of. A fair-weather cloud's base is grey-blue skylight; a
 			// storm's is slate, and much less of anything.
-			Color tint = clouds.ShadedTint;
+			// The profile's underside colour is a standard noon's; here it takes the hue of this
+			// world's skylight, so a dusty world's cloud bases are tan-shadowed and a dusk's are warm.
+			Color tint = InCloudShade(clouds.ShadedTint);
 			float tintStrength = Mathf.Clamp01(clouds.ShadedTintStrength + storm * 0.35f);
 			Shader.SetGlobalVector(CloudTintId, new Vector4(tint.r, tint.g, tint.b, tintStrength));
 		}
@@ -1786,7 +1834,9 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(OwnRingId, new Vector4(rings.Inner, rings.Outer, rings.Bands, rings.Opacity));
 			Shader.SetGlobalVector(OwnRingTintId, rings.Tint);
 			Shader.SetGlobalVector(OwnRingZenithId, new Vector4(zenith.x, zenith.y, zenith.z, rings.Texture != null ? 1f : 0f));
-			Shader.SetGlobalVector(OwnRingSunId, new Vector4(sun.x, sun.y, sun.z, 0f));
+			// w: the world's radius in thousands of km, so a body's distance can be set against where
+			// the ring is along the line to it — a moon INSIDE the ring's radius is not behind the ring.
+			Shader.SetGlobalVector(OwnRingSunId, new Vector4(sun.x, sun.y, sun.z, observer.SkyRadiusKm * 0.001f));
 			if (rings.Texture != null)
 			{
 				Shader.SetGlobalTexture(OwnRingTexId, rings.Texture);
@@ -1801,6 +1851,10 @@ namespace FishMMO.Client
 		private static readonly int OccluderCountId = Shader.PropertyToID("_FishOccluderCount");
 		private readonly Vector4[] occluders = new Vector4[SkyBodyMesh.MaxOccluders];
 		private readonly Vector4[] occluderRanks = new Vector4[SkyBodyMesh.MaxOccluders];
+		private readonly Vector4[] occluderRings = new Vector4[SkyBodyMesh.MaxOccluders];
+		private readonly Vector4[] occluderRingShapes = new Vector4[SkyBodyMesh.MaxOccluders];
+		private static readonly int OccluderRingsId = Shader.PropertyToID("_FishOccluderRings");
+		private static readonly int OccluderRingShapesId = Shader.PropertyToID("_FishOccluderRingShapes");
 
 		/// <summary>
 		/// The discs that hide what is behind them, for the body shader. The list is furthest first,
@@ -1815,7 +1869,11 @@ namespace FishMMO.Client
 			{
 				occluders[i] = bodies.Occluders[total - count + i];
 				occluderRanks[i] = bodies.OccluderRanks[total - count + i];
+				occluderRings[i] = bodies.OccluderRings[total - count + i];
+				occluderRingShapes[i] = bodies.OccluderRingShapes[total - count + i];
 			}
+			Shader.SetGlobalVectorArray(OccluderRingsId, occluderRings);
+			Shader.SetGlobalVectorArray(OccluderRingShapesId, occluderRingShapes);
 			// Arrays are sized by their first upload, so the whole of each goes up every time.
 			Shader.SetGlobalVectorArray(OccludersId, occluders);
 			Shader.SetGlobalVectorArray(OccluderRanksId, occluderRanks);
@@ -1870,7 +1928,7 @@ namespace FishMMO.Client
 						quad.Clear();
 						Color tint = body.Body.Tint;
 						tint.a = body.Body is WorldBody world && world.HasWeather ? 0.4f : 1f;
-						quad.AddQuad(body.Direction, SkyBodyMesh.Kind.Disc, body.AngularRadius * scale, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, step.Rank);
+						quad.AddQuad(body.Direction, SkyBodyMesh.Kind.Disc, body.AngularRadius * scale, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, step.Rank, (float)body.DistanceKm);
 						properties = texturedBlocks[textured];
 						properties.Clear();
 						properties.SetTexture(BodyTexId, body.Body.SurfaceTexture);
@@ -1897,7 +1955,7 @@ namespace FishMMO.Client
 						// The ring plane's normal is the body's own pole, brought from the ecliptic into
 						// this sky the way every other direction in it is.
 						Vector3 pole = state.HeliocentricDirection(CelestialMath.PoleOf(body.Body));
-						quad.AddRing(body.Direction, body.AngularRadius * scale, pole, rings, body.LightDirection, step.Rank);
+						quad.AddRing(body.Direction, body.AngularRadius * scale, pole, rings, body.LightDirection, step.Rank, (float)body.DistanceKm);
 						properties = ringBlocks[ringed];
 						properties.Clear();
 						properties.SetFloat(UseTextureId, rings.Texture != null ? 1f : 0f);

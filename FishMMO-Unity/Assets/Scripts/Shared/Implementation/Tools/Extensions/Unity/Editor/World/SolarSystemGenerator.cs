@@ -5,6 +5,7 @@ using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Shared.Atlas;
 using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -100,6 +101,12 @@ namespace FishMMO.Shared.WorldDesign
 				if (!string.IsNullOrEmpty(bodyPath) && !paths.Contains(bodyPath))
 				{
 					paths.Add(bodyPath);
+				}
+				// A body's own cloud stack goes with it, when it has one of its own.
+				string cloudPath = body is WorldBody world && world.Clouds != null ? AssetDatabase.GetAssetPath(world.Clouds) : null;
+				if (!string.IsNullOrEmpty(cloudPath) && !paths.Contains(cloudPath))
+				{
+					paths.Add(cloudPath);
 				}
 			}
 			string path = AssetDatabase.GetAssetPath(system);
@@ -236,6 +243,20 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Debug.LogWarning($"[Solar system] Could not rename {bodyPath}: {failure}");
 				}
+				// And its cloud stack, which carries the same prefix and lives beside it.
+				if (body is WorldBody world && world.Clouds != null)
+				{
+					string cloudPath = AssetDatabase.GetAssetPath(world.Clouds);
+					string cloudPlain = world.Clouds.name.StartsWith(prefix, StringComparison.Ordinal) ? world.Clouds.name.Substring(prefix.Length) : world.Clouds.name;
+					string cloudFolder = newFolder + "/Clouds";
+					WorldEditorAssets.EnsureFolder(cloudFolder);
+					string cloudTarget = AssetDatabase.GenerateUniqueAssetPath($"{cloudFolder}/{WorldEditorAssets.Sanitize(WorldEditorAssets.BodyAssetName(newName, cloudPlain))}.asset");
+					string cloudFailure = AssetDatabase.MoveAsset(cloudPath, cloudTarget);
+					if (!string.IsNullOrEmpty(cloudFailure))
+					{
+						Debug.LogWarning($"[Solar system] Could not rename {cloudPath}: {cloudFailure}");
+					}
+				}
 			}
 
 			// The system itself, last, into its folder under its new name.
@@ -324,6 +345,95 @@ namespace FishMMO.Shared.WorldDesign
 				s.SkyRadiusKm = 696000f * Mathf.Clamp(Mathf.Sqrt(luminosity) / (relative * relative), 0.2f, 8f);
 				s.Tint = StarBody.TemperatureColor(temperature);
 			});
+		}
+
+		/// <summary>
+		/// A world's cloud stack from its air, its gravity and its warmth: where the deck sits, how deep
+		/// the sky is, what stands above. Null for a world with no air, which has no clouds to stack.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The stack is the planetary part of how weather is drawn, so it is rolled with the planet. The
+		/// shape follows what makes a real sky: the condensation level rises with a dry, warm air and
+		/// falls with a damp cold one; a thick atmosphere is a deep one, so every band sits higher and
+		/// the columns reach further; a big world's gravity squashes the sky, a small one's lets it
+		/// spread; a giant has no ground and no ground fog — its stack is bands of cloud all the way
+		/// down, in its own colours. Every number is a multiple of the home world's, so the home world
+		/// rolls the default stack near enough, and only OTHER worlds look different for it.
+		/// </para>
+		/// </remarks>
+		private static CloudStackProfile RollClouds(Dice dice, string folder, string assetName, WorldBody world, bool giant, float distanceRelative)
+		{
+			if (world.Atmosphere == AtmosphereKind.None)
+			{
+				return null;
+			}
+			float air = AtmosphereModel.Density(world.Atmosphere);
+			// The sky's height scales with the air's depth and inversely with the pull of the ground.
+			float gravity = Mathf.Clamp(world.SkyRadiusKm / 6371f, 0.25f, 4f);
+			float height = Mathf.Clamp(Mathf.Pow(air, 0.35f) / Mathf.Pow(gravity, 0.5f), 0.3f, 3.5f);
+			// The condensation level: high over dry warm ground, low over damp cold ground.
+			float dry = 1f - world.Water;
+			float warm = Mathf.Clamp(1f / Mathf.Max(0.3f, distanceRelative), 0.5f, 2f);
+			float baseHeight = Mathf.Clamp(800f * height * Mathf.Lerp(0.6f, 2.2f, dry * 0.6f + (warm - 1f) * 0.3f + 0.2f) * dice.Range(0.85f, 1.15f), 150f, 6000f);
+			float tint = dice.Range(0f, 1f);
+			Color giantShade = giant ? Color.Lerp(world.Tint, Color.white, 0.5f) : new Color(0.62f, 0.68f, 0.82f);
+
+			var layers = new List<CloudLayer>();
+			if (!giant)
+			{
+				layers.Add(new CloudLayer
+				{
+					Name = "Weather", Bottom = 0f, Top = baseHeight,
+					NoiseScale = 2600f * height, DetailScale = 180f, DetailStrength = 0.6f,
+					BaseSoftness = 0.5f, TopSoftness = 0.75f, Convection = 0.35f,
+					Density = 0.55f * Mathf.Clamp(air, 0.3f, 2f), CoverageScale = 0f, CoverageBias = 0f, WindScale = 0.6f,
+					ShadedTint = new Color(0.78f, 0.82f, 0.88f),
+				});
+			}
+			// The columns: the deck and everything a tower can climb to. Thick air is unstable air,
+			// and its towers go higher; thin air barely convects.
+			float towerTop = baseHeight + 7000f * height * Mathf.Lerp(0.6f, 1.3f, Mathf.Clamp01((air - 0.15f) / 2.85f));
+			float convection = giant ? dice.Range(0.6f, 1f) : Mathf.Clamp01(0.5f + 0.3f * (air - 1f) + (warm - 1f) * 0.4f + dice.Range(-0.15f, 0.15f));
+			layers.Add(new CloudLayer
+			{
+				Name = giant ? "Ammonia deck" : "Cumulus", Bottom = giant ? baseHeight * 0.3f : baseHeight, Top = towerTop, Column = true, BaseFollowsCondensation = !giant,
+				NoiseScale = 12000f * Mathf.Sqrt(height) * dice.Range(0.8f, 1.25f), DetailScale = 380f, DetailStrength = 0.45f,
+				BaseSoftness = giant ? 0.2f : 0.06f, TopSoftness = 0.65f, Convection = convection,
+				Density = giant ? dice.Range(0.9f, 1.4f) : Mathf.Clamp(air, 0.35f, 1.5f), CoverageScale = 1f,
+				CoverageBias = giant ? dice.Range(0.25f, 0.5f) : 0f, WindScale = 1f,
+				Stretch = giant ? dice.Range(3f, 9f) : 1f,
+				CarriesRain = !giant, GrowsStorms = true,
+				ShadedTint = giantShade,
+			});
+			// A middle sheet, most skies; a giant's is a second band of a different colour.
+			if (giant || dice.Chance(0.8f))
+			{
+				float altoBottom = baseHeight + (towerTop - baseHeight) * dice.Range(0.35f, 0.5f);
+				layers.Add(new CloudLayer
+				{
+					Name = giant ? "Upper haze" : "Alto", Bottom = altoBottom, Top = altoBottom + 1000f * height,
+					NoiseScale = 9000f * dice.Range(0.8f, 1.3f), DetailScale = 700f, DetailStrength = 0.25f,
+					BaseSoftness = 0.3f, TopSoftness = 0.4f, Convection = 0.2f,
+					Density = giant ? 0.7f : 0.5f, CoverageScale = 1f, CoverageOnset = giant ? 0.2f : 0.55f, WindScale = 1.7f,
+					Stretch = giant ? dice.Range(4f, 12f) : 1f,
+					ShadedTint = giant ? Color.Lerp(world.Tint, new Color(1f, 0.95f, 0.85f), 0.6f) : new Color(0.66f, 0.7f, 0.8f),
+				});
+			}
+			// High ice, where the air is deep enough to hold any: thin air has no cirrus.
+			if (air >= 0.5f && (giant || dice.Chance(0.85f)))
+			{
+				float cirrusBottom = towerTop * dice.Range(0.94f, 1.02f);
+				layers.Add(new CloudLayer
+				{
+					Name = "Cirrus", Bottom = cirrusBottom, Top = cirrusBottom + 1100f * height,
+					NoiseScale = 14000f, DetailScale = 1200f, DetailStrength = 0.2f, Stretch = dice.Range(5f, 12f),
+					BaseSoftness = 0.35f, TopSoftness = 0.45f,
+					Density = 0.18f, CoverageScale = -0.35f, CoverageBias = 0.3f, WindScale = 3f,
+					ShadedTint = new Color(0.8f, 0.84f, 0.92f),
+				});
+			}
+			return WorldEditorAssets.Create<CloudStackProfile>(folder, assetName, c => c.Layers = layers);
 		}
 
 		/// <summary>
@@ -462,6 +572,9 @@ namespace FishMMO.Shared.WorldDesign
 						: giant ? dice.Range(1.2f, 2f)
 						: b.SkyRadiusKm < 3200f ? (dice.Chance(0.75f) ? 0f : dice.Range(0.05f, 0.3f))
 						: Mathf.Clamp(dice.Range(0.2f, 1.3f) * Mathf.Lerp(0.3f, 1f, spin), 0f, 2f);
+					// The dipole leans off the spin axis by a little, as ours does; now and then by a lot.
+					b.MagneticPoleTiltDegrees = dice.Chance(0.12f) ? dice.Range(20f, 45f) : dice.Range(2f, 15f);
+					b.MagneticPoleLongitudeDegrees = dice.Range(0f, 360f);
 					if (b.HasRings)
 					{
 						float inner = dice.Range(1.2f, 1.7f);
@@ -477,6 +590,13 @@ namespace FishMMO.Shared.WorldDesign
 					b.MinimumRadiusKm = isHome ? 30f : 10f;
 					b.CurrentRadiusKm = b.MinimumRadiusKm;
 				});
+				// Its clouds, from the world it turned out to be. Not the home world's: that keeps the
+				// default stack, which is the one everything was tuned against.
+				if (!isHome)
+				{
+					world.Clouds = RollClouds(dice, WorldEditorAssets.SystemFolder(systemName) + "/Clouds", Asset(name + " Clouds"), world, giant, distance / Mathf.Max(1e-4f, habitable));
+					EditorUtility.SetDirty(world);
+				}
 				bodies.Add(world);
 				if (isHome)
 				{
@@ -525,6 +645,11 @@ namespace FishMMO.Shared.WorldDesign
 						b.MinimumRadiusKm = 10f;
 						b.CurrentRadiusKm = 10f;
 					});
+					if (moon.Atmosphere != AtmosphereKind.None)
+					{
+						moon.Clouds = RollClouds(dice, WorldEditorAssets.SystemFolder(systemName) + "/Clouds", Asset(moonName + " Clouds"), moon, false, distance / Mathf.Max(1e-4f, habitable));
+						EditorUtility.SetDirty(moon);
+					}
 					bodies.Add(moon);
 					moonDistance *= dice.Range(1.6f, 2.4f);
 				}

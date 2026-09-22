@@ -88,7 +88,47 @@ Shader "FishMMO/Sky"
                     float sunUp = saturate(sd.y * 3.0 + 0.4);
                     float glow = pow(saturate(cosSun * 0.5 + 0.5), 5.0) * saturate(1.0 - abs(up) * 2.5) * saturate(1.0 - abs(sd.y) * 4.0);
                     color += sc * glow * _FishSunShape.z * (1.0 - airless);
-                    color += sc * HenyeyGreenstein(cosSun, 0.78) * _FishSunColor[i].a * 0.08 * sunUp * (1.0 - airless * 0.8);
+                    // The glare: the air scattering the sun forward at you. During an eclipse it has
+                    // to come from the part of the sun that is still showing and no other, or the sky
+                    // glows round a disc that is nine tenths hidden and the crescent has no glare of
+                    // its own. Cheaply: the point of the sun's disc nearest this pixel is what mostly
+                    // lights the air here, so ask whether THAT point is behind the covering body,
+                    // and give the rest a share in proportion to how much of the sun is uncovered.
+                    // It came out as a glow hugging the crescent, a thin ring at an annular eclipse,
+                    // and nothing at totality, where the corona takes over. Mostly the sun's own
+                    // glare, then, and only shaped by the eclipse, which is what a glare is.
+                    float3 sunRight = normalize(cross(sd, abs(sd.y) < 0.9 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0)));
+                    float3 sunUpAxis = cross(sd, sunRight);
+                    float glareShape = 1.0;
+                    if (i == 0 && _FishSkyEclipseCover.x > 0.001 && _FishSkyEclipseBody.w > 0.0)
+                    {
+                        float2 offset = float2(dot(dir, sunRight), dot(dir, sunUpAxis));
+                        float away = length(offset);
+                        float sunR = max(_FishSunDir[0].w, 0.002);
+                        float2 nearestOnSun = offset / max(away, 1e-6) * min(away, sunR);
+                        float2 bodyAt = float2(dot(_FishSkyEclipseBody.xyz, sunRight), dot(_FishSkyEclipseBody.xyz, sunUpAxis));
+                        // Soft-edged: a hard test on the body's limb cut the glare into a wedge with
+                        // straight sides. The transition is a third of the SUN's radius wide, which is
+                        // about the width of the crescent it is standing in for.
+                        float hidden = 1.0 - smoothstep(_FishSkyEclipseBody.w - sunR * 0.35, _FishSkyEclipseBody.w + sunR * 0.35, length(nearestOnSun - bodyAt));
+                        glareShape = 0.3 * (1.0 - _FishSkyEclipseCover.x) + 0.7 * (1.0 - hidden);
+
+                        // The crescent's own glare. The everyday halo above peaks at about a seventh
+                        // and is dimmed with the rest of the sky, which beside a crescent drawn at
+                        // eighteen is nothing to see. This is the glare a thin, hard-bright edge of
+                        // sun throws in a darkened sky: tight round the uncovered part, brightest at
+                        // its edge, and standing out MORE as the day gets darker — it is added to the
+                        // sun's own light below, which the darkening does not touch.
+                        float fromSun = max(0.0, away - sunR);
+                        // And rounder: the fan fades across as well as out, so it is a glow and not a beam.
+                        float crescentGlare = exp(-fromSun / max(0.0005, sunR * 0.5)) * 0.6 + exp(-fromSun / max(0.0005, sunR * 1.6)) * 0.4;
+                        crescentGlare *= 0.55 + 0.45 * saturate(dot(normalize(offset), normalize(bodyAt - nearestOnSun + 1e-6)) * -1.0);
+                        float showing = 1.0 - hidden;
+                        float darkened = 0.35 + 0.65 * _FishSkyEclipse.x;
+                        float onlyInEclipse = smoothstep(0.15, 0.5, _FishSkyEclipseCover.x) * (1.0 - _FishSkyEclipse.w);
+                        sunsLight += sc * crescentGlare * showing * darkened * onlyInEclipse * 2.2 * saturate(up * 40.0 + 1.0);
+                    }
+                    color += sc * HenyeyGreenstein(cosSun, 0.78) * _FishSunColor[i].a * 0.08 * sunUp * glareShape * (1.0 - airless * 0.8);
                     float angle = acos(clamp(cosSun, -1.0, 1.0));
                     float radius = max(_FishSunDir[i].w, 0.002);
                     float disc = 1.0 - smoothstep(radius * 0.92, radius, angle);
@@ -120,11 +160,9 @@ Shader "FishMMO/Sky"
                         // plumes by the sun's field, brighter and longer at its equator. Two octaves
                         // of noise round the sun, stretched along the radius so each streamer runs
                         // outward, over a smooth inner glow that the streamers stand out of.
-                        float3 sunRight = normalize(cross(sd, abs(sd.y) < 0.9 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0)));
-                        float3 sunUp = cross(sd, sunRight);
                         // Round the sun as 0..1, then whole numbers of the noise's tiles, so there is
                         // no seam where the angle wraps.
-                        float theta = atan2(dot(dir, sunUp), dot(dir, sunRight)) / (2.0 * PI) + 0.5;
+                        float theta = atan2(dot(dir, sunUpAxis), dot(dir, sunRight)) / (2.0 * PI) + 0.5;
                         float radial = beyond / max(0.0005, radius);
                         float streamers = FishNoise(float2(theta * 3.0, radial * 0.4), 0) * 0.6 + FishNoise(float2(theta * 8.0 + 0.37, radial * 0.7 + 0.5), 1) * 0.4;
                         streamers = 0.45 + 1.1 * saturate(streamers * 1.6 - 0.4);

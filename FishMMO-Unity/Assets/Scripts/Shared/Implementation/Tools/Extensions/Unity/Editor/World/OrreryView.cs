@@ -196,7 +196,9 @@ namespace FishMMO.Shared.WorldDesign
 
 			foreach ((CelestialBody body, Vector2 _) in placed)
 			{
-				if (!(body is StarBody) || body.Parent != null)
+				// Anything that goes round something: a root star's orbit is its swing about the
+				// centre of mass it shares with its companions, and a lone star has none.
+				if (!double.IsInfinity(CelestialMath.OrbitHours(System, body)))
 				{
 					DrawOrbit(painter, body, centre, scale);
 				}
@@ -326,7 +328,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			bool moon = IsMoon(body);
 			int steps = body is CometBody ? 256 : moon ? 48 : 96;
-			Color c = body.Tint;
+			Color c = body is StarBody orbitingStar ? orbitingStar.StarColor : body.Tint;
 			painter.strokeColor = new Color(c.r, c.g, c.b, moon ? 0.25f : 0.35f);
 			painter.lineWidth = 1f;
 			painter.BeginPath();

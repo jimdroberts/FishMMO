@@ -153,7 +153,9 @@ namespace FishMMO.Shared.Weather
 					if (system != null && sceneBody != null)
 					{
 						float wind = (float)(CelestialMath.Insolation(system, sceneBody, worldHours) / System.Math.Max(1e-6, CelestialMath.MeanHomeInsolation(system)));
-						natural[WeatherChannel.Aurora] = WeatherDriver.Aurora(WeatherDriver.WorldSeed, worldSeconds, timeline.LatitudeDegrees, season01, sceneBody.MagneticField, wind);
+						// At the MAGNETIC latitude: the ring is round the magnetic pole, which stands off
+						// the turning pole by the body's dipole tilt.
+						natural[WeatherChannel.Aurora] = WeatherDriver.Aurora(WeatherDriver.WorldSeed, worldSeconds, sceneBody.MagneticLatitude(timeline.LatitudeDegrees, timeline.LongitudeDegrees), season01, sceneBody.MagneticField, wind);
 					}
 					accumulator.Add(WeatherDriver.UnderAtmosphere(natural, atmosphere), driverWeight);
 					if (profile != null)

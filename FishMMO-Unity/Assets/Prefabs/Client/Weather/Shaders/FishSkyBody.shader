@@ -63,6 +63,7 @@ Shader "FishMMO/Sky Body"
                 float4 color : COLOR;
                 float visibility : TEXCOORD6;
                 float rank : TEXCOORD8;
+                float distance : TEXCOORD9;      // thousands of km to the body, 0 when unknown
                 float4 ring : TEXCOORD7;         // rings only: x how open (signed), y inner rim / outer, z bands, w outer rim in body radii
             };
 
@@ -138,6 +139,7 @@ Shader "FishMMO/Sky Body"
                 output.forward = -dir;
                 output.color = input.color;
                 output.rank = input.extra.x;
+                output.distance = input.extra.y;
 
                 float horizon = saturate(dir.y * 20.0 + 0.5);
                 float fog = 1.0 - saturate(1.0 - dir.y * 7.0) * _FishSkyFogColor.a;
@@ -345,8 +347,15 @@ Shader "FishMMO/Sky Body"
                 {
                     float reachAcross = tan(min(input.shape.x, 1.2)) * (kind > 0.5 && kind < 1.5 ? max(1.0, input.ring.w) : 1.0);
                     float3 toPixel = normalize(-input.forward + (input.right * c.x + input.up * c.y) * (kind < 1.5 ? reachAcross : 0.0));
+                    // Only what is BEYOND the ring: a moon orbiting inside the ring's radius stands in
+                    // front of it for half its circuit. Where along the line the ring is, against how
+                    // far off this body is; a quad with no distance on it (an asteroid speck) is far.
                     float3 unusedLight;
-                    alpha *= 1.0 - FishOwnRing(toPixel, unusedLight);
+                    float ringReach;
+                    float ownCover = FishOwnRingAt(toPixel, unusedLight, ringReach);
+                    float ringDistance = ringReach * _FishOwnRingSun.w;
+                    float bodyDistance = input.distance > 0.0 ? input.distance : 1e9;
+                    alpha *= 1.0 - ownCover * step(ringDistance, bodyDistance);
 
                     // Behind any nearer body's disc, lit or not. Drawing the nearest last puts a lit
                     // disc on top, but by day a body's unlit side is drawn clear — what is seen there
@@ -361,6 +370,8 @@ Shader "FishMMO/Sky Body"
                             float across = acos(clamp(dot(toPixel, _FishOccluders[o].xyz), -1.0, 1.0));
                             float limb = _FishOccluders[o].w;
                             alpha *= smoothstep(limb * 0.985, limb, across);
+                            // And its rings, by how solid they are where this pixel looks through them.
+                            alpha *= 1.0 - FishRingCover(toPixel, _FishOccluders[o].xyz, _FishOccluderRings[o], _FishOccluderRingShapes[o]);
                         }
                     }
                 }

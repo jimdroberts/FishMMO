@@ -50,6 +50,30 @@ namespace FishMMO.Shared.Celestial
 		public Color HazeColor = Color.white;
 		[Tooltip("How strong the body's magnetic field is, against the home world's at 1. It is what an aurora needs besides air: the field catches the star's wind and brings it down in a ring round each pole. None, and there is no aurora however active the star — a small dead world, or one whose core has cooled. Strong, and the aurora is bright and keeps close to the poles; weak, and it is dim.")]
 		[Range(0f, 2f)] public float MagneticField = 1f;
+		[Tooltip("How far the magnetic pole stands from the pole the world turns on, in degrees. Ours is about eleven. The auroral ring is centred on the MAGNETIC pole, so with a tilt the ring reaches further toward the equator on one side of the world than the other, and which side changes with the hour as the world turns under it.")]
+		[Range(0f, 45f)] public float MagneticPoleTiltDegrees = 11f;
+		[Tooltip("Which longitude the magnetic pole is tilted toward, in degrees.")]
+		[Range(0f, 360f)] public float MagneticPoleLongitudeDegrees = 250f;
+
+		/// <summary>
+		/// The magnetic latitude of a place, in degrees: its latitude as the magnetic pole sees it. What
+		/// the aurora's ring is drawn round.
+		/// </summary>
+		public float MagneticLatitude(float latitudeDegrees, float longitudeDegrees)
+		{
+			float tilt = MagneticPoleTiltDegrees * Mathf.Deg2Rad;
+			if (tilt <= 1e-5f)
+			{
+				return latitudeDegrees;
+			}
+			float poleLatitude = Mathf.PI * 0.5f - tilt;
+			float poleLongitude = MagneticPoleLongitudeDegrees * Mathf.Deg2Rad;
+			float latitude = latitudeDegrees * Mathf.Deg2Rad, longitude = longitudeDegrees * Mathf.Deg2Rad;
+			// The angle between the place and the magnetic pole, on the sphere; magnetic latitude is
+			// ninety less that.
+			float cosine = Mathf.Sin(latitude) * Mathf.Sin(poleLatitude) + Mathf.Cos(latitude) * Mathf.Cos(poleLatitude) * Mathf.Cos(longitude - poleLongitude);
+			return 90f - Mathf.Acos(Mathf.Clamp(cosine, -1f, 1f)) * Mathf.Rad2Deg;
+		}
 		[Tooltip("0 dry … 1 ocean world. Feeds the humidity offset.")]
 		[Range(0f, 1f)] public float Water = 0.7f;
 		[Tooltip("Base climate model for scenes on this body. Scene settings may still name their own.")]

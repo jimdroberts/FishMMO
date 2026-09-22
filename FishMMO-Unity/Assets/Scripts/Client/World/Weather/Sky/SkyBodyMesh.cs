@@ -56,6 +56,10 @@ namespace FishMMO.Client
 		/// </remarks>
 		public readonly List<Vector4> Occluders = new List<Vector4>();
 		public readonly List<Vector4> OccluderRanks = new List<Vector4>();
+		/// <summary>Beside each occluder: its rings' pole in scene space and outer rim (rad), or zero.</summary>
+		public readonly List<Vector4> OccluderRings = new List<Vector4>();
+		/// <summary>Beside each occluder: inner rim over outer, bands, opacity, 1 when there are rings.</summary>
+		public readonly List<Vector4> OccluderRingShapes = new List<Vector4>();
 		private readonly List<int> indices = new List<int>();
 
 		public Mesh Mesh { get; private set; }
@@ -153,14 +157,18 @@ namespace FishMMO.Client
 			Steps.Clear();
 			Occluders.Clear();
 			OccluderRanks.Clear();
+			OccluderRings.Clear();
+			OccluderRingShapes.Clear();
 			extras.Clear();
 			runs.Clear();
 			runStart = 0;
 		}
 
-		public void AddQuad(Vector3 direction, Kind kind, float angularRadius, float illumination, float shadowed, Vector3 light, float brightness, Vector3 axis, float axisLength, Color color, float rank = BehindAll)
+		public void AddQuad(Vector3 direction, Kind kind, float angularRadius, float illumination, float shadowed, Vector3 light, float brightness, Vector3 axis, float axisLength, Color color, float rank = BehindAll, float distanceKm = 0f)
 		{
-			var extra = new Vector4(rank, 0f, 0f, 0f);
+			// y: how far off the body is, in thousands of km, for the ring of the world underfoot to
+			// know whether this body is beyond it or inside it.
+			var extra = new Vector4(rank, distanceKm * 0.001f, 0f, 0f);
 			int start = directions.Count;
 			var shape = new Vector4(angularRadius, (float)kind, illumination, shadowed);
 			var lit = new Vector4(light.x, light.y, light.z, brightness);
@@ -192,11 +200,11 @@ namespace FishMMO.Client
 		/// where it passes behind the disc.
 		/// </summary>
 		/// <param name="pole">The body's north pole in scene space: the ring plane's normal.</param>
-		public void AddRing(Vector3 direction, float bodyRadius, Vector3 pole, RingSettings rings, Vector3 light, float rank = BehindAll)
+		public void AddRing(Vector3 direction, float bodyRadius, Vector3 pole, RingSettings rings, Vector3 light, float rank = BehindAll, float distanceKm = 0f)
 		{
 			// Packed into the quad's spare fields: shape.z the band count, shape.w the inner rim,
 			// axis the pole with the outer rim beside it, lighting.w how solid.
-			AddQuad(direction, Kind.Ring, Mathf.Max(bodyRadius, 0.002f), rings.Bands, rings.Inner, light, rings.Opacity, pole, rings.Outer, rings.Tint, rank);
+			AddQuad(direction, Kind.Ring, Mathf.Max(bodyRadius, 0.002f), rings.Bands, rings.Inner, light, rings.Opacity, pole, rings.Outer, rings.Tint, rank, distanceKm);
 		}
 
 		/// <summary>Adds everything the state holds, within the sky limits. Returns the quads added.</summary>
@@ -253,9 +261,9 @@ namespace FishMMO.Client
 						continue;
 					}
 					var comet = (CometBody)body.Body;
-					AddQuad(body.Direction, Kind.Tail, 0.002f + 0.004f * brightness, 1f, 0f, body.LightDirection, brightness, body.TailDirection, body.TailLength, comet.IonTailColor, rank);
-					AddQuad(body.Direction, Kind.Tail, 0.004f + 0.006f * brightness, 1f, 0f, body.LightDirection, brightness * 0.6f, body.TailDirection, body.TailLength * 0.7f, tint, rank);
-					AddQuad(body.Direction, Kind.Point, 0.0015f, 1f, 0f, body.LightDirection, Mathf.Min(1f, brightness * 3f), Vector3.up, 0f, Color.white, rank);
+					AddQuad(body.Direction, Kind.Tail, 0.002f + 0.004f * brightness, 1f, 0f, body.LightDirection, brightness, body.TailDirection, body.TailLength, comet.IonTailColor, rank, (float)body.DistanceKm);
+					AddQuad(body.Direction, Kind.Tail, 0.004f + 0.006f * brightness, 1f, 0f, body.LightDirection, brightness * 0.6f, body.TailDirection, body.TailLength * 0.7f, tint, rank, (float)body.DistanceKm);
+					AddQuad(body.Direction, Kind.Point, 0.0015f, 1f, 0f, body.LightDirection, Mathf.Min(1f, brightness * 3f), Vector3.up, 0f, Color.white, rank, (float)body.DistanceKm);
 					continue;
 				}
 				float radius = body.AngularRadius * scale;
@@ -264,6 +272,21 @@ namespace FishMMO.Client
 				{
 					Occluders.Add(new Vector4(body.Direction.x, body.Direction.y, body.Direction.z, radius));
 					OccluderRanks.Add(new Vector4(rank, 0f, 0f, 0f));
+					// Its rings hide what is behind them too, by how solid they are: a moon passing
+					// behind a ringed planet dims through the rings before it goes behind the disc.
+					bool ringed = body.Body.HasRings && body.Body.Rings != null;
+					if (ringed)
+					{
+						Vector3 pole = state.HeliocentricDirection(CelestialMath.PoleOf(body.Body));
+						RingSettings rings = body.Body.Rings;
+						OccluderRings.Add(new Vector4(pole.x, pole.y, pole.z, radius * rings.Outer));
+						OccluderRingShapes.Add(new Vector4(rings.Inner / rings.Outer, rings.Bands, rings.Opacity, 1f));
+					}
+					else
+					{
+						OccluderRings.Add(Vector4.zero);
+						OccluderRingShapes.Add(Vector4.zero);
+					}
 				}
 				if (body.Textured && body.Body.SurfaceTexture != null)
 				{
@@ -273,11 +296,11 @@ namespace FishMMO.Client
 				else if (radius < 0.0012f)
 				{
 					// Too small for a disc: a point whose brightness follows its phase.
-					AddQuad(body.Direction, Kind.Point, 0.0012f, body.Illumination, body.Shadowed, body.LightDirection, Mathf.Lerp(0.25f, 1f, body.Illumination), Vector3.up, 0f, tint, rank);
+					AddQuad(body.Direction, Kind.Point, 0.0012f, body.Illumination, body.Shadowed, body.LightDirection, Mathf.Lerp(0.25f, 1f, body.Illumination), Vector3.up, 0f, tint, rank, (float)body.DistanceKm);
 				}
 				else
 				{
-					AddQuad(body.Direction, Kind.Disc, radius, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, rank);
+					AddQuad(body.Direction, Kind.Disc, radius, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, rank, (float)body.DistanceKm);
 				}
 				// Straight after its own body, which it crosses in front of; anything nearer than the
 				// pair comes later in the sequence and covers both.

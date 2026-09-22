@@ -16,17 +16,26 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The fog colour: mist, pulled toward the colour of what is falling.</summary>
+		/// <summary>The profile's colour in this world's air, when there is a sky to say what that is.</summary>
+		private static Color Air(Color authored)
+		{
+			SkySystem sky = SkySystem.Instance;
+			return sky != null ? sky.InAir(authored) : authored;
+		}
+
 		public static Color ColorOf(in WeatherFrame frame, WeatherRenderProfile profile)
 		{
-			Color color = profile.MistColor;
+			// Mist, rain, snow and hail are water in the air and take the air's hue; ash and sand
+			// are what they are made of, and keep their own.
+			Color color = Air(profile.MistColor);
 			float p = frame[WeatherChannel.Precipitation];
 			if (p <= 0.001f)
 			{
 				return color;
 			}
-			Color falling = profile.Rain.FogColor * frame[WeatherChannel.RainWeight]
-				+ profile.Snow.FogColor * frame[WeatherChannel.SnowWeight]
-				+ profile.Hail.FogColor * frame[WeatherChannel.HailWeight]
+			Color falling = Air(profile.Rain.FogColor) * frame[WeatherChannel.RainWeight]
+				+ Air(profile.Snow.FogColor) * frame[WeatherChannel.SnowWeight]
+				+ Air(profile.Hail.FogColor) * frame[WeatherChannel.HailWeight]
 				+ profile.Ash.FogColor * frame[WeatherChannel.AshWeight]
 				+ profile.Sand.FogColor * frame[WeatherChannel.SandWeight];
 			falling.a = 1f;

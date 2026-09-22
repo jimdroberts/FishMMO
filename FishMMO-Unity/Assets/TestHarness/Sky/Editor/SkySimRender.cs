@@ -110,6 +110,8 @@ namespace FishMMO.TestHarness.Sky.Editor
 			/// project may not have (Solar System page → Add example sky objects).
 			/// </summary>
 			public string Requires;
+			/// <summary>Draws the discs at the profile's flattering scales, as the bed's toggle does.</summary>
+			public bool LargerThanLife;
 			/// <summary>As <see cref="Requires"/>, for content that is not a body.</summary>
 			public Func<bool> Available;
 			/// <summary>When set, the time of day is searched for so the sun stands about here.</summary>
@@ -199,6 +201,30 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// An eclipse: the rays rake out around the body covering the sun.
 				Name = "solar-eclipse", Time = 0.5, Sun = 1, ExpectEclipse = true, ExpectGodRays = true, LookAt = "Sun", Requires = "Companion",
 				Want = state => state.SolarEclipse > 0.5f,
+			},
+			new Stage
+			{
+				// From the moon, with the planet crossing the sun: the crescent stage, with the sun's
+				// sliver at the planet's limb — the backlit rim on that side and the glare round it.
+				Name = "eclipse-crescent", Body = "Moon 1", Time = 0.5, Sun = 1, LookAt = "Sun", Requires = "Moon 1",
+				Want = state => state.Solar.Phase == SolarEclipsePhase.Partial && state.Solar.Obscuration > 0.7f && state.Solar.Obscuration < 0.95f && state.SunAltitude > 15f,
+			},
+			new Stage
+			{
+				// And totality: the rim all round, the sky twilight, the stars out.
+				Name = "eclipse-total", Body = "Moon 1", Time = 0.5, Sun = 1, LookAt = "Sun", Requires = "Moon 1",
+				Want = state => state.Solar.Totality > 0.99f && state.SunAltitude > 15f,
+			},
+			new Stage
+			{
+				// The same two with the discs drawn larger than life, which is how the bed is usually looked at.
+				Name = "eclipse-crescent-large", Body = "Moon 1", Time = 0.5, Sun = 1, LookAt = "Sun", Requires = "Moon 1", LargerThanLife = true,
+				Want = state => state.SolarEclipseAsDrawn(1.6f, 1.6f).Phase == SolarEclipsePhase.Partial && state.SolarEclipseAsDrawn(1.6f, 1.6f).Obscuration > 0.7f && state.SolarEclipseAsDrawn(1.6f, 1.6f).Obscuration < 0.95f && state.SunAltitude > 15f,
+			},
+			new Stage
+			{
+				Name = "eclipse-total-large", Body = "Moon 1", Time = 0.5, Sun = 1, LookAt = "Sun", Requires = "Moon 1", LargerThanLife = true,
+				Want = state => state.SolarEclipseAsDrawn(1.6f, 1.6f).Totality > 0.99f && state.SunAltitude > 15f,
 			},
 			new Stage
 			{
@@ -573,6 +599,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			QualitySettings.SetQualityLevel(Mathf.Clamp(stage.Quality, 0, QualitySettings.names.Length - 1), true);
 			controller.Paused = true;
 			controller.Body = BodyNamed(controller, stage.Body);
+			controller.LargerThanLife = stage.LargerThanLife;
 			controller.Latitude = stage.Latitude;
 			controller.DayOfYear = stage.Want != null ? FindDay(controller, stage) : stage.Day;
 			controller.TimeOfDay = stage.SunAltitudeWanted.HasValue ? FindTime(controller, stage) : stage.Time;
