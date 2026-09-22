@@ -67,6 +67,9 @@ namespace FishMMO.Shared
 		/// Bit flag for the charged-hold tick counter in the delta bitmask.
 		/// </summary>
 		private const ushort CHARGED_HOLD_BIT = 1 << 11;
+
+		/// <summary>Set when the weather exposure array changed.</summary>
+		private const ushort EXPOSURE_BIT = 1 << 12;
 		// Bits 12..15 are reserved for future fields. The flag mask is a ushort (16 bits);
 		// 12 are currently in use. When adding new fields, take the next bit and update
 		// WriteDelta, ReadDelta and DrainDeltaPayload in lock-step — the three read the same
@@ -209,6 +212,9 @@ namespace FishMMO.Shared
 			// Charged hold counter. Appended after the fields that predate it so the frame's
 			// existing layout is untouched; the length prefix is what makes appending safe.
 			writer.WriteUInt32(value.ChargedHoldTicks);
+
+			// Weather exposure levels, appended for the same reason.
+			ExposureReconcileEntry.WriteArrayDelta(writer, null, value.Exposure, DeltaSerializerOption.FullSerialize);
 
 			// Chain sequence — see CharacterReconcileData.Sequence. Written last so older readers
 			// of the absolute form would have read every field before reaching it.
@@ -361,6 +367,8 @@ namespace FishMMO.Shared
 
 			result.ChargedHoldTicks = reader.ReadUInt32();
 
+			result.Exposure = ExposureReconcileEntry.ReadArrayDelta(reader, null);
+
 			result.Sequence = reader.ReadUInt8Unpacked();
 
 			/* Belt and braces on the success path too. If the two sides ever disagree about the shape
@@ -505,6 +513,9 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaUInt32(prev.ChargedHoldTicks, next.ChargedHoldTicks, fieldOption))
 				flags |= CHARGED_HOLD_BIT;
 
+			if (ExposureReconcileEntry.WriteArrayDelta(writer, prev.Exposure, next.Exposure, fieldOption))
+				flags |= EXPOSURE_BIT;
+
 			if (flags != 0 || mustEmit)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
@@ -617,6 +628,7 @@ namespace FishMMO.Shared
 			if ((flags & ATTRIBUTE_BIT) != 0) AttributeReconcileEntry.ReadArrayDelta(reader, prev.Attributes);
 			if ((flags & EQUIPMENT_BIT) != 0) EquipmentReconcileEntry.ReadArrayDelta(reader, prev.Equipment);
 			if ((flags & CHARGED_HOLD_BIT) != 0) reader.ReadDeltaUInt32(prev.ChargedHoldTicks);
+			if ((flags & EXPOSURE_BIT) != 0) ExposureReconcileEntry.ReadArrayDelta(reader, prev.Exposure);
 		}
 
 		/// <summary>
@@ -712,6 +724,9 @@ namespace FishMMO.Shared
 
 			if ((flags & CHARGED_HOLD_BIT) != 0)
 				result.ChargedHoldTicks = reader.ReadDeltaUInt32(prev.ChargedHoldTicks);
+
+			if ((flags & EXPOSURE_BIT) != 0)
+				result.Exposure = ExposureReconcileEntry.ReadArrayDelta(reader, prev.Exposure);
 
 			return result;
 		}

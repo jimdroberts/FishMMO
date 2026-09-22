@@ -133,6 +133,22 @@ namespace FishMMO.Shared
 		public AttributeReconcileEntry[] Attributes;
 
 		/// <summary>
+		/// Weather exposure levels — how wet, how chilled — one entry per state the character is
+		/// carrying. Null when the controller is absent or every state is at zero.
+		/// <para>
+		/// These are timers, and that is why they reconcile. Exposure builds over tens of seconds
+		/// from the weather where the character stands, so the owner predicts it to have the buff
+		/// land the moment it should; without the level in the reconcile the owner's idea of how wet
+		/// it is would wander from the server's and never be pulled back.
+		/// </para>
+		/// <para>
+		/// Producers MUST emit entries sorted by <c>TemplateID</c> ascending, as
+		/// <see cref="Attributes"/> does, so the index-delta serializer keeps indices stable.
+		/// </para>
+		/// </summary>
+		public ExposureReconcileEntry[] Exposure;
+
+		/// <summary>
 		/// Full xoshiro128** internal state of the ability seed generator.
 		/// Required because the 128-bit RNG state cannot be reconstructed from
 		/// the 32-bit <see cref="Seed"/> output alone. Without this, a single
