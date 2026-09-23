@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared
 {
@@ -35,6 +37,18 @@ namespace FishMMO.Shared
 		/// Cooldown time for the event (in seconds). Aggregated into the runtime ability.
 		/// </summary>
 		public float Cooldown;
+
+		/// <summary>
+		/// Rules scaling the ability's numbers by the weather where it is cast (Q16). Aggregated
+		/// with the parent template's.
+		/// </summary>
+		/// <remarks>
+		/// An effect added to an ability brings its own weather rules, the same way it brings its
+		/// own cast time — so a Lightning Bolt effect can be the thing that makes an ability hit
+		/// harder in a storm, whatever ability it is crafted onto.
+		/// </remarks>
+		[Tooltip("Scale the ability's numbers by the weather where it is cast. Empty: this effect does not care about the weather.")]
+		public List<WeatherAbilityModifier> WeatherModifiers = new List<WeatherAbilityModifier>();
 
 		/// <summary>
 		/// Crafting price of the event (in-game currency cost to add this event during ability crafting).

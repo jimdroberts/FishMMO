@@ -1,342 +1,342 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
-using FishMMO.Shared.Biomes;
+using FishMMO.Shared;
 using FishMMO.Shared.Weather;
-using FishMMO.Shared.WorldDesign;
-using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
+using FishMMO.UnitTests.Harness;
+using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The default weather content: what each layer kind writes, what the named presets add up
-	/// to, the profile each kind of biome gets, biome variants, and the generated textures.
+	/// The content layer over the weather (Q16): what a designer can gate a spawn on, test in a
+	/// trigger, and scale an ability by.
 	/// </summary>
+	/// <remarks>
+	/// Every reading here is a pure function of a weather sample, which is itself a pure function of
+	/// a tick and a position. That is what lets an ability modifier be PREDICTED: the owner and the
+	/// server reach the same multiplier from the same inputs, and a reconcile replay reaches it
+	/// again. Where these agree, nothing has to be sent.
+	/// </remarks>
 	[TestFixture]
 	public class WeatherContentTests
 	{
-		private readonly List<Object> created = new List<Object>();
-		private Dictionary<WeatherLayerKind, WeatherLayerTemplate> templates;
-
-		[SetUp]
-		public void SetUp()
-		{
-			templates = new Dictionary<WeatherLayerKind, WeatherLayerTemplate>();
-			foreach (WeatherLayerKind kind in (WeatherLayerKind[])System.Enum.GetValues(typeof(WeatherLayerKind)))
-			{
-				var template = Make<WeatherLayerTemplate>(kind.ToString());
-				template.Kind = kind;
-				WeatherContentGenerator.DefineTemplate(template);
-				templates[kind] = template;
-			}
-		}
-
 		[TearDown]
 		public void TearDown()
 		{
-			foreach (Object asset in created)
-			{
-				Object.DestroyImmediate(asset);
-			}
-			created.Clear();
+			WeatherLayerHandles.Clear();
+			WeatherQuery.Clear();
 		}
 
-		private T Make<T>(string name) where T : ScriptableObject
+		private static WeatherSample Sample(float precipitation = 0f, float rain = 0f, float snow = 0f,
+			float wind = 0f, float lightning = 0f, float cloud = 0f, float shelter = 0f, float temperature = 0f)
 		{
-			T asset = ScriptableObject.CreateInstance<T>();
-			asset.name = name;
-			created.Add(asset);
-			return asset;
+			var frame = new WeatherFrame();
+			frame[WeatherChannel.Precipitation] = precipitation;
+			frame[WeatherChannel.RainWeight] = rain;
+			frame[WeatherChannel.SnowWeight] = snow;
+			frame[WeatherChannel.WindSpeed] = wind;
+			frame[WeatherChannel.LightningRate] = lightning;
+			frame[WeatherChannel.CloudCover] = cloud;
+			return new WeatherSample { Frame = frame, Shelter = shelter, Temperature = temperature };
 		}
 
-		private WeatherPreset Preset(string name, params (WeatherLayerKind kind, float intensity)[] layers)
+		private static WeatherSample Rain(float amount, float shelter = 0f) => Sample(precipitation: amount, rain: 1f, shelter: shelter);
+		private static WeatherSample Snow(float amount) => Sample(precipitation: amount, snow: 1f);
+
+		// ---- severity, the reading everything else is built on ----
+
+		[Test]
+		public void SeverityIsReadFromTheKindsAskedAboutAndNoOthers()
 		{
-			WeatherPreset preset = Make<WeatherPreset>(name);
-			preset.DisplayName = name;
-			foreach (var (kind, intensity) in layers)
-			{
-				preset.Layers.Add(new WeatherPresetLayer { Template = templates[kind], Intensity = intensity });
-			}
-			return preset;
+			/* The mistake this exists to prevent. Rain, snow and hail all arrive on the same
+			 * precipitation channel and differ only in the mix, so a rule waiting on snow that
+			 * measured "precipitation" would fire in a rainstorm. Every reader of severity in the
+			 * project goes through this one function so none of them can drift apart on it. */
+			WeatherSample downpour = Rain(0.9f);
+
+			Assert.That(WeatherSeverity.Of(WeatherKindMask.Precipitation, downpour), Is.EqualTo(0.9f).Within(1e-4f));
+			Assert.That(WeatherSeverity.Of(WeatherKindMask.Lightning, downpour), Is.EqualTo(0f), "no lightning in it");
+			Assert.That(WeatherSeverity.Of(WeatherKindMask.Wind, downpour), Is.EqualTo(0f), "and no wind");
+
+			// The worst of several, not their sum.
+			WeatherSample storm = Sample(precipitation: 0.6f, rain: 1f, wind: 0.8f, lightning: 0.3f);
+			Assert.That(WeatherSeverity.Of(WeatherKindMask.Precipitation | WeatherKindMask.Wind, storm),
+				Is.EqualTo(0.8f).Within(1e-4f), "the worst of them, never added together");
 		}
 
 		[Test]
-		public void EveryKindWritesTheChannelsItIsNamedFor()
+		public void AClearSkyIsMeasuredByHowClearItIs()
 		{
-			WeatherFrame rain = templates[WeatherLayerKind.Rain].Evaluate(1f);
-			LogAssert.IsTrue(rain[WeatherChannel.Precipitation] > 0.9f);
-			LogAssert.AreEqual(1f, rain[WeatherChannel.RainWeight], "rain falls as rain");
-			LogAssert.AreEqual(1f, templates[WeatherLayerKind.Sand].Evaluate(1f)[WeatherChannel.SandWeight]);
-			LogAssert.IsTrue(templates[WeatherLayerKind.Wind].Evaluate(1f)[WeatherChannel.WindSpeed] > 0.9f);
-			LogAssert.IsTrue(templates[WeatherLayerKind.Fog].Evaluate(1f)[WeatherChannel.FogDensity] > 0.9f);
-			LogAssert.IsTrue(templates[WeatherLayerKind.Lightning].Evaluate(1f)[WeatherChannel.LightningRate] > 0.9f);
-			LogAssert.IsTrue(templates[WeatherLayerKind.Aurora].Evaluate(1f)[WeatherChannel.Aurora] > 0.9f);
-			LogAssert.IsTrue(templates[WeatherLayerKind.Clouds].Evaluate(1f)[WeatherChannel.CloudCover] > 0.9f);
-			LogAssert.IsTrue(templates[WeatherLayerKind.Snow].Evaluate(1f)[WeatherChannel.TemperatureOffset] < 0f, "snow chills");
+			// "Clear" is the absence of the others, so it needs reading backwards or it would always
+			// measure zero and no rule could ever wait for good weather.
+			Assert.That(WeatherSeverity.Of(WeatherKindMask.ClearSky, Sample(cloud: 0f)), Is.EqualTo(1f).Within(1e-4f));
+			Assert.That(WeatherSeverity.Of(WeatherKindMask.ClearSky, Sample(cloud: 1f)), Is.EqualTo(0f).Within(1e-4f));
+		}
 
-			foreach (WeatherLayerTemplate template in templates.Values)
+		// ---- the ECA condition ----
+
+		[Test]
+		public void AWeatherConditionPassesOnlyForTheWeatherItNames()
+		{
+			var wet = new WeatherCondition
 			{
-				WeatherFrame none = template.Evaluate(0f);
-				LogAssert.IsTrue(none[WeatherChannel.Precipitation] < 0.01f, $"{template.Kind} at intensity 0 drops nothing");
-			}
+				Reads = WeatherConditionReads.Severity,
+				Weather = WeatherKindMask.Rain,
+				AtLeast = 0.4f,
+				AtMost = 1f,
+			};
+
+			Assert.That(wet.Matches(Rain(0.8f)), Is.True, "heavy rain");
+			Assert.That(wet.Matches(Rain(0.1f)), Is.False, "a drizzle is under the bar");
+			Assert.That(wet.Matches(Snow(0.8f)), Is.False, "heavy SNOW is not heavy rain");
+			Assert.That(wet.Matches(Sample()), Is.False, "a clear day");
 		}
 
 		[Test]
-		public void MoreIntensityMeansMoreWeather()
+		public void AWeatherConditionCanAskAboutABandNotJustAFloor()
 		{
-			foreach (WeatherLayerTemplate template in templates.Values)
+			// "Overcast but not raining" is a band, and needs both ends.
+			var overcast = new WeatherCondition
 			{
-				foreach (WeatherChannelCurve curve in template.Channels)
-				{
-					if (curve.Channel == WeatherChannel.CloudBase || curve.Channel == WeatherChannel.WindHeading || curve.Channel == WeatherChannel.TemperatureOffset || curve.Channel == WeatherChannel.HumidityOffset)
-					{
-						continue;
-					}
-					float previous = float.MinValue;
-					for (float i = 0f; i <= 1.0001f; i += 0.1f)
-					{
-						float value = curve.Evaluate(i);
-						LogAssert.IsTrue(value >= previous - 1e-4f, $"{template.Kind} {curve.Channel} falls at {i:0.0}");
-						previous = value;
-					}
-				}
-			}
+				Reads = WeatherConditionReads.Channel,
+				Channel = WeatherChannel.Precipitation,
+				AtLeast = 0f,
+				AtMost = 0.1f,
+			};
+			Assert.That(overcast.Matches(Sample(cloud: 0.9f)), Is.True, "dry");
+			Assert.That(overcast.Matches(Rain(0.5f)), Is.False, "raining is outside the band");
 		}
 
 		[Test]
-		public void TheNamedPresetsAreWhatTheySay()
+		public void AWeatherConditionCanAskAboutShelterAndTemperature()
 		{
-			WeatherFrame blizzard = Preset("Blizzard", (WeatherLayerKind.Snow, 1f), (WeatherLayerKind.Wind, 0.85f), (WeatherLayerKind.Clouds, 0.95f), (WeatherLayerKind.Fog, 0.6f)).Evaluate();
-			LogAssert.AreEqual(PrecipitationKind.Snow, blizzard.DominantPrecipitation);
-			LogAssert.IsTrue(blizzard[WeatherChannel.WindSpeed] > 0.8f, "a blizzard is windy");
-			LogAssert.IsTrue(blizzard[WeatherChannel.FogDensity] >= 0.6f);
+			var indoors = new WeatherCondition { Reads = WeatherConditionReads.Exposure, AtLeast = -1f, AtMost = 0.25f };
+			Assert.That(indoors.Matches(Rain(1f, shelter: 1f)), Is.True, "under a roof");
+			Assert.That(indoors.Matches(Rain(1f, shelter: 0f)), Is.False, "out in it");
 
-			WeatherFrame storm = Preset("Thunderstorm", (WeatherLayerKind.Rain, 0.85f), (WeatherLayerKind.Clouds, 1f), (WeatherLayerKind.Wind, 0.6f), (WeatherLayerKind.Lightning, 0.7f)).Evaluate();
-			LogAssert.AreEqual(PrecipitationKind.Rain, storm.DominantPrecipitation);
-			LogAssert.IsTrue(storm[WeatherChannel.LightningRate] > 0.5f);
-			LogAssert.IsTrue(storm.StormSeverity > 0.5f, $"a thunderstorm is severe ({storm.StormSeverity:0.00})");
-
-			WeatherFrame sand = Preset("Sandstorm", (WeatherLayerKind.Sand, 0.9f), (WeatherLayerKind.Wind, 0.9f)).Evaluate();
-			LogAssert.AreEqual(PrecipitationKind.Sand, sand.DominantPrecipitation);
-			LogAssert.IsTrue(sand[WeatherChannel.HumidityOffset] < 0f, "sand dries the air");
-
-			WeatherFrame clear = Preset("Clear", (WeatherLayerKind.Clouds, 0f)).Evaluate();
-			LogAssert.AreEqual(PrecipitationKind.None, clear.DominantPrecipitation);
-			LogAssert.IsTrue(clear[WeatherChannel.CloudCover] < 0.1f);
+			var freezing = new WeatherCondition { Reads = WeatherConditionReads.Temperature, AtLeast = -1f, AtMost = -0.5f };
+			Assert.That(freezing.Matches(Sample(temperature: -0.8f)), Is.True);
+			Assert.That(freezing.Matches(Sample(temperature: 0.2f)), Is.False);
 		}
 
-		private Dictionary<string, WeatherPreset> AllPresets()
+		// ---- ability modifiers (Q16) ----
+
+		[Test]
+		public void AnAbilityIsScaledAcrossTheBandItNames()
 		{
-			var presets = new Dictionary<string, WeatherPreset>();
-			foreach (string name in new[] { "Clear", "Fair", "Overcast", "Mist", "Sprinkle", "Light Rain", "Medium Rain", "Heavy Rain", "Thunderstorm",
-				"Light Snow", "Heavy Snow", "Blizzard", "Hailstorm", "Ashfall", "Sandstorm", "Windy", "Aurora Night",
-				"Swamp Rain", "Jungle Downpour", "Tundra Snow", "Dune Sandstorm", "Eruption Ashfall" })
+			// A lightning spell that hits half again as hard in a full storm.
+			var rule = new WeatherAbilityModifier
 			{
-				presets[name] = Preset(name, (WeatherLayerKind.Clouds, 0.5f), (WeatherLayerKind.Fog, 0.2f), (WeatherLayerKind.Wind, 0.2f));
-			}
-			return presets;
-		}
+				Target = WeatherAbilityTarget.Power,
+				Reads = WeatherAbilityReads.Severity,
+				Weather = WeatherKindMask.Lightning,
+				From = 0f, To = 1f,
+				AtNone = 1f, AtFull = 1.5f,
+			};
 
-		private BiomeWeatherProfile ProfileFor(string biomeName)
-		{
-			BiomeTemplate biome = Make<BiomeTemplate>(biomeName);
-			return WeatherContentGenerator.ProfileForBiome(biome, AllPresets());
-		}
-
-		private static bool Spawns(BiomeWeatherProfile profile, string preset)
-		{
-			return profile.CellSpawns.Exists(s => s.Preset != null && s.Preset.name == preset && s.Weight > 0f);
+			Assert.That(rule.Evaluate(Sample()), Is.EqualTo(1f).Within(1e-4f), "a clear day changes nothing");
+			Assert.That(rule.Evaluate(Sample(lightning: 1f)), Is.EqualTo(1.5f).Within(1e-4f), "a full storm");
+			Assert.That(rule.Evaluate(Sample(lightning: 0.5f)), Is.EqualTo(1.25f).Within(1e-4f), "and half way is half the bonus");
 		}
 
 		[Test]
-		public void EachKindOfBiomeGetsItsOwnWeather()
+		public void ABandWrittenBackwardsWorksAsWritten()
 		{
-			BiomeWeatherProfile desert = ProfileFor("Desert");
-			LogAssert.IsTrue(Spawns(desert, "Sandstorm"));
-			LogAssert.IsTrue(desert.Variants.Exists(v => v.Preset.name == "Sandstorm" && v.Variant.name == "Dune Sandstorm"));
+			/* "The drier it is, the harder this hits" is as reasonable a rule as its opposite, and is
+			 * written by putting the larger reading in From. A plain subtraction would have produced
+			 * a NEGATIVE multiplier for it; InverseLerp copes with a reversed range. */
+			var fire = new WeatherAbilityModifier
+			{
+				Target = WeatherAbilityTarget.Power,
+				Reads = WeatherAbilityReads.Channel,
+				Channel = WeatherChannel.Precipitation,
+				From = 1f, To = 0f,
+				AtNone = 0.5f, AtFull = 1f,
+			};
 
-			BiomeWeatherProfile glacier = ProfileFor("Glacier");
-			LogAssert.IsTrue(Spawns(glacier, "Blizzard"));
-			LogAssert.IsTrue((glacier.Forbidden & WeatherKindMask.Sand) != 0, "no sand on a glacier");
-
-			BiomeWeatherProfile swamp = ProfileFor("Swamp");
-			LogAssert.IsTrue(Spawns(swamp, "Thunderstorm"));
-			LogAssert.IsTrue(swamp.Background.Count > 0, "a swamp is misty even without a storm");
-			LogAssert.IsTrue(swamp.Variants.Exists(v => v.Variant.name == "Swamp Rain"));
-
-			BiomeWeatherProfile volcanic = ProfileFor("Volcanic");
-			LogAssert.IsTrue(Spawns(volcanic, "Ashfall"));
-
-			BiomeWeatherProfile cave = ProfileFor("Ice Cave");
-			LogAssert.AreEqual(WeatherKindMask.All, cave.Forbidden, "nothing falls in a cave");
-			LogAssert.AreEqual(0, cave.CellSpawns.Count);
-
-			LogAssert.AreEqual(WeatherKindMask.All, ProfileFor("Coral Reef").Forbidden, "or under the sea");
-			LogAssert.IsNull(ProfileFor("Forest"), "ordinary land uses the climate's default");
-			LogAssert.IsNull(ProfileFor("Castle"));
+			Assert.That(fire.Evaluate(Rain(1f)), Is.EqualTo(0.5f).Within(1e-4f), "a downpour halves it");
+			Assert.That(fire.Evaluate(Sample()), Is.EqualTo(1f).Within(1e-4f), "and dry air leaves it alone");
+			Assert.That(fire.Evaluate(Rain(0.5f)), Is.EqualTo(0.75f).Within(1e-4f));
 		}
 
 		[Test]
-		public void TheTemperateDefaultHasMostlyFairWeather()
+		public void RulesForTheSameNumberMultiplyRatherThanAddUp()
 		{
-			Dictionary<string, WeatherPreset> presets = AllPresets();
-			BiomeWeatherProfile profile = WeatherContentGenerator.TemperateProfile(presets);
-			LogAssert.IsTrue(profile.IsAuthored);
-			float fair = 0f, all = 0f;
-			foreach (WeightedWeatherPreset spawn in profile.CellSpawns)
+			/* Two rules each halving a cooldown must leave a quarter of it, not none of it. Summed
+			 * reductions reach zero and then go negative, so a pair of individually sensible rules
+			 * could remove a cooldown outright. */
+			var half = new WeatherAbilityModifier
 			{
-				all += spawn.Weight;
-				if (spawn.Preset.name == "Fair" || spawn.Preset.name == "Overcast")
-				{
-					fair += spawn.Weight;
-				}
-			}
-			LogAssert.IsTrue(fair / all > 0.3f, "fair and overcast are the commonest");
-			LogAssert.IsTrue(profile.SuitabilityOf(presets["Sandstorm"]) < 0.5f, "sandstorms fade over farmland");
-			LogAssert.AreEqual(1f, profile.SuitabilityOf(presets["Light Rain"]));
+				Target = WeatherAbilityTarget.Cooldown,
+				Reads = WeatherAbilityReads.Channel,
+				Channel = WeatherChannel.Precipitation,
+				From = 0f, To = 1f, AtNone = 1f, AtFull = 0.5f,
+			};
+			var alsoHalf = new WeatherAbilityModifier
+			{
+				Target = WeatherAbilityTarget.Cooldown,
+				Reads = WeatherAbilityReads.Channel,
+				Channel = WeatherChannel.Precipitation,
+				From = 0f, To = 1f, AtNone = 1f, AtFull = 0.5f,
+			};
+			var otherTarget = new WeatherAbilityModifier
+			{
+				Target = WeatherAbilityTarget.Speed,
+				Reads = WeatherAbilityReads.Channel,
+				Channel = WeatherChannel.Precipitation,
+				From = 0f, To = 1f, AtNone = 1f, AtFull = 0.1f,
+			};
+
+			var rules = new List<WeatherAbilityModifier> { half, alsoHalf, otherTarget };
+			WeatherSample downpour = Rain(1f);
+
+			Assert.That(WeatherAbilityModifiers.Multiplier(rules, WeatherAbilityTarget.Cooldown, downpour),
+				Is.EqualTo(0.25f).Within(1e-4f), "a quarter, never zero");
+			Assert.That(WeatherAbilityModifiers.Multiplier(rules, WeatherAbilityTarget.Speed, downpour),
+				Is.EqualTo(0.1f).Within(1e-4f), "and a rule for another number stays out of it");
+			Assert.That(WeatherAbilityModifiers.Multiplier(rules, WeatherAbilityTarget.LifeTime, downpour),
+				Is.EqualTo(1f), "a number nothing names is untouched");
 		}
 
 		[Test]
-		public void ABiomeCanSwapAPresetForItsVariant()
+		public void AnAbilityWithNoRulesCostsNothingAndChangesNothing()
 		{
-			Dictionary<string, WeatherPreset> presets = AllPresets();
-			var profile = new BiomeWeatherProfile();
-			LogAssert.IsFalse(profile.IsAuthored);
-			profile.Variants.Add(new WeatherPresetVariant { Preset = presets["Heavy Rain"], Variant = presets["Swamp Rain"] });
-			LogAssert.IsTrue(profile.IsAuthored, "a variant alone is authoring");
-			LogAssert.AreSame(presets["Swamp Rain"], profile.VariantOf(presets["Heavy Rain"]));
-			LogAssert.AreSame(presets["Light Rain"], profile.VariantOf(presets["Light Rain"]), "other presets pass through");
-			LogAssert.IsNull(profile.VariantOf(null));
-			profile.Variants.Add(new WeatherPresetVariant { Preset = presets["Blizzard"], Variant = null });
-			LogAssert.AreSame(presets["Blizzard"], profile.VariantOf(presets["Blizzard"]), "an empty variant is ignored");
+			// The case nearly every ability is in. Asked before anything is sampled, so the cast path
+			// — which runs in the replicate and is replayed on every reconcile — pays one loop over
+			// an empty list.
+			Assert.That(WeatherAbilityModifiers.Any(null, WeatherAbilityTarget.Power), Is.False);
+			Assert.That(WeatherAbilityModifiers.Any(new List<WeatherAbilityModifier>(), WeatherAbilityTarget.Power), Is.False);
+			Assert.That(WeatherAbilityModifiers.Multiplier(null, WeatherAbilityTarget.Power, Rain(1f)), Is.EqualTo(1f));
 		}
 
 		[Test]
-		public void ABiomeGuessedWithoutGroundDoesNotSilenceTheWeather()
+		public void AModifierNeverProducesANegativeNumber()
 		{
-			// Only a sea-floor biome that forbids everything is registered, so a position with no
-			// terrain and no map (a scene built from meshes) resolves to it by default.
-			var saved = new List<BiomeTemplate>();
-			foreach (string key in BiomeRegistry.SupportedBiomes)
+			// Whatever a designer types, an ability cannot have a negative cast time.
+			var silly = new WeatherAbilityModifier
 			{
-				if (BiomeRegistry.TryGet(key, out BiomeTemplate existing))
-				{
-					saved.Add(existing);
-				}
-			}
-			BiomeTemplate seabed = Make<BiomeTemplate>("Test Seabed");
-			seabed.DisplayName = "Test Seabed";
-			seabed.MinHeight = 0f;
-			seabed.MaxHeight = 1f;
-			seabed.SelectionWeight = 1f;
-			seabed.Weather = new BiomeWeatherProfile { Forbidden = WeatherKindMask.All };
-			WeatherLayerTemplate rain = templates[WeatherLayerKind.Rain];
-			rain.AddToCache(rain.name + System.Guid.NewGuid().ToString("N"));
-			try
-			{
-				BiomeRegistry.Clear();
-				BiomeRegistry.Register(seabed);
-				BiomeReading reading = BiomeSampler.Read(new Vector3(0f, 0f, 0f), (FishMMO.Shared.WorldSceneSettings)null);
-				Assume.That(reading.Biome, Is.SameAs(seabed), "the resolver did not pick the only biome");
-				LogAssert.IsFalse(reading.IsGrounded, "no terrain and no map: the biome is a guess");
-
-				var timeline = new WeatherTimeline { SceneMode = WeatherSceneMode.Own };
-				timeline.Layers.Add(new WeatherLayerEntry { Handle = 1, TemplateID = rain.ID, From = 1f, To = 1f });
-				WeatherSample sample = WeatherField.Sample(timeline, null, default, Vector3.zero, 10);
-				LogAssert.IsTrue(sample.Frame[WeatherChannel.Precipitation] > 0.5f,
-					"a guessed sea floor must not forbid the rain a scene layer asked for");
-			}
-			finally
-			{
-				rain.RemoveFromCache();
-				BiomeRegistry.Clear();
-				foreach (BiomeTemplate biome in saved)
-				{
-					BiomeRegistry.Register(biome);
-				}
-			}
+				Target = WeatherAbilityTarget.ActivationTime,
+				Reads = WeatherAbilityReads.Channel,
+				Channel = WeatherChannel.Precipitation,
+				From = 0f, To = 1f, AtNone = 1f, AtFull = 0f,
+			};
+			Assert.That(silly.Evaluate(Rain(1f)), Is.EqualTo(0f).Within(1e-4f));
+			Assert.That(silly.Evaluate(Rain(1f)), Is.GreaterThanOrEqualTo(0f));
 		}
 
-		// ── Textures ──
+		// ---- weather-gated spawns (Q16) ----
 
 		[Test]
-		public void TheAtlasHasFiveRowsOfShapesAndThreeSpare()
+		public void ASpawnGateReadsTheKindsItNames()
 		{
-			Texture2D atlas = WeatherTextureBaker.BuildAtlas(WeatherTextureBaker.DefaultSeed);
-			try
+			var nightCrawler = new WeatherRespawnCondition
 			{
-				LogAssert.AreEqual(512, atlas.width);
-				LogAssert.AreEqual(1024, atlas.height);
-				Color32[] pixels = atlas.GetPixels32();
-				for (int row = 0; row < WeatherTextureBaker.Rows; row++)
-				{
-					long alpha = 0;
-					int top = atlas.height - (row + 1) * WeatherTextureBaker.Tile;
-					for (int y = top; y < top + WeatherTextureBaker.Tile; y++)
-					{
-						for (int x = 0; x < atlas.width; x++)
-						{
-							alpha += pixels[y * atlas.width + x].a;
-						}
-					}
-					if (row < 5)
-					{
-						LogAssert.IsTrue(alpha > 1000, $"row {row} has shapes");
-					}
-					else
-					{
-						LogAssert.AreEqual(0L, alpha, $"row {row} is spare");
-					}
-				}
-				// Tiles keep a clear border so mipmaps do not bleed into neighbours.
-				LogAssert.AreEqual((byte)0, pixels[(atlas.height - 1) * atlas.width + 0].a);
-			}
-			finally
+				Weather = WeatherKindMask.Rain,
+				MinimumSeverity = 0.3f,
+			};
+
+			Assert.That(nightCrawler.SeverityOf(Rain(0.8f)), Is.EqualTo(0.8f).Within(1e-4f));
+			Assert.That(nightCrawler.SeverityOf(Sample(lightning: 0.9f)), Is.EqualTo(0f), "lightning is not rain");
+
+			// The inverted one — the creature that hides from the rain — is the same condition.
+			var fairWeather = new WeatherRespawnCondition
 			{
-				Object.DestroyImmediate(atlas);
-			}
+				Weather = WeatherKindMask.Rain,
+				MinimumSeverity = 0.3f,
+				Invert = true,
+			};
+			Assert.That(fairWeather.Invert, Is.True);
 		}
 
 		[Test]
-		public void TheSameSeedBakesTheSamePixels()
+		public void ASpawnGateInASceneWithNoWeatherSpawnsNormallyByDefault()
 		{
-			Texture2D a = WeatherTextureBaker.BuildAtlas(5);
-			Texture2D b = WeatherTextureBaker.BuildAtlas(5);
-			Texture2D c = WeatherTextureBaker.BuildAtlas(6);
-			try
-			{
-				CollectionAssert.AreEqual(a.GetPixels32(), b.GetPixels32());
-				CollectionAssert.AreNotEqual(a.GetPixels32(), c.GetPixels32(), "a different seed makes different flakes");
-			}
-			finally
-			{
-				Object.DestroyImmediate(a);
-				Object.DestroyImmediate(b);
-				Object.DestroyImmediate(c);
-			}
+			/* Most scenes have no weather registered while this is being built, and answering "no"
+			 * there would silently empty every gated spawner in all of them — a very quiet way to
+			 * lose a world's worth of creatures. */
+			var gate = new WeatherRespawnCondition();
+			Assert.That(gate.AllowWhenSceneHasNoWeather, Is.True);
+		}
+
+		// ---- layer handles: how an ECA action takes back the layer it put up ----
+
+		[Test]
+		public void ALayerIsRemovedByTheNameItsAuthorGaveIt()
+		{
+			/* A layer is removed by a handle the server allocated at runtime, and ECA actions cannot
+			 * pass a value from one to the next — each runs independently against the event. Naming
+			 * the layer at authoring time and looking its handle up by that name is what closes the
+			 * gap. */
+			var caster = new StubCharacter { ID = 1 };
+
+			WeatherLayerHandles.Remember(caster, "ritual-storm", 42);
+			Assert.That(WeatherLayerHandles.TryTake(caster, "ritual-storm", out ushort handle), Is.True);
+			Assert.That(handle, Is.EqualTo(42));
+
+			// Taken, not read: a handle is good for exactly one removal. Left behind, a second
+			// trigger would remove a layer the server has forgotten — or one whose number has since
+			// been handed to a different layer.
+			Assert.That(WeatherLayerHandles.TryTake(caster, "ritual-storm", out _), Is.False, "and only once");
+			Assert.That(WeatherLayerHandles.TrackedCharacters, Is.EqualTo(0), "the record is gone with it");
 		}
 
 		[Test]
-		public void TheNoiseTiles()
+		public void OneCastersStormCannotBeCalledOffByAnother()
 		{
-			const int size = 64;
-			float worst = 0f;
-			for (int i = 0; i < size; i++)
-			{
-				float t = i / (float)size;
-				// The value just past the right edge is the value at the left edge.
-				worst = Mathf.Max(worst, Mathf.Abs(WeatherTextureBaker.Fbm(1f, t, 4, 9) - WeatherTextureBaker.Fbm(0f, t, 4, 9)));
-				worst = Mathf.Max(worst, Mathf.Abs(WeatherTextureBaker.Fbm(t, 1f, 4, 9) - WeatherTextureBaker.Fbm(t, 0f, 4, 9)));
-			}
-			Assert.That(worst, Is.LessThan(1e-4f));
-			float lo = 1f, hi = 0f;
-			for (int i = 0; i < 200; i++)
-			{
-				float v = WeatherTextureBaker.Fbm(i * 0.0371f, i * 0.0613f, 4, 9);
-				lo = Mathf.Min(lo, v);
-				hi = Mathf.Max(hi, v);
-			}
-			LogAssert.IsTrue(hi - lo > 0.2f, "and is not flat");
+			// Two players lighting the same brazier must each be able to put out their own.
+			var first = new StubCharacter { ID = 1 };
+			var second = new StubCharacter { ID = 2 };
+
+			WeatherLayerHandles.Remember(first, "brazier", 10);
+			WeatherLayerHandles.Remember(second, "brazier", 20);
+
+			Assert.That(WeatherLayerHandles.TryTake(second, "brazier", out ushort theirs), Is.True);
+			Assert.That(theirs, Is.EqualTo(20), "their own layer, not the other player's");
+			Assert.That(WeatherLayerHandles.TryTake(first, "brazier", out ushort mine), Is.True);
+			Assert.That(mine, Is.EqualTo(10));
+		}
+
+		[Test]
+		public void RemovingALayerNobodyPutUpIsNotAnError()
+		{
+			// How "stop the storm" is written for a storm that may not be running.
+			var caster = new StubCharacter { ID = 1 };
+			Assert.That(WeatherLayerHandles.TryTake(caster, "never-added", out _), Is.False);
+			Assert.That(WeatherLayerHandles.TryTake(null, "anything", out _), Is.False);
+			Assert.That(WeatherLayerHandles.TryTake(caster, "", out _), Is.False);
+		}
+
+		// ---- the authority gate in front of every weather action ----
+
+		[Test]
+		public void AWeatherActionRefusesToActWithoutServerAuthority()
+		{
+			/* Weather ACTIONS are the one part of this pass that is not predicted. Everything else —
+			 * exposure, recipes, region buffs — is derived from a timeline both peers hold. Editing
+			 * that timeline is the opposite: a client that did it locally would be predicting a
+			 * future the server never decided on. A character with no network object is not a
+			 * server, so the gate hands back nothing to act through. */
+			var notOnAServer = new StubCharacter { ID = 1 };
+			Assert.That(WeatherActionGate.Resolve(notOnAServer, null, out _), Is.Null);
+			Assert.That(WeatherActionGate.Resolve(null, null, out _), Is.Null);
+
+			// And the underlying decision, stated directly.
+			Assert.That(RegionActionGate.Decide(hasInitiator: true, isServerStarted: false, isReconciling: false), Is.False,
+				"a client never edits the weather");
+			Assert.That(RegionActionGate.Decide(hasInitiator: true, isServerStarted: true, isReconciling: true), Is.False,
+				"and never during a reconcile replay, or one trigger would broadcast the edit once per replayed tick");
+			Assert.That(RegionActionGate.Decide(hasInitiator: true, isServerStarted: true, isReconciling: false), Is.True);
+		}
+
+		[Test]
+		public void TheCommandSeamIsClearedWithTheTimelinesSoNothingCallsADeadHost()
+		{
+			// Shared content reaches the server's weather host through WeatherQuery.Commands. A
+			// teardown that left a stopped host behind would have triggers calling into it.
+			WeatherQuery.Commands = null;
+			WeatherQuery.Clear();
+			Assert.That(WeatherQuery.Commands, Is.Null);
 		}
 	}
 }

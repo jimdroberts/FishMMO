@@ -94,6 +94,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		[Tooltip("Chance target selection picks the second-highest threat instead of the highest.")]
 		public float AggressionVarietyChance = 0.15f;
 
+		[Header("Weather")]
+		[Tooltip("Whether and how this archetype's NPCs go and stand out of the weather. Off by default.")]
+		public AIShelterSettings Shelter = new AIShelterSettings();
+
 		[Header("Performance")]
 		[Tooltip("Optional distance-based update throttling.")]
 		public AILodSettings LodSettings;

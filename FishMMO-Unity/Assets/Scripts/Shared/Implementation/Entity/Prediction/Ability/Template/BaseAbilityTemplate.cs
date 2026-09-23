@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using FishMMO.Shared.Core;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared
 {
@@ -57,6 +58,17 @@ namespace FishMMO.Shared
 		/// Cooldown time for the ability.
 		/// </summary>
 		public float Cooldown;
+
+		/// <summary>
+		/// Rules scaling this ability's numbers by the weather where it is cast (Q16).
+		/// </summary>
+		/// <remarks>
+		/// Empty on almost everything, and free when it is: the controller asks whether any rule
+		/// names a target before it samples anything, so an ability with no rules never pays for a
+		/// weather sample. See <see cref="WeatherAbilityModifier"/> for why this can be predicted.
+		/// </remarks>
+		[Tooltip("Scale this ability's numbers by the weather where it is cast. Empty: the weather changes nothing.")]
+		public List<WeatherAbilityModifier> WeatherModifiers = new List<WeatherAbilityModifier>();
 
 		/// <summary>
 		/// Crafting price of the ability (in-game currency).

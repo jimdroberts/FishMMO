@@ -7,6 +7,7 @@ using FishNet.Object.Prediction;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared
 {
@@ -104,6 +105,30 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// The weather multiplier for one of this ability's numbers, at the moment of the cast (Q16).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Exactly 1 — and free — for an ability with no weather rules on it, which is nearly all of
+		/// them: the check for whether any rule exists happens before anything is sampled. That
+		/// matters because this sits on the cast path, which runs inside the replicate and is
+		/// replayed on every reconcile.
+		/// </para>
+		/// <para>
+		/// <b>Predictable, unlike the attribute read above it.</b> <see cref="CalculateSpeedReduction"/>
+		/// carries a documented desync risk because it reads live attributes that may have
+		/// reconciled in a different order. This does not: the weather is a pure function of a tick
+		/// and a position, the tick is mapped into the synchronised domain by
+		/// <see cref="WeatherExposureTick"/>, and the position is already reconciled — so the owner
+		/// and the server reach the same multiplier, and a replay reaches it again.
+		/// </para>
+		/// </remarks>
+		private float WeatherScaling(Ability ability, uint inputTick, WeatherAbilityTarget target)
+		{
+			return AbilityWeatherScaling.Multiplier(ability, this, Character, inputTick, target);
+		}
+
+		/// <summary>
 		/// Returns true if the given ability requires held input (channeled or charged).
 		/// AI should pass the result as the isHeld parameter when calling Activate().
 		/// </summary>
@@ -165,7 +190,9 @@ namespace FishMMO.Shared
 				currentAbilityID = newAbility.ID;
 				// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
 				// between x86 and ARM that Mathf.CeilToInt is susceptible to.
-				float activationTimeSec = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
+				float activationTimeSec = newAbility.ActivationTime
+					* CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility))
+					* WeatherScaling(newAbility, activationData.GetTick(), WeatherAbilityTarget.ActivationTime);
 				remainingTicks = (uint)(int)Math.Ceiling(activationTimeSec / (double)base.TimeManager.TickDelta);
 				remainingTicks = ApplyChannelActivationFloor(newAbility, activationData.ActivationFlags, remainingTicks);
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
@@ -390,7 +417,16 @@ namespace FishMMO.Shared
 			if (state.IsTickedCreated())
 			{
 				float tickDelta = (float)base.TimeManager.TickDelta;
-				float totalTime = validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility));
+				/* Scaled too, or the bar would be drawn against the ability's unmodified time and
+				 * would visibly disagree with the cast it is showing in any weather at all.
+				 *
+				 * Recomputed from the CURRENT weather, not from what was sampled at cast start — so
+				 * if the weather changes mid-cast the bar drifts, exactly as the NOTE above says it
+				 * already does for the speed attribute. Only the bar: remainingTicks was locked in
+				 * TryStartAbility and is what the cast actually runs on, on both peers. */
+				float totalTime = validatedAbility.ActivationTime
+					* CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility))
+					* WeatherScaling(validatedAbility, activationData.GetTick(), WeatherAbilityTarget.ActivationTime);
 				OnUpdate?.Invoke(validatedAbility.Name, remainingTicks * tickDelta, totalTime);
 			}
 
@@ -1991,7 +2027,8 @@ namespace FishMMO.Shared
 				cachedCooldownController != null)
 			{
 				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
-				float cooldown = ability.Cooldown * cooldownReduction;
+				float cooldown = ability.Cooldown * cooldownReduction
+					* WeatherScaling(ability, currentTick, WeatherAbilityTarget.Cooldown);
 
 				// The cooldown controller caches the tick delta once OnStartNetwork has run (and a
 				// test can seed it); fall back to the TimeManager only when it does not hold one.

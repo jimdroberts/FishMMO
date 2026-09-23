@@ -1,4 +1,5 @@
 using FishNet.Managing.Timing;
+using FishNet.Object;
 
 namespace FishMMO.Shared.Weather
 {
@@ -102,6 +103,39 @@ namespace FishMMO.Shared.Weather
 			int elapsed = unchecked((int)(inputTick - clientStateTick));
 			long mapped = (long)serverStateTick + elapsed;
 			return mapped <= 0L ? 0u : (uint)mapped;
+		}
+
+		/// <summary>
+		/// <see cref="Resolve"/> for a behaviour on a predicted object, reading the clocks off its own
+		/// managers. Every predicted thing that reads the weather goes through this, so there is one
+		/// place the two tick domains are reconciled and one place to get it wrong.
+		/// </summary>
+		/// <param name="behaviour">The behaviour being replicated.</param>
+		/// <param name="inputTick">The replicate's own tick, in the owning client's domain.</param>
+		public static uint Resolve(NetworkBehaviour behaviour, uint inputTick)
+		{
+			if (behaviour == null)
+			{
+				return 0u;
+			}
+
+			TimeManager time = behaviour.TimeManager;
+			bool isServer = behaviour.IsServerStarted;
+
+			uint serverTick = time != null ? time.Tick : Unset;
+			// The client's own estimate of the synchronised tick is the same quantity, and is the
+			// only thing available before a first reconcile has established the pairing.
+			uint clientSyncTick = serverTick;
+			uint clientStateTick = Unset;
+			uint serverStateTick = Unset;
+
+			if (!isServer && behaviour.PredictionManager != null)
+			{
+				clientStateTick = behaviour.PredictionManager.ClientStateTick;
+				serverStateTick = behaviour.PredictionManager.ServerStateTick;
+			}
+
+			return Resolve(isServer, serverTick, clientSyncTick, clientStateTick, serverStateTick, inputTick);
 		}
 
 		/// <summary>

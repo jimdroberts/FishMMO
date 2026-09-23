@@ -17,6 +17,25 @@ namespace FishMMO.Shared.Weather
 		/// <summary>The server tick "now" means. Set by the server host or the client mirror.</summary>
 		public static Func<uint> TickSource;
 
+		/// <summary>
+		/// Authoritative weather edits, or null on a peer that has no business making them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The scene server sets this to its <c>WeatherHost</c> at startup, the same way it sets
+		/// <see cref="TickSource"/>. It exists so shared content — the ECA actions a designer puts
+		/// on a trigger, which both peers load — can reach a service that only the server assembly
+		/// implements.
+		/// </para>
+		/// <para>
+		/// <b>Null is not a failure to handle specially.</b> On a client it is always null, and a
+		/// weather action that finds it so does nothing — which is exactly what the server-authority
+		/// check in front of it would have decided in any case. The two agree, and the property is
+		/// the cheaper of the two to ask.
+		/// </para>
+		/// </remarks>
+		public static IWeatherService Commands;
+
 		public static uint CurrentTick => TickSource != null ? TickSource() : 0u;
 
 		public static void Register(Scene scene, WeatherTimeline timeline)
@@ -29,7 +48,13 @@ namespace FishMMO.Shared.Weather
 
 		public static void Unregister(Scene scene) => timelines.Remove(scene.handle);
 
-		public static void Clear() => timelines.Clear();
+		public static void Clear()
+		{
+			timelines.Clear();
+			// The service belongs to the host that registered it; a teardown that left a dead one
+			// behind would have shared content calling into a server that has stopped.
+			Commands = null;
+		}
 
 		public static bool TryGetTimeline(Scene scene, out WeatherTimeline timeline) => timelines.TryGetValue(scene.handle, out timeline);
 

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2f0825001c2c8e8f856e351f018eaad, type: 3}
+  m_Name: Hypothermic
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherExposureRecipe
+  Description: Hypothermic
+  Ingredients:
+  - State: {fileID: 11400000, guid: ba22cd4baf335c87c8bc0f51a901cf7b, type: 2}
+    AtLeast: 0.6
+  - State: {fileID: 11400000, guid: 08b030e493f302546af15e93d7a0afa8, type: 2}
+    AtLeast: 0.6
+  ReleaseMargin: 0.15
+  Buff: {fileID: 11400000, guid: cf35623aec811e7249a7527b8f6b4c65, type: 2}
+  SuppressIngredients: 1

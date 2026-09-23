@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FishNet.Managing.Timing;
 using FishNet.Object.Prediction;
@@ -57,6 +58,9 @@ namespace FishMMO.Shared
 		[Tooltip("The states this character can be put into by the weather. Empty: the controller does nothing.")]
 		public List<WeatherExposureTemplate> States = new List<WeatherExposureTemplate>();
 
+		[Tooltip("States that exist only where two or more of the above do at once: soaked AND chilled is frozen. Evaluated from the levels, so they cost nothing on the wire.")]
+		public List<WeatherExposureRecipe> Recipes = new List<WeatherExposureRecipe>();
+
 		[Tooltip("How often the weather is sampled, in seconds. The level is stepped by exactly this much each time, so a slower sample is cheaper without changing how fast a state builds.")]
 		[Range(0.1f, 5f)] public float SampleSeconds = 1f;
 
@@ -68,6 +72,18 @@ namespace FishMMO.Shared
 
 		/// <summary>Which states currently hold their buff, so it is applied and released once, not every tick.</summary>
 		private readonly HashSet<int> held = new HashSet<int>();
+
+		/// <summary>Which recipes currently hold. Derived from the levels, so never sent.</summary>
+		private readonly HashSet<int> recipesHeld = new HashSet<int>();
+
+		/// <summary>States whose own buff is off because a recipe that uses them is holding it instead.</summary>
+		private readonly HashSet<int> suppressed = new HashSet<int>();
+
+		/// <summary>Bound once so evaluating a recipe does not allocate a closure every tick.</summary>
+		private Func<WeatherExposureTemplate, float> levelReader;
+
+		/// <summary>Recipes with their nulls and duplicates removed, in a stable order.</summary>
+		private List<WeatherExposureRecipe> orderedRecipes;
 
 		/// <summary>Reused so a per-tick snapshot does not allocate.</summary>
 		private ExposureReconcileEntry[] snapshot;
@@ -89,6 +105,37 @@ namespace FishMMO.Shared
 		/// <summary>True while the state's buff is held.</summary>
 		public bool IsHolding(WeatherExposureTemplate state) => state != null && held.Contains(state.ID);
 
+		/// <summary>True while the recipe is satisfied and holding its buff.</summary>
+		public bool IsHolding(WeatherExposureRecipe recipe) => recipe != null && recipesHeld.Contains(recipe.ID);
+
+		/// <summary>True while a recipe is holding this state's buff in its place.</summary>
+		public bool IsSuppressed(WeatherExposureTemplate state) => state != null && suppressed.Contains(state.ID);
+
+		/// <summary>Every recipe this controller can satisfy, nulls and duplicates removed.</summary>
+		public IReadOnlyList<WeatherExposureRecipe> OrderedRecipes => EnsureRecipes();
+
+		private List<WeatherExposureRecipe> EnsureRecipes()
+		{
+			if (orderedRecipes != null)
+			{
+				return orderedRecipes;
+			}
+			orderedRecipes = new List<WeatherExposureRecipe>();
+			for (int i = 0; i < Recipes.Count; i++)
+			{
+				if (Recipes[i] != null && !orderedRecipes.Contains(Recipes[i]))
+				{
+					EnsureCached(Recipes[i], Recipes[i].name);
+					orderedRecipes.Add(Recipes[i]);
+				}
+			}
+			// By ID. Nothing of a recipe goes on the wire, so this is not the serializer's stable
+			// order — it is only so two peers evaluate the same recipes in the same sequence, which
+			// matters the moment two recipes suppress the same state.
+			orderedRecipes.Sort((a, b) => a.ID.CompareTo(b.ID));
+			return orderedRecipes;
+		}
+
 		/// <summary>Every state this controller can enter, in reconcile order.</summary>
 		public IReadOnlyList<WeatherExposureTemplate> OrderedStates => EnsureOrdered();
 
@@ -103,6 +150,7 @@ namespace FishMMO.Shared
 			{
 				if (States[i] != null && !ordered.Contains(States[i]))
 				{
+					EnsureCached(States[i], States[i].name);
 					ordered.Add(States[i]);
 				}
 			}
@@ -110,6 +158,33 @@ namespace FishMMO.Shared
 			// position by position, so an unstable order would resend every entry every tick.
 			ordered.Sort((a, b) => a.ID.CompareTo(b.ID));
 			return ordered;
+		}
+
+		/// <summary>
+		/// Gives a template its deterministic ID if nothing has yet.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A cached template's ID comes from <c>AddToCache</c>, which the addressables loader calls on
+		/// everything it loads. These templates need not be addressable — the prefab references them
+		/// directly, so Unity loads them with it — and an asset that arrives that way has an ID of
+		/// ZERO. That is not a harmless zero. Every state would share it, so the reconcile array's
+		/// sort would be arbitrary and its entries indistinguishable; and
+		/// <see cref="WeatherExposureTemplate.Get{T}"/> could never find one again, so no buff would
+		/// survive a reconcile. <see cref="WeatherHost"/> guards its layer templates the same way and
+		/// for the same reason.
+		/// </para>
+		/// <para>
+		/// The ID is a hash of the type name and the asset name, so every peer derives the same one
+		/// from the same asset without anything being sent.
+		/// </para>
+		/// </remarks>
+		private static void EnsureCached(ICachedObject cached, string assetName)
+		{
+			if (cached.ID == 0)
+			{
+				cached.AddToCache(assetName);
+			}
 		}
 
 		/// <inheritdoc />
@@ -124,10 +199,12 @@ namespace FishMMO.Shared
 			List<WeatherExposureTemplate> states = EnsureOrdered();
 			if (states.Count == 0 || Character == null)
 			{
+				// Recipes read state levels and nothing else, so with no states there is nothing for
+				// one to be made of either.
 				return;
 			}
 
-			uint weatherTick = ResolveWeatherTick(input.GetTick());
+			uint weatherTick = WeatherExposureTick.Resolve(this, input.GetTick());
 			double tickDelta = base.TimeManager != null ? base.TimeManager.TickDelta : 1.0 / 30.0;
 
 			// Sampled on a tick boundary derived from the WEATHER tick, so the server and the owner
@@ -165,6 +242,14 @@ namespace FishMMO.Shared
 
 			float exposure = sampled ? sample.Exposure : 0f;
 
+			/* Three passes, and the order is the point.
+			 *
+			 * Every level moves first, because a recipe is a verdict on the levels and all of them
+			 * have to be this tick's before any verdict is taken. Then the recipes are judged, which
+			 * is also what decides which states are having their buff held for them. Only then do
+			 * buffs move. Done in one pass instead, a state would apply its own buff and a recipe
+			 * would take it straight off again in the same tick — a spurious apply and remove on
+			 * every single tick of the combined state, each one a message to every observer. */
 			for (int i = 0; i < states.Count; i++)
 			{
 				WeatherExposureTemplate template = states[i];
@@ -183,8 +268,102 @@ namespace FishMMO.Shared
 						Log.Debug("WeatherExposureController", $"{template.DisplayName}: {level:0.000} -> {next:0.000} (drive {drive:0.000}, exposure {exposure:0.00})");
 					}
 				}
+			}
 
-				ApplyOrRelease(template, next, predictionTick);
+			EvaluateRecipes();
+
+			for (int i = 0; i < states.Count; i++)
+			{
+				WeatherExposureTemplate template = states[i];
+				levels.TryGetValue(template.ID, out float level);
+				ApplyOrRelease(template, level, predictionTick);
+			}
+
+			List<WeatherExposureRecipe> recipes = EnsureRecipes();
+			for (int i = 0; i < recipes.Count; i++)
+			{
+				ApplyOrReleaseRecipe(recipes[i], predictionTick);
+			}
+		}
+
+		/// <summary>
+		/// Decides which recipes hold from the levels as they now stand, and which states are having
+		/// their buff held by one.
+		/// </summary>
+		/// <remarks>
+		/// Rebuilt from scratch each time rather than patched, so the suppressed set cannot drift out
+		/// of step with the recipes that caused it — a state stops being suppressed the moment the
+		/// last recipe using it lets go, with no bookkeeping to forget.
+		/// </remarks>
+		private void EvaluateRecipes()
+		{
+			List<WeatherExposureRecipe> recipes = EnsureRecipes();
+			suppressed.Clear();
+			if (recipes.Count == 0)
+			{
+				recipesHeld.Clear();
+				return;
+			}
+
+			levelReader ??= LevelOf;
+
+			for (int i = 0; i < recipes.Count; i++)
+			{
+				WeatherExposureRecipe recipe = recipes[i];
+				bool wasHolding = recipesHeld.Contains(recipe.ID);
+				bool satisfied = recipe.IsSatisfied(wasHolding, levelReader);
+
+				if (satisfied)
+				{
+					recipesHeld.Add(recipe.ID);
+					if (recipe.SuppressIngredients)
+					{
+						for (int j = 0; j < recipe.Ingredients.Count; j++)
+						{
+							WeatherExposureIngredient ingredient = recipe.Ingredients[j];
+							if (ingredient?.State != null)
+							{
+								suppressed.Add(ingredient.State.ID);
+							}
+						}
+					}
+				}
+				else
+				{
+					recipesHeld.Remove(recipe.ID);
+				}
+
+				if (VerboseLogging && satisfied != wasHolding)
+				{
+					Log.Debug("WeatherExposureController", $"recipe {recipe.DisplayName}: {(satisfied ? "held" : "released")}");
+				}
+			}
+		}
+
+		/// <summary>Puts a recipe's buff on while it holds and takes it off when it lets go.</summary>
+		/// <remarks>
+		/// The hysteresis lives in <see cref="WeatherExposureRecipe.IsSatisfied"/>, which has already
+		/// run by the time this is called, so there is only the one verdict to act on here.
+		/// </remarks>
+		private void ApplyOrReleaseRecipe(WeatherExposureRecipe recipe, PredictionTick predictionTick)
+		{
+			if (recipe.Buff == null)
+			{
+				// A recipe with no buff of its own still suppresses, which is enough to be useful: it
+				// is how a combined state can simply silence its parts.
+				return;
+			}
+
+			bool holding = recipesHeld.Contains(recipe.ID);
+			bool applied = Character.TryGet(out IBuffController buffs) && buffs.Buffs.ContainsKey(recipe.Buff.ID);
+
+			if (holding && !applied && buffs != null)
+			{
+				buffs.Apply(recipe.Buff, predictionTick);
+			}
+			else if (!holding && applied)
+			{
+				buffs.Remove(recipe.Buff.ID);
 			}
 		}
 
@@ -206,6 +385,24 @@ namespace FishMMO.Shared
 			}
 
 			bool holding = held.Contains(template.ID);
+
+			/* A recipe is holding this state's buff in its place: soaked-and-chilled shows as frozen,
+			 * not as frozen plus soaked plus chilled. The LEVEL keeps running underneath — the
+			 * character is still getting wetter, and still has to dry off — because suppression is
+			 * about what is shown and what it does, not about the weather stopping. */
+			if (suppressed.Contains(template.ID))
+			{
+				if (holding)
+				{
+					held.Remove(template.ID);
+					if (Character.TryGet(out IBuffController owner))
+					{
+						owner.Remove(template.Buff.ID);
+					}
+				}
+				return;
+			}
+
 			if (!holding && level >= template.ApplyAt)
 			{
 				held.Add(template.ID);
@@ -224,29 +421,6 @@ namespace FishMMO.Shared
 					buffs.Remove(template.Buff.ID);
 				}
 			}
-		}
-
-		/// <summary>
-		/// The tick to read the weather at, from whichever clock this peer has. See
-		/// <see cref="WeatherExposureTick"/> for why the replicate's own tick will not do.
-		/// </summary>
-		private uint ResolveWeatherTick(uint inputTick)
-		{
-			TimeManager time = base.TimeManager;
-			bool isServer = base.IsServerStarted;
-
-			uint serverTick = time != null ? time.Tick : WeatherExposureTick.Unset;
-			uint clientSyncTick = serverTick;
-			uint clientStateTick = WeatherExposureTick.Unset;
-			uint serverStateTick = WeatherExposureTick.Unset;
-
-			if (!isServer && base.PredictionManager != null)
-			{
-				clientStateTick = base.PredictionManager.ClientStateTick;
-				serverStateTick = base.PredictionManager.ServerStateTick;
-			}
-
-			return WeatherExposureTick.Resolve(isServer, serverTick, clientSyncTick, clientStateTick, serverStateTick, inputTick);
 		}
 
 		/// <inheritdoc />
@@ -350,6 +524,17 @@ namespace FishMMO.Shared
 					held.Remove(entry.TemplateID);
 				}
 			}
+
+			/* And the recipes, from the levels that have just landed. Nothing about a recipe is sent,
+			 * because nothing about one needs to be: it is a function of the levels, and the levels
+			 * are now the server's. The one thing genuinely not derivable is which side of the
+			 * hysteresis band the recipe was on, and that is resolved the same way a single state's
+			 * hold is — by reading it as NOT held, so the stricter apply threshold decides. A recipe
+			 * that should be on is applied again on the very next step, whereas one wrongly believed
+			 * held would never be applied again at all. */
+			recipesHeld.Clear();
+			EvaluateRecipes();
+
 			snapshotDirty = true;
 		}
 
@@ -361,9 +546,12 @@ namespace FishMMO.Shared
 			// may survive into the next.
 			levels.Clear();
 			held.Clear();
+			recipesHeld.Clear();
+			suppressed.Clear();
 			snapshot = null;
 			snapshotDirty = true;
 			ordered = null;
+			orderedRecipes = null;
 		}
 	}
 }

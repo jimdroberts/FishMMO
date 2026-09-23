@@ -10,6 +10,7 @@ using FishNet.Object;
 using FishMMO.Shared.Core;
 using FishMMO.Logging;
 using FishMMO.Shared;
+using FishMMO.Shared.Weather;
 using FishMMO.Server.Core.World.SceneServer;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.AI
@@ -212,6 +213,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// The state the NPC starts in when it spawns.
 		/// </summary>
 		public BaseAIState InitialState => archetype != null ? archetype.InitialState : null;
+
+		/// <summary>
+		/// Whether and how this NPC shelters from the weather, or null when the archetype says
+		/// nothing about it. Off unless an archetype turns it on (Q15).
+		/// </summary>
+		public AIShelterSettings Shelter => archetype != null ? archetype.Shelter : null;
 
 		/// <summary>
 		/// Random movement around the home position, or null when the archetype does not wander.
@@ -839,6 +846,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		[System.NonSerialized]
 		public float PetStuckTimer;
+
+		/// <summary>Seconds until the next shelter check. See <see cref="CheckShelter"/>.</summary>
+		private float nextShelterCheck;
 
 		/// <summary>
 		/// Seconds the NPC has spent unable to reach its combat target.
@@ -1469,6 +1479,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			UpdateSeparation();
 			SweepForEnemies(dt);
 			CheckLeash(dt);
+			CheckShelter(dt);
 
 			// --- Behavior Tree (decision layer) ---
 			bool btHandled = false;
@@ -1511,6 +1522,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			repathCooldown -= dt;
 			UpdateSeparation();
 			CheckLeash(dt);
+			CheckShelter(dt);
 			UpdateCurrentState(dt);
 			TickAggression(dt);
 		}
@@ -1789,6 +1801,88 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				nextLeashUpdate = CurrentState.LeashUpdateRate;
 			}
 			nextLeashUpdate -= deltaTime;
+		}
+
+		/// <summary>
+		/// Sends the NPC to stand out of the weather, and brings it back out when the weather has
+		/// passed (Q15).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Never during a fight.</b> An NPC that walked off to a barn mid-combat would be
+		/// unkillable in a thunderstorm and would look ridiculous doing it. Combat, leashing and
+		/// being dead all outrank the weather.
+		/// </para>
+		/// <para>
+		/// <b>Asked on a slow clock.</b> Weather moves over minutes, so the default interval is
+		/// seconds rather than ticks; the sample and the shelter search are the expensive parts and
+		/// neither needs to happen often. An archetype with sheltering off pays one boolean.
+		/// </para>
+		/// <para>
+		/// Two thresholds, as with everything else exposure-driven: what it takes to go in is
+		/// higher than what it takes to stay, so weather sitting on the line does not have the
+		/// creature pacing in and out of a doorway.
+		/// </para>
+		/// </remarks>
+		/// <param name="deltaTime">Seconds elapsed since the previous AI tick.</param>
+		private void CheckShelter(float deltaTime)
+		{
+			AIShelterSettings settings = Shelter;
+			if (settings == null || !settings.Enabled || settings.ShelterState == null)
+			{
+				return;
+			}
+
+			nextShelterCheck -= deltaTime;
+			if (nextShelterCheck > 0f)
+			{
+				return;
+			}
+			nextShelterCheck = settings.CheckInterval;
+
+			// Fighting, going home, or dead: the weather is the least of it.
+			bool sheltering = ReferenceEquals(CurrentState, settings.ShelterState);
+			if (CurrentState is BaseAttackingState ||
+				CurrentState == ReturnHomeState ||
+				(AggressionState?.HasAggression ?? false) ||
+				Character == null || Character.GameObject == null ||
+				Character.IsFlagged(CharacterFlags.IsDead))
+			{
+				if (sheltering)
+				{
+					// It was sheltering and something more urgent came up; let go of the state so
+					// the NPC is not left standing in a barn after the fight.
+					TransitionToRandomMovementState();
+				}
+				return;
+			}
+
+			WeatherSample weather = WeatherQuery.Sample(Character.GameObject.scene, Character.Transform.position);
+
+			if (sheltering)
+			{
+				if (!settings.WouldStay(weather))
+				{
+					TransitionToRandomMovementState();
+				}
+				return;
+			}
+
+			if (!settings.WantsShelter(weather))
+			{
+				return;
+			}
+
+			// Only commit to the state when there is somewhere to go. Entering it with no shelter in
+			// reach would have the NPC walk nowhere and immediately bounce back out, once per check,
+			// for as long as the storm lasted.
+			if (WeatherVolumeRegistry.NearestShelter(Character.GameObject.scene, Home,
+				settings.SearchRadius, settings.MinimumShelterStrength) == null)
+			{
+				return;
+			}
+
+			ChangeState(settings.ShelterState);
 		}
 
 		/// <summary>

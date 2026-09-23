@@ -55,6 +55,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			weatherHost = new WeatherHost(networkManager, characterMapping);
 			weatherHost.Start();
+			// Shared content — ECA actions on triggers, which both peers load — reaches the
+			// authoritative edits through here, because it cannot reference this assembly.
+			WeatherQuery.Commands = weatherHost;
 
 			weatherCharacterSystem = characterSystem;
 			if (weatherCharacterSystem != null)
@@ -69,6 +72,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				weatherCharacterSystem.OnSpawnCharacter -= CharacterSystem_OnWeatherCharacterSpawned;
 				weatherCharacterSystem = null;
+			}
+			if (ReferenceEquals(WeatherQuery.Commands, weatherHost))
+			{
+				WeatherQuery.Commands = null;
 			}
 			weatherHost?.Stop();
 			weatherHost = null;

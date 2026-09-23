@@ -1,8 +1,7 @@
-using FishMMO.Shared.Weather;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace FishMMO.Server.Implementation.World.SceneServer.Weather
+namespace FishMMO.Shared.Weather
 {
 	/// <summary>
 	/// Authoritative weather edits for the scenes this server hosts. Every edit is scheduled a
@@ -10,8 +9,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 	/// clients hold it before it takes effect.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// Weather changes gameplay (exposure buffs, spawns, ability modifiers), so only
 	/// administrators and server code may call this. Game masters get read-only reports.
+	/// </para>
+	/// <para>
+	/// <b>Declared here rather than beside its implementation.</b> The only implementation is the
+	/// scene server's <c>WeatherHost</c> and always will be — but the ECA actions that drive it are
+	/// shared content, authored on triggers that both peers load, and shared code cannot reference
+	/// the server assembly. So the interface lives here and the server registers its host into
+	/// <see cref="WeatherQuery.Commands"/> at startup, exactly as it already does for
+	/// <see cref="WeatherQuery.TickSource"/>. On a client that property is simply null, which is
+	/// the same answer the authority check would have given anyway.
+	/// </para>
 	/// </remarks>
 	public interface IWeatherService
 	{
