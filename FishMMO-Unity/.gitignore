@@ -75,3 +75,11 @@ crashlytics-build.properties
 /[Aa]ssets/Prefabs/Shared/WorldMaps.meta
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientWorldMaps.asset*
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientWorldMaps_*
+
+# Baked planet surfaces. Build output, exactly like the world maps above: every image is
+# reproduced exactly from its body's terrain seed, so committing them would be storing what a
+# function can produce. A client build bakes them, builds, and removes them again.
+/[Aa]ssets/Prefabs/Shared/PlanetSurfaces/
+/[Aa]ssets/Prefabs/Shared/PlanetSurfaces.meta
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientPlanetSurfaces.asset*
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientPlanetSurfaces_*
