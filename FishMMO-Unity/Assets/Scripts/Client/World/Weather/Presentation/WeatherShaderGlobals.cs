@@ -17,6 +17,8 @@ namespace FishMMO.Client
 		public static readonly int Misc = Shader.PropertyToID("_FishWeatherMisc");
 		public static readonly int Tier = Shader.PropertyToID("_FishWeatherTier");
 		public static readonly int Mix = Shader.PropertyToID("_FishWeatherMix");
+		/// <summary>What is falling, as a colour: rgb the substance's tint, a how harsh it is.</summary>
+		public static readonly int Substance = Shader.PropertyToID("_FishWeatherSubstance");
 
 		/// <summary>The wind's ground-plane direction (world x, z) for a heading in degrees.</summary>
 		public static Vector2 WindDirection(float headingDegrees)
@@ -34,8 +36,16 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(Tier, new Vector4(terrainSnowDisplacement ? 1f : 0f, 0f, 0f, 0f));
 		}
 
-		public static void Apply(in WeatherFrame frame, in WeatherCover cover, float temperature, float shelter, float time, float lightningFlash)
+		/// <param name="substance">
+		/// What the precipitation is made of, or null for the kinds' own defaults. Lets a surface or
+		/// an overlay show nitrogen snow and water snow as the different things they are, without
+		/// anything downstream having to know what a substance is.
+		/// </param>
+		public static void Apply(in WeatherFrame frame, in WeatherCover cover, float temperature, float shelter, float time, float lightningFlash, WeatherSubstance substance = null)
 		{
+			Color tint = substance != null ? substance.Tint : Color.white;
+			float harshness = substance != null ? substance.Harshness : 0f;
+			Shader.SetGlobalVector(Substance, new Vector4(tint.r, tint.g, tint.b, harshness));
 			Shader.SetGlobalVector(Cloud, new Vector4(frame[WeatherChannel.CloudCover], frame[WeatherChannel.CloudDensity], frame[WeatherChannel.CloudBase], lightningFlash));
 			Shader.SetGlobalVector(Precip, new Vector4(frame[WeatherChannel.Precipitation], frame[WeatherChannel.DropSize], frame[WeatherChannel.SnowWeight], frame.StormSeverity));
 			Vector2 wind = WindDirection(frame[WeatherChannel.WindHeading]);

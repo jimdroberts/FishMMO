@@ -17,6 +17,7 @@ namespace FishMMO.Client
 		public const string ProfilePath = Folder + "/Weather Render Profile.asset";
 		public const string AudioPath = Folder + "/Weather Audio Profile.asset";
 		public const string ShaderName = "FishMMO/Weather/Precipitation";
+		public const string SplashShaderName = "FishMMO/Weather/Precipitation Splash";
 		public const string SkyFolder = "Assets/Templates/World/Sky";
 		public const string SkyProfilePath = SkyFolder + "/Temperate Sky.asset";
 
@@ -136,6 +137,9 @@ namespace FishMMO.Client
 			}
 			Undo.RecordObject(profile, "Weather render profile");
 			if (profile.PrecipitationMaterial == null) profile.PrecipitationMaterial = material;
+			// Where the rain lands. Its own material, because it is its own shader and its own
+			// blend; sharing the precipitation material would mean one atlas row deciding both.
+			if (profile.SplashMaterial == null) profile.SplashMaterial = EnsureMaterial("Precipitation Splash", SplashShaderName);
 			if (profile.PrecipitationAtlas == null) profile.PrecipitationAtlas = atlas;
 			if (profile.Noise == null) profile.Noise = noise;
 			if (profile.Audio == null) profile.Audio = audio;

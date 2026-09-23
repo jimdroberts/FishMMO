@@ -41,12 +41,38 @@ MonoBehaviour:
       Adjectives: []
       Description: Tall stems packed close, creaking in the smallest wind
   Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
+    Background:
+    - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
+      Intensity: 0.06
+    CellSpawns:
+    - Preset: {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Weight: 2.5
+    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
+      Weight: 2.5
+    - Preset: {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
+      Weight: 2
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Weight: 0.6
+    - Preset: {fileID: 11400000, guid: 77ceb35e60107d4bfb9d84311ed6d380, type: 2}
+      Weight: 1.5
+    Suitability:
+    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
+      Suitability: 0.1
+    - Preset: {fileID: 11400000, guid: 48dfb6c7fef4034188fa9261bde2de5b, type: 2}
+      Suitability: 0.05
+    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
+      Suitability: 0.35
+    - Preset: {fileID: 11400000, guid: cd247f59315b9d16782275ef9077806c, type: 2}
+      Suitability: 0.3
     Variants: []
     Forbidden: 0
-    CellsPerSquareKm: 0.4
+    CellsPerSquareKm: 0.45
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

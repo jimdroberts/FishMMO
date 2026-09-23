@@ -69,7 +69,10 @@ MonoBehaviour:
   m_RendererFeatures:
   - {fileID: -1878332245247344467}
   - {fileID: -2711503009455396585}
-  m_RendererFeatureMap: adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee51700000000000000290000000000000002000000000000000a000000000000006100000000000000ce000000000000005e00000000000000da00000000000000
+  - {fileID: 2017944865441511579}
+  - {fileID: 4558045951250616325}
+  - {fileID: 5709787981933450383}
+  m_RendererFeatureMap: adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee5adc0de57c6d2eee51700000000000000290000000000000002000000000000000a000000000000006100000000000000ce000000000000005e00000000000000da000000000000009b00000000000000f800000000000000f600000000000000e00000000000000029000000000000002e0000000000000001000000000000001c00000000000000050000000000000050000000000000003300000000000000a200000000000000a4000000000000006e0000000000000041000000000000003f000000000000008f000000000000001400000000000000f000000000000000f500000000000000ea000000000000003d000000000000003d000000000000004f00000000000000
   m_UseNativeRenderPass: 0
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -98,3 +101,66 @@ MonoBehaviour:
   m_DepthTextureFormat: 0
   m_AccurateGbufferNormals: 0
   m_IntermediateTextureMode: 1
+--- !u!114 &2017944865441511579
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 962cde43234a9652bb6f081e43da3e8e, type: 3}
+  m_Name: Fish Height Fog
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishHeightFogFeature
+  m_Active: 1
+  FogMaterial: {fileID: 0}
+  FalloffHeight: 60
+  BaseHeight: 0
+  MaximumOpacity: 0.92
+  SunInscatter: 0.6
+  StartDistance: 4
+  EndDistance: 1200
+  DensityScale: 0.03
+--- !u!114 &4558045951250616325
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c1ce010563cd3c17a11a7517af1ae54, type: 3}
+  m_Name: Fish Volumetric Fog
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishVolumetricFogFeature
+  m_Active: 1
+  Compute: {fileID: 0}
+  ApplyMaterial: {fileID: 0}
+  GridWidth: 160
+  GridHeight: 90
+  GridDepth: 64
+  NearDistance: 0.5
+  FarDistance: 500
+  DepthCurve: 1.4
+  Albedo: {r: 0.92, g: 0.94, b: 1, a: 1}
+  Anisotropy: 0.6
+  AmbientFloor: 0.12
+  DensityScale: 0.03
+--- !u!114 &5709787981933450383
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9342f5242f3ee962ca937a7f527edbd0, type: 3}
+  m_Name: Fish Weather Overlay
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishWeatherOverlayFeature
+  m_Active: 1
+  OverlayMaterial: {fileID: 0}
+  Drops: 1
+  Frost: 1
+  Dust: 1

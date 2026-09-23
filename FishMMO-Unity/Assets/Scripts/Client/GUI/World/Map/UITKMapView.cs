@@ -986,13 +986,16 @@ namespace FishMMO.Client
 			{
 				Vector2 uv = uvScratch[i];
 
-				/* Remapped through the write data's UV region. UI Toolkit may have placed the
-				 * texture inside a dynamic atlas, in which case 0..1 addresses the whole atlas
-				 * rather than this texture — sampling without the remap draws some other panel's
-				 * artwork, and only for the textures that happened to get atlased. */
-				uv = new Vector2(mesh.uvRegion.xMin + (uv.x * mesh.uvRegion.width),
-								 mesh.uvRegion.yMin + (uv.y * mesh.uvRegion.height));
-
+				/* Written straight through, in 0..1 of this texture.
+				 *
+				 * This used to be remapped by hand through the write data's uvRegion, because UI
+				 * Toolkit may place a texture in a dynamic atlas and 0..1 would then address the
+				 * whole atlas — sampling without the remap drew some other panel's artwork, and
+				 * only for the textures that happened to get atlased. The renderer now does that
+				 * remapping itself and uvRegion is obsolete, so doing it here as well would apply
+				 * it TWICE: the map would sample a shrinking sub-rectangle of itself, wrongly, and
+				 * again only once a texture was atlased. Keeping the old line to silence a warning
+				 * would have been the bug. */
 				mesh.SetNextVertex(new Vertex()
 				{
 					position = cornerScratch[i],

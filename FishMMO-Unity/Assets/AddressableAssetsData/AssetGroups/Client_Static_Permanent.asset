@@ -51,6 +51,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 262d8c8b6862907c3a61c0438002b927
+    m_Address: Precipitation Splash
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 316068aec7de8294ba9429fc2bc910b9
     m_Address: DaySkybox
     m_ReadOnly: 0
@@ -87,6 +93,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
+    m_Address: Weather Audio Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
     m_Address: MinimapRenderTexture
     m_ReadOnly: 0
@@ -101,6 +113,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 695281b44bcf6b527b3fb26e0dc8d4b5
     m_Address: Precipitation Atlas
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69baeeda49ea89f268266955933d6961
+    m_Address: Weather Render Profile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

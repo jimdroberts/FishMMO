@@ -6,8 +6,8 @@ using UnityEngine.Rendering.Universal;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Puts the volumetric cloud pass on every URP renderer, so the clouds are drawn on every
-	/// quality tier without anyone wiring a renderer asset by hand.
+	/// Puts the weather's render passes on every URP renderer, so they are drawn on every quality
+	/// tier without anyone wiring a renderer asset by hand.
 	/// </summary>
 	/// <remarks>
 	/// A renderer feature lives inside its renderer asset as a sub-asset. This adds one where it is
@@ -75,6 +75,168 @@ namespace FishMMO.Client
 				AssetDatabase.SaveAssets();
 			}
 			return added;
+		}
+
+		/// <summary>
+		/// Adds the height-fog pass to every renderer that has none. Returns how many were changed.
+		/// </summary>
+		/// <remarks>
+		/// On every tier, not only the top ones. The pass is a single full-screen shader with a
+		/// closed-form integral and no loop, so it costs a fraction of what the cloud march already
+		/// costs on the cheapest tier — and fog lying in the low ground is most of what makes
+		/// weather read as weather.
+		/// </remarks>
+		public static int EnsureHeightFog()
+		{
+			int added = 0;
+			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
+				if (data == null)
+				{
+					continue;
+				}
+				bool present = false;
+				foreach (ScriptableRendererFeature feature in data.rendererFeatures)
+				{
+					if (feature is FishHeightFogFeature)
+					{
+						present = true;
+						break;
+					}
+				}
+				if (present)
+				{
+					continue;
+				}
+
+				var created = ScriptableObject.CreateInstance<FishHeightFogFeature>();
+				created.name = "Fish Height Fog";
+				AssetDatabase.AddObjectToAsset(created, data);
+				AssetDatabase.SaveAssets();
+				Append(data, created);
+				added++;
+				Debug.Log($"[Fog] Added the height-fog pass to {System.IO.Path.GetFileNameWithoutExtension(path)}.");
+			}
+			if (added > 0)
+			{
+				AssetDatabase.SaveAssets();
+			}
+			return added;
+		}
+
+		/// <summary>
+		/// Adds the froxel volumetric-fog pass to every renderer that has none.
+		/// </summary>
+		/// <remarks>
+		/// Added on every tier even though it needs compute: the feature checks
+		/// <see cref="FishVolumetricFogFeature.Supported"/> itself and enqueues nothing where there
+		/// is none, so a WebGL2 build carries an inert feature rather than a different renderer.
+		/// One asset that behaves correctly everywhere beats two that have to be kept in step.
+		/// </remarks>
+		public static int EnsureVolumetricFog()
+		{
+			int added = 0;
+			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
+				if (data == null)
+				{
+					continue;
+				}
+				bool present = false;
+				foreach (ScriptableRendererFeature feature in data.rendererFeatures)
+				{
+					if (feature is FishVolumetricFogFeature)
+					{
+						present = true;
+						break;
+					}
+				}
+				if (present)
+				{
+					continue;
+				}
+				var created = ScriptableObject.CreateInstance<FishVolumetricFogFeature>();
+				created.name = "Fish Volumetric Fog";
+				AssetDatabase.AddObjectToAsset(created, data);
+				AssetDatabase.SaveAssets();
+				Append(data, created);
+				added++;
+				Debug.Log($"[Fog] Added the volumetric fog pass to {System.IO.Path.GetFileNameWithoutExtension(path)}.");
+			}
+			if (added > 0)
+			{
+				AssetDatabase.SaveAssets();
+			}
+			return added;
+		}
+
+		/// <summary>Adds the weather screen overlay to every renderer that has none.</summary>
+		public static int EnsureOverlay()
+		{
+			int added = 0;
+			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
+				if (data == null)
+				{
+					continue;
+				}
+				bool present = false;
+				foreach (ScriptableRendererFeature feature in data.rendererFeatures)
+				{
+					if (feature is FishWeatherOverlayFeature)
+					{
+						present = true;
+						break;
+					}
+				}
+				if (present)
+				{
+					continue;
+				}
+				var created = ScriptableObject.CreateInstance<FishWeatherOverlayFeature>();
+				created.name = "Fish Weather Overlay";
+				AssetDatabase.AddObjectToAsset(created, data);
+				AssetDatabase.SaveAssets();
+				Append(data, created);
+				added++;
+				Debug.Log($"[Overlay] Added the weather overlay to {System.IO.Path.GetFileNameWithoutExtension(path)}.");
+			}
+			if (added > 0)
+			{
+				AssetDatabase.SaveAssets();
+			}
+			return added;
+		}
+
+		/// <summary>
+		/// Appends a feature to a renderer's list, keeping the feature map in step.
+		/// </summary>
+		/// <remarks>
+		/// The map is the list's identity: eight bytes of local file id per feature, in order. A
+		/// feature appended without it loads as a null entry and the renderer silently drops it,
+		/// which looks exactly like the pass not working.
+		/// </remarks>
+		private static void Append(ScriptableRendererData data, ScriptableRendererFeature feature)
+		{
+			var serialized = new SerializedObject(data);
+			SerializedProperty features = serialized.FindProperty("m_RendererFeatures");
+			SerializedProperty map = serialized.FindProperty("m_RendererFeatureMap");
+			features.arraySize++;
+			features.GetArrayElementAtIndex(features.arraySize - 1).objectReferenceValue = feature;
+			long id = LocalId(feature);
+			map.arraySize = features.arraySize * 8;
+			for (int i = 0; i < 8; i++)
+			{
+				map.GetArrayElementAtIndex((features.arraySize - 1) * 8 + i).intValue = (int)((id >> (i * 8)) & 0xFF);
+			}
+			serialized.ApplyModifiedProperties();
+			EditorUtility.SetDirty(data);
 		}
 
 		private static long LocalId(Object asset)

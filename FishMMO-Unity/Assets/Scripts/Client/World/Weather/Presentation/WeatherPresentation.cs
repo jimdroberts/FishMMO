@@ -33,9 +33,12 @@ namespace FishMMO.Client
 		private WeatherContext context;
 		private bool hasContext;
 		private float time;
-		// Made in Awake: the precipitation field allocates a MaterialPropertyBlock, which Unity
-		// refuses inside a MonoBehaviour's constructor (field initialisers run there).
+		// Made in Awake: these allocate a MaterialPropertyBlock, which Unity refuses inside a
+		// MonoBehaviour's constructor (field initialisers run there). The exception is thrown out of
+		// the constructor, so the field is left NULL and every later use of it throws instead —
+		// which reads as an unrelated NullReferenceException in whatever touched it first.
 		private PrecipitationField precipitation;
+		private PrecipitationSplashField splashes;
 		private SkyOcclusionMap occlusion;
 		private WeatherCoverMap coverMap;
 		private WeatherAudioPresenter audioPresenter;
@@ -89,6 +92,7 @@ namespace FishMMO.Client
 		private void EnsureParts()
 		{
 			precipitation = precipitation ?? new PrecipitationField();
+			splashes = splashes ?? new PrecipitationSplashField();
 			occlusion = occlusion ?? new SkyOcclusionMap();
 			coverMap = coverMap ?? new WeatherCoverMap();
 			audioPresenter = audioPresenter ?? new WeatherAudioPresenter(transform);
@@ -115,6 +119,7 @@ namespace FishMMO.Client
 			WeatherClient.AudioCue -= OnAudioCue;
 			RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
 			precipitation?.Dispose();
+			splashes?.Dispose();
 			occlusion?.Dispose();
 			coverMap?.Dispose();
 			audioPresenter?.Dispose();
@@ -228,7 +233,8 @@ namespace FishMMO.Client
 				}
 			}
 
-			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash);
+			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash,
+				hasContext ? context.Substance : null);
 			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
 			WeatherFogPresenter.Apply(shown, profile);
 			ApplyWind(shown);
@@ -261,7 +267,10 @@ namespace FishMMO.Client
 			// falls, and a shower that follows the cloud above you wants the field sampled on the
 			// CPU, which is work for when the cloud system has settled.
 			// this.context, not the render callback's parameter of the same name.
-			precipitation.Render(shown, camera, currentTier, Profile, time, hasContext ? this.context.Substance : null);
+			WeatherSubstance falling = hasContext ? this.context.Substance : null;
+			precipitation.Render(shown, camera, currentTier, Profile, time, falling);
+			// Where it lands. Needs the height map, so it draws nothing until that has been built.
+			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid, falling);
 		}
 
 		private void ApplyWind(in WeatherFrame frame)

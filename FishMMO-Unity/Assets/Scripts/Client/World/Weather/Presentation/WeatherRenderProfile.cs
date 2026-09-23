@@ -190,6 +190,9 @@ namespace FishMMO.Client
 	{
 		[Header("Precipitation")]
 		public Material PrecipitationMaterial;
+
+		[Tooltip("Rings bursting where the rain lands. Empty: no splashes.")]
+		public Material SplashMaterial;
 		public Texture2D PrecipitationAtlas;
 		public Texture2D Noise;
 		public PrecipitationLook Rain = PrecipitationLook.Rain();

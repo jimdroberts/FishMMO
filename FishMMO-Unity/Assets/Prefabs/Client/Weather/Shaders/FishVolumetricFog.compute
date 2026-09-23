@@ -1,0 +1,139 @@
+// Froxel volumetric fog: fog you can see light shafts inside, rather than a flat wash over the
+// screen (P5).
+//
+// The frustum is diced into a grid of voxels — froxels — that follow the camera, so the work is
+// fixed per frame and independent of how far anything is. Each froxel works out how much fog is in
+// it and how much light scatters out of it toward the viewer; a second pass walks each column from
+// the camera outward accumulating that light and the transmittance through it. The fullscreen apply
+// then just reads the volume at (uv, depth).
+//
+// WHY THIS IS THE CHEAP PATH, despite the name. 160 x 90 x 64 is 921,600 froxels at one sample
+// each, about 1M samples a frame at a FIXED cost. The volumetric cloud march already running is
+// 3.6M samples on the cheapest tier and 37M on the highest, and it scales with screen resolution.
+// Volumetric fog is a third of the cheapest thing already shipping.
+//
+// It needs compute, so it is WebGPU and desktop only. WebGL2 has no compute at all and falls back
+// to the analytic height fog, which is a full-screen pass with a closed-form integral and no loop.
+
+#pragma kernel Scatter
+#pragma kernel Integrate
+
+#pragma multi_compile_local _ FISH_VOLFOG_SHADOWS
+
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+
+// (scattered rgb, extinction) per froxel.
+RWTexture3D<float4> _FishVolFogScatter;
+// (accumulated in-scattered rgb, transmittance) per froxel.
+RWTexture3D<float4> _FishVolFogIntegrated;
+
+float4x4 _FishVolFogInverseVP;
+float4   _FishVolFogSize;      // xyz froxel counts, w unused
+float4   _FishVolFogParams;    // x density, y falloff height, z base height, w near plane
+float4   _FishVolFogRange;     // x near, y far, z depth curve exponent, w time
+float4   _FishVolFogAlbedo;    // rgb single-scattering albedo, a anisotropy g
+float4   _FishVolFogSunDir;    // xyz toward the light, w intensity
+float4   _FishVolFogSunColor;  // rgb light colour, a ambient floor
+float4   _FishVolFogCamera;    // xyz camera world position, w jitter
+
+/* Froxel slices are spaced exponentially, not evenly. Fog matters most within a few tens of metres
+ * and hardly changes out at the far plane, so even spacing spends most of its slices where nothing
+ * is happening and leaves the near field — the part filling the screen — with almost none. */
+float SliceDistance(float slice01)
+{
+    return _FishVolFogRange.x * pow(_FishVolFogRange.y / _FishVolFogRange.x, pow(slice01, _FishVolFogRange.z));
+}
+
+float3 FroxelWorld(uint3 id, float jitter)
+{
+    float2 uv = (id.xy + 0.5) / _FishVolFogSize.xy;
+    float slice01 = (id.z + 0.5 + jitter) / _FishVolFogSize.z;
+    float distance = SliceDistance(slice01);
+
+    // A ray through this froxel's centre, from the inverse view-projection.
+    float4 clip = float4(uv * 2.0 - 1.0, 0.5, 1.0);
+    #if UNITY_UV_STARTS_AT_TOP
+        clip.y = -clip.y;
+    #endif
+    float4 world = mul(_FishVolFogInverseVP, clip);
+    float3 farPoint = world.xyz / world.w;
+    float3 dir = normalize(farPoint - _FishVolFogCamera.xyz);
+    return _FishVolFogCamera.xyz + dir * distance;
+}
+
+/// Henyey-Greenstein: how much light scatters toward the viewer at this angle. Forward-biased,
+/// which is what puts the glow around a light seen through fog.
+float HenyeyGreenstein(float cosAngle, float g)
+{
+    float gg = g * g;
+    float denominator = 1.0 + gg - 2.0 * g * cosAngle;
+    return (1.0 - gg) / (4.0 * PI * max(1e-4, denominator * sqrt(max(1e-4, denominator))));
+}
+
+[numthreads(8, 8, 4)]
+void Scatter(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id >= (uint3)_FishVolFogSize.xyz))
+    {
+        return;
+    }
+
+    // Jittered along the slice so banding between slices averages away over frames instead of
+    // standing as visible shells in the air.
+    float jitter = (_FishVolFogCamera.w - 0.5);
+    float3 world = FroxelWorld(id, jitter);
+
+    // The same exponential height falloff the analytic pass uses, so the two agree about where fog
+    // lies and only differ in what they can do with it.
+    float height = exp(-(world.y - _FishVolFogParams.z) / max(1.0, _FishVolFogParams.y));
+    float density = max(0.0, _FishVolFogParams.x * height);
+
+    float3 toCamera = normalize(_FishVolFogCamera.xyz - world);
+    float cosAngle = dot(toCamera, normalize(_FishVolFogSunDir.xyz));
+    float phase = HenyeyGreenstein(cosAngle, _FishVolFogAlbedo.a);
+
+    float3 light = _FishVolFogSunColor.rgb * _FishVolFogSunDir.w * phase;
+    // An ambient floor, so fog in shadow is still lit by the sky rather than black.
+    light += _FishVolFogSunColor.rgb * _FishVolFogSunColor.a;
+
+    float3 scattered = light * _FishVolFogAlbedo.rgb * density;
+    _FishVolFogScatter[id] = float4(scattered, density);
+}
+
+[numthreads(8, 8, 1)]
+void Integrate(uint3 id : SV_DispatchThreadID)
+{
+    uint3 size = (uint3)_FishVolFogSize.xyz;
+    if (any(id.xy >= size.xy))
+    {
+        return;
+    }
+
+    float3 accumulated = 0.0;
+    float transmittance = 1.0;
+    float previous = 0.0;
+
+    for (uint z = 0; z < size.z; z++)
+    {
+        uint3 at = uint3(id.xy, z);
+        float4 slice = _FishVolFogScatter[at];
+
+        float distance = SliceDistance((z + 1.0) / _FishVolFogSize.z);
+        float thickness = max(1e-4, distance - previous);
+        previous = distance;
+
+        float extinction = max(1e-7, slice.a);
+        float sliceTransmittance = exp(-extinction * thickness);
+
+        /* The analytic integral of in-scattering across the slice, not scattered * thickness.
+         * Multiplying by thickness over-brightens thick slices badly — and the slices get thicker
+         * with distance by construction here, so the error grows exactly where the fog should be
+         * settling down. */
+        float3 sliceScattering = slice.rgb * (1.0 - sliceTransmittance) / extinction;
+
+        accumulated += sliceScattering * transmittance;
+        transmittance *= sliceTransmittance;
+
+        _FishVolFogIntegrated[at] = float4(accumulated, transmittance);
+    }
+}
