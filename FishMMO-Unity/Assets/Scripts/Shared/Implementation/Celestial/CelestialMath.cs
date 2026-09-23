@@ -570,7 +570,18 @@ namespace FishMMO.Shared.Celestial
 			{
 				if (candidate is StarBody star)
 				{
-					double d = Math.Max(1e-4, (Position(system, star, hours) - p).Magnitude);
+					/* Floored at the star's own surface, because that is the closest anything can
+					 * physically get to it and so the brightest its light can be. The floor used to
+					 * be an arbitrary 1e-4 AU — about 15,000 km, well inside any real star — which
+					 * meant a body that happened to coincide with one received 100,000,000 times the
+					 * home world's sunlight. That is not a number that stays put: insolation feeds
+					 * ClimateOffsets, which feeds the temperature, which feeds the weather driver,
+					 * so one piece of misplaced content produced a whole system of nonsense
+					 * rather than something merely very hot. Two bodies CAN coincide: a companion
+					 * star at its barycentre distance sits exactly where a planet is at epoch, which
+					 * is how this was found. */
+					double surfaceAu = Math.Max(1e-9, star.SkyRadiusKm / AuKm);
+					double d = Math.Max(surfaceAu, (Position(system, star, hours) - p).Magnitude);
 					total += star.Luminosity / (d * d);
 				}
 			}
@@ -578,6 +589,103 @@ namespace FishMMO.Shared.Celestial
 		}
 
 		/// <summary>The home world's starlight at its mean distance: the "1.0" every climate offset is measured from.</summary>
+		/// <summary>
+		/// A body's climate offsets averaged over its orbit, rather than at one moment of it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// What the TERRAIN should be built from. Biomes are the slow shape of a world — a forest
+		/// does not become tundra in winter — so they need the mean, while the weather rightly reads
+		/// the instantaneous value and gives the same world its seasons.
+		/// </para>
+		/// <para>
+		/// Sampled around the orbit rather than taken at hour zero, which would bake in whatever
+		/// phase the body happened to start at: on an eccentric orbit that is the difference between
+		/// a world's perihelion and its aphelion, and picking one of them arbitrarily would make a
+		/// world's biomes depend on where the epoch fell.
+		/// </para>
+		/// </remarks>
+		/// <param name="latitudeDegrees">
+		/// Where on the body, so the poles come out colder than the equator. Null averages the body
+		/// as a whole, which is what a question about the WORLD wants rather than about a place on it.
+		/// </param>
+		public static void MeanClimateOffsets(SolarSystemProfile system, WorldBody body, out float temperature, out float humidity, double? latitudeDegrees = null)
+		{
+			temperature = 0f;
+			humidity = 0f;
+			if (system == null || body == null)
+			{
+				return;
+			}
+			double period = OrbitHours(system, body);
+			if (double.IsInfinity(period) || double.IsNaN(period) || period <= 0.0)
+			{
+				ClimateOffsets(system, body, 0.0, out temperature, out humidity, latitudeDegrees);
+				return;
+			}
+			/* Sampled around the orbit, which is what makes this mean anything at a latitude: the
+			 * whole point of an axial tilt is that a pole leans into its sun for half a year and
+			 * away for the other half. One sample would catch a pole in perpetual summer or
+			 * perpetual winter and call that its climate. Eight is enough to average a tilt out
+			 * while still separating a genuinely cold pole from a warm equator. */
+			const int Samples = 8;
+			double t = 0.0, h = 0.0;
+			for (int i = 0; i < Samples; i++)
+			{
+				ClimateOffsets(system, body, period * i / Samples, out float ti, out float hi, latitudeDegrees);
+				t += ti;
+				h += hi;
+			}
+			temperature = (float)(t / Samples);
+			humidity = (float)(h / Samples);
+		}
+
+		/// <summary>
+		/// The temperature a standard-atmosphere world would have at this distance from the system's
+		/// centre, on the same -1..1 scale everything else uses.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The same arithmetic <see cref="ClimateOffsets"/> runs — fourth root of relative insolation
+		/// against the home world's mean — with the body replaced by a point at a radius. That is the
+		/// point of it: the goldilocks band drawn on the orrery and the biomes a world actually
+		/// resolves come out of ONE function, so a ring cannot promise a climate the ground then
+		/// contradicts.
+		/// </para>
+		/// <para>
+		/// Sums every star, so a binary's habitable band is the real one and not the primary's.
+		/// </para>
+		/// <para>
+		/// <b>A single star's brightness cancels out, and that is not a bug.</b> Everything here is
+		/// relative to the home world's own starlight, so making the one sun brighter warms the
+		/// reference by exactly as much and the band stays where it was — measured in AU it is
+		/// always about 0.52 to 2.30, with the home world's orbit inside it. The band moves when the
+		/// home world moves, or when a SECOND star is added and the two stop scaling together. That
+		/// follows from the home world being the definition of temperate, which is the same
+		/// assumption the biome envelopes are authored against.
+		/// </para>
+		/// </remarks>
+		public static float TemperatureAtDistance(SolarSystemProfile system, double au)
+		{
+			if (system == null)
+			{
+				return 0f;
+			}
+			double d = Math.Max(1e-6, au);
+			double total = 0.0;
+			foreach (CelestialBody candidate in system.Bodies)
+			{
+				if (candidate is StarBody star)
+				{
+					// From the system's centre, which is where the orrery draws its rings about.
+					total += star.Luminosity / (d * d);
+				}
+			}
+			double relative = total / Math.Max(1e-6, MeanHomeInsolation(system));
+			double t = 2.2 * (Math.Pow(Math.Max(0.0, relative), 0.25) - 1.0);
+			return (float)Math.Max(-1.0, Math.Min(1.0, t));
+		}
+
 		public static double MeanHomeInsolation(SolarSystemProfile system)
 		{
 			if (system == null || system.HomeWorld == null)
@@ -597,7 +705,21 @@ namespace FishMMO.Shared.Celestial
 		}
 
 		/// <summary>How much colder a latitude is than the equator at equinox, at most.</summary>
-		public const double LatitudeCooling = 0.6;
+		/// <remarks>
+		/// <para>
+		/// Measured, not chosen. At 0.6 the mean sea-level temperature ran from 0.33 at the equator
+		/// to −0.18 at the pole, and NOT ONE authored biome envelope fell inside that band: Jungle
+		/// wants 0.6, Desert 0.4, Tundra −0.5, Glacier −0.6. Every biome on every world was being
+		/// picked as a nearest miss in the temperate middle, so a pole and an equator resolved to
+		/// nearly the same ground and the cold biomes could only ever be painted by hand.
+		/// </para>
+		/// <para>
+		/// At 1.8, with a sea-level anchor of 0.8, the span runs 0.73 to −0.78 and the whole
+		/// authored range is reachable from latitude alone — real tropics, real ice caps. If the
+		/// biome envelopes are ever re-authored, re-measure this against them.
+		/// </para>
+		/// </remarks>
+		public const double LatitudeCooling = 1.8;
 
 		/// <summary>
 		/// The temperature shift of a latitude right now: from how high the sun climbs at noon,

@@ -45,6 +45,28 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Relative chance among biomes whose envelopes fit. 0 = never chosen by climate; placed by hand only.")]
 		[Min(0f)] public float SelectionWeight = 1f;
 
+		[Header("Where it can exist at all")]
+		/// <remarks>
+		/// <para>
+		/// The temperature and humidity envelope above says what climate a biome LIKES. These two
+		/// say what it physically requires, and they are not the same question: the temperature on
+		/// an airless moon at the right distance from its star is perfectly temperate, and a jungle
+		/// there is still absurd.
+		/// </para>
+		/// <para>
+		/// Kept as requirements on the biome rather than as a list of allowed biomes on each world.
+		/// A world states its own conditions once; every biome states its own needs once; the
+		/// resolver matches them. A list per world would be one entry per biome per body to
+		/// maintain, and every biome added later would have to be threaded back through every world
+		/// that ought to have it.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Air this biome needs. Vacuum-tolerant biomes (regolith, impact basin) leave every box ticked.")]
+		public BiomeAtmosphereRequirement Atmosphere = BiomeAtmosphereRequirement.Any;
+
+		[Tooltip("Needs liquid water on the surface. Off for deserts, regolith and anything cryogenic — a methane lake is not water.")]
+		public bool RequiresLiquidWater;
+
 		[Header("Climate variants")]
 		[Tooltip("How this biome reads under different climates. Empty uses the scene's default variants.")]
 		public List<BiomeClimateVariant> ClimateVariants = new List<BiomeClimateVariant>();

@@ -148,7 +148,7 @@ namespace FishMMO.Shared.Weather
 				WeatherLayerTemplate template = WeatherLayerTemplate.Get<WeatherLayerTemplate>(entry.TemplateID);
 				if (template != null && (float.IsNaN(temperature) || template.AllowsTemperature(temperature)))
 				{
-					accumulator.Add(template.Evaluate(intensity), 1f);
+					accumulator.Add(template.Evaluate(intensity), 1f, template.Substance);
 				}
 			}
 		}

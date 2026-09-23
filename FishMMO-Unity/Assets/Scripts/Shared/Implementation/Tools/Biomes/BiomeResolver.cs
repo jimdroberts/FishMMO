@@ -17,7 +17,13 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The biome for a height and climate reading, or null when no selectable biome is registered.</summary>
 		public static BiomeTemplate Select(float height, ClimateSample sample)
 		{
-			return Select(height, sample.Temperature, sample.Humidity, sample.ElevationTier);
+			return Select(height, sample.Temperature, sample.Humidity, sample.ElevationTier, BiomeWorldConditions.Earthlike);
+		}
+
+		/// <summary>The same, on a world that is not the home world.</summary>
+		public static BiomeTemplate Select(float height, ClimateSample sample, in BiomeWorldConditions world)
+		{
+			return Select(height, sample.Temperature, sample.Humidity, sample.ElevationTier, world);
 		}
 
 		/// <summary>The biome for a height, temperature and humidity under a climate's tier boundaries.</summary>
@@ -29,6 +35,26 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>The biome for a height, temperature, humidity and already-resolved elevation tier.</summary>
 		public static BiomeTemplate Select(float height, float temperature, float humidity, int elevationTier)
+		{
+			return Select(height, temperature, humidity, elevationTier, BiomeWorldConditions.Earthlike);
+		}
+
+		/// <summary>
+		/// The biome that best fits this spot on this world.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <paramref name="world"/> is the physical filter and is applied BEFORE the climate score,
+		/// because no amount of fitting the temperature makes a jungle possible in vacuum. The
+		/// climate envelope then decides among what is left.
+		/// </para>
+		/// <para>
+		/// This is what makes a body's biomes fall out of its orbit rather than out of a list:
+		/// distance from the star sets the temperature, the atmosphere and surface water set what
+		/// can live there, and the biomes select themselves.
+		/// </para>
+		/// </remarks>
+		public static BiomeTemplate Select(float height, float temperature, float humidity, int elevationTier, in BiomeWorldConditions world)
 		{
 			IReadOnlyList<BiomeTemplate> candidates = BiomeRegistry.Selectable;
 			if (candidates.Count == 0)
@@ -44,6 +70,10 @@ namespace FishMMO.Shared.Biomes
 				for (int i = 0; i < candidates.Count; i++)
 				{
 					BiomeTemplate biome = candidates[i];
+					if (!world.Allows(biome))
+					{
+						continue;
+					}
 					if (!Eligible(biome, height, elevationTier, pass))
 					{
 						continue;

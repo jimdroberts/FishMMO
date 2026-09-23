@@ -203,6 +203,69 @@ namespace FishMMO.Shared
 		/// The climate at a normalised height and latitude right now: the climate asset's reading
 		/// plus this scene's runtime offsets.
 		/// </summary>
+		/// <summary>
+		/// How much colder or wetter this scene's world is than the home world, from where it sits.
+		/// </summary>
+		/// <remarks>
+		/// Zero for a scene on the home world, and zero when there is no solar system loaded, so
+		/// nothing authored against the old behaviour moves. Cached per frame's worth of calls would
+		/// be premature: this is a handful of multiplies and the biome sampler is not a hot path.
+		/// </remarks>
+		public void CelestialOffsets(out float temperature, out float humidity)
+		{
+			CelestialOffsets(0.5f, out temperature, out humidity);
+		}
+
+		/// <summary>
+		/// The same, at a point across the scene's own biome map.
+		/// </summary>
+		/// <param name="latitude01">
+		/// 0 at the map's north edge, 1 at its south, 0.5 at the scene's own latitude. Spread over
+		/// <see cref="ClimateSettings.MapLatitudeSpanDegrees"/>, so one map can run from forest to
+		/// tundra across its width.
+		/// </param>
+		public void CelestialOffsets(float latitude01, out float temperature, out float humidity)
+		{
+			temperature = 0f;
+			humidity = 0f;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			WorldBody body = Body;
+			if (system == null || body == null)
+			{
+				return;
+			}
+			/* At THIS scene's latitude, which is what gives a body more than one climate.
+			 *
+			 * The poles are cold because the sun never climbs far above their horizon, not because
+			 * they are further from it — the difference in distance across a planet is nothing, and
+			 * the difference in the angle light arrives at is everything. CelestialMath.LatitudeTemperature
+			 * already works it out properly, from the sun's noon altitude against the body's own
+			 * axial tilt and where it is in its orbit; it simply was not being asked.
+			 *
+			 * The home world is included now rather than skipped. It has a tilt of 23.4° and poles
+			 * of its own, and exempting it meant every scene on it resolved the same temperate
+			 * biome set from the equator to the ice cap. */
+			/* The scene's own latitude, offset by where in its map this point is. At true scale a
+			 * 4 km scene spans about 0.04° and the gradient would be invisible, so the span is
+			 * authored rather than derived: a scene that wants to read as a climate transition says
+			 * how many degrees it stands for, and one that does not sets it to zero. */
+			float span = Climate != null ? Climate.MapLatitudeSpanDegrees : 0f;
+			double latitude = Latitude + (Mathf.Clamp01(latitude01) - 0.5f) * span;
+			CelestialMath.MeanClimateOffsets(system, body, out temperature, out humidity, latitude);
+		}
+
+		/// <summary>What this scene's world physically offers, for the biome resolver.</summary>
+		public BiomeWorldConditions WorldConditions
+		{
+			get
+			{
+				WorldBody body = Body;
+				return body == null
+					? BiomeWorldConditions.Earthlike
+					: BiomeWorldConditions.For(SolarSystemProfile.Active, body);
+			}
+		}
+
 		public ClimateSample SampleClimate(float height01, float latitude01)
 		{
 			ClimateSample sample = Climate != null
@@ -213,8 +276,19 @@ namespace FishMMO.Shared
 					Humidity = Mathf.Clamp((1f - height01) * 0.3f, -1f, 1f),
 					ElevationTier = ClimateSettings.TierForHeight(height01, null),
 				};
-			sample.Temperature = Mathf.Clamp(sample.Temperature + RuntimeTemperatureOffset, -1f, 1f);
-			sample.Humidity = Mathf.Clamp(sample.Humidity + RuntimeHumidityOffset, -1f, 1f);
+			/* The world this scene is ON, before anything local to it.
+			 *
+			 * Without this a scene on a frozen outer moon resolved exactly the same biomes as one on
+			 * the home world: SampleClimate read only the authored ClimateSettings, so the body's
+			 * distance from its star — the thing that actually decides whether anything can live
+			 * there — reached the weather but never the ground. A designer had to hand-author a
+			 * colder ClimateSettings per scene and keep it in step with the orbit by hand.
+			 *
+			 * The offsets are the body's mean, so latitude and elevation still do their own work on
+			 * top; and they are derived from the orbit, so moving a planet moves its biomes. */
+			CelestialOffsets(latitude01, out float bodyTemperature, out float bodyHumidity);
+			sample.Temperature = Mathf.Clamp(sample.Temperature + bodyTemperature + RuntimeTemperatureOffset, -1f, 1f);
+			sample.Humidity = Mathf.Clamp(sample.Humidity + bodyHumidity + RuntimeHumidityOffset, -1f, 1f);
 			return sample;
 		}
 

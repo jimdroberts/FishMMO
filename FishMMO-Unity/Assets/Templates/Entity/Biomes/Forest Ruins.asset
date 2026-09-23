@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Forest Ruins
   m_EditorClassIdentifier: 
   DisplayName: Forest Ruins
-  Description: 'Ancient structures consumed by forest — roots through stone, green fading'
+  Description: "Ancient structures consumed by forest \u2014 roots through stone,
+    green fading"
   BiomeColorId: {r: 0.3, g: 0.45, b: 0.25, a: 1}
   GizmoColor: {r: 0.4, g: 0.55, b: 0.35, a: 1}
   ElevationTier: 5
@@ -24,6 +25,8 @@ MonoBehaviour:
   MinHumidity: 0.2
   MaxHumidity: 0.9
   SelectionWeight: 0
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants: []
   Naming:
     Phonology:
@@ -158,7 +161,15 @@ MonoBehaviour:
       - Silent
       - Ancient
       - Beautiful
-      Description: 'Ancient structures consumed by forest — roots through stone, green fading'
+      Description: "Ancient structures consumed by forest \u2014 roots through stone,
+        green fading"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

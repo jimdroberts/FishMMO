@@ -30,6 +30,47 @@ namespace FishMMO.Client
 		[Tooltip("Fog colour this kind of weather pushes toward.")]
 		public Color FogColor = new Color(0.6f, 0.65f, 0.7f, 1f);
 
+		/// <summary>
+		/// This look as the substance makes it: the kind still decides how it falls, the substance
+		/// what it is.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A copy, never an edit in place. The looks live on the render profile, which is a shared
+		/// asset — tinting one would tint water snow everywhere the moment a nitrogen flurry blew
+		/// through, and it would stay tinted.
+		/// </para>
+		/// <para>
+		/// The substance SCALES rather than replaces the motion: nitrogen snow falling in thin air
+		/// is faster than water snow in thick air, but it is still a flake drifting and not a
+		/// raindrop. Keeping the kind's numbers as the base is what stops a substance quietly
+		/// turning one kind of weather into another.
+		/// </para>
+		/// </remarks>
+		public PrecipitationLook As(WeatherSubstance substance)
+		{
+			if (substance == null)
+			{
+				return this;
+			}
+			return new PrecipitationLook
+			{
+				AtlasRow = AtlasRow,
+				Size = Size,
+				Stretch = Mathf.Max(1f, Stretch * Mathf.Max(0f, substance.StretchScale)),
+				FallSpeed = FallSpeed * Mathf.Max(0.01f, substance.FallSpeedScale),
+				Sway = Sway,
+				SwayFrequency = SwayFrequency,
+				WindResponse = Mathf.Clamp(WindResponse * Mathf.Max(0f, substance.WindResponseScale), 0f, 2f),
+				// The substance's own colour outright: this is the one thing it IS rather than scales.
+				Tint = substance.Tint,
+				Alpha = Alpha,
+				// Something that glows lights itself; the rest keep the kind's brightness.
+				Brightness = Brightness + substance.Emission * 2f,
+				FogColor = substance.FogColor,
+			};
+		}
+
 		public static PrecipitationLook Rain() => new PrecipitationLook { AtlasRow = 0, Size = new Vector2(0.018f, 0.045f), Stretch = 34f, FallSpeed = new Vector2(7f, 11f), WindResponse = 0.35f, Tint = new Color(0.78f, 0.83f, 0.92f, 1f), Alpha = 0.7f, FogColor = new Color(0.55f, 0.6f, 0.66f, 1f) };
 		public static PrecipitationLook Snow() => new PrecipitationLook { AtlasRow = 1, Size = new Vector2(0.03f, 0.08f), Stretch = 1f, FallSpeed = new Vector2(0.8f, 1.4f), Sway = 0.35f, SwayFrequency = 0.8f, WindResponse = 0.9f, Tint = Color.white, Alpha = 0.9f, FogColor = new Color(0.82f, 0.85f, 0.9f, 1f) };
 		public static PrecipitationLook Hail() => new PrecipitationLook { AtlasRow = 2, Size = new Vector2(0.03f, 0.06f), Stretch = 1f, FallSpeed = new Vector2(10f, 16f), WindResponse = 0.2f, Tint = new Color(0.9f, 0.95f, 1f, 1f), Alpha = 0.95f, FogColor = new Color(0.6f, 0.64f, 0.7f, 1f) };

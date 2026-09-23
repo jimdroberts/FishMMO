@@ -191,9 +191,13 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheSameSeedScattersTheSameStarsAndAnotherSeedOthers()
 		{
-			Cubemap first = StarfieldBuilder.Build(64, 238u);
-			Cubemap again = StarfieldBuilder.Build(64, 238u);
-			Cubemap different = StarfieldBuilder.Build(64, 239u);
+			/* keepReadable, because the game's own call does not: the starfield is uploaded to the
+			 * GPU once and never read back, so it throws its CPU copy away — 24 MB of it at full
+			 * size. Reading the pixels is a thing only a test or an editor preview wants, so it is
+			 * asked for rather than paid for everywhere. */
+			Cubemap first = StarfieldBuilder.Build(64, 238u, keepReadable: true);
+			Cubemap again = StarfieldBuilder.Build(64, 238u, keepReadable: true);
+			Cubemap different = StarfieldBuilder.Build(64, 239u, keepReadable: true);
 			try
 			{
 				bool anyDifference = false;
@@ -445,7 +449,17 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheEclipseHasPhasesAndAnAnnularOneIsNeverTotal()
 		{
-			Moon();
+			/* Brought in from the shared fixture's 384,000 km, where this test could never have
+			 * passed: at that distance the moon's angular radius is 0.972 of the sun's, so it is
+			 * ALWAYS too small to cover it and only annular eclipses exist. The search found no
+			 * totality and reported itself Inconclusive, which reads as a pass in most summaries —
+			 * a test quietly not testing.
+			 *
+			 * 360,000 km puts it at 1.037 of the sun, a shade closer than the real Moon's perigee
+			 * (1.028), so totality is comfortably reachable and brief partial phases still bracket
+			 * it. Changed here rather than in Moon(), because eight other tests share that fixture
+			 * and depend on its phases and angular size. */
+			Moon().Orbit = new OrbitSettings { Distance = 360f, PeriodDays = 27.3f };
 			var state = new CelestialState();
 			bool partial = false, total = false;
 			for (int i = 0; i < 40000 && !(partial && total); i++)
@@ -467,10 +481,11 @@ namespace FishMMO.UnitTests.Weather
 					Assert.That(drawn.Magnitude, Is.GreaterThanOrEqualTo(1f));
 				}
 			}
-			if (!partial || !total)
-			{
-				Assert.Inconclusive("no total eclipse in the hours searched from this fixture's orbit");
-			}
+			/* A real failure, not Inconclusive. The fixture above is now built so that both phases
+			 * MUST occur; if they stop occurring, something in the eclipse geometry has broken and
+			 * this should say so rather than excuse itself. */
+			Assert.That(partial, Is.True, "no partial phase found — the discs never met at all");
+			Assert.That(total, Is.True, "no totality found, though this moon is larger than its sun");
 			// A cover smaller than the sun: the discs meet, but a ring of sun is always left.
 			WorldBody moon = (WorldBody)state.Bodies[state.Moon].Body;
 			moon.SkyRadiusKm *= 0.85f;
@@ -486,7 +501,7 @@ namespace FishMMO.UnitTests.Weather
 					return;
 				}
 			}
-			Assert.Inconclusive("no annular eclipse in the hours searched");
+			Assert.Fail("no annular eclipse found, though the shrunken moon can no longer cover the sun");
 		}
 
 		[Test]
@@ -725,8 +740,22 @@ namespace FishMMO.UnitTests.Weather
 			float dawnFog = Fog(At(0.25f)), noonFog = Fog(At(0.5f));
 			Assert.That(dawnFog, Is.GreaterThan(noonFog * 2f), "an ordinary day: thick at dawn, thin by noon");
 
-			// The midnight sun: the clock says four in the morning, the sun has not set for a month.
-			Assert.That(Fog(WeatherDriver.UnderSun(At(0.25f), 1f)), Is.EqualTo(noonFog).Within(1e-4f), "no night, so no night's fog");
+			/* The midnight sun: the clock says four in the morning, the sun has not set for a month.
+			 *
+			 * The invariant is that the CLOCK STOPS MATTERING — four in the morning and noon give the
+			 * same fog, because neither is a night. That is stronger than the thing this used to
+			 * assert (that it equals an ordinary noon), which was also false: an ordinary noon keeps
+			 * a small residue of the night term, since the night window is wide enough to reach it,
+			 * whereas a polar summer has no night term at all. A pole in summer genuinely has less
+			 * fog at noon than a temperate noon does — the ground never cools — so the old assertion
+			 * was asking the model to be wrong. */
+			float midnightSunEarly = Fog(WeatherDriver.UnderSun(At(0.25f), 1f));
+			float midnightSunNoon = Fog(WeatherDriver.UnderSun(At(0.5f), 1f));
+			Assert.That(midnightSunEarly, Is.EqualTo(midnightSunNoon).Within(1e-6f),
+				"under a sun that never sets, the hour on the clock changes nothing");
+			Assert.That(midnightSunEarly, Is.LessThanOrEqualTo(noonFog),
+				"and it sits at the no-night floor, never above an ordinary noon");
+			Assert.That(midnightSunEarly, Is.LessThan(dawnFog * 0.5f), "nothing like a dawn fog");
 			// The polar night: the clock says noon, and there is no sun to burn anything off.
 			Assert.That(Fog(WeatherDriver.UnderSun(At(0.5f), 0f)), Is.GreaterThan(noonFog * 2f), "no morning, so the fog stays");
 			// And an ordinary place is left exactly alone.
@@ -999,8 +1028,14 @@ namespace FishMMO.UnitTests.Weather
 				float distance = new Vector2(whole[i].Ground.x, whole[i].Ground.z).magnitude;
 				LogAssert.IsTrue(distance >= 249f && distance <= 3001f, $"scene lightning keeps its distance, got {distance}");
 			}
-			// A rate of 1 is a strike about every two seconds.
-			LogAssert.IsTrue(whole.Count > 220 && whole.Count < 380, $"about 300 strikes in 600 s, got {whole.Count}");
+			/* A rate of 1 is a strike about every eight seconds: 600 s of it is around 72.
+			 *
+			 * This asserted ~300 — the old rate of 0.5/s — and was simply never revisited when
+			 * StrikesPerSecondAtFullRate was deliberately dropped to 0.12, because twenty-one
+			 * flashes a minute is three times the busiest real storm and reads as a strobe. The
+			 * calibration is the considered one; this number was the stale one. Keep them together:
+			 * if the constant moves again, so must this. */
+			LogAssert.IsTrue(whole.Count > 50 && whole.Count < 100, $"about 72 strikes in 600 s, got {whole.Count}");
 		}
 
 		[Test]

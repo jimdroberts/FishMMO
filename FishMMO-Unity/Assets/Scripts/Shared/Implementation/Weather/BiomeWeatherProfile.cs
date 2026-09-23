@@ -99,7 +99,7 @@ namespace FishMMO.Shared.Weather
 				WeatherPresetLayer layer = Background[i];
 				if (layer?.Template != null)
 				{
-					accumulator.Add(layer.Template.Evaluate(layer.Intensity), 1f);
+					accumulator.Add(layer.Template.Evaluate(layer.Intensity), 1f, layer.Template.Substance);
 				}
 			}
 		}

@@ -33,6 +33,21 @@ namespace FishMMO.Shared.Weather
 	public class WeatherLayerTemplate : CachedScriptableObject<WeatherLayerTemplate>, ICachedObject
 	{
 		public WeatherLayerKind Kind;
+
+		/// <summary>
+		/// What this layer is made of. Null is the kind's own default — water rain, water snow,
+		/// volcanic ash.
+		/// </summary>
+		/// <remarks>
+		/// The substance never changes how the layer blends: <see cref="Kind"/> decides that, and
+		/// the mix keeps its fixed five. It decides what the stuff IS — the colour, the sound, the
+		/// cover it leaves, what it melts at and whether it can be breathed. Nitrogen snow is
+		/// <see cref="WeatherLayerKind.Snow"/> with a substance; cryovolcanic tephra is
+		/// <see cref="WeatherLayerKind.Ash"/> with one.
+		/// </remarks>
+		[Tooltip("What this layer is made of. Empty means the kind's default: water rain, water snow, volcanic ash.")]
+		public WeatherSubstance Substance;
+
 		public List<WeatherChannelCurve> Channels = new List<WeatherChannelCurve>();
 		[Tooltip("Coldest local temperature this layer can happen at.")]
 		[Range(-1f, 1f)] public float MinTemperature = -1f;

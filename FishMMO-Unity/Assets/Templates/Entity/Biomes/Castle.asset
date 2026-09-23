@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Castle
   m_EditorClassIdentifier: 
   DisplayName: Castle
-  Description: 'Stone fortification — battlements, towers, and echoing halls'
+  Description: "Stone fortification \u2014 battlements, towers, and echoing halls"
   BiomeColorId: {r: 0.55, g: 0.55, b: 0.6, a: 1}
   GizmoColor: {r: 0.7, g: 0.7, b: 0.75, a: 1}
   ElevationTier: 5
@@ -24,6 +24,8 @@ MonoBehaviour:
   MinHumidity: -0.5
   MaxHumidity: 0.5
   SelectionWeight: 0
+  Atmosphere: 15
+  RequiresLiquidWater: 0
   ClimateVariants: []
   Naming:
     Phonology:
@@ -158,7 +160,14 @@ MonoBehaviour:
       - Towering
       - Magnificent
       - Grim
-      Description: 'Stone fortification — battlements, towers, and echoing halls'
+      Description: "Stone fortification \u2014 battlements, towers, and echoing halls"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

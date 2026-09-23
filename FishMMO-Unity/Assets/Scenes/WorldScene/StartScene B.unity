@@ -3976,11 +3976,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldDayNightCycle
   DayNightCycle: 1
-  SunLight: {fileID: 5871419508359712388}
-  MoonLight: {fileID: 5871419508359712387}
   SkyOverride: {fileID: 0}
   RotateObjects:
-  - {fileID: 5871419508359712386}
+  - {fileID: 0}
   - {fileID: 782950642}
   - {fileID: 961621781}
   - {fileID: 1573858113}
@@ -6583,92 +6581,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2141794242}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!1001 &5871419508359712385
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3339543120605955018, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6291631714174163124, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-        type: 3}
-      propertyPath: m_Name
-      value: SunAndMoon
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: d9b40c4bb7d3f5d4c965814c5433ce65, type: 3}
---- !u!1 &5871419508359712386 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 6291631714174163124, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-    type: 3}
-  m_PrefabInstance: {fileID: 5871419508359712385}
-  m_PrefabAsset: {fileID: 0}
---- !u!108 &5871419508359712387 stripped
-Light:
-  m_CorrespondingSourceObject: {fileID: 5183813577060795889, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-    type: 3}
-  m_PrefabInstance: {fileID: 5871419508359712385}
-  m_PrefabAsset: {fileID: 0}
---- !u!108 &5871419508359712388 stripped
-Light:
-  m_CorrespondingSourceObject: {fileID: 4218097068567984847, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-    type: 3}
-  m_PrefabInstance: {fileID: 5871419508359712385}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -6679,6 +6591,5 @@ SceneRoots:
   - {fileID: 700411445}
   - {fileID: 347432129}
   - {fileID: 709083585}
-  - {fileID: 5871419508359712385}
   - {fileID: 849065438}
   - {fileID: 632550202}

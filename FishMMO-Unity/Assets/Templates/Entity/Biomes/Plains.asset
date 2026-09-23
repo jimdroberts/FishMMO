@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Plains
   m_EditorClassIdentifier: 
   DisplayName: Plains
-  Description: 'Flat grasslands — rolling hills, hidden barrows beneath golden fields'
+  Description: "Flat grasslands \u2014 rolling hills, hidden barrows beneath golden
+    fields"
   BiomeColorId: {r: 0.5, g: 0.8, b: 0.4, a: 1}
   GizmoColor: {r: 0.6, g: 0.9, b: 0.5, a: 1}
   ElevationTier: 4
@@ -24,6 +25,8 @@ MonoBehaviour:
   MinHumidity: -0.3
   MaxHumidity: 0.3
   SelectionWeight: 1
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants:
   - Name: Frozen
     MinTemperature: -1
@@ -186,7 +189,15 @@ MonoBehaviour:
       - Amber
       - Flat
       - Horizon-stretching
-      Description: 'Flat grasslands — rolling hills, hidden barrows beneath golden fields'
+      Description: "Flat grasslands \u2014 rolling hills, hidden barrows beneath
+        golden fields"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: ac571e023977e824b8d127213edebc1f, type: 3}
     normalTexture: {fileID: 0}
@@ -209,6 +220,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -232,6 +244,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -254,6 +267,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -277,6 +291,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

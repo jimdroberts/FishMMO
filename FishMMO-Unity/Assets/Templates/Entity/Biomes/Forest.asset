@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Forest
   m_EditorClassIdentifier: 
   DisplayName: Forest
-  Description: 'Dense temperate forests — old growth, dark canopy, ancient roots'
+  Description: "Dense temperate forests \u2014 old growth, dark canopy, ancient roots"
   BiomeColorId: {r: 0.2, g: 0.5, b: 0.2, a: 1}
   GizmoColor: {r: 0.2, g: 0.6, b: 0.2, a: 1}
   ElevationTier: 5
@@ -24,6 +24,8 @@ MonoBehaviour:
   MinHumidity: 0.4
   MaxHumidity: 0.9
   SelectionWeight: 1
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants:
   - Name: Frozen
     MinTemperature: -1
@@ -190,7 +192,15 @@ MonoBehaviour:
       - Dappled
       - Untouched
       - Primordial
-      Description: 'Dense temperate forests — old growth, dark canopy, ancient roots'
+      Description: "Dense temperate forests \u2014 old growth, dark canopy, ancient
+        roots"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

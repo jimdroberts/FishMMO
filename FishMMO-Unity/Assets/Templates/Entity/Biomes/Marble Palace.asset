@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Marble Palace
   m_EditorClassIdentifier: 
   DisplayName: Marble Palace
-  Description: 'Opulent marble architecture — columns, mosaics, divine grandeur'
+  Description: "Opulent marble architecture \u2014 columns, mosaics, divine grandeur"
   BiomeColorId: {r: 0.9, g: 0.9, b: 0.85, a: 1}
   GizmoColor: {r: 1, g: 1, b: 0.95, a: 1}
   ElevationTier: 5
@@ -24,6 +24,8 @@ MonoBehaviour:
   MinHumidity: -0.4
   MaxHumidity: 0.4
   SelectionWeight: 0
+  Atmosphere: 15
+  RequiresLiquidWater: 0
   ClimateVariants: []
   Naming:
     Phonology:
@@ -158,7 +160,14 @@ MonoBehaviour:
       - Alabaster
       - Splendid
       - Majestic
-      Description: 'Opulent marble architecture — columns, mosaics, divine grandeur'
+      Description: "Opulent marble architecture \u2014 columns, mosaics, divine grandeur"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

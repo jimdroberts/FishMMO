@@ -133,7 +133,11 @@ namespace FishMMO.Client
 			return new Vector3(dir.x * wind, -fall, dir.y * wind);
 		}
 
-		public void Render(in WeatherFrame frame, Camera camera, WeatherTierSettings tier, WeatherRenderProfile profile, float time)
+		/// <param name="substance">
+		/// What is falling, or null for the kinds' own looks. The kind still decides how it falls;
+		/// the substance decides what it is — see <see cref="PrecipitationLook.As"/>.
+		/// </param>
+		public void Render(in WeatherFrame frame, Camera camera, WeatherTierSettings tier, WeatherRenderProfile profile, float time, WeatherSubstance substance = null)
 		{
 			Choose(frame, drawn);
 			if (drawn.Count == 0 || camera == null || profile.PrecipitationMaterial == null)
@@ -160,7 +164,7 @@ namespace FishMMO.Client
 			};
 			foreach ((WeatherChannel kind, float amount) in drawn)
 			{
-				PrecipitationLook look = profile.LookOf(kind);
+				PrecipitationLook look = profile.LookOf(kind).As(substance);
 				float drop = frame[WeatherChannel.DropSize];
 				Vector3 fall = FallVelocity(frame, look, gust);
 				block.Clear();

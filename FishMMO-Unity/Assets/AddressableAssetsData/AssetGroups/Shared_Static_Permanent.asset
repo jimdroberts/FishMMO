@@ -2979,12 +2979,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d9b40c4bb7d3f5d4c965814c5433ce65
-    m_Address: SunAndMoon
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: da0784a63e774c6583670b281a304ae3
     m_Address: Undead
     m_ReadOnly: 0

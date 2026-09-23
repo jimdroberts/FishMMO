@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Farmland
   m_EditorClassIdentifier: 
   DisplayName: Farmland
-  Description: 'Agricultural areas — rich earth, buried cellars, ancient foundations'
+  Description: "Agricultural areas \u2014 rich earth, buried cellars, ancient foundations"
   BiomeColorId: {r: 0.7, g: 0.8, b: 0.4, a: 1}
   GizmoColor: {r: 0.8, g: 0.9, b: 0.5, a: 1}
   ElevationTier: 4
@@ -24,6 +24,8 @@ MonoBehaviour:
   MinHumidity: 0.3
   MaxHumidity: 0.7
   SelectionWeight: 0
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants: []
   Naming:
     Phonology:
@@ -158,7 +160,15 @@ MonoBehaviour:
       - Neglected
       - Sun-warmed
       - Humble
-      Description: 'Agricultural areas — rich earth, buried cellars, ancient foundations'
+      Description: "Agricultural areas \u2014 rich earth, buried cellars, ancient
+        foundations"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 4201eec06e10cfa499e99f76d465f474, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +191,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +215,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +238,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +262,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

@@ -53,7 +53,13 @@ namespace FishMMO.Client
 		/// <summary>The n-th number, 0..1, of the sequence a seed gives. Stateless, so it cannot drift.</summary>
 		private static float Draw(uint seed, uint index) => SkySchedule.Unit(SkySchedule.Hash(seed ^ 0x57A25EEDu, index));
 
-		public static Cubemap Build(int size, uint seed, int stars = DefaultStars)
+		/// <param name="keepReadable">
+		/// Keep the CPU-side copy of the pixels. False in the game, where the starfield is uploaded
+		/// once and never read back, and the copy is pure waste — a 1024 cubemap is 24 MB of it. True
+		/// for anything that needs to look at the result: a test checking that a seed is
+		/// reproducible, or an editor tool previewing a sky.
+		/// </param>
+		public static Cubemap Build(int size, uint seed, int stars = DefaultStars, bool keepReadable = false)
 		{
 			size = Mathf.ClosestPowerOfTwo(Mathf.Clamp(size, 64, 2048));
 			var faces = new Color32[6][];
@@ -96,7 +102,8 @@ namespace FishMMO.Client
 				}
 				cubemap.SetPixels(colors, (CubemapFace)f);
 			}
-			cubemap.Apply(false, true);
+			// makeNoLongerReadable: the CPU copy goes unless somebody asked to keep it.
+			cubemap.Apply(false, !keepReadable);
 			return cubemap;
 		}
 

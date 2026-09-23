@@ -73,6 +73,26 @@ namespace FishMMO.Shared.Celestial
 		private const float SunsetGlow = 1.103f;
 
 		// What is left when the sun is eighteen degrees down: airglow and starlight.
+		/// <summary>
+		/// The zenith luminance at which daylight has just washed the stars out. Above this, none
+		/// show; at zero brightness, all of them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Measured against what this model actually produces at a 60° sun, rather than picked:
+		/// standard air 0.454, thin air 0.135, thin air full of dust 0.255, thick air 0.804. At 0.22
+		/// clear thin air shows the stars at about 0.39 and everything else shows none — including a
+		/// thin sky in a dust storm, which is right: it is the dust that is hiding them, and the
+		/// same world is starry again once it settles.
+		/// </para>
+		/// <para>
+		/// It was 0.12, which is BELOW thin air's own 0.135, so the one case the daylight-stars term
+		/// exists for was the one case it could never fire in. Anything changing the zenith terms
+		/// above should re-measure this rather than assume it still holds.
+		/// </para>
+		/// </remarks>
+		private const float DaylightStarCeiling = 0.22f;
+
 		private static readonly Color NightZenith = new Color(0.01f, 0.012f, 0.03f);
 		private static readonly Color NightHorizon = new Color(0.02f, 0.025f, 0.05f);
 
@@ -215,7 +235,7 @@ namespace FishMMO.Shared.Celestial
 			// Stars: out once the sun is well down, as ever — and out in daylight too where the air is
 			// too thin to hide them, which is how bright the sky overhead is and nothing else.
 			float byNight = Mathf.Clamp01(Mathf.InverseLerp(-2f, -14f, sunAltitude));
-			float throughDay = 1f - Mathf.Clamp01(Luminance(zenith) / 0.12f);
+			float throughDay = 1f - Mathf.Clamp01(Luminance(zenith) / DaylightStarCeiling);
 
 			return new SkySample
 			{

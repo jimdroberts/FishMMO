@@ -27,6 +27,16 @@ namespace FishMMO.Shared.WorldDesign
 		public float ObserverLongitude { get; set; }
 		public float Zoom { get; set; } = 1f;
 
+		/// <summary>
+		/// Draw the climate bands: a ring for every temperature a world could have at that distance,
+		/// with the liquid-water band picked out. Off by default — it is an analysis overlay, not
+		/// part of reading the orrery.
+		/// </summary>
+		public bool ShowHeatMap { get; set; }
+
+		/// <summary>Draw the goldilocks annulus on its own, without the full heat map.</summary>
+		public bool ShowGoldilocks { get; set; }
+
 		/// <summary>Raised when a body is clicked.</summary>
 		public event Action<CelestialBody> BodyClicked;
 
@@ -176,6 +186,13 @@ namespace FishMMO.Shared.WorldDesign
 			float scale = layoutScale;
 			Painter2D painter = context.painter2D;
 
+			/* Under everything else, so the bodies and their orbits read on top of it — the bands are
+			 * background, and a planet drawn beneath its own climate ring would be unreadable. */
+			if (ShowHeatMap || ShowGoldilocks)
+			{
+				DrawClimateBands(painter, centre, scale);
+			}
+
 			// Belts: a scatter of their asteroids.
 			foreach (AsteroidBelt belt in System.AsteroidBelts)
 			{
@@ -317,6 +334,143 @@ namespace FishMMO.Shared.WorldDesign
 			painter.LineTo(end - along * 1.5f - across * 2f);
 			painter.ClosePath();
 			painter.Fill();
+		}
+
+		/// <summary>
+		/// Rings of colour for the temperature a world would have at each distance, and the band
+		/// where water is liquid.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>It asks the same question the biome resolver does.</b> The temperature at a radius is
+		/// <see cref="CelestialMath.TemperatureAtDistance"/>, the same fourth-root-of-insolation the
+		/// climate offsets use, so a ring's colour and a world's actual biomes cannot disagree. The
+		/// goldilocks band is not a separate calculation either: it is exactly where that
+		/// temperature falls inside the range <c>BiomeWorldConditions.HasLiquidWater</c> accepts.
+		/// </para>
+		/// <para>
+		/// Drawn as filled arcs from the outside in, so each ring covers the one beyond it and the
+		/// whole disc is painted with two hundred strokes rather than a texture. At √AU scale the
+		/// inner rings are naturally wider on screen, which is where the temperature changes fastest.
+		/// </para>
+		/// </remarks>
+		private void DrawClimateBands(Painter2D painter, Vector2 centre, float scale)
+		{
+			double outer = OutermostAu();
+			if (outer <= 0.0)
+			{
+				return;
+			}
+
+			const int Rings = 200;
+			for (int i = Rings; i >= 1; i--)
+			{
+				double au = outer * i / Rings;
+				float radius = (float)(Math.Sqrt(au) * scale);
+				if (radius < 1f)
+				{
+					continue;
+				}
+				float t = CelestialMath.TemperatureAtDistance(System, au);
+				bool liquid = t > LiquidWaterMin && t < LiquidWaterMax;
+
+				if (ShowHeatMap)
+				{
+					painter.fillColor = HeatColor(t, liquid);
+				}
+				else
+				{
+					// Goldilocks only: the band, and nothing else painted at all.
+					if (!liquid)
+					{
+						continue;
+					}
+					painter.fillColor = new Color(0.30f, 0.75f, 0.45f, 0.20f);
+				}
+				painter.BeginPath();
+				painter.Arc(centre, radius, 0f, 360f);
+				painter.Fill();
+			}
+
+			// The band's edges, so where it starts and stops is readable rather than inferred.
+			if (ShowGoldilocks || ShowHeatMap)
+			{
+				painter.strokeColor = new Color(0.45f, 0.95f, 0.60f, 0.85f);
+				painter.lineWidth = 1.5f;
+				foreach (double edge in new[] { EdgeAu(outer, LiquidWaterMax), EdgeAu(outer, LiquidWaterMin) })
+				{
+					if (edge <= 0.0)
+					{
+						continue;
+					}
+					float r = (float)(Math.Sqrt(edge) * scale);
+					painter.BeginPath();
+					painter.Arc(centre, r, 0f, 360f);
+					painter.Stroke();
+				}
+			}
+		}
+
+		/// <summary>The same thresholds <c>BiomeWorldConditions.HasLiquidWater</c> uses.</summary>
+		private const float LiquidWaterMin = -0.75f, LiquidWaterMax = 0.85f;
+
+		/// <summary>Frozen blue through temperate green to scorched red; the liquid band brightened.</summary>
+		private static Color HeatColor(float t, bool liquid)
+		{
+			Color cold = new Color(0.20f, 0.35f, 0.70f);
+			Color mild = new Color(0.25f, 0.62f, 0.45f);
+			Color hot = new Color(0.78f, 0.28f, 0.18f);
+			Color c = t < 0f ? Color.Lerp(cold, mild, Mathf.InverseLerp(-1f, 0f, t))
+							 : Color.Lerp(mild, hot, Mathf.InverseLerp(0f, 1f, t));
+			// Faint, because bodies and orbits have to stay legible over it.
+			c.a = liquid ? 0.34f : 0.20f;
+			return c;
+		}
+
+		/// <summary>The outermost distance worth painting: the furthest body, with a little margin.</summary>
+		private double OutermostAu()
+		{
+			double outer = 0.0;
+			foreach (CelestialBody body in System.Bodies)
+			{
+				if (body == null || IsMoon(body))
+				{
+					continue;
+				}
+				Vector3d at = CelestialMath.Position(System, body, Hours);
+				outer = Math.Max(outer, Math.Sqrt(at.X * at.X + at.Y * at.Y));
+			}
+			return outer * 1.08;
+		}
+
+		/// <summary>The distance at which the temperature crosses a value, by bisection.</summary>
+		/// <remarks>
+		/// Bisected rather than inverted because the temperature at a radius folds in every star in
+		/// the system plus the home world's greenhouse reference; there is no closed form to invert,
+		/// and forty steps costs nothing once per repaint.
+		/// </remarks>
+		private double EdgeAu(double outer, float temperature)
+		{
+			double lo = outer / 5000.0, hi = outer;
+			if (CelestialMath.TemperatureAtDistance(System, lo) < temperature ||
+				CelestialMath.TemperatureAtDistance(System, hi) > temperature)
+			{
+				// The whole disc is on one side of it: no edge to draw.
+				return 0.0;
+			}
+			for (int i = 0; i < 40; i++)
+			{
+				double mid = (lo + hi) * 0.5;
+				if (CelestialMath.TemperatureAtDistance(System, mid) > temperature)
+				{
+					lo = mid;
+				}
+				else
+				{
+					hi = mid;
+				}
+			}
+			return (lo + hi) * 0.5;
 		}
 
 		private void DrawOrbit(Painter2D painter, CelestialBody body, Vector2 centre, float scale)

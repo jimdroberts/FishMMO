@@ -19,8 +19,50 @@ namespace FishMMO.Shared.Weather
 		private float windX, windZ;
 		private bool any;
 
+		/// <summary>
+		/// The substance of the heaviest precipitating contribution so far, and how heavy it was.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The strongest one wins outright rather than blending, because substances do not mix:
+		/// half nitrogen snow and half water snow is not a thing, and a colour lerped between them
+		/// would name neither. Two substances falling at once is already unusual — a cryo-plume
+		/// drifting over a water-ice world is about the only case — and there the heavier of the two
+		/// is what somebody standing in it would say was falling.
+		/// </para>
+		/// <para>
+		/// Nothing about this goes on the wire. Both peers resolve it from the timeline's layer
+		/// templates and cell presets, which they already hold.
+		/// </para>
+		/// </remarks>
+		private WeatherSubstance substance;
+		private float substanceWeight;
+
 		/// <summary>True once anything has been added.</summary>
 		public bool HasAny => any;
+
+		/// <summary>What is falling, or null for the kinds' own defaults.</summary>
+		public WeatherSubstance Substance => substance;
+
+		/// <summary>Adds a layer, and offers the substance it is made of.</summary>
+		/// <param name="substanceOfLayer">
+		/// The layer's substance, or null to leave whatever is already winning. Weighed by how much
+		/// precipitation this layer actually contributes, so a clear-sky or wind layer carrying a
+		/// substance by accident cannot take the title from real falling weather.
+		/// </param>
+		public void Add(in WeatherFrame layer, float weight, WeatherSubstance substanceOfLayer)
+		{
+			if (substanceOfLayer != null)
+			{
+				float falling = Mathf.Clamp01(weight) * Mathf.Clamp01(layer[WeatherChannel.Precipitation]);
+				if (falling > substanceWeight)
+				{
+					substanceWeight = falling;
+					substance = substanceOfLayer;
+				}
+			}
+			Add(layer, weight);
+		}
 
 		public void Add(in WeatherFrame layer, float weight)
 		{

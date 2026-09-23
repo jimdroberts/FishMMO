@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab769dc1f57a4664961c566f298a3984, type: 3}
+  m_Name: Regolith Storm
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherPreset
+  DisplayName: Regolith Storm
+  Layers:
+  - Template: {fileID: 11400000, guid: b5766084d5d97eda78948eb5272d7266, type: 2}
+    Intensity: 1
+  - Template: {fileID: 11400000, guid: a6a57c019710ab6feb91bab672f0081c, type: 2}
+    Intensity: 0.9
+  - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
+    Intensity: 0.4
+  TransitionSeconds: 40
+  DurationMinutes: {x: 10, y: 35}
+  CellRadiusMeters: {x: 250, y: 800}

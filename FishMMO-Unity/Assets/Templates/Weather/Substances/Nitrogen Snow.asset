@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc31fd6c26d6fbb81b415e9bc031c46f, type: 3}
+  m_Name: Nitrogen Snow
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherSubstance
+  DisplayName: Nitrogen Snow
+  Description: Nitrogen frozen out of the air. Falls faster than water snow, because
+    the air holding it is thinner.
+  Tint: {r: 0.88, g: 0.93, b: 1, a: 1}
+  FogColor: {r: 0.72, g: 0.8, b: 0.9, a: 1}
+  FallSpeedScale: 1.6
+  StretchScale: 1.2
+  WindResponseScale: 1.3
+  Emission: 0
+  Cover: 2
+  CoverTint: {r: 0.9, g: 0.95, b: 1, a: 1}
+  MeltsAbove: -0.7
+  Breathable: 0
+  Harshness: 0.85
+  AudioCue: 

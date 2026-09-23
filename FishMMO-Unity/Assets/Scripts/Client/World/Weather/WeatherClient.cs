@@ -29,6 +29,12 @@ namespace FishMMO.Client
 		public float Shelter;
 		/// <summary>Local temperature at the viewer, -1..1.</summary>
 		public float Temperature;
+
+		/// <summary>
+		/// What is falling at the viewer, or null for the kinds' own defaults. Resolved from the
+		/// timeline both peers hold, so it costs nothing on the wire.
+		/// </summary>
+		public WeatherSubstance Substance;
 	}
 
 	/// <summary>

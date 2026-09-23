@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Grassland
   m_EditorClassIdentifier: 
   DisplayName: Grassland
-  Description: 'Temperate grasslands — wild grasses, hidden warrens, wind-swept plains'
+  Description: "Temperate grasslands \u2014 wild grasses, hidden warrens, wind-swept
+    plains"
   BiomeColorId: {r: 0.4, g: 0.7, b: 0.3, a: 1}
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   ElevationTier: 4
@@ -24,6 +25,8 @@ MonoBehaviour:
   MinHumidity: 0
   MaxHumidity: 0.6
   SelectionWeight: 1
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants:
   - Name: Frozen
     MinTemperature: -1
@@ -187,7 +190,15 @@ MonoBehaviour:
       - Undulating
       - Fragrant
       - Sweeping
-      Description: 'Temperate grasslands — wild grasses, hidden warrens, wind-swept plains'
+      Description: "Temperate grasslands \u2014 wild grasses, hidden warrens, wind-swept
+        plains"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: b57d7a0ebf324414fb3f358921cc80fc, type: 3}
     normalTexture: {fileID: 0}

@@ -257,6 +257,7 @@ namespace FishMMO.Client
 				DriverWeight = sample.DriverWeight,
 				Shelter = sample.Shelter,
 				Temperature = sample.Temperature,
+				Substance = sample.Substance,
 			};
 			WeatherClient.Present(sample.Frame, context);
 		}

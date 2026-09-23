@@ -1,0 +1,192 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Lava Tube
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Biomes.BiomeTemplate
+  DisplayName: Lava Tube
+  Description: A roofed void under the surface, the only shelter for a long way
+  BiomeColorId: {r: 0.28, g: 0.26, b: 0.26, a: 1}
+  GizmoColor: {r: 0.28, g: 0.26, b: 0.26, a: 1}
+  ElevationTier: 2
+  MinHeight: 0.1
+  MaxHeight: 0.45
+  MinTemperature: -1
+  MaxTemperature: 0.8
+  MinHumidity: -1
+  MaxHumidity: -0.5
+  SelectionWeight: 1
+  Atmosphere: 15
+  RequiresLiquidWater: 0
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets: []
+      Nuclei: []
+      Codas: []
+      Middles: []
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes: []
+      DungeonPrefixes: []
+      POISuffixes: []
+      Adjectives: []
+      Description: A roofed void under the surface, the only shelter for a long way
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability:
+    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 77ceb35e60107d4bfb9d84311ed6d380, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 6f63f0ccbfbfdc2e4bc4c4df3b494945, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: cd247f59315b9d16782275ef9077806c, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 30c934f6fa91f8a34856ff851d8a619e, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: ade9a108bb77fdcc4a0f194c4f2f1972, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 3fcc3b4cc1297b551b570f2672afc7e9, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 48dfb6c7fef4034188fa9261bde2de5b, type: 2}
+      Suitability: 0
+    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
+      Suitability: 0
+    Variants: []
+    Forbidden: 1023
+    CellsPerSquareKm: 0
+  mainTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  detailTextureLayers: []
+  roadTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers: []
+  riverbedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

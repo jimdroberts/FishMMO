@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc31fd6c26d6fbb81b415e9bc031c46f, type: 3}
+  m_Name: Methane Drizzle
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherSubstance
+  DisplayName: Methane Drizzle
+  Description: Liquid methane, falling slow and heavy in the cold.
+  Tint: {r: 0.62, g: 0.56, b: 0.38, a: 1}
+  FogColor: {r: 0.42, g: 0.38, b: 0.26, a: 1}
+  FallSpeedScale: 0.7
+  StretchScale: 1.4
+  WindResponseScale: 0.8
+  Emission: 0
+  Cover: 1
+  CoverTint: {r: 0.5, g: 0.45, b: 0.3, a: 1}
+  MeltsAbove: -0.6
+  Breathable: 0
+  Harshness: 0.8
+  AudioCue: 

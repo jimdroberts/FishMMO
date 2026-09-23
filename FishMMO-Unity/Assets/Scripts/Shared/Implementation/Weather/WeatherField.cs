@@ -20,6 +20,17 @@ namespace FishMMO.Shared.Weather
 		public float Temperature;
 		/// <summary>0 in the open … 1 fully under cover.</summary>
 		public float Shelter;
+
+		/// <summary>
+		/// What is falling here, or null when it is the kinds' own defaults — water rain, water
+		/// snow, volcanic ash.
+		/// </summary>
+		/// <remarks>
+		/// Resolved from the layer templates and cell presets both peers already hold, so it costs
+		/// nothing on the wire. The client reads it for the colour, the sound and the cover it
+		/// leaves; the server for what it melts at and whether it can be breathed.
+		/// </remarks>
+		public WeatherSubstance Substance;
 		/// <summary>What the driver says the air is doing here: pressure, humidity, instability, wind.</summary>
 		public WeatherDriver.Synoptic Air;
 		/// <summary>
@@ -193,10 +204,11 @@ namespace FishMMO.Shared.Weather
 						weight *= profile.SuitabilityOf(preset);
 						preset = profile.VariantOf(preset);
 					}
-					accumulator.Add(preset.Evaluate(), weight);
+					accumulator.Add(preset.Evaluate(), weight, preset.DominantSubstance());
 				}
 			}
 
+			sample.Substance = accumulator.Substance;
 			WeatherFrame frame = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
 			frame.RetypeForTemperature(sample.Temperature);
 			StormsInHeavyRain(ref frame, sample.Temperature);

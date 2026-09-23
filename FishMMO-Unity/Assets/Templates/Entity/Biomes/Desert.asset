@@ -24,6 +24,8 @@ MonoBehaviour:
   MinHumidity: -1
   MaxHumidity: -0.3
   SelectionWeight: 1
+  Atmosphere: 12
+  RequiresLiquidWater: 0
   ClimateVariants:
   - Name: Frozen
     MinTemperature: -1

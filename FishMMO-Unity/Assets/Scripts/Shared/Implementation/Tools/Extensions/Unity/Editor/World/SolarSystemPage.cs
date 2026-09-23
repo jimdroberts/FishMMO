@@ -192,6 +192,32 @@ namespace FishMMO.Shared.WorldDesign
 			orrery = new OrreryView();
 			orrery.BodyClicked += body => Select(body);
 			orreryColumn.Add(orrery);
+
+			/* Both off by default. They answer a question a designer asks now and then — "where
+			 * would a world like this one be habitable?" — and the orrery's ordinary job is to show
+			 * where things are, which a disc of colour under everything makes harder. */
+			var overlays = new VisualElement();
+			overlays.style.flexDirection = FlexDirection.Row;
+			overlays.style.marginTop = 2f;
+
+			var heatToggle = new Toggle("Heat map") { value = false, tooltip = "Colour the whole disc by the temperature a standard-atmosphere world would have at each distance: blue frozen, green temperate, red scorched." };
+			heatToggle.style.marginRight = 12f;
+			heatToggle.RegisterValueChangedCallback(evt =>
+			{
+				orrery.ShowHeatMap = evt.newValue;
+				orrery.Refresh();
+			});
+			overlays.Add(heatToggle);
+
+			var goldilocksToggle = new Toggle("Goldilocks band") { value = false, tooltip = "Ring the distances where water would be liquid — the same test the biome resolver uses to decide whether a world can have oceans. Measured against the home world's starlight, so a single sun's brightness cancels: the band moves when the home world moves or a second star is added, not when you brighten the one." };
+			goldilocksToggle.RegisterValueChangedCallback(evt =>
+			{
+				orrery.ShowGoldilocks = evt.newValue;
+				orrery.Refresh();
+			});
+			overlays.Add(goldilocksToggle);
+
+			orreryColumn.Add(overlays);
 			views.Add(orreryColumn);
 
 			var skyColumn = new VisualElement();

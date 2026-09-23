@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Woodland
   m_EditorClassIdentifier: 
   DisplayName: Woodland
-  Description: 'Temperate forest — dappled light, old growth, woodland creatures'
+  Description: "Temperate forest \u2014 dappled light, old growth, woodland creatures"
   BiomeColorId: {r: 0.45, g: 0.65, b: 0.35, a: 1}
   GizmoColor: {r: 0.55, g: 0.7, b: 0.45, a: 1}
   ElevationTier: 5
@@ -24,6 +24,8 @@ MonoBehaviour:
   MinHumidity: 0.2
   MaxHumidity: 0.6
   SelectionWeight: 1
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants: []
   Naming:
     Phonology:
@@ -158,7 +160,14 @@ MonoBehaviour:
       - Timeless
       - Mysterious
       - Rustling
-      Description: 'Temperate forest — dappled light, old growth, woodland creatures'
+      Description: "Temperate forest \u2014 dappled light, old growth, woodland creatures"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 1a25c9f32fbc86941820446872df368c, type: 3}
     normalTexture: {fileID: 0}
@@ -219,7 +228,7 @@ MonoBehaviour:
     - stableGuid: afdc1bdca9b24d259cd15a8de2516542
       enableSpawning: 1
       ruleName: 
-      prefabs:
+      prefabs: []
       spawnChannel: 0
       densityPer100m2: 5
       maxPerChunk: 5000

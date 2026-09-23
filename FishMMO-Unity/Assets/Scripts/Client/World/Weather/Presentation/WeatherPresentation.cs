@@ -260,7 +260,8 @@ namespace FishMMO.Client
 			// rather than a list of objects there is nothing to ask; the scene's forecast is what
 			// falls, and a shower that follows the cloud above you wants the field sampled on the
 			// CPU, which is work for when the cloud system has settled.
-			precipitation.Render(shown, camera, currentTier, Profile, time);
+			// this.context, not the render callback's parameter of the same name.
+			precipitation.Render(shown, camera, currentTier, Profile, time, hasContext ? this.context.Substance : null);
 		}
 
 		private void ApplyWind(in WeatherFrame frame)

@@ -32,12 +32,15 @@ namespace FishMMO.Shared.Biomes
 		[Range(-1f, 1f)] public float GlobalTemperatureOffset = 0f;
 		[Tooltip("Shifts every humidity reading: -1 drought … +1 monsoon.")]
 		[Range(-1f, 1f)] public float GlobalHumidityOffset = 0f;
-		[Tooltip("When on, temperature falls with distance from the equator (the map's centre line).")]
+		[Tooltip("SUPERSEDED by Map latitude span, which does this properly from the body's tilt and orbit. Left so existing assets keep loading; it adds a second, cruder gradient on top when on.")]
 		public bool UsePlanetTemperature = false;
 
+		[Tooltip("How many degrees of latitude the scene's biome map spans, north edge to south. The scene's own latitude sits at the middle, so one map can run from forest to tundra. 0 gives the whole scene one climate.")]
+		[Range(0f, 120f)] public float MapLatitudeSpanDegrees = 20f;
+
 		[Header("Temperature model")]
-		[Tooltip("Temperature at the water line (-1 frozen … +1 scorching). Land above it cools with the lapse rate; the sea floor below it is warmer. 0.35 is temperate: rain in the lowlands, snow only on the highest peaks.")]
-		[Range(-1f, 1f)] public float SeaLevelTemperature = 0.35f;
+		[Tooltip("Temperature at the water line ON THE SUB-SOLAR EQUATOR (-1 frozen … +1 scorching). Latitude cools it from there and the lapse rate cools it with height, so this is the hottest the sea-level ground ever gets, not its average. 0.8 puts true tropics at the equator and ice caps at the poles.")]
+		[Range(-1f, 1f)] public float SeaLevelTemperature = 0.8f;
 		[Tooltip("How much temperature drops from sea floor to the highest peak.")]
 		[Range(0f, 2f)] public float ElevationLapseRate = 0.8f;
 

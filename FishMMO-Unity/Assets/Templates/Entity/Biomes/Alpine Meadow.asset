@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Alpine Meadow
   m_EditorClassIdentifier: 
   DisplayName: Alpine Meadow
-  Description: 'High mountain meadows — wildflowers, meltwater, brief alpine summer'
+  Description: "High mountain meadows \u2014 wildflowers, meltwater, brief alpine
+    summer"
   BiomeColorId: {r: 0.5, g: 0.8, b: 0.3, a: 1}
   GizmoColor: {r: 0.6, g: 0.9, b: 0.4, a: 1}
   ElevationTier: 7
@@ -24,6 +25,8 @@ MonoBehaviour:
   MinHumidity: 0.4
   MaxHumidity: 0.8
   SelectionWeight: 1
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants: []
   Naming:
     Phonology:
@@ -158,7 +161,15 @@ MonoBehaviour:
       - Enchanting
       - Colorful
       - Fleeting
-      Description: 'High mountain meadows — wildflowers, meltwater, brief alpine summer'
+      Description: "High mountain meadows \u2014 wildflowers, meltwater, brief alpine
+        summer"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 189164606a235f741a8e299fdf4a96f1, type: 3}
     normalTexture: {fileID: 0}
@@ -181,6 +192,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   detailTextureLayers: []
   roadTextureLayer:
     albedoTexture: {fileID: 0}
@@ -204,6 +216,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   smallPathTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -226,6 +239,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   cliffTextureLayers: []
   riverbedTextureLayer:
     albedoTexture: {fileID: 0}
@@ -249,6 +263,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
+    prefabSpawnRules: []
   lakebedTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

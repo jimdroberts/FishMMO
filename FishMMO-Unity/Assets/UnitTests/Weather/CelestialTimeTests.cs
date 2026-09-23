@@ -323,13 +323,63 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TwoSunsAreBrighterThanOne()
 		{
+			/* This test used to assert that a second star "sits at the centre with the first", which
+			 * is not what a parentless star does: it orbits the pair's barycentre at its own
+			 * Orbit.Distance, and that field defaults to 1 AU. With two equal masses the primary
+			 * swings out to -0.5 AU and the companion to +0.5 — which is exactly where the home
+			 * world is at epoch, since home orbits the PRIMARY at 1 AU. The two coincided, and the
+			 * old assertion was measuring a planet sitting inside a star. */
 			double one = CelestialMath.Insolation(system, home, 0.0);
+			Assert.That(one, Is.EqualTo(1.0).Within(1e-9), "one sun at 1 AU is the reference");
+
+			// A genuine second sun: far enough out that the geometry is not a coincidence.
 			StarBody companion = Make<StarBody>("Companion");
 			companion.Luminosity = 1f;
+			companion.Orbit = new OrbitSettings { Distance = 40f, PeriodDays = 27.3f };
 			system.Bodies.Add(companion);
-			Assert.That(one, Is.EqualTo(1.0).Within(1e-9));
-			Assert.That(CelestialMath.Insolation(system, home, 0.0), Is.EqualTo(2.0).Within(1e-9),
-				"a second star without a parent sits at the centre with the first");
+
+			double two = CelestialMath.Insolation(system, home, 0.0);
+			Assert.That(two, Is.GreaterThan(one), "a second sun can only add light");
+			Assert.That(two, Is.LessThan(one * 1.05), "but a distant one adds very little of it");
+
+			// Brought in close, it dominates — still smoothly, with nothing blowing up.
+			companion.Orbit = new OrbitSettings { Distance = 2f, PeriodDays = 27.3f };
+			double near = CelestialMath.Insolation(system, home, 0.0);
+			Assert.That(near, Is.GreaterThan(two), "the nearer sun contributes more");
+			Assert.That(near, Is.LessThan(1e6), "and no arrangement of two ordinary stars is a million suns");
+		}
+
+		[Test]
+		public void SunlightSaturatesAtAStarsSurfaceRatherThanRunningAwayToInfinity()
+		{
+			/* What the assertion above was accidentally exercising, done on purpose. A body can end
+			 * up exactly on top of a star — a companion at its barycentre distance lands on a planet
+			 * at epoch — and the inverse-square law has no answer at zero distance. The floor is the
+			 * star's own surface, because that is the closest anything can physically be to it.
+			 *
+			 * It matters that this is bounded by a REAL quantity and not an epsilon: insolation
+			 * feeds ClimateOffsets, which feeds the temperature, which feeds the weather driver. The
+			 * old 1e-4 AU floor returned a hundred million suns and turned one piece of misplaced
+			 * content into a whole system of nonsense. */
+			sun.SkyRadiusKm = 696_000f;   // a real sun; CreateInstance does not run Reset()
+			double surfaceAu = 696_000.0 / CelestialMath.AuKm;
+			double atSurface = 1.0 / (surfaceAu * surfaceAu);
+
+			// A world sitting exactly on the star.
+			WorldBody inside = Make<WorldBody>("Inside");
+			inside.Parent = sun;
+			inside.Orbit = new OrbitSettings { Distance = 0f, PeriodDays = 27.3f };
+			system.Bodies.Add(inside);
+
+			double light = CelestialMath.Insolation(system, inside, 0.0);
+			Assert.That(double.IsFinite(light), Is.True, "never infinite, whatever the content says");
+			Assert.That(light, Is.EqualTo(atSurface).Within(atSurface * 1e-6),
+				"exactly the irradiance at the star's surface, which is the physical maximum");
+
+			// And a smaller star saturates higher, because its surface is closer to its own fire.
+			sun.SkyRadiusKm = 69_600f;
+			Assert.That(CelestialMath.Insolation(system, inside, 0.0), Is.GreaterThan(light * 99.0),
+				"ten times smaller is a hundred times brighter at the surface");
 		}
 
 		[Test]

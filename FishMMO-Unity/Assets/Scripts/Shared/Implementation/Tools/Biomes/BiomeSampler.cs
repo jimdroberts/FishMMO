@@ -73,7 +73,12 @@ namespace FishMMO.Shared.Biomes
 			}
 			if (reading.Biome == null)
 			{
-				reading.Biome = BiomeResolver.Select(reading.Height, reading.Climate);
+				/* Filtered by the world this scene is on before the climate is scored. A painted
+				 * biome map is left alone — if a designer has put a jungle on an airless moon they
+				 * meant it, and second-guessing a hand-painted map would be worse than the mistake. */
+				reading.Biome = settings != null
+					? BiomeResolver.Select(reading.Height, reading.Climate, settings.WorldConditions)
+					: BiomeResolver.Select(reading.Height, reading.Climate);
 			}
 			if (reading.Biome != null)
 			{

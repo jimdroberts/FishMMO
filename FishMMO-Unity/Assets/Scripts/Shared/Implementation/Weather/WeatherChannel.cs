@@ -30,7 +30,11 @@ namespace FishMMO.Shared.Weather
 		FogDensity = 13,
 		FogHeight = 14,
 		VolumetricFog = 15,
-		/// <summary>0 none … 1 = a strike every couple of seconds.</summary>
+		/// <summary>
+		/// 0 none … 1 = a strike about every eight seconds, which is a severe storm. See
+		/// <c>SkySchedule.StrikesPerSecondAtFullRate</c>, which is where the number lives; this said
+		/// "every couple of seconds" until that was deliberately calmed down, and was then wrong.
+		/// </summary>
 		LightningRate = 16,
 		Aurora = 17,
 		/// <summary>How wet exposed surfaces get. Derived from rain unless a layer says more.</summary>

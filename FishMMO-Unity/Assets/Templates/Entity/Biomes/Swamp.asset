@@ -24,6 +24,8 @@ MonoBehaviour:
   MinHumidity: 0.6
   MaxHumidity: 1
   SelectionWeight: 0
+  Atmosphere: 12
+  RequiresLiquidWater: 1
   ClimateVariants: []
   Naming:
     Phonology:

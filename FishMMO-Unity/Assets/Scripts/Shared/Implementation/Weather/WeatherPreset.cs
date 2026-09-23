@@ -46,7 +46,7 @@ namespace FishMMO.Shared.Weather
 				{
 					continue;
 				}
-				accumulator.Add(layer.Template.Evaluate(Mathf.Clamp01(layer.Intensity * scale)), 1f);
+				accumulator.Add(layer.Template.Evaluate(Mathf.Clamp01(layer.Intensity * scale)), 1f, layer.Template.Substance);
 			}
 			WeatherFrame frame = accumulator.Resolve();
 			if (Mathf.Approximately(scale, 1f))
@@ -55,6 +55,37 @@ namespace FishMMO.Shared.Weather
 				cached = true;
 			}
 			return frame;
+		}
+
+		/// <summary>
+		/// What this preset is made of: the substance of its heaviest precipitating layer, or null
+		/// when every layer falls as its kind's default.
+		/// </summary>
+		/// <remarks>
+		/// A separate pass rather than something <see cref="Evaluate"/> returns, because Evaluate
+		/// hands back a frame and a frame has nowhere to put this — the substance rides on the
+		/// layers, not on the channels. Cheap, and only asked for on the storm-cell path.
+		/// </remarks>
+		public WeatherSubstance DominantSubstance()
+		{
+			WeatherSubstance best = null;
+			float heaviest = 0f;
+			for (int i = 0; i < Layers.Count; i++)
+			{
+				WeatherPresetLayer layer = Layers[i];
+				if (layer?.Template?.Substance == null)
+				{
+					continue;
+				}
+				float falling = Mathf.Clamp01(layer.Intensity)
+					* Mathf.Clamp01(layer.Template.Evaluate(Mathf.Clamp01(layer.Intensity))[WeatherChannel.Precipitation]);
+				if (falling > heaviest)
+				{
+					heaviest = falling;
+					best = layer.Template.Substance;
+				}
+			}
+			return best;
 		}
 
 		/// <summary>The kinds this preset contains.</summary>

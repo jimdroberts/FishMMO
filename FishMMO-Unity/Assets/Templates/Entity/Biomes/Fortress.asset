@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Fortress
   m_EditorClassIdentifier: 
   DisplayName: Fortress
-  Description: 'Military stronghold — thick walls, arrowslits, siege-scarred stone'
+  Description: "Military stronghold \u2014 thick walls, arrowslits, siege-scarred
+    stone"
   BiomeColorId: {r: 0.45, g: 0.45, b: 0.5, a: 1}
   GizmoColor: {r: 0.6, g: 0.6, b: 0.65, a: 1}
   ElevationTier: 6
@@ -24,6 +25,8 @@ MonoBehaviour:
   MinHumidity: -0.6
   MaxHumidity: 0.4
   SelectionWeight: 0
+  Atmosphere: 15
+  RequiresLiquidWater: 0
   ClimateVariants: []
   Naming:
     Phonology:
@@ -158,7 +161,15 @@ MonoBehaviour:
       - Forbidding
       - Towering
       - Indomitable
-      Description: 'Military stronghold — thick walls, arrowslits, siege-scarred stone'
+      Description: "Military stronghold \u2014 thick walls, arrowslits, siege-scarred
+        stone"
+  Weather:
+    Background: []
+    CellSpawns: []
+    Suitability: []
+    Variants: []
+    Forbidden: 0
+    CellsPerSquareKm: 0.4
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
