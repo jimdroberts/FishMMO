@@ -62,24 +62,49 @@ namespace FishMMO.Client
 			if (asked.Add(name))
 			{
 				Begin(name);
+				/* Asked again straight away, because in the editor Begin is synchronous: the file
+				 * is on disk and the asset database hands it over at once. Returning null here
+				 * regardless meant the very first frame a body was large enough to texture always
+				 * drew it plain, and anything that decided "this body is untextured" on that frame
+				 * kept drawing it plain. */
+				if (loaded.TryGetValue(name, out texture))
+				{
+					return texture;
+				}
 			}
 			return null;
+		}
+
+		/// <summary>The file a bake writes, matching PlanetSurfaceBaker's own path exactly.</summary>
+		/// <remarks>
+		/// The baker sanitises the body's name for the file system; this has to sanitise it the
+		/// same way or every body whose name holds an awkward character looks up a path that was
+		/// never written.
+		/// </remarks>
+		private static string EditorPathOf(string bodyName)
+		{
+			foreach (char c in System.IO.Path.GetInvalidFileNameChars())
+			{
+				bodyName = bodyName.Replace(c, '_');
+			}
+			return $"Assets/Prefabs/Shared/PlanetSurfaces/{bodyName}.png";
 		}
 
 		private static void Begin(string bodyName)
 		{
 #if UNITY_EDITOR
-			/* Straight off disk outside play mode. The addressable catalog is not built while
-			 * somebody is working in the editor, so a bake made a minute ago would otherwise be
-			 * invisible until the next content build — which is exactly when a designer wants to
-			 * see it. */
-			if (!Application.isPlaying)
-			{
-				loaded[bodyName] = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(
-					$"Assets/Prefabs/Shared/PlanetSurfaces/{bodyName}.png");
-				return;
-			}
-#endif
+			/* Straight off disk in the editor, playing or not.
+			 *
+			 * A baked surface is build output: the addressable catalog is only built for a real
+			 * player build, so in the editor the entry may point at content that has never been
+			 * packed. Going through Addressables there means a bake made a minute ago stays
+			 * invisible — which is precisely when somebody is looking at it. On disk it is always
+			 * current, and the load is synchronous, so the body is textured on the first frame it
+			 * is big enough to be.
+			 */
+			loaded[bodyName] = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(EditorPathOf(bodyName));
+			return;
+#else
 			AsyncOperationHandle<Texture2D> handle = Addressables.LoadAssetAsync<Texture2D>(AddressOf(bodyName));
 			handle.Completed += operation =>
 			{
@@ -87,6 +112,7 @@ namespace FishMMO.Client
 				// remembered as "nothing" rather than reported.
 				loaded[bodyName] = operation.Status == AsyncOperationStatus.Succeeded ? operation.Result : null;
 			};
+#endif
 		}
 
 		/// <summary>Forgets everything, so the next ask loads again. For the editor after a bake.</summary>

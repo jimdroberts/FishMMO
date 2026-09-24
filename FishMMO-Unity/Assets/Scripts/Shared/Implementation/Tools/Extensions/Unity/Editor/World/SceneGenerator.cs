@@ -7,7 +7,9 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
+using FishMMO.Water;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -26,6 +28,20 @@ namespace FishMMO.Shared.WorldDesign
 		public float ReliefMetres;
 		/// <summary>The scene's altitude above the body's sea level, in metres.</summary>
 		public float BaseAltitudeMetres;
+		/// <summary>
+		/// Metres above the body's sea level of the scene's lowest ground — what its y = 0 is.
+		/// </summary>
+		/// <remarks>
+		/// A scene is built around its own origin, so this is the one place the metres between the
+		/// planet's water line and the ground underfoot are written down. A scene cut from a
+		/// plateau three kilometres up and one cut from a beach are otherwise indistinguishable
+		/// once the terrain exists.
+		/// </remarks>
+		public float GroundAltitudeMetres;
+		/// <summary>True when the scene reaches the body's water line and was given a sea.</summary>
+		public bool HasWater;
+		/// <summary>Scene-space Y of the sea's surface, when there is one.</summary>
+		public float SeaLevelY;
 
 		public static SceneGenerationResult Failed(string problem) => new SceneGenerationResult { Problem = problem };
 	}
@@ -69,6 +85,18 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public static readonly List<Action<Scene, SceneGenerationRequest>> Dress =
 			new List<Action<Scene, SceneGenerationRequest>>();
+
+		/// <summary>
+		/// The terrain material generated ground is drawn with.
+		/// </summary>
+		/// <remarks>
+		/// A <see cref="Terrain"/> created from script gets Unity's built-in terrain material,
+		/// which the Universal pipeline cannot render — the ground comes out magenta, the colour
+		/// URP uses for a shader it has no pass for. It is not a missing texture and no amount of
+		/// terrain layers fixes it. This is the same weather-capable material the world sim bed
+		/// uses, so generated ground also takes snow, wetness and cloud shadow.
+		/// </remarks>
+		public const string TerrainMaterialPath = "Assets/Prefabs/Client/Materials/Ground/Weather Terrain.mat";
 
 		/// <summary>Where a world's scenes live.</summary>
 		public static string WorldFolder(WorldBody body)
@@ -126,13 +154,15 @@ namespace FishMMO.Shared.WorldDesign
 			var result = new SceneGenerationResult { Plan = SceneGeneration.PlanTiles(request.SizeKm) };
 			TerrainTilePlan plan = result.Plan;
 
-			/* Measured before anything is created, because every tile has to share one height range
+			/* Bounded before anything is created, because every tile has to share one height range
 			 * and one floor. Tiles normalised against their own range are what makes a stitched
-			 * landmass step at its seams, and the climate read differently on either side. */
-			Bounds(request, plan, out float lowest, out float highest);
+			 * landmass step at its seams, and the climate read differently on either side. A BOUND
+			 * and not a measurement: a range that merely sampled the ground is a range some peak
+			 * between the samples falls outside, and the heightmap flattens whatever falls outside
+			 * it. Tighten() gives the slack back once the real ground is on disk. */
+			SceneGeneration.Bounds(request, plan, out float lowest, out float highest);
 			result.BaseAltitudeMetres = SceneGeneration.AltitudeMetres(request, 0f, 0f);
 			float relief = Mathf.Max(SceneGeneration.MinimumTerrainHeightMetres, highest - lowest);
-			result.ReliefMetres = relief;
 
 			WorldEditorAssets.EnsureFolder(WorldFolder(request.Body));
 			WorldEditorAssets.EnsureFolder(terrainFolder);
@@ -162,7 +192,23 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Stitch(terrains, plan);
 
+				/* Now that every height is written, the tiles can be shrunk onto the ground they
+				 * actually hold — and the colour bands painted against a height that means
+				 * something. Painting before this read every scene as lowland, because the bound
+				 * has to allow for a peak that this particular scene does not have. */
+				relief = Tighten(terrains, ref lowest, relief);
+				result.ReliefMetres = relief;
+				result.GroundAltitudeMetres = lowest;
+				foreach (Terrain terrain in terrains)
+				{
+					if (terrain != null && terrain.terrainData != null)
+					{
+						Paint(terrain.terrainData, relief);
+					}
+				}
+
 				AddBoundary(scene, plan, relief);
+				AddWater(scene, plan, request, lowest, relief, result);
 
 				// The same components the audit adds to a scene somebody forgot to finish.
 				bool wantsSky = request.Layer == null || !request.Layer.Underground;
@@ -216,29 +262,6 @@ namespace FishMMO.Shared.WorldDesign
 			return result;
 		}
 
-		/// <summary>The lowest and highest ground anywhere in the scene, sampled on the tile grid.</summary>
-		private static void Bounds(SceneGenerationRequest request, TerrainTilePlan plan, out float lowest, out float highest)
-		{
-			lowest = float.MaxValue;
-			highest = float.MinValue;
-			float halfWidth = plan.WidthMetres * 0.5f;
-			float halfDepth = plan.DepthMetres * 0.5f;
-			// Coarser than the heightmap: this only needs the range, and the range does not move
-			// between samples a few metres apart.
-			const int Steps = 96;
-			for (int z = 0; z <= Steps; z++)
-			{
-				float north = Mathf.Lerp(-halfDepth, halfDepth, z / (float)Steps);
-				for (int x = 0; x <= Steps; x++)
-				{
-					float east = Mathf.Lerp(-halfWidth, halfWidth, x / (float)Steps);
-					float altitude = SceneGeneration.AltitudeMetres(request, east, north);
-					lowest = Mathf.Min(lowest, altitude);
-					highest = Mathf.Max(highest, altitude);
-				}
-			}
-		}
-
 		/// <summary>Creates one terrain tile and its data asset.</summary>
 		private static Terrain CreateTile(SceneGenerationRequest request, TerrainTilePlan plan, int tx, int tz,
 			float lowest, float relief, Scene scene, string terrainFolder, SceneGenerationResult result)
@@ -268,7 +291,6 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			data.SetHeights(0, 0, heights);
-			Paint(data, relief);
 
 			string dataPath = $"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} {tx}_{tz}.asset";
 			AssetDatabase.CreateAsset(data, dataPath);
@@ -281,9 +303,198 @@ namespace FishMMO.Shared.WorldDesign
 
 			Terrain terrain = host.AddComponent<Terrain>();
 			terrain.terrainData = data;
+
+			Material material = AssetDatabase.LoadAssetAtPath<Material>(TerrainMaterialPath);
+			if (material != null)
+			{
+				terrain.materialTemplate = material;
+			}
+			else
+			{
+				Debug.LogWarning($"[Scene generator] '{TerrainMaterialPath}' is missing, so this terrain will render magenta under URP. " +
+					"Run Weather → Weather Tools → Weather-proof terrain to create it, then re-generate or assign it by hand.");
+			}
+
 			host.AddComponent<TerrainCollider>().terrainData = data;
 			terrain.allowAutoConnect = true;
 			return terrain;
+		}
+
+		/// <summary>The ocean material every generated scene shares.</summary>
+		public const string WaterMaterialPath = "Assets/Plugins/FishMMO Water/Materials/OceanWater.mat";
+
+		/// <summary>
+		/// Puts the sea in the scene, at the height the planet says its sea level is.
+		/// </summary>
+		/// <param name="groundAltitudeMetres">
+		/// Metres above the body's sea level of the scene's lowest ground — the altitude that the
+		/// terrain's y = 0 stands for.
+		/// </param>
+		/// <remarks>
+		/// <para>
+		/// <b>The Y is the whole point.</b> A scene is built around its own origin, with its lowest
+		/// ground at zero, so the planet's water line lands at <c>-groundAltitudeMetres</c> and
+		/// nowhere else. Put the sea at a round number instead and the coastline in the scene stops
+		/// being the coastline on the globe — the map shows a bay and the ground has none, or the
+		/// whole scene drowns. One unit is one metre, so this is a subtraction and not a
+		/// conversion.
+		/// </para>
+		/// <para>
+		/// <b>Not every scene gets one.</b> A world with no liquid water has no sea to put in, and
+		/// a scene cut entirely from high ground never reaches the water line — a sea plane under
+		/// its floor would be invisible from every point in it while still costing a full-screen
+		/// transparent pass. Measured on an Earth-like world, about 70% of randomly cut scenes DO
+		/// reach it, because that is how much of such a world is ocean.
+		/// </para>
+		/// </remarks>
+		private static void AddWater(Scene scene, TerrainTilePlan plan, SceneGenerationRequest request,
+			float groundAltitudeMetres, float relief, SceneGenerationResult result)
+		{
+			if (request.Layer != null && request.Layer.Underground)
+			{
+				return;
+			}
+			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			if (!BiomeWorldConditions.For(system, request.Body).HasLiquidWater)
+			{
+				return;
+			}
+			// The scene's floor is above the water line, so the sea is not in this scene.
+			if (groundAltitudeMetres >= 0f)
+			{
+				return;
+			}
+
+			var host = new GameObject("Water");
+			SceneManager.MoveGameObjectToScene(host, scene);
+			host.transform.position = new Vector3(0f, -groundAltitudeMetres, 0f);
+
+			host.AddComponent<MeshFilter>();
+			var renderer = host.AddComponent<MeshRenderer>();
+			var surface = host.AddComponent<WaterSurface>();
+
+			Material material = AssetDatabase.LoadAssetAtPath<Material>(WaterMaterialPath);
+			if (material != null)
+			{
+				surface.Material = material;
+				renderer.sharedMaterial = material;
+			}
+			else
+			{
+				Debug.LogWarning($"[Scene generator] '{WaterMaterialPath}' is missing, so '{request.SceneName}' has a " +
+					"water surface with no material. Assign one on its Water object.", host);
+			}
+
+			/* Far enough to reach the horizon from anywhere in the scene, and no further: past the
+			 * camera's far plane the rings are drawn and clipped. The diagonal is what a viewer at
+			 * one corner has to see across. */
+			float diagonal = Mathf.Sqrt(plan.WidthMetres * plan.WidthMetres + plan.DepthMetres * plan.DepthMetres);
+			surface.OuterRadius = Mathf.Clamp(diagonal * 2f, 4000f, 20000f);
+			surface.Rebuild();
+
+			/* The depth field the shoaling, the surf and the swash all read, and the driver that
+			 * connects the sea to the world's wind and moons. Both are wanted on every generated
+			 * scene: without the field a beach gets open-ocean waves that stop dead at the
+			 * waterline, and without the driver the sea runs on whatever the component was
+			 * authored with instead of on the weather. */
+			host.AddComponent<WaterShoreField>();
+			host.AddComponent<WaterEnvironment>();
+
+			result.SeaLevelY = host.transform.position.y;
+			result.HasWater = true;
+		}
+
+		/// <summary>
+		/// Shrinks every tile onto the ground the scene actually has, and returns the new relief.
+		/// </summary>
+		/// <param name="terrains">Every tile of the scene, already written.</param>
+		/// <param name="lowest">Metres above sea level at height 0; replaced with the new floor.</param>
+		/// <param name="relief">The bound the tiles were written against, in metres.</param>
+		/// <remarks>
+		/// <para>
+		/// The bound the heights were written against has to allow for the highest peak local
+		/// detail could produce anywhere, so that nothing is ever clamped. Most scenes are nowhere
+		/// near it — a couple of kilometres of gentle ground sits inside a tenth of the range its
+		/// world allows — and a terrain whose nominal height is several times its real relief is
+		/// not a harmless overshoot. Its <c>size.y</c> IS the metres that a normalised height of 0
+		/// to 1 spans, which is what <see cref="Biomes.SceneTerrainExtent"/> reports and what turns
+		/// a real lapse rate into the climate scale's. Left inflated, a scene cools from valley to
+		/// ridge by a fraction of what its own relief says it should.
+		/// </para>
+		/// <para>
+		/// Done by rescaling what is on disk rather than by sampling the planet again: the heights
+		/// are already the answer, and asking the noise a second time would double the cost of the
+		/// slowest part of generating a scene. The stored values are 16-bit, so requantising them
+		/// against a smaller range loses at most one step of the OLD range — about a centimetre on
+		/// any scene this produces, against a metre being the unit the world is built in.
+		/// </para>
+		/// </remarks>
+		private static float Tighten(Terrain[,] terrains, ref float lowest, float relief)
+		{
+			float minimum = 1f;
+			float maximum = 0f;
+			bool any = false;
+
+			foreach (Terrain terrain in terrains)
+			{
+				TerrainData data = terrain != null ? terrain.terrainData : null;
+				if (data == null)
+				{
+					continue;
+				}
+				int resolution = data.heightmapResolution;
+				float[,] heights = data.GetHeights(0, 0, resolution, resolution);
+				for (int z = 0; z < resolution; z++)
+				{
+					for (int x = 0; x < resolution; x++)
+					{
+						float height = heights[z, x];
+						minimum = Mathf.Min(minimum, height);
+						maximum = Mathf.Max(maximum, height);
+						any = true;
+					}
+				}
+			}
+
+			if (!any)
+			{
+				return relief;
+			}
+
+			float floor = lowest + minimum * relief;
+			float tightened = Mathf.Max(SceneGeneration.MinimumTerrainHeightMetres, (maximum - minimum) * relief);
+			// Nothing to give back, and rewriting every heightmap to change nothing would only add
+			// a requantisation to the scene for free.
+			if (tightened >= relief - 0.5f)
+			{
+				return relief;
+			}
+
+			foreach (Terrain terrain in terrains)
+			{
+				TerrainData data = terrain != null ? terrain.terrainData : null;
+				if (data == null)
+				{
+					continue;
+				}
+				int resolution = data.heightmapResolution;
+				float[,] heights = data.GetHeights(0, 0, resolution, resolution);
+				for (int z = 0; z < resolution; z++)
+				{
+					for (int x = 0; x < resolution; x++)
+					{
+						float metres = lowest + heights[z, x] * relief;
+						heights[z, x] = Mathf.Clamp01((metres - floor) / tightened);
+					}
+				}
+				Vector3 size = data.size;
+				data.size = new Vector3(size.x, tightened, size.z);
+				data.SetHeights(0, 0, heights);
+				EditorUtility.SetDirty(data);
+			}
+
+			lowest = floor;
+			return tightened;
 		}
 
 		/// <summary>

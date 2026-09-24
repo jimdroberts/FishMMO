@@ -34,7 +34,20 @@ namespace FishMMO.Shared.Celestial
 		[Header("Sky")]
 		public SkyLimits Limits = new SkyLimits();
 		[Tooltip("Share of the visible sky, in percent, above which a body is drawn with its texture.")]
-		[Range(0.001f, 5f)] public float TextureAboveSkyPercent = 0.1f;
+		/// <remarks>
+		/// <para>
+		/// 0.002, not 0.1. <c>SkyFraction</c> is <c>1 − cos(θ/2)</c>, the share of the visible
+		/// <em>hemisphere</em> a disc covers — and that is a far smaller number than it looks. A
+		/// full Moon spans half a degree and covers <b>0.001%</b> of the sky; the old threshold of
+		/// 0.1% needed a body <b>5.1° across, ten Moons wide</b>, so in practice nothing was ever
+		/// textured and every planet and moon drew as a flat disc however good its bake was.
+		/// </para>
+		/// <para>
+		/// 0.002% is about 0.7°, a little larger than a full Moon — the point at which a flat disc
+		/// starts to look wrong and a surface is worth binding a texture for.
+		/// </para>
+		/// </remarks>
+		[Range(0.001f, 5f)] public float TextureAboveSkyPercent = 0.002f;
 
 		/// <summary>
 		/// The system the game is set in: the one the world atlas names, or failing that the first found.

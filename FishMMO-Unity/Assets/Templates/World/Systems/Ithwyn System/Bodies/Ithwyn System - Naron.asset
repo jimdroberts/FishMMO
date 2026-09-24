@@ -47,7 +47,7 @@ MonoBehaviour:
   MagneticPoleLongitudeDegrees: 298.3906
   TerrainSeed: 1199842975
   Water: 0.5221827
-  BaseClimate: {fileID: 0}
+  BaseClimate: {fileID: 11400000, guid: 706a75aad517420f8dde51790ac44689, type: 2}
   Sky: {fileID: 0}
   Clouds: {fileID: 0}
   RadiusMode: 0

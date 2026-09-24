@@ -9,7 +9,8 @@
         "Unity.Addressables.Editor",
         "Unity.ResourceManager",
         "FishMMO.Shared.Map.Editor",
-        "FishMMO.Shared.NameGenerator.Editor"
+        "FishMMO.Shared.NameGenerator.Editor",
+        "FishMMO.Water"
     ],
     "includePlatforms": [
         "Editor"

@@ -1,6 +1,9 @@
 #if UNITY_EDITOR
+using System;
 using UnityEditor;
 using UnityEngine;
+using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Celestial;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -21,20 +24,31 @@ namespace FishMMO.Shared.WorldDesign
 		private bool accepted;
 		private bool done;
 
+		/// <summary>The ground the rectangle sits on, for naming it. Null disables the button.</summary>
+		private Func<SuggestedSceneName> suggest;
+		private SuggestedSceneName suggestion;
+		private bool suggested;
+
 		/// <summary>
 		/// Asks for a name. Returns null if it was cancelled.
 		/// </summary>
 		/// <param name="details">What is about to be cut, shown above the field.</param>
 		/// <param name="suggestion">The name the field opens with.</param>
 		/// <param name="fineDetail">Whether local detail was asked for.</param>
-		public static string Ask(string details, string suggestion, out bool fineDetail)
+		/// <param name="suggest">
+		/// Draws a name from the ground being cut. Null hides the button — for a caller that has no
+		/// body to ask about.
+		/// </param>
+		public static string Ask(string details, string suggestion, out bool fineDetail,
+			Func<SuggestedSceneName> suggest = null)
 		{
 			var window = CreateInstance<SceneNamePrompt>();
 			window.titleContent = new GUIContent("Cut scene");
 			window.details = details;
 			window.sceneName = suggestion;
-			window.minSize = new Vector2(460f, 260f);
-			window.maxSize = new Vector2(460f, 260f);
+			window.suggest = suggest;
+			window.minSize = new Vector2(460f, 300f);
+			window.maxSize = new Vector2(460f, 300f);
 			// Modal, so the globe underneath cannot be turned to somewhere else while the
 			// rectangle that is about to be cut is the one that was drawn.
 			window.ShowModalUtility();
@@ -43,6 +57,18 @@ namespace FishMMO.Shared.WorldDesign
 			string result = window.accepted ? window.sceneName : null;
 			DestroyImmediate(window);
 			return result;
+		}
+
+		/// <summary>
+		/// Convenience for the atlas: names the ground at a point on a body.
+		/// </summary>
+		public static Func<SuggestedSceneName> NamerFor(WorldBody body, WorldAtlasLayer layer, double latitude, double longitude)
+		{
+			if (body == null)
+			{
+				return null;
+			}
+			return () => GeneratedSceneNames.Suggest(body, layer, latitude, longitude, SceneGenerator.ExistingSceneNames());
 		}
 
 		private void OnGUI()
@@ -56,9 +82,22 @@ namespace FishMMO.Shared.WorldDesign
 			EditorGUILayout.LabelField(details, EditorStyles.wordWrappedLabel);
 			EditorGUILayout.Space(8f);
 
-			GUI.SetNextControlName("SceneName");
-			sceneName = EditorGUILayout.TextField("Scene name", sceneName);
-			if (Event.current.type == EventType.Repaint)
+			using (new EditorGUILayout.HorizontalScope())
+			{
+				GUI.SetNextControlName("SceneName");
+				sceneName = EditorGUILayout.TextField("Scene name", sceneName);
+				using (new EditorGUI.DisabledScope(suggest == null))
+				{
+					if (GUILayout.Button(new GUIContent("Generate",
+							"Names this scene after the ground under the rectangle: the planet says which biome is " +
+							"there, and the name generator says what such a place is called. Press again for another."),
+						GUILayout.Width(80f)))
+					{
+						Draw();
+					}
+				}
+			}
+			if (Event.current.type == EventType.Repaint && !suggested)
 			{
 				GUI.FocusControl("SceneName");
 			}
@@ -67,6 +106,18 @@ namespace FishMMO.Shared.WorldDesign
 			if (problem != null)
 			{
 				EditorGUILayout.HelpBox(problem, MessageType.Warning);
+			}
+			else if (suggested && !string.IsNullOrEmpty(suggestion.Problem))
+			{
+				EditorGUILayout.HelpBox(suggestion.Problem, MessageType.Warning);
+			}
+			else if (suggested && !string.IsNullOrEmpty(suggestion.Biome))
+			{
+				EditorGUILayout.HelpBox(
+					string.IsNullOrEmpty(suggestion.Variant)
+						? $"Named from the {suggestion.Biome} under the rectangle."
+						: $"Named from the {suggestion.Variant.ToLowerInvariant()} {suggestion.Biome} under the rectangle.",
+					MessageType.None);
 			}
 
 			EditorGUILayout.Space(4f);
@@ -87,11 +138,9 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				using (new EditorGUI.DisabledScope(problem != null))
 				{
-					if (GUILayout.Button("Generate", GUILayout.Width(110f)))
+					if (GUILayout.Button("Cut scene", GUILayout.Width(110f)))
 					{
-						accepted = true;
-						done = true;
-						Close();
+						Accept();
 					}
 				}
 			}
@@ -106,11 +155,45 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				else if ((Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter) && problem == null)
 				{
-					accepted = true;
-					done = true;
-					Close();
+					Accept();
 				}
 			}
+		}
+
+		private void Accept()
+		{
+			accepted = true;
+			done = true;
+			Close();
+		}
+
+		/// <summary>
+		/// Draws a name from the ground and puts it in the field.
+		/// </summary>
+		/// <remarks>
+		/// Keyboard focus is taken off the text field first. A UI that writes into a control the
+		/// user is editing is one where the old text comes back the moment they type, because IMGUI
+		/// keeps the focused field's own editing buffer and it wins over the value passed in.
+		/// </remarks>
+		private void Draw()
+		{
+			GUI.FocusControl(null);
+			GUIUtility.keyboardControl = 0;
+			try
+			{
+				suggestion = suggest();
+			}
+			catch (Exception ex)
+			{
+				suggestion = new SuggestedSceneName { Problem = $"Naming threw: {ex.Message}" };
+				Debug.LogException(ex);
+			}
+			suggested = true;
+			if (suggestion.Usable)
+			{
+				sceneName = suggestion.Name;
+			}
+			Repaint();
 		}
 	}
 }

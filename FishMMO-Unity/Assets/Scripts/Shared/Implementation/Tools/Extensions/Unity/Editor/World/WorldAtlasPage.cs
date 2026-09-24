@@ -464,7 +464,8 @@ namespace FishMMO.Shared.WorldDesign
 			TerrainTilePlan plan = SceneGeneration.PlanTiles(sizeKm);
 			string sceneName = SceneNamePrompt.Ask(
 				$"{sizeKm.x:0.##} x {sizeKm.y:0.##} km on {body.ResolvedName}, at {latitude:0.##}°, {longitude:0.##}°.\n{plan}",
-				SuggestSceneName(), out bool fineDetail);
+				SuggestSceneName(), out bool fineDetail,
+				SceneNamePrompt.NamerFor(body, layer, latitude, longitude));
 			if (string.IsNullOrEmpty(sceneName))
 			{
 				return;
@@ -491,10 +492,14 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			Debug.Log($"[World atlas] Generated '{sceneName}': {plan}, {result.ReliefMetres:0} m of relief, " +
-				$"standing at {result.BaseAltitudeMetres:0} m above sea level.\n  " + string.Join("\n  ", result.Wrote));
+				$"standing at {result.BaseAltitudeMetres:0} m above sea level (its ground floor is {result.GroundAltitudeMetres:0} m).\n  "
+				+ string.Join("\n  ", result.Wrote));
+			string sea = result.HasWater
+				? $"\nThe sea is at y = {result.SeaLevelY:0} m, which is where this body's water line falls here."
+				: "\nNo sea: this scene's lowest ground is above the body's water line.";
 			EditorUtility.DisplayDialog("Cut scene",
 				$"\"{sceneName}\" is ready.\n\n{plan}\n" +
-				$"{result.ReliefMetres:0} m of relief, standing at {result.BaseAltitudeMetres:0} m above sea level.\n\n" +
+				$"{result.ReliefMetres:0} m of relief, standing at {result.BaseAltitudeMetres:0} m above sea level.{sea}\n\n" +
 				$"Wrote {result.Wrote.Count} file(s) under {SceneGenerator.WorldFolder(body)}.\n\n" +
 				"Rebuild the world scene details cache to bring it into the game.",
 				"OK");
@@ -517,6 +522,98 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return string.Empty;
+		}
+
+		/// <summary>
+		/// Deletes a scene and everything that belongs only to it, after asking.
+		/// </summary>
+		/// <remarks>
+		/// Lists exactly what will go before it goes. The terrain data lives in a folder beside the
+		/// scene and is useless without it; the atlas entry is what puts the rectangle on the globe
+		/// and blocks anything else being cut there. Leaving either behind is the state that had to
+		/// be cleaned up by hand.
+		/// </remarks>
+		private void DeleteScene(WorldAtlasScene entry)
+		{
+			if (entry == null)
+			{
+				return;
+			}
+			string sceneName = entry.SceneName;
+			model.ScenePaths.TryGetValue(sceneName ?? string.Empty, out string scenePath);
+			WorldBody owner = model.BodyOf(entry);
+			string terrainFolder = owner != null ? SceneGenerator.TerrainFolder(owner, sceneName) : null;
+			string entryPath = AssetDatabase.GetAssetPath(entry);
+
+			var doomed = new List<string>();
+			if (!string.IsNullOrEmpty(scenePath))
+			{
+				doomed.Add(scenePath);
+			}
+			if (!string.IsNullOrEmpty(terrainFolder) && AssetDatabase.IsValidFolder(terrainFolder))
+			{
+				doomed.Add(terrainFolder + " (terrain data)");
+			}
+			if (!string.IsNullOrEmpty(entryPath))
+			{
+				doomed.Add(entryPath + " (atlas entry)");
+			}
+			if (doomed.Count == 0)
+			{
+				EditorUtility.DisplayDialog("Delete scene", $"Nothing left to delete for \"{sceneName}\".", "OK");
+				return;
+			}
+
+			if (!EditorUtility.DisplayDialog("Delete scene",
+				$"Delete \"{sceneName}\" and everything that belongs to it?\n\n" +
+				string.Join("\n", doomed) +
+				"\n\nThis cannot be undone.",
+				"Delete", "Cancel"))
+			{
+				return;
+			}
+
+			// Closed first: the asset database will not delete a scene that is open, and reports
+			// that by returning false rather than by failing loudly.
+			if (!string.IsNullOrEmpty(scenePath))
+			{
+				UnityEngine.SceneManagement.Scene open = UnityEngine.SceneManagement.SceneManager.GetSceneByPath(scenePath);
+				if (open.IsValid() && open.isLoaded)
+				{
+					// Closed without saving: it is about to be deleted, so offering to save it first
+					// would only ask somebody to write a file and then watch it go.
+					UnityEditor.SceneManagement.EditorSceneManager.CloseScene(open, true);
+				}
+			}
+
+			foreach (string path in new[] { scenePath, terrainFolder, entryPath })
+			{
+				if (!string.IsNullOrEmpty(path) && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path)))
+				{
+					AssetDatabase.DeleteAsset(path);
+				}
+			}
+
+			// The world folder, if this was the last scene in it.
+			if (owner != null)
+			{
+				string worldFolder = SceneGenerator.WorldFolder(owner);
+				if (System.IO.Directory.Exists(worldFolder) && System.IO.Directory.GetFileSystemEntries(worldFolder).Length == 0)
+				{
+					AssetDatabase.DeleteAsset(worldFolder);
+				}
+			}
+
+			AssetDatabase.SaveAssets();
+			AssetDatabase.Refresh();
+			WorldAtlasScene.EditorLookup.Invalidate();
+
+			Debug.Log($"[World atlas] Deleted '{sceneName}':\n  " + string.Join("\n  ", doomed) +
+				"\n  Rebuild the world scene details cache so the game stops expecting it.");
+
+			selected = null;
+			model.Reload();
+			Rebuild();
 		}
 
 		/// <summary>Deletes atlas entries whose scene is gone, after asking.</summary>
@@ -879,6 +976,15 @@ namespace FishMMO.Shared.WorldDesign
 			actions.Add(new Button(() => { if (path != null) EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<SceneAsset>(path)); }) { text = "Ping scene" });
 			actions.Add(new Button(() => Turn(90f)) { text = "Turn 90° (R)" });
 			actions.Add(new Button(() => { if (entry.Placed) RemoveFromMap(entry); else Place(entry, null); }) { text = entry.Placed ? "Remove from map" : "Place" });
+
+			/* Deleting a scene is three separate things — the scene file, the terrain data beside
+			 * it and the atlas entry — and doing one without the others is what leaves a rectangle
+			 * on the globe for ground that no longer exists. There was no way to do it from here at
+			 * all, so it had to be done by hand in the Project window, where the terrain folder and
+			 * the entry are easy to miss. */
+			var delete = new Button(() => DeleteScene(entry)) { text = "Delete scene…" };
+			delete.style.marginLeft = 8f;
+			actions.Add(delete);
 			inspectorHost.Add(actions);
 
 			WorldBody b = model.BodyOf(entry);

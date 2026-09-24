@@ -41,6 +41,23 @@ namespace FishMMO.Shared.Biomes
 				GlobalTemperatureOffset + SeaLevelTemperature - (height - WaterSurfaceHeight) * ElevationLapseRate,
 				-1f, 1f);
 
+			return new ClimateSample
+			{
+				Temperature = temperature,
+				Humidity = HumidityAt(temperature, height),
+				ElevationTier = ClimateSettings.TierForHeight(height, ElevationBoundaries),
+			};
+		}
+
+		/// <summary>
+		/// Humidity for a temperature already worked out, at a normalised height.
+		/// </summary>
+		/// <remarks>
+		/// Split out so anything that derives its own temperature — the globe bake works in metres
+		/// above sea level, not in normalised height — still dries the air by the same curves.
+		/// </remarks>
+		public float HumidityAt(float temperature, float height)
+		{
 			float humidity = (1f - height) * LowlandHumidityBonus;
 			if (temperature > HeatDryingThreshold)
 			{
@@ -50,13 +67,7 @@ namespace FishMMO.Shared.Biomes
 			{
 				humidity += (temperature - ColdDryingThreshold) * ColdDryingRate;
 			}
-
-			return new ClimateSample
-			{
-				Temperature = temperature,
-				Humidity = Mathf.Clamp(humidity + GlobalHumidityOffset, -1f, 1f),
-				ElevationTier = ClimateSettings.TierForHeight(height, ElevationBoundaries),
-			};
+			return Mathf.Clamp(humidity + GlobalHumidityOffset, -1f, 1f);
 		}
 	}
 
@@ -186,6 +197,64 @@ namespace FishMMO.Shared.Biomes
 			double equilibrium = SolarConstantTemperature * Math.Pow(flux, 0.25) * Math.Pow(1.0 - Albedo(atmosphere, water), 0.25);
 			return equilibrium + Greenhouse(atmosphere, water);
 		}
+
+		/// <summary>
+		/// How much heat a world makes for itself, 0 dead to 1 molten.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Heat from below, kept apart from heat from the star.</b> Io's surface is −140 °C and
+		/// it is the most volcanic body in the solar system; Venus is 460 °C and geologically
+		/// placid. Folding the two together would make every volcano a function of sunlight and
+		/// put lava on the wrong worlds entirely.
+		/// </para>
+		/// <para>
+		/// Two real sources. <b>Tides</b> squeeze a moon on an eccentric orbit, and that term is
+		/// nearly a switch — heating falls with the sixth power of distance, so a system gets a
+		/// couple of tormented inner moons and many dead outer ones. <b>Size</b> is the other: a
+		/// large world holds its primordial and radiogenic heat for billions of years while a small
+		/// one radiates it away and freezes solid, which is why Earth has plate tectonics and the
+		/// Moon has none despite being made of much the same rock.
+		/// </para>
+		/// <para>
+		/// A body's magnetic field corroborates rather than drives: a field needs a molten
+		/// conducting core, so a world that has one is warm inside whatever the other two terms
+		/// guessed. It can only raise the answer, never lower it — plenty of hot worlds have no
+		/// field, so its absence proves nothing.
+		/// </para>
+		/// </remarks>
+		public static float InternalHeat(SolarSystemProfile system, WorldBody body)
+		{
+			if (body == null)
+			{
+				return EarthlikeInternalHeat;
+			}
+
+			// Tides. Saturated well below Io's, because Io is an extreme and a world half as
+			// tormented is still comprehensively volcanic.
+			double tidal = CelestialMath.TidalHeating(system, body);
+			float fromTides = (float)Math.Min(1.0, Math.Sqrt(Math.Max(0.0, tidal)) * 0.8);
+
+            /* Size. Radius against Earth's, curved so that the interesting range is where the
+             * bodies are: a 5 km rock is stone dead, a 1000 km moon is barely warm, and an
+             * Earth-sized world is fully active. */
+			float radiusKm = body.SkyRadiusKm > 1f ? body.SkyRadiusKm : PlanetSurface.EarthRadiusKm;
+			float fromSize = Mathf.Clamp01(Mathf.Pow(radiusKm / PlanetSurface.EarthRadiusKm, 1.4f));
+
+			// The stronger of the two, not the sum: a world is volcanic for one reason or the
+			// other, and Io is not made calmer by being small.
+			float heat = Mathf.Max(fromTides, fromSize);
+
+			// A magnetic field means a molten core. It can only corroborate.
+			float field = Mathf.Clamp01(body.MagneticField);
+			return Mathf.Clamp01(Mathf.Max(heat, field * 0.55f));
+		}
+
+		/// <summary>What an Earth-sized world makes, for anything with no body to ask about.</summary>
+		public const float EarthlikeInternalHeat = 1f;
+
+		/// <summary>Above this a world's surface is being actively rebuilt: lava, sulphur, fresh basalt.</summary>
+		public const float VolcanicThreshold = 0.55f;
 
 		/// <summary>A kelvin temperature on the −1…1 climate scale.</summary>
 		public static float ToScale(double kelvin) => (float)Math.Max(-1.0, Math.Min(1.0, ToScaleUnclamped(kelvin)));

@@ -52,4 +52,4 @@ MonoBehaviour:
     Comets: 32
     VisibleAsteroids: 2000
     Meteors: 512
-  TextureAboveSkyPercent: 0.1
+  TextureAboveSkyPercent: 0.002

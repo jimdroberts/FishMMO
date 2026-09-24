@@ -385,7 +385,8 @@ namespace FishMMO.Shared.Celestial
 			 * snowball with ice to the equator.
 			 */
 			float top = Mathf.Max(1e-4f, profile.Highest - profile.SeaLevel);
-			float shaped = Mathf.Pow(Mathf.Clamp01(above / top), LandHypsometry);
+			float x = Mathf.Clamp01(above / top);
+			float shaped = LandShoreSlope * x + (1f - LandShoreSlope) * Mathf.Pow(x, LandHypsometry);
 			return shaped * top / profile.Range * relief;
 		}
 
@@ -394,12 +395,34 @@ namespace FishMMO.Shared.Celestial
 		/// How hard land is pushed down toward sea level, standing in for a bimodal hypsometry.
 		/// </summary>
 		/// <remarks>
-		/// The mean of x^p over the land is 1/(p+1) of the summit, so 6 puts the average continent
-		/// at about a seventh of the highest peak — roughly 1.3 km against a 9 km summit here,
-		/// against Earth's 0.84 km against 8.85. Most of a world is coastal plain and a little of
-		/// it is mountain, which is what the curve has to say.
+		/// <para>
+		/// Measured over 200,000 points of the real field rather than reasoned about, because the
+		/// arithmetic that used to stand here was wrong twice over. A bare <c>x^6</c> was chosen on
+		/// the theory that the mean of x^p is 1/(p+1) of the summit and would land near 1.3 km;
+		/// that identity holds for x spread evenly, and the field's land is not — measured, x^6
+		/// gave a mean land elevation of <b>198 m</b> against Earth's 840, and put the MEDIAN land
+		/// point <b>8 m</b> above the water line.
+		/// </para>
+		/// <para>
+		/// <b>The second error was worse, and it is why the ground never matched the globe.</b> A
+		/// pure power curve has zero derivative at the shore, so it does not merely lower the land,
+		/// it flattens it: across a two-kilometre scene the planet's own shape contributed
+		/// <b>0.30 m</b> of height. Meanwhile the baked globe shades the raw field, which varies
+		/// normally over the same ground — so the picture showed a continent with relief on it and
+		/// the scene cut from that spot came out a table.
+		/// </para>
 		/// </remarks>
-		public const float LandHypsometry = 6f;
+		public const float LandHypsometry = 4f;
+
+		/// <summary>
+		/// How much of the land curve stays linear, which is what keeps a slope at the shore.
+		/// </summary>
+		/// <remarks>
+		/// The linear part sets the derivative near sea level and the power part sets the mean.
+		/// Measured: 0.30 gives a mean land elevation of about 840 m — Earth's — with a median
+		/// around 500 m and thirteen times the local relief the pure power curve left.
+		/// </remarks>
+		public const float LandShoreSlope = 0.30f;
 
 		/// <summary>The altitude above sea level at a latitude and longitude, in metres.</summary>
 		public static float AltitudeMetresAt(uint seed, WorldBody body, double latitudeDegrees, double longitudeDegrees)
@@ -490,16 +513,24 @@ namespace FishMMO.Shared.Celestial
 
 		// ── Local detail ──────────────────────────────────────────────
 
-		/// <summary>How far apart the coarsest local detail features are, in metres.</summary>
-		public const float DetailFeatureMetres = 900f;
+		/// <summary>
+		/// How far apart the coarsest local detail features are, in metres.
+		/// </summary>
+		/// <remarks>
+		/// 500, not 900. A scene is two to five kilometres across, so at 900 m the whole of it held
+		/// about three undulations and read as flat — the planet function is continent-scale and
+		/// contributes almost nothing over that distance, so local detail is nearly all the relief
+		/// a scene has.
+		/// </remarks>
+		public const float DetailFeatureMetres = 500f;
 
 		/// <summary>Local detail height as a fraction of the body's total relief.</summary>
 		/// <remarks>
 		/// Proportional rather than absolute so a small moon is not given Earth-sized hills: at
-		/// 0.5% of a 20 km relief that is about 100 m of local shape on an Earth-like world, and a
-		/// few metres on a 5 km rock.
+		/// 1% of a 20 km relief is about 200 m of local shape on an Earth-like world, and a few
+		/// metres on a 5 km rock — a small body genuinely is smoother.
 		/// </remarks>
-		public const float DetailReliefFraction = 0.005f;
+		public const float DetailReliefFraction = 0.010f;
 
 		/// <summary>
 		/// Metre-scale ground shape for a point inside a scene, averaging to zero.
@@ -521,12 +552,26 @@ namespace FishMMO.Shared.Celestial
 		/// at the altitude the globe says it does, and the coastline is still where the map shows.
 		/// </para>
 		/// </remarks>
+		/// <summary>
+		/// The most local detail can move the ground either way, in metres.
+		/// </summary>
+		/// <remarks>
+		/// Exact, not an estimate: <see cref="LocalDetailMetres"/> is <c>(Fbm − 0.5) × 2 ×
+		/// amplitude</c> and <c>Fbm</c> is bounded to 0 … 1, so the result cannot leave
+		/// ±amplitude at any point on any world. That is what lets a scene's height range be
+		/// bounded without sampling every point of it — and a range that is merely sampled is a
+		/// range some peak between the samples falls outside, which the terrain then flattens.
+		/// </remarks>
+		public static float LocalDetailAmplitudeMetres(WorldBody body) => ReliefMetres(body) * DetailReliefFraction;
+
 		public static float LocalDetailMetres(uint seed, float eastMetres, float northMetres, WorldBody body)
 		{
-			float amplitude = ReliefMetres(body) * DetailReliefFraction;
+			float amplitude = LocalDetailAmplitudeMetres(body);
 			var p = new Vector3(eastMetres / DetailFeatureMetres, 0.37f, northMetres / DetailFeatureMetres);
-			// Centred on zero: Fbm runs 0..1 and this must not raise the ground.
-			return (Fbm(p, 5, seed ^ 0x5CE4E7A1u) - 0.5f) * 2f * amplitude;
+			/* Six octaves, so the finest features are about fifteen metres across: a scene needs
+			 * shape at the scale somebody walks over, not only at the scale they see from a ridge.
+			 * Centred on zero, because Fbm runs 0..1 and this must not raise the ground. */
+			return (Fbm(p, 6, seed ^ 0x5CE4E7A1u) - 0.5f) * 2f * amplitude;
 		}
 
 		/// <summary>

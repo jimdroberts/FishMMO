@@ -897,6 +897,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 385c0d078d021fd7a83329f6f0d07b4e
+    m_Address: Naron 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 38a817eaf519420eb01ebd0adcb23d5a
     m_Address: Gremlin
     m_ReadOnly: 0
@@ -1139,12 +1145,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4e1992ef02b4b184e990ea145b34bdd0
     m_Address: Rocky Terrain
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4f39c0785ad7dd8b2b3d27c9842ced2d
-    m_Address: Nariatha 1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

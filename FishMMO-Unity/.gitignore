@@ -76,6 +76,15 @@ crashlytics-build.properties
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientWorldMaps.asset*
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientWorldMaps_*
 
+# World scenes. Not shared: the planets and the scenes cut from them are this project's own
+# content, and a generated scene brings a folder of terrain data with it.
+#
+# This ignores UNTRACKED files only. The scenes already committed stay versioned until they are
+# removed from the index as well, which is a separate decision because the build puts every world
+# scene into the player — a clone without them has nowhere to spawn.
+/[Aa]ssets/[Ss]cenes/[Ww]orld[Ss]cene/
+/[Aa]ssets/[Ss]cenes/[Ww]orld[Ss]cene.meta
+
 # Baked planet surfaces. Build output, exactly like the world maps above: every image is
 # reproduced exactly from its body's terrain seed, so committing them would be storing what a
 # function can produce. A client build bakes them, builds, and removes them again.

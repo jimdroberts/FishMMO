@@ -21,6 +21,28 @@ namespace FishMMO.Shared.WorldDesign
 	public class SkyPreviewView : VisualElement
 	{
 		private const int StarCount = 700;
+		/// <summary>
+		/// The surface to draw a body with: a hand-made one, else the baked one off disk.
+		/// </summary>
+		/// <remarks>
+		/// The bake no longer writes onto <see cref="CelestialBody.SurfaceTexture"/> — it is build
+		/// output and a committed asset must not point at it — so a preview that reads only that
+		/// field shows every generated world as a blank disc. Read straight off disk here, which
+		/// the editor can always do and which is current the instant a bake finishes.
+		/// </remarks>
+		private static Texture2D SurfaceOf(CelestialBody body)
+		{
+			if (body == null)
+			{
+				return null;
+			}
+			if (body.SurfaceTexture != null)
+			{
+				return body.SurfaceTexture;
+			}
+			return body is WorldBody world ? PlanetSurfaceBaker.Baked(world) : null;
+		}
+
 		private static readonly Vector3[] stars = BuildStars();
 
 		private readonly List<SkyBodyView> views = new List<SkyBodyView>();
@@ -104,10 +126,11 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Vector2 p = ToScreen(view.Altitude, view.Azimuth);
 				float size = BodyPixels(view);
-				if (view.Textured && view.Body.SurfaceTexture != null)
+				Texture2D surface = SurfaceOf(view.Body);
+				if (view.Textured && surface != null)
 				{
 					Image image = ImageAt(imageIndex++);
-					image.image = view.Body.SurfaceTexture;
+					image.image = surface;
 					image.style.left = p.x - size;
 					image.style.top = p.y - size;
 					image.style.width = size * 2f;
@@ -380,7 +403,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			if (view.Textured && body.SurfaceTexture != null)
+			if (view.Textured && SurfaceOf(body) != null)
 			{
 				// The image child draws the surface; shade the night side over it below.
 			}

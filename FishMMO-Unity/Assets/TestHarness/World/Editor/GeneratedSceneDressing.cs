@@ -63,17 +63,22 @@ namespace FishMMO.TestHarness.World.Editor
 
 			Camera camera = host.AddComponent<Camera>();
 			camera.nearClipPlane = 0.1f;
-			/* Far enough to see the clouds, which are marched to tens of kilometres. A near plane
-			 * sized for a room clips the horizon off them and the sky reads as empty. */
-			camera.farClipPlane = 5000f;
+			/* Sized from the scene, not fixed.
+			 *
+			 * One unit is one metre, so a 4.5 km scene is 4500 units across and 6360 corner to
+			 * corner — a fixed 5000 clips the far side of it, and the clouds are marched to tens of
+			 * kilometres beyond that. Standing in the middle you would see the ground end in mid
+			 * air. The floor keeps small scenes looking the way the world sim bed does. */
+			TerrainTilePlan sized = SceneGeneration.PlanTiles(request.SizeKm);
+			float diagonal = Mathf.Sqrt(sized.WidthMetres * sized.WidthMetres + sized.DepthMetres * sized.DepthMetres);
+			camera.farClipPlane = Mathf.Clamp(diagonal * 2f, 5000f, 40000f);
 			camera.clearFlags = CameraClearFlags.Skybox;
 			host.AddComponent<AudioListener>();
 			host.AddComponent<WorldSimCamera>();
 
 			/* Standing on the ground at the middle of the scene, looking out. The terrain's own
 			 * floor is zero, so the height here is eye level above whatever is underneath. */
-			TerrainTilePlan plan = SceneGeneration.PlanTiles(request.SizeKm);
-			host.transform.position = new Vector3(0f, GroundHeight(scene) + 1.8f, -plan.DepthMetres * 0.25f);
+			host.transform.position = new Vector3(0f, GroundHeight(scene) + 1.8f, -sized.DepthMetres * 0.25f);
 			host.transform.rotation = Quaternion.Euler(4f, 0f, 0f);
 			return camera;
 		}

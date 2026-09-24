@@ -51,16 +51,6 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public const string AddressableGroupName = "ClientPlanetSurfaces";
 
-		/// <summary>
-		/// How far regional climate pushes a temperature about, in scale units.
-		/// </summary>
-		/// <remarks>
-		/// 0.18 is about six kelvin. Measured on Naron, the latitude term moves roughly 0.02 units
-		/// per degree, so this swings the snowline about nine degrees either way — enough for real
-		/// lobes and bays, small enough that it never turns a temperate world into a frozen one.
-		/// </remarks>
-		private const float RegionalVariation = 0.18f;
-
 		/// <summary>Width of a baked surface. Height is half of it: an equirectangular map is 2:1.</summary>
 		public const int Width = 2048;
 
@@ -148,24 +138,23 @@ namespace FishMMO.Shared.WorldDesign
 
 			WorldEditorAssets.EnsureFolder(BakedDirectory);
 
-			uint seed = body.ResolvedTerrainSeed;
-			float cratering = PlanetSurface.CrateringOf(body.Atmosphere);
-			PlanetSurface.PlanetProfile profile = PlanetSurface.ProfileOf(seed, body);
-
 			/* The world's own climate, so the picture is of THIS planet rather than a colour ramp.
 			 * Every body used to come out the same brown-to-white gradient whatever its orbit,
 			 * atmosphere or ocean — a frozen moon and a temperate world were indistinguishable, and
-			 * nothing showed where the ice caps or the deserts would actually fall. */
+			 * nothing showed where the ice caps or the deserts would actually fall.
+			 *
+			 * Resolved once, in the shared field, so the picture, the ground a scene is cut from
+			 * and the name that scene is given all come from the same arithmetic. */
 			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
-			double insolation = system != null ? CelestialMath.Insolation(system, body, 0.0) : 1.0;
-			/* Unclamped, because latitude and altitude are still to be subtracted from it. Clamped
-			 * first, a 460 K greenhouse world reads +1 like any warm planet, and the pole's -1.6
-			 * then drags it below freezing — which is how a world hot enough to melt lead came out
-			 * with ice caps. */
-			float meanTemperature = (float)ClimateModel.ToScaleUnclamped(
-				ClimateModel.MeanSurfaceKelvin(insolation, body.Atmosphere, body.Water));
-			float relief = PlanetSurface.ReliefMetres(body);
-			float lapsePerMetre = (float)ClimateModel.LapseRatePerMetre(body.Atmosphere) / (float)ClimateModel.KelvinPerUnit;
+			PlanetClimateField climate = PlanetClimateField.For(system, body);
+
+			uint seed = climate.Seed;
+			float cratering = climate.Cratering;
+			PlanetSurface.PlanetProfile profile = climate.Profile;
+			float relief = climate.ReliefMetres;
+			// What the world makes for itself: lava on a tormented moon, a fractured shell on a
+			// frozen one. Nothing to do with how far it sits from its star.
+			float internalHeat = climate.InternalHeat;
 
 			int height = Width / 2;
 			var texture = new Texture2D(Width, height, TextureFormat.RGBA32, false);
@@ -199,33 +188,8 @@ namespace FishMMO.Shared.WorldDesign
 					// The same helper the terrain generator uses, so the picture and the ground
 					// agree about how high a continent is.
 					float altitude = PlanetSurface.AltitudeFromHeight(h, profile, relief);
-					/* A regional wobble on top of the physics, so the snowline is a coastline and
-					 * not a ruled line.
-					 *
-					 * Latitude temperature is a pure function of latitude, and altitude barely
-					 * moves on gentle ground — so without this the freezing contour is exactly a
-					 * circle of latitude, and the ice cap came out as a band drawn straight across
-					 * the map with a razor edge. Real caps are lobed because currents, land and
-					 * weather push them about; this stands in for all three at a fraction of a
-					 * kelvin's worth of variation. */
 					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
-					/* Two scales, and stretched, because fBm does not fill its own range.
-					 *
-					 * Measured: (Fbm − 0.5) × 2 swings only about ±0.22, since averaging octaves
-					 * pulls the result to the middle. At the old multiplier that was ±0.02 of
-					 * temperature — under a degree of latitude, invisible, which is why the edge
-					 * stayed ruler-straight however much I claimed to have fixed it. Stretched to
-					 * use the range, the coarse term moves the snowline by several degrees and the
-					 * fine one frays it. */
-					float coarse = Mathf.Clamp((PlanetSurface.FieldNoise(seed ^ 0x51CEEDA7u, direction, 2.4f, 3) - 0.5f) * 2f * 3.4f, -1f, 1f);
-					float fine = Mathf.Clamp((PlanetSurface.FieldNoise(seed ^ 0x2A66EDu, direction, 11f, 3) - 0.5f) * 2f * 3.4f, -1f, 1f);
-					float regional = (coarse * 0.78f + fine * 0.22f) * RegionalVariation;
-
-					// Clamped here, once, with every term in.
-					float temperature = Mathf.Clamp(meanTemperature
-						+ (system != null ? (float)CelestialMath.LatitudeTemperature(system, body, 0.0, latitude) : 0f)
-						- Mathf.Max(0f, altitude) * lapsePerMetre
-						+ regional, -1f, 1f);
+					float temperature = climate.TemperatureAt(latitude, direction, altitude);
 					/* Slope from the neighbours already taken. Scaled by the cosine of the
 					 * latitude because an equirectangular map's columns crowd together toward the
 					 * poles: without it a gentle slope near the pole shades like a cliff. */
@@ -246,7 +210,7 @@ namespace FishMMO.Shared.WorldDesign
 					hasPreviousHeight = true;
 					previousRow[x] = h;
 
-					pixels[row + x] = Shade(h, profile, body, temperature, slope);
+					pixels[row + x] = Shade(h, profile, body, temperature, slope, internalHeat, direction, seed);
 				}
 				hasPreviousRow = true;
 			}
@@ -449,7 +413,8 @@ namespace FishMMO.Shared.WorldDesign
 			return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(edge0, edge1, x));
 		}
 
-		private static Color32 Shade(float h, PlanetSurface.PlanetProfile profile, WorldBody body, float temperature, float slope)
+		private static Color32 Shade(float h, PlanetSurface.PlanetProfile profile, WorldBody body, float temperature,
+			float slope, float internalHeat, Vector3 direction, uint seed)
 		{
 			bool hasOcean = body.Water > 0f;
 			bool airless = body.Atmosphere == AtmosphereKind.None;
@@ -481,10 +446,55 @@ namespace FishMMO.Shared.WorldDesign
 					? Color.Lerp(new Color(0.22f, 0.21f, 0.20f), new Color(0.72f, 0.70f, 0.66f), above)
 					: Color.Lerp(new Color(0.46f, 0.40f, 0.32f), new Color(0.52f, 0.49f, 0.45f), above);
 
-				if (airless)
+				if (airless || body.Atmosphere == AtmosphereKind.Thin)
 				{
-					// No air, no weather, no life: bare regolith whatever the temperature.
-					colour = rock;
+					/* An airless world is NOT just regolith at every temperature, which is what
+					 * this used to say. Europa is airless and made of ice; the Moon is airless and
+					 * made of rock; Io is airless and made of sulphur and lava. What separates them
+					 * is water and internal heat, not air. */
+					bool icy = body.Water > 0.05f && temperature <= -0.35f;
+
+					if (icy)
+					{
+						// Water ice: bright, and bluer where it is thick and old.
+						Color ice = Color.Lerp(new Color(0.78f, 0.84f, 0.90f), new Color(0.93f, 0.96f, 0.99f), above);
+						colour = ice;
+
+						if (internalHeat >= 0.3f)
+						{
+							/* Cryovolcanism. A shell worked from beneath cracks into long curved
+							 * lineae with darker material welling up through them — Europa's
+							 * defining feature, and invisible from temperature alone since the
+							 * surface is frozen either way. */
+							float lineae = PlanetSurface.FieldNoiseAt(seed ^ 0x1CE1AEu,
+								new Vector3(direction.x * 7f, direction.y * 7f, direction.z * 7f), 4);
+							float crack = 1f - Mathf.Abs(lineae - 0.5f) * 2f;
+							colour = Color.Lerp(colour, new Color(0.62f, 0.52f, 0.45f),
+								Smooth(0.86f, 1f, crack) * Mathf.Clamp01(internalHeat));
+						}
+					}
+					else if (internalHeat >= ClimateModel.VolcanicThreshold)
+					{
+						/* Volcanic rock: fresh basalt is dark, and sulphur compounds stain it
+						 * yellow and orange wherever the vents are. Io, not the Moon. */
+						float vents = PlanetSurface.FieldNoiseAt(seed ^ 0x7A0A11u,
+							new Vector3(direction.x * 5.5f, direction.y * 5.5f, direction.z * 5.5f), 4);
+						Color basalt = Color.Lerp(new Color(0.17f, 0.15f, 0.15f), new Color(0.34f, 0.31f, 0.29f), above);
+						Color sulphur = Color.Lerp(new Color(0.78f, 0.66f, 0.28f), new Color(0.86f, 0.52f, 0.22f), vents);
+						colour = Color.Lerp(basalt, sulphur, Smooth(0.52f, 0.78f, vents) * Mathf.Clamp01(internalHeat));
+
+						// Molten ground glows in the lowest places, where the crust is thinnest.
+						if (internalHeat > 0.8f)
+						{
+							colour = Color.Lerp(colour, new Color(0.95f, 0.35f, 0.10f),
+								Smooth(0.14f, 0f, above) * 0.8f);
+						}
+					}
+					else
+					{
+						// Dead rock: no air, no water, no heat left. Our own Moon.
+						colour = rock;
+					}
 				}
 				else if (temperature <= 0f)
 				{

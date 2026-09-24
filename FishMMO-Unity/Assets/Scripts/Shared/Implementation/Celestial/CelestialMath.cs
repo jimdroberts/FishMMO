@@ -738,6 +738,68 @@ namespace FishMMO.Shared.Celestial
 			return LatitudeCooling * (height - 1.0);
 		}
 
+		// ── Internal heat ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Tidal heating a moon receives from the world it circles, relative to Io's.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The reason Io is the most volcanic body in the solar system and Europa has an ocean
+		/// under its ice, while our own larger, colder Moon is geologically dead. A moon on an
+		/// eccentric orbit is squeezed and released once per circuit, and that flexing heats it
+		/// from within — heat that owes nothing at all to its star.
+		/// </para>
+		/// <para>
+		/// Heating goes as the parent's mass squared, the eccentricity squared, and the inverse
+		/// <b>sixth</b> power of the distance. The distance term is what makes this a switch rather
+		/// than a gradient: doubling a moon's orbit divides its heating by sixty-four, so a system
+		/// has a couple of tormented inner moons and a lot of dead outer ones, exactly as Jupiter's
+		/// does. Mass is taken from radius cubed at constant density, which is the only mass the
+		/// project carries.
+		/// </para>
+		/// <para>
+		/// Returns 0 for anything that is not a moon of a world. A planet is not being squeezed by
+		/// its star at any distance a planet survives at.
+		/// </para>
+		/// </remarks>
+		public static double TidalHeating(SolarSystemProfile system, WorldBody body)
+		{
+			if (body == null || !(body.Parent is WorldBody parent))
+			{
+				return 0.0;
+			}
+			double eccentricity = Math.Max(0.0, body.Orbit.Eccentricity);
+			double distance = Math.Max(1e-6, body.Orbit.Distance);
+			if (eccentricity <= 1e-4)
+			{
+				// A perfectly circular orbit is never squeezed: the tide does not move.
+				return 0.0;
+			}
+
+			/* Mass SQUARED, which is not a detail. Tidal heating goes as the square of the
+			 * parent's mass, and with it linear our own Moon came out a quarter as tormented as Io
+			 * — "warm", with volcanism to match. It is geologically dead, and the reason is exactly
+			 * this term: Jupiter is eleven times Earth's radius, so more than a thousand times its
+			 * mass, and squaring that is what separates a moon being kneaded molten from one that
+			 * froze solid billions of years ago. */
+			double parentMass = Math.Pow(Math.Max(1.0, parent.SkyRadiusKm), 3.0);
+			double referenceMass = Math.Pow(IoParentRadiusKm, 3.0);
+			double reference = referenceMass * referenceMass * IoEccentricity * IoEccentricity
+				/ Math.Pow(IoDistance, 6.0);
+			double heating = parentMass * parentMass * eccentricity * eccentricity / Math.Pow(distance, 6.0);
+			return reference > 0.0 ? heating / reference : 0.0;
+		}
+
+		/// <summary>Jupiter's radius in kilometres, the reference for tidal heating.</summary>
+		public const double IoParentRadiusKm = 69911.0;
+
+		/// <summary>Io's orbital eccentricity, small but never zero because the other moons keep pumping it.</summary>
+		public const double IoEccentricity = 0.0041;
+
+		/// <summary>Io's distance in the project's own orbit units, matching how moons are authored.</summary>
+		public const double IoDistance = 422.0;
+
 		/// <summary>Greenhouse contribution to the temperature offset for an atmosphere.</summary>
 		public static double Greenhouse(AtmosphereKind atmosphere)
 		{

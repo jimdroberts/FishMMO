@@ -242,6 +242,89 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			return altitude;
 		}
+
+		/// <summary>One sample of the planet's own shape per this many metres, when bounding a scene.</summary>
+		/// <remarks>
+		/// The planet term is continent-scale — its finest feature spans hundreds of kilometres —
+		/// so 250 m is far finer than it needs and a 20 km scene still costs under seven thousand
+		/// samples. Clamped below so a small scene is not bounded from a handful of points.
+		/// </remarks>
+		public const float BoundsSampleMetres = 250f;
+		private const int MinimumBoundsSteps = 96;
+
+		/// <summary>
+		/// The lowest and highest ground a scene can possibly have, in metres above the body's sea
+		/// level.
+		/// </summary>
+		/// <param name="request">The scene being cut.</param>
+		/// <param name="plan">Its tile grid, for how far the scene reaches.</param>
+		/// <param name="lowest">Metres above sea level of the lowest possible ground.</param>
+		/// <param name="highest">Metres above sea level of the highest possible ground.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>A bound, not a measurement.</b> Every tile's heightmap is stored as a fraction of one
+		/// shared height range, so a height outside that range is not merely rounded — it is
+		/// clamped, and the ground comes out with a flat top where a summit should be and a flat
+		/// floor where a gully should be. A scene is written at about two metres a sample; a range
+		/// sampled every forty-seven metres, as this was, misses most of what local detail does,
+		/// and the terrain then flattens every peak and pit between the samples it took.
+		/// </para>
+		/// <para>
+		/// So the two terms are bounded differently, which is the whole point: the planet's own
+		/// shape is sampled, because it is smooth over a scene and sampling it closely is cheap,
+		/// while local detail is bounded <em>exactly</em> from
+		/// <see cref="PlanetSurface.LocalDetailAmplitudeMetres"/> — it cannot leave ±amplitude
+		/// anywhere, so no sampling can improve on that and none is done. The result is a range
+		/// the ground provably fits inside at every one of the millions of points that get written.
+		/// </para>
+		/// </remarks>
+		public static void Bounds(SceneGenerationRequest request, TerrainTilePlan plan, out float lowest, out float highest)
+		{
+			lowest = 0f;
+			highest = 0f;
+			if (request == null)
+			{
+				return;
+			}
+
+			float halfWidth = plan.WidthMetres * 0.5f;
+			float halfDepth = plan.DepthMetres * 0.5f;
+			int steps = Mathf.Clamp(
+				Mathf.CeilToInt(Mathf.Max(plan.WidthMetres, plan.DepthMetres) / BoundsSampleMetres),
+				MinimumBoundsSteps, 512);
+
+			// The planet's own shape only: local detail is added back as an exact bound below, and
+			// sampling it here would understate it however fine the grid was.
+			bool fineDetail = request.FineDetail;
+			request.FineDetail = false;
+			try
+			{
+				lowest = float.MaxValue;
+				highest = float.MinValue;
+				for (int z = 0; z <= steps; z++)
+				{
+					float north = Mathf.Lerp(-halfDepth, halfDepth, z / (float)steps);
+					for (int x = 0; x <= steps; x++)
+					{
+						float east = Mathf.Lerp(-halfWidth, halfWidth, x / (float)steps);
+						float altitude = AltitudeMetres(request, east, north);
+						lowest = Mathf.Min(lowest, altitude);
+						highest = Mathf.Max(highest, altitude);
+					}
+				}
+			}
+			finally
+			{
+				request.FineDetail = fineDetail;
+			}
+
+			if (fineDetail)
+			{
+				float amplitude = PlanetSurface.LocalDetailAmplitudeMetres(request.Body);
+				lowest -= amplitude;
+				highest += amplitude;
+			}
+		}
 	}
 }
 #endif
