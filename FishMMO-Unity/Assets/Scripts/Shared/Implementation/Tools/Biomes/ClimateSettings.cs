@@ -27,6 +27,47 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Elevation-tier boundaries WorldEditor generates with: 0, 8 cut-offs, 1.</summary>
 		public static readonly float[] DefaultElevationBoundaries = { 0f, 0.2f, 0.35f, 0.42f, 0.45f, 0.6f, 0.75f, 0.9f, 0.95f, 1f };
 
+		private static ClimateSettings derived;
+
+		/// <summary>
+		/// The climate every scene gets when none is authored: this asset's own field defaults, held
+		/// in memory and never written to disk.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>A world's climate is derived, not authored.</b> <c>CelestialMath.ClimateOffsets</c>
+		/// already works out what a body's distance from its star, its atmosphere, its water and its
+		/// latitude do to every reading on it — all of it relative to the home world. So this asset
+		/// is not "a climate": it is the <em>reference</em> model those offsets move, and there is
+		/// exactly one of it however many planets a system has. Writing one per body would apply the
+		/// orbit twice and make a cold world colder than anything could live on.
+		/// </para>
+		/// <para>
+		/// Which leaves nothing for a per-world asset to say, so the defaults answer for every scene
+		/// and an authored asset becomes what it should always have been: an override for a scene
+		/// that wants to differ. The numbers here are the calibrated ones — sea level 0.8, the lapse
+		/// rate 0.8, a 20° span across the map — measured so the whole biome range is reachable
+		/// between the equator and the poles.
+		/// </para>
+		/// <para>
+		/// Not registered in the cached-object table: it has no asset name, and an unnamed entry
+		/// would take the ID 0 slot that a template referenced only by a prefab already collides on.
+		/// </para>
+		/// </remarks>
+		public static ClimateSettings Default
+		{
+			get
+			{
+				if (derived == null)
+				{
+					derived = CreateInstance<ClimateSettings>();
+					derived.name = "Derived Climate";
+					derived.hideFlags = HideFlags.HideAndDontSave;
+				}
+				return derived;
+			}
+		}
+
 		[Header("Global climate")]
 		[Tooltip("Shifts every temperature reading: -1 ice age … +1 hothouse.")]
 		[Range(-1f, 1f)] public float GlobalTemperatureOffset = 0f;
@@ -41,8 +82,16 @@ namespace FishMMO.Shared.Biomes
 		[Header("Temperature model")]
 		[Tooltip("Temperature at the water line ON THE SUB-SOLAR EQUATOR (-1 frozen … +1 scorching). Latitude cools it from there and the lapse rate cools it with height, so this is the hottest the sea-level ground ever gets, not its average. 0.8 puts true tropics at the equator and ice caps at the poles.")]
 		[Range(-1f, 1f)] public float SeaLevelTemperature = 0.8f;
-		[Tooltip("How much temperature drops from sea floor to the highest peak.")]
-		[Range(0f, 2f)] public float ElevationLapseRate = 0.8f;
+		/// <remarks>
+		/// 1.5, not 0.8. The lapse rate has to carry the whole drop from the water line to the
+		/// highest peak on its own, and at 0.8 it removed only 0.464 across a scene's entire height
+		/// range — so with the sea level anchored at 0.8, the highest peak in any scene read +0.336
+		/// and **nothing froze from elevation at all**. Snow could only come from latitude or from
+		/// a weather cell, which is not how a mountain looks. At 1.5 the peak reads −0.07 and the
+		/// water line is untouched at 0.80.
+		/// </remarks>
+		[Tooltip("How much temperature drops from sea floor to the highest peak. 1.5 puts the highest ground just below freezing while the water line stays mild.")]
+		[Range(0f, 2f)] public float ElevationLapseRate = 1.5f;
 
 		[Header("Humidity model")]
 		[Tooltip("Extra humidity at the lowest elevations, fading to none at the highest.")]

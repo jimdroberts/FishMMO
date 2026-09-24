@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39aaa201d0124cd6a217bdb1a28fa474, type: 3}
+  m_Name: Ithwyn System - Pelus
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.WorldBody
+  DisplayName: Pelus
+  Parent: {fileID: 11400000, guid: b2608a48d656ea3a3a75783e75e9829d, type: 2}
+  Orbit:
+    Distance: 0.21831961
+    Eccentricity: 0.07407122
+    InclinationDegrees: 0.909533
+    OffsetDegrees: 206.8455
+    PeriodMode: 0
+    PeriodDays: 365
+  SkyRadiusKm: 8123.7905
+  Tint: {r: 0.60846394, g: 0.5278237, b: 0.48222652, a: 1}
+  SurfaceTexture: {fileID: 0}
+  HasRings: 0
+  Rings:
+    InnerRadius: 1.3
+    OuterRadius: 2.3
+    Bands: 5
+    Opacity: 0.6
+    Tint: {r: 0.86, g: 0.8, b: 0.68, a: 1}
+    Texture: {fileID: 0}
+  Kind: 0
+  RotationHours: 25.677368
+  Retrograde: 0
+  AxialTiltDegrees: 21.768585
+  PoleLongitudeDegrees: 194.69875
+  TidallyLocked: 0
+  RotationOffsetDegrees: 84.9152
+  Atmosphere: 3
+  Haze: 3.5232637
+  HazeColor: {r: 0.68677115, g: 0.62225896, b: 0.5857812, a: 1}
+  MagneticField: 0.30582947
+  MagneticPoleTiltDegrees: 6.4893684
+  MagneticPoleLongitudeDegrees: 107.150536
+  TerrainSeed: 540378750
+  Water: 0.0640854
+  BaseClimate: {fileID: 0}
+  Sky: {fileID: 0}
+  Clouds: {fileID: 11400000, guid: be5eade63596c948fb1d08f3940fbf26, type: 2}
+  RadiusMode: 0
+  ManualRadiusKm: 30
+  MinimumRadiusKm: 10
+  MaxCoveragePercent: 35
+  CurrentRadiusKm: 10
+  Layers: []

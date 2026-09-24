@@ -288,7 +288,9 @@ namespace FishMMO.Client
 						OccluderRingShapes.Add(Vector4.zero);
 					}
 				}
-				if (body.Textured && body.Body.SurfaceTexture != null)
+				// Asked of the library, not of the body: a baked surface is build output and is
+				// never written onto the asset. See PlanetSurfaceLibrary.
+				if (body.Textured && PlanetSurfaceLibrary.Get(body.Body) != null)
 				{
 					Textured.Add(body);
 					AddStep(StepKind.Textured, body, rank);

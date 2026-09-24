@@ -49,7 +49,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			public ushort NextCellID = 1;
 			public bool Director;
 			public uint NextSpawnTick;
+			/// <summary>Degrees the prevailing wind blows TOWARD. Derived; see RefreshPrevailingWind.</summary>
 			public float WindHeadingDegrees;
+
+			/// <summary>How hard it is blowing, in metres per second. Storm cells are carried by it.</summary>
+			public float WindSpeedMetersPerSecond;
 			public float CoverResync;
 			public WeatherDeltaBroadcast Pending;
 			public bool HasPending;
@@ -153,7 +157,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				Rng = new DeterministicRNG(unchecked((int)seed)),
 				Director = settings.WeatherDirector && mode == WeatherSceneMode.Own,
 			};
+			/* A starting guess only. RefreshPrevailingWind replaces it with the real thing on the
+			 * first director run — it cannot be derived here, because the scene's timeline has not
+			 * been given its clock anchor yet and the driver has nothing to answer from. */
 			sw.WindHeadingDegrees = sw.Rng.Range(0f, 360f);
+			sw.WindSpeedMetersPerSecond = 4f;
 			sw.NextSpawnTick = NowTick + timeline.SecondsToTicks(sw.Rng.Range(5f, 30f));
 			scenes[scene.handle] = sw;
 			WeatherQuery.Register(scene, timeline);
@@ -395,21 +403,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				area = new Rect(map.WorldOrigin, map.WorldSize);
 				return true;
 			}
-			bool found = false;
-			area = default;
-			foreach (Terrain terrain in Terrain.activeTerrains)
-			{
-				if (terrain == null || terrain.terrainData == null || terrain.gameObject.scene.handle != sw.Scene.handle)
-				{
-					continue;
-				}
-				Vector3 origin = terrain.GetPosition();
-				Vector3 size = terrain.terrainData.size;
-				var rect = new Rect(origin.x, origin.z, size.x, size.z);
-				area = found ? Rect.MinMaxRect(Mathf.Min(area.xMin, rect.xMin), Mathf.Min(area.yMin, rect.yMin), Mathf.Max(area.xMax, rect.xMax), Mathf.Max(area.yMax, rect.yMax)) : rect;
-				found = true;
-			}
-			return found;
+			/* One measurement of the scene's ground, shared with the biome sampler. This used to
+			 * union the tiles here as well, which was the same arithmetic written twice — and the
+			 * two could drift, leaving the director working over a different landmass from the one
+			 * the climate was being read against. */
+			SceneTerrainExtent extent = SceneTerrainExtent.Of(sw.Scene);
+			area = extent.Area;
+			return extent.Found;
 		}
 
 		// ── Director ──────────────────────────────────────────────────
@@ -438,7 +438,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				}
 				alive++;
 				Vector2 centre = cell.CentreAt(now, timeline.TickDelta);
-				Rect grown = new Rect(area.xMin - cell.RadiusMeters, area.yMin - cell.RadiusMeters, area.width + cell.RadiusMeters * 2f, area.height + cell.RadiusMeters * 2f);
+				/* ReachMeters, not the radius: a front reaches far further along its line than
+				 * across it, so measuring by radius would retire one the moment its CENTRE neared
+				 * the edge, with most of the wall still over the scene. */
+				float reach = cell.ReachMeters;
+				Rect grown = new Rect(area.xMin - reach, area.yMin - reach, area.width + reach * 2f, area.height + reach * 2f);
 				bool outside = !grown.Contains(centre);
 				bool hostile = false;
 				if (!outside)
@@ -460,6 +464,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			{
 				return;
 			}
+			RefreshPrevailingWind(sw, area, now);
 			float density = AverageDensity(sw, area);
 			int target = Mathf.Min(MaxCellsPerScene, Mathf.RoundToInt(squareKm * density));
 			if (alive >= target)
@@ -469,6 +474,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			}
 			TrySpawnFromBiomes(sw, area, now);
 			sw.NextSpawnTick = now + timeline.SecondsToTicks(sw.Rng.Range(60f, 240f));
+		}
+
+		/// <summary>
+		/// Takes the scene's prevailing wind from the driver, rather than from a number rolled once
+		/// when the scene loaded.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The heading used to be <c>Rng.Range(0, 360)</c> at startup and never touched again, so
+		/// every storm in a scene drifted the same way for as long as the server ran — and for a
+		/// FRONT that is worse than for a shower, because a front's line is perpendicular to its
+		/// velocity, so a stale heading gives a permanently wrongly-oriented wall.
+		/// </para>
+		/// <para>
+		/// The driver has the real answer: trade winds, westerlies and polar easterlies by latitude,
+		/// leaning poleward, breathing over hours. <see cref="WeatherSample.Air"/> carries it
+		/// already, so this only has to ask — at the scene's centre, once per director pass, which is
+		/// every half minute or so. Weather turns slowly; it does not need asking more often.
+		/// </para>
+		/// <para>
+		/// Keeps the last good answer when the driver has nothing to say — a scene with no driver, or
+		/// air so still there is no direction in it. A zero vector would otherwise snap every storm
+		/// to due north.
+		/// </para>
+		/// </remarks>
+		private static void RefreshPrevailingWind(SceneWeather sw, Rect area, uint now)
+		{
+			var centre = new Vector3(area.center.x, 0f, area.center.y);
+			WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, centre, now);
+			Vector2 wind = sample.Air.Wind;
+			if (wind.sqrMagnitude < 1e-4f)
+			{
+				return;
+			}
+			sw.WindHeadingDegrees = Mathf.Repeat(Mathf.Atan2(wind.x, wind.y) * Mathf.Rad2Deg, 360f);
+			sw.WindSpeedMetersPerSecond = wind.magnitude;
 		}
 
 		private static float AverageDensity(SceneWeather sw, Rect area)
@@ -507,7 +548,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 					continue;
 				}
 				float heading = (sw.WindHeadingDegrees + sw.Rng.Range(-35f, 35f)) * Mathf.Deg2Rad;
-				float speed = sw.Rng.Range(2f, 6f);
+				/* Carried by the wind that is actually blowing, not by a fixed 2–6 m/s. A cell moves
+				 * with the air it is in, so a stiff day drives weather across a scene in minutes and
+				 * a still one leaves it hanging about — which is most of what makes one day feel
+				 * different from another. Kept below the wind itself: a storm lags its steering flow. */
+				float carried = Mathf.Clamp(sw.WindSpeedMetersPerSecond * 0.55f, 1.5f, 14f);
+				float speed = carried * sw.Rng.Range(0.75f, 1.25f);
 				float radius = sw.Rng.Range(preset.CellRadiusMeters.x, Mathf.Max(preset.CellRadiusMeters.x, preset.CellRadiusMeters.y));
 				float minutes = sw.Rng.Range(preset.DurationMinutes.x, Mathf.Max(preset.DurationMinutes.x, preset.DurationMinutes.y));
 				SpawnCellInternal(sw, preset, p, radius, new Vector2(Mathf.Sin(heading), Mathf.Cos(heading)) * speed, minutes * 60f, now);
@@ -548,8 +594,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				VelocityX = velocity.x,
 				VelocityZ = velocity.y,
 				RadiusMeters = Mathf.Max(10f, radius),
+				/* The shape comes from the PRESET, not from whoever asked for the cell. A front is
+				 * a property of the weather, not of the call that spawned it, so an admin command,
+				 * an ECA action and the director all produce the same shape for the same preset. */
+				Shape = preset != null ? preset.CellShape : StormCellShape.Disc,
+				ExtentMeters = preset != null
+					? sw.Rng.Range(preset.CellExtentMeters.x, Mathf.Max(preset.CellExtentMeters.x, preset.CellExtentMeters.y))
+					: 0f,
 				PeakIntensity = 1f,
-				MeanderMeters = Mathf.Max(10f, radius) * 0.15f,
+				// A wall wanders less than a shower: it is held in shape by the air pushing it.
+				MeanderMeters = Mathf.Max(10f, radius) * (preset != null && preset.CellShape == StormCellShape.Front ? 0.04f : 0.15f),
 				MotionTick = birth,
 				BirthTick = birth,
 				MatureTick = birth + timeline.SecondsToTicks(matureSeconds),

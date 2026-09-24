@@ -406,9 +406,28 @@ namespace FishMMO.Shared.WorldDesign
 			HashSet<string> dungeons = DungeonSceneNames();
 			WorldBody home = atlas != null && atlas.SolarSystem != null ? atlas.SolarSystem.HomeWorld : null;
 			int created = 0;
+			/* Which file claimed each name, within this run.
+			 *
+			 * World scenes live in per-world subdirectories, so two worlds can each hold a "Coast".
+			 * The "existing" map above is built once before the loop, so without this the second
+			 * one would not see the entry the first just created and would make a SECOND atlas
+			 * entry with the same SceneName — after which WorldAtlasScene.Find returns whichever
+			 * registered last, and a scene silently takes another scene's latitude. */
+			var claimedBy = new Dictionary<string, string>(StringComparer.Ordinal);
+
 			foreach (string path in WorldScenePaths())
 			{
 				string sceneName = Path.GetFileNameWithoutExtension(path);
+				if (claimedBy.TryGetValue(sceneName, out string firstPath))
+				{
+					Debug.LogError(
+						$"[WorldDesign] Two world scenes are both called '{sceneName}': '{firstPath}' and '{path}'. " +
+						"Scene names must be unique across every world folder — the atlas identifies a scene by name, " +
+						$"not by path. No atlas entry was made for '{path}'; rename one of them.");
+					continue;
+				}
+				claimedBy[sceneName] = path;
+
 				Vector2? size = SceneSizeKm(cache, sceneName);
 				if (existing.TryGetValue(sceneName, out WorldAtlasScene entry))
 				{
@@ -437,6 +456,64 @@ namespace FishMMO.Shared.WorldDesign
 				AssetDatabase.SaveAssets();
 			}
 			return created;
+		}
+
+		/// <summary>
+		/// Deletes atlas entries whose scene no longer exists.
+		/// </summary>
+		/// <returns>The names of the scenes whose entries were removed.</returns>
+		/// <remarks>
+		/// An entry outlives its scene silently: deleting a <c>.unity</c> file removes the scene
+		/// but not the asset that says where it sits, so the globe goes on drawing a rectangle for
+		/// ground nothing occupies, and it still blocks anything else from being cut there. The
+		/// atlas reports it, but reporting a stale asset is not the same as being able to get rid
+		/// of it.
+		/// </remarks>
+		public static List<string> RemoveOrphanedAtlasScenes()
+		{
+			var removed = new List<string>();
+			var scenes = new HashSet<string>(StringComparer.Ordinal);
+			foreach (string path in WorldScenePaths())
+			{
+				scenes.Add(Path.GetFileNameWithoutExtension(path));
+			}
+
+			foreach (WorldAtlasScene entry in FindAll<WorldAtlasScene>())
+			{
+				if (entry == null || string.IsNullOrEmpty(entry.SceneName) || scenes.Contains(entry.SceneName))
+				{
+					continue;
+				}
+				removed.Add(entry.SceneName);
+				AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(entry));
+			}
+
+			if (removed.Count > 0)
+			{
+				AssetDatabase.SaveAssets();
+				AssetDatabase.Refresh();
+				WorldAtlasScene.EditorLookup.Invalidate();
+			}
+			return removed;
+		}
+
+		/// <summary>Scene names that have an atlas entry but no scene file.</summary>
+		public static List<string> OrphanedAtlasScenes()
+		{
+			var orphans = new List<string>();
+			var scenes = new HashSet<string>(StringComparer.Ordinal);
+			foreach (string path in WorldScenePaths())
+			{
+				scenes.Add(Path.GetFileNameWithoutExtension(path));
+			}
+			foreach (WorldAtlasScene entry in FindAll<WorldAtlasScene>())
+			{
+				if (entry != null && !string.IsNullOrEmpty(entry.SceneName) && !scenes.Contains(entry.SceneName))
+				{
+					orphans.Add(entry.SceneName);
+				}
+			}
+			return orphans;
 		}
 
 		/// <summary>

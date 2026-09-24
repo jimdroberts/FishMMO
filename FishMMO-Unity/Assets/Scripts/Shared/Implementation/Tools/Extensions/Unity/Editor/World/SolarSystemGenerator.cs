@@ -87,8 +87,62 @@ namespace FishMMO.Shared.WorldDesign
 			uint seed = (uint)(DateTime.UtcNow.Ticks & 0x7FFFFFFF);
 			SolarSystemProfile system = Roll(seed);
 			FinishCreating(system, first || wasActive);
-			Debug.Log($"[Solar system] Rolled \"{system.name}\" from seed {seed}: {system.Bodies.Count} bodies, home world \"{(system.HomeWorld != null ? system.HomeWorld.ResolvedName : "none")}\".");
+
+			/* Surfaces, but no scenes.
+			 *
+			 * A globe nobody can see is a globe nobody can choose a scene location on, so the
+			 * bake belongs with the roll. Scenes do not: a scene is a named place people will live
+			 * in, and rolling a dozen of them makes a dozen places nobody chose and somebody has to
+			 * curate or delete. They are cut by hand on the atlas, from ground that can be seen.
+			 * The bake is build output either way — gitignored, and a client build makes its own. */
+			int baked = BakeSurfaces(system);
+
+			Debug.Log($"[Solar system] Rolled \"{system.name}\" from seed {seed}: {system.Bodies.Count} bodies, " +
+				$"home world \"{(system.HomeWorld != null ? system.HomeWorld.ResolvedName : "none")}\", {baked} surface(s) baked. " +
+				"Cut scenes from it in World \u2192 World Atlas.");
 			return system;
+		}
+
+		/// <summary>
+		/// Bakes a surface for every body in a rolled system that has ground.
+		/// </summary>
+		/// <remarks>
+		/// Failing here must not lose the system: the bodies are real assets and the roll is not
+		/// repeatable once the clock has moved on, so a bake that throws is reported and the
+		/// system kept.
+		/// </remarks>
+		private static int BakeSurfaces(SolarSystemProfile system)
+		{
+			if (system == null)
+			{
+				return 0;
+			}
+			int baked = 0;
+			try
+			{
+				for (int i = 0; i < system.Bodies.Count; i++)
+				{
+					if (system.Bodies[i] is WorldBody world && PlanetSurfaceBaker.HasGround(world))
+					{
+						EditorUtility.DisplayProgressBar("Rolling a solar system",
+							$"Baking {world.ResolvedName}...", (i + 1f) / Mathf.Max(1f, system.Bodies.Count));
+						if (PlanetSurfaceBaker.Bake(world) != null)
+						{
+							baked++;
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Debug.LogWarning($"[Solar system] The surfaces could not all be baked, but the system is fine: {ex.Message}. " +
+					"Run Core \u2192 Maintenance \u2192 Bake planet surfaces.");
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+			return baked;
 		}
 
 		/// <summary>A system, its bodies, and its folder if it has one to itself: to the trash.</summary>
@@ -511,7 +565,10 @@ namespace FishMMO.Shared.WorldDesign
 				WorldBody world = WorldEditorAssets.Create<WorldBody>(folder, Asset(name), b =>
 				{
 					b.DisplayName = name;
-					b.Kind = !giant && !isHome && dice.Chance(0.15f) ? WorldBodyKind.DwarfPlanet : WorldBodyKind.Planet;
+					// The roll already knew; it simply had nowhere to record it until GasGiant existed.
+					b.Kind = giant ? WorldBodyKind.GasGiant
+						: !isHome && dice.Chance(0.15f) ? WorldBodyKind.DwarfPlanet
+						: WorldBodyKind.Planet;
 					// To the primary whatever happens: a world belongs to a star, and with a close
 					// pair the two are near enough together that going round one is going round both.
 					b.Parent = primary;
@@ -530,6 +587,9 @@ namespace FishMMO.Shared.WorldDesign
 					b.AxialTiltDegrees = isHome ? dice.Range(8f, 32f) : tilt;
 					b.PoleLongitudeDegrees = dice.Range(0f, 360f);
 					b.RotationOffsetDegrees = dice.Range(0f, 360f);
+					/* Rolled from the system's own dice, so the whole system — orbits, sizes and
+					 * every coastline on every world — comes back from the one seed in the log. */
+					b.TerrainSeed = unchecked((uint)dice.Range(1, int.MaxValue));
 					b.SkyRadiusKm = giant ? dice.Range(24000f, 72000f) : b.Kind == WorldBodyKind.DwarfPlanet ? dice.Range(600f, 1800f) : dice.Range(2400f, 9000f);
 					if (isHome)
 					{

@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Mol
+      - Mag
+      - Pyr
+      - Ign
+      - Cal
+      - Fla
+      - Emb
+      - Ard
+      - Fer
+      - Lav
+      Nuclei:
+      - a
+      - o
+      - e
+      - au
+      - ae
+      - ia
+      Codas:
+      - flow
+      - lake
+      - crust
+      - forge
+      - melt
+      - sea
+      - flare
+      - furnace
+      Middles:
+      - an
+      - or
+      - el
+      - us
+      - ir
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Rock hot enough to flow, crusting and cracking as it goes
+      DungeonSuffixes:
+      - Forge
+      - Vent
+      - Chamber
+      - Tube
+      - Conduit
+      - Furnace
+      - Shaft
+      - Crucible
+      DungeonPrefixes:
+      - The Molten
+      - The Blazing
+      - The Glowing
+      - The Unquenched
+      - The Open
+      - The Searing
+      - The Red
+      - The Roaring
+      POISuffixes:
+      - Flow
+      - Lake
+      - Sea
+      - Forge
+      - Melt
+      - Flare
+      Adjectives:
+      - Molten
+      - Searing
+      - Blazing
+      - Unquenched
+      - Red
+      - Roaring
+      Description: Rock that never finished cooling, and still moves.
   Weather:
     Background: []
     CellSpawns:

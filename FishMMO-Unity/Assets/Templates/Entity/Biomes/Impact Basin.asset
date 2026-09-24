@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Imp
+      - Cra
+      - Ej
+      - Bas
+      - Ring
+      - Pal
+      - Cal
+      - Struc
+      - Rim
+      - Ter
+      Nuclei:
+      - a
+      - e
+      - i
+      - ae
+      - ou
+      - ia
+      Codas:
+      - crater
+      - basin
+      - rim
+      - ring
+      - scar
+      - ejecta
+      - floor
+      - wall
+      Middles:
+      - an
+      - or
+      - el
+      - us
+      - ir
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: A crater wide enough to hold its own weather, if there were any
+      DungeonSuffixes:
+      - Cavern
+      - Vault
+      - Shaft
+      - Hollow
+      - Pit
+      - Chamber
+      - Tube
+      - Rift
+      DungeonPrefixes:
+      - The Shattered
+      - The Ringed
+      - The Deep
+      - The Glassed
+      - The Ancient
+      - The Struck
+      - The Terraced
+      - The Buried
+      POISuffixes:
+      - Basin
+      - Rim
+      - Ring
+      - Scar
+      - Floor
+      - Terrace
+      Adjectives:
+      - Shattered
+      - Ringed
+      - Glassed
+      - Ancient
+      - Struck
+      - Deep
+      Description: A hole a mountain-sized rock left, with its rim still standing.
   Weather:
     Background: []
     CellSpawns:

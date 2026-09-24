@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Tid
+      - Fra
+      - Lin
+      - Cyc
+      - Flex
+      - Stra
+      - Chas
+      - Rup
+      - Ten
+      - Sul
+      Nuclei:
+      - a
+      - i
+      - e
+      - ae
+      - ou
+      - ia
+      Codas:
+      - fracture
+      - linea
+      - chasm
+      - rift
+      - seam
+      - cleft
+      - band
+      - split
+      Middles:
+      - an
+      - or
+      - el
+      - us
+      - ir
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Ground pulled open and closed by the world it orbits
+      DungeonSuffixes:
+      - Grotto
+      - Vault
+      - Hollow
+      - Fissure
+      - Chamber
+      - Gallery
+      - Shaft
+      - Crevasse
+      DungeonPrefixes:
+      - The Flexing
+      - The Grinding
+      - The Open
+      - The Restless
+      - The Split
+      - The Groaning
+      - The Shifting
+      - The Banded
+      POISuffixes:
+      - Fracture
+      - Linea
+      - Chasm
+      - Rift
+      - Seam
+      - Band
+      Adjectives:
+      - Flexing
+      - Grinding
+      - Restless
+      - Groaning
+      - Split
+      - Banded
+      Description: Crust kneaded open and shut by the pull of the world it circles.
   Weather:
     Background: []
     CellSpawns:

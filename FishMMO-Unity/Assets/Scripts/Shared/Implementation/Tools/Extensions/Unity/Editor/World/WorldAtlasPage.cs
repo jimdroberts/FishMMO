@@ -100,10 +100,28 @@ namespace FishMMO.Shared.WorldDesign
 			Toggle(tools, "Snap", true, v => { globe.Snap = v; });
 			Toggle(tools, "Grid", true, v => { globe.ShowGrid = v; globe.Refresh(); });
 			Toggle(tools, "Time zones", true, v => { globe.ShowTimeZones = v; globe.Refresh(); });
+			Toggle(tools, "Reference", true, v => { globe.ShowReference = v; globe.Refresh(); });
 			Toggle(tools, "Daylight", true, v => { globe.ShowDaylight = v; globe.Refresh(); });
 			Toggle(tools, "Spin", false, v => { spinning = v; });
 			tools.Add(new ToolbarSpacer { flex = true });
 			tools.Add(new ToolbarButton(() => { hours = NowHours(); RefreshGlobe(); }) { text = "Now", tooltip = "World time right now, from this machine's clock." });
+			Toggle(tools, "Cut scene", false, v =>
+			{
+				globe.CutMode = v;
+				globe.tooltip = v
+					? "Drag a rectangle on the globe to cut a new scene from it."
+					: string.Empty;
+			});
+			tools.Add(new ToolbarButton(RemoveOrphans)
+			{
+				text = "Clear orphans",
+				tooltip = "Deletes atlas entries whose scene file no longer exists. They still draw on the globe and still block a rectangle from being cut there.",
+			});
+			tools.Add(new ToolbarButton(BakeSurface)
+			{
+				text = "Bake surface",
+				tooltip = "Generates this body's terrain from its seed and draws it on the globe. Build output: the folder is gitignored and a client build removes it again.",
+			});
 			tools.Add(new ToolbarButton(() => globe.Frame()) { text = "Frame scenes (F)" });
 			tools.Add(new ToolbarButton(() => globe.ResetView()) { text = "Reset view (Home)" });
 			Add(tools);
@@ -148,6 +166,7 @@ namespace FishMMO.Shared.WorldDesign
 			globe = new GlobeView();
 			globe.TimeLabel = TimeLabelOf;
 			globe.SceneClicked += OnSceneClicked;
+			globe.RectangleDrawn += OnRectangleDrawn;
 			globe.EmptyClicked += OnEmptyClicked;
 			globe.SceneMoveStarted += e => { dragging = true; Undo.RecordObject(e, "Move scene"); globe.Routes.Clear(); };
 			globe.SceneMoving += OnSceneMoving;
@@ -364,7 +383,18 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				WorldBody captured = b;
 				var chip = new ToolbarToggle { text = (b.Kind == WorldBodyKind.Moon ? "◐ " : "● ") + b.ResolvedName, value = b == body };
-				chip.RegisterValueChangedCallback(_ => { body = captured; layer = null; Rebuild(); globe.Frame(); });
+				/* The selected scene is cleared with the body, so the inspector shows the body that
+				 * was just clicked. Without this the right-hand panel kept showing the scene
+				 * selected on the PREVIOUS world — a scene that is not on the globe being looked
+				 * at, and whose latitude and layer belong to somewhere else entirely. */
+				chip.RegisterValueChangedCallback(_ =>
+				{
+					body = captured;
+					layer = null;
+					selected = null;
+					Rebuild();
+					globe.Frame();
+				});
 				bodyChips.Add(chip);
 			}
 			layerTabs.Clear();
@@ -390,10 +420,167 @@ namespace FishMMO.Shared.WorldDesign
 
 		private bool Visible(WorldAtlasScene entry) => layer == null || entry.Layer == layer;
 
+		/// <summary>
+		/// A rectangle was drawn on the globe: name it, check it, and cut a scene out of it.
+		/// </summary>
+		/// <remarks>
+		/// Everything that can refuse does so before anything is written. A scene is a folder, a
+		/// scene file, a terrain asset per tile and an atlas entry; half of that on disk because a
+		/// name was rejected afterwards is worse than not starting.
+		/// </remarks>
+		private void OnRectangleDrawn(double latitude, double longitude, Vector2 sizeKm)
+		{
+			if (body == null)
+			{
+				EditorUtility.DisplayDialog("Cut scene", "Choose a body to cut the scene from first.", "OK");
+				return;
+			}
+
+			WorldAtlasLayer layer = model.Atlas != null ? model.Atlas.SurfaceLayerOf(body) : null;
+			var request = new SceneGenerationRequest
+			{
+				Body = body,
+				Layer = layer,
+				Latitude = latitude,
+				Longitude = longitude,
+				SizeKm = sizeKm,
+			};
+
+			List<WorldAtlasScene> hits = SceneGeneration.Collisions(request, model.Entries, AtlasModel.RadiusOf(body));
+			if (hits.Count > 0)
+			{
+				var names = new List<string>();
+				foreach (WorldAtlasScene hit in hits)
+				{
+					names.Add(hit.SceneName);
+				}
+				EditorUtility.DisplayDialog("Cut scene",
+					$"That rectangle lands on {(hits.Count == 1 ? "an existing scene" : "existing scenes")}: {string.Join(", ", names)}.\n\n" +
+					"Scenes in the same layer cannot overlap. Draw somewhere else, or put this one in another layer.",
+					"OK");
+				return;
+			}
+
+			TerrainTilePlan plan = SceneGeneration.PlanTiles(sizeKm);
+			string sceneName = SceneNamePrompt.Ask(
+				$"{sizeKm.x:0.##} x {sizeKm.y:0.##} km on {body.ResolvedName}, at {latitude:0.##}°, {longitude:0.##}°.\n{plan}",
+				SuggestSceneName(), out bool fineDetail);
+			if (string.IsNullOrEmpty(sceneName))
+			{
+				return;
+			}
+
+			request.SceneName = sceneName;
+			request.FineDetail = fineDetail;
+
+			SceneGenerationResult result;
+			try
+			{
+				EditorUtility.DisplayProgressBar("Cut scene", $"Generating {sceneName} ({plan.TotalTiles} tile(s))...", 0.5f);
+				result = SceneGenerator.Generate(request);
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+
+			if (!result.Success)
+			{
+				EditorUtility.DisplayDialog("Cut scene", result.Problem, "OK");
+				return;
+			}
+
+			Debug.Log($"[World atlas] Generated '{sceneName}': {plan}, {result.ReliefMetres:0} m of relief, " +
+				$"standing at {result.BaseAltitudeMetres:0} m above sea level.\n  " + string.Join("\n  ", result.Wrote));
+			EditorUtility.DisplayDialog("Cut scene",
+				$"\"{sceneName}\" is ready.\n\n{plan}\n" +
+				$"{result.ReliefMetres:0} m of relief, standing at {result.BaseAltitudeMetres:0} m above sea level.\n\n" +
+				$"Wrote {result.Wrote.Count} file(s) under {SceneGenerator.WorldFolder(body)}.\n\n" +
+				"Rebuild the world scene details cache to bring it into the game.",
+				"OK");
+
+			model.Reload();
+			RefreshGlobe();
+		}
+
+		/// <summary>A name nothing is using yet, so the prompt opens on something workable.</summary>
+		private string SuggestSceneName()
+		{
+			List<string> existing = SceneGenerator.ExistingSceneNames();
+			string stem = body != null ? body.ResolvedName : "New Scene";
+			for (int n = 1; n < 1000; n++)
+			{
+				string candidate = $"{stem} {n}";
+				if (SceneGeneration.NameProblem(candidate, existing) == null)
+				{
+					return candidate;
+				}
+			}
+			return string.Empty;
+		}
+
+		/// <summary>Deletes atlas entries whose scene is gone, after asking.</summary>
+		private void RemoveOrphans()
+		{
+			List<string> orphans = WorldEditorAssets.OrphanedAtlasScenes();
+			if (orphans.Count == 0)
+			{
+				EditorUtility.DisplayDialog("Clear orphans", "Every atlas entry has a scene.", "OK");
+				return;
+			}
+			if (!EditorUtility.DisplayDialog("Clear orphans",
+				$"Delete {orphans.Count} atlas entr{(orphans.Count == 1 ? "y" : "ies")} whose scene no longer exists?\n\n" +
+				string.Join("\n", orphans) + "\n\nThis cannot be undone.",
+				"Delete", "Cancel"))
+			{
+				return;
+			}
+
+			List<string> removed = WorldEditorAssets.RemoveOrphanedAtlasScenes();
+			Debug.Log($"[World atlas] Removed {removed.Count} orphaned atlas entr{(removed.Count == 1 ? "y" : "ies")}: {string.Join(", ", removed)}.");
+			selected = null;
+			model.Reload();
+			Rebuild();
+		}
+
+		/// <summary>
+		/// Bakes the body being looked at and puts it straight on the globe.
+		/// </summary>
+		/// <remarks>
+		/// One body, not all of them: this is the button somebody presses while deciding where a
+		/// scene goes, and waiting for nineteen worlds to answer a question about one is the kind
+		/// of tool people stop using. Core → Maintenance bakes the whole system for a build.
+		/// </remarks>
+		private void BakeSurface()
+		{
+			if (body == null)
+			{
+				EditorUtility.DisplayDialog("Bake surface", "There is no body selected to bake.", "OK");
+				return;
+			}
+			try
+			{
+				EditorUtility.DisplayProgressBar("Bake surface", $"Generating {body.ResolvedName}…", 0.5f);
+				PlanetSurfaceBaker.Bake(body);
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+			RefreshGlobe();
+		}
+
 		private void RefreshGlobe(bool full = true)
 		{
 			globe.RadiusKm = AtlasModel.RadiusOf(body);
 			globe.BodyColour = body != null ? Color.Lerp(body.Tint, new Color(0.2f, 0.3f, 0.35f, 1f), 0.45f) : new Color(0.3f, 0.45f, 0.6f, 1f);
+			/* The baked surface if this body has one, and a plain ball if not. Null is the normal
+			 * state in a fresh clone — the bake is build output — so this must never be a fault.
+			 * With it, scene rectangles sit on real coastlines, which is what makes choosing where
+			 * a scene goes a decision rather than a guess. */
+			globe.Surface = PlanetSurfaceBaker.Baked(body);
+			// The body's own tilt, so the tropics and polar circles are this world's, not Earth's.
+			globe.AxialTiltDegrees = body != null ? body.AxialTiltDegrees : 23.4f;
 			globe.Selected = selected;
 			globe.SnapKm = 0.25;
 			globe.SunDirection = SunDirection();
@@ -432,10 +619,16 @@ namespace FishMMO.Shared.WorldDesign
 				bad.Add(a);
 				bad.Add(b);
 			}
+			// An entry whose scene file is gone: it still draws, still blocks a cut, and is still
+			// counted as somewhere a character can be. Red, like any other invalid rectangle.
+			var orphans = new HashSet<string>(WorldEditorAssets.OrphanedAtlasScenes(), StringComparer.Ordinal);
+
 			double radius = AtlasModel.RadiusOf(body);
 			foreach (GlobeScene scene in globe.Scenes)
 			{
-				scene.Problem = bad.Contains(scene.Entry) || !AtlasGeometry.Fits(scene.Footprint, radius);
+				scene.Problem = bad.Contains(scene.Entry)
+					|| !AtlasGeometry.Fits(scene.Footprint, radius)
+					|| scene.Entry != null && orphans.Contains(scene.Entry.SceneName ?? string.Empty);
 			}
 		}
 

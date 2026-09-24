@@ -148,12 +148,13 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					float angle = Unit(Hash(h, 2)) * Mathf.PI * 2f;
-					float distance = Mathf.Sqrt(Unit(Hash(h, 3))) * cell.RadiusMeters * 0.6f;
+					/* Placed by the cell's own SHAPE. A disc of strikes around the centre put a
+					 * squall line's whole display at one point and struck a hurricane in its eye. */
+					Vector2 offset = cell.PointInside(Unit(Hash(h, 2)), Unit(Hash(h, 3)));
 					into.Add(new LightningStrike
 					{
 						Time = time,
-						Ground = new Vector3(centre.x + Mathf.Sin(angle) * distance, viewer.y - 2f, centre.y + Mathf.Cos(angle) * distance),
+						Ground = new Vector3(centre.x + offset.x, viewer.y - 2f, centre.y + offset.y),
 						CloudHeight = Mathf.Lerp(900f, 1500f, Unit(Hash(h, 4))),
 						Seed = h,
 						Intensity = Mathf.Lerp(0.7f, 1f, Unit(Hash(h, 5))),

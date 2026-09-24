@@ -249,7 +249,7 @@ namespace FishMMO.Shared
 			 * 4 km scene spans about 0.04° and the gradient would be invisible, so the span is
 			 * authored rather than derived: a scene that wants to read as a climate transition says
 			 * how many degrees it stands for, and one that does not sets it to zero. */
-			float span = Climate != null ? Climate.MapLatitudeSpanDegrees : 0f;
+			float span = (Climate != null ? Climate : ClimateSettings.Default).MapLatitudeSpanDegrees;
 			double latitude = Latitude + (Mathf.Clamp01(latitude01) - 0.5f) * span;
 			CelestialMath.MeanClimateOffsets(system, body, out temperature, out humidity, latitude);
 		}
@@ -268,14 +268,19 @@ namespace FishMMO.Shared
 
 		public ClimateSample SampleClimate(float height01, float latitude01)
 		{
-			ClimateSample sample = Climate != null
-				? Climate.Evaluate(height01, latitude01)
-				: new ClimateSample
-				{
-					Temperature = Mathf.Clamp(-height01 * 0.8f, -1f, 1f),
-					Humidity = Mathf.Clamp((1f - height01) * 0.3f, -1f, 1f),
-					ElevationTier = ClimateSettings.TierForHeight(height01, null),
-				};
+			/* The derived model when nothing is authored, not a guess.
+			 *
+			 * This used to fall back to Temperature = -height01 * 0.8, which reads -0.4 at mid
+			 * elevation where the calibrated model reads +0.74 — below freezing over most of a
+			 * scene — with no latitude gradient at all. Since no ClimateSettings asset existed
+			 * anywhere in the project, that guess, not the model, was deciding every biome and
+			 * every rain-or-snow call in the game.
+			 *
+			 * There is nothing for it to be a fallback FROM: a body's own climate is already
+			 * derived from its orbit by CelestialOffsets below, so the asset only ever held the
+			 * shared reference model. ClimateSettings.Default is that model. */
+			ClimateSample sample = (Climate != null ? Climate : ClimateSettings.Default)
+				.Evaluate(height01, latitude01);
 			/* The world this scene is ON, before anything local to it.
 			 *
 			 * Without this a scene on a frozen outer moon resolved exactly the same biomes as one on
@@ -299,9 +304,9 @@ namespace FishMMO.Shared
 			{
 				return null;
 			}
-			return Climate != null
-				? Climate.ResolveVariant(biome, sample)
-				: biome.ResolveOwnVariant(sample.Temperature, sample.Humidity);
+			// Identical either way for a biome with its own variants, which is the only case that
+			// resolves to anything: the derived climate carries no default variants of its own.
+			return (Climate != null ? Climate : ClimateSettings.Default).ResolveVariant(biome, sample);
 		}
 	}
 }

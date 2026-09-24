@@ -270,7 +270,8 @@ namespace FishMMO.Client
 			WeatherSubstance falling = hasContext ? this.context.Substance : null;
 			precipitation.Render(shown, camera, currentTier, Profile, time, falling);
 			// Where it lands. Needs the height map, so it draws nothing until that has been built.
-			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid, falling);
+			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid,
+				hasContext ? this.context.Temperature : 0f, falling);
 		}
 
 		private void ApplyWind(in WeatherFrame frame)

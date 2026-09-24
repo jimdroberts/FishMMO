@@ -181,6 +181,12 @@ MonoBehaviour:
       Weight: 1.5
     - Preset: {fileID: 11400000, guid: 3fcc3b4cc1297b551b570f2672afc7e9, type: 2}
       Weight: 0.4
+    - Preset: {fileID: 11400000, guid: b32410dbffe52af2a92ded94d45f3861, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: ca60d016840a269d39bdc27d60f772bc, type: 2}
+      Weight: 1.2
+    - Preset: {fileID: 11400000, guid: 9cf12cc653dc8f775a40cced4e1cf5cb, type: 2}
+      Weight: 0.1
     Suitability:
     - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
       Suitability: 0.5

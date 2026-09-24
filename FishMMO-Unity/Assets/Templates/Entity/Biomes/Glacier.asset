@@ -180,6 +180,8 @@ MonoBehaviour:
       Weight: 1
     - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
       Weight: 1.5
+    - Preset: {fileID: 11400000, guid: 7092b5e1f4729e9d2990560f2df069ec, type: 2}
+      Weight: 1.2
     Suitability:
     - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
       Suitability: 0

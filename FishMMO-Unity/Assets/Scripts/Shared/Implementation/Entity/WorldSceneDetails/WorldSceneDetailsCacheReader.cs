@@ -69,13 +69,32 @@ namespace FishMMO.Shared
 				worldScenes.UnionWith(localScenes);
 			}
 
+			/* Which file claimed each scene name.
+			 *
+			 * The cache is keyed by scene NAME, not by path, and so is the world atlas — a scene's
+			 * atlas entry finds it by name, and a character's location names a scene. Now that
+			 * world scenes live in per-world subdirectories, two worlds can each hold a "Coast",
+			 * and the loser used to be skipped without a word: no cache entry, no boundaries, no
+			 * spawn points, and nothing anywhere saying why. */
+			var claimedBy = new Dictionary<string, string>();
+
 			// Scan each world scene for relevant objects and configuration.
 			foreach (string scenePath in worldScenes)
 			{
 				// Load the scene additively for scanning.
 				Scene currentScene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
-				if (!worldSceneDetailsDictionary.ContainsKey(currentScene.name) && currentScene.IsValid())
+				if (worldSceneDetailsDictionary.ContainsKey(currentScene.name))
 				{
+					Log.Error("WorldSceneDetailsCacheReader",
+						$"Two world scenes are both called '{currentScene.name}': '{claimedBy[currentScene.name]}' and '{scenePath}'. " +
+						"Scene names must be unique across every world folder, because the details cache, the world atlas and a character's " +
+						$"location all identify a scene by name. '{scenePath}' was skipped; rename one of them.");
+					EditorSceneManager.CloseScene(currentScene, true);
+					continue;
+				}
+				if (currentScene.IsValid())
+				{
+					claimedBy[currentScene.name] = scenePath;
 					Log.Debug("WorldSceneDetailsCacheReader", $"Scene Loaded[{currentScene.name}]");
 
 					// Ensure the scene has a boundary for safety.
@@ -274,6 +293,12 @@ namespace FishMMO.Shared
 						sceneDetails.Teleporters.Add(obj.name, newDetails);
 					}
 				}
+
+				/* Anything else that wants to look at every world scene gets it here, while it is
+				 * open, rather than opening all seven again. Read-only: the close below discards
+				 * whatever a listener changed. */
+				WorldSceneScan.Report(currentScene);
+
 				// Unload the scene after scanning.
 				Log.Debug("WorldSceneDetailsCacheReader", $"Scene Unloaded[{currentScene.name}]");
 				EditorSceneManager.CloseScene(currentScene, true);

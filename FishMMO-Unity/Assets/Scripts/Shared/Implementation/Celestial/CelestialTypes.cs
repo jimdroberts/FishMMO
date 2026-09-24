@@ -9,6 +9,16 @@ namespace FishMMO.Shared.Celestial
 		Planet = 0,
 		Moon = 1,
 		DwarfPlanet = 2,
+
+		/// <summary>
+		/// A world with no solid ground. It has no heightmap, no coastline and no scene can stand
+		/// on it; what looks like a surface is a cloud deck at whatever depth the pressure makes one.
+		/// </summary>
+		/// <remarks>
+		/// Appended rather than inserted: these values are serialized on every body asset, so
+		/// renumbering would silently turn planets into moons.
+		/// </remarks>
+		GasGiant = 3,
 	}
 
 	/// <summary>How thick a body's air is. <see cref="None"/> means no weather, no meteors and a black day sky.</summary>

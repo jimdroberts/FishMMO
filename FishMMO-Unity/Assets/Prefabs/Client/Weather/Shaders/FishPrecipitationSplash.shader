@@ -37,6 +37,7 @@ Shader "FishMMO/Weather/Precipitation Splash"
             float4 _FishSplashOrigin;   // xyz camera, w time
             float4 _FishSplashParams;   // x radius, y density 0..1, z size, w lifetime seconds
             float4 _FishSplashColor;    // rgb tint, a alpha
+            float4 _FishSplashHeat;     // x dryness 0..1, y how far a corner may drape, zw unused
 
             struct Attributes
             {
@@ -82,7 +83,7 @@ Shader "FishMMO/Weather/Precipitation Splash"
                 float3 at = _FishSplashOrigin.xyz + float3(cos(angle) * distance, 0.0, sin(angle) * distance);
 
                 // The surface a drop falling here would hit: roof, ledge or ground.
-                at.y = FishSkyOcclusionHeight(at) + 0.02;
+                float centreGround = FishSkyOcclusionHeight(at);
 
                 /* Thinned by how hard it is raining. Splashes that exist but are invisible still
                  * cost a quad each, so the ones that are not wanted are collapsed to zero size and
@@ -91,12 +92,35 @@ Shader "FishMMO/Weather/Precipitation Splash"
 
                 // A ring that widens and fades, which is what a drop hitting water looks like.
                 float grow = 0.35 + 1.65 * age;
-                float fade = 1.0 - smoothstep(0.45, 1.0, age);
+
+                /* Hot ground takes a splash away quickly — a drop landing on sun-baked stone is
+                 * gone almost as soon as it lands, where the same drop on cold ground sits. The
+                 * FADE is pulled earlier rather than the lifetime being shortened: every splash's
+                 * phase comes from time / lifetime, so changing the lifetime would jump all of them
+                 * at once the moment the temperature moved. */
+                float dry = saturate(_FishSplashHeat.x);
+                float fadeFrom = lerp(0.45, 0.10, dry);
+                float fadeTo = lerp(1.00, 0.42, dry);
+                float fade = 1.0 - smoothstep(fadeFrom, fadeTo, age);
+
                 float size = _FishSplashParams.z * grow * alive * fade;
 
-                // Camera-facing is wrong for these: a splash lies ON the ground, so the quad is
-                // flat in world space and seen at whatever angle the viewer happens to be at.
-                float3 world = at + float3(input.positionOS.x, 0.0, input.positionOS.z) * size;
+                /* Camera-facing is wrong for these: a splash lies ON the ground. But a quad that is
+                 * FLAT sinks into any ground that is not, and the depth test then clips whichever
+                 * half went under — which is why splashes were being cut off on slopes, and only
+                 * sometimes. So every corner asks the heightfield for its OWN ground and the quad
+                 * drapes over the surface instead of hovering across it.
+                 *
+                 * Clamped, because at a ledge one corner can be metres below the others and the
+                 * quad would stretch into a spike reaching down the drop. Beyond the clamp it is
+                 * better for a splash to clip a little than to become a streak. */
+                float3 corner = at + float3(input.positionOS.x, 0.0, input.positionOS.z) * size;
+                float cornerGround = FishSkyOcclusionHeight(corner);
+                float drape = max(0.02, _FishSplashHeat.y * max(size, 0.05));
+                corner.y = clamp(cornerGround, centreGround - drape, centreGround + drape);
+                // Lifted off the surface, by a little more when the splash is bigger and further.
+                corner.y += 0.015 + size * 0.05;
+                float3 world = corner;
 
                 output.positionCS = TransformWorldToHClip(world);
                 output.uv = input.uv;

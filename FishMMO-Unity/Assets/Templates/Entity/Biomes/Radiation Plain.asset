@@ -29,18 +29,75 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Rad
+      - Ion
+      - Bel
+      - Flux
+      - Cher
+      - Gam
+      - Sear
+      - Volt
+      - Arc
+      - Sync
+      Nuclei:
+      - a
+      - i
+      - o
+      - ae
+      - eu
+      - io
+      Codas:
+      - flux
+      - belt
+      - glare
+      - storm
+      - field
+      - burn
+      - sleet
+      - wash
+      Middles:
+      - an
+      - or
+      - el
+      - is
+      - us
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Swept by a giant's magnetic field; nothing stays unshielded for
-        long
+      DungeonSuffixes:
+      - Cavern
+      - Vault
+      - Shaft
+      - Hollow
+      - Pit
+      - Chamber
+      - Tube
+      - Rift
+      DungeonPrefixes:
+      - The Scoured
+      - The Glowing
+      - The Unshielded
+      - The Sleeting
+      - The Hard
+      - The Blistered
+      - The Screaming
+      - The Bright
+      POISuffixes:
+      - Flux
+      - Belt
+      - Field
+      - Glare
+      - Burn
+      - Wash
+      Adjectives:
+      - Scoured
+      - Unshielded
+      - Blistered
+      - Glowing
+      - Sleeting
+      - Hard
+      Description: Ground under a magnetosphere's fire, where the sky itself is the
+        hazard.
   Weather:
     Background: []
     CellSpawns:

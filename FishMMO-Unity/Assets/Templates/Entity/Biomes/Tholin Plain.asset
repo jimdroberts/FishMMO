@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Tho
+      - Rus
+      - Umb
+      - Och
+      - Tar
+      - Sien
+      - Bru
+      - Cop
+      - Fuli
+      - Amb
+      Nuclei:
+      - a
+      - o
+      - i
+      - ou
+      - ae
+      - ia
+      Codas:
+      - plain
+      - stain
+      - waste
+      - crust
+      - haze
+      - drift
+      - field
+      - bed
+      Middles:
+      - an
+      - or
+      - el
+      - is
+      - ur
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Organic haze fallen out as a rust-coloured crust
+      DungeonSuffixes:
+      - Grotto
+      - Vault
+      - Hollow
+      - Fissure
+      - Chamber
+      - Gallery
+      - Shaft
+      - Crevasse
+      DungeonPrefixes:
+      - The Rust
+      - The Stained
+      - The Amber
+      - The Tarred
+      - The Sunless
+      - The Orange
+      - The Sticky
+      - The Ancient
+      POISuffixes:
+      - Plain
+      - Stain
+      - Waste
+      - Drift
+      - Field
+      - Bed
+      Adjectives:
+      - Rust
+      - Stained
+      - Amber
+      - Tarred
+      - Orange
+      - Sticky
+      Description: Organic haze that has settled out of the sky for a billion years.
   Weather:
     Background: []
     CellSpawns:

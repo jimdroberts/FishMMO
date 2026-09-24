@@ -270,7 +270,8 @@ namespace FishMMO.Shared.WorldDesign
 					Add(t, WeatherChannel.Precipitation, Line(0f, 1f));
 					Add(t, WeatherChannel.DropSize, Line(0.1f, 0.3f));
 					Add(t, WeatherChannel.WindSpeed, Line(0.3f, 1f));
-					Add(t, WeatherChannel.WindHeading, Line(1f, 1f), 70f);
+					/* No heading. A sandstorm means "it is blowing hard and carrying sand", not "the
+					 * wind blows toward 70 degrees" — see the Wind layer below for why. */
 					Add(t, WeatherChannel.WindGust, Line(0.2f, 0.8f));
 					Add(t, WeatherChannel.FogDensity, Line(0.1f, 0.8f));
 					Add(t, WeatherChannel.FogHeight, Line(0.2f, 0.5f));
@@ -278,7 +279,18 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 				case WeatherLayerKind.Wind:
 					Add(t, WeatherChannel.WindSpeed, Line(0f, 1f));
-					Add(t, WeatherChannel.WindHeading, Line(1f, 1f), 60f);
+					/* SPEED ONLY, NEVER A HEADING.
+					 *
+					 * This used to write a flat 60 degrees, and the sand layer 70. Heading blends as
+					 * a vector weighted by speed, so any preset containing wind dragged the whole
+					 * scene's wind toward one authored compass point — and since most stormy presets
+					 * contain a wind layer, that was most weather. A world with trade winds,
+					 * westerlies and polar easterlies blew the same way everywhere, all year.
+					 *
+					 * The direction is the DRIVER's: WeatherDriver.PrevailingWind bands it by
+					 * latitude and leans it poleward, and it breathes over hours. A layer says how
+					 * hard it is blowing; where it blows from is a property of the place and the
+					 * season, not of the preset that happens to be running. */
 					Add(t, WeatherChannel.WindGust, Ease(0f, 0.7f));
 					t.DefaultTransitionSeconds = 20f;
 					break;

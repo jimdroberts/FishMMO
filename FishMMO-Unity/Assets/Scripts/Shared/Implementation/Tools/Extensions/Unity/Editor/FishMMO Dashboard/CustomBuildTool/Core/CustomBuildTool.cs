@@ -248,6 +248,9 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			try
 			{
+				Log.Debug("BuildLogger", "Baking planet surfaces...");
+				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.BakeAll(out _);
+
 				Log.Debug("BuildLogger", "Baking world maps...");
 				FishMMO.Shared.WorldMaps.WorldMapBaker.BakeAll();
 				Log.Debug("BuildLogger", "Rebuilding the world scene details cache with the baked maps...");
@@ -255,7 +258,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 			catch (Exception ex)
 			{
-				Log.Warning("BuildLogger", $"World map bake failed; the build continues without map images: {ex.Message}");
+				Log.Warning("BuildLogger", $"World map or planet surface bake failed; the build continues without those images: {ex.Message}");
 			}
 		}
 
@@ -314,13 +317,16 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			try
 			{
+				Log.Debug("BuildLogger", "Removing baked planet surfaces...");
+				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.CleanBakedSurfaces();
+
 				Log.Debug("BuildLogger", "Removing baked world maps...");
 				FishMMO.Shared.WorldMaps.WorldMapBaker.CleanBakedMaps();
 				WorldSceneDetailsCacheBuilder.Rebuild();
 			}
 			catch (Exception ex)
 			{
-				Log.Warning("BuildLogger", $"Removing the baked world maps failed; run FishMMO Dashboard → World → World Map → Remove Baked Maps and FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details by hand: {ex.Message}");
+				Log.Warning("BuildLogger", $"Removing the baked world maps or planet surfaces failed; run FishMMO Dashboard → World → World Map → Remove Baked Maps, Core → Maintenance → Remove baked planet surfaces, and World → World Scene Details → Rebuild World Scene Details by hand: {ex.Message}");
 			}
 		}
 

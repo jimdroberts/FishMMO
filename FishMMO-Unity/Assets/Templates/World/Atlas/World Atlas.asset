@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c543454743c4ab2933041a32a45ebdd, type: 3}
   m_Name: World Atlas
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Atlas.WorldAtlas
-  SolarSystem: {fileID: 11400000, guid: 76ab8206601b810beb83fc950b4bfcff, type: 2}
+  SolarSystem: {fileID: 11400000, guid: a6c79bcf91335f279b97f709bbba8dee, type: 2}
   DefaultLayers:
   - {fileID: 11400000, guid: 9330d7d346d14b622aab93f0c4a62448, type: 2}
   - {fileID: 11400000, guid: e3d29be775099b70ba79cc694121b638, type: 2}

@@ -140,10 +140,17 @@ namespace FishMMO.Client
 				Vector4 mix = Shader.GetGlobalVector(MixId);
 				Vector4 misc = Shader.GetGlobalVector(MiscId);
 				float exposure = Mathf.Clamp01(1f - misc.z);
-				float wet = mix.x * precip.x * exposure * settings.Drops;
+				/* Mirrors the shader's share test: a trace of rain inside falling snow is not rain.
+				 * If these two ever disagree the pass is skipped while the shader would have drawn,
+				 * or runs to produce nothing. */
+				float frozen = mix.y + mix.z;
+				float total = Mathf.Max(1e-4f, mix.x + frozen);
+				float liquidShare = mix.x / total;
+				float wet = mix.x * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.7f, liquidShare)) * precip.x * exposure * settings.Drops;
+				float sticking = frozen * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.7f, 1f - liquidShare)) * precip.x * exposure * settings.Frost;
 				float grit = mix.w * precip.x * exposure * settings.Dust;
 				float cold = Mathf.Clamp01(-misc.y - 0.25f) * exposure * settings.Frost;
-				if (wet <= 0.001f && grit <= 0.001f && cold <= 0.001f)
+				if (wet <= 0.001f && sticking <= 0.001f && grit <= 0.001f && cold <= 0.001f)
 				{
 					return;
 				}

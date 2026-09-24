@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Meth
+      - Eth
+      - Lig
+      - Kra
+      - Pun
+      - Lac
+      - Mar
+      - Ont
+      - Jing
+      - Vid
+      Nuclei:
+      - a
+      - e
+      - i
+      - ae
+      - ou
+      - ia
+      Codas:
+      - lake
+      - mare
+      - sea
+      - shore
+      - shallow
+      - basin
+      - channel
+      - delta
+      Middles:
+      - an
+      - or
+      - el
+      - us
+      - in
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Standing liquid methane, still as glass and lethally cold
+      DungeonSuffixes:
+      - Grotto
+      - Vault
+      - Hollow
+      - Fissure
+      - Chamber
+      - Gallery
+      - Shaft
+      - Crevasse
+      DungeonPrefixes:
+      - The Black
+      - The Still
+      - The Mirror
+      - The Oily
+      - The Cold
+      - The Sunless
+      - The Rippling
+      - The Deep
+      POISuffixes:
+      - Lake
+      - Mare
+      - Shore
+      - Basin
+      - Delta
+      - Shallow
+      Adjectives:
+      - Black
+      - Still
+      - Oily
+      - Mirror
+      - Sunless
+      - Cold
+      Description: Liquid hydrocarbon lying utterly still under an orange sky.
   Weather:
     Background: []
     CellSpawns:

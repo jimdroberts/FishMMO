@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Ven
+      - Aby
+      - Chem
+      - Smo
+      - Ther
+      - Bath
+      - Hyd
+      - Sul
+      - Nere
+      - Pel
+      Nuclei:
+      - a
+      - e
+      - i
+      - ou
+      - ae
+      - ia
+      Codas:
+      - vent
+      - smoker
+      - spire
+      - deep
+      - throat
+      - chimney
+      - field
+      - bloom
+      Middles:
+      - an
+      - or
+      - el
+      - us
+      - ir
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Warm water under a shell of ice, and the only life for a system
+      DungeonSuffixes:
+      - Vent
+      - Chimney
+      - Deep
+      - Throat
+      - Gallery
+      - Chamber
+      - Spire
+      - Hollow
+      DungeonPrefixes:
+      - The Lightless
+      - The Warm
+      - The Crowded
+      - The Black
+      - The Ancient
+      - The Smoking
+      - The Buried
+      - The Living
+      POISuffixes:
+      - Vent
+      - Smoker
+      - Spire
+      - Deep
+      - Field
+      - Bloom
+      Adjectives:
+      - Lightless
+      - Smoking
+      - Warm
+      - Crowded
+      - Black
+      - Living
+      Description: The one warm, crowded place under kilometres of ice.
   Weather:
     Background: []
     CellSpawns: []

@@ -19,6 +19,12 @@ namespace FishMMO.Client
 		public static readonly int Mix = Shader.PropertyToID("_FishWeatherMix");
 		/// <summary>What is falling, as a colour: rgb the substance's tint, a how harsh it is.</summary>
 		public static readonly int Substance = Shader.PropertyToID("_FishWeatherSubstance");
+		/// <summary>
+		/// Ash and sand apart: x ash, y sand. <see cref="Mix"/> adds them together, which is enough
+		/// for a surface that only needs "something dry is settling" but not for anything that has
+		/// to tell a greasy ashfall from a dry scouring sandstorm.
+		/// </summary>
+		public static readonly int Mix2 = Shader.PropertyToID("_FishWeatherMix2");
 
 		/// <summary>The wind's ground-plane direction (world x, z) for a heading in degrees.</summary>
 		public static Vector2 WindDirection(float headingDegrees)
@@ -57,6 +63,7 @@ namespace FishMMO.Client
 			// not, and snow does neither.
 			Shader.SetGlobalVector(Mix, new Vector4(frame[WeatherChannel.RainWeight], frame[WeatherChannel.SnowWeight],
 				frame[WeatherChannel.HailWeight], frame[WeatherChannel.AshWeight] + frame[WeatherChannel.SandWeight]));
+			Shader.SetGlobalVector(Mix2, new Vector4(frame[WeatherChannel.AshWeight], frame[WeatherChannel.SandWeight], 0f, 0f));
 		}
 
 		/// <summary>Calm, dry, clear.</summary>

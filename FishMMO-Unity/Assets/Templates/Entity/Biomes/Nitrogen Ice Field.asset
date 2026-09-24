@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Nit
+      - Gla
+      - Spu
+      - Fros
+      - Pal
+      - Nive
+      - Cri
+      - Sel
+      - Bore
+      - Vyn
+      Nuclei:
+      - a
+      - i
+      - o
+      - ei
+      - ou
+      - ae
+      Codas:
+      - ice
+      - field
+      - sheet
+      - glacier
+      - pack
+      - rime
+      - plain
+      - drift
+      Middles:
+      - an
+      - or
+      - el
+      - is
+      - ur
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Nitrogen frozen solid and drifted into dunes
+      DungeonSuffixes:
+      - Grotto
+      - Vault
+      - Hollow
+      - Fissure
+      - Chamber
+      - Gallery
+      - Shaft
+      - Crevasse
+      DungeonPrefixes:
+      - The Nitrogen
+      - The Blue
+      - The Unbroken
+      - The Creeping
+      - The Silent
+      - The Deep-frozen
+      - The Pale
+      - The Glassy
+      POISuffixes:
+      - Field
+      - Sheet
+      - Pack
+      - Drift
+      - Plain
+      - Glacier
+      Adjectives:
+      - Deep-frozen
+      - Blue
+      - Unbroken
+      - Creeping
+      - Pale
+      - Glassy
+      Description: Ice so cold that nitrogen lies on it as snow.
   Weather:
     Background: []
     CellSpawns:

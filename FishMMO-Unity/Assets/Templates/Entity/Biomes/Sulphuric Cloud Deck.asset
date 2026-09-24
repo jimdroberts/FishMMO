@@ -29,18 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Sul
+      - Vit
+      - Aci
+      - Nim
+      - Pall
+      - Cir
+      - Vap
+      - Cau
+      - Fum
+      - Lact
+      Nuclei:
+      - a
+      - u
+      - i
+      - ou
+      - ae
+      - ia
+      Codas:
+      - deck
+      - veil
+      - shroud
+      - layer
+      - haze
+      - cloud
+      - sea
+      - ceiling
+      Middles:
+      - an
+      - or
+      - ul
+      - is
+      - er
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Highland lost in acid cloud, where the rain never reaches the
-        ground
+      DungeonSuffixes:
+      - Gallery
+      - Vault
+      - Chamber
+      - Shaft
+      - Hollow
+      - Deck
+      - Cell
+      - Well
+      DungeonPrefixes:
+      - The Acid
+      - The Yellow
+      - The Choking
+      - The Drifting
+      - The Eternal
+      - The Sour
+      - The Boiling
+      - The Veiled
+      POISuffixes:
+      - Deck
+      - Veil
+      - Shroud
+      - Layer
+      - Ceiling
+      - Haze
+      Adjectives:
+      - Acid
+      - Yellow
+      - Choking
+      - Sour
+      - Drifting
+      - Veiled
+      Description: A permanent ceiling of acid that never once breaks.
   Weather:
     Background: []
     CellSpawns:

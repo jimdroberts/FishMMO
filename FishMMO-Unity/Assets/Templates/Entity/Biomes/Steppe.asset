@@ -29,17 +29,75 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Step
+      - Kur
+      - Tar
+      - Yur
+      - Ald
+      - Cher
+      - Bay
+      - Otar
+      - Sar
+      - Dzu
+      Nuclei:
+      - a
+      - o
+      - u
+      - ai
+      - an
+      - ur
+      Codas:
+      - grass
+      - steppe
+      - reach
+      - sweep
+      - range
+      - waste
+      - veldt
+      - run
+      Middles:
+      - an
+      - ar
+      - un
+      - ol
+      - er
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Dry grassland running further than anyone has walked it
+      DungeonSuffixes:
+      - Kurgan
+      - Barrow
+      - Hollow
+      - Pit
+      - Cairn
+      - Tomb
+      - Warren
+      - Shelter
+      DungeonPrefixes:
+      - The Windswept
+      - The Endless
+      - The Open
+      - The Dry
+      - The Trackless
+      - The Wide
+      - The Grass-hidden
+      - The Riders'
+      POISuffixes:
+      - Reach
+      - Sweep
+      - Range
+      - Run
+      - Waste
+      - Rise
+      Adjectives:
+      - Windswept
+      - Endless
+      - Open
+      - Trackless
+      - Dry
+      - Wide
+      Description: Grass to the horizon in every direction, and nothing to break
+        the wind.
   Weather:
     Background: []
     CellSpawns:
@@ -59,6 +117,12 @@ MonoBehaviour:
       Weight: 1.5
     - Preset: {fileID: 11400000, guid: 3fcc3b4cc1297b551b570f2672afc7e9, type: 2}
       Weight: 0.4
+    - Preset: {fileID: 11400000, guid: b32410dbffe52af2a92ded94d45f3861, type: 2}
+      Weight: 1
+    - Preset: {fileID: 11400000, guid: 5e2b4f36125896439879c0a36ecc3f25, type: 2}
+      Weight: 0.5
+    - Preset: {fileID: 11400000, guid: 9cf12cc653dc8f775a40cced4e1cf5cb, type: 2}
+      Weight: 0.12
     Suitability:
     - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
       Suitability: 0.5

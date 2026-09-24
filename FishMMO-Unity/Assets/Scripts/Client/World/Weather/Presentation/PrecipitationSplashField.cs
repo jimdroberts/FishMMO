@@ -32,6 +32,7 @@ namespace FishMMO.Client
 		private static readonly int OriginId = Shader.PropertyToID("_FishSplashOrigin");
 		private static readonly int ParamsId = Shader.PropertyToID("_FishSplashParams");
 		private static readonly int ColorId = Shader.PropertyToID("_FishSplashColor");
+		private static readonly int HeatId = Shader.PropertyToID("_FishSplashHeat");
 
 		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
 		private Mesh mesh;
@@ -43,8 +44,20 @@ namespace FishMMO.Client
 		/// <summary>How big one splash gets at its widest, in metres.</summary>
 		public float Size = 0.22f;
 
-		/// <summary>Seconds from landing to gone.</summary>
+		/// <summary>Seconds from landing to gone, on cool ground.</summary>
 		public float Lifetime = 0.45f;
+
+		/// <summary>
+		/// How far a corner of a splash may follow the ground away from its centre, as a multiple
+		/// of the splash's own size.
+		/// </summary>
+		/// <remarks>
+		/// The quad drapes over the surface rather than lying flat, or it sinks into any slope and
+		/// the depth test cuts off whichever half went under. This caps how far that can go: at a
+		/// ledge one corner would otherwise be metres from the others and the quad would stretch
+		/// into a spike down the drop. Past the cap, a little clipping beats a streak.
+		/// </remarks>
+		[Min(0.25f)] public float MaximumDrape = 1.5f;
 
 		public void Dispose()
 		{
@@ -63,8 +76,11 @@ namespace FishMMO.Client
 		/// Whether the height map has been built. Without it every splash would land at the same
 		/// height, which on a slope is a sheet of rings hanging in the air.
 		/// </param>
+		/// <param name="temperature">
+		/// The local temperature, -1 frozen to +1 scorching. Hot ground takes a splash away quickly.
+		/// </param>
 		public void Render(in WeatherFrame frame, Camera camera, WeatherTierSettings tier, WeatherRenderProfile profile,
-			float time, bool occlusionValid, WeatherSubstance substance = null)
+			float time, bool occlusionValid, float temperature = 0f, WeatherSubstance substance = null)
 		{
 			if (camera == null || profile == null || tier == null || profile.SplashMaterial == null || !occlusionValid)
 			{
@@ -104,6 +120,12 @@ namespace FishMMO.Client
 				tint = SkySystem.Instance.InAir(tint);
 			}
 			block.SetColor(ColorId, new Color(tint.r, tint.g, tint.b, 0.5f));
+
+			/* Dryness from the temperature. Nothing happens below the midpoint — a splash on cool
+			 * ground should behave as it always has — and it ramps from there to scorching, where a
+			 * drop is gone almost as soon as it lands. */
+			float dry = Mathf.Clamp01(Mathf.InverseLerp(0.15f, 0.9f, temperature));
+			block.SetVector(HeatId, new Vector4(dry, MaximumDrape, 0f, 0f));
 
 			var rp = new RenderParams(profile.SplashMaterial)
 			{

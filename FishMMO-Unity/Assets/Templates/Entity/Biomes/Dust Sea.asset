@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Dus
+      - Pow
+      - Fin
+      - Drif
+      - Sif
+      - Mot
+      - Pal
+      - Vel
+      - Shoa
+      - Ashe
+      Nuclei:
+      - a
+      - u
+      - i
+      - ou
+      - ea
+      - ai
+      Codas:
+      - sea
+      - drift
+      - shoal
+      - deep
+      - powder
+      - dune
+      - swell
+      - bed
+      Middles:
+      - an
+      - er
+      - ul
+      - or
+      - is
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Electrostatic dust deep enough to wade through
+      DungeonSuffixes:
+      - Cavern
+      - Vault
+      - Shaft
+      - Hollow
+      - Pit
+      - Chamber
+      - Tube
+      - Rift
+      DungeonPrefixes:
+      - The Bottomless
+      - The Silent
+      - The Drowning
+      - The Grey
+      - The Soft
+      - The Shifting
+      - The Trackless
+      - The Deep
+      POISuffixes:
+      - Sea
+      - Drift
+      - Shoal
+      - Deep
+      - Swell
+      - Dune
+      Adjectives:
+      - Bottomless
+      - Drowning
+      - Shifting
+      - Soft
+      - Trackless
+      - Silent
+      Description: Dust so fine and so deep that it swallows whatever stands on it.
   Weather:
     Background: []
     CellSpawns:
@@ -47,6 +104,8 @@ MonoBehaviour:
       Weight: 4
     - Preset: {fileID: 11400000, guid: 52e576570c765c0409d75cecfa0a3415, type: 2}
       Weight: 2
+    - Preset: {fileID: 11400000, guid: 5e2b4f36125896439879c0a36ecc3f25, type: 2}
+      Weight: 1.5
     Suitability:
     - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
       Suitability: 0

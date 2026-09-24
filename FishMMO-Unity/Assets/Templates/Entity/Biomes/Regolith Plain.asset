@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Reg
+      - Mar
+      - Sel
+      - Cin
+      - Dus
+      - Alb
+      - Ter
+      - Nub
+      - Ser
+      - Gri
+      Nuclei:
+      - a
+      - o
+      - i
+      - ae
+      - eu
+      - ia
+      Codas:
+      - dust
+      - mare
+      - plain
+      - regolith
+      - grey
+      - waste
+      - expanse
+      - floor
+      Middles:
+      - an
+      - or
+      - el
+      - us
+      - ar
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Powdered rock over bedrock, undisturbed but for impacts
+      DungeonSuffixes:
+      - Cavern
+      - Vault
+      - Shaft
+      - Hollow
+      - Pit
+      - Chamber
+      - Tube
+      - Rift
+      DungeonPrefixes:
+      - The Airless
+      - The Grey
+      - The Silent
+      - The Cratered
+      - The Static
+      - The Sunbaked
+      - The Lifeless
+      - The Unshielded
+      POISuffixes:
+      - Plain
+      - Mare
+      - Waste
+      - Expanse
+      - Flat
+      - Floor
+      Adjectives:
+      - Airless
+      - Grey
+      - Silent
+      - Cratered
+      - Lifeless
+      - Static
+      Description: Ground-up rock that has never known weather, and holds every footprint.
   Weather:
     Background: []
     CellSpawns:

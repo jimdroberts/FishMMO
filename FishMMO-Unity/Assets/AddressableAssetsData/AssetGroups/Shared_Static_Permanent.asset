@@ -261,6 +261,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 12d18fc36280c66a39cc6cb378e5bf47
+    m_Address: Ithwyn System - Yrven Clouds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1317bb0d1b4d4b6cb5d75c6bcaa082c8
     m_Address: Skeleton
     m_ReadOnly: 0
@@ -663,12 +669,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2708ec0b5e59352ecaf6df6312bec979
-    m_Address: Yrois System - Soltha
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2767bd947c0c0e89d97a609c45aa8a0e
     m_Address: Fire Impact FX Event
     m_ReadOnly: 0
@@ -725,12 +725,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a69803876db8086d81d72c790a12e9b
     m_Address: Scroll of Lesser Flame
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2a90e9a4654dca6ed8aa1752628adf7d
-    m_Address: Moon 5
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -827,6 +821,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 335c46c3e1940fa41a866740a873f64a
     m_Address: GeneralGoods
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 33646e35e6c4545228753138d2365632
+    m_Address: Ithwyn System - Wenereth
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -957,12 +957,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3eecfff349832b1fbb74cd8067cfc40b
-    m_Address: Planet 4
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3f1796fdbcc24929bb77e8c5b4aa5ff1
     m_Address: Dwarf
     m_ReadOnly: 0
@@ -1043,12 +1037,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 484b236f93276f18a92cbcc4e021a9a8
     m_Address: Sand
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 486b421eb65995e34a39f15cf3d209d3
-    m_Address: Moon 1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1155,14 +1143,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4fec6d640c1147642be17ff51ea55eae
-    m_Address: Oasis
+  - m_GUID: 4f39c0785ad7dd8b2b3d27c9842ced2d
+    m_Address: Nariatha 1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 502a5864d965402358c527e42529b8bd
-    m_Address: Home
+  - m_GUID: 4fec6d640c1147642be17ff51ea55eae
+    m_Address: Oasis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1233,12 +1221,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 54a174a355e7d19c78975b8ed6e979a9
-    m_Address: Yrois System - Yrois
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 550dbf6c4faec814d90892a954354921
     m_Address: Alpine
     m_ReadOnly: 0
@@ -1265,12 +1247,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 55eeb6eb7bb54562bd2d01720b05bd03
     m_Address: Elder Giant
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 55fa1100388c53d3a950774bbf7e22fa
-    m_Address: Yrois System - Uloris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1455,6 +1431,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 63e3b77929469f7dbb28c1da603cb176
+    m_Address: Ithwyn System - Valris
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 63fd4b18917945c1aa9e52aab9126194
     m_Address: Stormcalled
     m_ReadOnly: 0
@@ -1493,18 +1475,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6a76fb0c85014dda900e0657513971a7
     m_Address: Deepfolk
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6aae412e346a46aa1b995a45071ac5c7
-    m_Address: Yrois System - Narithis
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6b029fc5cd40b8a399e98be3e09edb12
-    m_Address: Yrois System - Moraeis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1625,18 +1595,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 73bb6b8a44154b2d8481bf5b24fa1893
     m_Address: Hydra
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 749ba1b6359807533857aba37ed808a4
-    m_Address: Yrois System - Ithiwyn
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 76ab8206601b810beb83fc950b4bfcff
-    m_Address: Yrois System
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1856,12 +1814,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 86bfb4a1bb9fa70b5a5ffd88ba53dc25
-    m_Address: Yrois System - Elorlis
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8766246d673041191a07889157e01b58
     m_Address: Mock Random Bolts
     m_ReadOnly: 0
@@ -1912,6 +1864,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8b6b0ff6e5c34bcb87f68e0b7d669af0
     m_Address: Gazer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c2a6e67a75e6bac0a10dca572035fed
+    m_Address: Ithwyn System - Yrlis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2102,12 +2060,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 988c4790e7cc158dab79dc7a7adccf99
-    m_Address: Yrois System - Ithiawyn
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9997a2c2024a48ddb3a8f2545c3cafe1
     m_Address: Swamp Temple
     m_ReadOnly: 0
@@ -2270,6 +2222,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a6c79bcf91335f279b97f709bbba8dee
+    m_Address: Ithwyn System
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
     m_Address: an orc mage
     m_ReadOnly: 0
@@ -2284,12 +2242,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a83e21ce20844edfa8ccf32414bb674f
     m_Address: Giant Beetle
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a84c9321eb21a97058c6d100aaf9a279
-    m_Address: Comet 7
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2330,6 +2282,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aaa3a8d4db0178c36974ad7db4a2d488
+    m_Address: Ithwyn System - Yrlis Clouds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aaaf52782b97908078e67bd16bb8e839
+    m_Address: Ithwyn System - Yrven
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aacb655df54e41b88ec41c8c762abae4
     m_Address: Dust Wraith
     m_ReadOnly: 0
@@ -2338,12 +2302,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: abbb28ed1b194ad081aa07ccf765a487
     m_Address: Moorfolk
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: abe13e5c1e14f1bb4a66f6a1f6368ad8
-    m_Address: Yrois System - Mornos
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2425,6 +2383,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2608a48d656ea3a3a75783e75e9829d
+    m_Address: Ithwyn System - Ithwyn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b2be23afeaddac6faa373ee751e2d988
     m_Address: Eruption Ashfall
     m_ReadOnly: 0
@@ -2469,12 +2433,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b5787b08b68d4f16888d75ecc6c58ef7
     m_Address: Rootwalker
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b58a9f32fc48c49a59879105e972eea0
-    m_Address: Yrois System - Calodor
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2581,8 +2539,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: be25a097fd0e8228f87c0a220085ff0a
-    m_Address: Yrois System - Calron
+  - m_GUID: bdff3d52b1f0134a69bf315c2b44c04f
+    m_Address: Ithwyn System - Belirtha
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: be5eade63596c948fb1d08f3940fbf26
+    m_Address: Ithwyn System - Pelus Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2653,12 +2617,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c2d9a07da40e8fd26bc62be41e584c84
-    m_Address: Moon 8
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3968d4b8d505f44f927a401902775b9
     m_Address: Crater
     m_ReadOnly: 0
@@ -2683,12 +2641,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c657b9f3adc3333b5a8bcdf77cb71741
-    m_Address: Sun
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c66ed2b42bcd6b14194a796e70a740e0
     m_Address: Assets/Prefabs/LevelLoggingConfiguration.asset
     m_ReadOnly: 0
@@ -2697,12 +2649,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c70f6d8041358ed41bfaf8483b590e34
     m_Address: Disable Fog
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c762dc112bd07b1989be629c53ce5641
-    m_Address: Yrois System - Yriais
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2745,6 +2691,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c9ba5e86dfbc41378c13f5eb2722eda7
     m_Address: Jungle Temple
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ca699b0b48f4810d38ff4d8a009b0379
+    m_Address: Ithwyn System - Naron
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2935,6 +2887,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d67e8ad17e4f2f7939bedd5d4359ad23
+    m_Address: Ithwyn System - Morris
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d6c4efea0d9481dbb97974bd3990df4e
+    m_Address: Ithwyn System - Pelus
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d6d32c919f2918f4f830933959878cae
     m_Address: Earth Resistance
     m_ReadOnly: 0
@@ -2967,12 +2931,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: da0784a63e774c6583670b281a304ae3
     m_Address: Undead
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: da7f609f5623f22e093087d609f80c6b
-    m_Address: Moon 6
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3033,12 +2991,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: def2a16b772d487db05ef395d2ca8134
     m_Address: Glimmerling
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: df30a0521124acc99bf0dc52b42eeb2d
-    m_Address: Yrois System - Helivar
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3213,12 +3165,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e8dfe2d2e98d4a249cea9743ad574879
     m_Address: Half-Elf
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e9472bdc60c3d6c49a901f7d540508d1
-    m_Address: Solar System
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3505,12 +3451,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: facce24b813b4b85a89423436b208340
-    m_Address: Yrois System - Lormar
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fb7cc60e1bf84b058130bb5d89d290bf
     m_Address: Nixie
     m_ReadOnly: 0
@@ -3543,6 +3483,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe3425a466033e34ead49fcfc3204895
     m_Address: Small World Item
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe505b171e15768fe8a5397b2b7c4c7f
+    m_Address: Ithwyn System - Elis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Sul
+      - Bri
+      - Cro
+      - Fum
+      - Och
+      - Cit
+      - Mof
+      - Sol
+      - Ver
+      - Pyr
+      Nuclei:
+      - a
+      - u
+      - i
+      - ou
+      - ae
+      - ia
+      Codas:
+      - flat
+      - crust
+      - field
+      - waste
+      - bed
+      - pan
+      - terrace
+      - bloom
+      Middles:
+      - an
+      - or
+      - ul
+      - is
+      - er
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Yellow crust over vents, and a smell that carries for miles
+      DungeonSuffixes:
+      - Forge
+      - Vent
+      - Chamber
+      - Tube
+      - Conduit
+      - Furnace
+      - Shaft
+      - Crucible
+      DungeonPrefixes:
+      - The Yellow
+      - The Reeking
+      - The Brittle
+      - The Crusted
+      - The Bitter
+      - The Smoking
+      - The Golden
+      - The Scalded
+      POISuffixes:
+      - Flat
+      - Field
+      - Crust
+      - Bed
+      - Terrace
+      - Bloom
+      Adjectives:
+      - Yellow
+      - Reeking
+      - Brittle
+      - Crusted
+      - Smoking
+      - Scalded
+      Description: Yellow crust over ground that has been venting for centuries.
   Weather:
     Background: []
     CellSpawns:

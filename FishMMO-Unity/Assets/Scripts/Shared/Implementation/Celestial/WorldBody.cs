@@ -74,6 +74,22 @@ namespace FishMMO.Shared.Celestial
 			float cosine = Mathf.Sin(latitude) * Mathf.Sin(poleLatitude) + Mathf.Cos(latitude) * Mathf.Cos(poleLatitude) * Mathf.Cos(longitude - poleLongitude);
 			return 90f - Mathf.Acos(Mathf.Clamp(cosine, -1f, 1f)) * Mathf.Rad2Deg;
 		}
+		/// <summary>
+		/// The seed this world's terrain is generated from. Change it and you get a different
+		/// planet; keep it and every server, client and tool agrees about every coastline.
+		/// </summary>
+		/// <remarks>
+		/// Zero means "derive one from the asset name", so a body that has never been given a seed
+		/// still has a stable world of its own rather than sharing seed 0 with every other body.
+		/// </remarks>
+		[Tooltip("Seed for this world's terrain. 0 derives one from the body's name.")]
+		public uint TerrainSeed;
+
+		/// <summary>The seed actually used: the authored one, or one derived from the name.</summary>
+		public uint ResolvedTerrainSeed => TerrainSeed != 0u
+			? TerrainSeed
+			: unchecked((uint)(name ?? string.Empty).GetDeterministicHashCode());
+
 		[Tooltip("0 dry … 1 ocean world. Feeds the humidity offset.")]
 		[Range(0f, 1f)] public float Water = 0.7f;
 		[Tooltip("Base climate model for scenes on this body. Scene settings may still name their own.")]

@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Tub
+      - Con
+      - Ves
+      - Pahoe
+      - Bas
+      - Sker
+      - Ig
+      - Fum
+      - Cav
+      - Thur
+      Nuclei:
+      - a
+      - o
+      - e
+      - au
+      - oe
+      - ur
+      Codas:
+      - tube
+      - conduit
+      - vault
+      - gallery
+      - run
+      - throat
+      - shaft
+      - hollow
+      Middles:
+      - an
+      - or
+      - el
+      - ur
+      - is
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: A roofed void under the surface, the only shelter for a long way
+      DungeonSuffixes:
+      - Forge
+      - Vent
+      - Chamber
+      - Tube
+      - Conduit
+      - Furnace
+      - Shaft
+      - Crucible
+      DungeonPrefixes:
+      - The Hollow
+      - The Black
+      - The Glassy
+      - The Sealed
+      - The Winding
+      - The Cooled
+      - The Deep
+      - The Echoing
+      POISuffixes:
+      - Tube
+      - Conduit
+      - Gallery
+      - Throat
+      - Vault
+      - Run
+      Adjectives:
+      - Hollow
+      - Glassy
+      - Black
+      - Sealed
+      - Echoing
+      - Cooled
+      Description: A drained lava conduit, smooth-walled and perfectly dark.
   Weather:
     Background: []
     CellSpawns: []

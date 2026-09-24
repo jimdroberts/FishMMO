@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Swel
+      - Bra
+      - Ign
+      - Tor
+      - Fer
+      - Cald
+      - Aes
+      - Pyr
+      - Ard
+      - Sul
+      Nuclei:
+      - a
+      - e
+      - i
+      - ae
+      - ou
+      - ia
+      Codas:
+      - plain
+      - swelter
+      - waste
+      - glare
+      - bake
+      - flat
+      - oven
+      - reach
+      Middles:
+      - an
+      - or
+      - el
+      - us
+      - ir
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Baked rock under a sky that never lets the heat out
+      DungeonSuffixes:
+      - Forge
+      - Vent
+      - Chamber
+      - Tube
+      - Conduit
+      - Furnace
+      - Shaft
+      - Crucible
+      DungeonPrefixes:
+      - The Sweltering
+      - The Crushing
+      - The Baked
+      - The Endless
+      - The Leaden
+      - The Airless
+      - The Blistering
+      - The Dim
+      POISuffixes:
+      - Plain
+      - Waste
+      - Flat
+      - Reach
+      - Glare
+      - Bake
+      Adjectives:
+      - Sweltering
+      - Crushing
+      - Baked
+      - Leaden
+      - Blistering
+      - Dim
+      Description: A world that kept its own heat until nothing could shed it.
   Weather:
     Background: []
     CellSpawns:

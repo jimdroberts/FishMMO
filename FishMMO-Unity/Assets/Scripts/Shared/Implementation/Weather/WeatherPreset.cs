@@ -26,6 +26,20 @@ namespace FishMMO.Shared.Weather
 		[Tooltip("Storm cell radius range in metres.")]
 		public Vector2 CellRadiusMeters = new Vector2(150f, 600f);
 
+		[Tooltip("The shape a cell of this preset covers the ground in. Disc is a shower or a thunderhead; Front is a wall that arrives along its length; Eyewall is a hurricane with a calm middle; Funnel is a tornado.")]
+		public StormCellShape CellShape = StormCellShape.Disc;
+
+		/// <summary>
+		/// The shape's second measurement, rolled per cell. Ignored by <see cref="StormCellShape.Disc"/>.
+		/// </summary>
+		/// <remarks>
+		/// It means a different thing to each shape — a front's half-length, a hurricane's eye, a
+		/// tornado's outer reach — which is why it is one field and not three: a preset only ever
+		/// has one shape, so only one of the three could ever be in use.
+		/// </remarks>
+		[Tooltip("Front: half-length along the wall. Eyewall: the eye's radius. Funnel: how far out it is felt. Ignored for Disc.")]
+		public Vector2 CellExtentMeters = new Vector2(600f, 1500f);
+
 		[NonSerialized] private bool cached;
 		[NonSerialized] private WeatherFrame cachedFull;
 

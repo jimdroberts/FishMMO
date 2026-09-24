@@ -51,7 +51,12 @@ namespace FishMMO.Shared.Biomes
 			SceneBiomeMap map = settings != null ? settings.BiomeMap : null;
 			float latitude = map != null ? map.Latitude01(worldPosition) : 0.5f;
 
-			if (TrySampleTerrainHeight(worldPosition, out float height))
+			/* Measured within this scene's own terrains. Scene servers load world scenes
+			 * additively and every scene is built around its own origin, so their terrains overlap
+			 * in world space; an unscoped search answers with whichever tile the global array lists
+			 * first, which may belong to a different zone entirely. */
+			Scene scene = settings != null ? settings.gameObject.scene : default;
+			if (TrySampleTerrainHeight(worldPosition, scene, out float height))
 			{
 				reading.Height = height;
 				reading.HeightKnown = true;
@@ -89,8 +94,36 @@ namespace FishMMO.Shared.Biomes
 			return reading;
 		}
 
-		/// <summary>Normalised height of the terrain under a position, from whichever active terrain contains it.</summary>
+		/// <summary>Normalised height of the terrain under a position, across every loaded terrain.</summary>
+		/// <remarks>Prefer the overload that names a scene; this one cannot tell two scenes' terrains apart.</remarks>
 		public static bool TrySampleTerrainHeight(Vector3 worldPosition, out float normalizedHeight)
+		{
+			return TrySampleTerrainHeight(worldPosition, default, out normalizedHeight);
+		}
+
+		/// <summary>
+		/// Normalised height of the terrain under a position, measured against the scene's whole
+		/// landmass.
+		/// </summary>
+		/// <param name="worldPosition">The world position to measure under.</param>
+		/// <param name="scene">The scene whose terrains to consider. Invalid measures them all.</param>
+		/// <param name="normalizedHeight">0 at the landmass's lowest possible ground, 1 at its highest.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>Against the landmass, not against the tile.</b> A scene may be one terrain or a grid
+		/// of them stitched together, and stitched tiles do not have to share a base height or a
+		/// height range — a plateau tile is commonly raised, and a tile over flat ground is
+		/// commonly given a shorter range so its heightmap keeps its precision. Normalising each
+		/// tile against its own range made the same world altitude read as a different height on
+		/// either side of a seam, so temperature and biome stepped as you crossed the join.
+		/// </para>
+		/// <para>
+		/// For a scene with one terrain the answer is arithmetically identical to the old one —
+		/// the landmass's base and span <em>are</em> that tile's — so nothing moves where the old
+		/// code was already right.
+		/// </para>
+		/// </remarks>
+		public static bool TrySampleTerrainHeight(Vector3 worldPosition, Scene scene, out float normalizedHeight)
 		{
 			normalizedHeight = 0f;
 			Terrain[] terrains = Terrain.activeTerrains;
@@ -98,10 +131,13 @@ namespace FishMMO.Shared.Biomes
 			{
 				return false;
 			}
+			SceneTerrainExtent extent = SceneTerrainExtent.Of(scene);
+			bool onlyOne = scene.IsValid();
 			for (int i = 0; i < terrains.Length; i++)
 			{
 				Terrain terrain = terrains[i];
-				if (terrain == null || terrain.terrainData == null)
+				if (terrain == null || terrain.terrainData == null
+					|| onlyOne && terrain.gameObject.scene.handle != scene.handle)
 				{
 					continue;
 				}
@@ -112,8 +148,11 @@ namespace FishMMO.Shared.Biomes
 				{
 					continue;
 				}
+				// SampleHeight is relative to the tile's own transform, so the tile's origin puts
+				// it back into world space before the landmass normalises it.
 				float worldY = terrain.SampleHeight(worldPosition) + origin.y;
-				normalizedHeight = size.y > 0f ? Mathf.Clamp01((worldY - origin.y) / size.y) : 0f;
+				normalizedHeight = extent.Found ? extent.Normalize(worldY)
+					: size.y > 0f ? Mathf.Clamp01((worldY - origin.y) / size.y) : 0f;
 				return true;
 			}
 			return false;

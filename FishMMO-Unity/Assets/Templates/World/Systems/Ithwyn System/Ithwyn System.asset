@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44468c9ca5314f2bbaa395243e9e773b, type: 3}
+  m_Name: Ithwyn System
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.SolarSystemProfile
+  Bodies:
+  - {fileID: 11400000, guid: b2608a48d656ea3a3a75783e75e9829d, type: 2}
+  - {fileID: 11400000, guid: d6c4efea0d9481dbb97974bd3990df4e, type: 2}
+  - {fileID: 11400000, guid: d67e8ad17e4f2f7939bedd5d4359ad23, type: 2}
+  - {fileID: 11400000, guid: 8c2a6e67a75e6bac0a10dca572035fed, type: 2}
+  - {fileID: 11400000, guid: aaaf52782b97908078e67bd16bb8e839, type: 2}
+  - {fileID: 11400000, guid: 33646e35e6c4545228753138d2365632, type: 2}
+  - {fileID: 11400000, guid: ca699b0b48f4810d38ff4d8a009b0379, type: 2}
+  - {fileID: 11400000, guid: 63e3b77929469f7dbb28c1da603cb176, type: 2}
+  - {fileID: 11400000, guid: fe505b171e15768fe8a5397b2b7c4c7f, type: 2}
+  - {fileID: 11400000, guid: bdff3d52b1f0134a69bf315c2b44c04f, type: 2}
+  HomeWorld: {fileID: 11400000, guid: ca699b0b48f4810d38ff4d8a009b0379, type: 2}
+  WeatherSeed: 1990097231
+  StarSeed: 1030302577
+  WeatherSystemHours: 5
+  Calendar: {fileID: 11400000, guid: b90f2d3c09077e97099fd6461c29802a, type: 2}
+  MeteorShowers:
+  - Name: Loraraids
+    PeakDayOfYear: 86
+    HalfWidthDays: 2.7126615
+    PeakPerHour: 50.60631
+    RadiantRightAscension: 113.9414
+    RadiantDeclination: 48.710987
+    Color: {r: 1, g: 0.95, b: 0.8, a: 1}
+  - Name: Mororwynids
+    PeakDayOfYear: 244
+    HalfWidthDays: 5.4241686
+    PeakPerHour: 95.10927
+    RadiantRightAscension: 339.83548
+    RadiantDeclination: 41.0397
+    Color: {r: 1, g: 0.95, b: 0.8, a: 1}
+  SporadicMeteorsPerHour: 8.911241
+  AsteroidBelts: []
+  Limits:
+    Suns: 4
+    Moons: 64
+    Planets: 256
+    Comets: 32
+    VisibleAsteroids: 2000
+    Meteors: 512
+  TextureAboveSkyPercent: 0.1

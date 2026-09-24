@@ -66,6 +66,34 @@ namespace FishMMO.Shared.WorldDesign
 
 		public double RadiusKm = 30.0;
 		public Color BodyColour = new Color(0.3f, 0.45f, 0.6f, 1f);
+
+		/// <summary>
+		/// The body's baked surface, drawn on the globe when there is one.
+		/// </summary>
+		/// <remarks>
+		/// Null is the normal state and not a fault: the bake is build output, so a freshly cloned
+		/// project has none and the globe shows a plain ball in <see cref="BodyColour"/>. Baking
+		/// puts the real coastlines under the scene rectangles, which is what makes picking a
+		/// location for a new scene a decision rather than a guess.
+		/// </remarks>
+		public Texture2D Surface;
+
+		/// <summary>
+		/// Draw the lines a developer places scenes against: the equator, the prime meridian, the
+		/// tropics and the polar circles.
+		/// </summary>
+		public bool ShowReference = true;
+
+		/// <summary>
+		/// The body's axial tilt, which is what puts the tropics and the polar circles where they are.
+		/// </summary>
+		/// <remarks>
+		/// Not decoration. The tilt decides the sun's noon altitude at every latitude, which is the
+		/// only thing making a pole cold in this model — so the tropic is literally the furthest the
+		/// sun ever gets overhead, and the polar circle is where it stops rising at midwinter. A
+		/// scene placed between them is temperate for a reason that is visible on the globe.
+		/// </remarks>
+		public float AxialTiltDegrees = 23.4f;
 		/// <summary>Unit vector toward the sun in the body's frame, or null for no daylight shading.</summary>
 		public Vector3d? SunDirection;
 		public bool ShowGrid = true;
@@ -96,6 +124,24 @@ namespace FishMMO.Shared.WorldDesign
 
 		public event Action<WorldAtlasScene> SceneClicked;
 		public event Action EmptyClicked;
+
+		/// <summary>
+		/// Drag a rectangle instead of turning the globe: the tool for cutting a new scene out of
+		/// a world.
+		/// </summary>
+		/// <remarks>
+		/// A mode rather than a modifier because drawing a rectangle and turning the ball are both
+		/// left-drags on empty sky, and guessing which one somebody meant from how far they moved
+		/// would get it wrong exactly when the rectangle is small.
+		/// </remarks>
+		public bool CutMode;
+
+		/// <summary>A rectangle was drawn: its centre in degrees and its size in kilometres.</summary>
+		public event Action<double, double, Vector2> RectangleDrawn;
+
+		private bool cutting;
+		private Vector3d cutFrom;
+		private Vector3d cutTo;
 		public event Action<WorldAtlasScene> SceneMoveStarted;
 		public event Action<WorldAtlasScene, double, double> SceneMoving;
 		public event Action<WorldAtlasScene> SceneMoveEnded;
@@ -299,6 +345,19 @@ namespace FishMMO.Shared.WorldDesign
 		private void LayoutLabels()
 		{
 			int index = 0;
+
+			/* The poles, first and therefore under the scene labels if they ever collide.
+			 *
+			 * Real labels rather than painted text, because these are UI elements and so are drawn
+			 * over the globe mesh whatever the camera is doing — a pole marker stroked into the
+			 * mesh disappears under the ice cap it is meant to be naming, which is the one place it
+			 * has to be readable. */
+			if (ShowReference)
+			{
+				index = PoleLabel(index, 90.0, "N");
+				index = PoleLabel(index, -90.0, "S");
+			}
+
 			foreach (GlobeScene scene in Scenes)
 			{
 				if (scene.Ghost || scene.Entry == null)
@@ -375,6 +434,23 @@ namespace FishMMO.Shared.WorldDesign
 			return pool[index];
 		}
 
+		/// <summary>Places one pole's letter, if that pole is facing us.</summary>
+		private int PoleLabel(int index, double latitude, string text)
+		{
+			Vector3d pole = AtlasGeometry.ToUnit(latitude, 0.0);
+			if (!Project(pole, out Vector2 at) || !contentRect.Contains(at))
+			{
+				return index;
+			}
+			Label label = LabelAt(labels, index++);
+			label.text = text;
+			label.style.left = at.x - 60f;
+			label.style.top = at.y - 30f;
+			label.style.color = new Color(1f, 0.95f, 0.8f, 0.95f);
+			label.style.display = DisplayStyle.Flex;
+			return index;
+		}
+
 		// ── Drawing ──
 
 		private void Draw(MeshGenerationContext context)
@@ -408,6 +484,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				DrawOutline(painter, scene);
 			}
+			// After the scenes, so the rectangle being cut is visible over whatever it overlaps —
+			// which is exactly when somebody needs to see it.
+			DrawPendingCut(painter);
 			foreach (GlobeRoute route in Routes)
 			{
 				DrawRoute(painter, route);
@@ -425,7 +504,11 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var vertices = new Vertex[(SphereRows + 1) * (SphereColumns + 1)];
 			var views = new Vector3[vertices.Length];
-			Color day = BodyColour;
+			/* With a surface the mesh is white and the texture supplies the colour; the daylight
+			 * and limb terms then multiply it, so night and the edge of the disc still read the
+			 * same way. Without one, the tint IS the colour, exactly as before. */
+			bool textured = Surface != null;
+			Color day = textured ? Color.white : BodyColour;
 			Color night = new Color(day.r * 0.28f, day.g * 0.3f, day.b * 0.38f, 1f);
 			for (int r = 0; r <= SphereRows; r++)
 			{
@@ -450,7 +533,11 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						position = new Vector3(Screen(v).x, Screen(v).y, Vertex.nearZ),
 						tint = colour,
-						uv = Vector2.zero,
+						// Equirectangular, the same way round the baker writes it: longitude
+						// across, latitude down from the north pole.
+						uv = textured
+							? new Vector2((float)((lon + 180.0) / 360.0), (float)((90.0 - lat) / 180.0))
+							: Vector2.zero,
 					};
 				}
 			}
@@ -472,7 +559,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			MeshWriteData mesh = context.Allocate(vertices.Length, indices.Count, Blank);
+			MeshWriteData mesh = context.Allocate(vertices.Length, indices.Count, textured ? Surface : Blank);
 			mesh.SetAllVertices(vertices);
 			mesh.SetAllIndices(indices.ToArray());
 		}
@@ -514,6 +601,10 @@ namespace FishMMO.Shared.WorldDesign
 					Polyline(painter, i => AtlasGeometry.ToUnit(-90.0 + 180.0 * i / 60, lon), 61, false);
 				}
 			}
+			if (ShowReference)
+			{
+				DrawReference(painter);
+			}
 			if (ShowTimeZones)
 			{
 				// Zone boundaries sit half an hour either side of each whole hour.
@@ -524,6 +615,164 @@ namespace FishMMO.Shared.WorldDesign
 					Polyline(painter, i => AtlasGeometry.ToUnit(-90.0 + 180.0 * i / 60, lon), 61, false);
 				}
 			}
+		}
+
+		/// <summary>
+		/// The rectangle currently being dragged, as a centre and a size in kilometres.
+		/// </summary>
+		/// <remarks>
+		/// Measured in the centre's own tangent plane rather than in degrees of latitude and
+		/// longitude. A degree of longitude is 111 km at the equator and 29 km at 75°, so a
+		/// rectangle sized in degrees would be a different scene depending where it was drawn.
+		/// </remarks>
+		private bool TryPendingRectangle(out double latitude, out double longitude, out Vector2 sizeKm)
+		{
+			latitude = 0.0;
+			longitude = 0.0;
+			sizeKm = Vector2.zero;
+
+			AtlasGeometry.FromUnit(cutFrom, out double fromLat, out double fromLon);
+			AtlasGeometry.FromUnit(cutTo, out double toLat, out double toLon);
+
+			// Midpoint of the two corners, through the sphere, so it is the centre of the ground
+			// rather than the average of two angles that may straddle the antimeridian.
+			var middle = new Vector3d(
+				(cutFrom.X + cutTo.X) * 0.5,
+				(cutFrom.Y + cutTo.Y) * 0.5,
+				(cutFrom.Z + cutTo.Z) * 0.5);
+			if (middle.Magnitude < 1e-9)
+			{
+				return false;
+			}
+			AtlasGeometry.FromUnit(middle, out latitude, out longitude);
+			latitude = Math.Max(-85.0, Math.Min(85.0, latitude));
+			longitude = AtlasGeometry.WrapLongitude(longitude);
+
+			Vector2 a = AtlasGeometry.Project(latitude, longitude, cutFrom, RadiusKm);
+			Vector2 b = AtlasGeometry.Project(latitude, longitude, cutTo, RadiusKm);
+			sizeKm = new Vector2(Mathf.Abs(b.x - a.x), Mathf.Abs(b.y - a.y));
+
+			if (Snap && SnapKm > 0.0)
+			{
+				sizeKm = new Vector2(
+					Mathf.Round(sizeKm.x / (float)SnapKm) * (float)SnapKm,
+					Mathf.Round(sizeKm.y / (float)SnapKm) * (float)SnapKm);
+			}
+			// Below this it is a stray click, not a scene.
+			return sizeKm.x >= 0.05f && sizeKm.y >= 0.05f;
+		}
+
+		/// <summary>Whether the rectangle being dragged lands on a scene it is not allowed to.</summary>
+		private bool PendingOverlaps(in AtlasFootprint footprint)
+		{
+			foreach (GlobeScene scene in Scenes)
+			{
+				if (scene.Ghost)
+				{
+					continue;
+				}
+				if (AtlasGeometry.Overlaps(footprint, scene.Footprint, RadiusKm))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Outlines the rectangle being dragged, so its size and whether it is allowed are both
+		/// visible while it is still being chosen.
+		/// </summary>
+		private void DrawPendingCut(Painter2D painter)
+		{
+			if (!cutting || !TryPendingRectangle(out double lat, out double lon, out Vector2 sizeKm))
+			{
+				return;
+			}
+			var footprint = new AtlasFootprint { Latitude = lat, Longitude = lon, SizeKm = sizeKm, HeadingDegrees = 0f };
+			Vector3d[] corners = AtlasGeometry.Corners(footprint, RadiusKm);
+			if (corners == null || corners.Length < 4)
+			{
+				return;
+			}
+			// Red while it is over something, so the refusal is seen before the mouse is released
+			// rather than read out of a dialog afterwards.
+			painter.strokeColor = PendingOverlaps(footprint)
+				? new Color(1f, 0.32f, 0.28f, 0.95f)
+				: new Color(1f, 0.85f, 0.3f, 0.95f);
+			painter.lineWidth = 2f;
+			Polyline(painter, i => corners[i % corners.Length], corners.Length + 1, DashStyle.Dashed);
+		}
+
+		/// <summary>
+		/// The lines a scene is placed against: equator, prime meridian, tropics, polar circles.
+		/// </summary>
+		/// <remarks>
+		/// The tropics and the polar circles are derived from the body's own axial tilt rather than
+		/// drawn at Earth's, so a world tipped on its side shows tropics that nearly reach its poles
+		/// — which is exactly the case where a designer's intuition about where it is warm is
+		/// wrong, and the one where seeing it matters most.
+		/// </remarks>
+		private void DrawReference(Painter2D painter)
+		{
+			float tilt = Mathf.Clamp(Mathf.Abs(AxialTiltDegrees), 0f, 90f);
+
+			// Tropics: the furthest from the equator the sun is ever directly overhead.
+			if (tilt > 0.5f)
+			{
+				painter.strokeColor = new Color(1f, 0.82f, 0.45f, 0.3f);
+				painter.lineWidth = 1f;
+				Parallel(painter, tilt);
+				Parallel(painter, -tilt);
+
+				// Polar circles: where the sun fails to rise at all at midwinter.
+				float polar = 90f - tilt;
+				if (polar < 89.5f)
+				{
+					painter.strokeColor = new Color(0.7f, 0.88f, 1f, 0.3f);
+					Parallel(painter, polar);
+					Parallel(painter, -polar);
+				}
+			}
+
+			// The equator and the prime meridian, brighter because everything else is measured
+			// from them.
+			painter.strokeColor = new Color(1f, 1f, 1f, 0.32f);
+			painter.lineWidth = 1.4f;
+			Parallel(painter, 0f);
+			Polyline(painter, i => AtlasGeometry.ToUnit(-90.0 + 180.0 * i / 60, 0.0), 61, DashStyle.Solid);
+
+			// The poles themselves, as short spurs along the axis: a dot at the pole is hidden by
+			// whatever is drawn over it, and on a turned globe an axis stub reads as an axis.
+			painter.strokeColor = new Color(1f, 0.95f, 0.8f, 0.55f);
+			painter.lineWidth = 2f;
+			Polyline(painter, i => AtlasGeometry.ToUnit(90.0 - i * 2.5, 0.0), 3, DashStyle.Solid);
+			Polyline(painter, i => AtlasGeometry.ToUnit(-90.0 + i * 2.5, 0.0), 3, DashStyle.Solid);
+
+			// Where the star is overhead right now, if the sun is known: the hottest point on the
+			// world at this instant, and the centre of the lit hemisphere.
+			if (SunDirection.HasValue)
+			{
+				Vector3d sub = SunDirection.Value;
+				AtlasGeometry.FromUnit(sub, out double subLat, out double subLon);
+				painter.strokeColor = new Color(1f, 0.85f, 0.3f, 0.7f);
+				painter.lineWidth = 1.5f;
+				const double Ring = 3.0;
+				Polyline(painter, i =>
+				{
+					double angle = 2.0 * Math.PI * i / 24.0;
+					return AtlasGeometry.Offset(subLat, subLon,
+						Math.Cos(angle) * Ring / 180.0 * Math.PI * RadiusKm,
+						Math.Sin(angle) * Ring / 180.0 * Math.PI * RadiusKm,
+						RadiusKm);
+				}, 25, DashStyle.Solid);
+			}
+		}
+
+		/// <summary>A line of latitude all the way round.</summary>
+		private void Parallel(Painter2D painter, double latitude)
+		{
+			Polyline(painter, i => AtlasGeometry.ToUnit(latitude, -180.0 + 360.0 * i / 120), 121, DashStyle.Solid);
 		}
 
 		private delegate Vector3d PointAt(int index);
@@ -611,6 +860,17 @@ namespace FishMMO.Shared.WorldDesign
 			AtlasFootprint f = scene.Footprint;
 			bool textured = scene.Preview != null;
 			Color tint = textured ? Color.white : scene.Tint;
+			/* Overlapping scenes are filled red, not merely outlined in it.
+			 *
+			 * Scenes in one layer may not overlap — two of them claim the same ground, and a
+			 * character standing there is in both and in neither. The outline already went red,
+			 * but an outline is a line: on a globe full of rectangles it reads as a selection, and
+			 * on a textured world it disappears into the coastline underneath. A flooded patch is
+			 * unmistakable at a glance, which is the point of showing it at all. */
+			if (scene.Problem)
+			{
+				tint = Color.Lerp(tint, new Color(1f, 0.25f, 0.2f, 1f), 0.55f);
+			}
 			if (scene.Entry == Selected)
 			{
 				tint = Color.Lerp(tint, new Color(1f, 0.95f, 0.7f, 1f), 0.15f);
@@ -797,6 +1057,23 @@ namespace FishMMO.Shared.WorldDesign
 				evt.StopPropagation();
 				return;
 			}
+			/* A cut never takes a click that belongs to an existing scene. Scenes cannot overlap,
+			 * so a rectangle started inside one could not have been generated anyway — and a mode
+			 * that silently stops you selecting what is under the cursor is a mode people leave on
+			 * by accident and then fight. Press on empty ground to cut; press on a scene to pick
+			 * it up, exactly as when the mode is off. */
+			if (CutMode && evt.button == 0 && !evt.altKey && !LockScenes
+				&& SceneAt(evt.localPosition) == null
+				&& Pick(evt.localPosition, out Vector3d start))
+			{
+				cutting = true;
+				cutFrom = start;
+				cutTo = start;
+				this.CapturePointer(evt.pointerId);
+				evt.StopPropagation();
+				return;
+			}
+
 			bool turnOnly = evt.button == 2 || evt.altKey || LockScenes;
 			GlobeScene scene = turnOnly ? null : SceneAt(evt.localPosition);
 			if (scene != null && evt.button == 0)
@@ -839,7 +1116,15 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			moved = true;
 			lastPointer = evt.localPosition;
-			if (rotating)
+			if (cutting)
+			{
+				if (Pick(evt.localPosition, out Vector3d corner))
+				{
+					cutTo = corner;
+					Refresh();
+				}
+			}
+			else if (rotating)
 			{
 				float degreesPerPixel = Mathf.Rad2Deg / Mathf.Max(1f, Scale);
 				Orientation = Quaternion.AngleAxis(delta.x * degreesPerPixel, Vector3.up) * Quaternion.AngleAxis(delta.y * degreesPerPixel, Vector3.right) * Orientation;
@@ -869,6 +1154,17 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			this.ReleasePointer(evt.pointerId);
+			if (cutting)
+			{
+				cutting = false;
+				if (moved && TryPendingRectangle(out double lat, out double lon, out Vector2 sizeKm))
+				{
+					RectangleDrawn?.Invoke(lat, lon, sizeKm);
+				}
+				Refresh();
+				evt.StopPropagation();
+				return;
+			}
 			if (dragging != null && moved)
 			{
 				SceneMoveEnded?.Invoke(dragging.Entry);

@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Ril
+      - Sin
+      - Ari
+      - Hyg
+      - Vall
+      - Gra
+      - Cle
+      - Ser
+      - Tor
+      - Hae
+      Nuclei:
+      - a
+      - i
+      - e
+      - ae
+      - ei
+      - ou
+      Codas:
+      - rille
+      - channel
+      - trench
+      - furrow
+      - groove
+      - valley
+      - cleft
+      - run
+      Middles:
+      - an
+      - in
+      - el
+      - us
+      - ar
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: A collapsed lava channel winding across the plain
+      DungeonSuffixes:
+      - Cavern
+      - Vault
+      - Shaft
+      - Hollow
+      - Pit
+      - Chamber
+      - Tube
+      - Rift
+      DungeonPrefixes:
+      - The Sinuous
+      - The Collapsed
+      - The Long
+      - The Narrow
+      - The Winding
+      - The Sunken
+      - The Dark
+      - The Straight
+      POISuffixes:
+      - Rille
+      - Channel
+      - Trench
+      - Cleft
+      - Groove
+      - Run
+      Adjectives:
+      - Sinuous
+      - Collapsed
+      - Narrow
+      - Winding
+      - Sunken
+      - Long
+      Description: A collapsed lava channel cut straight across dead ground.
   Weather:
     Background: []
     CellSpawns:

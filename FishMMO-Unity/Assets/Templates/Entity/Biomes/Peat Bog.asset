@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Mir
+      - Fen
+      - Quag
+      - Tur
+      - Sphag
+      - Moss
+      - Bol
+      - Duns
+      - Gleen
+      - Hag
+      Nuclei:
+      - a
+      - o
+      - e
+      - oo
+      - ir
+      - ai
+      Codas:
+      - bog
+      - mire
+      - fen
+      - moss
+      - peat
+      - hag
+      - slough
+      - marsh
+      Middles:
+      - en
+      - an
+      - ul
+      - er
+      - ow
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Waterlogged ground that keeps whatever falls into it
+      DungeonSuffixes:
+      - Sump
+      - Hollow
+      - Mire
+      - Warren
+      - Pit
+      - Burrow
+      - Chamber
+      - Cut
+      DungeonPrefixes:
+      - The Sunken
+      - The Black
+      - The Drowned
+      - The Sodden
+      - The Silent
+      - The Clinging
+      - The Old
+      - The Peat-dark
+      POISuffixes:
+      - Mire
+      - Fen
+      - Moss
+      - Cut
+      - Hollow
+      - Flat
+      Adjectives:
+      - Sodden
+      - Black
+      - Drowned
+      - Clinging
+      - Silent
+      - Peat-dark
+      Description: Wet ground that keeps everything it swallows.
   Weather:
     Background:
     - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}

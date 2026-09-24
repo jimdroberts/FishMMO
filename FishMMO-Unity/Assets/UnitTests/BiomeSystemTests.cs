@@ -167,17 +167,44 @@ namespace FishMMO.UnitTests
 		public void Climate_TemperatureFallsWithHeight_AndGlobalOffsetShiftsIt()
 		{
 			ClimateSettings climate = MakeClimate();
-			float low = climate.Evaluate(0.1f, 0.5f).Temperature;
+			float low = climate.Evaluate(0.5f, 0.5f).Temperature;
 			float high = climate.Evaluate(0.9f, 0.5f).Temperature;
 			Assert.Greater(low, high);
 
-			climate.GlobalTemperatureOffset = 0.5f;
-			Assert.Greater(climate.Evaluate(0.1f, 0.5f).Temperature, low);
+			/* Sampled above the water line, not at height 0.1. Anchoring sea level at 0.8 puts
+			 * everything below about 0.29 hard against the +1 clamp, where an offset provably
+			 * cannot move the reading — the old sample point sat inside that band and the
+			 * assertion was testing the clamp, not the offset. Everything in that band is
+			 * underwater, so nothing is lost by measuring where ground actually is. */
+			climate.GlobalTemperatureOffset = 0.2f;
+			Assert.Greater(climate.Evaluate(0.5f, 0.5f).Temperature, low);
+		}
+
+		[Test]
+		public void Climate_EverythingBelowTheWaterLineSaturates()
+		{
+			/* The consequence of the calibration, pinned so it is a known shape rather than a
+			 * surprise. Sea level 0.8 with a lapse rate of 1.5 means the deepest ground is 0.63
+			 * above the clamp, so the sea floor and the shallows all read exactly +1. That is
+			 * acceptable only because the band is entirely under water; if the water line ever
+			 * drops, this stops being free. */
+			ClimateSettings climate = MakeClimate();
+			float clampsAbove = climate.WaterSurfaceHeight - (1f - climate.SeaLevelTemperature) / climate.ElevationLapseRate;
+
+			Assert.Less(clampsAbove, climate.WaterSurfaceHeight, "the saturated band must stay under water");
+			Assert.That(climate.Evaluate(0f, 0.5f).Temperature, Is.EqualTo(1f).Within(1e-4f), "the sea floor is clamped");
+			Assert.Less(climate.Evaluate(climate.WaterSurfaceHeight, 0.5f).Temperature, 1f, "the water line itself is not");
 		}
 
 		[Test]
 		public void Climate_SeaLevelIsTemperate_OnlyTheHighestPeaksFreeze()
 		{
+			/* The lapse rate carries the whole drop from the water line to the peak on its own, so
+			 * it is what decides whether a mountain is ever snow-capped. At 0.8 it removed only
+			 * 0.464 across a scene's entire height range and the highest ground read +0.336 —
+			 * nothing froze from elevation anywhere, and snow could only arrive from latitude or
+			 * from a passing cell. 1.5 is the rate that puts the peak just under freezing while
+			 * leaving the water line exactly where the calibration put it. */
 			ClimateSettings climate = MakeClimate();
 			float shore = climate.Evaluate(climate.WaterSurfaceHeight, 0.5f).Temperature;
 			Assert.That(shore, Is.EqualTo(climate.SeaLevelTemperature).Within(1e-4f), "the water line reads the sea-level temperature");
@@ -187,12 +214,28 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void Climate_AuthoredLowlandBiomesMatchTheirOwnHeight()
+		public void Climate_ReachesTheWholeAuthoredBandAcrossItsMap()
 		{
-			// The default grassland band (tier 4) was authored for -0.1..0.4: the model must reach it.
+			/* Rewritten for the calibration that moved sea level 0.35 -> 0.8.
+			 *
+			 * It used to check one point — tier 4 at the equator — against the grassland band of
+			 * -0.1..0.4, which the model reached only because sea level was low enough to make the
+			 * equator temperate. That was the bug the calibration fixed: every biome envelope sat
+			 * outside the reachable band and selection was a nearest-miss in the temperate middle.
+			 *
+			 * What the model actually promises now is that the band is reachable ACROSS a scene,
+			 * not at any one spot in it: hot at the equator at low elevation, cold high up, with
+			 * the authored bands somewhere between. Asserting the span is the honest form — it
+			 * fails if the model ever narrows again, and does not fail merely because a chosen
+			 * sample point moved. */
 			ClimateSettings climate = MakeClimate();
-			float grassland = climate.Evaluate(0.5f, 0.5f).Temperature;
-			Assert.That(grassland, Is.InRange(-0.1f, 0.4f));
+			float lowland = climate.Evaluate(0.5f, 0.5f).Temperature;
+			float peak = climate.Evaluate(1f, 0.5f).Temperature;
+
+			Assert.Greater(lowland, 0.4f, "equatorial lowland is hot, which is what makes a jungle possible");
+			Assert.Less(peak, 0f, "and the high ground is freezing, which is what makes a glacier possible");
+			Assert.Greater(lowland - peak, 0.6f,
+				"elevation alone must cross most of the biome range, or every scene resolves to one band");
 		}
 
 		[Test]

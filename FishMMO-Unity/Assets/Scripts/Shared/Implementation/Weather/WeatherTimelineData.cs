@@ -39,7 +39,58 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// A moving storm: a preset over a disc that drifts with the wind, grows, matures and decays.
+	/// The shape a storm cell covers the ground in.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Everything was a disc, which is right for a shower and wrong for most of the weather worth
+	/// seeing. A front is a LINE that arrives as a wall; a hurricane has a calm eye with its worst
+	/// weather in a ring around it; a tornado is a tiny violent core. None of those are a smooth
+	/// falloff from a centre, so the shape has to be part of the cell rather than something a
+	/// preset can imply.
+	/// </para>
+	/// <para>
+	/// <b>A byte and one float</b> is the whole cost on the wire. The shapes share
+	/// <see cref="StormCell.RadiusMeters"/> and <see cref="StormCell.ExtentMeters"/> and read them
+	/// differently, rather than each carrying its own geometry — see each member for what the two
+	/// mean to it.
+	/// </para>
+	/// </remarks>
+	public enum StormCellShape : byte
+	{
+		/// <summary>
+		/// A shower or a thunderhead: full inside 55% of the radius, fading to the edge.
+		/// <c>Radius</c> is the edge; <c>Extent</c> is unused.
+		/// </summary>
+		Disc = 0,
+
+		/// <summary>
+		/// A front: a wall of weather that arrives along its whole length at once.
+		/// <c>Radius</c> is the band's depth; <c>Extent</c> is its half-length along the line.
+		/// </summary>
+		/// <remarks>
+		/// Its line runs PERPENDICULAR to its velocity, so a front needs no orientation of its own —
+		/// a front advances at right angles to itself, which is exactly what its heading already
+		/// says. One less thing to author, one less thing to send, and one less thing that can
+		/// disagree with the direction it is travelling.
+		/// </remarks>
+		Front = 1,
+
+		/// <summary>
+		/// A hurricane: a calm eye, the worst of it in the ring around that, decaying outward.
+		/// <c>Radius</c> is the outer edge; <c>Extent</c> is the eye's radius.
+		/// </summary>
+		Eyewall = 2,
+
+		/// <summary>
+		/// A tornado: a small violent core inside a much larger region of disturbed air.
+		/// <c>Radius</c> is the core; <c>Extent</c> is how far it is felt at all.
+		/// </summary>
+		Funnel = 3,
+	}
+
+	/// <summary>
+	/// A moving storm: a preset over a shape that drifts with the wind, grows, matures and decays.
 	/// Motion and life are pure functions of the tick, so the network only hears about births,
 	/// edits and deaths.
 	/// </summary>
@@ -53,7 +104,18 @@ namespace FishMMO.Shared.Weather
 		public float OriginX, OriginZ;
 		/// <summary>Metres per second.</summary>
 		public float VelocityX, VelocityZ;
+		/// <summary>What this means depends on <see cref="Shape"/>; see <see cref="StormCellShape"/>.</summary>
 		public float RadiusMeters;
+
+		/// <summary>
+		/// The shape's second measurement: a front's half-length, a hurricane's eye, a tornado's
+		/// outer reach. Unused by <see cref="StormCellShape.Disc"/>.
+		/// </summary>
+		public float ExtentMeters;
+
+		/// <summary>Disc unless something says otherwise, so every cell authored before this is unchanged.</summary>
+		public StormCellShape Shape;
+
 		public float PeakIntensity;
 		/// <summary>Amplitude of the seeded wander, in metres.</summary>
 		public float MeanderMeters;
@@ -92,7 +154,12 @@ namespace FishMMO.Shared.Weather
 			return 1f - d * d * (3f - 2f * d);
 		}
 
-		/// <summary>How much of the cell applies at a position: full inside 55% of the radius, fading to the edge.</summary>
+		/// <summary>How much of the cell applies at a position, 0..1.</summary>
+		/// <remarks>
+		/// The envelope and the peak are the cell's life and strength; the SHAPE decides how that is
+		/// spread over the ground. Split out so each shape is readable on its own and can be tested
+		/// without a tick or a timeline.
+		/// </remarks>
 		public float InfluenceAt(Vector3 position, uint tick, double tickDelta)
 		{
 			float envelope = EnvelopeAt(tick);
@@ -101,9 +168,187 @@ namespace FishMMO.Shared.Weather
 				return 0f;
 			}
 			Vector2 centre = CentreAt(tick, tickDelta);
-			float distance = Vector2.Distance(new Vector2(position.x, position.z), centre);
-			float falloff = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(RadiusMeters * 0.55f, RadiusMeters, distance));
-			return envelope * PeakIntensity * falloff;
+			var at = new Vector2(position.x, position.z);
+			return envelope * PeakIntensity * Coverage(at - centre);
+		}
+
+		/// <summary>
+		/// How strongly the shape covers a point, given as an offset from the cell's centre.
+		/// </summary>
+		/// <remarks>
+		/// Pure: an offset in, a 0..1 out. No tick, no timeline, no scene — so every shape can be
+		/// checked directly, which matters because the difference between a front and a disc is
+		/// entirely in this function.
+		/// </remarks>
+		public float Coverage(Vector2 offset)
+		{
+			switch (Shape)
+			{
+				case StormCellShape.Front:
+					return FrontCoverage(offset);
+				case StormCellShape.Eyewall:
+					return EyewallCoverage(offset.magnitude);
+				case StormCellShape.Funnel:
+					return FunnelCoverage(offset.magnitude);
+				default:
+					return 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(RadiusMeters * 0.55f, RadiusMeters, offset.magnitude));
+			}
+		}
+
+		/// <summary>The direction a front advances in: its velocity, or east when it is not moving.</summary>
+		/// <remarks>
+		/// A front's LINE is perpendicular to this, so nothing has to be authored or sent for its
+		/// orientation. A stationary front is a contradiction in terms but content can still ask for
+		/// one, so it gets an arbitrary but stable facing rather than a divide by zero.
+		/// </remarks>
+		public Vector2 Facing
+		{
+			get
+			{
+				var v = new Vector2(VelocityX, VelocityZ);
+				return v.sqrMagnitude > 1e-6f ? v.normalized : Vector2.right;
+			}
+		}
+
+		/// <summary>
+		/// A wall: deep across its line, long along it, and sharper in front than behind.
+		/// </summary>
+		/// <remarks>
+		/// The leading edge is much steeper than the trailing one, because that is what a front is
+		/// — it arrives all at once and clears slowly. Symmetric depth reads as a passing blob
+		/// rather than as weather moving in.
+		/// </remarks>
+		private float FrontCoverage(Vector2 offset)
+		{
+			Vector2 forward = Facing;
+			var along = new Vector2(-forward.y, forward.x);
+
+			float across = Vector2.Dot(offset, forward);
+			float sideways = Mathf.Abs(Vector2.Dot(offset, along));
+
+			// Sharp ahead, long tail behind.
+			float reach = across >= 0f ? RadiusMeters * 0.45f : RadiusMeters * 1.6f;
+			float depth = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Abs(across) / Mathf.Max(1e-3f, reach));
+
+			// Soft ends, so a front tapers out rather than stopping at a hard line.
+			float half = Mathf.Max(RadiusMeters, ExtentMeters);
+			float length = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(half * 0.75f, half, sideways));
+			return depth * length;
+		}
+
+		/// <summary>
+		/// A hurricane: calm in the eye, worst in the ring around it, decaying outward.
+		/// </summary>
+		/// <remarks>
+		/// The eye is quiet but not empty — 0.05 rather than 0. An eye that reported nothing at all
+		/// would have the sky snap to clear and every exposure state stop dead in the middle of a
+		/// hurricane, which is not what standing in one is like.
+		/// </remarks>
+		private float EyewallCoverage(float distance)
+		{
+			float eye = Mathf.Clamp(ExtentMeters, 0f, RadiusMeters * 0.6f);
+			if (distance <= eye)
+			{
+				float t = eye > 1e-3f ? distance / eye : 1f;
+				return Mathf.Lerp(0.05f, 1f, Mathf.SmoothStep(0f, 1f, t));
+			}
+			float outward = Mathf.InverseLerp(eye, RadiusMeters, distance);
+			return 1f - Mathf.SmoothStep(0f, 1f, outward);
+		}
+
+		/// <summary>
+		/// A tornado: everything inside the core, falling away steeply to the edge of what it disturbs.
+		/// </summary>
+		private float FunnelCoverage(float distance)
+		{
+			if (distance <= RadiusMeters)
+			{
+				return 1f;
+			}
+			float reach = Mathf.Max(ExtentMeters, RadiusMeters * 1.5f);
+			float outward = Mathf.InverseLerp(RadiusMeters, reach, distance);
+			// Squared, so it drops away fast: a tornado's edge is close to its middle.
+			float falloff = 1f - Mathf.SmoothStep(0f, 1f, outward);
+			return falloff * falloff;
+		}
+
+		/// <summary>
+		/// A point somewhere inside the shape, from two numbers in 0..1. Offset from the centre.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// For anything that has to HAPPEN somewhere in a storm rather than merely be measured
+		/// there — a lightning strike, and in time a debris spawn or a wind gust. It lives on the
+		/// cell so the shapes are described once: a caller that placed strikes in a disc of its own
+		/// would put a squall line's entire lightning display at the one point its centre happens to
+		/// be, and would strike a hurricane's eye, which is the one calm place in it.
+		/// </para>
+		/// <para>
+		/// Deterministic in its inputs, so a seeded hash gives every peer the same point.
+		/// </para>
+		/// </remarks>
+		public Vector2 PointInside(float u, float v)
+		{
+			u = Mathf.Clamp01(u);
+			v = Mathf.Clamp01(v);
+			switch (Shape)
+			{
+				case StormCellShape.Front:
+				{
+					/* Spread along the wall, and offset across it with THE SAME ASYMMETRY the
+					 * coverage has: a front reaches 0.45 of its depth ahead and 1.6 behind, so a
+					 * symmetric spread put strikes out in front of its own sharp edge, where there
+					 * is no weather to strike out of. Both bounds sit inside the covered band. */
+					Vector2 forward = Facing;
+					var along = new Vector2(-forward.y, forward.x);
+					float half = Mathf.Max(RadiusMeters, ExtentMeters);
+					float across = Mathf.Lerp(-RadiusMeters * 1.2f, RadiusMeters * 0.35f, v);
+					return along * ((u * 2f - 1f) * half * 0.9f) + forward * across;
+				}
+				case StormCellShape.Eyewall:
+				{
+					// In the eyewall, never the eye: the middle of a hurricane is its quietest part.
+					float eye = Mathf.Clamp(ExtentMeters, 0f, RadiusMeters * 0.6f);
+					float angle = u * Mathf.PI * 2f;
+					float r = Mathf.Lerp(eye, RadiusMeters * 0.8f, Mathf.Sqrt(v));
+					return new Vector2(Mathf.Sin(angle), Mathf.Cos(angle)) * r;
+				}
+				case StormCellShape.Funnel:
+				{
+					// Tight to the core.
+					float angle = u * Mathf.PI * 2f;
+					return new Vector2(Mathf.Sin(angle), Mathf.Cos(angle)) * (Mathf.Sqrt(v) * RadiusMeters);
+				}
+				default:
+				{
+					float angle = u * Mathf.PI * 2f;
+					return new Vector2(Mathf.Sin(angle), Mathf.Cos(angle)) * (Mathf.Sqrt(v) * RadiusMeters * 0.6f);
+				}
+			}
+		}
+
+		/// <summary>
+		/// How far from its centre the cell reaches at all, for culling and scene-edge tests.
+		/// </summary>
+        /// <remarks>
+        /// A front reaches much further along its line than across it, and a disc's radius would cut
+        /// it off at the ends — retiring a front the moment its centre neared the scene edge even
+        /// though most of it was still inside.
+        /// </remarks>
+		public float ReachMeters
+		{
+			get
+			{
+				switch (Shape)
+				{
+					case StormCellShape.Front:
+						return Mathf.Max(RadiusMeters * 1.6f, Mathf.Max(RadiusMeters, ExtentMeters));
+					case StormCellShape.Funnel:
+						return Mathf.Max(ExtentMeters, RadiusMeters * 1.5f);
+					default:
+						return RadiusMeters;
+				}
+			}
 		}
 
 		public bool IsDead(uint tick) => tick >= DeathTick;

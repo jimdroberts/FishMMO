@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Cry
+      - Gla
+      - Rime
+      - Amm
+      - Bri
+      - Slur
+      - Fros
+      - Nive
+      - Pal
+      - Sye
+      Nuclei:
+      - a
+      - o
+      - i
+      - ae
+      - ei
+      - ou
+      Codas:
+      - flow
+      - plain
+      - slurry
+      - rime
+      - crust
+      - vent
+      - sheet
+      - apron
+      Middles:
+      - an
+      - or
+      - el
+      - is
+      - ur
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Ice volcanoes resurfacing the ground in slow sheets
+      DungeonSuffixes:
+      - Grotto
+      - Vault
+      - Hollow
+      - Fissure
+      - Chamber
+      - Gallery
+      - Shaft
+      - Crevasse
+      DungeonPrefixes:
+      - The Freezing
+      - The Pale
+      - The Weeping
+      - The Slow
+      - The Brittle
+      - The Bitter
+      - The Ammonia
+      - The Glassy
+      POISuffixes:
+      - Flow
+      - Plain
+      - Vent
+      - Apron
+      - Sheet
+      - Rime
+      Adjectives:
+      - Freezing
+      - Brittle
+      - Weeping
+      - Pale
+      - Bitter
+      - Slow
+      Description: Volcanoes that erupt slush and freeze where they fall.
   Weather:
     Background: []
     CellSpawns:

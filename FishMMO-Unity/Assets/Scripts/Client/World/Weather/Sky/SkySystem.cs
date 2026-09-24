@@ -1931,7 +1931,7 @@ namespace FishMMO.Client
 						quad.AddQuad(body.Direction, SkyBodyMesh.Kind.Disc, body.AngularRadius * scale, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, step.Rank, (float)body.DistanceKm);
 						properties = texturedBlocks[textured];
 						properties.Clear();
-						properties.SetTexture(BodyTexId, body.Body.SurfaceTexture);
+						properties.SetTexture(BodyTexId, PlanetSurfaceLibrary.Get(body.Body));
 						properties.SetFloat(UseTextureId, 1f);
 						mesh = quad.Upload();
 						textured++;

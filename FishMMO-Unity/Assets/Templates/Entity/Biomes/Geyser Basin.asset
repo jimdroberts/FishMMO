@@ -29,17 +29,74 @@ MonoBehaviour:
   ClimateVariants: []
   Naming:
     Phonology:
-      Onsets: []
-      Nuclei: []
-      Codas: []
-      Middles: []
+      Onsets:
+      - Gey
+      - Sput
+      - Bois
+      - Ful
+      - Stro
+      - Halde
+      - Mud
+      - Scald
+      - Brim
+      - Ker
+      Nuclei:
+      - a
+      - e
+      - u
+      - ey
+      - ou
+      - i
+      Codas:
+      - spring
+      - pool
+      - vent
+      - terrace
+      - basin
+      - fumarole
+      - sinter
+      - cauldron
+      Middles:
+      - an
+      - er
+      - ul
+      - is
+      - ot
       SyllMin: 2
       SyllMax: 3
-      DungeonSuffixes: []
-      DungeonPrefixes: []
-      POISuffixes: []
-      Adjectives: []
-      Description: Hot springs and spouts over a shallow magma chamber
+      DungeonSuffixes:
+      - Cauldron
+      - Vent
+      - Basin
+      - Chamber
+      - Conduit
+      - Terrace
+      - Hollow
+      - Spring
+      DungeonPrefixes:
+      - The Boiling
+      - The Scalding
+      - The Sulphur
+      - The Roaring
+      - The Steaming
+      - The Bitter
+      - The Hissing
+      - The Mineral
+      POISuffixes:
+      - Spring
+      - Pool
+      - Terrace
+      - Vent
+      - Basin
+      - Cauldron
+      Adjectives:
+      - Boiling
+      - Scalding
+      - Steaming
+      - Bitter
+      - Roaring
+      - Mineral
+      Description: Ground that breathes steam and throws boiling water without warning.
   Weather:
     Background:
     - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
