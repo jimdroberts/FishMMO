@@ -51,6 +51,10 @@ Material:
     - _ShoreBreak: 0.62
     - _ShoreDepth: 2
     - _ShoreRefraction: 0.85
+    - _ShoreWaveLength: 40
+    - _ShoreWaveHeight: 1.1
+    - _ShoreWavePitch: 0.7
+    - _ShoreWaveFoam: 1.5
     - _Smoothness: 0.96
     - _SpecularStrength: 1.6
     - _SurfStrength: 1.4

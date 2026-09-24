@@ -47,16 +47,16 @@ namespace FishMMO.TestHarness.World.Editor
 			SceneGenerator.Dress.Add(Dress);
 		}
 
-		private static void Dress(Scene scene, SceneGenerationRequest request)
+		private static void Dress(Scene scene, SceneGenerationRequest request, SceneGenerationResult result)
 		{
 			WorldSceneSettings settings = Find<WorldSceneSettings>(scene);
 			WorldDayNightCycle dayNight = Find<WorldDayNightCycle>(scene);
 
-			Camera camera = CreateCamera(scene, request);
+			Camera camera = CreateCamera(scene, request, result);
 			CreateController(scene, camera, settings, dayNight);
 		}
 
-		private static Camera CreateCamera(Scene scene, SceneGenerationRequest request)
+		private static Camera CreateCamera(Scene scene, SceneGenerationRequest request, SceneGenerationResult result)
 		{
 			var host = new GameObject("Main Camera") { tag = "MainCamera" };
 			SceneManager.MoveGameObjectToScene(host, scene);
@@ -76,28 +76,45 @@ namespace FishMMO.TestHarness.World.Editor
 			host.AddComponent<AudioListener>();
 			host.AddComponent<WorldSimCamera>();
 
-			/* Standing on the ground at the middle of the scene, looking out. The terrain's own
-			 * floor is zero, so the height here is eye level above whatever is underneath. */
-			host.transform.position = new Vector3(0f, GroundHeight(scene) + 1.8f, -sized.DepthMetres * 0.25f);
+			/* Eye level over whatever is underneath, looking out — and on the surface when that is
+			 * the sea floor. Y is metres above sea level, so the sea is at zero; a camera stood on
+			 * a seabed a kilometre down sees nothing of the sky this bed exists to show. */
+			var standing = new Vector3(0f, 0f, -sized.DepthMetres * 0.25f);
+			float ground = GroundHeight(scene, standing);
+			float underfoot = result != null && result.HasWater ? Mathf.Max(ground, result.SeaLevelY) : ground;
+			host.transform.position = new Vector3(standing.x, underfoot + 1.8f, standing.z);
 			host.transform.rotation = Quaternion.Euler(4f, 0f, 0f);
 			return camera;
 		}
 
-		/// <summary>The terrain height under the middle of the scene, so the camera starts above ground rather than inside it.</summary>
-		private static float GroundHeight(Scene scene)
+		/// <summary>
+		/// World Y of the ground at a point, so the camera starts above ground rather than inside it.
+		/// </summary>
+		/// <remarks>
+		/// Read from the one tile the point is over. <c>SampleHeight</c> clamps a point outside a
+		/// tile onto that tile's edge, so asking every tile and keeping the highest answer took
+		/// whichever edge anywhere in the scene stood tallest — and asking at the centre, when the
+		/// camera stands a quarter of the scene south of it, put it above ground that is not there.
+		/// </remarks>
+		private static float GroundHeight(Scene scene, Vector3 at)
 		{
-			float highest = 0f;
 			foreach (GameObject root in scene.GetRootGameObjects())
 			{
 				foreach (Terrain terrain in root.GetComponentsInChildren<Terrain>(true))
 				{
-					if (terrain != null && terrain.terrainData != null)
+					if (terrain == null || terrain.terrainData == null)
 					{
-						highest = Mathf.Max(highest, terrain.SampleHeight(Vector3.zero) + terrain.GetPosition().y);
+						continue;
+					}
+					Vector3 origin = terrain.GetPosition();
+					Vector3 size = terrain.terrainData.size;
+					if (at.x >= origin.x && at.x <= origin.x + size.x && at.z >= origin.z && at.z <= origin.z + size.z)
+					{
+						return terrain.SampleHeight(at) + origin.y;
 					}
 				}
 			}
-			return highest;
+			return 0f;
 		}
 
 		private static void CreateController(Scene scene, Camera camera, WorldSceneSettings settings, WorldDayNightCycle dayNight)

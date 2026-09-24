@@ -29,18 +29,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The scene's altitude above the body's sea level, in metres.</summary>
 		public float BaseAltitudeMetres;
 		/// <summary>
-		/// Metres above the body's sea level of the scene's lowest ground — what its y = 0 is.
+		/// Metres above the body's sea level of the scene's lowest ground — which is also the world
+		/// Y its terrain tiles stand at, since a generated scene's Y IS altitude.
 		/// </summary>
-		/// <remarks>
-		/// A scene is built around its own origin, so this is the one place the metres between the
-		/// planet's water line and the ground underfoot are written down. A scene cut from a
-		/// plateau three kilometres up and one cut from a beach are otherwise indistinguishable
-		/// once the terrain exists.
-		/// </remarks>
 		public float GroundAltitudeMetres;
 		/// <summary>True when the scene reaches the body's water line and was given a sea.</summary>
 		public bool HasWater;
-		/// <summary>Scene-space Y of the sea's surface, when there is one.</summary>
+		/// <summary>World Y of the sea's surface when there is one: always 0, sea level being the datum.</summary>
 		public float SeaLevelY;
 
 		public static SceneGenerationResult Failed(string problem) => new SceneGenerationResult { Problem = problem };
@@ -70,6 +65,15 @@ namespace FishMMO.Shared.WorldDesign
 	/// moment: the generator seeds it and a designer sculpts it afterwards, so it is committed,
 	/// unlike the surface textures which are pure build output.
 	/// </para>
+	/// <para>
+	/// <b>World Y is metres above sea level.</b> The ground stands at its real altitude and the sea,
+	/// when there is one, is at y = 0 — in every scene, not just the ones cut at the coast. It
+	/// used to be the other way round: each scene's lowest ground at y = 0 and the sea at minus
+	/// that altitude. The sea came out in the right place relative to the ground, but nothing else
+	/// was told where it was. The cloud bands are shells over y = 0 and every renderer's height fog
+	/// lies thickest at y = 0, so in a scene cut from a kilometre down the cloud deck hung 300 m
+	/// under the water, and on a plateau the fog lay on the valley floor as if it were the shore.
+	/// </para>
 	/// </remarks>
 	public static class SceneGenerator
 	{
@@ -81,10 +85,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// assembly and not the other way round — and must, since it is compiled out of a server
 		/// build entirely. So the harness registers itself here, the same way the client registers
 		/// its renderer checks with the world-systems audit. A server-subtarget editor simply has
-		/// no dressing to run.
+		/// no dressing to run. It is handed the result so far, which is how it knows where the
+		/// ground and the sea are without measuring the scene again.
 		/// </remarks>
-		public static readonly List<Action<Scene, SceneGenerationRequest>> Dress =
-			new List<Action<Scene, SceneGenerationRequest>>();
+		public static readonly List<Action<Scene, SceneGenerationRequest, SceneGenerationResult>> Dress =
+			new List<Action<Scene, SceneGenerationRequest, SceneGenerationResult>>();
 
 		/// <summary>
 		/// The terrain material generated ground is drawn with.
@@ -207,8 +212,10 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 
-				AddBoundary(scene, plan, relief);
-				AddWater(scene, plan, request, lowest, relief, result);
+				// The sea first: the boundary has to reach its surface, which on a scene cut from
+				// the sea floor is far above the highest ground.
+				AddWater(scene, plan, request, lowest, result);
+				AddBoundary(scene, plan, lowest, relief, result.HasWater);
 
 				// The same components the audit adds to a scene somebody forgot to finish.
 				bool wantsSky = request.Layer == null || !request.Layer.Underground;
@@ -218,11 +225,11 @@ namespace FishMMO.Shared.WorldDesign
 				/* The camera and the sim controller, if the harness is in this project. A failure
 				 * here must not lose the scene: the terrain is minutes of work and the dressing is
 				 * seconds, so it is reported and the scene kept. */
-				foreach (Action<Scene, SceneGenerationRequest> dress in Dress)
+				foreach (Action<Scene, SceneGenerationRequest, SceneGenerationResult> dress in Dress)
 				{
 					try
 					{
-						dress?.Invoke(scene, request);
+						dress?.Invoke(scene, request, result);
 					}
 					catch (Exception ex)
 					{
@@ -298,8 +305,11 @@ namespace FishMMO.Shared.WorldDesign
 
 			var host = new GameObject($"Terrain {tx}_{tz}");
 			SceneManager.MoveGameObjectToScene(host, scene);
-			// Every tile shares one floor, so the landmass is one slope rather than a set of terraces.
-			host.transform.position = new Vector3(tx * plan.TileMetres - halfWidth, 0f, tz * plan.TileMetres - halfDepth);
+			/* Every tile shares one floor, so the landmass is one slope rather than a set of
+			 * terraces — and that floor stands at its real altitude, so y is metres above sea level
+			 * here exactly as it is for the sea, the clouds and the fog. Tighten() moves it again
+			 * when it finds the ground's true floor. */
+			host.transform.position = new Vector3(tx * plan.TileMetres - halfWidth, lowest, tz * plan.TileMetres - halfDepth);
 
 			Terrain terrain = host.AddComponent<Terrain>();
 			terrain.terrainData = data;
@@ -323,32 +333,39 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The ocean material every generated scene shares.</summary>
 		public const string WaterMaterialPath = "Assets/Plugins/FishMMO Water/Materials/OceanWater.mat";
 
+		/// <summary>The compute shader that simulates the sea's waves.</summary>
+		public const string WaterSpectrumPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFFT.compute";
+
+		/// <summary>The same FFT as render passes, for machines with no compute shaders.</summary>
+		public const string WaterSpectrumPassesPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFFT.shader";
+
+		/// <summary>The pass that keeps the foam the swash leaves on the sand.</summary>
+		public const string WaterFoamMemoryPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFoamMemory.shader";
+
 		/// <summary>
 		/// Puts the sea in the scene, at the height the planet says its sea level is.
 		/// </summary>
 		/// <param name="groundAltitudeMetres">
-		/// Metres above the body's sea level of the scene's lowest ground — the altitude that the
-		/// terrain's y = 0 stands for.
+		/// Metres above the body's sea level of the scene's lowest ground.
 		/// </param>
 		/// <remarks>
 		/// <para>
-		/// <b>The Y is the whole point.</b> A scene is built around its own origin, with its lowest
-		/// ground at zero, so the planet's water line lands at <c>-groundAltitudeMetres</c> and
-		/// nowhere else. Put the sea at a round number instead and the coastline in the scene stops
-		/// being the coastline on the globe — the map shows a bay and the ground has none, or the
-		/// whole scene drowns. One unit is one metre, so this is a subtraction and not a
-		/// conversion.
+		/// <b>At y = 0, because y is altitude.</b> The terrain stands at its real height above the
+		/// body's sea level, so the planet's water line is at zero and nowhere else. Put the sea at
+		/// a round number instead and the coastline in the scene stops being the coastline on the
+		/// globe — the map shows a bay and the ground has none, or the whole scene drowns.
 		/// </para>
 		/// <para>
 		/// <b>Not every scene gets one.</b> A world with no liquid water has no sea to put in, and
 		/// a scene cut entirely from high ground never reaches the water line — a sea plane under
 		/// its floor would be invisible from every point in it while still costing a full-screen
 		/// transparent pass. Measured on an Earth-like world, about 70% of randomly cut scenes DO
-		/// reach it, because that is how much of such a world is ocean.
+		/// reach it, because that is how much of such a world is ocean — and many of those are
+		/// open sea floor, every point of it kilometres under water.
 		/// </para>
 		/// </remarks>
 		private static void AddWater(Scene scene, TerrainTilePlan plan, SceneGenerationRequest request,
-			float groundAltitudeMetres, float relief, SceneGenerationResult result)
+			float groundAltitudeMetres, SceneGenerationResult result)
 		{
 			if (request.Layer != null && request.Layer.Underground)
 			{
@@ -367,11 +384,26 @@ namespace FishMMO.Shared.WorldDesign
 
 			var host = new GameObject("Water");
 			SceneManager.MoveGameObjectToScene(host, scene);
-			host.transform.position = new Vector3(0f, -groundAltitudeMetres, 0f);
+			host.transform.position = Vector3.zero;
 
 			host.AddComponent<MeshFilter>();
 			var renderer = host.AddComponent<MeshRenderer>();
 			var surface = host.AddComponent<WaterSurface>();
+
+			/* The FFT that makes the waves. Without it the surface is a flat sheet with ripples
+			 * drawn on, and every generated scene until now shipped that way: a component added
+			 * from script has no default reference, and this line was missing. */
+			surface.Spectrum = AssetDatabase.LoadAssetAtPath<ComputeShader>(WaterSpectrumPath);
+			// And its render-pass twin, for WebGL2 and GLES3: referenced so a build includes it.
+			surface.SpectrumPasses = AssetDatabase.LoadAssetAtPath<Shader>(WaterSpectrumPassesPath);
+			// The projected passes the surface finds by name in the editor, referenced for builds.
+			surface.UnderwaterShader = Shader.Find(WaterSurface.UnderwaterShaderName);
+			surface.CausticsShader = Shader.Find(WaterSurface.CausticsShaderName);
+			if (surface.Spectrum == null)
+			{
+				Debug.LogWarning($"[Scene generator] '{WaterSpectrumPath}' is missing, so '{request.SceneName}' has a flat sea. " +
+					"Assign the FFT compute shader on its Water object.", host);
+			}
 
 			Material material = AssetDatabase.LoadAssetAtPath<Material>(WaterMaterialPath);
 			if (material != null)
@@ -399,7 +431,8 @@ namespace FishMMO.Shared.WorldDesign
 			 * authored with instead of on the weather. */
 			host.AddComponent<WaterShoreField>();
 			host.AddComponent<WaterEnvironment>();
-			host.AddComponent<WaterShore>();
+			// Referenced so a build includes the pass that keeps the foam each wave strands.
+			host.AddComponent<WaterShore>().FoamMemoryShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterFoamMemoryPath);
 
 			result.SeaLevelY = host.transform.position.y;
 			result.HasWater = true;
@@ -492,6 +525,10 @@ namespace FishMMO.Shared.WorldDesign
 				data.size = new Vector3(size.x, tightened, size.z);
 				data.SetHeights(0, 0, heights);
 				EditorUtility.SetDirty(data);
+
+				// Height 0 now means the new floor, so the tile stands there: y is altitude.
+				Vector3 position = terrain.transform.position;
+				terrain.transform.position = new Vector3(position.x, floor, position.z);
 			}
 
 			lowest = floor;
@@ -563,19 +600,37 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Adds the boundary the scene cannot be read without.
 		/// </summary>
+		/// <param name="lowest">World Y of the lowest ground, which is its altitude.</param>
+		/// <param name="relief">Metres from the lowest ground to the highest.</param>
+		/// <param name="hasSea">True when the scene was given a sea, whose surface is at y = 0.</param>
 		/// <remarks>
+		/// <para>
 		/// <c>WorldSceneDetailsCacheReader</c> refuses a scene with no <c>IBoundary</c> outright —
 		/// "Boundaries are required for safety purposes" — so a generated scene without one would
 		/// never reach the cache and would silently not exist to the game.
+		/// </para>
+		/// <para>
+		/// Generous vertically: a boundary that hugs the ground catches anyone who jumps. It keeps
+		/// half the relief and 500 m clear below the lowest ground and above the highest surface.
+		/// </para>
+		/// <para>
+		/// <b>The highest surface can be the sea.</b> Sized from the ground alone, a scene cut from
+		/// a kilometre down had its ceiling 250 m under the water: nobody could swim up to the
+		/// surface, and a boat could not be in the scene at all.
+		/// </para>
 		/// </remarks>
-		private static void AddBoundary(Scene scene, TerrainTilePlan plan, float relief)
+		private static void AddBoundary(Scene scene, TerrainTilePlan plan, float lowest, float relief, bool hasSea)
 		{
+			float margin = relief * 0.5f + 500f;
+			float surface = hasSea ? Mathf.Max(lowest + relief, 0f) : lowest + relief;
+			float bottom = lowest - margin;
+			float top = surface + margin;
+
 			var host = new GameObject("Scene Boundary");
 			SceneManager.MoveGameObjectToScene(host, scene);
-			host.transform.position = new Vector3(0f, relief * 0.5f, 0f);
-			// Generous vertically: a boundary that hugs the ground catches anyone who jumps.
+			host.transform.position = new Vector3(0f, (bottom + top) * 0.5f, 0f);
 			host.AddComponent<SceneBoundary>().BoundarySize =
-				new Vector3(plan.WidthMetres, relief * 2f + 1000f, plan.DepthMetres);
+				new Vector3(plan.WidthMetres, top - bottom, plan.DepthMetres);
 		}
 
 		/// <summary>Gives the body a base climate if it has none and the project has exactly one.</summary>

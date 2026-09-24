@@ -123,13 +123,40 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>The fall velocity of a kind: down at its speed, pushed by the wind.</summary>
+		/// <summary>
+		/// How much of the reported wind reaches the height precipitation is seen at.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The weather's wind is the standard surface wind, measured ten metres up — the figure the
+		/// sea state is computed from, too. Friction slows the air toward the ground along a
+		/// logarithmic profile, u(z) ∝ ln(z / z0): at eye height, two metres, over open ground with
+		/// a roughness of three centimetres, that is 0.72 of the ten-metre figure.
+		/// </para>
+		/// <para>
+		/// <b>This is most of why snow fell far too fast.</b> A flake falls at a metre a second and
+		/// goes wherever the air goes, so its drift is nearly all of what the eye sees. At the full
+		/// ten-metre wind, doubled again by gusts, an ordinary 10 m/s breeze streamed the snow
+		/// sideways at nine to eighteen metres a second.
+		/// </para>
+		/// </remarks>
+		public const float EyeLevelWind = 0.72f;
+
+		/// <summary>How far a gust lifts the wind above its mean at full gustiness.</summary>
+		/// <remarks>
+		/// A peak gust over land runs about 1.4 times the mean wind. The gust here is also held by a
+		/// modulation tens of seconds long, so it has to top out at a gust's peak — it was
+		/// <c>1 + gust</c>, which held the whole field at double the wind for half a minute at a time.
+		/// </remarks>
+		public const float GustFactor = 0.4f;
+
+		/// <summary>The fall velocity of a kind: down at its speed, pushed by the wind at eye height.</summary>
 		public static Vector3 FallVelocity(in WeatherFrame frame, PrecipitationLook look, float gust)
 		{
 			float drop = frame[WeatherChannel.DropSize];
 			float fall = Mathf.Lerp(look.FallSpeed.x, look.FallSpeed.y, drop);
 			Vector2 dir = WeatherShaderGlobals.WindDirection(frame[WeatherChannel.WindHeading]);
-			float wind = frame[WeatherChannel.WindSpeed] * 30f * (1f + gust) * look.WindResponse;
+			float wind = frame[WeatherChannel.WindSpeed] * 30f * EyeLevelWind * (1f + GustFactor * gust) * look.WindResponse;
 			return new Vector3(dir.x * wind, -fall, dir.y * wind);
 		}
 

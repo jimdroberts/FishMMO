@@ -154,6 +154,80 @@ namespace FishMMO.UnitTests.Celestial
 		}
 
 		[Test]
+		public void AnEarthlikeWorldHasAnEarthlikeOceanFloor()
+		{
+			/* Checked against Earth's measured ocean (NOAA's ETOPO1 curve), not against itself. A
+			 * straight line from the water line to the deepest trench put 2.2% of a world's ocean
+			 * on shelves where Earth has 7%, and a third of it deeper than seven kilometres where
+			 * Earth has a fraction of a percent — which is how a scene cut 141 km offshore came out
+			 * a kilometre deep and named for the shallows. Measured here: 6.5%, 74%, 0.3%, 3681 m. */
+			const int Samples = 20000;
+			int ocean = 0, shelf = 0, abyssal = 0, hadal = 0;
+			double total = 0.0;
+			for (int i = 0; i < Samples; i++)
+			{
+				float altitude = PlanetSurface.AltitudeMetres(Seed, body, PlanetSurface.FibonacciDirection(i, Samples));
+				if (altitude >= 0f)
+				{
+					continue;
+				}
+				float depth = -altitude;
+				ocean++;
+				total += depth;
+				if (depth < 200f)
+				{
+					shelf++;
+				}
+				else if (depth >= 3000f && depth < 6000f)
+				{
+					abyssal++;
+				}
+				else if (depth >= 7000f)
+				{
+					hadal++;
+				}
+			}
+
+			Assert.That(shelf / (float)ocean, Is.EqualTo(0.071f).Within(0.015f), "Earth's continental shelves are about 7% of its ocean");
+			Assert.That(abyssal / (float)ocean, Is.EqualTo(0.74f).Within(0.04f), "about three quarters of Earth's ocean is abyssal plain, 3 to 6 km down");
+			Assert.That(hadal / (float)ocean, Is.LessThan(0.01f), "trenches deeper than 7 km are a sliver of Earth's ocean");
+			Assert.That((float)(total / ocean), Is.EqualTo(3680f).Within(200f), "Earth's mean ocean depth is 3686 m");
+		}
+
+		[Test]
+		public void TheSeaFloorMeetsTheShoreWithoutAStep()
+		{
+			/* Land and sea floor are two curves joined at the water line. A join with a step in it
+			 * is a cliff along every coastline on the planet. */
+			PlanetSurface.PlanetProfile profile = PlanetSurface.ProfileOf(Seed, body);
+			float relief = PlanetSurface.ReliefMetres(body);
+			float below = PlanetSurface.AltitudeFromHeight(profile.SeaLevel - 1e-5f, profile, relief);
+			float above = PlanetSurface.AltitudeFromHeight(profile.SeaLevel + 1e-5f, profile, relief);
+
+			Assert.That(below, Is.LessThanOrEqualTo(0f), "just under the water line is under water");
+			Assert.That(above - below, Is.LessThan(1f), $"the shore steps {above - below:0.00} m across a hundred-thousandth of the field");
+		}
+
+		[Test]
+		public void FlatSeaFloorTakesTheShallowestDepthItReaches()
+		{
+			/* The field clamps at 0, and on some worlds a percent of the ocean lies on the clamp, so
+			 * the deepest knots share one height. Taking the deepest of them laid that percent flat
+			 * at trench depth; the shallowest makes it an abyssal plain. */
+			var floor = new float[PlanetSurface.OceanAreaShallower.Length];
+			for (int i = 0; i < floor.Length; i++)
+			{
+				floor[i] = Mathf.Max(0f, 0.5f - i * 0.05f);   // on the clamp from knot 10 down
+			}
+
+			Assert.That(PlanetSurface.OceanDepthMetres(0f, floor), Is.EqualTo(PlanetSurface.OceanKnotDepthMetres[10]),
+				"ground on the clamp is as deep as the first knot to reach it");
+			Assert.That(PlanetSurface.OceanDepthMetres(0.5f - 3.5f * 0.05f, floor), Is.EqualTo(350f).Within(0.01f),
+				"between knots the depth is interpolated");
+			Assert.That(PlanetSurface.OceanDepthMetres(0.6f, floor), Is.EqualTo(0f), "above the water line there is no depth");
+		}
+
+		[Test]
 		public void ReliefGrowsWithSizeButShrinksAgainstTheBodysOwnRadius()
 		{
 			/* Bodies here run from about 5 km to 1000 km of radius, so this has to hold over three

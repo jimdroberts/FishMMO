@@ -9,6 +9,8 @@
 #if defined(_WATER_REFRACTION)
 	#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
 #endif
+// The light the waves focus onto the sea bed: lit here too, for the sea bed seen by refraction.
+#include "FishWaterCausticsCommon.hlsl"
 
 struct Attributes
 {
@@ -222,8 +224,11 @@ half4 WaterFragment(Varyings input) : SV_Target
 			/* The edge case every refractive water gets wrong: if what is at the offset UV is IN
 			 * FRONT of the water it is not behind the water at all, and sampling it smears a
 			 * character standing at the shoreline across the surface. Reject and go straight. */
-			float refractedEye = WaterEyeDepth(SampleSceneDepth(refractedUV));
-			refractedUV = refractedEye < surfaceEye ? screenUV : refractedUV;
+			float refractedRaw = SampleSceneDepth(refractedUV);
+			float refractedEye = WaterEyeDepth(refractedRaw);
+			bool straight = refractedEye < surfaceEye;
+			refractedUV = straight ? screenUV : refractedUV;
+			float seabedRaw = straight ? rawDepth : refractedRaw;
 			waterColumn = max(0.0, max(refractedEye, sceneEye) - surfaceEye);
 			transmittance = exp(-waterColumn * density);
 			open = lerp(_DeepColor.rgb, _ShallowColor.rgb, transmittance);
@@ -231,6 +236,16 @@ half4 WaterFragment(Varyings input) : SV_Target
 		#endif
 
 		half3 refracted = SampleSceneColor(refractedUV);
+		#if defined(_WATER_DEPTH)
+			/* The copy of the frame this refracts was taken before any transparent pass ran — the
+			 * caustics pass among them — so the sea bed it shows has no caustics on it, and the sea
+			 * puts them there itself: the same light, from the same function, at the point the
+			 * refracted ray actually reaches. Seen from below, the frame itself is lit instead. */
+			if (!underwater)
+			{
+				refracted *= FishWaterCausticLight(FishWaterSceneWorldPosition(refractedUV, seabedRaw));
+			}
+		#endif
 		// What survived the column, plus the water's own scattered light. This is why shallow
 		// water shows the sand and deep water does not.
 		behind = refracted * transmittance + bodyColor * (1.0 - transmittance);
@@ -345,6 +360,31 @@ half4 WaterFragment(Varyings input) : SV_Target
 	 * erases the thing being drawn. */
 	alpha = saturate(alpha * edgeFade);
 	alpha = max(alpha, foamAlpha * _MaxAlpha);
+
+	/* One term at a time, drawn opaque, for finding what a finished image cannot say. The dark
+	 * patches in the shallows were guessed at from finished renders all one day, and every guess
+	 * was wrong — a colour is the product of a dozen terms and the eye cannot factor it. With this
+	 * the product is taken apart on screen, and the term that goes dark where the water does is the
+	 * answer. Uniform across the draw, so the branch costs nothing when it is off. */
+	if (_DebugView > 0.5)
+	{
+		int term = (int)(_DebugView + 0.5);
+		half3 shown = half3(1.0, 0.0, 1.0);
+		if (term == 1) shown = sediment.xxx;
+		else if (term == 2) shown = clarityField.xxx;
+		else if (term == 3) shown = transmittance;
+		else if (term == 4) shown = fresnel.xxx;
+		else if (term == 5) shown = alpha.xxx;
+		else if (term == 6) shown = waterLight * 0.5;
+		else if (term == 7) shown = shade.xxx;
+		else if (term == 8) shown = saturate(wave.depth / 10.0).xxx;
+		else if (term == 9) shown = bodyColor;
+		else if (term == 10) shown = behind;
+		else if (term == 11) shown = reflection;
+		else if (term == 12) shown = foamAlpha.xxx;
+		return half4(shown, 1.0);
+	}
+
 	color = MixFog(color, input.surface.z);
 	return half4(color, alpha);
 }

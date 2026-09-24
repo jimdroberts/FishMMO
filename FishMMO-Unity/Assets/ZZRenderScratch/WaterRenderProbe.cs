@@ -47,6 +47,7 @@ namespace FishMMO.RenderScratch
 		private static readonly StringBuilder Report = new StringBuilder();
 		private static Material authoredValues;
 		private static WaterShore shoreline;
+		private static WaterEnvironment environment;
 
 		public static void Run()
 		{
@@ -270,8 +271,6 @@ namespace FishMMO.RenderScratch
 			water.Spectrum = AssetDatabase.LoadAssetAtPath<ComputeShader>(
 				"Assets/Plugins/FishMMO Water/Shaders/FishWaterFFT.compute");
 			water.OuterRadius = 14000f;
-			water.Rings = 150;
-			water.Segments = 220;
 			water.ReportQuality = false;
 			water.UnderwaterVisibility = 30f;
 			water.Rebuild();
@@ -280,6 +279,18 @@ namespace FishMMO.RenderScratch
 			shore.Build();
 			// The shoreline itself: swash, edge foam and wet sand, as its own projected pass.
 			shoreline = waterHost.AddComponent<WaterShore>();
+
+			/* Through the REAL driver. Earlier renders set each shot's wind straight onto the
+			 * surface and so bypassed the fetch, the sea state and the surf sizing entirely — every
+			 * sea in them was a fully developed open-ocean sea, which is why a 20 m/s shot showed
+			 * nine-metre waves on a beach. There is no planet here, so the fetch falls back to the
+			 * component's own figure; colour and tide need a body and are left off. */
+			environment = waterHost.AddComponent<WaterEnvironment>();
+			environment.DriveGravity = false;
+			environment.DriveColor = false;
+			environment.DriveTide = false;
+			environment.DriveStorms = false;
+			environment.DriveCloudShadow = false;
 
 			// What the distance field actually holds — the shore pass is driven entirely by it.
 			Texture2D fieldTexture = Shader.GetGlobalTexture("_FishWaterShore") as Texture2D;
@@ -447,8 +458,18 @@ namespace FishMMO.RenderScratch
 
 		private static void Capture(Shot shot, Camera camera, WaterSurface water, Light sun)
 		{
-			water.WindSpeed = shot.Wind;
 			water.Choppiness = shot.Choppiness;
+			if (environment != null)
+			{
+				// Onshore: the beach is to the west, so the wind blows TOWARD 270 degrees.
+				environment.WindOverride = shot.Wind;
+				environment.HeadingOverride = 270f;
+				environment.Apply();
+			}
+			else
+			{
+				water.WindSpeed = shot.Wind;
+			}
 			water.FFTChoppiness = Mathf.Lerp(1.0f, 1.9f, shot.Choppiness);
 			water.Refraction = shot.Refraction;
 			water.DepthEffects = shot.Depth;
@@ -514,7 +535,10 @@ namespace FishMMO.RenderScratch
 					white++;
 				}
 			}
-			Report.AppendLine($"{shot.Name,-26} wind {shot.Wind,4:0} chop {shot.Choppiness:0.00} " +
+			string sea = environment != null
+				? $"Hs {environment.SignificantHeight,4:0.00} m Tp {environment.PeakPeriod,4:0.0} s fetch {environment.FetchMetres / 1000f,4:0} km "
+				: "";
+			Report.AppendLine($"{shot.Name,-26} wind {shot.Wind,4:0} {sea}chop {shot.Choppiness:0.00} " +
 				$"refr={(shot.Refraction ? "on " : "off")} depth={(shot.Depth ? "on " : "off")} " +
 				$"| mean {mean:0.000} min {min:0.000} max {max:0.000} bright {100f * white / pixels.Length,5:0.0}%");
 

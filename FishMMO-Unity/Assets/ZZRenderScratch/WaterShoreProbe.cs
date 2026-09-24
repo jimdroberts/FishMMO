@@ -50,9 +50,6 @@ namespace FishMMO.RenderScratch
 				camera.transform.LookAt(new Vector3(268f, -0.6f, 2f));
 				camera.fieldOfView = 55f;
 
-				shore.DriveFromSea = false;
-				shore.Period = Period;
-				shore.Reach = 16f;
 
 				for (int frame = 0; frame < 6; frame++)
 				{
@@ -82,6 +79,72 @@ namespace FishMMO.RenderScratch
 				shore.Material.SetFloat("_EdgeFoam", 3f);
                 shore.Material.SetFloat("_FoamSharpness", 0.02f);
 				Capture(camera, "terms-lip-raw", "lip only, sharpness 0.02");
+
+				/* The barrel, from water level looking ALONG the wave front — the only angle a
+				 * curling crest can be judged from. Seen from above or from behind, a plunging
+				 * breaker and a swollen one look identical. */
+				shore.Material.SetFloat("_Debug", 0f);
+				camera.transform.position = new Vector3(300f, 1.1f, -40f);
+				camera.transform.LookAt(new Vector3(292f, 0.4f, 30f));
+				camera.fieldOfView = 48f;
+				for (int frame = 0; frame < 4; frame++)
+				{
+					float t = 40f + frame * 1.6f;
+					water.SetClock(t);
+					shore.SetClock(t);
+					Capture(camera, $"barrel-{frame}", $"along the front, t={t:0.0}s");
+				}
+				camera.transform.position = new Vector3(238f, 2.0f, -6f);
+				camera.transform.LookAt(new Vector3(268f, -0.6f, 2f));
+				camera.fieldOfView = 55f;
+
+
+				for (int frame = 0; frame < 6; frame++)
+				{
+					float t = frame / 6f * Period;
+					water.SetClock(11.0 + t);
+					shore.SetClock(t);
+					Capture(camera, $"cycle-{frame}", $"t={t:0.0}s of {Period:0}s");
+				}
+
+				// Which term is contributing what.
+				shore.SetClock(Period * 0.22f);
+				water.SetClock(11.0 + Period * 0.22f);
+				shore.Material.SetColor("_WetColor", Color.black);
+				shore.Material.SetColor("_SwashColor", Color.black);
+				Capture(camera, "terms-foam-only", "wet+swash black; white = the lip");
+
+				// Is the SHEET running at all? If this shows a band, the swash cycle is alive and
+				// only the lip is missing; if it does not, the whole cycle is returning zero.
+				shore.Material.SetColor("_SwashColor", Color.green);
+				shore.Material.SetFloat("_SwashOpacity", 1f);
+				shore.Material.SetFloat("_EdgeFoam", 0f);
+				Capture(camera, "terms-sheet", "swash sheet in green, foam off");
+
+				// The lip with the contrast curve effectively removed.
+				shore.Material.SetColor("_SwashColor", Color.black);
+				shore.Material.SetFloat("_SwashOpacity", 0f);
+				shore.Material.SetFloat("_EdgeFoam", 3f);
+                shore.Material.SetFloat("_FoamSharpness", 0.02f);
+				Capture(camera, "terms-lip-raw", "lip only, sharpness 0.02");
+
+				/* The barrel, from water level looking ALONG the wave front — the only angle a
+				 * curling crest can be judged from. Seen from above or from behind, a plunging
+				 * breaker and a swollen one look identical. */
+				shore.Material.SetFloat("_Debug", 0f);
+				camera.transform.position = new Vector3(300f, 1.1f, -40f);
+				camera.transform.LookAt(new Vector3(292f, 0.4f, 30f));
+				camera.fieldOfView = 48f;
+				for (int frame = 0; frame < 4; frame++)
+				{
+					float t = 40f + frame * 1.6f;
+					water.SetClock(t);
+					shore.SetClock(t);
+					Capture(camera, $"barrel-{frame}", $"along the front, t={t:0.0}s");
+				}
+				camera.transform.position = new Vector3(238f, 2.0f, -6f);
+				camera.transform.LookAt(new Vector3(268f, -0.6f, 2f));
+				camera.fieldOfView = 55f;
 
 				// The three terms, raw: red sheet, green lip, blue wet.
 				shore.Material.SetFloat("_Debug", 1f);
@@ -138,14 +201,22 @@ namespace FishMMO.RenderScratch
 			water.Spectrum = AssetDatabase.LoadAssetAtPath<ComputeShader>(
 				"Assets/Plugins/FishMMO Water/Shaders/FishWaterFFT.compute");
 			water.OuterRadius = 9000f;
-			water.Rings = 150;
-			water.Segments = 220;
 			water.ReportQuality = false;
-			water.WindSpeed = 9f;
-			water.WindDirectionDegrees = 250f;
 			water.Rebuild();
 			waterHost.AddComponent<WaterShoreField>().Build();
 			shore = waterHost.AddComponent<WaterShore>();
+			var environment = waterHost.AddComponent<WaterEnvironment>();
+			environment.DriveGravity = false;
+			environment.DriveColor = false;
+			environment.DriveTide = false;
+			environment.DriveStorms = false;
+			environment.DriveCloudShadow = false;
+			// A fresh breeze blowing onshore across the default 20 km of open water.
+			environment.WindOverride = 8f;
+			environment.HeadingOverride = 270f;
+			environment.Apply();
+			Report.AppendLine($"sea state: Hs {environment.SignificantHeight:0.00} m, Tp {environment.PeakPeriod:0.0} s, " +
+				$"fetch {environment.FetchMetres / 1000f:0} km, FFT wind {water.WindSpeed:0.0} m/s");
 
 			var cameraHost = new GameObject("Probe Camera");
 			camera = cameraHost.AddComponent<Camera>();

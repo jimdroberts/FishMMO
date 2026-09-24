@@ -130,6 +130,23 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
+		public void SnowDriftsWithTheWindAtEyeHeight_AndAGustIsNotADoubling()
+		{
+			/* Snow falls at a metre a second and goes wherever the air goes, so its drift is what the
+			 * eye reads as its speed. It used to take the full ten-metre wind and double it in a gust,
+			 * which streamed it sideways at nine to eighteen metres a second in an ordinary breeze. */
+			PrecipitationLook snow = PrecipitationLook.Snow();
+			WeatherFrame breeze = Frame((WeatherChannel.WindSpeed, 10f / 30f), (WeatherChannel.WindHeading, 90f));
+			Vector3 steady = PrecipitationField.FallVelocity(breeze, snow, 0f);
+			Vector3 gusting = PrecipitationField.FallVelocity(breeze, snow, 1f);
+
+			float expected = 10f * PrecipitationField.EyeLevelWind * snow.WindResponse;
+			LogAssert.IsTrue(Mathf.Abs(steady.x - expected) < 0.01f, $"a 10 m/s breeze drifts snow at {steady.x:0.00} m/s; eye-height wind is {expected:0.00}");
+			LogAssert.IsTrue(gusting.x < steady.x * 1.45f, $"a full gust lifts the drift {gusting.x / steady.x:0.00}x; a real one peaks near 1.4x");
+			LogAssert.IsTrue(steady.y > -1.5f, "snow still falls at snow's speed, not rain's");
+		}
+
+		[Test]
 		public void TheFieldMeshSharesOnePositionPerQuad()
 		{
 			Mesh mesh = PrecipitationField.BuildMesh(100, 7);

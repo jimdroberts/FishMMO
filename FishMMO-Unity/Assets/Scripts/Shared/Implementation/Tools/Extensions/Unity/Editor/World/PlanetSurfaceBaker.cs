@@ -210,7 +210,8 @@ namespace FishMMO.Shared.WorldDesign
 					hasPreviousHeight = true;
 					previousRow[x] = h;
 
-					pixels[row + x] = Shade(h, profile, body, temperature, slope, internalHeat, direction, seed);
+					pixels[row + x] = Shade(h, profile, body, temperature, slope, internalHeat, direction, seed,
+						SeaDepth01(-altitude / (relief / PlanetSurface.EarthReliefMetres)));
 				}
 				hasPreviousRow = true;
 			}
@@ -413,8 +414,36 @@ namespace FishMMO.Shared.WorldDesign
 			return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(edge0, edge1, x));
 		}
 
+		/// <summary>
+		/// How dark to draw the sea over ground this deep, 0 at the shore to 1 on the abyssal plain.
+		/// </summary>
+		/// <param name="earthMetres">Depth in metres on Earth's scale, which the body's own floor is sized from.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>From the metres the ground has, not from the raw field.</b> This used to shade by how
+		/// far down the raw field's range a point lay, through a smoothstep that stays flat at its
+		/// start — so everything shallower than about two kilometres came out in nearly the same
+		/// pale coastal blue. A scene cut from a kilometre of open water 141 km offshore looked like
+		/// the shallows on the globe, and the terrain generated there was a kilometre under the
+		/// surface: the picture and the ground were showing two different functions, the very bug
+		/// the land curve was fixed for.
+		/// </para>
+		/// <para>
+		/// On a log scale, because that is how a sea floor reads: the step from shelf to slope is
+		/// a few hundred metres and the one from slope to abyss is kilometres, and both have to
+		/// show. The shelf's edge lands near a quarter, a kilometre near 0.6, the abyssal plain at
+		/// 0.9 and past.
+		/// </para>
+		/// </remarks>
+		private static float SeaDepth01(float earthMetres)
+		{
+			const float Scale = 100f;
+			const float Abyss = 6000f;
+			return Mathf.Clamp01(Mathf.Log(1f + Mathf.Max(0f, earthMetres) / Scale) / Mathf.Log(1f + Abyss / Scale));
+		}
+
 		private static Color32 Shade(float h, PlanetSurface.PlanetProfile profile, WorldBody body, float temperature,
-			float slope, float internalHeat, Vector3 direction, uint seed)
+			float slope, float internalHeat, Vector3 direction, uint seed, float seaDepth01)
 		{
 			bool hasOcean = body.Water > 0f;
 			bool airless = body.Atmosphere == AtmosphereKind.None;
@@ -422,7 +451,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			if (hasOcean && h <= profile.SeaLevel)
 			{
-				float depth = Mathf.Clamp01((profile.SeaLevel - h) / Mathf.Max(1e-4f, profile.SeaLevel - profile.Lowest));
+				float depth = seaDepth01;
 				// Frozen over where the sea itself would freeze, which is what makes a polar cap
 				// read as a cap rather than as a white ring on the land.
 				colour = temperature <= -0.05f

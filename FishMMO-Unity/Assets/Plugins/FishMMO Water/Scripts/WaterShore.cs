@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
+using FishMMO.Shared.Celestial;
 
 namespace FishMMO.Water
 {
@@ -51,7 +53,33 @@ namespace FishMMO.Water
 		[Tooltip("Let the wind drive how far the swash reaches and how often waves arrive.")]
 		public bool DriveFromSea = true;
 
+		[Header("Foam left behind")]
+		[Tooltip("Seconds the foam a wave strands on the sand takes to fade to about a third.")]
+		[Range(1f, 40f)] public float FoamLingers = 8f;
+		[Tooltip("The pass that keeps it. Referenced so a build includes it; found by name otherwise.")]
+		public Shader FoamMemoryShader;
+
+		/// <summary>The foam memory's shader, for finding it when the reference was never set.</summary>
+		public const string FoamMemoryShaderName = "Hidden/FishMMO/Water/ShoreFoamMemory";
+
+		private static readonly int MemoryId = Shader.PropertyToID("_FishWaterFoamMemory");
+		private static readonly int PreviousId = Shader.PropertyToID("_FoamMemoryPrevious");
+		private static readonly int MemorySizeId = Shader.PropertyToID("_FoamMemorySize");
+		private static readonly int MemoryStepId = Shader.PropertyToID("_FoamMemoryStep");
+
+		/// <summary>How often the memory is stepped, per second of the swash's clock.</summary>
+		private const float MemoryRate = 30f;
+
+		private Material memoryMaterial;
+		private RenderTexture memoryA;
+		private RenderTexture memoryB;
+		private bool memoryInA = true;
+		private WaterShoreField field;
+		private double memoryClock = -1.0;
+		private int memoryFrame = -1;
+
 		private WaterSurface surface;
+		private WaterEnvironment environment;
 		private MeshRenderer meshRenderer;
 		private MeshFilter meshFilter;
 		private Mesh mesh;
@@ -72,6 +100,20 @@ namespace FishMMO.Water
 		private void OnDisable()
 		{
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+			ReleaseMemory();
+			if (memoryMaterial != null)
+			{
+				if (Application.isPlaying)
+				{
+					Destroy(memoryMaterial);
+				}
+				else
+				{
+					DestroyImmediate(memoryMaterial);
+				}
+				memoryMaterial = null;
+			}
+			Shader.SetGlobalTexture(MemoryId, Texture2D.blackTexture);
 			if (mesh != null)
 			{
 				if (Application.isPlaying)
@@ -215,27 +257,191 @@ namespace FishMMO.Water
 			}
 			if (!overridden)
 			{
-				clock = (clock + Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f)) % 10000.0;
+				// The world's motion, so the surf stops when the world's time does.
+				clock = (clock + WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f))) % 10000.0;
 			}
 			overridden = false;
 			lastRealtime = now;
 
 			float period = Period;
 			float reach = Reach;
-			if (DriveFromSea && surface != null)
+			if (DriveFromSea)
 			{
-				/* Bigger seas throw the water further up and arrive less often, because both
-				 * follow the wavelength — and wavelength follows the wind. A breeze laps at the
-				 * sand every few seconds; a gale sends a wall up the beach twice a minute. */
-				float wind = Mathf.Clamp(surface.WindSpeed, 0f, 30f);
-				period = Mathf.Lerp(5f, 14f, Mathf.InverseLerp(2f, 22f, wind));
-				reach = Reach * Mathf.Lerp(0.35f, 2.2f, Mathf.InverseLerp(2f, 22f, wind));
+				environment ??= GetComponent<WaterEnvironment>();
+				if (environment != null && environment.SignificantHeight > 0f)
+				{
+					/* From the sea state itself: waves arrive at the sea's peak period, and run up
+					 * a distance that grows with their height. On a beach of ordinary slope the
+					 * run-up travels a dozen or so metres for every metre of wave. */
+					period = Mathf.Clamp(environment.PeakPeriod, 3f, 20f);
+					reach = Mathf.Clamp(environment.SignificantHeight * 13f, 1.5f, 60f);
+				}
+				else if (surface != null)
+				{
+					float wind = Mathf.Clamp(surface.WindSpeed, 0f, 30f);
+					period = Mathf.Lerp(5f, 14f, Mathf.InverseLerp(2f, 22f, wind));
+					reach = Reach * Mathf.Lerp(0.35f, 2.2f, Mathf.InverseLerp(2f, 22f, wind));
+				}
 			}
 
 			Shader.SetGlobalFloat(PeriodId, Mathf.Max(0.5f, period));
 			Shader.SetGlobalFloat(ReachId, Mathf.Max(0.5f, reach));
 			Shader.SetGlobalFloat(SkewId, Mathf.Clamp01(Skew));
 			Shader.SetGlobalFloat(TimeId, (float)clock);
+
+			// Once a frame, whichever camera is first: the memory is the beach's, not the camera's.
+			if (memoryFrame != Time.frameCount)
+			{
+				memoryFrame = Time.frameCount;
+				StepFoamMemory();
+			}
+		}
+
+		/// <summary>
+		/// Keeps the foam the swash strands: what was there fades, and whatever the lip is laying now
+		/// is added. Stepped at a fixed rate on the swash's own clock, so it stops with the world.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Half float, not eight bits.</b> A fade is a multiply by a factor just under one, and an
+		/// eight-bit value times 0.998 rounds straight back to itself — the foam would never go. The
+		/// fixed step rate keeps the factor far enough from one for half float to resolve it at any
+		/// frame rate.
+		/// </para>
+		/// <para>
+		/// Over the shore field's own rectangle, at its resolution, so a stranded line sits where the
+		/// field puts the water and costs one texture — not a window that follows the camera and
+		/// forgets every beach it leaves.
+		/// </para>
+		/// </remarks>
+		private void StepFoamMemory()
+		{
+			if (field == null)
+			{
+				field = GetComponent<WaterShoreField>();
+			}
+			int size = field != null ? field.Resolution : 0;
+			if (size <= 0)
+			{
+				Shader.SetGlobalTexture(MemoryId, Texture2D.blackTexture);
+				return;
+			}
+			if (memoryMaterial == null)
+			{
+				if (FoamMemoryShader == null)
+				{
+					FoamMemoryShader = Shader.Find(FoamMemoryShaderName);
+				}
+				if (FoamMemoryShader == null || !FoamMemoryShader.isSupported)
+				{
+					Shader.SetGlobalTexture(MemoryId, Texture2D.blackTexture);
+					return;
+				}
+				memoryMaterial = new Material(FoamMemoryShader) { name = "Shore foam memory", hideFlags = HideFlags.HideAndDontSave };
+			}
+			/* Resized in place, never destroyed and made again: this runs inside a render callback,
+			 * where Unity refuses DestroyImmediate — the same trap the sea's mesh and the shore
+			 * field both fell into from OnValidate. */
+			if (memoryA == null)
+			{
+				memoryA = CreateMemory(size);
+				memoryB = CreateMemory(size);
+				memoryInA = true;
+				memoryClock = clock;
+			}
+			else if (memoryA.width != size)
+			{
+				Resize(memoryA, size);
+				Resize(memoryB, size);
+				memoryInA = true;
+				memoryClock = clock;
+			}
+
+			// How far the swash's clock has run since the last step; it wraps at 10,000 s.
+			double elapsed = clock - memoryClock;
+			if (elapsed < 0.0)
+			{
+				elapsed += 10000.0;
+			}
+			if (elapsed >= 1.0 / MemoryRate)
+			{
+				memoryClock = clock;
+				RenderTexture source = memoryInA ? memoryA : memoryB;
+				RenderTexture target = memoryInA ? memoryB : memoryA;
+				memoryMaterial.SetTexture(PreviousId, source);
+				memoryMaterial.SetVector(MemorySizeId, new Vector4(size, size, 1f / size, 1f / size));
+				memoryMaterial.SetVector(MemoryStepId, new Vector4(
+					Mathf.Exp(-(float)elapsed / Mathf.Max(0.1f, FoamLingers)), 1f, 0f, 0f));
+
+				RenderTexture previous = RenderTexture.active;
+				Graphics.SetRenderTarget(target);
+				memoryMaterial.SetPass(0);
+				Graphics.DrawProceduralNow(MeshTopology.Triangles, 3);
+				RenderTexture.active = previous;
+				memoryInA = !memoryInA;
+			}
+			Shader.SetGlobalTexture(MemoryId, memoryInA ? memoryA : memoryB);
+		}
+
+		private static void Resize(RenderTexture texture, int size)
+		{
+			texture.Release();
+			texture.width = size;
+			texture.height = size;
+			texture.Create();
+			Clear(texture);
+		}
+
+		private static void Clear(RenderTexture texture)
+		{
+			RenderTexture previous = RenderTexture.active;
+			RenderTexture.active = texture;
+			GL.Clear(false, true, Color.clear);
+			RenderTexture.active = previous;
+		}
+
+		private static RenderTexture CreateMemory(int size)
+		{
+			GraphicsFormat format =
+				SystemInfo.IsFormatSupported(GraphicsFormat.R16_SFloat, GraphicsFormatUsage.Render) ? GraphicsFormat.R16_SFloat
+				: SystemInfo.IsFormatSupported(GraphicsFormat.R32_SFloat, GraphicsFormatUsage.Render) ? GraphicsFormat.R32_SFloat
+				: GraphicsFormat.R16G16B16A16_SFloat;
+			var texture = new RenderTexture(size, size, 0, format)
+			{
+				name = "Shore foam memory",
+				wrapMode = TextureWrapMode.Clamp,
+				filterMode = FilterMode.Bilinear,
+				useMipMap = false,
+				hideFlags = HideFlags.HideAndDontSave,
+			};
+			texture.Create();
+			// Starts clean: a new render texture's contents are undefined.
+			Clear(texture);
+			return texture;
+		}
+
+		private void ReleaseMemory()
+		{
+			ReleaseTexture(ref memoryA);
+			ReleaseTexture(ref memoryB);
+		}
+
+		private static void ReleaseTexture(ref RenderTexture texture)
+		{
+			if (texture == null)
+			{
+				return;
+			}
+			texture.Release();
+			if (Application.isPlaying)
+			{
+				Destroy(texture);
+			}
+			else
+			{
+				DestroyImmediate(texture);
+			}
+			texture = null;
 		}
 	}
 }

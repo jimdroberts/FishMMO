@@ -3,11 +3,11 @@ Shader "Hidden/FishMMO/Weather/Overlay"
     // What the weather does to the view itself (P5). Six treatments, because six kinds of weather
     // do six different things to a surface held in front of your eyes:
     //
-    //   rain   beads that refract and run down
-    //   snow   flecks that land, whiten and melt
+    //   rain   streaks that refract and run down
+    //   snow   flakes that land, whiten and melt
     //   hail   hard brief impacts, no beading
-    //   ash    greasy dark smears that build up and clear slowly
-    //   sand   dry grain scouring across with the wind
+    //   ash    dark flakes that stick, build up and clear slowly
+    //   sand   grit scouring across with the wind
     //   frost  crystals creeping in from the edges
     //
     // SHELTER GATES ALL OF IT. Every one fades as the viewer goes under cover, because the effect
@@ -20,7 +20,10 @@ Shader "Hidden/FishMMO/Weather/Overlay"
     // all" put water beading on the lens through visibly falling snow. Each treatment asks for its
     // share to DOMINATE, and they hand over across the middle rather than both running.
     //
-    // Everything is procedural: no texture to author or keep resident, and no tiling seam.
+    // THE SHAPES ARE THE PRECIPITATION ATLAS'S OWN SPRITES — the sheet the falling particles are
+    // drawn from — so what lands on the view is what is falling past it. Snow on the lens used to be
+    // a procedural disc, which read as a white circle whatever was falling. Frost alone is still
+    // procedural: nothing falls to make it.
     SubShader
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
@@ -67,9 +70,59 @@ Shader "Hidden/FishMMO/Weather/Overlay"
                 return float2(uv.x * _FishOverlayParams.w, uv.y);
             }
 
-            /* One cell's drop, measured against a point given in THAT cell's local space.
-             * Split out so a neighbouring cell can evaluate it too — see Drops(). */
-            float3 DropInCell(float2 id, float2 local, float time, float amount, float size)
+            TEXTURE2D(_FishWeatherAtlas);
+            SAMPLER(sampler_FishWeatherAtlas);
+
+            // Four variants to a row, eight rows: 0 streak, 1 flake, 2 hail, 3 ash, 4 grit.
+            static const float2 AtlasCell = float2(0.25, 0.125);
+            // The streak is a line down the middle of its square, a tenth of the square's width at
+            // half its peak (12 px of 128), so a streak N wide is drawn from a square ten N across.
+            static const float StreakFill = 0.094;
+
+            /* One sprite's alpha from the atlas, at `local` 0..1 across the sprite, y up.
+             *
+             * The gradients are passed in rather than taken from the uv, because the uv jumps at
+             * every cell edge — the sprite is chosen per cell — and a mip picked across that jump is
+             * the smallest one: a hairline of mush round every sprite. `blur` adds whole mips on top,
+             * which is how a melting flake softens into water. */
+            float AtlasSprite(float row, float variant, float2 local, float2 dx, float2 dy, float blur)
+            {
+                if (any(local < 0.0) || any(local > 1.0))
+                {
+                    return 0.0;
+                }
+                float2 uv = float2((variant + local.x) * AtlasCell.x, 1.0 - (row + 1.0 - local.y) * AtlasCell.y);
+                float widen = exp2(blur);
+                return SAMPLE_TEXTURE2D_GRAD(_FishWeatherAtlas, sampler_FishWeatherAtlas, uv,
+                    dx * AtlasCell * widen, dy * AtlasCell * widen).a;
+            }
+
+            /* The sprite a cell holds, at this pixel. `within` is 0..1 across the cell and dpdx/dpdy
+             * its change per pixel.
+             *
+             * KEPT WHOLLY INSIDE ITS OWN CELL. The sprite's centre never lies closer to the cell's
+             * edge than half its size, and every sprite's content sits within the circle inscribed
+             * in its square, so it survives any rotation — one cell answers for every pixel it
+             * covers, and nothing is sliced off along a cell boundary. Rain is the exception, since
+             * its drops run out of their cells, and searches its neighbours instead. */
+            float CellSprite(float2 id, float2 within, float2 dpdx, float2 dpdy, float row, float size, float spin, float blur)
+            {
+                float2 centre = 0.5 + (Hash22(id + 3.3) - 0.5) * (1.0 - size);
+                float s, c;
+                sincos(spin, s, c);
+                float2x2 turn = float2x2(c, -s, s, c);
+                float2 local = mul(turn, within - centre) / size + 0.5;
+                float variant = floor(Hash21(id + 5.7) * 4.0);
+                return AtlasSprite(row, variant, local, mul(turn, dpdx) / size, mul(turn, dpdy) / size, blur);
+            }
+
+            /* One cell's drop, measured against a point given in THAT cell's local space (-0.5..0.5).
+             * Split out so a neighbouring cell can evaluate it too — see Drops().
+             *
+             * The drop is the atlas's streak: short when it lands, drawing out into a trail as it
+             * runs down, its top held where it struck. Bent like a thin cylinder of water — outward
+             * from its own centre line — which is what makes a trail on glass read as water. */
+            float3 DropInCell(float2 id, float2 local, float2 dpdx, float2 dpdy, float time, float amount, float size)
             {
                 float2 random = Hash22(id);
                 if (random.x > amount * 1.15)
@@ -77,36 +130,39 @@ Shader "Hidden/FishMMO/Weather/Overlay"
                     return float3(0.0, 0.0, 0.0);
                 }
                 float life = frac(time * (0.25 + random.x * 0.35) + random.y);
-
-                float2 at = (random - 0.5) * 0.6;
-                // Slides down as it ages. This is what takes it out of its own cell.
-                at.y -= life * 0.5;
-                float radius = (0.12 + random.y * 0.16) * (0.6 + size * 0.9);
                 float age = smoothstep(0.0, 0.12, life) * (1.0 - smoothstep(0.65, 1.0, life));
 
-                float d = length((local - at) * float2(1.0, 1.3));
-                float mask = smoothstep(radius, radius * 0.45, d) * age;
-                float2 bend = normalize(local - at + 1e-5) * mask;
-                return float3(mask, bend);
+                float2 born = (random - 0.5) * 0.6;
+                // Runs down as it ages. This is what takes it out of its own cell.
+                float slide = life * 0.5;
+                float width = (0.05 + random.y * 0.05) * (0.6 + size * 0.9);
+                float trail = width * 3.0 + slide;
+                float2 head = born - float2(0.0, slide);
+
+                float square = width / StreakFill;
+                float2 sprite = float2((local.x - head.x) / square + 0.5, (local.y - head.y) / trail);
+                float2 dx = float2(dpdx.x / square, dpdx.y / trail);
+                float2 dy = float2(dpdy.x / square, dpdy.y / trail);
+                float mask = AtlasSprite(0.0, floor(random.y * 4.0), sprite, dx, dy, 0.0) * age;
+
+                float across = clamp((local.x - head.x) / (width * 0.5), -1.0, 1.0);
+                return float3(mask, across * mask, 0.0);
             }
 
-            /* Rain: beads that refract what is behind them and slide down as they age.
+            /* Rain: streaks that refract what is behind them and run down as they age.
              *
              * EVALUATED ACROSS THE NEIGHBOURING CELLS, not just this pixel's own. A drop is placed
-             * by the cell it was born in, but it is offset within that cell and then slides
-             * downward out of it — its centre reaches -0.8 against a half-cell of 0.5, and its
-             * radius can be 0.42 on top of that. A pixel that only asked its own cell therefore saw
-             * nothing where a neighbour's drop had spilled over, and the drop was sliced along the
-             * cell boundary: the "cut off" drops.
-             *
-             * Nine cells rather than the three the vertical slide alone would need, because the
-             * horizontal offset overflows too on the larger drops. It is nine evaluations of cheap
-             * scalar maths in a pass that only runs while it is actually raining.
+             * by the cell it was born in, but it slides downward out of it and its trail reaches
+             * above it — so a pixel that only asked its own cell saw nothing where a neighbour's
+             * drop had spilled over, and the drop was sliced along the cell boundary.
              */
             float3 Drops(float2 uv, float time, float amount, float size)
             {
                 float2 grid = float2(5.0, 5.0) * (0.7 + size * 0.8);
                 float2 cell = Square(uv) * grid;
+                // Taken here, before any branch: a derivative inside divergent flow is undefined.
+                float2 dpdx = ddx(cell);
+                float2 dpdy = ddy(cell);
                 float2 id = floor(cell);
                 float2 within = frac(cell) - 0.5;
 
@@ -116,8 +172,7 @@ Shader "Hidden/FishMMO/Weather/Overlay"
                     for (int x = -1; x <= 1; x++)
                     {
                         float2 neighbour = float2(x, y);
-                        // This pixel, in the neighbour's local space.
-                        float3 drop = DropInCell(id + neighbour, within - neighbour, time, amount, size);
+                        float3 drop = DropInCell(id + neighbour, within - neighbour, dpdx, dpdy, time, amount, size);
                         // The nearest one wins outright rather than adding: two overlapping drops
                         // are two drops, and summing their masks makes a bright blob where they
                         // cross and doubles the refraction there.
@@ -127,29 +182,35 @@ Shader "Hidden/FishMMO/Weather/Overlay"
                 return best;
             }
 
-            // Snow: flecks that land, whiten and melt. No refraction — snow does not bead.
+            // Snow: flakes that land, sit a moment, and melt — shrinking and softening into water
+            // before they go. No refraction: snow does not bead.
             float Flecks(float2 uv, float time, float amount)
             {
-                float2 cell = Square(uv) * float2(13.0, 13.0);
+                float2 cell = Square(uv) * 10.0;
+                float2 dpdx = ddx(cell);
+                float2 dpdy = ddy(cell);
                 float2 id = floor(cell);
-                float2 within = frac(cell) - 0.5;
                 float2 random = Hash22(id);
                 if (random.x > amount * 1.1)
                 {
                     return 0.0;
                 }
-                float life = frac(time * (0.5 + random.x * 0.5) + random.y);
-                float melt = smoothstep(0.0, 0.1, life) * (1.0 - smoothstep(0.4, 1.0, life));
-                float d = length(within - (random - 0.5) * 0.5);
-                return smoothstep(0.17, 0.04, d) * melt;
+                float life = frac(time * (0.16 + random.x * 0.18) + random.y);
+                float landed = smoothstep(0.0, 0.04, life);
+                float melt = smoothstep(0.3, 1.0, life);
+                float size = lerp(0.35, 0.7, Hash21(id + 7.1)) * (1.0 - 0.4 * melt);
+                float flake = CellSprite(id, frac(cell), dpdx, dpdy, 1.0, size, Hash21(id + 11.9) * 6.2831853, melt * 1.5);
+                return flake * landed * (1.0 - melt * melt);
             }
 
-            // Hail: hard, brief, and gone. A short white star rather than a lingering bead.
+            // Hail: hard, brief, and gone — a stone that strikes and bounces off, shrinking as it
+            // leaves, not a lingering bead.
             float Impacts(float2 uv, float time, float amount)
             {
-                float2 cell = Square(uv) * float2(7.0, 7.0);
+                float2 cell = Square(uv) * 7.0;
+                float2 dpdx = ddx(cell);
+                float2 dpdy = ddy(cell);
                 float2 id = floor(cell);
-                float2 within = frac(cell) - 0.5;
                 float2 random = Hash22(id + 31.7);
                 if (random.x > amount * 0.9)
                 {
@@ -157,37 +218,51 @@ Shader "Hidden/FishMMO/Weather/Overlay"
                 }
                 // Much faster than rain: a strike, not a drop.
                 float life = frac(time * (2.2 + random.x) + random.y);
-                float flash = 1.0 - smoothstep(0.0, 0.22, life);
-                float2 d = abs(within - (random - 0.5) * 0.6);
-                // A cross, which reads as a sharp hit where a disc reads as a drop.
-                float star = max(smoothstep(0.10, 0.0, d.x) * smoothstep(0.02, 0.0, d.y),
-                                 smoothstep(0.10, 0.0, d.y) * smoothstep(0.02, 0.0, d.x));
-                return star * flash;
+                float gone = smoothstep(0.0, 0.22, life);
+                float size = lerp(0.25, 0.45, Hash21(id + 2.9)) * (1.0 - 0.5 * gone);
+                return CellSprite(id + 31.7, frac(cell), dpdx, dpdy, 2.0, size, 0.0, 0.0) * (1.0 - gone);
             }
 
-            // Ash: greasy smears that build where they land and clear slowly.
+            // Ash: flakes that stick where they land and clear slowly — tens of seconds, where snow
+            // melts in a few — softened a little, since ash smears rather than sitting crisp.
             float Smears(float2 uv, float time, float amount)
             {
-                float2 p = Square(uv) * 6.0;
-                float n = 0.0, scale = 1.0, weight = 0.6;
-                for (int i = 0; i < 3; i++)
+                float2 cell = Square(uv) * 8.0;
+                float2 dpdx = ddx(cell);
+                float2 dpdy = ddy(cell);
+                float2 id = floor(cell);
+                float2 random = Hash22(id + 17.3);
+                if (random.x > amount)
                 {
-                    n += Hash21(floor(p * scale + float2(0.0, time * 0.02))) * weight;
-                    scale *= 2.3;
-                    weight *= 0.5;
+                    return 0.0;
                 }
-                return saturate(smoothstep(0.35, 0.85, n) * amount);
+                float life = frac(time * (0.03 + random.x * 0.04) + random.y);
+                float stuck = smoothstep(0.0, 0.03, life) * (1.0 - smoothstep(0.55, 1.0, life));
+                float size = lerp(0.45, 0.85, Hash21(id + 4.4));
+                return CellSprite(id + 17.3, frac(cell), dpdx, dpdy, 3.0, size, Hash21(id + 8.8) * 6.2831853, 0.4) * stuck;
             }
 
-            // Sand: dry grain driven across the view by the wind, not settling on it.
+            // Sand: grit driven across the view by the wind, not settling on it.
             float Scour(float2 uv, float time, float amount)
             {
                 // Along the wind, so a sandstorm reads as coming FROM somewhere.
                 float2 dir = normalize(_FishWeatherWind.xy + 1e-4);
+                float2 cell = Square(uv) * 12.0 - dir * time * (4.0 + _FishWeatherWind.z * 6.0);
+                float2 dpdx = ddx(cell);
+                float2 dpdy = ddy(cell);
+                float2 id = floor(cell);
+                float2 random = Hash22(id + 57.1);
+                float grit = 0.0;
+                if (random.x <= amount)
+                {
+                    float size = lerp(0.55, 0.95, Hash21(id + 6.6));
+                    grit = CellSprite(id + 57.1, frac(cell), dpdx, dpdy, 4.0, size, Hash21(id + 9.2) * 6.2831853, 0.0);
+                }
+                // The streaks stay, faint: they are the air moving rather than anything in it, and
+                // they are what says the grit is being blown.
                 float along = dot(Square(uv), dir) * 40.0 - time * (6.0 + _FishWeatherWind.z * 2.0);
-                float streak = frac(along * 0.5);
-                float grain = Hash21(floor(Square(uv) * 180.0) + floor(time * 20.0));
-                return saturate((smoothstep(0.85, 1.0, streak) * 0.6 + grain * 0.5) * amount);
+                float streak = smoothstep(0.85, 1.0, frac(along * 0.5));
+                return saturate((grit * 0.8 + streak * 0.35) * amount);
             }
 
             // Frost: crystals thickening in from the edges when it is cold enough to hurt.

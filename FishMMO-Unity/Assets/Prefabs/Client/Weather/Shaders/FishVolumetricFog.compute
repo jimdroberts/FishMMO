@@ -41,7 +41,13 @@ float4   _FishVolFogCamera;    // xyz camera world position, w jitter
  * is happening and leaves the near field — the part filling the screen — with almost none. */
 float SliceDistance(float slice01)
 {
-    return _FishVolFogRange.x * pow(_FishVolFogRange.y / _FishVolFogRange.x, pow(slice01, _FishVolFogRange.z));
+    /* Both bases clamped to what they already are for every valid input. slice01 is a position
+     * through the froxel volume and cannot leave 0..1 — the C# jitter is (frame x 0.618) % 1,
+     * so the shader's w - 0.5 keeps slice 0 at zero and above — and far / near is a ratio of two
+     * positive distances. The compiler cannot see either fact and warned (X3571) on every
+     * import that pow of a negative base is undefined; saying so explicitly costs nothing. */
+    float ratio = max(1e-4, _FishVolFogRange.y / max(1e-4, _FishVolFogRange.x));
+    return _FishVolFogRange.x * pow(ratio, pow(saturate(slice01), _FishVolFogRange.z));
 }
 
 float3 FroxelWorld(uint3 id, float jitter)

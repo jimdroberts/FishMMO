@@ -51,6 +51,10 @@ CBUFFER_START(UnityPerMaterial)
 	half _ShoreBreak;
 	half _SwashMetres;
 	half _ShoreRefraction;
+	half _ShoreWaveLength;
+	half _ShoreWaveHeight;
+	half _ShoreWavePitch;
+	half _ShoreWaveFoam;
 
 	// ── Waves ──
 	half _WaveFadeStart;
@@ -60,6 +64,9 @@ CBUFFER_START(UnityPerMaterial)
 	// ── Variation ──
 	half _Clarity;
 	half _ClarityScale;
+
+	// ── Development ──
+	half _DebugView;
 CBUFFER_END
 
 TEXTURE2D(_NormalMap);
@@ -91,6 +98,8 @@ SAMPLER(sampler_FishWaterDisplacement0);
 float4 _FishWaterPatch;
 
 float _FishWaterLevel;
+/// The level with no tide on it: what the shore field was built against.
+float _FishWaterMeanLevel;
 /// Seconds, wrapped by the CPU. NOT _Time.y, which is a float counting from level load: after a
 /// few hours of a session its resolution is coarser than a frame and the sea visibly judders.
 float _FishWaterTime;

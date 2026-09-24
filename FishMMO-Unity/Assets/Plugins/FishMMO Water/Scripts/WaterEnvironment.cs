@@ -32,6 +32,8 @@ namespace FishMMO.Water
 		private static readonly int ShallowId = Shader.PropertyToID("_ShallowColor");
 		private static readonly int DeepId = Shader.PropertyToID("_DeepColor");
 		private static readonly int DensityId = Shader.PropertyToID("_WaterDensity");
+		private static readonly int SurfHeightId = Shader.PropertyToID("_ShoreWaveHeight");
+		private static readonly int SurfLengthId = Shader.PropertyToID("_ShoreWaveLength");
 
 		[Header("Celestial")]
 		[Tooltip("Take surface gravity from the body. It sets every wavelength and wave speed in the sea.")]
@@ -48,6 +50,18 @@ namespace FishMMO.Water
 		public bool DriveStorms = true;
 		[Tooltip("Darken the water under cloud, the same way the ground is darkened.")]
 		public bool DriveCloudShadow = true;
+
+		[Header("Sea state")]
+		[Tooltip("Open water upwind when there is no planet to measure it on, in km.")]
+		[Range(0.5f, 800f)] public float FallbackFetchKm = 20f;
+		[Tooltip("The furthest upwind the fetch is measured, in km. Past this the sea is developed anyway.")]
+		[Range(10f, 2000f)] public float MaximumFetchKm = 400f;
+		[Tooltip("Swell from distant weather, in metres. A real beach is never dead flat even with an offshore wind.")]
+		[Range(0f, 3f)] public float SwellMetres = 0.3f;
+		[Tooltip("Force the wind, m/s, for testing. Negative uses the weather.")]
+		public float WindOverride = -1f;
+		[Tooltip("Force the heading the wind blows TOWARD, degrees, for testing. Negative uses the weather.")]
+		public float HeadingOverride = -1f;
 
 		[Header("Climate")]
 		[Tooltip("Colour the water from the world's climate: clear cold blue through warm, productive green.")]
@@ -73,12 +87,23 @@ namespace FishMMO.Water
 		private float windSpeed;
 		private float windHeading;
 		private bool primed;
+		private float fetchHeading = float.NaN;
+		private WorldBody fetchBody;
 
 		/// <summary>The tide this frame, in metres above mean sea level.</summary>
 		public float Tide { get; private set; }
 
 		/// <summary>The sustained wind this frame, in metres per second.</summary>
 		public float Wind => windSpeed;
+
+		/// <summary>Open water upwind of this scene, in metres, measured across the planet.</summary>
+		public float FetchMetres { get; private set; }
+
+		/// <summary>Significant wave height, in metres: the mean of the highest third of waves.</summary>
+		public float SignificantHeight { get; private set; }
+
+		/// <summary>Peak period of the sea, in seconds.</summary>
+		public float PeakPeriod { get; private set; }
 
 		/// <summary>Surface gravity in use, in m/s².</summary>
 		public float Gravity => surface != null ? surface.Gravity : WaterWaves.EarthGravity;
@@ -91,8 +116,19 @@ namespace FishMMO.Water
 			settings = null;
 		}
 
-		private void LateUpdate()
+		private void LateUpdate() => Apply();
+
+		/// <summary>
+		/// Brings the sea up to date with the world. Called every frame; public so anything that
+		/// renders without a frame loop — a batch capture, an editor preview — can drive it.
+		/// </summary>
+		public void Apply()
 		{
+			if (surface == null)
+			{
+				surface = GetComponent<WaterSurface>();
+				meshRenderer = GetComponent<MeshRenderer>();
+			}
 			if (surface == null)
 			{
 				return;
@@ -159,10 +195,12 @@ namespace FishMMO.Water
 
 			if (DriveWind)
 			{
-				float speed = air.Wind.magnitude * Mathf.Max(0f, Fetch);
-				float heading = Mathf.Repeat(Mathf.Atan2(air.Wind.x, air.Wind.y) * Mathf.Rad2Deg, 360f);
+				float speed = WindOverride >= 0f ? WindOverride : air.Wind.magnitude * Mathf.Max(0f, Fetch);
+				float heading = HeadingOverride >= 0f
+					? Mathf.Repeat(HeadingOverride, 360f)
+					: Mathf.Repeat(Mathf.Atan2(air.Wind.x, air.Wind.y) * Mathf.Rad2Deg, 360f);
 
-				if (!primed)
+				if (!primed || WindOverride >= 0f)
 				{
 					windSpeed = speed;
 					windHeading = heading;
@@ -200,14 +238,140 @@ namespace FishMMO.Water
 
 			if (DriveWind)
 			{
-				if (!Mathf.Approximately(surface.WindSpeed, windSpeed)
-					|| !Mathf.Approximately(surface.WindDirectionDegrees, windHeading))
-				{
-					surface.WindSpeed = windSpeed;
-					surface.WindDirectionDegrees = windHeading;
-				}
-				surface.Rebuild();
+				ApplySeaState(latitude);
 			}
+		}
+
+		/// <summary>
+		/// Turns the wind into a sea, through the fetch the planet actually has upwind.
+		/// </summary>
+		private void ApplySeaState(float latitude)
+		{
+			float gravity = surface.Gravity;
+			WorldBody body = settings != null ? settings.Body : null;
+
+			// The march is a few hundred planet samples, so it is redone only when the wind has
+			// swung far enough to be blowing across different water.
+			if (float.IsNaN(fetchHeading) || fetchBody != body
+				|| Mathf.Abs(Mathf.DeltaAngle(fetchHeading, windHeading)) > 12f)
+			{
+				FetchMetres = MeasureFetch(body, settings, windHeading);
+				fetchHeading = windHeading;
+				fetchBody = body;
+			}
+
+			float local = WaterSeaState.SignificantHeight(windSpeed, FetchMetres, gravity);
+			/* Swell from weather elsewhere, combined in quadrature because the two are independent
+			 * wave fields and it is their ENERGIES that add. Without it an offshore wind leaves a
+			 * mirror-flat sea, and no real coast is ever that. */
+			SignificantHeight = Mathf.Sqrt(local * local + SwellMetres * SwellMetres);
+			/* Energy-weighted between the local sea and the swell, not the longer of the two.
+			 * Taking the maximum handed a gale's short, steep chop the swell's lazy seven-second
+			 * period — the long rolling lines of a calm day under a storm — even though the local
+			 * sea was carrying twenty times the energy. Whichever field has the energy sets the
+			 * rhythm the waves arrive to. */
+			float localPeriod = WaterSeaState.PeakPeriod(windSpeed, FetchMetres, gravity);
+			const float SwellPeriod = 9f;
+			float localEnergy = local * local;
+			float swellEnergy = SwellMetres * SwellMetres;
+			float energy = localEnergy + swellEnergy;
+			PeakPeriod = energy > 1e-6f
+				? (localEnergy * localPeriod + swellEnergy * SwellPeriod) / energy
+				: SwellPeriod;
+
+			/* The FFT is handed the wind that would raise THIS sea if it were developed, so its
+			 * height and its peak wavelength both come out consistent with the fetch. The direction
+			 * is the real wind's. */
+			surface.WindSpeed = WaterSeaState.EquivalentWind(SignificantHeight, gravity);
+			surface.WindDirectionDegrees = windHeading;
+			surface.Rebuild();
+
+			/* The surf is driven from the same sea rather than being a number somebody typed.
+			 * Breakers stand at roughly the significant height offshore — the shader's own
+			 * shoaling grows them from there as the water shallows — and they arrive at the peak
+			 * period, so their spacing on the beach is the sea's own wavelength. */
+			if (meshRenderer != null)
+			{
+				block ??= new MaterialPropertyBlock();
+				meshRenderer.GetPropertyBlock(block);
+				block.SetFloat(SurfHeightId, SignificantHeight * 0.5f);
+				block.SetFloat(SurfLengthId, Mathf.Clamp(WaterSeaState.Wavelength(PeakPeriod, gravity), 6f, 160f));
+				meshRenderer.SetPropertyBlock(block);
+			}
+		}
+
+		/// <summary>
+		/// Open water upwind of a scene, in metres, marched across the planet's own surface.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Walks the great circle UPWIND — against the direction the wind blows toward — sampling
+		/// the same surface function the globe is baked from, first across any land the scene
+		/// itself stands on, then across water until the first land again. That run of water is the
+		/// fetch.
+		/// </para>
+		/// <para>
+		/// It is why an onshore wind and an offshore wind of the same strength make completely
+		/// different beaches, and why a sheltered bay behind a headland is calm when the open coast
+		/// beside it is not — none of which has to be authored, because the planet already knows
+		/// where its coastlines are.
+		/// </para>
+		/// </remarks>
+		private float MeasureFetch(WorldBody body, WorldSceneSettings scene, float windHeading)
+		{
+			if (body == null || scene == null)
+			{
+				return FallbackFetchKm * 1000f;
+			}
+
+			uint seed = body.ResolvedTerrainSeed;
+			double radiusKm = Mathf.Max(1f, body.SkyRadiusKm);
+			double latitude = scene.Latitude * Mathf.Deg2Rad;
+			double longitude = scene.Longitude * Mathf.Deg2Rad;
+			// Upwind: the heading is where the wind blows TOWARD.
+			double bearing = (windHeading + 180.0) * Mathf.Deg2Rad;
+
+			const float StepKm = 1f;
+			float maximum = Mathf.Max(StepKm, MaximumFetchKm);
+			bool reachedWater = false;
+			float waterStart = 0f;
+
+			for (float travelled = StepKm; travelled <= maximum; travelled += StepKm)
+			{
+				// Great-circle destination.
+				double angular = travelled / radiusKm;
+				double sinLat = System.Math.Sin(latitude) * System.Math.Cos(angular)
+					+ System.Math.Cos(latitude) * System.Math.Sin(angular) * System.Math.Cos(bearing);
+				double lat2 = System.Math.Asin(System.Math.Max(-1.0, System.Math.Min(1.0, sinLat)));
+				double lon2 = longitude + System.Math.Atan2(
+					System.Math.Sin(bearing) * System.Math.Sin(angular) * System.Math.Cos(latitude),
+					System.Math.Cos(angular) - System.Math.Sin(latitude) * sinLat);
+
+				float altitude = PlanetSurface.AltitudeMetresAt(seed, body,
+					lat2 * Mathf.Rad2Deg, lon2 * Mathf.Rad2Deg);
+				bool water = altitude < 0f;
+
+				if (!reachedWater)
+				{
+					// Still crossing the scene's own land toward the sea it faces.
+					if (water)
+					{
+						reachedWater = true;
+						waterStart = travelled;
+					}
+					else if (travelled > 30f)
+					{
+						// Thirty kilometres of land upwind: the wind is coming off a continent.
+						return 0f;
+					}
+					continue;
+				}
+				if (!water)
+				{
+					return (travelled - waterStart) * 1000f;
+				}
+			}
+			return reachedWater ? (maximum - waterStart) * 1000f : 0f;
 		}
 
 		/// <summary>

@@ -494,9 +494,15 @@ namespace FishMMO.Shared.WorldDesign
 			Debug.Log($"[World atlas] Generated '{sceneName}': {plan}, {result.ReliefMetres:0} m of relief, " +
 				$"standing at {result.BaseAltitudeMetres:0} m above sea level (its ground floor is {result.GroundAltitudeMetres:0} m).\n  "
 				+ string.Join("\n  ", result.Wrote));
-			string sea = result.HasWater
-				? $"\nThe sea is at y = {result.SeaLevelY:0} m, which is where this body's water line falls here."
-				: "\nNo sea: this scene's lowest ground is above the body's water line.";
+			/* Said in so many words when the whole cut is sea floor. A kilometre of water reads as
+			 * pale blue on the globe and can carry a name like "Shallow ...", and the terrain alone
+			 * does not say how far under the surface it is. */
+			float highestGround = result.GroundAltitudeMetres + result.ReliefMetres;
+			string sea = !result.HasWater
+				? "\nNo sea: this scene's lowest ground is above the body's water line."
+				: highestGround < 0f
+					? $"\nAll of it is sea floor, {-highestGround:0} to {-result.GroundAltitudeMetres:0} m under the surface at y = 0."
+					: "\nThe sea is at y = 0, where this body's water line falls; y is metres above sea level.";
 			EditorUtility.DisplayDialog("Cut scene",
 				$"\"{sceneName}\" is ready.\n\n{plan}\n" +
 				$"{result.ReliefMetres:0} m of relief, standing at {result.BaseAltitudeMetres:0} m above sea level.{sea}\n\n" +

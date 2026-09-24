@@ -78,6 +78,14 @@ Shader "FishMMO/Water/Underwater"
             half4 Frag(Varyings input) : SV_Target
             {
                 float rawDepth = SampleSceneDepth(input.screenUV);
+                /* OpenGL's clip space runs -1 to 1 in depth where the texture holds 0 to 1. Passed
+                 * straight through, every point came back about twice as far away as it is, and
+                 * the water took twice the fog it should: on the Linux editor, which is OpenGL
+                 * Core, the visibility was half what the material says. FishWaterShore has the
+                 * same fix. */
+                #if !UNITY_REVERSED_Z
+                    rawDepth = lerp(UNITY_NEAR_CLIP_VALUE, 1.0, rawDepth);
+                #endif
                 float3 positionWS = ComputeWorldSpacePosition(input.screenUV, rawDepth, UNITY_MATRIX_I_VP);
                 float3 toPoint = positionWS - _WorldSpaceCameraPos;
                 float sceneDistance = length(toPoint);

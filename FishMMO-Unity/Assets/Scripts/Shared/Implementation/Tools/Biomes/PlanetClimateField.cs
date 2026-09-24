@@ -192,11 +192,23 @@ namespace FishMMO.Shared.Biomes
 		/// <see cref="ClimateModel.DefaultWaterSurfaceHeight"/>.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// <b>From the metres, not from the raw field.</b> The surface field is squeezed toward sea
 		/// level by <see cref="PlanetSurface.LandHypsometry"/>, so its median land point sits a long
 		/// way up the raw range while standing barely a kilometre above the water. Normalising the
 		/// raw field instead would put ordinary coastal plain in the alpine elevation tiers, and
 		/// every scene cut from a continent would come out named for a mountain it is not on.
+		/// </para>
+		/// <para>
+		/// <b>Under water, the tiers are the ocean's own zones.</b> The sea floor used to be spread
+		/// evenly from the water line to the deepest trench, so the coastal tier — "tidal pools,
+		/// kelp beds" — reached 2.6 km down on a world with a 16 km trench, and a scene cut from a
+		/// kilometre of open water 141 km offshore was named "Shallow". Now the coastal tier is
+		/// the continental shelf, to 200 m; the next is the slope and rise, to 4 km; the lowest is
+		/// the abyssal floor and the trenches. The metres are Earth's, scaled by the body's size
+		/// exactly as <see cref="PlanetSurface.OceanDepthMetres"/> scales its floor, so the tiers
+		/// follow the body's own shelf wherever it is.
+		/// </para>
 		/// </remarks>
 		public float HeightOfAltitude(float altitudeMetres)
 		{
@@ -206,9 +218,32 @@ namespace FishMMO.Shared.Biomes
 				float top = Mathf.Max(1f, HighestMetres);
 				return Water + (1f - Water) * Mathf.Clamp01(altitudeMetres / top);
 			}
-			float floor = Mathf.Min(-1f, LowestMetres);
-			return Water * Mathf.Clamp01(1f - altitudeMetres / floor);
+
+			// The climate's own tier edges, so a climate that moves them keeps its zones.
+			float[] boundaries = Parameters.ElevationBoundaries != null && Parameters.ElevationBoundaries.Length > 2
+				? Parameters.ElevationBoundaries
+				: ClimateSettings.DefaultElevationBoundaries;
+			float shelfTier = Mathf.Min(boundaries[2], Water);
+			float abyssalTier = Mathf.Min(boundaries[1], shelfTier);
+
+			float depth = -altitudeMetres / Mathf.Max(1e-3f, ReliefMetres / PlanetSurface.EarthReliefMetres);
+			if (depth <= ShelfEdgeMetres)
+			{
+				return Mathf.Lerp(Water, shelfTier, depth / ShelfEdgeMetres);
+			}
+			if (depth <= AbyssalMetres)
+			{
+				return Mathf.Lerp(shelfTier, abyssalTier, (depth - ShelfEdgeMetres) / (AbyssalMetres - ShelfEdgeMetres));
+			}
+			float deepest = PlanetSurface.OceanKnotDepthMetres[PlanetSurface.OceanKnotDepthMetres.Length - 1];
+			return Mathf.Lerp(abyssalTier, 0f, (depth - AbyssalMetres) / (deepest - AbyssalMetres));
 		}
+
+		/// <summary>Where the continental shelf ends on Earth, in metres: the bottom of the coastal tier.</summary>
+		public const float ShelfEdgeMetres = 200f;
+
+		/// <summary>Where the bathyal zone gives way to the abyssal on Earth, in metres: the top of the lowest tier.</summary>
+		public const float AbyssalMetres = 4000f;
 
 		/// <summary>Everything about one point on the globe.</summary>
 		public PlanetSurfacePoint At(double latitudeDegrees, double longitudeDegrees)

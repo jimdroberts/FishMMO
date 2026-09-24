@@ -29,7 +29,12 @@ struct FishWaterSurface
 	float depth;
 };
 
-/// <summary>Metres of water over the ground, or open ocean where the scene has no shore field.</summary>
+/// <summary>Metres of water over the ground now, or open ocean where the scene has no shore field.</summary>
+/// <remarks>
+/// The field holds the depth at MEAN sea level; the tide is added here. Without it the waves died
+/// at the mean waterline whatever the tide was doing, which at high tide left a strip of calm,
+/// waveless water between the surf and the swash.
+/// </remarks>
 float FishWaterSeabedDepth(float2 xz)
 {
 	if (_FishWaterShoreRect.z < 1.0)
@@ -42,7 +47,22 @@ float FishWaterSeabedDepth(float2 xz)
 	{
 		return 1000.0;
 	}
-	return SAMPLE_TEXTURE2D_LOD(_FishWaterShore, sampler_FishWaterShore, uv, 0).r;
+	return SAMPLE_TEXTURE2D_LOD(_FishWaterShore, sampler_FishWaterShore, uv, 0).r + (_FishWaterLevel - _FishWaterMeanLevel);
+}
+
+/// <summary>Signed metres to the water's edge: positive at sea, negative on dry land.</summary>
+float FishWaterShoreDistance(float2 xz)
+{
+	if (_FishWaterShoreRect.z < 1.0)
+	{
+		return 1000.0;
+	}
+	float2 uv = (xz - _FishWaterShoreRect.xy) / _FishWaterShoreRect.zw;
+	if (any(uv < 0.0) || any(uv > 1.0))
+	{
+		return 1000.0;
+	}
+	return SAMPLE_TEXTURE2D_LOD(_FishWaterShore, sampler_FishWaterShore, uv, 0).g;
 }
 
 /// <summary>
@@ -126,6 +146,8 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	FishWaterSurface surface;
 	surface.positionWS = flatPositionWS;
 	surface.depth = FishWaterSeabedDepth(flatPositionWS.xz);
+	// Which way the beach lies. Zero out at sea, where there is no shore to roll toward.
+	float2 shoreward = FishWaterShoreGradient(flatPositionWS.xz);
 
 	float3 displacement = 0.0;
 	float2 slope = 0.0;
@@ -187,6 +209,81 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 		// cannot keep hurling itself forward.
 		displacement.xz *= saturate(surface.depth * 0.5);
 		slope *= gain * scale;
+	}
+
+	/* ── The shore train: waves that roll in, rear up and pitch over ──
+	 *
+	 * The FFT is a deep-water model: it knows nothing about a bottom, so on its own the sea simply
+	 * gets shallower and flatter toward a beach. Everything recognisable about surf — the long
+	 * parallel lines arriving one after another, the face that steepens to vertical, the crest
+	 * that throws forward and curls — comes from the bottom, and has to be added against it.
+	 *
+	 * Fronts are lines of constant DISTANCE from the water's edge, so they arrive parallel to the
+	 * beach whatever the wind is doing, and they travel shoreward at the shallow-water speed.
+	 *
+	 * The barrel is a forward SHEAR, and it is the same mechanism that cusps a Gerstner crest:
+	 * displace the water toward the beach in proportion to how high it stands, and the front face
+	 * leans. Past the point where that lean exceeds the face's own slope the crest overhangs the
+	 * trough — which is a plunging breaker, drawn rather than faked. It is switched on by how hard
+	 * the wave is breaking, so it happens at the break line and nowhere else.
+	 */
+	if (surface.depth < 900.0 && _ShoreWaveHeight > 0.01 && dot(shoreward, shoreward) > 0.5)
+	{
+		float wavelength = max(4.0, _ShoreWaveLength);
+		float k = 6.2831853 / wavelength;
+		float distance = FishWaterShoreDistance(flatPositionWS.xz);
+		// Travelling shoreward: a crest sits where the phase is constant, and its distance from
+		// the edge falls as time runs.
+		float phase = k * distance + sqrt(max(0.05, _FishWaterGravity) * k) * _FishWaterTime;
+
+		// A wave feels the bottom from about half a wavelength of depth.
+		float feel = saturate(1.0 - surface.depth / (wavelength * 0.5));
+		// Green's law, then the depth limit that breaks it.
+		float amplitude = _ShoreWaveHeight * (1.0 + feel * 1.6) * feel;
+		float limit = max(0.0, surface.depth) * 0.78;
+		float breaking = saturate((amplitude - limit) / max(0.05, amplitude));
+		amplitude = min(amplitude, limit);
+		// Gone by the waterline; the shore pass owns everything past it.
+		amplitude *= saturate(surface.depth * 1.2);
+
+		float s, c;
+		sincos(phase, s, c);
+		float crest = saturate(s);
+
+		displacement.y += amplitude * s;
+		/* The lean. Only on the crest, and only once the wave is breaking — and scaled by the
+		 * WAVELENGTH, not the height.
+		 *
+		 * To overhang, the crest has to be thrown past the trough in front of it, which is about a
+		 * quarter wavelength away. Scaled by height, as this first was, the throw came to 0.7 m on
+		 * a 40 m wave against the ~10 m needed: the face steepened slightly and never went past
+		 * vertical, so the surf rolled but did not curl. Cubing the crest keeps the throw on the
+		 * very top of the wave, which is the part that pitches — the base stays where it is and
+		 * the lip goes over it. */
+		/* Whether it plunges at all is decided by the BEACH, not by a slider.
+		 *
+		 * The Iribarren number, ξ = tan β / sqrt(H/L), is what separates breaker types in the
+		 * real surf zone: below about 0.5 the wave SPILLS, its crest crumbling down its own face;
+		 * between 0.5 and 3.3 it PLUNGES, throwing its lip out into a barrel. A small wave on a
+		 * gentle beach therefore spills however the throw is set, and forcing a curl onto it is
+		 * the look of a wave machine rather than a coast. Measured on the test beach — a 1:33
+		 * slope under 0.65 m of sea — ξ is about 0.17, which is exactly why it spills. Put the
+		 * same sea against a 1:10 shelf and ξ rises past 0.5, and the barrels appear by
+		 * themselves.
+		 */
+		const float Span = 10.0;
+		float beachSlope = abs(FishWaterSeabedDepth(flatPositionWS.xz - shoreward * Span)
+			- FishWaterSeabedDepth(flatPositionWS.xz + shoreward * Span)) / (2.0 * Span);
+		float waveHeight = max(0.05, amplitude * 2.0);
+		float iribarren = beachSlope / sqrt(max(1e-4, waveHeight / wavelength));
+		float plunging = smoothstep(0.35, 0.9, iribarren);
+
+		float throwMetres = _ShoreWavePitch * plunging * breaking * crest * crest * crest * wavelength * 0.11;
+		displacement.xz += shoreward * throwMetres;
+		// Gradient of the added height along the shoreward direction.
+		slope += shoreward * (-k * amplitude * c);
+
+		surface.surf = max(surface.surf, breaking * crest * crest * _ShoreWaveFoam);
 	}
 
 	surface.positionWS += displacement;

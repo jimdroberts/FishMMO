@@ -51,11 +51,21 @@ float _FishWaterShoreTime;
 /// drains for several — a sine looks like breathing, not like water. The skew is what makes the
 /// difference between a sheet of water being thrown up a beach and a tide going in and out.
 /// </para>
+/// <para>
+/// <b>No two waves run up the same distance.</b> Swell arrives in groups, so the run-up swings
+/// between waves — some barely wet the sand the last one left, some go well past it. Every wave
+/// reaching exactly the same line drew the swash as a machine, and left its foam in one ruled
+/// stripe; varied, each wave strands its foam at its own height and the beach carries several.
+/// </para>
 /// </remarks>
 float FishWaterSwashEdge(float alongShorePhase)
 {
 	float period = max(0.5, _FishWaterSwashPeriod);
-	float t = frac(_FishWaterShoreTime / period + alongShorePhase);
+	float cycles = _FishWaterShoreTime / period + alongShorePhase;
+	float t = frac(cycles);
+	// This wave's share of the full reach: two thirds to four thirds, fixed for the whole wave.
+	float wave = floor(cycles);
+	float reach = 0.65 + 0.7 * frac(sin(wave * 12.9898 + 78.233) * 43758.5453);
 
 	// Rush up over the first part of the cycle, drain over the rest.
 	float rush = saturate(_FishWaterSwashSkew) * 0.5 + 0.12;
@@ -63,7 +73,7 @@ float FishWaterSwashEdge(float alongShorePhase)
 	float drain = 1.0 - smoothstep(rush, 1.0, t);
 	float height = min(climb, drain);
 	// Squared on the way out: water drains fastest when the sheet is thickest.
-	return height * height * _FishWaterSwashReach;
+	return height * height * _FishWaterSwashReach * reach;
 }
 
 /// <summary>
@@ -114,6 +124,21 @@ void FishWaterSwash(float edgeDistance, out float sheet, out float lip, out floa
 	float lipWidth = max(0.5, reach * 0.09);
 	lip = saturate(1.0 - abs(behind) / lipWidth);
 	lip *= step(0.0, front - 0.05);
+}
+
+/// <summary>
+/// How much foam the swash lays at a point right now, for the foam memory to keep.
+/// </summary>
+/// <remarks>
+/// Foam is made by the breaking bore and carried up at its lip, and what stays behind is what the
+/// lip leaves where it stalls — the lacy line at the top of each run-up — so the lip lays foam in
+/// the upper part of its run and hardly at all low down, where the next wave washes it off anyway.
+/// </remarks>
+float FishWaterSwashFoamDeposit(float edgeDistance)
+{
+	float sheet, lip, highWater;
+	FishWaterSwash(edgeDistance, sheet, lip, highWater);
+	return lip * smoothstep(0.35, 0.9, highWater);
 }
 
 #endif

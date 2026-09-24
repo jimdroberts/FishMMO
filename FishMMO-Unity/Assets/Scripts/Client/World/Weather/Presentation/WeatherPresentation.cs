@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -21,6 +22,7 @@ namespace FishMMO.Client
 		public const float SmoothingSeconds = 0.6f;
 
 		private static WeatherPresentation instance;
+		private static readonly int AtlasId = Shader.PropertyToID("_FishWeatherAtlas");
 
 		/// <summary>An explicit profile (the test scene); otherwise the loaded one.</summary>
 		public WeatherRenderProfile Profile;
@@ -186,7 +188,10 @@ namespace FishMMO.Client
 				return;
 			}
 			float dt = deltaTime;
-			time += dt;
+			// What is falling moves on the world's motion, so it stops when the world's time does.
+			// The weather itself still eases to its target on the wall clock: held still, a new
+			// preset should still appear, just not move.
+			time += WorldMotion.Scale(dt);
 			shown = dt > 0f ? WeatherFrame.Lerp(shown, target, 1f - Mathf.Exp(-dt / SmoothingSeconds)) : shown;
 
 			Camera camera = TargetCamera != null ? TargetCamera : Camera.main;
@@ -235,6 +240,10 @@ namespace FishMMO.Client
 
 			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash,
 				hasContext ? context.Substance : null);
+			/* The screen overlay draws the same sprites that fall past the camera, so what lands on
+			 * the view is what is falling: a snowflake, not a disc. Transparent when there is no
+			 * atlas, so a missing texture shows nothing rather than a square of grey. */
+			Shader.SetGlobalTexture(AtlasId, profile.PrecipitationAtlas != null ? profile.PrecipitationAtlas : Texture2D.blackTexture);
 			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
 			WeatherFogPresenter.Apply(shown, profile);
 			ApplyWind(shown);
@@ -279,9 +288,12 @@ namespace FishMMO.Client
 			float speed = frame[WeatherChannel.WindSpeed];
 			float gust = frame[WeatherChannel.WindGust];
 			wind.transform.rotation = Quaternion.Euler(0f, frame[WeatherChannel.WindHeading], 0f);
-			wind.windMain = speed * 2f;
-			wind.windTurbulence = gust * 1.5f;
-			wind.windPulseMagnitude = gust;
+			// Scaled by the world's motion: Unity animates the trees on its own clock, and a wind of
+			// nothing is the nearest thing to holding them still.
+			float motion = WorldMotion.Rate;
+			wind.windMain = speed * 2f * motion;
+			wind.windTurbulence = gust * 1.5f * motion;
+			wind.windPulseMagnitude = gust * motion;
 			wind.windPulseFrequency = 0.1f + gust * 0.4f;
 		}
 	}

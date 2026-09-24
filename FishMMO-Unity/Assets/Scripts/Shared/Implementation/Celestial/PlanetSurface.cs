@@ -189,6 +189,12 @@ namespace FishMMO.Shared.Celestial
 			public float Lowest;
 			/// <summary>The highest normalised height found anywhere.</summary>
 			public float Highest;
+			/// <summary>
+			/// The normalised height at each of <see cref="OceanAreaShallower"/>'s fractions of
+			/// this world's ocean, shallowest first: where its shelf ends, where its abyssal plain
+			/// begins. Null on a dry world, which has no sea floor.
+			/// </summary>
+			public float[] OceanFloor;
 
 			/// <summary>The part of the 0..1 range this world's ground actually occupies.</summary>
 			public float Range => Mathf.Max(1e-4f, Highest - Lowest);
@@ -246,9 +252,24 @@ namespace FishMMO.Shared.Celestial
 			 * above its own datum, so a Mars-like body read as 38 km of unbroken highland. Mars
 			 * itself quotes elevations against its mean radius for exactly this reason, which is
 			 * what the median is. */
-			profile.SeaLevel = water <= 0f ? heights[SeaLevelSamples / 2]
-				: water >= 1f ? profile.Highest
-				: heights[Mathf.Clamp(Mathf.RoundToInt(water * (SeaLevelSamples - 1)), 0, SeaLevelSamples - 1)];
+			int seaIndex = water >= 1f ? SeaLevelSamples - 1
+				: Mathf.Clamp(Mathf.RoundToInt(water * (SeaLevelSamples - 1)), 0, SeaLevelSamples - 1);
+			profile.SeaLevel = water <= 0f ? heights[SeaLevelSamples / 2] : heights[seaIndex];
+
+			/* The same sorted sweep says how this world's own ocean floor is distributed, which is
+			 * what lets it be given Earth's: the height below which each fraction of the ocean
+			 * lies. Everything from the sea's index down is ocean, shallowest first. */
+			if (water > 0f && seaIndex > 0)
+			{
+				profile.OceanFloor = new float[OceanAreaShallower.Length];
+				for (int i = 0; i < OceanAreaShallower.Length; i++)
+				{
+					float at = seaIndex * (1f - OceanAreaShallower[i]);
+					int below = Mathf.Clamp(Mathf.FloorToInt(at), 0, seaIndex);
+					int above = Mathf.Min(below + 1, seaIndex);
+					profile.OceanFloor[i] = Mathf.Lerp(heights[below], heights[above], at - below);
+				}
+			}
 
 			profiles[key] = profile;
 			return profile;
@@ -287,7 +308,11 @@ namespace FishMMO.Shared.Celestial
 		// ── Relief in metres ──────────────────────────────────────────
 
 		/// <summary>Total relief of an Earth-sized world, trench floor to summit, in metres.</summary>
-		/// <remarks>Earth runs about 11 km below sea level to 8.8 km above it.</remarks>
+		/// <remarks>
+		/// Earth runs about 11 km below sea level to 8.8 km above it. A body's sea floor is Earth's
+		/// scaled by its own relief against this (<see cref="OceanDepthMetres"/>), so a smaller
+		/// world has a proportionally shallower shelf and abyss.
+		/// </remarks>
 		public const float EarthReliefMetres = 20000f;
 
 		/// <summary>The radius that relief is quoted for, in kilometres.</summary>
@@ -367,8 +392,12 @@ namespace FishMMO.Shared.Celestial
 
 			if (above <= 0f)
 			{
-				// Ocean floor, straight through: trenches really are spread across their range.
-				return above / profile.Range * relief;
+				if (profile.OceanFloor == null)
+				{
+					// A dry world: below its datum is low ground, not sea floor, and has no shelf.
+					return above / profile.Range * relief;
+				}
+				return -OceanDepthMetres(height, profile.OceanFloor) * (relief / EarthReliefMetres);
 			}
 
 			/* Land is squeezed down toward sea level, and that is not a fudge.
@@ -413,6 +442,112 @@ namespace FishMMO.Shared.Celestial
 		/// </para>
 		/// </remarks>
 		public const float LandHypsometry = 4f;
+
+		/// <summary>
+		/// Earth's ocean floor: the fraction of the ocean shallower than each of
+		/// <see cref="OceanKnotDepthMetres"/>, measured.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The sea floor was a straight line, and it put a third of every ocean in a trench.</b>
+		/// Below sea level the field used to map linearly onto depth, on the theory that trenches
+		/// really are spread across their range. They are not. Earth's ocean floor is its own
+		/// second hypsometric mode: a continental shelf a couple of hundred metres deep, a slope
+		/// that falls kilometres in a narrow band, and an abyssal plain that holds three quarters
+		/// of all the ocean between three and six kilometres down, with trenches a sliver below.
+		/// Measured over 200,000 points of a 75%-ocean world, the straight line put 2.2% of its
+		/// ocean on shelves (Earth: 7.1%), 26% on the abyssal plain (74%) and <b>33% deeper than
+		/// seven kilometres (0.1%)</b>. Its mean depth was 5351 m against Earth's 3686.
+		/// </para>
+		/// <para>
+		/// <b>So a world's ocean is given Earth's, by area.</b> Each point's depth comes from how
+		/// much of its own ocean is shallower than it, read off Earth's curve. That fixes the
+		/// shares exactly for any seed and any ocean fraction, which a curve fitted to one seed's
+		/// field cannot; and because depth still rises with the field's height, every coastline,
+		/// basin and ridge stays exactly where it was — only how deep each lies changes. The shelf
+		/// comes out where it belongs, as the band of shallows along every coast.
+		/// </para>
+		/// <para>
+		/// Digitised from NOAA NCEI's hypsographic curve of ETOPO1 (Eakins &amp; Sharman, 2012):
+		/// the coastal curve for the first 100 m and the global one below it, ocean taken as the
+		/// 70.95% of the surface below sea level. The table's own mean depth is 3680 m, against
+		/// 3686 m published with the curve. The hadal tail beyond 6.4 km is too thin a sliver for
+		/// the figure to resolve and follows Jamieson (2010): the hadal zone is 1–2% of the ocean
+		/// floor, nearly all of it above seven kilometres.
+		/// </para>
+		/// </remarks>
+		public static readonly float[] OceanAreaShallower =
+		{
+			0f, 0.0376f, 0.0555f, 0.0709f, 0.0980f, 0.1179f, 0.1389f, 0.1629f, 0.1961f, 0.2503f, 0.3433f,
+			0.4767f, 0.6366f, 0.7928f, 0.9299f, 0.9896f, 0.9970f, 0.9993f, 0.99985f, 0.99997f, 1f,
+		};
+
+		/// <summary>The depths, in metres on Earth, that <see cref="OceanAreaShallower"/> pairs with.</summary>
+		public static readonly float[] OceanKnotDepthMetres =
+		{
+			0f, 50f, 100f, 200f, 500f, 1000f, 1500f, 2000f, 2500f, 3000f, 3500f,
+			4000f, 4500f, 5000f, 5500f, 6000f, 7000f, 8000f, 9000f, 10000f, 10911f,
+		};
+
+		/// <summary>Where the hadal zone starts in the table: six kilometres, the floor of the abyssal plain.</summary>
+		private const int HadalKnot = 15;
+
+		/// <summary>
+		/// How deep a sea-floor height lies on Earth's curve, in metres, before the body's own
+		/// size scales it.
+		/// </summary>
+		/// <param name="height">A normalised height at or below the world's sea level.</param>
+		/// <param name="floor">The world's <see cref="PlanetProfile.OceanFloor"/>.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>Ground that is flat takes the shallowest depth it reaches.</b> The field is clamped
+		/// at 0, and on some worlds a percent of the ocean lies exactly on that clamp — measured,
+		/// 1.0% of Naraeon's — so the deepest few knots all land on the same height. Taking the
+		/// deepest of them laid that whole percent flat at trench depth, a plate the size of a
+		/// sea at the bottom of the world; taking the shallowest makes it what flat ground down
+		/// there is, an abyssal plain.
+		/// </para>
+		/// <para>
+		/// Below the deepest point the sweep found, the hadal slope is carried on rather than the
+		/// depth held: about one part in eight thousand of the surface is deeper than any of the
+		/// sweep's samples, and a floor that stopped there would be a flat plate at the bottom of
+		/// every deepest trench.
+		/// </para>
+		/// </remarks>
+		public static float OceanDepthMetres(float height, float[] floor)
+		{
+			int last = floor.Length - 1;
+			if (height >= floor[0])
+			{
+				return 0f;
+			}
+			if (height < floor[last])
+			{
+				float span = floor[HadalKnot] - floor[last];
+				float perHeight = span > 1e-7f ? (OceanKnotDepthMetres[last] - OceanKnotDepthMetres[HadalKnot]) / span : 0f;
+				return OceanKnotDepthMetres[last] + (floor[last] - height) * perHeight;
+			}
+
+			// The knots fall with depth. Find the first at or below the height — the shallowest,
+			// when several share it — and come down to it from the one before.
+			int lo = 0;
+			int hi = last;
+			while (hi - lo > 1)
+			{
+				int mid = (lo + hi) >> 1;
+				if (floor[mid] > height)
+				{
+					lo = mid;
+				}
+				else
+				{
+					hi = mid;
+				}
+			}
+			float gap = floor[lo] - floor[hi];
+			float t = gap > 1e-9f ? (floor[lo] - height) / gap : 1f;
+			return Mathf.Lerp(OceanKnotDepthMetres[lo], OceanKnotDepthMetres[hi], t);
+		}
 
 		/// <summary>
 		/// How much of the land curve stays linear, which is what keeps a slope at the shore.

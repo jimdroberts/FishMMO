@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using FishMMO.Shared.Celestial;
 
 namespace FishMMO.Water
 {
@@ -32,6 +33,7 @@ namespace FishMMO.Water
 		private static readonly int MotionId = Shader.PropertyToID("_FishWaterMotion");
 		private static readonly int CountId = Shader.PropertyToID("_FishWaterWaveCount");
 		private static readonly int LevelId = Shader.PropertyToID("_FishWaterLevel");
+		private static readonly int MeanLevelId = Shader.PropertyToID("_FishWaterMeanLevel");
 		private static readonly int TimeId = Shader.PropertyToID("_FishWaterTime");
 		private static readonly int CloudShadowId = Shader.PropertyToID("_FishWaterCloudShadow");
 		private static readonly int WindId = Shader.PropertyToID("_FishWaterWind");
@@ -82,6 +84,14 @@ namespace FishMMO.Water
 		[Header("Spectrum")]
 		[Tooltip("The FFT compute shader. Without it the sea is flat.")]
 		public ComputeShader Spectrum;
+		[Tooltip("The same FFT as render passes, for machines with no compute shaders (WebGL2, GLES3). Referenced here so a build includes it.")]
+		public Shader SpectrumPasses;
+
+		/// <summary>The render-pass FFT's name, for finding it when the reference was never set.</summary>
+		public const string SpectrumPassesShader = "Hidden/FishMMO/Water/FFT";
+		[Tooltip("Development: run the render-pass FFT even on a machine with compute, to see what WebGL2 and GLES3 draw.")]
+		public bool ForceRenderPasses;
+		private bool builtWithPasses;
 		[Tooltip("How sharp the crests are. Above about 1.5 the surface folds through itself.")]
 		[Range(0f, 2f)] public float FFTChoppiness = 1.2f;
 		[Tooltip("Seconds before the wave animation repeats exactly. Also what the baked fallback loops on.")]
@@ -93,9 +103,18 @@ namespace FishMMO.Water
 		[Tooltip("How far the sea reaches, in metres. Beyond the camera's far clip is wasted.")]
 		public float OuterRadius = 12000f;
 		[Tooltip("Rings of vertices from the centre out.")]
-		[Range(8, 256)] public int Rings = 96;
-		[Tooltip("Vertices around each ring. Low values show as a polygonal horizon.")]
-		[Range(8, 512)] public int Segments = 160;
+		[Range(8, 1024)] public int Rings = 300;
+		[Tooltip("Vertices around each ring. Low values show as a polygonal horizon, and coarse arcs cannot curl a breaking crest.")]
+		[Range(8, 2048)] public int Segments = 720;
+		/// <remarks>
+		/// Surf is watched from twenty to a hundred metres off, and a breaking crest needs vertices
+		/// well under a metre apart to curl at all. Geometric rings put two or three metres between
+		/// them at that range; this zone is spaced evenly instead.
+		/// </remarks>
+		[Tooltip("Radius around the camera with evenly spaced rings, dense enough for breaking waves to curl.")]
+		[Range(0f, 600f)] public float NearRadius = 130f;
+		[Tooltip("Share of the rings spent inside the near radius.")]
+		[Range(0.1f, 0.9f)] public float NearRingFraction = 0.65f;
 
 		[Header("Quality")]
 		[Tooltip("Refract what is behind the water. Needs the URP asset's Opaque Texture; ignored when it is off.")]
@@ -112,6 +131,26 @@ namespace FishMMO.Water
 		public Color UnderwaterTint = new Color(0.05f, 0.28f, 0.36f);
 		[Tooltip("Roughly how far a diver can see, in metres.")]
 		[Range(1f, 200f)] public float UnderwaterVisibility = 22f;
+		[Tooltip("The underwater pass. Referenced so a build includes it; found by name otherwise.")]
+		public Shader UnderwaterShader;
+
+		[Header("Caustics")]
+		[Tooltip("Sunlight focused onto whatever is under the water by the waves above it.")]
+		public bool Caustics = true;
+		[Tooltip("How strongly the waves' focusing brightens and darkens the light under them.")]
+		[Range(0f, 2f)] public float CausticsStrength = 1f;
+		[Tooltip("How deep the caustics carry, in metres: their contrast falls to a third by this depth.")]
+		[Range(1f, 60f)] public float CausticsClarity = 12f;
+		[Tooltip("How far from the camera they are gone by, in metres; the pattern is finer than a pixel past that.")]
+		[Range(10f, 600f)] public float CausticsFadeDistance = 120f;
+		[Tooltip("The caustics pass. Referenced so a build includes it; found by name otherwise.")]
+		public Shader CausticsShader;
+
+		/// <summary>The caustics pass's name, for finding it when the reference was never set.</summary>
+		public const string CausticsShaderName = "FishMMO/Water/Caustics";
+
+		/// <summary>The underwater pass's name, for finding it when the reference was never set.</summary>
+		public const string UnderwaterShaderName = "FishMMO/Water/Underwater";
 
 		private MeshFilter meshFilter;
 		private MeshRenderer meshRenderer;
@@ -123,13 +162,15 @@ namespace FishMMO.Water
 		private double clock;
 		private double lastRealtime = -1.0;
 		private int builtRings, builtSegments;
-		private float builtInner, builtOuter;
+		private float builtInner, builtOuter, builtNear = -1f;
 		private bool reported;
 		private WaterFFT fft;
 		private float builtWind = -1f;
 		private float builtHeading = -1f;
 		private float builtGravity = -1f;
 		private float builtChoppiness = -1f;
+		private GameObject causticsHost;
+		private Material causticsMaterial;
 		private GameObject underwaterHost;
 		private MeshRenderer underwaterRenderer;
 		private Material underwaterMaterial;
@@ -170,17 +211,241 @@ namespace FishMMO.Water
 		[HideInInspector] public float CloudShadow = 1f;
 
 		/// <summary>
-		/// The sea's surface height above or below a world position, in metres.
+		/// The sea's surface height at a world position, in metres — the surface as it is drawn.
 		/// </summary>
 		/// <remarks>
-		/// The same wave sum the shader draws, so a boat sits in the trough the player can see
-		/// rather than a centimetre-accurate average of one. Gerstner waves move water sideways as
-		/// well as up, so this solves for the piece of water that ENDS UP here — see
-		/// <see cref="WaterWaves.SampleHeight"/>.
+		/// <para>
+		/// <b>The sea the player sees, not a model of it.</b> This used to sum the six Gerstner waves
+		/// the sea was drawn with before the FFT replaced them, so anything floating bobbed on waves
+		/// that were no longer there. It now evaluates the FFT's own strongest components on the CPU
+		/// (<see cref="WaterSpectrum"/>) and then does exactly what the vertex shader does with
+		/// them: the distance fade, the shoaling and depth limit, and the surf train rolling onto
+		/// the beach, from the same shore field and the same tide.
+		/// </para>
+		/// <para>
+		/// <b>Solved, not sampled.</b> The sea moves water sideways as well as up, so the water
+		/// over a point came from somewhere else: the point it started from is found by stepping
+		/// back along the throw, and its height is the answer.
+		/// </para>
 		/// </remarks>
 		public float HeightAt(Vector3 worldPosition)
 		{
-			return WaterWaves.SampleHeight(waves, liveWaves, worldPosition, SeaLevel, (float)clock);
+			WaterSpectrum spectrum = SpectrumForQueries();
+			spectrum?.Evaluate(clock);
+			SurfSettings surf = ReadSurf();
+
+			// The vertex shader flattens the sea with distance from the camera; so does this.
+			float fade = 1f;
+			Camera camera = Camera.main;
+			if (camera != null)
+			{
+				Vector3 flatPoint = new Vector3(worldPosition.x, SeaLevel, worldPosition.z);
+				fade = 1f - Smoothstep(surf.FadeStart, Mathf.Max(surf.FadeEnd, surf.FadeStart + 1f),
+					Vector3.Distance(flatPoint, camera.transform.position));
+			}
+
+			var target = new Vector2(worldPosition.x, worldPosition.z);
+			Vector2 flat = target;
+			float height = 0f;
+			for (int i = 0; i < 3; i++)
+			{
+				Displace(spectrum, flat, fade, surf, out height, out Vector2 moved);
+				flat = target - moved;
+			}
+			return SeaLevel + height;
+		}
+
+		private struct SurfSettings
+		{
+			public float Height, Length, Break, Pitch, FadeStart, FadeEnd;
+		}
+
+		private static readonly int SurfHeightId = Shader.PropertyToID("_ShoreWaveHeight");
+		private static readonly int SurfLengthId = Shader.PropertyToID("_ShoreWaveLength");
+		private static readonly int ShoreBreakId = Shader.PropertyToID("_ShoreBreak");
+		private static readonly int SurfPitchId = Shader.PropertyToID("_ShoreWavePitch");
+		private static readonly int FadeStartId = Shader.PropertyToID("_WaveFadeStart");
+		private static readonly int FadeEndId = Shader.PropertyToID("_WaveFadeEnd");
+
+		/// <summary>WebGL has no threads; everywhere else a rebuild runs on the thread pool.</summary>
+		private static bool CanBuildOffThread => Application.platform != RuntimePlatform.WebGLPlayer;
+
+		private WaterSpectrum querySpectrum;
+		private System.Threading.Tasks.Task<WaterSpectrum> queryBuild;
+		private MaterialPropertyBlock queryBlock;
+		private WaterShoreField shoreField;
+
+		/// <summary>
+		/// The spectrum height queries run on, rebuilt when the sea state moves enough to matter.
+		/// </summary>
+		/// <remarks>
+		/// A build is 20 to 30 ms, and the sea state eases every frame while the weather changes, so
+		/// it is rebuilt only past two percent of wind or a degree of heading, and off the main
+		/// thread wherever there are threads to use — the previous one answers in the meantime. The
+		/// very first build answers with a flat sea until it lands.
+		/// </remarks>
+		private WaterSpectrum SpectrumForQueries()
+		{
+			// Nothing is drawn by the transform, so there is nothing for a height to match.
+			if (fft == null)
+			{
+				return null;
+			}
+			if (queryBuild != null && queryBuild.IsCompleted)
+			{
+				if (queryBuild.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
+				{
+					querySpectrum = queryBuild.Result;
+				}
+				queryBuild = null;
+			}
+			bool stale = querySpectrum == null
+				|| Mathf.Abs(querySpectrum.Wind - WindSpeed) > Mathf.Max(0.05f, WindSpeed * 0.02f)
+				|| Mathf.Abs(Mathf.DeltaAngle(querySpectrum.HeadingDegrees, WindDirectionDegrees)) > 1f
+				|| !Mathf.Approximately(querySpectrum.Gravity, Gravity)
+				|| !Mathf.Approximately(querySpectrum.Choppiness, FFTChoppiness);
+			if (stale && queryBuild == null)
+			{
+				float wind = WindSpeed;
+				float heading = WindDirectionDegrees;
+				float gravity = Gravity;
+				float amplitude = fft.Amplitude;
+				float choppiness = FFTChoppiness;
+				float loop = LoopPeriod;
+				float[] patches = (float[])fft.PatchMetres.Clone();
+				/* Off the main thread wherever there are threads — the first build as well: a query
+				 * before it lands sees a flat sea for a frame or two, which is better than every
+				 * scene with a camera near the water stalling for 25 ms on its first frame. */
+				if (!CanBuildOffThread)
+				{
+					querySpectrum = WaterSpectrum.Build(wind, heading, gravity, amplitude, choppiness, loop, 1u, patches);
+				}
+				else
+				{
+					queryBuild = System.Threading.Tasks.Task.Run(() =>
+						WaterSpectrum.Build(wind, heading, gravity, amplitude, choppiness, loop, 1u, patches));
+				}
+			}
+			return querySpectrum;
+		}
+
+		/// <summary>The surf and fade settings the shader is drawing with: the renderer's block first, then the material.</summary>
+		private SurfSettings ReadSurf()
+		{
+			if (meshRenderer == null)
+			{
+				meshRenderer = GetComponent<MeshRenderer>();
+			}
+			queryBlock ??= new MaterialPropertyBlock();
+			if (meshRenderer != null)
+			{
+				meshRenderer.GetPropertyBlock(queryBlock);
+			}
+			return new SurfSettings
+			{
+				Height = Setting(SurfHeightId, 1.1f),
+				Length = Setting(SurfLengthId, 40f),
+				Break = Setting(ShoreBreakId, 0.62f),
+				Pitch = Setting(SurfPitchId, 0.7f),
+				FadeStart = Setting(FadeStartId, 900f),
+				FadeEnd = Setting(FadeEndId, 4000f),
+			};
+		}
+
+		private float Setting(int id, float fallback)
+		{
+			if (queryBlock != null && queryBlock.HasFloat(id))
+			{
+				return queryBlock.GetFloat(id);
+			}
+			return Material != null && Material.HasProperty(id) ? Material.GetFloat(id) : fallback;
+		}
+
+		/// <summary>
+		/// Where the water that starts at a flat point ends up: its height above still water, and how
+		/// far it is thrown sideways. <c>FishWaterDisplace</c> in FishWaterWaves.hlsl, line for line.
+		/// </summary>
+		private void Displace(WaterSpectrum spectrum, Vector2 flat, float fade, in SurfSettings surf,
+			out float height, out Vector2 moved)
+		{
+			float h = 0f, dx = 0f, dz = 0f;
+			if (spectrum != null)
+			{
+				spectrum.Sample(flat.x, flat.y, out h, out dx, out dz);
+				h *= fade;
+				dx *= fade;
+				dz *= fade;
+			}
+
+			if (shoreField == null)
+			{
+				shoreField = GetComponent<WaterShoreField>();
+			}
+			if (shoreField != null && shoreField.TrySample(flat, out float meanDepth, out float edge))
+			{
+				float depth = meanDepth + TideMetres;
+
+				// Shoaling, then the depth limit that breaks it.
+				float reference = Mathf.Max(1f, (fft != null ? fft.PatchMetres[1] : 118f) * 0.5f);
+				float gain = Mathf.Clamp(Mathf.Pow(reference / Mathf.Max(0.35f, depth), 0.25f), 1f, 2f);
+				float grown = Mathf.Abs(h) * gain;
+				float allowed = Mathf.Max(0f, depth) * surf.Break;
+				float scale = grown > 1e-4f ? Mathf.Min(grown, allowed) / grown : 1f;
+				h *= gain * scale;
+				float lateral = Mathf.Clamp01(depth * 0.5f);
+				dx *= lateral;
+				dz *= lateral;
+
+				// The surf train, rolling in parallel to the beach.
+				Vector2 shoreward = ShoreGradient(flat);
+				if (surf.Height > 0.01f && shoreward.sqrMagnitude > 0.5f)
+				{
+					float wavelength = Mathf.Max(4f, surf.Length);
+					float k = 2f * Mathf.PI / wavelength;
+					float phase = k * edge + Mathf.Sqrt(Mathf.Max(0.05f, Gravity) * k) * (float)clock;
+					float feel = Mathf.Clamp01(1f - depth / (wavelength * 0.5f));
+					float amplitude = surf.Height * (1f + feel * 1.6f) * feel;
+					float limit = Mathf.Max(0f, depth) * 0.78f;
+					float breaking = Mathf.Clamp01((amplitude - limit) / Mathf.Max(0.05f, amplitude));
+					amplitude = Mathf.Min(amplitude, limit) * Mathf.Clamp01(depth * 1.2f);
+					float sin = Mathf.Sin(phase);
+					float crest = Mathf.Clamp01(sin);
+					h += amplitude * sin;
+
+					const float Span = 10f;
+					float beachSlope = Mathf.Abs(Depth(flat - shoreward * Span) - Depth(flat + shoreward * Span)) / (2f * Span);
+					float iribarren = beachSlope / Mathf.Sqrt(Mathf.Max(1e-4f, Mathf.Max(0.05f, amplitude * 2f) / wavelength));
+					float plunging = Smoothstep(0.35f, 0.9f, iribarren);
+					float throwMetres = surf.Pitch * plunging * breaking * crest * crest * crest * wavelength * 0.11f;
+					dx += shoreward.x * throwMetres;
+					dz += shoreward.y * throwMetres;
+				}
+			}
+			height = h;
+			moved = new Vector2(dx, dz);
+		}
+
+		/// <summary>Metres of water over the ground now, tide in; open ocean off the field.</summary>
+		private float Depth(Vector2 xz)
+		{
+			return shoreField != null && shoreField.TrySample(xz, out float depth, out _) ? depth + TideMetres : 1000f;
+		}
+
+		/// <summary>Which way the ground falls toward the shore, as the shader measures it: over 14 m, not a texel.</summary>
+		private Vector2 ShoreGradient(Vector2 xz)
+		{
+			const float Step = 14f;
+			float east = Depth(xz + new Vector2(Step, 0f)) - Depth(xz - new Vector2(Step, 0f));
+			float north = Depth(xz + new Vector2(0f, Step)) - Depth(xz - new Vector2(0f, Step));
+			var gradient = new Vector2(-east, -north);
+			return gradient.sqrMagnitude > 1e-8f ? gradient.normalized : Vector2.zero;
+		}
+
+		/// <summary>HLSL's smoothstep. Not Mathf.SmoothStep, which interpolates between its first two arguments.</summary>
+		private static float Smoothstep(float edge0, float edge1, float x)
+		{
+			float t = Mathf.Clamp01((x - edge0) / (edge1 - edge0));
+			return t * t * (3f - 2f * t);
 		}
 
 		/// <summary>True when a world position is under the sea's surface.</summary>
@@ -207,6 +472,10 @@ namespace FishMMO.Water
 			underwaterHost = null;
 			underwaterMesh = null;
 			underwaterMaterial = null;
+			Discard(causticsHost);
+			Discard(causticsMaterial);
+			causticsHost = null;
+			causticsMaterial = null;
 			if (mesh != null)
 			{
 				// HideAndDontSave, so nothing else will ever clean it up.
@@ -262,16 +531,25 @@ namespace FishMMO.Water
 				tallest += waves[i].Amplitude;
 			}
 
-			if (mesh == null || builtRings != Rings || builtSegments != Segments
-				|| !Mathf.Approximately(builtInner, InnerRadius) || !Mathf.Approximately(builtOuter, OuterRadius))
+			bool shapeChanged = builtRings != Rings || builtSegments != Segments
+				|| !Mathf.Approximately(builtNear, NearRadius)
+				|| !Mathf.Approximately(builtInner, InnerRadius) || !Mathf.Approximately(builtOuter, OuterRadius);
+			if (mesh == null || shapeChanged)
 			{
-				if (mesh != null)
+				/* Refilled in place, never destroyed and recreated. This runs from OnValidate, and
+				 * Unity refuses DestroyImmediate there — measured, the old version logged that
+				 * refusal on every inspector edit and every domain reload. */
+				if (mesh == null)
 				{
-					DestroyImmediate(mesh);
+					mesh = WaterMesh.Build(InnerRadius, OuterRadius, Rings, Segments, tallest, NearRadius, NearRingFraction);
 				}
-				mesh = WaterMesh.Build(InnerRadius, OuterRadius, Rings, Segments, tallest);
+				else
+				{
+					WaterMesh.Fill(mesh, InnerRadius, OuterRadius, Rings, Segments, tallest, NearRadius, NearRingFraction);
+				}
 				builtRings = Rings;
 				builtSegments = Segments;
+				builtNear = NearRadius;
 				builtInner = InnerRadius;
 				builtOuter = OuterRadius;
 			}
@@ -284,7 +562,13 @@ namespace FishMMO.Water
 			{
 				meshRenderer = GetComponent<MeshRenderer>();
 			}
-			meshFilter.sharedMesh = mesh;
+			/* Only when it is actually a different mesh. Assigning sharedMesh makes the filter
+			 * message its renderer, and Unity logs "SendMessage cannot be called during OnValidate"
+			 * for that — so re-assigning the same mesh on every validate is noise at best. */
+			if (meshFilter.sharedMesh != mesh)
+			{
+				meshFilter.sharedMesh = mesh;
+			}
 			if (Material != null && meshRenderer.sharedMaterial != Material)
 			{
 				meshRenderer.sharedMaterial = Material;
@@ -309,21 +593,36 @@ namespace FishMMO.Water
 		/// </remarks>
 		private void EnsureSpectrum()
 		{
-			if (fft != null || Spectrum == null)
+			// Rebuilt when the development toggle is flipped, so the two paths can be compared live.
+			if (fft != null && builtWithPasses != ForceRenderPasses)
+			{
+				fft.Dispose();
+				fft = null;
+			}
+			if (fft != null)
 			{
 				return;
 			}
-			if (!WaterFFT.Supported)
+			if (SpectrumPasses == null)
+			{
+				SpectrumPasses = Shader.Find(SpectrumPassesShader);
+			}
+			if (Spectrum == null && SpectrumPasses == null)
+			{
+				return;
+			}
+			fft = WaterFFT.Create(Spectrum, SpectrumPasses, ForceRenderPasses);
+			builtWithPasses = ForceRenderPasses;
+			if (fft == null)
 			{
 				if (!reportedSpectrum)
 				{
 					reportedSpectrum = true;
-					Debug.LogWarning("[Water] This device has no compute shader support, so the FFT ocean " +
-						"cannot run. A baked wave set is needed here.", this);
+					Debug.LogWarning("[Water] This device can run the ocean's FFT neither as compute nor as render passes " +
+						"(it needs two render targets and a float format it can render to), so the sea is flat.", this);
 				}
 				return;
 			}
-			fft = new WaterFFT(Spectrum);
 			builtWind = -1f;
 		}
 
@@ -336,8 +635,9 @@ namespace FishMMO.Water
 			{
 				lastRealtime = now;
 			}
-			// Clamped so a domain reload, a breakpoint or a long frame does not jump the sea.
-			double delta = Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f);
+			// Clamped so a domain reload, a breakpoint or a long frame does not jump the sea; scaled
+			// by the world's motion, so the sea stops when the world's time does.
+			double delta = WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f));
 			lastRealtime = now;
 			clock = (clock + delta) % WrapSeconds;
 		}
@@ -365,6 +665,7 @@ namespace FishMMO.Water
 			Advance();
 			ApplyQuality();
 			UpdateUnderwater(camera);
+			UpdateCaustics();
 
 			/* Centred on the camera in XZ only, and NOT snapped to a grid. Snapping a radial mesh
 			 * makes the whole ring pattern jump by a step; letting the vertices slide is invisible
@@ -387,6 +688,8 @@ namespace FishMMO.Water
 			Shader.SetGlobalVectorArray(MotionId, packedMotion);
 			Shader.SetGlobalFloat(CountId, liveWaves);
 			Shader.SetGlobalFloat(LevelId, position.y + TideMetres);
+			// The level the shore field was built against, so the shore can follow the tide off it.
+			Shader.SetGlobalFloat(MeanLevelId, position.y);
 			Shader.SetGlobalFloat(TimeId, (float)clock);
 			Shader.SetGlobalFloat(CloudShadowId, Mathf.Clamp01(CloudShadow));
 
@@ -402,6 +705,15 @@ namespace FishMMO.Water
 				if (foam != null)
 				{
 					Shader.SetGlobalTexture("_FishWaterFoamTexture", foam);
+				}
+			}
+			// And its ripples, so the swash's thin sheet shimmers with the same ones.
+			if (Material != null && Material.HasProperty("_NormalMap"))
+			{
+				Texture ripples = Material.GetTexture("_NormalMap");
+				if (ripples != null)
+				{
+					Shader.SetGlobalTexture("_FishWaterNormalTexture", ripples);
 				}
 			}
 
@@ -504,8 +816,14 @@ namespace FishMMO.Water
 		/// </remarks>
 		private void UpdateUnderwater(Camera camera)
 		{
+			/* Asked of the surface only near it. The exact height costs a spectrum sum, and a camera
+			 * higher above the still water than any crest could stand — twice the significant height of
+			 * the sea the wind can raise, and the surf on top — is plainly not under it. */
+			float cameraHeight = camera.transform.position.y - SeaLevel;
+			float highestCrest = 2f * 0.21f * WindSpeed * WindSpeed / Mathf.Max(0.05f, Gravity) + 4f;
 			bool wanted = UnderwaterEffect && liveWaves > 0
-				&& camera.transform.position.y < HeightAt(camera.transform.position);
+				&& cameraHeight < highestCrest
+				&& (cameraHeight < -highestCrest || camera.transform.position.y < HeightAt(camera.transform.position));
 
 			if (!wanted)
 			{
@@ -518,7 +836,7 @@ namespace FishMMO.Water
 
 			if (underwaterHost == null)
 			{
-				Shader shader = Shader.Find("FishMMO/Water/Underwater");
+				Shader shader = UnderwaterShader != null ? UnderwaterShader : Shader.Find(UnderwaterShaderName);
 				if (shader == null)
 				{
 					UnderwaterEffect = false;
@@ -527,18 +845,7 @@ namespace FishMMO.Water
 				}
 				underwaterMaterial = new Material(shader) { name = "Underwater", hideFlags = HideFlags.HideAndDontSave };
 
-				/* One triangle covering the screen, in clip coordinates. Its bounds are enormous
-				 * because the vertex shader ignores the transform entirely — culling would
-				 * otherwise throw it away the moment its origin left the frustum. */
-				underwaterMesh = new Mesh { name = "Underwater", hideFlags = HideFlags.HideAndDontSave };
-				underwaterMesh.vertices = new[]
-				{
-					new Vector3(-1f, -1f, 0f),
-					new Vector3(3f, -1f, 0f),
-					new Vector3(-1f, 3f, 0f),
-				};
-				underwaterMesh.triangles = new[] { 0, 1, 2 };
-				underwaterMesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1e9f);
+				EnsureScreenTriangle();
 
 				underwaterHost = new GameObject("Underwater") { hideFlags = HideFlags.DontSave };
 				underwaterHost.transform.SetParent(transform, false);
@@ -554,6 +861,80 @@ namespace FishMMO.Water
 			underwaterMaterial.SetColor(UnderwaterTintId, UnderwaterTint);
 			underwaterMaterial.SetFloat(UnderwaterDepthId, UnderwaterVisibility);
 			underwaterHost.SetActive(true);
+		}
+
+		/// <summary>
+		/// Keeps the caustics pass alive while there is a sea to cast them: it needs the FFT's slope
+		/// maps, and nothing else — every pixel above the water it simply leaves alone.
+		/// </summary>
+		/// <remarks>
+		/// A full-screen triangle on its own child, for the reason the underwater pass is one: a
+		/// renderer feature would have to be added to every URP renderer asset by hand. It draws
+		/// before the shore and the sea, so they go over what it lights. With the pipeline's opaque
+		/// texture on, the sea refracts a copy of the scene taken before this pass runs, so seen
+		/// from above through refracting water the caustics are not in it; from below, and through
+		/// blended water, they are.
+		/// </remarks>
+		private static readonly int CausticsId = Shader.PropertyToID("_FishWaterCaustics");
+
+		private void UpdateCaustics()
+		{
+			bool wanted = Caustics && fft != null;
+			/* One global for both places the light is drawn — this pass, and the sea's refraction,
+			 * which lights the sea bed it refracts itself. A strength of nothing switches both. */
+			Shader.SetGlobalVector(CausticsId, new Vector4(wanted ? CausticsStrength : 0f, CausticsClarity, CausticsFadeDistance, 0f));
+			if (!wanted)
+			{
+				if (causticsHost != null)
+				{
+					causticsHost.SetActive(false);
+				}
+				return;
+			}
+			if (causticsHost == null)
+			{
+				Shader shader = CausticsShader != null ? CausticsShader : Shader.Find(CausticsShaderName);
+				if (shader == null || !shader.isSupported)
+				{
+					Caustics = false;
+					Debug.LogWarning($"[Water] '{CausticsShaderName}' is missing or unsupported here, so there are no caustics.", this);
+					return;
+				}
+				causticsMaterial = new Material(shader) { name = "Caustics", hideFlags = HideFlags.HideAndDontSave };
+				EnsureScreenTriangle();
+
+				causticsHost = new GameObject("Caustics") { hideFlags = HideFlags.DontSave };
+				causticsHost.transform.SetParent(transform, false);
+				causticsHost.AddComponent<MeshFilter>().sharedMesh = underwaterMesh;
+				var renderer = causticsHost.AddComponent<MeshRenderer>();
+				renderer.sharedMaterial = causticsMaterial;
+				renderer.shadowCastingMode = ShadowCastingMode.Off;
+				renderer.receiveShadows = false;
+				renderer.lightProbeUsage = LightProbeUsage.Off;
+				renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+			}
+			causticsHost.SetActive(true);
+		}
+
+		/// <summary>The one full-screen triangle both projected passes draw with.</summary>
+		private void EnsureScreenTriangle()
+		{
+			if (underwaterMesh != null)
+			{
+				return;
+			}
+			/* In clip coordinates. Its bounds are enormous because the vertex shaders ignore the
+			 * transform entirely — culling would otherwise throw it away the moment its origin left
+			 * the frustum. */
+			underwaterMesh = new Mesh { name = "Screen triangle", hideFlags = HideFlags.HideAndDontSave };
+			underwaterMesh.vertices = new[]
+			{
+				new Vector3(-1f, -1f, 0f),
+				new Vector3(3f, -1f, 0f),
+				new Vector3(-1f, 3f, 0f),
+			};
+			underwaterMesh.triangles = new[] { 0, 1, 2 };
+			underwaterMesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1e9f);
 		}
 
 		private static void SetKeyword(string keyword, bool on)

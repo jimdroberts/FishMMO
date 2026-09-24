@@ -76,6 +76,39 @@ namespace FishMMO.Water
 		/// <summary>The world-space rectangle the field covers.</summary>
 		public Rect Area => area;
 
+		/// <summary>Texels along each side of the field; 0 before it is built.</summary>
+		public int Resolution => field != null ? field.width : 0;
+
+		/// <summary>
+		/// The field at a world point, on the CPU: metres of water over the ground at MEAN sea level
+		/// (negative on land), and signed metres to the mean waterline (positive at sea). False off
+		/// the field or before it is built.
+		/// </summary>
+		/// <remarks>
+		/// Read back from the texture's own CPU copy, which is kept — it is built with
+		/// <c>Apply(false, false)</c> — so buoyancy can ask the same field the shader shoals the sea
+		/// with, at no memory cost beyond what already exists.
+		/// </remarks>
+		public bool TrySample(Vector2 xz, out float depth, out float edgeDistance)
+		{
+			depth = OpenWaterDepth;
+			edgeDistance = 1000f;
+			if (field == null || area.width < 1f || area.height < 1f)
+			{
+				return false;
+			}
+			float u = (xz.x - area.xMin) / area.width;
+			float v = (xz.y - area.yMin) / area.height;
+			if (u < 0f || u > 1f || v < 0f || v > 1f)
+			{
+				return false;
+			}
+			Color sample = field.GetPixelBilinear(u, v);
+			depth = sample.r;
+			edgeDistance = sample.g;
+			return true;
+		}
+
 		private void OnEnable()
 		{
 			surface = GetComponent<WaterSurface>();
@@ -102,11 +135,35 @@ namespace FishMMO.Water
 
 		private void OnValidate()
 		{
-			if (RebuildOnValidate && isActiveAndEnabled)
+			if (!RebuildOnValidate || !isActiveAndEnabled)
+			{
+				return;
+			}
+#if UNITY_EDITOR
+			/* Deferred to the next editor tick, and coalesced.
+			 *
+			 * A build samples every terrain up to 2048 x 2048 times and runs a two-pass distance
+			 * transform over the result. OnValidate fires on every keystroke in the inspector and
+			 * on every domain reload — where OnEnable then builds again straight afterwards — so
+			 * building synchronously here froze the editor for each of those, twice per recompile.
+			 * Unsubscribing first means ten edits in one frame cost one build. */
+			UnityEditor.EditorApplication.delayCall -= DeferredBuild;
+			UnityEditor.EditorApplication.delayCall += DeferredBuild;
+#else
+			Build();
+#endif
+		}
+
+#if UNITY_EDITOR
+		private void DeferredBuild()
+		{
+			// The component can be gone by the time the editor gets round to this.
+			if (this != null && isActiveAndEnabled)
 			{
 				Build();
 			}
 		}
+#endif
 
 		/// <summary>Reads the scene's terrains and rebuilds the depth field.</summary>
 		public void Build()
@@ -152,12 +209,8 @@ namespace FishMMO.Water
 			int resolution = Mathf.Clamp(Mathf.NextPowerOfTwo(wanted), 64,
 				Mathf.Clamp(Mathf.NextPowerOfTwo(MaximumResolution), 64, 4096));
 			TexelMetres = span / resolution;
-			if (field == null || field.width != resolution)
+			if (field == null)
 			{
-				if (field != null)
-				{
-					DestroyImmediate(field);
-				}
 				field = new Texture2D(resolution, resolution, TextureFormat.RGHalf, false, true)
 				{
 					name = "Shore depth",
@@ -165,6 +218,13 @@ namespace FishMMO.Water
 					filterMode = FilterMode.Bilinear,
 					hideFlags = HideFlags.HideAndDontSave,
 				};
+			}
+			else if (field.width != resolution || field.format != TextureFormat.RGHalf)
+			{
+				/* Resized in place, never destroyed and recreated: this can run from OnValidate,
+				 * where Unity refuses DestroyImmediate — the same error the ocean mesh was logging
+				 * on every inspector edit, waiting here for the first time the resolution moved. */
+				field.Reinitialize(resolution, resolution, TextureFormat.RGHalf, false);
 			}
 
 			float sea = surface != null ? surface.MeanSeaLevel : transform.position.y;

@@ -17,12 +17,12 @@ MonoBehaviour:
     dangerous"
   BiomeColorId: {r: 0.3, g: 0.7, b: 0.8, a: 1}
   GizmoColor: {r: 0.4, g: 0.8, b: 0.9, a: 1}
-  ElevationTier: 1
-  MinHeight: 0.3
-  MaxHeight: 0.35
+  ElevationTier: 2
+  MinHeight: 0.35
+  MaxHeight: 0.42
   MinTemperature: 0.3
   MaxTemperature: 0.8
-  MinHumidity: 0.3
+  MinHumidity: -1
   MaxHumidity: 1
   SelectionWeight: 1
   Atmosphere: 12

@@ -16,8 +16,10 @@ namespace FishMMO.TestHarness.World
 	{
 		public float Speed = 10f;
 		public float LookSpeed = 0.15f;
-		[Tooltip("The camera never sinks below this, so a fly-around cannot end up under the ground.")]
+		[Tooltip("Metres above the ground under it that the camera never sinks below, so a fly-around cannot end up inside the terrain. From the ground, not from y = 0: y is altitude, so a scene cut from the sea floor has all its ground below zero and one cut from a plateau all of it far above.")]
 		public float MinimumHeight = 0.5f;
+
+		private static readonly System.Collections.Generic.List<Terrain> terrains = new System.Collections.Generic.List<Terrain>();
 		public float DefaultFieldOfView = 60f;
 
 		private float yaw;
@@ -68,7 +70,7 @@ namespace FishMMO.TestHarness.World
 			{
 				float speed = Speed * (keyboard.leftShiftKey.isPressed ? 4f : 1f);
 				Vector3 position = transform.position + transform.TransformDirection(move.normalized) * speed * Time.deltaTime;
-				position.y = Mathf.Max(MinimumHeight, position.y);
+				position.y = Mathf.Max(GroundBelow(position) + MinimumHeight, position.y);
 				transform.position = position;
 			}
 			// The camera's own rotation stays level: the sky turns, not the horizon.
@@ -76,6 +78,27 @@ namespace FishMMO.TestHarness.World
 			{
 				camera.fieldOfView = DefaultFieldOfView;
 			}
+		}
+
+		/// <summary>World Y of the terrain under a point; negative infinity off the edge of every tile.</summary>
+		private static float GroundBelow(Vector3 position)
+		{
+			Terrain.GetActiveTerrains(terrains);
+			for (int i = 0; i < terrains.Count; i++)
+			{
+				Terrain terrain = terrains[i];
+				if (terrain == null || terrain.terrainData == null)
+				{
+					continue;
+				}
+				Vector3 origin = terrain.GetPosition();
+				Vector3 size = terrain.terrainData.size;
+				if (position.x >= origin.x && position.x <= origin.x + size.x && position.z >= origin.z && position.z <= origin.z + size.z)
+				{
+					return origin.y + terrain.SampleHeight(position);
+				}
+			}
+			return float.NegativeInfinity;
 		}
 	}
 }

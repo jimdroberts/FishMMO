@@ -45,6 +45,12 @@ Shader "FishMMO/Water/Ocean"
         _SwashMetres ("Swash run-up (m)", Range(0, 3)) = 0.35
         _ShoreRefraction ("Waves turn to face shore", Range(0, 1)) = 0.85
 
+        [Header(Shore waves)]
+        _ShoreWaveLength ("Surf wavelength (m)", Range(4, 160)) = 40
+        _ShoreWaveHeight ("Surf height (m)", Range(0, 8)) = 1.1
+        _ShoreWavePitch ("Barrel (crest throw)", Range(0, 4)) = 0.7
+        _ShoreWaveFoam ("Surf foam", Range(0, 3)) = 1.5
+
         [Header(Waves)]
         _GroupLength ("Wave group length", Range(2, 20)) = 7
         _WaveFadeStart ("Waves fade from (m)", Range(10, 8000)) = 900
@@ -53,6 +59,10 @@ Shader "FishMMO/Water/Ocean"
         [Header(Variation)]
         _Clarity ("Clarity varies by", Range(0, 0.9)) = 0.40
         _ClarityScale ("Clarity patch size (m)", Range(20, 4000)) = 500
+
+        [Header(Development)]
+        [Enum(Off,0, Sediment,1, Clarity field,2, Transmittance,3, Fresnel,4, Opacity,5, Light on the water,6, Shadow,7, Depth to 10m,8, Body colour,9, Behind the surface,10, Reflection,11, Foam,12)]
+        _DebugView ("Show one term", Float) = 0
     }
 
     SubShader

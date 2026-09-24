@@ -845,6 +845,12 @@ namespace FishMMO.TestHarness.World
 
 		// ── Life ──────────────────────────────────────────────────────
 
+		/// <summary>Leaves the world moving: the rate is global, and the game runs at 1.</summary>
+		private void OnDisable()
+		{
+			WorldMotion.Rate = 1f;
+		}
+
 		private void Awake()
 		{
 			Cache();
@@ -1002,6 +1008,12 @@ namespace FishMMO.TestHarness.World
 					timeOfDay = state.LocalTime01;
 				}
 			}
+
+			/* One clock for everything. The sky follows the hours above; the sea, the surf and what
+			 * is falling have real-time clocks of their own and followed nothing, so a stopped clock
+			 * went on surfing under a frozen sky. At or above real time they run at real time —
+			 * waves at a hundred and eighty times are a blur, not a faster sea. */
+			WorldMotion.FollowClock(paused ? 0.0 : TimeScale * 3600.0);
 
 			uint tick = Tick;
 			float dt = Time.deltaTime;
