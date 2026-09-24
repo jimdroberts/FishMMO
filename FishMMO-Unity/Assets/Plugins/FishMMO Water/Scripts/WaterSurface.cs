@@ -36,6 +36,12 @@ namespace FishMMO.Water
 		private static readonly int CloudShadowId = Shader.PropertyToID("_FishWaterCloudShadow");
 		private static readonly int WindId = Shader.PropertyToID("_FishWaterWind");
 		private static readonly int WhitecapId = Shader.PropertyToID("_FishWaterWhitecap");
+		private static readonly int GravityId = Shader.PropertyToID("_FishWaterGravity");
+		private static readonly int PatchId = Shader.PropertyToID("_FishWaterPatch");
+		private static readonly string[] DisplacementNames =
+			{ "_FishWaterDisplacement0", "_FishWaterDisplacement1", "_FishWaterDisplacement2" };
+		private static readonly string[] DerivativeNames =
+			{ "_FishWaterDerivatives0", "_FishWaterDerivatives1", "_FishWaterDerivatives2" };
 		private static readonly int UnderwaterTintId = Shader.PropertyToID("_UnderwaterTint");
 		private static readonly int UnderwaterDepthId = Shader.PropertyToID("_UnderwaterDepth");
 
@@ -70,6 +76,16 @@ namespace FishMMO.Water
 		[Range(0f, 3f)] public float WaveScale = 1f;
 		[Tooltip("How many waves are summed. Each costs one sine per vertex.")]
 		[Range(1, WaterWaves.MaximumWaves)] public int WaveCount = 6;
+		[Tooltip("Surface gravity, m/s². Driven from the celestial body by WaterEnvironment.")]
+		[Range(0.05f, 30f)] public float Gravity = WaterWaves.EarthGravity;
+
+		[Header("Spectrum")]
+		[Tooltip("The FFT compute shader. Without it the sea is flat.")]
+		public ComputeShader Spectrum;
+		[Tooltip("How sharp the crests are. Above about 1.5 the surface folds through itself.")]
+		[Range(0f, 2f)] public float FFTChoppiness = 1.2f;
+		[Tooltip("Seconds before the wave animation repeats exactly. Also what the baked fallback loops on.")]
+		[Range(20f, 600f)] public float LoopPeriod = 120f;
 
 		[Header("Geometry")]
 		[Tooltip("Radius of the solid centre disc, in metres.")]
@@ -109,6 +125,11 @@ namespace FishMMO.Water
 		private int builtRings, builtSegments;
 		private float builtInner, builtOuter;
 		private bool reported;
+		private WaterFFT fft;
+		private float builtWind = -1f;
+		private float builtHeading = -1f;
+		private float builtGravity = -1f;
+		private float builtChoppiness = -1f;
 		private GameObject underwaterHost;
 		private MeshRenderer underwaterRenderer;
 		private Material underwaterMaterial;
@@ -171,11 +192,15 @@ namespace FishMMO.Water
 			meshRenderer = GetComponent<MeshRenderer>();
 			Rebuild();
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+
+			EnsureSpectrum();
 		}
 
 		private void OnDisable()
 		{
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+			fft?.Dispose();
+			fft = null;
 			Discard(underwaterHost);
 			Discard(underwaterMesh);
 			Discard(underwaterMaterial);
@@ -226,6 +251,8 @@ namespace FishMMO.Water
 		/// <summary>Rebuilds the sea state, and the mesh if its shape changed.</summary>
 		public void Rebuild()
 		{
+			// Set before building: every wavelength and speed in the sea state comes off it.
+			WaterWaves.Gravity = Mathf.Max(0.05f, Gravity);
 			liveWaves = WaterWaves.Build(waves, WindDirectionDegrees, WindSpeed, Spread, Choppiness, WaveScale);
 			liveWaves = Mathf.Min(liveWaves, Mathf.Clamp(WaveCount, 1, WaterWaves.MaximumWaves));
 
@@ -270,6 +297,37 @@ namespace FishMMO.Water
 			meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.BlendProbes;
 			meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
 		}
+
+		/// <summary>
+		/// Creates the transform once the compute shader is actually there.
+		/// </summary>
+		/// <remarks>
+		/// Lazily, not in OnEnable, because a component's fields are assigned AFTER AddComponent
+		/// returns — so anything that adds the water from script had a null shader at enable time
+		/// and got a permanently flat sea with no error. The same applies to a designer dropping
+		/// the asset into the field in the inspector.
+		/// </remarks>
+		private void EnsureSpectrum()
+		{
+			if (fft != null || Spectrum == null)
+			{
+				return;
+			}
+			if (!WaterFFT.Supported)
+			{
+				if (!reportedSpectrum)
+				{
+					reportedSpectrum = true;
+					Debug.LogWarning("[Water] This device has no compute shader support, so the FFT ocean " +
+						"cannot run. A baked wave set is needed here.", this);
+				}
+				return;
+			}
+			fft = new WaterFFT(Spectrum);
+			builtWind = -1f;
+		}
+
+		private bool reportedSpectrum;
 
 		private void Advance()
 		{
@@ -334,7 +392,48 @@ namespace FishMMO.Water
 
 			// The ripples run with the wind, so the fragment stage needs it too.
 			float radians = WindDirectionDegrees * Mathf.Deg2Rad;
-			Shader.SetGlobalVector(WindId, new Vector4(Mathf.Sin(radians), Mathf.Cos(radians), 0f, 0f));
+			Shader.SetGlobalVector(WindId, new Vector4(Mathf.Sin(radians), Mathf.Cos(radians), WindSpeed, 0f));
+			Shader.SetGlobalFloat(GravityId, Mathf.Max(0.05f, Gravity));
+
+			// Shared with the shore pass, so the beach foam and the sea foam are the same stuff.
+			if (Material != null && Material.HasProperty("_FoamTexture"))
+			{
+				Texture foam = Material.GetTexture("_FoamTexture");
+				if (foam != null)
+				{
+					Shader.SetGlobalTexture("_FishWaterFoamTexture", foam);
+				}
+			}
+
+			EnsureSpectrum();
+			if (fft != null)
+			{
+				/* The static spectrum is the expensive half and depends on nothing that changes
+				 * frame to frame, so it is rebuilt only when the sea state genuinely moves. */
+				if (!Mathf.Approximately(builtWind, WindSpeed)
+					|| !Mathf.Approximately(builtHeading, WindDirectionDegrees)
+					|| !Mathf.Approximately(builtGravity, Gravity)
+					|| !Mathf.Approximately(builtChoppiness, FFTChoppiness))
+				{
+					float windRadians = WindDirectionDegrees * Mathf.Deg2Rad;
+					fft.SetSeaState(WindSpeed,
+						new Vector2(Mathf.Sin(windRadians), Mathf.Cos(windRadians)),
+						Gravity, fft.Amplitude, FFTChoppiness, LoopPeriod, 1u);
+					builtWind = WindSpeed;
+					builtHeading = WindDirectionDegrees;
+					builtGravity = Gravity;
+					builtChoppiness = FFTChoppiness;
+				}
+
+				fft.Evaluate((float)clock);
+				for (int i = 0; i < WaterFFT.Cascades; i++)
+				{
+					Shader.SetGlobalTexture(DisplacementNames[i], fft.Displacement[i]);
+					Shader.SetGlobalTexture(DerivativeNames[i], fft.Derivatives[i]);
+				}
+				Shader.SetGlobalVector(PatchId, new Vector4(
+					fft.PatchMetres[0], fft.PatchMetres[1], fft.PatchMetres[2], WaveScale));
+			}
 
 			/* Past about 15 m/s a fully developed sea stops getting steeper, so the wave geometry
 			 * stops producing more breaking crests while a real ocean goes on whitening. This is

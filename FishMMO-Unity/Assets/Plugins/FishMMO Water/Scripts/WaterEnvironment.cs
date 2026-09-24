@@ -1,27 +1,27 @@
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Water
 {
 	/// <summary>
-	/// Connects the sea to the world it is in: the wind that raises its waves and the moons that
-	/// move its tide.
+	/// Connects the sea to the world it is in: the gravity that sets its wavelengths, the wind that
+	/// raises its waves, the weather overhead, the climate that colours it, and the moons that move
+	/// its tide.
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// Separate from <see cref="WaterSurface"/> on purpose. The surface knows how to be a sea — a
-	/// wind speed in, waves out, a level in, a surface at that height — and nothing about planets.
-	/// Everything that reaches into FishMMO's own weather and celestial systems is here, so a scene
-	/// with no atlas entry still gets a working sea from whatever the component is set to.
+	/// gravity and a wind in, waves out; a level in, a surface at that height — and nothing about
+	/// planets. Everything reaching into FishMMO's own weather and celestial systems is here, so a
+	/// scene with no atlas entry still gets a working sea from whatever the component is set to.
 	/// </para>
 	/// <para>
-	/// <b>The sustained wind, not the gusts.</b> The waves are driven from the synoptic field
-	/// rather than from a storm cell's local wind, and that is physics rather than convenience: a
-	/// fully developed sea is the accumulated work of hours of wind over kilometres of fetch, and
-	/// it does not answer to a gust that lasts ten seconds. The gusts are already in the picture as
-	/// the ripple patches the shader drags across the surface.
+	/// <b>Colour goes through a property block, never the material.</b> Writing the climate into
+	/// the shared asset would leave a modified <c>.mat</c> in the tree in whichever scene happened
+	/// to be open last. One extra draw call is a cheap price for a clean working copy.
 	/// </para>
 	/// </remarks>
 	[ExecuteAlways]
@@ -29,13 +29,29 @@ namespace FishMMO.Water
 	[RequireComponent(typeof(WaterSurface))]
 	public sealed class WaterEnvironment : MonoBehaviour
 	{
-		[Header("Wind")]
+		private static readonly int ShallowId = Shader.PropertyToID("_ShallowColor");
+		private static readonly int DeepId = Shader.PropertyToID("_DeepColor");
+		private static readonly int DensityId = Shader.PropertyToID("_WaterDensity");
+
+		[Header("Celestial")]
+		[Tooltip("Take surface gravity from the body. It sets every wavelength and wave speed in the sea.")]
+		public bool DriveGravity = true;
+
+		[Header("Wind and weather")]
 		[Tooltip("Take the wind from the world's weather. Off leaves the surface's own settings alone.")]
 		public bool DriveWind = true;
 		[Tooltip("Scales the wind the weather reports, for a sheltered bay or an exposed cape.")]
 		[Range(0f, 2f)] public float Fetch = 1f;
 		[Tooltip("How quickly the sea answers a change in the wind. A real sea takes hours.")]
 		[Range(0.01f, 2f)] public float Responsiveness = 0.15f;
+		[Tooltip("Let an unstable, stormy sky raise the sea and sharpen its crests.")]
+		public bool DriveStorms = true;
+		[Tooltip("Darken the water under cloud, the same way the ground is darkened.")]
+		public bool DriveCloudShadow = true;
+
+		[Header("Climate")]
+		[Tooltip("Colour the water from the world's climate: clear cold blue through warm, productive green.")]
+		public bool DriveColor = true;
 
 		[Header("Tide")]
 		[Tooltip("Move the sea level with the moons and the star.")]
@@ -50,36 +66,29 @@ namespace FishMMO.Water
 		[Tooltip("The most the tide may move the sea, in metres, whatever the moons say.")]
 		[Range(0f, 30f)] public float MaximumTideMetres = 2.5f;
 
-		[Header("Reporting")]
-		[Tooltip("Log what the sea is doing once a minute. For tuning a coast.")]
-		public bool LogState;
-
 		private WaterSurface surface;
+		private MeshRenderer meshRenderer;
+		private MaterialPropertyBlock block;
 		private WorldSceneSettings settings;
 		private float windSpeed;
 		private float windHeading;
 		private bool primed;
-		private double nextLog;
 
 		/// <summary>The tide this frame, in metres above mean sea level.</summary>
 		public float Tide { get; private set; }
 
-		/// <summary>The wind this frame, in metres per second.</summary>
+		/// <summary>The sustained wind this frame, in metres per second.</summary>
 		public float Wind => windSpeed;
+
+		/// <summary>Surface gravity in use, in m/s².</summary>
+		public float Gravity => surface != null ? surface.Gravity : WaterWaves.EarthGravity;
 
 		private void OnEnable()
 		{
 			surface = GetComponent<WaterSurface>();
+			meshRenderer = GetComponent<MeshRenderer>();
 			primed = false;
-			Resolve();
-		}
-
-		private void Resolve()
-		{
-			if (settings == null)
-			{
-				WorldSceneSettings.TryGetForScene(gameObject.scene, out settings);
-			}
+			settings = null;
 		}
 
 		private void LateUpdate()
@@ -88,7 +97,10 @@ namespace FishMMO.Water
 			{
 				return;
 			}
-			Resolve();
+			if (settings == null)
+			{
+				WorldSceneSettings.TryGetForScene(gameObject.scene, out settings);
+			}
 
 			double hours = WorldTime.UnanchoredHours();
 			SolarSystemProfile system = SolarSystemProfile.Active;
@@ -96,81 +108,169 @@ namespace FishMMO.Water
 			float latitude = settings != null ? settings.Latitude : 0f;
 			float longitude = settings != null ? settings.Longitude : 0f;
 
-			if (DriveWind)
+			if (DriveGravity)
 			{
-				ApplyWind(latitude, hours);
+				surface.Gravity = SurfaceGravity(body);
 			}
-			if (DriveTide)
+			if (DriveWind || DriveStorms || DriveCloudShadow)
 			{
-				ApplyTide(system, body, hours, latitude, longitude);
+				ApplyWeather(latitude, hours);
 			}
-			else
+			if (DriveColor)
 			{
-				surface.TideMetres = 0f;
+				ApplyClimate(system, body);
 			}
-
-			if (LogState && hours * 3600.0 >= nextLog)
-			{
-				nextLog = hours * 3600.0 + 60.0;
-				Debug.Log($"[Water] {gameObject.scene.name}: wind {windSpeed:0.0} m/s from {windHeading:0}°, " +
-					$"tide {Tide:+0.00;-0.00} m, sea at {surface.SeaLevel:0.00} m.", this);
-			}
+			surface.TideMetres = DriveTide ? Tide = TideAt(system, body, hours, latitude, longitude) : 0f;
 		}
 
-		private void ApplyWind(float latitude, double hours)
+		/// <summary>
+		/// Surface gravity of a world, in m/s².
+		/// </summary>
+		/// <remarks>
+		/// g = GM/R², and the project's only size is radius, so mass comes from radius cubed at
+		/// constant density — the same convention <c>CelestialMath.TidalHeating</c> uses. The cube
+		/// over the square leaves gravity simply proportional to radius: a body half Earth's size
+		/// pulls at half a gravity. It over-rates a low-density world, and it is the only answer
+		/// available from the data the project carries.
+		/// </remarks>
+		public static float SurfaceGravity(WorldBody body)
 		{
-			/* The prevailing field: banded by latitude, drifting with the world clock, the same
-			 * numbers the clouds and the weather director run on. Nothing here is random, so two
-			 * clients looking at the same coast at the same moment see the same sea. */
-			Vector2 wind = WeatherDriver.PrevailingWind(latitude)
-				* WeatherDriver.PrevailingSpeed(WeatherDriver.WorldSeed, latitude, hours * 3600.0);
-			float speed = wind.magnitude * Mathf.Max(0f, Fetch);
-			// Heading the wind blows TOWARD, clockwise from north, which is how everything else in
-			// this project quotes a heading.
-			float heading = Mathf.Repeat(Mathf.Atan2(wind.x, wind.y) * Mathf.Rad2Deg, 360f);
-
-			if (!primed)
+			if (body == null)
 			{
-				windSpeed = speed;
-				windHeading = heading;
-				primed = true;
+				return WaterWaves.EarthGravity;
 			}
-			else
+			float radii = Mathf.Max(1f, body.SkyRadiusKm) / (float)PlanetTides.EarthRadiusKm;
+			return Mathf.Clamp(WaterWaves.EarthGravity * radii, 0.05f, 30f);
+		}
+
+		private void ApplyWeather(float latitude, double hours)
+		{
+			/* The prevailing synoptic field: banded by latitude, drifting with the world clock, the
+			 * same numbers the clouds and the weather director run on. Nothing is random, so two
+			 * clients looking at the same coast at the same moment see the same sea.
+			 *
+			 * The SUSTAINED wind, not a storm cell's gusts, and that is physics rather than
+			 * convenience: a fully developed sea is hours of wind over kilometres of fetch and does
+			 * not answer a gust that lasts ten seconds. The gusts are already in the picture, as
+			 * the patches of ruffled water the shader drags across the surface. */
+			var position = new Vector2(transform.position.x, transform.position.z);
+			WeatherDriver.Synoptic air = WeatherDriver.Sample(
+				WeatherDriver.WorldSeed, position, hours * 3600.0, latitude, 0.5f);
+
+			if (DriveWind)
 			{
-				/* Eased, because a sea has memory. The wind can back forty degrees in a minute and
-				 * the swell will still be running the old way for hours — snapping the wave
-				 * directions to the current wind makes the whole surface pivot at once, which
-				 * nothing in nature does. */
-				float step = Mathf.Clamp01(Time.deltaTime * Responsiveness);
-				windSpeed = Mathf.Lerp(windSpeed, speed, step);
-				windHeading = Mathf.MoveTowardsAngle(windHeading, heading, 360f * step);
+				float speed = air.Wind.magnitude * Mathf.Max(0f, Fetch);
+				float heading = Mathf.Repeat(Mathf.Atan2(air.Wind.x, air.Wind.y) * Mathf.Rad2Deg, 360f);
+
+				if (!primed)
+				{
+					windSpeed = speed;
+					windHeading = heading;
+					primed = true;
+				}
+				else
+				{
+					/* Eased, because a sea has memory. The wind can back forty degrees in a minute
+					 * and the swell will still run the old way for hours; snapping the wave
+					 * directions to the current wind pivots the whole surface at once, which
+					 * nothing in nature does. */
+					float step = Mathf.Clamp01(Time.deltaTime * Responsiveness);
+					windSpeed = Mathf.Lerp(windSpeed, speed, step);
+					windHeading = Mathf.MoveTowardsAngle(windHeading, heading, 360f * step);
+				}
 			}
 
-			if (!Mathf.Approximately(surface.WindSpeed, windSpeed)
-				|| !Mathf.Approximately(surface.WindDirectionDegrees, windHeading))
+			if (DriveStorms)
 			{
-				surface.WindSpeed = windSpeed;
-				surface.WindDirectionDegrees = windHeading;
+				/* An unstable, low-pressure sky is a rough sea. Wave height and steepness both go
+				 * up, which is the difference between a swell and a storm running: the same wind
+				 * speed under a settled high makes a far gentler sea than under a deepening low. */
+				float storm = Mathf.Clamp01(air.Instability * 0.7f + Mathf.Clamp01(-air.Pressure) * 0.5f);
+				surface.WaveScale = Mathf.Lerp(0.85f, 1.6f, storm);
+				surface.Choppiness = Mathf.Lerp(0.45f, 0.85f, storm);
+			}
+
+			if (DriveCloudShadow)
+			{
+				float cover = Mathf.Clamp01(WeatherDriver.MesoscaleCoverAt(
+					WeatherDriver.WorldSeed, position, hours * 3600.0, latitude, 0.5f));
+				// Never to black: even under heavy cloud the sea is lit by the whole sky.
+				surface.CloudShadow = Mathf.Lerp(1f, 0.35f, cover);
+			}
+
+			if (DriveWind)
+			{
+				if (!Mathf.Approximately(surface.WindSpeed, windSpeed)
+					|| !Mathf.Approximately(surface.WindDirectionDegrees, windHeading))
+				{
+					surface.WindSpeed = windSpeed;
+					surface.WindDirectionDegrees = windHeading;
+				}
 				surface.Rebuild();
 			}
 		}
 
-		private void ApplyTide(SolarSystemProfile system, WorldBody body, double hours, float latitude, float longitude)
+		/// <summary>
+		/// Colours the water from the world's own climate.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Water is not blue everywhere, and the reason is biology. Cold, barren open ocean is the
+		/// clearest water on Earth and a deep blue, because almost nothing in it absorbs the green;
+		/// a warm, productive, sediment-fed coast is green and you can see a few metres. So the
+		/// absorption and the shallow tint are driven from mean temperature and how much water the
+		/// world has — the same two numbers the biome resolver uses.
+		/// </para>
+		/// <para>
+		/// A world with no air is the limiting case: nothing lives in it, nothing clouds it, and it
+		/// is as clear as distilled water.
+		/// </para>
+		/// </remarks>
+		private void ApplyClimate(SolarSystemProfile system, WorldBody body)
+		{
+			if (meshRenderer == null)
+			{
+				return;
+			}
+			BiomeWorldConditions conditions = body != null
+				? BiomeWorldConditions.For(system, body)
+				: BiomeWorldConditions.Earthlike;
+
+			// Productivity: warm and wet is green soup, cold and barren is blue glass.
+			float productivity = conditions.Atmosphere == AtmosphereKind.None
+				? 0f
+				: Mathf.Clamp01(0.45f + conditions.MeanTemperature * 0.45f + (conditions.Water - 0.5f) * 0.4f);
+
+			/* Absorption per metre, per channel. Red goes first in any water; what productivity
+			 * changes is the green and blue — clear ocean lets blue run for tens of metres, a
+			 * productive coast eats it within a few. */
+			var clear = new Vector4(0.30f, 0.055f, 0.030f, 0f);
+			var turbid = new Vector4(0.48f, 0.20f, 0.24f, 0f);
+			Vector4 density = Vector4.Lerp(clear, turbid, productivity);
+
+			Color shallow = Color.Lerp(new Color(0.30f, 0.66f, 0.74f), new Color(0.42f, 0.70f, 0.50f), productivity);
+			Color deep = Color.Lerp(new Color(0.01f, 0.09f, 0.20f), new Color(0.02f, 0.14f, 0.16f), productivity);
+
+			block ??= new MaterialPropertyBlock();
+			meshRenderer.GetPropertyBlock(block);
+			block.SetVector(DensityId, density);
+			block.SetColor(ShallowId, shallow);
+			block.SetColor(DeepId, deep);
+			meshRenderer.SetPropertyBlock(block);
+		}
+
+		private float TideAt(SolarSystemProfile system, WorldBody body, double hours, float latitude, float longitude)
 		{
 			if (system == null || body == null)
 			{
-				Tide = 0f;
-				surface.TideMetres = 0f;
-				return;
+				return 0f;
 			}
 			double equilibrium = PlanetTides.HeightMetres(system, body, hours, latitude, longitude);
-			float tide = (float)equilibrium * Mathf.Max(0f, CoastalAmplification);
 			/* Clamped, and the clamp is a level-design tool rather than a safety rail. The terrain
-			 * is fixed and the waterline is not: a tide of two metres on a gentle beach moves the
-			 * shore tens of metres, and everything that was placed on dry sand is then in the sea.
-			 * A scene decides how much of that it can take. */
-			Tide = Mathf.Clamp(tide, -MaximumTideMetres, MaximumTideMetres);
-			surface.TideMetres = Tide;
+			 * is fixed and the waterline is not: two metres of tide on a gentle beach moves the
+			 * shore tens of metres, and everything placed on dry sand is then in the sea. */
+			return Mathf.Clamp((float)equilibrium * Mathf.Max(0f, CoastalAmplification),
+				-MaximumTideMetres, MaximumTideMetres);
 		}
 	}
 }

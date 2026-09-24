@@ -1,0 +1,365 @@
+// Tessendorf ocean spectrum, inverse-FFT'd to a displacement field each frame.
+//
+// WHY THIS AND NOT A SUM OF WAVES
+// A sum of Gerstner waves is limited by how many sines can be afforded per vertex — six or eight —
+// and a real sea surface is a continuous spectrum with tens of thousands of components. That gap
+// is not a tuning problem: with eight components the periodicity is always visible and the
+// surface reads as corrugated metal however carefully the amplitudes are set.
+//
+// An inverse FFT evaluates EVERY component of an N x N spectrum at once, in O(N² log N) rather
+// than O(N² · components). At 256² that is about 200,000 waves per cascade for a fraction of a
+// millisecond, and the per-pixel cost in the water shader DROPS, because the shader stops
+// re-evaluating a wave sum and simply samples a texture.
+
+#pragma kernel InitialSpectrum
+#pragma kernel TimeSpectrum
+#pragma kernel HorizontalFFT
+#pragma kernel VerticalFFT
+#pragma kernel Assemble
+
+#define SIZE 256
+#define LOG_SIZE 8
+#define PI 3.14159265358979
+
+// ── Parameters ────────────────────────────────────────────────────────
+float _PatchMetres;      // world size of this cascade's tile
+float _WindSpeed;        // metres per second
+float2 _WindDirection;   // unit
+float _Gravity;          // m/s², from the celestial body
+float _Amplitude;        // Phillips scale
+float _SmallWave;        // shortest wavelength kept, in metres
+float _Directionality;   // how hard waves align to the wind
+float _MinWaveNumber;    // this cascade owns k from here …
+float _MaxWaveNumber;    // … to here
+float _FFTTime;          // seconds
+float _LoopPeriod;       // seconds; quantises the dispersion so the animation repeats exactly
+float _Choppiness;       // horizontal displacement scale
+uint _Step;              // FFT stage, 1 … LOG_SIZE
+uint _Seed;
+
+RWTexture2D<float4> _H0;            // xy h0(k), zw conj(h0(-k))
+RWTexture2D<float4> _SpectrumA;     // xy height, zw Dx
+RWTexture2D<float4> _SpectrumB;     // xy Dz, zw unused
+RWTexture2D<float4> _Displacement;  // xyz displacement, w folding
+RWTexture2D<float4> _Derivatives;   // xy slope, z folding, w unused
+
+// ── Helpers ───────────────────────────────────────────────────────────
+
+float2 ComplexMul(float2 a, float2 b)
+{
+	return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+/// <summary>Two independent complex numbers packed in one float4, times one twiddle.</summary>
+float4 ComplexMulPair(float4 v, float2 w)
+{
+	return float4(ComplexMul(v.xy, w), ComplexMul(v.zw, w));
+}
+
+uint Hash(uint x)
+{
+	x ^= x >> 16; x *= 0x7feb352du;
+	x ^= x >> 15; x *= 0x846ca68bu;
+	x ^= x >> 16;
+	return x;
+}
+
+float Random(uint2 id, uint salt)
+{
+	uint h = Hash(id.x + Hash(id.y * 57u + salt * 131u));
+	return (h & 0x00FFFFFFu) / 16777216.0;
+}
+
+/// <summary>Two independent standard normals, Box-Muller.</summary>
+float2 Gaussian(uint2 id, uint salt)
+{
+	float u1 = max(1e-6, Random(id, salt));
+	float u2 = Random(id, salt + 977u);
+	float r = sqrt(-2.0 * log(u1));
+	float theta = 2.0 * PI * u2;
+	return float2(r * cos(theta), r * sin(theta));
+}
+
+/// <summary>The wave vector of a texel, in radians per metre.</summary>
+float2 WaveVector(uint2 id)
+{
+	// Centred: the texel grid runs -N/2 … N/2, so the zero frequency sits at the middle and the
+	// spectrum is symmetric about it — which is what makes h0(-k) meaningful.
+	float2 n = float2(id) - SIZE * 0.5;
+	return 2.0 * PI * n / max(1.0, _PatchMetres);
+}
+
+/// <summary>
+/// The Phillips spectrum: how much energy a wind-driven sea carries at each wave vector.
+/// </summary>
+/// <remarks>
+/// L = V²/g is the wavelength of the longest wave that wind can raise — the whole reason a gale
+/// makes long swell and a breeze makes ripples. The k⁻⁴ falloff is the equilibrium range; the
+/// directional term keeps waves running with the wind; and the small-wave cut-off removes the
+/// components below the grid's resolution, which would otherwise alias into noise.
+/// </remarks>
+float Phillips(float2 k)
+{
+	float kk = dot(k, k);
+	if (kk < 1e-9)
+	{
+		return 0.0;
+	}
+	float k2 = kk;
+	float k4 = k2 * k2;
+	float L = _WindSpeed * _WindSpeed / max(0.05, _Gravity);
+
+	float2 kn = k * rsqrt(k2);
+	float directional = pow(abs(dot(kn, _WindDirection)), _Directionality);
+	// Waves running against the wind exist but are far weaker; killing them outright makes a
+	// surface that is suspiciously one-way.
+	if (dot(kn, _WindDirection) < 0.0)
+	{
+		directional *= 0.12;
+	}
+
+	/* Each cascade owns a BAND of the spectrum, and nothing outside it.
+	 *
+	 * Three tiles of 520, 118 and 27 metres can each represent wavenumbers from 2π/patch up to the
+	 * Nyquist limit of their own grid, and those ranges overlap heavily — a ten-metre wave fits in
+	 * all three. Without a band-pass every wave in the overlap is generated two or three times and
+	 * the energies add: measured, significant wave height came out 1.8x theory at 5 m/s and 5.0x
+	 * at 20, and the ratio MOVED with the wind because the overlap does. Splitting the spectrum at
+	 * the crossovers makes the cascades a partition rather than three copies.
+	 */
+	float magnitude = sqrt(k2);
+	if (magnitude < _MinWaveNumber || magnitude >= _MaxWaveNumber)
+	{
+		return 0.0;
+	}
+
+	float spectrum = _Amplitude * exp(-1.0 / (k2 * L * L)) / k4 * directional;
+	// Damp everything shorter than the smallest wave this grid can carry.
+	spectrum *= exp(-k2 * _SmallWave * _SmallWave);
+	return spectrum;
+}
+
+// ── Stage 1: the static spectrum ──────────────────────────────────────
+
+[numthreads(8, 8, 1)]
+void InitialSpectrum(uint3 id : SV_DispatchThreadID)
+{
+	float2 k = WaveVector(id.xy);
+	float2 g1 = Gaussian(id.xy, _Seed);
+	float2 g2 = Gaussian(uint2(SIZE - id.x, SIZE - id.y) & (SIZE - 1), _Seed + 7919u);
+
+	/* Multiplied by the area of ONE CELL of k-space, and this is what makes three cascades add up
+	 * to one sea.
+	 *
+	 * Phillips returns a spectral DENSITY — energy per unit area of k-space — so turning it into
+	 * the amplitude of a discrete component means multiplying by the cell that component
+	 * represents, (2π/patch)². Omitting it leaves each cascade's energy scaled by its own patch
+	 * size: measured, significant wave height grew as roughly the fourth power of wind speed
+	 * instead of the square, because the long-wave cascade that dominates at high wind was the
+	 * one most over-weighted.
+	 */
+	float deltaK = 2.0 * PI / max(1.0, _PatchMetres);
+	float cell = deltaK * deltaK;
+
+	float h0 = sqrt(max(0.0, Phillips(k)) * cell * 0.5);
+	float h0conj = sqrt(max(0.0, Phillips(-k)) * cell * 0.5);
+
+	_H0[id.xy] = float4(g1 * h0, g2 * h0conj);
+}
+
+// ── Stage 2: evolve it to this instant ────────────────────────────────
+
+[numthreads(8, 8, 1)]
+void TimeSpectrum(uint3 id : SV_DispatchThreadID)
+{
+	float4 h0 = _H0[id.xy];
+	float2 k = WaveVector(id.xy);
+	float magnitude = max(1e-4, length(k));
+
+	/* Deep-water dispersion, QUANTISED to the loop period.
+	 *
+	 * Left continuous, the surface never repeats — which is correct for a live sea and useless for
+	 * the baked fallback, where a finite number of frames has to loop seamlessly. Snapping every
+	 * frequency to a multiple of 2π/T makes the whole field exactly periodic in T at a cost no
+	 * eye can find. */
+	float omega = sqrt(_Gravity * magnitude);
+	if (_LoopPeriod > 0.0)
+	{
+		float base = 2.0 * PI / _LoopPeriod;
+		omega = floor(omega / base) * base;
+	}
+
+	float phase = omega * _FFTTime;
+	float2 forward = float2(cos(phase), sin(phase));
+	float2 backward = float2(forward.x, -forward.y);
+
+	// h(k,t) = h0(k)·e^{iωt} + conj(h0(-k))·e^{-iωt}
+	float2 h = ComplexMul(h0.xy, forward) + ComplexMul(float2(h0.z, -h0.w), backward);
+
+	/* Horizontal displacement: D(k) = -i·(k/|k|)·h(k,t). It is what turns round sine humps into
+	 * sharp crests and flat troughs — the single most recognisable feature of a real sea, and the
+	 * reason a pure height field always looks like a bedsheet. */
+	float2 kn = k / magnitude;
+	float2 dx = ComplexMul(float2(0.0, -kn.x), h);
+	float2 dz = ComplexMul(float2(0.0, -kn.y), h);
+
+	_SpectrumA[id.xy] = float4(h, dx);
+	_SpectrumB[id.xy] = float4(dz, 0.0, 0.0);
+}
+
+// ── Stage 3: the inverse FFT, one row or column per thread group ──────
+//
+// Every stage of a 256-point transform lives in group shared memory, so the whole 1D transform is
+// ONE dispatch per axis instead of eight. Each thread owns one element and reads its butterfly
+// partner, which needs no atomics and no bit-reversal write conflicts.
+
+groupshared float4 SharedA[2][SIZE];
+groupshared float4 SharedB[2][SIZE];
+
+uint BitReverse(uint value)
+{
+	uint result = 0;
+	[unroll]
+	for (uint i = 0; i < LOG_SIZE; i++)
+	{
+		result = (result << 1) | ((value >> i) & 1u);
+	}
+	return result;
+}
+
+/// <summary>Inverse twiddle: e^{+2πi·j/m}. The sign is what makes this a synthesis, not an analysis.</summary>
+float2 Twiddle(uint j, uint m)
+{
+	float angle = 2.0 * PI * float(j) / float(m);
+	return float2(cos(angle), sin(angle));
+}
+
+void Butterfly(uint x, inout uint src)
+{
+	[unroll]
+	for (uint s = 1; s <= LOG_SIZE; s++)
+	{
+		uint m = 1u << s;
+		uint halfSpan = m >> 1;
+		uint j = x & (halfSpan - 1u);
+		uint lower = x & ~halfSpan;
+		uint upper = lower + halfSpan;
+		bool isUpper = (x & halfSpan) != 0u;
+		float2 w = Twiddle(j, m);
+
+		float4 a = SharedA[src][lower];
+		float4 b = ComplexMulPair(SharedA[src][upper], w);
+		float4 c = SharedB[src][lower];
+		float4 d = ComplexMulPair(SharedB[src][upper], w);
+
+		uint dst = 1u - src;
+		SharedA[dst][x] = isUpper ? (a - b) : (a + b);
+		SharedB[dst][x] = isUpper ? (c - d) : (c + d);
+
+		GroupMemoryBarrierWithGroupSync();
+		src = dst;
+	}
+}
+
+[numthreads(SIZE, 1, 1)]
+void HorizontalFFT(uint3 gid : SV_GroupThreadID, uint3 grp : SV_GroupID)
+{
+	uint x = gid.x;
+	uint y = grp.x;
+	uint reversed = BitReverse(x);
+
+	SharedA[0][x] = _SpectrumA[uint2(reversed, y)];
+	SharedB[0][x] = _SpectrumB[uint2(reversed, y)];
+	GroupMemoryBarrierWithGroupSync();
+
+	uint src = 0;
+	Butterfly(x, src);
+
+	_SpectrumA[uint2(x, y)] = SharedA[src][x];
+	_SpectrumB[uint2(x, y)] = SharedB[src][x];
+}
+
+[numthreads(SIZE, 1, 1)]
+void VerticalFFT(uint3 gid : SV_GroupThreadID, uint3 grp : SV_GroupID)
+{
+	uint y = gid.x;
+	uint x = grp.x;
+	uint reversed = BitReverse(y);
+
+	SharedA[0][y] = _SpectrumA[uint2(x, reversed)];
+	SharedB[0][y] = _SpectrumB[uint2(x, reversed)];
+	GroupMemoryBarrierWithGroupSync();
+
+	uint src = 0;
+	Butterfly(y, src);
+
+	/* NO 1/N² here, and that is deliberate.
+	 *
+	 * The textbook inverse DFT carries 1/N², but Tessendorf's spectrum amplitudes are defined
+	 * against the UNNORMALISED transform — the energy is already in h0. Dividing again scales the
+	 * surface by 1/65536: measured, the field arrived intact at the end of the horizontal pass
+	 * (sum 62.9) and left the vertical pass with a peak below 5e-5, which reads as a dead flat
+	 * sea and gives no hint that the transform itself was perfectly correct. The overall scale is
+	 * set once, by calibrating _Amplitude against significant wave height. */
+	_SpectrumA[uint2(x, y)] = SharedA[src][y];
+	_SpectrumB[uint2(x, y)] = SharedB[src][y];
+}
+
+// ── Stage 4: displacement, slope and folding ──────────────────────────
+
+[numthreads(8, 8, 1)]
+void Assemble(uint3 id : SV_DispatchThreadID)
+{
+	/* The checkerboard sign.
+	 *
+	 * The spectrum is indexed from -N/2, so the transform comes out shifted by half the grid.
+	 * Multiplying by (-1)^(x+y) puts it back. Forgetting it produces a field that looks plausible
+	 * and is offset by half a tile from its own normals — the kind of error that reads as "the
+	 * lighting is wrong somehow" rather than as a bug.
+	 */
+	float sign = ((id.x + id.y) & 1u) ? -1.0 : 1.0;
+
+	float height = _SpectrumA[id.xy].x * sign;
+	float dx = _SpectrumA[id.xy].z * sign * _Choppiness;
+	float dz = _SpectrumB[id.xy].x * sign * _Choppiness;
+
+	_Displacement[id.xy] = float4(dx, height, dz, 0.0);
+
+	// Neighbours, wrapped — the field is periodic, so the edges join.
+	uint2 east = uint2((id.x + 1) & (SIZE - 1), id.y);
+	uint2 west = uint2((id.x + SIZE - 1) & (SIZE - 1), id.y);
+	uint2 north = uint2(id.x, (id.y + 1) & (SIZE - 1));
+	uint2 south = uint2(id.x, (id.y + SIZE - 1) & (SIZE - 1));
+
+	float signEast = ((east.x + east.y) & 1u) ? -1.0 : 1.0;
+	float signWest = ((west.x + west.y) & 1u) ? -1.0 : 1.0;
+	float signNorth = ((north.x + north.y) & 1u) ? -1.0 : 1.0;
+	float signSouth = ((south.x + south.y) & 1u) ? -1.0 : 1.0;
+
+	float spacing = _PatchMetres / float(SIZE);
+	float hEast = _SpectrumA[east].x * signEast;
+	float hWest = _SpectrumA[west].x * signWest;
+	float hNorth = _SpectrumA[north].x * signNorth;
+	float hSouth = _SpectrumA[south].x * signSouth;
+	float2 slope = float2(hEast - hWest, hNorth - hSouth) / (2.0 * spacing);
+
+	/* Folding: the Jacobian of the horizontal displacement. Where it goes negative the surface has
+	 * turned itself inside out, which is physically where a wave is breaking — so this is the
+	 * foam signal, derived rather than painted. */
+	float dxEast = _SpectrumA[east].z * signEast * _Choppiness;
+	float dxWest = _SpectrumA[west].z * signWest * _Choppiness;
+	float dzNorth = _SpectrumB[north].x * signNorth * _Choppiness;
+	float dzSouth = _SpectrumB[south].x * signSouth * _Choppiness;
+	float dxEastWest = _SpectrumA[north].z * signNorth * _Choppiness
+		- _SpectrumA[south].z * signSouth * _Choppiness;
+	float dzEastWest = _SpectrumB[east].x * signEast * _Choppiness
+		- _SpectrumB[west].x * signWest * _Choppiness;
+
+	float jxx = 1.0 + (dxEast - dxWest) / (2.0 * spacing);
+	float jzz = 1.0 + (dzNorth - dzSouth) / (2.0 * spacing);
+	float jxz = dxEastWest / (2.0 * spacing);
+	float jzx = dzEastWest / (2.0 * spacing);
+	float jacobian = jxx * jzz - jxz * jzx;
+
+	_Derivatives[id.xy] = float4(slope, jacobian, 0.0);
+}

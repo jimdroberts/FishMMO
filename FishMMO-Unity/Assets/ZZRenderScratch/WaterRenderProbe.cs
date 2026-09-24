@@ -36,13 +36,17 @@ namespace FishMMO.RenderScratch
 			public float SunYaw;
 			public float Clock = 12f;
 			public float FieldOfView = 60f;
-			public bool Refraction = true;
+			public bool Refraction;
 			public bool Depth = true;
 			/// <summary>Material overrides, for isolating which term a frame is actually showing.</summary>
 			public Action<Material> Override;
+			/// <summary>Shore overrides, for isolating the beach pass.</summary>
+			public Action<WaterShore> Shore;
 		}
 
 		private static readonly StringBuilder Report = new StringBuilder();
+		private static Material authoredValues;
+		private static WaterShore shoreline;
 
 		public static void Run()
 		{
@@ -167,7 +171,7 @@ namespace FishMMO.RenderScratch
 				{
 					m.SetFloat("_SpecularStrength", 0f);
 					m.SetColor("_FoamColor", Color.red);
-					m.SetFloat("_FoamCrest", 0.70f);
+					m.SetFloat("_WhitecapThreshold", 0.70f);
 				},
 			};
 			// A viewpoint that is not inside the waves: at 20 m/s the swell is 9 m tall, so a
@@ -189,17 +193,47 @@ namespace FishMMO.RenderScratch
 				Wind = 8f, Choppiness = 0.55f, SunPitch = 45f, SunYaw = -40f, FieldOfView = 55f,
 			};
 
+			/* Two conclusive tests for the missing shore foam, using material overrides only.
+			 * D3 paints the sediment band magenta and widens it to 50 m: if the near shore goes
+			 * magenta the depth lookup is sound and the foam FORMULA is at fault; if it stays
+			 * green the field is not reaching the shader at all.
+			 * D4 widens the foam band to 50 m of depth: if foam then appears, 1.1 m was simply too
+			 * narrow a band to see. */
+			yield return new Shot
+			{
+				Name = "D3-depth-probe", Position = new Vector3(232f, 2.2f, -10f), LookAt = new Vector3(300f, -1f, 6f),
+				Wind = 8f, Choppiness = 0.55f, SunPitch = 45f, SunYaw = -40f, FieldOfView = 55f,
+				Override = m =>
+				{
+					m.SetColor("_ShoreColor", Color.magenta);
+					m.SetFloat("_ShoreDepth", 50f);
+				},
+			};
+			yield return new Shot
+			{
+				Name = "D4-wide-foam", Position = new Vector3(232f, 2.2f, -10f), LookAt = new Vector3(300f, -1f, 6f),
+				Wind = 8f, Choppiness = 0.55f, SunPitch = 45f, SunYaw = -40f, FieldOfView = 55f,
+				Override = m => m.SetFloat("_FoamDistance", 50f),
+			};
+
+			yield return new Shot
+			{
+				Name = "D5-shore-band", Position = new Vector3(232f, 6f, -10f), LookAt = new Vector3(320f, -1f, 6f),
+				Wind = 8f, Choppiness = 0.55f, SunPitch = 45f, SunYaw = -40f, FieldOfView = 60f,
+				Shore = s => { s.DriveFromSea = false; s.Reach = 22f; },
+			};
+
 			// What a player on the shipped Balanced tier actually sees: no opaque copy.
 			yield return new Shot
 			{
-				Name = "09-shore-no-refraction", Position = new Vector3(215f, 5f, -30f), LookAt = new Vector3(600f, -6f, 30f),
-				Wind = 6f, Choppiness = 0.5f, SunPitch = 28f, SunYaw = 0f, Refraction = false,
+				Name = "09-shore-with-refraction", Refraction = true, Position = new Vector3(215f, 5f, -30f), LookAt = new Vector3(600f, -6f, 30f),
+				Wind = 6f, Choppiness = 0.5f, SunPitch = 28f, SunYaw = 0f,
 			};
 			// And on Performant: no depth either.
 			yield return new Shot
 			{
 				Name = "10-shore-no-depth", Position = new Vector3(215f, 5f, -30f), LookAt = new Vector3(600f, -6f, 30f),
-				Wind = 6f, Choppiness = 0.5f, SunPitch = 28f, SunYaw = 0f, Refraction = false, Depth = false,
+				Wind = 6f, Choppiness = 0.5f, SunPitch = 28f, SunYaw = 0f, Depth = false,
 			};
 		}
 
@@ -224,15 +258,57 @@ namespace FishMMO.RenderScratch
 			waterHost.AddComponent<MeshRenderer>();
 			waterHost.transform.position = Vector3.zero;   // sea level y = 0
 			water = waterHost.AddComponent<WaterSurface>();
-			water.Material = new Material(shader) { name = "ProbeOcean" };
+			/* The real material, instanced. Building one from the shader alone gives a material
+			 * with no normal map and no foam mask, which is exactly the configuration the shipped
+			 * one is not — and the probe exists to photograph what ships. */
+			Material authored = AssetDatabase.LoadAssetAtPath<Material>(
+				"Assets/Plugins/FishMMO Water/Materials/OceanWater.mat");
+			authoredValues = authored;
+			water.Material = authored != null
+				? new Material(authored) { name = "ProbeOcean" }
+				: new Material(shader) { name = "ProbeOcean" };
+			water.Spectrum = AssetDatabase.LoadAssetAtPath<ComputeShader>(
+				"Assets/Plugins/FishMMO Water/Shaders/FishWaterFFT.compute");
 			water.OuterRadius = 14000f;
-			water.Rings = 110;
-			water.Segments = 180;
+			water.Rings = 150;
+			water.Segments = 220;
 			water.ReportQuality = false;
 			water.UnderwaterVisibility = 30f;
 			water.Rebuild();
 			// The depth field the surf and the shoaling read. Built from the terrain above.
-			waterHost.AddComponent<WaterShoreField>().Build();
+			WaterShoreField shore = waterHost.AddComponent<WaterShoreField>();
+			shore.Build();
+			// The shoreline itself: swash, edge foam and wet sand, as its own projected pass.
+			shoreline = waterHost.AddComponent<WaterShore>();
+
+			// What the distance field actually holds — the shore pass is driven entirely by it.
+			Texture2D fieldTexture = Shader.GetGlobalTexture("_FishWaterShore") as Texture2D;
+			if (fieldTexture != null)
+			{
+				Color[] texels = fieldTexture.GetPixels();
+				float depthLow = float.MaxValue, depthHigh = float.MinValue;
+				float distLow = float.MaxValue, distHigh = float.MinValue;
+				for (int i = 0; i < texels.Length; i++)
+				{
+					depthLow = Mathf.Min(depthLow, texels[i].r);
+					depthHigh = Mathf.Max(depthHigh, texels[i].r);
+					distLow = Mathf.Min(distLow, texels[i].g);
+					distHigh = Mathf.Max(distHigh, texels[i].g);
+				}
+				Report.AppendLine($"shore field: depth {depthLow:0.0} .. {depthHigh:0.0} m | " +
+					$"distance {distLow:0.0} .. {distHigh:0.0} m");
+			}
+			else
+			{
+				Report.AppendLine("shore field: NOT READABLE from the global slot");
+			}
+			Vector4 rect = Shader.GetGlobalVector("_FishWaterShoreRect");
+			Texture bound = Shader.GetGlobalTexture("_FishWaterShore");
+			Report.AppendLine($"shore pass: component={(shoreline != null)} " +
+				$"material={(shoreline != null && shoreline.Material != null ? shoreline.Material.shader.name : "NULL")} " +
+				$"shaderFound={(Shader.Find("FishMMO/Water/Shore") != null)}");
+			Report.AppendLine($"shore field: rect={rect} texture={(bound != null ? bound.width + "px" : "NONE")} " +
+				$"terrains={Terrain.activeTerrains.Length}");
 
 			var cameraHost = new GameObject("Probe Camera");
 			camera = cameraHost.AddComponent<Camera>();
@@ -247,6 +323,9 @@ namespace FishMMO.RenderScratch
 		/// A terrain rather than a mesh, because WaterShoreField reads Terrain.activeTerrains to
 		/// build the depth field the surf needs — and because that is what a generated scene has.
 		/// </remarks>
+		/// <summary>Shared with the shore probe, which needs the same beach.</summary>
+		public static void BuildSeabedForProbe() => BuildSeabed();
+
 		private static void BuildSeabed()
 		{
 			const int Resolution = 513;
@@ -370,19 +449,25 @@ namespace FishMMO.RenderScratch
 		{
 			water.WindSpeed = shot.Wind;
 			water.Choppiness = shot.Choppiness;
+			water.FFTChoppiness = Mathf.Lerp(1.0f, 1.9f, shot.Choppiness);
 			water.Refraction = shot.Refraction;
 			water.DepthEffects = shot.Depth;
 			water.Rebuild();
 			water.SetClock(shot.Clock);
 
-			// Reset to the material's authored values, then apply this shot's overrides.
+			// Reset to the authored values, then apply this shot's overrides.
 			Material material = water.Material;
-			material.SetColor("_DeepColor", new Color(0.03f, 0.20f, 0.30f));
-			material.SetColor("_ShallowColor", new Color(0.30f, 0.62f, 0.58f));
-			material.SetColor("_FoamColor", new Color(0.95f, 0.98f, 1f));
-			material.SetFloat("_SpecularStrength", 2f);
-			material.SetFloat("_FoamCrest", 0.70f);
+			if (authoredValues != null)
+			{
+				material.CopyPropertiesFromMaterial(authoredValues);
+			}
 			shot.Override?.Invoke(material);
+			if (shoreline != null)
+			{
+				shoreline.DriveFromSea = true;
+				shoreline.Reach = 14f;
+				shot.Shore?.Invoke(shoreline);
+			}
 
 			sun.transform.rotation = Quaternion.Euler(shot.SunPitch, shot.SunYaw, 0f);
 

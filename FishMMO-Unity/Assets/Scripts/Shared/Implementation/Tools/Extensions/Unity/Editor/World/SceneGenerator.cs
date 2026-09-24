@@ -399,6 +399,7 @@ namespace FishMMO.Shared.WorldDesign
 			 * authored with instead of on the weather. */
 			host.AddComponent<WaterShoreField>();
 			host.AddComponent<WaterEnvironment>();
+			host.AddComponent<WaterShore>();
 
 			result.SeaLevelY = host.transform.position.y;
 			result.HasWater = true;

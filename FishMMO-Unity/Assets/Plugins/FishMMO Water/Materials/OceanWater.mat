@@ -22,41 +22,49 @@ Material:
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
-    m_TexEnvs: []
+    m_TexEnvs:
+    - _FoamTexture:
+        m_Texture: {fileID: 2800000, guid: 53e265ec933898147a63bf88a3c2d940, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalMap:
+        m_Texture: {fileID: 2800000, guid: bdbfc4380233e42e29b981c94d5bcde3, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _AbsorptionDepth: 6
-    - _Clarity: 0.45
-    - _ClarityScale: 420
-    - _GustScale: 160
-    - _GustStrength: 0.55
-    - _ShoreDepth: 4
-    - _ShoreBreak: 0.62
-    - _ShoreSurf: 1
-    - _SwashMetres: 0.55
-    - _ShoreRefraction: 0.8
-    - _GroupDepth: 7
-    - _DetailFadeDistance: 400
-    - _DetailScale: 1
-    - _DetailSpeed: 1
-    - _DetailStrength: 0.7
-    - _EdgeFade: 0.6
-    - _FoamCrest: 0.7
-    - _FoamDepth: 0.5
-    - _FoamScale: 6
-    - _FoamSharpness: 0.3
+    - _Clarity: 0.4
+    - _ClarityScale: 500
+    - _EdgeFade: 0.5
+    - _FoamDistance: 1.1
+    - _FoamScale: 9
+    - _FoamSharpness: 0.28
+    - _GroupLength: 7
     - _MaxAlpha: 1
-    - _RefractionStrength: 0.35
-    - _ScatterStrength: 1
-    - _Smoothness: 0.97
-    - _SpecularStrength: 2
-    - _WaveFadeEnd: 3000
-    - _WaveFadeStart: 600
+    - _NormalFadeDistance: 500
+    - _NormalScaleA: 26
+    - _NormalScaleB: 7
+    - _NormalStrength: 0.75
+    - _ReflectionStrength: 0.85
+    - _RefractionStrength: 0.5
+    - _ScatterStrength: 1.8
+    - _ShoreBreak: 0.62
+    - _ShoreDepth: 2
+    - _ShoreRefraction: 0.85
+    - _Smoothness: 0.96
+    - _SpecularStrength: 1.6
+    - _SurfStrength: 1.4
+    - _SwashMetres: 0.35
+    - _WaveFadeEnd: 4000
+    - _WaveFadeStart: 900
+    - _WaveSpeed: 1
+    - _WhitecapThreshold: 0.7
     m_Colors:
-    - _DeepColor: {r: 0.03, g: 0.2, b: 0.3, a: 1}
+    - _DeepColor: {r: 0.06, g: 0.24, b: 0.35, a: 1}
     - _FoamColor: {r: 0.95, g: 0.98, b: 1, a: 1}
-    - _ShoreColor: {r: 0.52, g: 0.66, b: 0.52, a: 1}
     - _ScatterColor: {r: 0.12, g: 0.45, b: 0.35, a: 1}
-    - _ShallowColor: {r: 0.3, g: 0.62, b: 0.58, a: 1}
+    - _ShallowColor: {r: 0.45, g: 0.78, b: 0.72, a: 1}
+    - _ShoreColor: {r: 0.55, g: 0.66, b: 0.52, a: 1}
+    - _WaterDensity: {r: 0.36, g: 0.12, b: 0.07, a: 0}
   m_BuildTextureStacks: []
-  m_AllowLocked: 1
+  m_AllowLocking: 1

@@ -23,7 +23,7 @@ namespace FishMMO.Water
 		/// <summary>Radians per metre.</summary>
 		public float WaveNumber => 2f * Mathf.PI / Mathf.Max(0.01f, Wavelength);
 		/// <summary>Radians per second, from deep-water dispersion.</summary>
-		public float AngularFrequency => Mathf.Sqrt(WaterWaves.Gravity * WaveNumber);
+		public float AngularFrequency => Mathf.Sqrt(Mathf.Max(0.05f, WaterWaves.Gravity) * WaveNumber);
 
 		/// <summary>As the shader wants it: xy direction, z wave number, w amplitude.</summary>
 		public Vector4 Packed => new Vector4(Direction.x, Direction.y, WaveNumber, Amplitude);
@@ -68,8 +68,20 @@ namespace FishMMO.Water
 	/// </remarks>
 	public static class WaterWaves
 	{
-		/// <summary>Metres per second squared. The sea is not the place to be imprecise about this.</summary>
-		public const float Gravity = 9.81f;
+		/// <summary>Earth's surface gravity, the default when no world says otherwise.</summary>
+		public const float EarthGravity = 9.81f;
+
+		/// <summary>
+		/// The surface gravity the waves are built against, in m/s².
+		/// </summary>
+		/// <remarks>
+		/// Driven from the celestial body, because it changes what the sea looks like more than any
+		/// other single number. Deep-water waves travel at sqrt(g/k): at a sixth of a gravity the
+		/// same swell moves at 40% of the speed and needs six times the wavelength to stand as
+		/// tall, so a low-gravity moon has long, slow, lazy rollers and a heavy world has short
+		/// steep chop. Left at 9.81 every world in the system has an identical sea.
+		/// </remarks>
+		public static float Gravity = EarthGravity;
 
 		/// <summary>The most waves the shader will sum. Kept small: every one costs a sin and a cos per vertex.</summary>
 		public const int MaximumWaves = 8;
@@ -95,7 +107,7 @@ namespace FishMMO.Water
 			/* The longest wave the wind can raise, from the fully-developed sea relation
 			 * L = 2π·U²/g — a 10 m/s wind builds a 64 m swell. Shorter waves come from halving it
 			 * repeatedly, which spaces them across the spectrum without any two landing together. */
-			float longest = Mathf.Max(2f, 2f * Mathf.PI * windSpeed * windSpeed / Gravity);
+			float longest = Mathf.Max(2f, 2f * Mathf.PI * windSpeed * windSpeed / Mathf.Max(0.05f, Gravity));
 			float steepness = Mathf.Clamp01(choppiness);
 
 			// The wind blows toward this; +Z is north, clockwise, to match every other heading in
