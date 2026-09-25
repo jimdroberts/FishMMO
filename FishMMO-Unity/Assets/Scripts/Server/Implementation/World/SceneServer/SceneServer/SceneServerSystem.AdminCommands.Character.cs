@@ -266,7 +266,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Administrator '{character.Account}' set '{target.CharacterName}' (id {target.ID}) {template.Name} from {before} to {value}.");
 
 			Reply(character, $"{target.CharacterName} {template.Name}: base {before} to {value}, final {attribute.FinalValue}." +
-				(queued ? string.Empty : " The save could not be queued; the next periodic save writes it."));
+				(queued ? string.Empty : " The persistence queue was full, so the save ran outside it; it is written all the same."));
 		}
 
 		/// <summary>Resolves the damage controller of a target, answering the caller when it has none.</summary>

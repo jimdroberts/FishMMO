@@ -186,8 +186,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// a brief database stall never deletes the scenes of a healthy server, and under the
 		/// two-minute session lease so a dead server's characters are freed rather than left
 		/// pointing at scenes that no longer exist.
+		/// <para>
+		/// Internal because the scene servers' channel list reads it too: offering a channel the
+		/// world server will not route to lets a player spend their switch on a destination they
+		/// are then sent away from. It was two copies of the same number (issue #267).
+		/// </para>
 		/// </remarks>
-		private const double SceneServerPulseStaleSeconds = 60.0;
+		internal const double SceneServerPulseStaleSeconds = 60.0;
 
 		/// <summary>
 		/// Maximum connections allowed per waiting queue type (open-world or instance).

@@ -67,6 +67,14 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			// Index for finding stale claims (claimed but never sent)
 			builder.HasIndex(e => new { e.ClaimedAt, e.SentAt });
+
+			/* One row per request. A write retried after its reply was lost (the connection dropped
+			 * after the commit) carries the same key and lands on the row its first attempt made,
+			 * instead of writing a second (issue #267). Filtered, so rows written without a key
+			 * never collide. */
+			builder.HasIndex(e => e.RequestKey)
+				.IsUnique()
+				.HasFilter("request_key IS NOT NULL");
 		}
 	}
 }

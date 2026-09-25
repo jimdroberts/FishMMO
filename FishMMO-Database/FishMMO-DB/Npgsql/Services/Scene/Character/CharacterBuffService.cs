@@ -67,23 +67,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more buffs had an invalid Version. Version must be greater than 0.");
 			}
 
-			// Prevent duplicate keys within the same batch from causing
-			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
-			if (buffList.Count > 1)
-			{
-				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterBuffData>();
-				foreach (var buff in buffList)
-				{
-					deduped[(buff.CharacterID, buff.TemplateID)] = buff;
-				}
-
-				if (deduped.Count != buffList.Count)
-				{
-					buffList = deduped.Values.ToList();
-				}
-			}
-
+			// Counted before collapsing, so a key the batch names twice shows as Filtered. See BulkBatch.
 			int suppliedRows = buffList.Count;
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			buffList = BulkBatch.KeepNewest(buffList, buff => (buff.CharacterID, buff.TemplateID), buff => buff.Version);
+
 
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{

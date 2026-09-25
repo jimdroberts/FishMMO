@@ -14,7 +14,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>Reads the locks that are still in force for the given characters.</summary>
 		Task<DatabaseResult<IReadOnlyList<ArenaPenaltyData>>> FetchActiveAsync(IReadOnlyList<long> characterIds, CancellationToken cancellationToken = default);
 
-		/// <summary>Locks a character out of the arena queue until an instant. Replaces an earlier lock.</summary>
+		/// <summary>Locks a character out of the arena queue until an instant. The later of this and any existing lock stands, so a second desertion can extend the lock but never shorten it.</summary>
 		Task<DatabaseResult<bool>> SetAsync(long characterId, DateTime lockedUntilUtc, string reason, CancellationToken cancellationToken = default);
 
 		/// <summary>Removes a character's lock, if any. For a disconnected player who came back in time.</summary>

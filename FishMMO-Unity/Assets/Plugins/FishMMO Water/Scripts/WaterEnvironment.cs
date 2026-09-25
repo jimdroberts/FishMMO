@@ -138,9 +138,13 @@ namespace FishMMO.Water
 				WorldSceneSettings.TryGetForScene(gameObject.scene, out settings);
 			}
 
-			double hours = WorldTime.UnanchoredHours();
+			// The sky's clock: the sea's wind, period and tide keep the same time as the clouds.
+			double hours = WorldDayNightCycle.SkyClockHours ?? WorldTime.UnanchoredHours();
 			SolarSystemProfile system = SolarSystemProfile.Active;
-			WorldBody body = settings != null ? settings.Body : null;
+			/* The world the sky says this is. It was the atlas entry's body alone, so a scene with no
+			 * entry — or a preview of another world — had Earth's 9.81 and a sea that looked the
+			 * same on every body in the system. */
+			WorldBody body = WorldDayNightCycle.BodyFor(settings);
 			float latitude = settings != null ? settings.Latitude : 0f;
 			float longitude = settings != null ? settings.Longitude : 0f;
 
@@ -171,12 +175,8 @@ namespace FishMMO.Water
 		/// </remarks>
 		public static float SurfaceGravity(WorldBody body)
 		{
-			if (body == null)
-			{
-				return WaterWaves.EarthGravity;
-			}
-			float radii = Mathf.Max(1f, body.SkyRadiusKm) / (float)PlanetTides.EarthRadiusKm;
-			return Mathf.Clamp(WaterWaves.EarthGravity * radii, 0.05f, 30f);
+			// One formula for the world's pull, shared with what falls through its air.
+			return Mathf.Clamp(SurfacePhysics.Gravity(body), 0.05f, 30f);
 		}
 
 		private void ApplyWeather(float latitude, double hours)
@@ -248,7 +248,7 @@ namespace FishMMO.Water
 		private void ApplySeaState(float latitude)
 		{
 			float gravity = surface.Gravity;
-			WorldBody body = settings != null ? settings.Body : null;
+			WorldBody body = WorldDayNightCycle.BodyFor(settings);
 
 			// The march is a few hundred planet samples, so it is redone only when the wind has
 			// swung far enough to be blowing across different water.

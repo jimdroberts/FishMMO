@@ -365,8 +365,24 @@ half4 WaterFragment(Varyings input) : SV_Target
 		 * to the product. Applied afterwards it cancelled the calibration: a genuinely breaking
 		 * crest scores about 0.18, the mask takes it to 0.14, and a curve starting at 0.15 returns
 		 * zero — white caps on one crest in the frame and nowhere else. */
-		half breaking = smoothstep(0.02, max(0.06, _FoamSharpness), max(crest, surf));
-		half foam = saturate(breaking) * (0.45 + 0.55 * mask);
+		half curveTop = max(0.06, _FoamSharpness);
+		half whitecaps = smoothstep(0.02, curveTop, crest) * (0.45 + 0.55 * mask);
+
+		/* The SURF is thresholded against the mottle rather than scaled by it. Scaled, as the white
+		 * caps above still are, the thinnest part of the pattern kept 45% of the foam — and the surf
+		 * saturates across its whole band, so where the waves ran into the beach the sea was one
+		 * solid white line. A breaking wave's white water is clumps of bubbles with the sea showing
+		 * between them: the harder it breaks, the more of the pattern passes (a finer octave breaks
+		 * the clumps into bubbles), the densest froth still lets a little through, and between the
+		 * clumps is only a thin veil. The shore pass's lip, which this runs into, is drawn the same
+		 * way. */
+		half surfing = smoothstep(0.02, curveTop, surf);
+		half bubbles = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV * 5.3 + float2(0.19, 0.71)).r;
+		half lace = mask * 0.7 + bubbles * 0.3;
+		half cut = 0.62 - 0.5 * surfing;
+		half froth = smoothstep(cut, cut + 0.3, lace) * _SurfFoamOpacity;
+		half surfFoam = max(froth, _SurfFoamVeil * smoothstep(0.05, 0.6, surfing)) * smoothstep(0.02, 0.15, surfing);
+		half foam = max(whitecaps, surfFoam);
 
 		// Foam is a rough white surface: it takes the sky as diffuse ambient, not as a reflection.
 		half3 foamLit = _FoamColor.rgb * (lightColor * NdotL * 0.6 + _GlossyEnvironmentColor.rgb * 0.5 + 0.1);

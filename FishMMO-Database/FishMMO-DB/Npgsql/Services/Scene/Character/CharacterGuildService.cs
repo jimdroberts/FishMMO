@@ -140,11 +140,24 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid Version. Version must be greater than 0.");
 			}
 
-			var result = await ExecuteWriteAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var characterTableName = dbContext.GetTableName<CharacterEntity>();
 				var guildTableName = dbContext.GetTableName<GuildEntity>();
+
+				/* The container row is locked in a statement of its OWN, inside this transaction,
+				 * before the statement below counts the members. That statement also locks the row
+				 * and counts in one go, and on its own that is not enough: under READ COMMITTED a
+				 * statement's snapshot is taken when it starts, so a join that waited on the lock
+				 * still counted from before the join it waited for had committed, and both went in.
+				 * Measured on PostgreSQL 18 (issue #267): twenty concurrent joins against a cap of
+				 * five left up to nineteen members. Locked first, the counting statement starts after
+				 * every earlier join has committed and sees them all. */
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$"SELECT id FROM {guildTableName} WHERE id = {{0}} FOR UPDATE",
+					new object[] { guildData.GuildID },
+					cancellationToken).ConfigureAwait(false);
 				var sql = $@"
 					WITH active_character AS (
 						SELECT id FROM {characterTableName} WHERE id = {{0}} AND deleted = FALSE
@@ -430,6 +443,34 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> UpdateLocationAsync(long characterId, long guildId, string location, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0 || guildId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID or guild ID. Both must be greater than 0.");
+			}
+
+			// character_guild.location is varchar(200); an over-long label is cut, not an error.
+			string label = location ?? string.Empty;
+			if (label.Length > 200)
+			{
+				label = label.Substring(0, 200);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// Never an insert: a membership that no longer exists must stay gone. See the interface.
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET location = {{0}} WHERE character_id = {{1}} AND guild_id = {{2}}",
+					new object[] { label, characterId, guildId },
+					cancellationToken).ConfigureAwait(false);
+				return rowsAffected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

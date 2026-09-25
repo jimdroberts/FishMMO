@@ -1371,7 +1371,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 
-			if (!await partySystem.TryAddCharacterToPartyAsync(waiter.Connection, waiter.CharacterID, run.PartyID, waiter.HealthPCT))
+			if (await partySystem.TryAddCharacterToPartyAsync(waiter.Connection, waiter.CharacterID, run.PartyID, waiter.HealthPCT) != PartyJoinOutcome.Joined)
 			{
 				/* A release that fails leaves the row matched to a run whose party refused them.
 				 * The next pump reads it as a match, and DispatchMatchedAsync — which checks the

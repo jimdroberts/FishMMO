@@ -65,10 +65,26 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async context =>
 			{
+				/* The session hash is a digest of a random id, so a row already holding it for this
+				 * account can only be this call's own, landed by an attempt whose reply was lost. The
+				 * retry used to fail on the unique index and the sign-in with it, for a session that
+				 * had been created (issue #267). */
+				string canonicalName = AuthTokenService.CanonicalAccountName(accountName);
+				var landed = await context.WebSessions
+					.AsNoTracking()
+					.FirstOrDefaultAsync(s => s.SessionHash == sessionHash && s.AccountName == canonicalName, cancellationToken)
+					.ConfigureAwait(false);
+				if (landed != null)
+				{
+					return ToData(landed);
+				}
+
 				var entity = new WebSessionEntity
 				{
 					SessionHash = sessionHash,
-					AccountName = accountName,
+					// The row's own spelling: web_sessions.account_name references accounts.name. See
+					// AuthTokenService.CanonicalAccountName.
+					AccountName = canonicalName,
 					AccessLevelAtIssue = accessLevel,
 					TwoFactorSatisfied = twoFactorSatisfied,
 					// A session that has just proven a second factor has, by definition, just
@@ -131,16 +147,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid session hash.");
 			}
 
+			/* One conditional UPDATE, like every write in this service. See RevokeAllForAccountAsync
+			 * for why none of them may read the row through the change tracker first. */
 			return await ExecuteWriteAsync(async context =>
 			{
-				var entity = await context.WebSessions
-					.FirstOrDefaultAsync(s => s.SessionHash == sessionHash && !s.Revoked, cancellationToken)
-					.ConfigureAwait(false);
-				if (entity != null)
-				{
-					entity.LastSeenUtc = DateTime.UtcNow;
-					await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-				}
+				await context.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET last_seen_utc = {{0}} WHERE session_hash = {{1}} AND revoked = FALSE",
+					new object[] { DateTime.UtcNow, sessionHash },
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -158,18 +172,16 @@ namespace FishMMO.Database.Npgsql.Services
 			DateTime now = DateTime.UtcNow;
 			return await ExecuteWriteAsync(async context =>
 			{
-				var entity = await context.WebSessions
-					.FirstOrDefaultAsync(s => s.SessionHash == sessionHash && !s.Revoked, cancellationToken)
-					.ConfigureAwait(false);
-				if (entity == null)
+				int rows = await context.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName}
+						SET two_factor_satisfied = TRUE, last_step_up_utc = {{0}}, last_seen_utc = {{0}}, expires_utc = {{1}}
+						WHERE session_hash = {{2}} AND revoked = FALSE",
+					new object[] { now, expiresUtc, sessionHash },
+					cancellationToken).ConfigureAwait(false);
+				if (rows == 0)
 				{
 					throw new Exceptions.DatabaseEntityNotFoundException("WebSession", sessionHash);
 				}
-				entity.TwoFactorSatisfied = true;
-				entity.LastStepUpUtc = now;
-				entity.LastSeenUtc = now;
-				entity.ExpiresUtc = expiresUtc;
-				await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -185,17 +197,14 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async context =>
 			{
-				var entity = await context.WebSessions
-					.FirstOrDefaultAsync(s => s.SessionHash == sessionHash && !s.Revoked, cancellationToken)
-					.ConfigureAwait(false);
-				if (entity == null)
+				int rows = await context.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET last_step_up_utc = {{0}}, last_seen_utc = {{0}} WHERE session_hash = {{1}} AND revoked = FALSE",
+					new object[] { DateTime.UtcNow, sessionHash },
+					cancellationToken).ConfigureAwait(false);
+				if (rows == 0)
 				{
 					throw new Exceptions.DatabaseEntityNotFoundException("WebSession", sessionHash);
 				}
-				DateTime now = DateTime.UtcNow;
-				entity.LastStepUpUtc = now;
-				entity.LastSeenUtc = now;
-				await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -211,14 +220,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async context =>
 			{
-				var entity = await context.WebSessions
-					.FirstOrDefaultAsync(s => s.SessionHash == sessionHash, cancellationToken)
-					.ConfigureAwait(false);
-				if (entity != null)
-				{
-					entity.Revoked = true;
-					await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-				}
+				// Idempotent: a session that is already revoked, or gone, is a success.
+				await context.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET revoked = TRUE WHERE session_hash = {{0}} AND revoked = FALSE",
+					new object[] { sessionHash },
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -237,14 +243,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				// Scoped to the account on purpose: an id alone must not let one operator revoke
 				// another operator's session.
-				var entity = await context.WebSessions
-					.FirstOrDefaultAsync(s => s.ID == id && s.AccountName == accountName, cancellationToken)
-					.ConfigureAwait(false);
-				if (entity != null)
-				{
-					entity.Revoked = true;
-					await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-				}
+				await context.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET revoked = TRUE WHERE id = {{0}} AND account_name = {{1}} AND revoked = FALSE",
+					new object[] { id, AuthTokenService.CanonicalAccountName(accountName) },
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -258,18 +260,23 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Account name must not be empty.");
 			}
 
+			/* One UPDATE, not load-then-save. The entity's Version is Postgres's xmin, a concurrency
+			 * token, and TouchAsync rewrites a session's row on every panel request — so a revoke
+			 * that read the rows and then saved them lost the race to any request made in between:
+			 * EF threw DbUpdateConcurrencyException, that mapped to STALE_STATE, and NOTHING was
+			 * revoked. Here that was one touched session aborting the revocation of all of them, on
+			 * the path a ban, a password change and a compromise response all take (issue #267).
+			 * A single statement is applied by Postgres to the current row version, so there is no
+			 * window to lose. Every other write in this service is one statement for the same
+			 * reason. */
 			return await ExecuteWriteAsync(async context =>
 			{
-				var rows = await context.WebSessions
-					.Where(s => s.AccountName == accountName && !s.Revoked)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				foreach (var row in rows)
-				{
-					row.Revoked = true;
-				}
-				await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-				return rows.Count;
+				return await context.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET revoked = TRUE WHERE account_name = {{0}} AND revoked = FALSE",
+					// Any case in, the row's spelling out: an exact match on the caller's spelling
+					// revoked nothing when it differed, and reported success.
+					new object[] { AuthTokenService.CanonicalAccountName(accountName) },
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -285,11 +292,12 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			DateTime now = DateTime.UtcNow;
+			string canonicalName = AuthTokenService.CanonicalAccountName(accountName);
 			return await ExecuteReadAsync(async context =>
 			{
 				var rows = await context.WebSessions
 					.AsNoTracking()
-					.Where(s => s.AccountName == accountName && !s.Revoked && s.ExpiresUtc > now)
+					.Where(s => s.AccountName == canonicalName && !s.Revoked && s.ExpiresUtc > now)
 					.OrderByDescending(s => s.LastSeenUtc)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);

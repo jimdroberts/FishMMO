@@ -59,11 +59,14 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			if (templateId <= 0)
+			/* Zero is the only "no template" value. Template ids are the signed deterministic hash of
+			 * the template's type and asset name (CachedScriptableObject.AddToCache), so about half of
+			 * all templates have a NEGATIVE id; rejecting <= 0 here silently refused to save them. */
+			if (templateId == 0)
 			{
 				return DatabaseResult.Failure(
 					DatabaseErrorCodes.ValidationError,
-					"Template ID must be greater than 0.");
+					"Template ID must not be 0.");
 			}
 
 			if (incomingVersion <= 0)
@@ -139,18 +142,11 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more known abilities had an invalid Version. Version must be greater than 0.");
 			}
 
-			// Prevent duplicates within the same batch from causing tracking issues.
-			if (abilityList.Count > 1)
-			{
-				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterKnownAbilityData>();
-				foreach (var ability in abilityList)
-				{
-					deduped[(ability.CharacterID, ability.TemplateID)] = ability;
-				}
-				abilityList = deduped.Values.ToList();
-			}
-
+			// Counted before collapsing, so a key the batch names twice shows as Filtered. See BulkBatch.
 			int suppliedRows = abilityList.Count;
+
+			// One row per key, the newest version: see BulkBatch.KeepNewest.
+			abilityList = BulkBatch.KeepNewest(abilityList, ability => (ability.CharacterID, ability.TemplateID), ability => ability.Version);
 
 			var saveResult = await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
@@ -170,7 +166,8 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				var activeAbilities = abilityList
-					.Where(a => a.TemplateID > 0 && activeCharacterIdSet.Contains(a.CharacterID))
+					// Template ids are signed hashes; only 0 means "no template". See PersistAsync.
+					.Where(a => a.TemplateID != 0 && activeCharacterIdSet.Contains(a.CharacterID))
 					.ToList();
 				if (activeAbilities.Count == 0)
 				{
@@ -230,11 +227,14 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			if (templateId <= 0)
+			/* Zero is the only "no template" value. Template ids are the signed deterministic hash of
+			 * the template's type and asset name (CachedScriptableObject.AddToCache), so about half of
+			 * all templates have a NEGATIVE id; rejecting <= 0 here silently refused to save them. */
+			if (templateId == 0)
 			{
 				return DatabaseResult.Failure(
 					DatabaseErrorCodes.ValidationError,
-					"Template ID must be greater than 0.");
+					"Template ID must not be 0.");
 			}
 
 			if (incomingVersion <= 0)

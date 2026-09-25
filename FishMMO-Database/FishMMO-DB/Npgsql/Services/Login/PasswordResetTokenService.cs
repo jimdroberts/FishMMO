@@ -134,32 +134,28 @@ namespace FishMMO.Database.Npgsql.Services
 				/* The single gate. Checking "unused and unexpired" in the WHERE clause of the
 				 * same UPDATE that marks it used is what makes a token single-use: a read
 				 * followed by a write would let two simultaneous redemptions both pass the
-				 * read. */
+				 * read.
+				 *
+				 * And the account comes back from the SAME statement (RETURNING), not from a read
+				 * after it. The UPDATE autocommits, and this lambda is retried on a transient
+				 * fault: when the follow-up SELECT used to fail after the UPDATE had committed,
+				 * the retry found the token already used and answered "not found, expired, or
+				 * already used" — burning a valid link the player had just clicked (issue #267
+				 * audit). One statement leaves nothing to fail between the claim and its answer. */
 				var sql = $@"UPDATE {TableName} SET used_utc = {{0}}
-					WHERE token_hash = {{1}} AND used_utc IS NULL AND expires_utc > {{0}}";
+					WHERE token_hash = {{1}} AND used_utc IS NULL AND expires_utc > {{0}}
+					RETURNING account_name";
 
-				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { now, tokenHash }, cancellationToken)
-					.ConfigureAwait(false);
-
-				if (rowsAffected == 0)
-				{
-					// Unknown, expired and already-used are one answer on purpose.
-					throw new DatabaseEntityNotFoundException("PasswordResetToken", "by hash",
-						"Token not found, expired, or already used.");
-				}
-
-				/* Recovering the account name afterwards is safe: the UPDATE above already
-				 * claimed the row exclusively, and account_name is never rewritten. */
-				var accountName = await dbContext.PasswordResetTokens
-					.AsNoTracking()
-					.Where(e => e.TokenHash == tokenHash)
-					.Select(e => e.AccountName)
-					.FirstOrDefaultAsync(cancellationToken)
-					.ConfigureAwait(false);
+				string accountName = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					new object[] { now, tokenHash },
+					reader => reader.IsDBNull(0) ? null : reader.GetString(0),
+					cancellationToken).ConfigureAwait(false);
 
 				if (string.IsNullOrEmpty(accountName))
 				{
+					// Unknown, expired and already-used are one answer on purpose.
 					throw new DatabaseEntityNotFoundException("PasswordResetToken", "by hash",
 						"Token not found, expired, or already used.");
 				}

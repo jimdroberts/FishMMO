@@ -570,5 +570,50 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(T(summer, 45.0), Is.EqualTo(T(winter, -45.0)).Within(0.02), "mirror images");
 			Assert.That(T(winter, 80.0), Is.EqualTo(-CelestialMath.LatitudeCooling).Within(1e-6), "polar night is as cold as it gets");
 		}
+
+		[Test]
+		public void TheWorldsMotionStopsAndSlowsWithTheClock_ButNeverOutrunsRealTime()
+		{
+			/* The sea, the surf, what falls and the trees stop when a preview stops the clock and slow
+			 * when it slows it — but a preview racing the day by leaves them at real time. The sea was
+			 * let follow the clock and looked wrong at 180 times and at 12: waves sped up are never
+			 * waves. (Its weather still keeps the sky's clock: WorldDayNightCycle.SkyClockHours.) */
+			try
+			{
+				WorldMotion.FollowClock(180.0);
+				Assert.That(WorldMotion.Rate, Is.EqualTo(1f), "a racing clock leaves the motion at real time");
+				Assert.That(WorldMotion.Scale(0.5f), Is.EqualTo(0.5f).Within(1e-6f));
+				WorldMotion.FollowClock(0.25);
+				Assert.That(WorldMotion.Rate, Is.EqualTo(0.25f), "a slowed clock slows it");
+				WorldMotion.FollowClock(0.0);
+				Assert.That(WorldMotion.Rate, Is.EqualTo(0f), "a stopped clock stops it");
+				WorldMotion.FollowClock(-3.0);
+				Assert.That(WorldMotion.Rate, Is.EqualTo(0f), "and so does one run backwards");
+			}
+			finally
+			{
+				WorldMotion.FollowClock(1.0);
+			}
+		}
+
+		[Test]
+		public void TheSeaAndTheSkyStandOnTheSameWorld()
+		{
+			/* The sea took its gravity from the atlas entry's body alone, so a scene with no entry,
+			 * or a preview of another world, had Earth's pull under the sky of that world. */
+			WorldBody moon = Make<WorldBody>("Preview Moon");
+			moon.SkyRadiusKm = 1737f;
+			try
+			{
+				FishMMO.Shared.WorldDayNightCycle.PreviewBody = moon;
+				LogAssert.IsTrue(FishMMO.Shared.WorldDayNightCycle.BodyFor(null) == moon, "a preview's world is the one underfoot");
+				Assert.That(SurfacePhysics.Gravity(FishMMO.Shared.WorldDayNightCycle.BodyFor(null)), Is.EqualTo(SurfacePhysics.EarthGravity * 1737f / 6371f).Within(1e-3f),
+					"and its pull is the one the sea feels");
+			}
+			finally
+			{
+				FishMMO.Shared.WorldDayNightCycle.PreviewBody = null;
+			}
+		}
 	}
 }

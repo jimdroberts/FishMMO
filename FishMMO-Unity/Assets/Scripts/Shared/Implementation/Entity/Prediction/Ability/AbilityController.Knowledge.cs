@@ -58,6 +58,9 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public bool KnowledgeDirty { get; set; }
 
+		/// <inheritdoc/>
+		public long KnowledgeVersion { get; private set; }
+
 		/// <summary>
 		/// All known base ability template IDs for this character.
 		/// </summary>
@@ -144,6 +147,7 @@ namespace FishMMO.Shared
 			}
 
 			KnowledgeDirty = true;
+			++KnowledgeVersion;
 			OnAddKnownAbility?.Invoke(template);
 			return true;
 		}
@@ -197,6 +201,7 @@ namespace FishMMO.Shared
 
 			CategorizeAbilityEvent(abilityEvent);
 			KnowledgeDirty = true;
+			++KnowledgeVersion;
 			OnAddKnownAbilityEvent?.Invoke(abilityEvent);
 			return true;
 		}

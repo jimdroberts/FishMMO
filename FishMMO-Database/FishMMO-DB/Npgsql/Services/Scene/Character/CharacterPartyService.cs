@@ -138,10 +138,23 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid version. Version must be greater than 0.");
 			}
 
-			var result = await ExecuteWriteAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var characterTableName = dbContext.GetTableName<CharacterEntity>();
 				var partyTableName = dbContext.GetTableName<PartyEntity>();
+
+				/* The container row is locked in a statement of its OWN, inside this transaction,
+				 * before the statement below counts the members. That statement also locks the row
+				 * and counts in one go, and on its own that is not enough: under READ COMMITTED a
+				 * statement's snapshot is taken when it starts, so a join that waited on the lock
+				 * still counted from before the join it waited for had committed, and both went in.
+				 * Measured on PostgreSQL 18 (issue #267): twenty concurrent joins against a cap of
+				 * five left up to nineteen members. Locked first, the counting statement starts after
+				 * every earlier join has committed and sees them all. */
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$"SELECT id FROM {partyTableName} WHERE id = {{0}} FOR UPDATE",
+					new object[] { partyData.PartyID },
+					cancellationToken).ConfigureAwait(false);
 
 				var sql = $@"
 					WITH

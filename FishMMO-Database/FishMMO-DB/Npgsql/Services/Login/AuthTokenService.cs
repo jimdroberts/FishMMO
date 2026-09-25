@@ -7,6 +7,7 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Shared;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -65,16 +66,32 @@ namespace FishMMO.Database.Npgsql.Services
 					"Expiry must be in the future.");
 			}
 
+			// See CanonicalAccountName.
+			string canonicalName = CanonicalAccountName(accountName);
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"INSERT INTO {TableName} (token_hash, account_name, login_server_id, expires_utc, revoked)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
-					RETURNING id, token_hash, account_name, login_server_id, time_created, expires_utc, revoked";
+				/* The token hash is a digest of a random token, so a conflict on it can only be this
+				 * call's own row, landed by an attempt whose reply was lost. The retry used to fail
+				 * on the unique index and the sign-in was refused with ServerBusy for a token that
+				 * was in fact recorded (issue #267); it now answers with that row. The fallback is
+				 * matched on the account and issuer too, so it can only ever return this call's row. */
+				var sql = $@"WITH ins AS (
+						INSERT INTO {TableName} (token_hash, account_name, login_server_id, expires_utc, revoked)
+						VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
+						ON CONFLICT (token_hash) DO NOTHING
+						RETURNING id, token_hash, account_name, login_server_id, time_created, expires_utc, revoked
+					)
+					SELECT id, token_hash, account_name, login_server_id, time_created, expires_utc, revoked FROM ins
+					UNION ALL
+					SELECT id, token_hash, account_name, login_server_id, time_created, expires_utc, revoked FROM {TableName}
+					WHERE token_hash = {{0}} AND account_name = {{1}} AND login_server_id = {{2}}
+						AND NOT EXISTS (SELECT 1 FROM ins)";
 
 				return await ExecuteReturningAsync(
 					dbContext,
 					sql,
-					new object[] { tokenHash, accountName, loginServerId, expiresUtc, false },
+					new object[] { tokenHash, canonicalName, loginServerId, expiresUtc, false },
 					reader => new AuthTokenEntity
 					{
 						ID = reader.GetInt64(0),
@@ -147,27 +164,44 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> RevokeAllForAccountAsync(
+		public async Task<DatabaseResult<int>> RevokeAllForAccountAsync(
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(accountName))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<int>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Account name must not be empty.");
 			}
 
+			// See CanonicalAccountName: an exact match on the name as given revoked nothing when the
+			// caller's spelling differed from the row's, and reported success.
+			string canonicalName = CanonicalAccountName(accountName);
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName} SET revoked = TRUE WHERE account_name = {{0}} AND revoked = FALSE";
-				await dbContext.Database.ExecuteSqlRawAsync(
+				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { accountName },
+					new object[] { canonicalName },
 					cancellationToken)
 					.ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
+
+		/// <summary>
+		/// The account row's own spelling of <paramref name="accountName"/>.
+		/// </summary>
+		/// <remarks>
+		/// <c>auth_tokens.account_name</c> references <c>accounts.name</c>, which is stored lowercase,
+		/// while a sign-in proves the spelling the player registered with (SRP needs the exact
+		/// identifier) and an operator may type any case. Accounts are looked up case-insensitively
+		/// through the same normalisation (see <c>AccountService</c>), and a stored name is the
+		/// lowercase form of a name that rule allows, so this is exactly the row's name.
+		/// </remarks>
+		internal static string CanonicalAccountName(string accountName) =>
+			Authentication.NormalizeAccountLookup(accountName);
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> CleanupExpiredAsync(

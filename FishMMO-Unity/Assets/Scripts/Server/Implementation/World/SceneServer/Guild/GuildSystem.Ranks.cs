@@ -423,12 +423,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					await Log.Warning("GuildSystem", $"DeleteGuildRankAsync delete failed (GuildID={guildID}, RankOrder={rankOrder}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
 
-					/* The service reports an occupied rank as a VALIDATION_ERROR — it is the
-					 * occupancy test in the delete's own statement — and a missing one as
-					 * NOT_FOUND. Anything else is a fault, and used to reach the player as "rank
-					 * in use", which is a claim about the guild's members that nobody could verify. */
+					/* The service reports an occupied rank as IN_USE — the occupancy test in the
+					 * delete's own statement — and a missing one as NOT_FOUND. Anything else is a
+					 * fault, and must not reach the player as "rank in use", which is a claim about
+					 * the guild's members nobody could verify. (Occupancy used to share
+					 * VALIDATION_ERROR with a malformed request; issue #267.) */
 					GuildResultType refusal = deleteResult.ErrorCode == DatabaseErrorCodes.NotFound ? GuildResultType.RankNotFound
-						: deleteResult.ErrorCode == DatabaseErrorCodes.ValidationError ? GuildResultType.RankInUse
+						: deleteResult.ErrorCode == DatabaseErrorCodes.InUse ? GuildResultType.RankInUse
 						: GuildResultType.Failed;
 
 					RefuseRankEdit(conn, refusal, await ResolveGuildAuthorityAsync(guildID, deleterCharacterID));

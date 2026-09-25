@@ -31,11 +31,19 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Compiled query for FetchAsync (by id) hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
+		/* No (CharacterEntity?) cast on the body, and the nullability warning silenced instead, as
+		 * on the queries below. The cast wrapped FirstOrDefault in a Convert node; CompileAsyncQuery
+		 * turns FirstOrDefault into its async form and the Convert was left converting a
+		 * Task<CharacterEntity> to a CharacterEntity, so every call threw INVALID_OPERATION ("No
+		 * coercion operator is defined") — FetchAsync(long) had never returned a character, which
+		 * broke adding a friend, the friend list's status at login and naming by id (issue #267). */
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterEntity?>> fetchByIdQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
-				(CharacterEntity?)context.Characters
+				context.Characters
 					.AsNoTracking()
 					.FirstOrDefault(c => c.ID == characterId && !c.Deleted));
+#pragma warning restore CS8619
 
 		/// <summary>
 		/// Compiled query for retrieving character by name (hot path for login/character selection).
@@ -610,7 +618,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWriteAsync(async dbContext =>
+			/* A transaction rather than a single write: the character row and the purge of its
+			 * deletion tombstones below must land together, or a restore that half-applied would
+			 * leave a live character whose saves are refused. */
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var entity = await dbContext.Characters
 					.FirstOrDefaultAsync(c => c.ID == characterId, cancellationToken)
@@ -658,6 +669,48 @@ namespace FishMMO.Database.Npgsql.Services
 				// does not expect.
 				entity.Selected = false;
 				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+				/* Remove the tombstones the deletion wrote, or the restored character can never save
+				 * these tables again.
+				 *
+				 * When the login server is configured not to keep a deleted character's data
+				 * (CharacterSelectSystem.KeepDeleteData = false), deletion soft-deletes every
+				 * sub-entity row at version long.MaxValue — the value that is guaranteed to pass each
+				 * table's "incoming version wins" guard. The same guard then refuses every later
+				 * write to those keys: no version a save can carry exceeds long.MaxValue. So a
+				 * restored character's attributes, buffs, factions, achievements, abilities and pets
+				 * were reported SUPERSEDED on every save and silently never written, and its hotkeys
+				 * failed STALE_STATE outright (issue #267 audit).
+				 *
+				 * Removed, not un-deleted: in that mode deletion hard-deletes the character's items,
+				 * so the data was not kept and bringing half of it back would be a character nobody
+				 * ever had. Only rows at exactly long.MaxValue are touched — a row tombstoned during
+				 * play (a quest turned in, say) carries its own small version and must keep refusing
+				 * the stale save it exists to refuse. With KeepDeleteData on (the shipped setting)
+				 * deletion writes no tombstones and this removes nothing. */
+				const long DeletionTombstoneVersion = long.MaxValue;
+				string[] tombstonedTables =
+				{
+					dbContext.GetTableName<CharacterAbilityEntity>(),
+					dbContext.GetTableName<CharacterAchievementEntity>(),
+					dbContext.GetTableName<CharacterAttributeEntity>(),
+					dbContext.GetTableName<CharacterBuffEntity>(),
+					dbContext.GetTableName<CharacterFactionEntity>(),
+					dbContext.GetTableName<CharacterFriendEntity>(),
+					dbContext.GetTableName<CharacterHotkeyEntity>(),
+					dbContext.GetTableName<CharacterKnownAbilityEntity>(),
+					dbContext.GetTableName<CharacterPetEntity>(),
+					dbContext.GetTableName<CharacterPetAttributeEntity>(),
+					dbContext.GetTableName<CharacterPetBuffEntity>(),
+					dbContext.GetTableName<CharacterArchetypeEntity>(),
+				};
+				foreach (string table in tombstonedTables)
+				{
+					await dbContext.Database.ExecuteSqlRawAsync(
+						$"DELETE FROM {table} WHERE character_id = {{0}} AND deleted = TRUE AND version = {{1}}",
+						new object[] { characterId, DeletionTombstoneVersion },
+						cancellationToken).ConfigureAwait(false);
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -1120,10 +1173,15 @@ namespace FishMMO.Database.Npgsql.Services
 					UPDATE {tableName} 
 					SET selected = (id = {{1}})
 					WHERE account = {{0}} AND deleted = FALSE
-					AND id IN (SELECT id FROM locked_chars)",
+					AND id IN (SELECT id FROM locked_chars)
+					AND EXISTS (SELECT 1 FROM locked_chars WHERE id = {{1}})",
 					new object[] { account, characterId },
 					cancellationToken).ConfigureAwait(false);
 
+				/* The EXISTS is what makes a character that is not one of this account's live
+				 * characters NotFound. Without it, a foreign or deleted id still matched every row
+				 * of the account, set `selected` false on all of them and reported success,
+				 * leaving the account with nothing selected (issue #267). */
 				if (rowsAffected == 0)
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
@@ -1901,24 +1959,37 @@ namespace FishMMO.Database.Npgsql.Services
 				 * The pre-update value comes back through a CTE, because RETURNING reports the row
 				 * as written. The caller needs it to undo the claim when the transfer it was taken
 				 * for does not happen — see RollbackChannelSwitchAsync. */
+				/* One row always comes back, saying whether the character exists as well as what the
+				 * claim replaced: a missing or deleted character used to return no row, which reads
+				 * as "on cooldown", so the player was told they were travelling too often
+				 * (issue #267). It is NotFound now. */
 				var sql = $@"WITH previous AS (
 						SELECT id, last_channel_switch_utc
 						FROM {tableName}
 						WHERE id = {{1}} AND deleted = false
+					),
+					stamped AS (
+						UPDATE {tableName} AS c
+						SET last_channel_switch_utc = {{0}}
+						FROM previous
+						WHERE c.id = previous.id
+							AND previous.last_channel_switch_utc <= {{2}}
+						RETURNING previous.last_channel_switch_utc AS was
 					)
-					UPDATE {tableName} AS c
-					SET last_channel_switch_utc = {{0}}
-					FROM previous
-					WHERE c.id = previous.id
-						AND previous.last_channel_switch_utc <= {{2}}
-					RETURNING previous.last_channel_switch_utc";
+					SELECT (SELECT COUNT(*) FROM previous), (SELECT was FROM stamped)";
 
-				return await ExecuteReturningOrDefaultAsync(
+				var outcome = await ExecuteReturningOrDefaultAsync(
 					dbContext,
 					sql,
 					new object[] { nowUtc, characterId, eligibleBeforeUtc },
-					reader => (DateTime?)reader.GetDateTime(0),
+					reader => (Found: reader.GetInt64(0) > 0, Was: reader.IsDBNull(1) ? (DateTime?)null : reader.GetDateTime(1)),
 					cancellationToken).ConfigureAwait(false);
+
+				if (!outcome.Found)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+				return outcome.Was;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
@@ -2026,7 +2097,13 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>The character data DTO.</returns>
 		private static CharacterData MapEntityToData(CharacterEntity entity)
 		{
-			var online = entity.SessionState != CharacterSessionState.Offline;
+			/* The claim predicate every other reader here uses (AnyOnlineAsync, the online filter,
+			 * FetchInWorldCharacterAsync): a claim whose lease has lapsed belongs to a server that is
+			 * no longer there. Without the lease check, the row a crashed scene server left behind
+			 * reported its character online to the friend list, to whispers and to the Control Panel
+			 * until something claimed it again (issue #267). */
+			var online = entity.SessionState == CharacterSessionState.Online &&
+						 entity.SessionLeaseExpiresUtc > DateTime.UtcNow;
 
 			return new CharacterData(
 				entity.ID,

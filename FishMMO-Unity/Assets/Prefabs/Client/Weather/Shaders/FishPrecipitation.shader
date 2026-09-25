@@ -49,7 +49,9 @@ Shader "FishMMO/Weather/Precipitation"
             // Per draw, from a MaterialPropertyBlock.
             float4 _PrecipOrigin;   // xyz camera position, w time in seconds
             float4 _PrecipBox;      // xyz size of the wrapping box around the camera, w near fade distance
-            float4 _PrecipFall;     // xyz fall velocity in m/s (wind included)
+            float4 _PrecipFall;     // xyz the kind's velocity now at its typical particle, m/s, wind included
+            float4 _PrecipTravel;   // x, z metres the air has carried everything, y metres the typical particle has fallen; wrapped
+            float4 _PrecipSpread;   // x slowest, y fastest particle against the typical one, z 1 when it falls from cloud
             float4 _PrecipShape;    // x visible share of particles, y size in metres, z stretch, w atlas row
             float4 _PrecipFlutter;  // x sway in metres, y sway frequency, z alpha, w brightness
             float4 _PrecipColor;    // tint for this draw
@@ -75,19 +77,23 @@ Shader "FishMMO/Weather/Precipitation"
                 float time = _PrecipOrigin.w;
                 float3 box = max(_PrecipBox.xyz, 1.0);
 
-                // Hide particles beyond the requested share: density is the fraction shown.
-                float visible = step(input.random.x, _PrecipShape.x);
 
                 // Each particle falls at its own speed; positions wrap inside a box that follows the
                 // camera, but in world space, so walking does not drag the particles along.
                 // Each drop's own fall. The field used to move as one sheet — every particle carried
                 // by the same vector, speeds within a fifth of each other, every streak parallel and
                 // the same length — which the eye reads as a pattern sliding past. A big drop falls
-                // faster than a small one (the same random that sets its size sets its speed, so the
-                // two agree), the air it falls through is never still, and no two streaks are quite
-                // alike.
-                float speed = lerp(0.55, 1.35, input.random.y) * lerp(0.9, 1.1, input.random.z);
-                float3 travelled = _PrecipFall.xyz * speed * time;
+                // faster than a small one (mostly the same random that sets its size sets its speed,
+                // so the two agree), the air it falls through is never still, and no two streaks are
+                // quite alike. Sideways, though, every particle goes with the air.
+                //
+                // Where it has got to is the travel PrecipitationField.Advance integrates, never the
+                // velocity times the time: that is only right while nothing changes, and the wind
+                // never stops changing. The speed is a whole number of 64ths of the typical one, which
+                // is what lets the fall be wrapped there without moving anything.
+                float share = saturate(input.random.y * 0.8 + input.random.z * 0.2);
+                float speed = round(lerp(_PrecipSpread.x, _PrecipSpread.y, share) * 64.0) / 64.0;
+                float3 travelled = float3(_PrecipTravel.x, -_PrecipTravel.y * speed, _PrecipTravel.z);
                 // Turbulence: a slow lateral wander, its own phase and rate to every drop, scaled by
                 // the wind — a still day's rain falls straight, a gusty one's is thrown about.
                 float gustiness = 0.15 + 0.25 * saturate(length(_PrecipFall.xz) / max(1.0, abs(_PrecipFall.y)));
@@ -99,11 +105,23 @@ Shader "FishMMO/Weather/Precipitation"
                 float phase = input.random.w * 6.2831 + time * _PrecipFlutter.y;
                 centre.xz += float2(sin(phase), cos(phase * 1.3)) * _PrecipFlutter.x;
 
+                /* HOW MANY fall here: the kind's share, times how much of it the cloud above can
+                 * shed. The field's weather says how hard it is raining where it rains; the cloud
+                 * standing over this spot says where, and a thin patch of it sheds less than the
+                 * deck's thick heart — so a gap in the deck is a gap in the rain, a thinning is a
+                 * thinning, and a shower moves with the cloud it falls from. It FADED the drops
+                 * instead, which under a thin patch left the full number of them hanging half there,
+                 * like a ghost of rain. A drop near its turn fades over a narrow band rather than
+                 * blinking as the cloud moves past it. Sand is lifted off the ground by the wind and
+                 * owes the sky nothing. */
+                float shedding = lerp(1.0, smoothstep(0.08, 0.35, FishCloudOver(centre)), saturate(_PrecipSpread.z));
+                float visible = saturate((_PrecipShape.x * shedding - input.random.x) * 25.0);
+
                 float3 toCamera = _WorldSpaceCameraPos.xyz - centre;
                 float distance = length(toCamera);
                 float3 view = toCamera / max(distance, 1e-3);
 
-                float size = _PrecipShape.y * lerp(0.7, 1.3, input.random.y) * visible;
+                float size = _PrecipShape.y * lerp(0.7, 1.3, input.random.y) * step(0.001, visible);
                 float3 axis;
                 float3 side;
                 float length01 = size;
@@ -111,10 +129,14 @@ Shader "FishMMO/Weather/Precipitation"
                 {
                     // Streaks: along the fall direction, facing the camera — each leaning a little its
                     // own way, and its own length, since a drop's streak is its speed over the frame.
-                    float3 lean = float3(input.random.z - 0.5, 0.0, input.random.w - 0.5) * 0.12 * length(_PrecipFall.xyz);
-                    axis = normalize(_PrecipFall.xyz + lean + float3(0, -1e-3, 0));
+                    // Along its OWN motion: the same wind and its own fall, so a fast drop streaks
+                    // steeper than a slow one in the same gust.
+                    float3 own = float3(_PrecipFall.x, _PrecipFall.y * speed, _PrecipFall.z);
+                    float3 lean = float3(input.random.z - 0.5, 0.0, input.random.w - 0.5) * 0.12 * length(own);
+                    axis = normalize(own + lean + float3(0, -1e-3, 0));
                     side = normalize(cross(axis, view) + float3(1e-4, 0, 0));
-                    length01 = size * _PrecipShape.z * lerp(0.85, 1.15, (speed - 0.5) / 0.9);
+                    float quick = saturate((speed - _PrecipSpread.x) / max(1e-3, _PrecipSpread.y - _PrecipSpread.x));
+                    length01 = size * _PrecipShape.z * lerp(0.85, 1.15, quick);
                 }
                 else
                 {
@@ -128,10 +150,6 @@ Shader "FishMMO/Weather/Precipitation"
                 float nearFade = saturate((distance - 0.3) / max(_PrecipBox.w, 0.1));
                 float farFade = saturate((box.x * 0.5 - distance) / (box.x * 0.2));
                 float open = FishSkyOpen(centre);
-                // And only under cloud: the amount says how hard it is raining where it rains, the
-                // cloud overhead says where. A gap in the deck is a gap in the rain, and a cell's
-                // rain moves with the cell.
-                float underCloud = smoothstep(0.08, 0.35, FishCloudOver(centre));
 
                 // Soft ambient light from above plus a little of the main light.
                 Light mainLight = GetMainLight();
@@ -142,7 +160,7 @@ Shader "FishMMO/Weather/Precipitation"
                 float tile = floor(frac(input.random.w * 7.13) * 4.0);
                 float row = _PrecipShape.w;
                 output.uv = float2((input.corner.x + tile) * 0.25, 1.0 - (row + 1.0 - input.corner.y) * 0.125);
-                output.color = float4(_PrecipColor.rgb * _Tint.rgb * light * _PrecipFlutter.w, _PrecipColor.a * _Tint.a * _PrecipFlutter.z * nearFade * farFade * open * underCloud * visible);
+                output.color = float4(_PrecipColor.rgb * _Tint.rgb * light * _PrecipFlutter.w, _PrecipColor.a * _Tint.a * _PrecipFlutter.z * nearFade * farFade * open * visible);
                 output.fogCoord = ComputeFogFactor(output.positionCS.z);
                 return output;
             }

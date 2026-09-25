@@ -32,16 +32,20 @@ namespace FishMMO.Database.Data
 		/// <summary>Attached item randomization seed.</summary>
 		public readonly int ItemAttachmentSeed;
 		/// <summary>Attached item stack amount.</summary>
-		public readonly int ItemAttachmentAmount;
+		/// <remarks>
+		/// uint, as the send and the claim carry it and the bigint column stores it. It was an int
+		/// here only, so an amount above int.MaxValue read back negative in the mail list (issue #267).
+		/// </remarks>
+		public readonly uint ItemAttachmentAmount;
 
 		long IVersioned<CharacterMailData>.Version => Version;
 
-		public CharacterMailData(long id, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachmentTemplateID, int itemAttachmentSeed, int itemAttachmentAmount)
+		public CharacterMailData(long id, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachmentTemplateID, int itemAttachmentSeed, uint itemAttachmentAmount)
 			: this(id, version: 0, characterID, senderID, senderName, subject, body, timeSent, read, currencyAttachment, itemAttachmentTemplateID, itemAttachmentSeed, itemAttachmentAmount)
 		{
 		}
 
-		public CharacterMailData(long id, long version, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachmentTemplateID, int itemAttachmentSeed, int itemAttachmentAmount)
+		public CharacterMailData(long id, long version, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachmentTemplateID, int itemAttachmentSeed, uint itemAttachmentAmount)
 		{
 			ID = id;
 			Version = version;

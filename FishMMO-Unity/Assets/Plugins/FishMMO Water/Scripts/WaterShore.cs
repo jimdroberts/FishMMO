@@ -37,6 +37,7 @@ namespace FishMMO.Water
 		private static readonly int SeaId = Shader.PropertyToID("_FishWaterSwashSea");
 		private static readonly int SkewId = Shader.PropertyToID("_FishWaterSwashSkew");
 		private static readonly int TimeId = Shader.PropertyToID("_FishWaterShoreTime");
+		private static readonly int CyclesId = Shader.PropertyToID("_FishWaterSwashCycles");
 		private static readonly int FoamId = Shader.PropertyToID("_FoamTexture");
 
 		[Tooltip("The shore material. Must use FishMMO/Water/Shore.")]
@@ -91,6 +92,19 @@ namespace FishMMO.Water
 
 		/// <summary>The shore's clock, in seconds: what the swash and the surf train both run on.</summary>
 		public double SurfClock => clock;
+
+		/// <summary>
+		/// Which wave the shore is on, in waves: the swash's phase, ADDED UP a frame at a time at the
+		/// period of the moment, and wrapped at a thousand whole waves.
+		/// </summary>
+		/// <remarks>
+		/// It was the clock over the period. The period is the live sea's, so it drifts as the wind
+		/// does, and with the clock thousands of seconds in, a drift of one part in ten thousand moved
+		/// the swash a fifth of a wave: the shore surged about with the world's time stopped, and
+		/// raced when it ran. Added up, a new period changes only how fast the waves come.
+		/// </remarks>
+		public double SurfCycles => cycles;
+		private double cycles;
 
 		/// <summary>Seconds between arriving waves, as last published; 0 before the first frame.</summary>
 		public float SurfPeriod { get; private set; }
@@ -225,6 +239,8 @@ namespace FishMMO.Water
 		public void SetClock(double seconds)
 		{
 			clock = seconds % 10000.0;
+			// Stepped by hand, a probe expects the clock over the period, and gets it.
+			cycles = (seconds / Mathf.Max(0.5f, SurfPeriod)) % 1000.0;
 			lastRealtime = Time.realtimeSinceStartupAsDouble;
 			overridden = true;
 		}
@@ -276,8 +292,11 @@ namespace FishMMO.Water
 			}
 			if (!overridden)
 			{
-				// The world's motion, so the surf stops when the world's time does.
-				clock = (clock + WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f))) % 10000.0;
+				// The world's motion, as the sea's: the surf stops when the world's time does, and never
+				// runs faster than real time (WorldMotion).
+				double step = WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f));
+				clock = (clock + step) % 10000.0;
+				cycles = (cycles + step / Mathf.Max(0.5f, SurfPeriod)) % 1000.0;
 			}
 			overridden = false;
 			lastRealtime = now;
@@ -320,6 +339,7 @@ namespace FishMMO.Water
 			Shader.SetGlobalVector(SeaId, new Vector4(SurfSeaHeight, SurfDeepWavelength, 0f, 0f));
 			Shader.SetGlobalFloat(SkewId, Mathf.Clamp01(Skew));
 			Shader.SetGlobalFloat(TimeId, (float)clock);
+			Shader.SetGlobalFloat(CyclesId, (float)cycles);
 
 			// Once a frame, whichever camera is first: the memory is the beach's, not the camera's.
 			if (memoryFrame != Time.frameCount)

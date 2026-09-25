@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using System.IO;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Rendering;
 using FishMMO.Client;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
@@ -118,15 +120,20 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheWindPushesWhatFalls()
 		{
+			/* Everything that falls goes where the air goes; what makes sand look blown and rain not
+			 * is only how slowly sand comes down. Each kind used to take its own share of the wind —
+			 * rain 0.35, hail 0.2 — which is the physics backwards: a raindrop still carries the wind
+			 * from metres above the eye, and that is faster. */
 			PrecipitationLook sand = PrecipitationLook.Sand();
 			PrecipitationLook rain = PrecipitationLook.Rain();
 			WeatherFrame east = Frame((WeatherChannel.WindSpeed, 0.5f), (WeatherChannel.WindHeading, 90f));
-			Vector3 sandFall = PrecipitationField.FallVelocity(east, sand, 0f);
-			Vector3 rainFall = PrecipitationField.FallVelocity(east, rain, 0f);
+			Vector3 sandFall = PrecipitationField.FallVelocity(east, sand, WeatherChannel.SandWeight, 0f);
+			Vector3 rainFall = PrecipitationField.FallVelocity(east, rain, WeatherChannel.RainWeight, 0f);
 			LogAssert.IsTrue(sandFall.x > 0f && Mathf.Abs(sandFall.z) < 1e-3f, "a wind toward 90° blows toward +X");
-			LogAssert.IsTrue(sandFall.x > rainFall.x, "sand follows the wind more than rain");
+			LogAssert.IsTrue(rainFall.x >= sandFall.x, $"rain carries the wind from higher up: {rainFall.x:0.00} m/s against sand's {sandFall.x:0.00}");
+			LogAssert.IsTrue(sandFall.x / -sandFall.y > rainFall.x / -rainFall.y, "but sand comes down slower, so it is blown flatter");
 			LogAssert.IsTrue(rainFall.y < sandFall.y, "rain falls faster");
-			LogAssert.IsTrue(PrecipitationField.FallVelocity(new WeatherFrame(), rain, 0f).y < 0f, "everything falls down");
+			LogAssert.IsTrue(PrecipitationField.FallVelocity(new WeatherFrame(), rain, WeatherChannel.RainWeight, 0f).y < 0f, "everything falls down");
 		}
 
 		[Test]
@@ -137,13 +144,141 @@ namespace FishMMO.UnitTests.Weather
 			 * which streamed it sideways at nine to eighteen metres a second in an ordinary breeze. */
 			PrecipitationLook snow = PrecipitationLook.Snow();
 			WeatherFrame breeze = Frame((WeatherChannel.WindSpeed, 10f / 30f), (WeatherChannel.WindHeading, 90f));
-			Vector3 steady = PrecipitationField.FallVelocity(breeze, snow, 0f);
-			Vector3 gusting = PrecipitationField.FallVelocity(breeze, snow, 1f);
+			Vector3 steady = PrecipitationField.FallVelocity(breeze, snow, WeatherChannel.SnowWeight, 0f);
+			Vector3 gusting = PrecipitationField.FallVelocity(breeze, snow, WeatherChannel.SnowWeight, 1f);
 
-			float expected = 10f * PrecipitationField.EyeLevelWind * snow.WindResponse;
-			LogAssert.IsTrue(Mathf.Abs(steady.x - expected) < 0.01f, $"a 10 m/s breeze drifts snow at {steady.x:0.00} m/s; eye-height wind is {expected:0.00}");
+			float eyeLevel = 10f * PrecipitationField.WindShareAt(PrecipitationField.EyeHeight);
+			LogAssert.IsTrue(Mathf.Abs(eyeLevel - 7.23f) < 0.02f, $"the log profile puts a 10 m/s wind at {eyeLevel:0.00} m/s at eye height");
+			LogAssert.IsTrue(Mathf.Abs(steady.x - eyeLevel) < eyeLevel * 0.03f, $"a 10 m/s breeze drifts snow at {steady.x:0.00} m/s; eye-height wind is {eyeLevel:0.00}");
 			LogAssert.IsTrue(gusting.x < steady.x * 1.45f, $"a full gust lifts the drift {gusting.x / steady.x:0.00}x; a real one peaks near 1.4x");
 			LogAssert.IsTrue(steady.y > -1.5f, "snow still falls at snow's speed, not rain's");
+		}
+
+		[Test]
+		public void MotionIsIntegrated_SoAGustingWindNeverTeleportsAnything()
+		{
+			/* The shader placed every particle at its velocity times the seconds since the weather
+			 * began, whose derivative is v + t·dv/dt. Ten minutes into a gusting breeze that swung
+			 * snow about at hundreds of metres a second. Integrated, no frame's step is ever more than
+			 * the fastest the air was moving. */
+			PrecipitationLook snow = PrecipitationLook.Snow();
+			var box = new Vector3(24f, 18f, 24f);
+			var travel = new PrecipitationField.Travel();
+			const float step = 1f / 60f;
+			float worst = 0f, fastest = 0f;
+			for (int i = 0; i < 60 * 600; i++)
+			{
+				float time = i * step;
+				// A breeze whose gusts come and go every few seconds, veering as they do.
+				WeatherFrame frame = Frame((WeatherChannel.WindSpeed, 10f / 30f), (WeatherChannel.WindHeading, 90f + 20f * Mathf.Sin(time * 0.3f)),
+					(WeatherChannel.WindGust, 1f), (WeatherChannel.DropSize, 0.5f + 0.5f * Mathf.Sin(time * 0.05f)));
+				float gust = 0.5f + 0.5f * Mathf.Sin(time * 0.7f) * Mathf.Sin(time * 0.23f + 1f);
+				Vector3 velocity = PrecipitationField.FallVelocity(frame, snow, WeatherChannel.SnowWeight, gust);
+				PrecipitationField.Travel before = travel;
+				PrecipitationField.Advance(ref travel, velocity, step, box);
+				double dx = ShortestWay(travel.X - before.X, box.x);
+				double dz = ShortestWay(travel.Z - before.Z, box.z);
+				double dy = ShortestWay(travel.Fall - before.Fall, box.y * PrecipitationField.SpeedSteps);
+				worst = Mathf.Max(worst, (float)(System.Math.Sqrt(dx * dx + dy * dy + dz * dz) / step));
+				fastest = Mathf.Max(fastest, velocity.magnitude);
+			}
+			LogAssert.IsTrue(worst <= fastest * 1.001f, $"ten minutes in, a particle moved at up to {worst:0.00} m/s in a wind of at most {fastest:0.00}");
+			LogAssert.IsTrue(fastest < 12f, $"and that was {fastest:0.00} m/s, not hundreds");
+		}
+
+		private static double ShortestWay(double delta, double period) => delta - period * System.Math.Round(delta / period);
+
+		[Test]
+		public void TheFallWrapsWhereEveryParticleIsWholeBoxesOn()
+		{
+			/* Each particle falls at a whole number of 64ths of its kind's speed, so when the kind's
+			 * fall wraps after 64 boxes every particle has fallen a whole number of boxes and the
+			 * shader's frac() puts it back where it was. The two halves are in two languages. */
+			string shader = File.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitation.shader"));
+			string steps = PrecipitationField.SpeedSteps.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+			LogAssert.IsTrue(shader.Contains($"* {steps}) / {steps}"), $"the shader rounds a particle's speed to 1/{steps} of its kind's, as Advance wraps it");
+			LogAssert.IsTrue(shader.Contains("_PrecipTravel") && !shader.Contains("_PrecipFall.xyz * speed * time"), "and places particles from the integrated travel, not velocity times time");
+		}
+
+		[Test]
+		public void NoRaindropOutrunsTheBiggestDrop()
+		{
+			/* Past about 9.2 m/s a raindrop breaks apart (Gunn and Kinzer): rain fell at up to sixteen
+			 * — 11 m/s at its largest, and half as fast again for a quick drop. */
+			PrecipitationLook rain = PrecipitationLook.Rain();
+			float quickest = rain.FallSpeed.y * PrecipitationField.TraitsOf(WeatherChannel.RainWeight).Spread.y;
+			LogAssert.IsTrue(quickest <= 9.2f, $"the fastest drop in the heaviest rain falls at {quickest:0.00} m/s");
+			float slowest = rain.FallSpeed.x * PrecipitationField.TraitsOf(WeatherChannel.RainWeight).Spread.x;
+			LogAssert.IsTrue(slowest >= 1.5f, $"and the slowest in the lightest at {slowest:0.00}: a drizzle drop");
+		}
+
+		[Test]
+		public void WhatFallsFromCloudFollowsItsCloud_SandDoesNot()
+		{
+			/* Rain, snow, hail and ash are shed by what is overhead, so they fall only under it and as
+			 * thickly as it allows; the particles are COUNTED by the cloud above, not faded by it.
+			 * Sand is lifted off the ground by the wind and was being blanked under a clear sky. */
+			LogAssert.IsTrue(PrecipitationField.TraitsOf(WeatherChannel.RainWeight).FromCloud, "rain falls from cloud");
+			LogAssert.IsTrue(PrecipitationField.TraitsOf(WeatherChannel.SnowWeight).FromCloud, "snow falls from cloud");
+			LogAssert.IsTrue(PrecipitationField.TraitsOf(WeatherChannel.HailWeight).FromCloud, "hail falls from cloud");
+			LogAssert.IsTrue(PrecipitationField.TraitsOf(WeatherChannel.AshWeight).FromCloud, "ash settles out of the plume");
+			LogAssert.IsFalse(PrecipitationField.TraitsOf(WeatherChannel.SandWeight).FromCloud, "sand owes the sky nothing");
+
+			string shader = File.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitation.shader"));
+			LogAssert.IsTrue(shader.Contains("_PrecipShape.x * shedding"), "the cloud above sets how MANY fall");
+			LogAssert.IsFalse(shader.Contains("underCloud"), "and no longer fades the drops it lets through");
+			string splash = File.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitationSplash.shader"));
+			LogAssert.IsTrue(splash.Contains("FishCloudOver("), "splashes land only where the drops can");
+		}
+
+		[Test]
+		public void AWorldsGravityAndAirSetHowFastThingsFall()
+		{
+			float g = SurfacePhysics.EarthGravity, air = SurfacePhysics.EarthAirDensity;
+			Assert.That(SurfacePhysics.TerminalSpeedScale(g, air, false), Is.EqualTo(1f).Within(1e-5f), "our own world is the reference");
+			Assert.That(SurfacePhysics.TerminalSpeedScale(4f * g, air, false), Is.EqualTo(2f).Within(1e-4f), "a drop's speed goes as the root of gravity");
+			Assert.That(SurfacePhysics.TerminalSpeedScale(g, 4f * air, false), Is.EqualTo(0.5f).Within(1e-4f), "and falls as the root of the air");
+			Assert.That(SurfacePhysics.TerminalSpeedScale(8f * g, 8f * air, true), Is.EqualTo(2f).Within(1e-4f), "a fine grain goes as g^2/3 over the cube root of the air");
+
+			/* Titan: a seventh of our gravity and four and a half times the air. Its methane rain was
+			 * measured falling at about 1.6 m/s where our biggest drops do 9 (Lorenz 1993). */
+			float titan = SurfacePhysics.TerminalSpeedScale(1.35f, 5.4f, false) * 9.2f;
+			Assert.That(titan, Is.EqualTo(1.6f).Within(0.2f), $"a big drop on Titan falls at {titan:0.00} m/s");
+		}
+
+		[Test]
+		public void GravityGoesWithTheRadius_AtOurOwnDensity()
+		{
+			var earth = ScriptableObject.CreateInstance<WorldBody>();
+			var small = ScriptableObject.CreateInstance<WorldBody>();
+			try
+			{
+				earth.SkyRadiusKm = 6371f;
+				small.SkyRadiusKm = 6371f * 0.5f;
+				Assert.That(SurfacePhysics.Gravity(earth), Is.EqualTo(SurfacePhysics.EarthGravity).Within(1e-3f));
+				Assert.That(SurfacePhysics.Gravity(small), Is.EqualTo(SurfacePhysics.EarthGravity * 0.5f).Within(1e-3f), "half the radius, half the pull");
+				Assert.That(SurfacePhysics.Gravity(null), Is.EqualTo(SurfacePhysics.EarthGravity).Within(1e-3f), "no body is our own world");
+				small.Atmosphere = AtmosphereKind.Thin;
+				Assert.That(SurfacePhysics.AirDensity(small), Is.EqualTo(SurfacePhysics.EarthAirDensity * AtmosphereModel.Density(AtmosphereKind.Thin)).Within(1e-4f));
+			}
+			finally
+			{
+				Object.DestroyImmediate(earth);
+				Object.DestroyImmediate(small);
+			}
+		}
+
+		[Test]
+		public void SnowOnAThinAiredWorldFallsFaster_AndTheWorldDecidesIt()
+		{
+			/* Nitrogen snow once carried a 1.6 speed-up for "the thinner air holding it" — the world's
+			 * air baked into the snow. The world supplies that now, so the substance must not. */
+			PrecipitationLook snow = PrecipitationLook.Snow();
+			WeatherFrame still = new WeatherFrame();
+			float here = -PrecipitationField.FallVelocity(still, snow, WeatherChannel.SnowWeight, 0f).y;
+			float thin = -PrecipitationField.FallVelocity(still, snow, WeatherChannel.SnowWeight, 0f,
+				SurfacePhysics.EarthGravity, SurfacePhysics.EarthAirDensity * AtmosphereModel.Density(AtmosphereKind.Thin)).y;
+			Assert.That(thin / here, Is.EqualTo(Mathf.Sqrt(1f / AtmosphereModel.Density(AtmosphereKind.Thin))).Within(1e-3f), "thin air lets snow fall faster by the root of how thin");
 		}
 
 		[Test]

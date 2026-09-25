@@ -171,7 +171,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Administrator '{character.Account}' changed '{target.CharacterName}' (id {target.ID}) {currencyTemplate.Name} from {before} to {after}.");
 
 			Reply(character, $"{target.CharacterName}: {before} to {after} {currencyTemplate.Name}." +
-				(queued ? string.Empty : " The save could not be queued; the next periodic save writes it."));
+				(queued ? string.Empty : " The persistence queue was full, so the save ran outside it; it is written all the same."));
 			if (target.ID != character.ID)
 			{
 				Reply(target, $"Staff adjusted your {currencyTemplate.Name}.");
@@ -316,7 +316,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// the version it stamped; a bump without the mark moves the attribute past a version an
 		/// in-flight save is waiting on, and it stays dirty for the rest of the session.
 		/// </remarks>
-		/// <returns>True when the write was queued.</returns>
+		/// <returns>
+		/// True when the write went through the persistence queue; false when the queue was full and
+		/// it ran directly instead (<c>EnqueuePersistence</c>'s fallback). It is written either way —
+		/// the replies used to tell the operator it would wait for the next periodic save (issue #267).
+		/// </returns>
 		private bool TryPersistOperatorAttribute(IPlayerCharacter character, int templateID, CharacterAttribute attribute, float currentValue)
 		{
 			attribute.Version++;

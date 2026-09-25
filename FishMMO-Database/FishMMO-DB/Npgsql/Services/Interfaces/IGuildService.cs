@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
@@ -51,6 +52,20 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
 		/// </remarks>
 		Task<DatabaseResult<string?>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Which of the given guilds still exist.
+		/// </summary>
+		/// <remarks>
+		/// For the scene servers' update pump. A disbanded guild's row goes, and its guild_updates row
+		/// goes with it by cascade, so the pump — which only ever learned of changes through that row —
+		/// never heard that the guild was gone, and its members on every other server kept a guild that
+		/// no longer existed (issue #267). The pump asks this instead.
+		/// </remarks>
+		/// <param name="guildIds">The guilds to look for.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>The subset of <paramref name="guildIds"/> that still exist.</returns>
+		Task<DatabaseResult<IReadOnlyCollection<long>>> FetchExistingIdsAsync(IReadOnlyCollection<long> guildIds, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the message of the day for a guild.

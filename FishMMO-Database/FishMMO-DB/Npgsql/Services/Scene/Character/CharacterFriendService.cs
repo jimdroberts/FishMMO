@@ -59,7 +59,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, bool isBlocked, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, bool isBlocked, int maxFriends, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || friendCharacterId <= 0)
 			{
@@ -84,16 +84,53 @@ namespace FishMMO.Database.Npgsql.Services
 			 * literal 1 (FriendSystem.AddFriendAsync) — so the resurrect gate asked
 			 * `1 > long.MaxValue`, matched nothing, and the caller saw a silent failure with no
 			 * result channel to report it. The pair was dead for the life of the account. */
-			var insertResult = await ExecuteWriteAsync(async dbContext =>
+			/* A transaction, and the owner's row locked in a statement of its own BEFORE the cap is
+			 * counted. The friend cap used to be enforced only in memory by FriendSystem, so two
+			 * adds racing past that check both landed and the next load gave the character more
+			 * friends than the cap allows (issue #267 audit).
+			 *
+			 * The lock and the count must be separate statements. Under READ COMMITTED a statement's
+			 * snapshot is taken when it starts: a single statement that locked the row and counted
+			 * would, after waiting on the lock, still count from the snapshot taken before the
+			 * other add committed — and both would pass. The count below starts after the lock is
+			 * held, so it sees every add that got there first. */
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var isActiveCharacter = await dbContext.Characters
-					.AsNoTracking()
-					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
-					.ConfigureAwait(false);
+				string characterTable = dbContext.GetTableName<CharacterEntity>();
+				bool isActiveCharacter = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					$"SELECT TRUE FROM {characterTable} WHERE id = {{0}} AND deleted = FALSE FOR UPDATE",
+					new object[] { characterId },
+					reader => reader.GetBoolean(0),
+					cancellationToken).ConfigureAwait(false);
 
 				if (!isActiveCharacter)
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString(), "Character not found or deleted.");
+				}
+
+				/* Blocks are not friends and are never capped. A pair that is already an active
+				 * friendship is not a new friend either — it is the add being replayed, which the
+				 * version check below answers — so it is not refused for a full list. */
+				if (!isBlocked && maxFriends > 0)
+				{
+					bool alreadyFriends = await dbContext.CharacterFriends
+						.AsNoTracking()
+						.AnyAsync(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId && !f.Deleted && !f.IsBlocked, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (!alreadyFriends)
+					{
+						int friendCount = await dbContext.CharacterFriends
+							.AsNoTracking()
+							.CountAsync(f => f.CharacterID == characterId && !f.Deleted && !f.IsBlocked, cancellationToken)
+							.ConfigureAwait(false);
+
+						if (friendCount >= maxFriends)
+						{
+							throw new DatabaseException($"The friend list is full ({maxFriends}).", errorCode: DatabaseErrorCodes.CapacityExceeded);
+						}
+					}
 				}
 
 				var now = DateTime.UtcNow;

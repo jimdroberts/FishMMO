@@ -94,15 +94,18 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+			/* One code per refusal. "Already in a guild" used to share ALREADY_EXISTS with "already
+			 * applied", and "too many outstanding applications" shared CAPACITY_EXCEEDED with "guild
+			 * full", so the caller could not tell the player which it was (issue #267 audit). */
 			return result.IsSuccess
 				? result.Data switch
 				{
 					0 => DatabaseResult.Success(),
 					1 => DatabaseResult.Failure(DatabaseErrorCodes.NotFound, $"Character with ID {characterId} was not found or has been deleted."),
 					2 => DatabaseResult.Failure(DatabaseErrorCodes.NotFound, "Guild does not exist or is not recruiting."),
-					3 => DatabaseResult.Failure(DatabaseErrorCodes.AlreadyExists, "Character is already in a guild."),
+					3 => DatabaseResult.Failure(DatabaseErrorCodes.AlreadyMember, "Character is already in a guild."),
 					4 => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, "Guild is full."),
-					5 => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, "Too many outstanding applications."),
+					5 => DatabaseResult.Failure(DatabaseErrorCodes.QuotaExceeded, "Too many outstanding applications."),
 					_ => DatabaseResult.Failure(DatabaseErrorCodes.AlreadyExists, "An application to this guild is already pending."),
 				}
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);

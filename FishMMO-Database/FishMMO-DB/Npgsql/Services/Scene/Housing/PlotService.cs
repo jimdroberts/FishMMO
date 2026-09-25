@@ -330,6 +330,35 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc />
+		public async Task<DatabaseResult<int>> TryRestoreTaxDueAsync(long plotID, DateTime advancedToUtc, DateTime restoreToUtc, CancellationToken cancellationToken = default)
+		{
+			if (plotID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Plot ID must be greater than zero.");
+			}
+			if (restoreToUtc >= advancedToUtc)
+			{
+				// Only ever backwards, and only to undo an advance; forwards is TryAdvanceTaxAsync.
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "The restored tax date must be earlier than the one being undone.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* Pinned to the date this caller advanced it to, exactly as the advance is pinned to
+				 * the date it read: if another server has since won a later period, the row no longer
+				 * holds advancedToUtc and this changes nothing. */
+				string sql = $@"UPDATE {TableName}
+					SET tax_due_utc = {{2}}, version = version + 1
+					WHERE id = {{0}} AND tax_due_utc = {{1}}";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { plotID, advancedToUtc, restoreToUtc },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
 		public async Task<DatabaseResult<int>> MarkTaxDelinquentAsync(long plotID, DateTime delinquentSinceUtc, CancellationToken cancellationToken = default)
 		{
 			if (plotID <= 0)

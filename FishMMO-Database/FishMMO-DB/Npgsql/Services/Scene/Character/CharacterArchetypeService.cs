@@ -62,22 +62,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more archetypes had an invalid Version. Version must be greater than 0.");
 			}
 
-			// Prevent duplicate keys within the same batch.
-			if (archetypeList.Count > 1)
-			{
-				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterArchetypeData>();
-				foreach (var archetype in archetypeList)
-				{
-					deduped[(archetype.CharacterID, archetype.TemplateID)] = archetype;
-				}
-
-				if (deduped.Count != archetypeList.Count)
-				{
-					archetypeList = deduped.Values.ToList();
-				}
-			}
-
+			// Counted before collapsing, so a key the batch names twice shows as Filtered. See BulkBatch.
 			int suppliedRows = archetypeList.Count;
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			archetypeList = BulkBatch.KeepNewest(archetypeList, archetype => (archetype.CharacterID, archetype.TemplateID), archetype => archetype.Version);
+
 
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{

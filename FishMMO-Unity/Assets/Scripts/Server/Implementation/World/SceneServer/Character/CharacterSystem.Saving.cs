@@ -114,6 +114,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly List<CharacterFactionData> Factions;
 			public readonly List<CharacterArchetypeData> Archetypes;
 			public readonly List<CharacterKnownAbilityData> KnownAbilities;
+			/// <summary>Each character's knowledge version as captured, keyed by character. See MarkKnowledgePersisted.</summary>
+			public readonly Dictionary<long, long> KnowledgeVersions;
 
 			public SubEntitySnapshot(int characterCount = 1)
 			{
@@ -127,6 +129,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Factions = new List<CharacterFactionData>(n * 8);
 				Archetypes = new List<CharacterArchetypeData>(n);
 				KnownAbilities = new List<CharacterKnownAbilityData>(n * 8);
+				KnowledgeVersions = new Dictionary<long, long>(n);
 			}
 		}
 
@@ -145,7 +148,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendWaypointData(character, snapshot.Waypoints);
 			AppendFactionData(character, snapshot.Factions);
 			AppendArchetypeData(character, snapshot.Archetypes);
-			AppendKnownAbilityData(character, snapshot.KnownAbilities);
+			AppendKnownAbilityData(character, snapshot.KnownAbilities, snapshot.KnowledgeVersions);
 		}
 
 		/// <summary>
@@ -203,7 +206,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (s.Waypoints.Count > 0) EnqueuePersistence(() => SaveWaypointsAsync(s.Waypoints));
 			if (s.Factions.Count > 0) EnqueuePersistence(() => SaveFactionsAsync(s.Factions));
 			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes));
-			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities));
+			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions));
 		}
 
 		/// <summary>
@@ -247,7 +250,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (s.Waypoints.Count > 0) await SaveWithRetryAsync(() => SaveWaypointsAsync(s.Waypoints), "waypoints", characterID);
 			if (s.Factions.Count > 0) await SaveWithRetryAsync(() => SaveFactionsAsync(s.Factions), "factions", characterID);
 			if (s.Archetypes.Count > 0) await SaveWithRetryAsync(() => SaveArchetypesAsync(s.Archetypes), "archetype", characterID);
-			if (s.KnownAbilities.Count > 0) await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities), "known abilities", characterID);
+			if (s.KnownAbilities.Count > 0) await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions), "known abilities", characterID);
 		}
 
 		/// <summary>Attempts one sub-entity table gets on the hand-off paths before it is given up on.</summary>
@@ -2074,13 +2077,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// filtered rather than applied.
 		/// </para>
 		/// </remarks>
-		private void AppendKnownAbilityData(IPlayerCharacter character, List<CharacterKnownAbilityData> knownAbilities)
+		private void AppendKnownAbilityData(IPlayerCharacter character, List<CharacterKnownAbilityData> knownAbilities, Dictionary<long, long> knowledgeVersions)
 		{
 			if (!character.TryGet(out IAbilityController abilityController) ||
 				!abilityController.KnowledgeDirty)
 			{
 				return;
 			}
+
+			// What this save covers: see MarkKnowledgePersisted.
+			knowledgeVersions[character.ID] = abilityController.KnowledgeVersion;
 
 			/* Base abilities and events share one table, keyed by template id — the same table the
 			 * merchant and achievement paths write to, one row at a time. */
@@ -2106,7 +2112,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Persists a snapshot of ability knowledge asynchronously.
 		/// </summary>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveKnownAbilitiesAsync(List<CharacterKnownAbilityData> knownAbilities)
+		private async Task<bool> SaveKnownAbilitiesAsync(List<CharacterKnownAbilityData> knownAbilities, Dictionary<long, long> knowledgeVersions)
 		{
 			try
 			{
@@ -2119,9 +2125,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<BulkWriteResult> result = await knownAbilityService.PersistAsync(knownAbilities);
 				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Known ability save", result);
 
-				if (written)
+				/* Gated on Filtered == 0, like the faction and attribute marks: a row the service
+				 * declined to attempt was never stored, so the mark must stay and the next pass
+				 * writes it again. Superseded rows are the benign case and pass. */
+				if (written && result.Data.Filtered == 0)
 				{
-					TryEnqueueMainThread(() => MarkKnowledgePersisted(knownAbilities));
+					TryEnqueueMainThread(() => MarkKnowledgePersisted(knowledgeVersions));
 				}
 
 				return written || !result.IsTransient;
@@ -2138,30 +2147,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Not gated on <c>Filtered == 0</c>, unlike the faction and attribute marks — but not for
-		/// the reason this used to give. Every knowledge row is written at version 1, so a row the
-		/// database already holds comes back SUPERSEDED, not filtered, and would pass that gate.
+		/// Called only for a write with no FILTERED rows (see <see cref="SaveKnownAbilitiesAsync"/>).
+		/// Every knowledge row is written at version 1, so a row the database already holds comes
+		/// back SUPERSEDED, not filtered, and correctly clears the mark.
 		/// </para>
 		/// <para>
-		/// What does come back filtered is any row whose template id is not positive: the service
-		/// refuses those as invalid. Template ids are signed deterministic hashes, so that is
-		/// roughly half of all templates, and every save of a character that knows one reports it.
-		/// Gating here would pin such a character dirty and rewrite its whole set every pass while
-		/// still never storing those rows. The fix belongs in the service (accept any non-zero id);
-		/// until then, clearing on a landed write is the lesser cost.
+		/// The gate used to be left off because the service filtered every row whose template id
+		/// was not positive — and template ids are signed deterministic hashes, so that was roughly
+		/// half of all templates, which were never stored at all. The service now refuses only 0
+		/// (issue #267), so a filtered row is a real refusal and keeps the character dirty.
+		/// </para>
+		/// <para>
+		/// Only for a character whose knowledge has not moved since the save captured it. The mark
+		/// used to be cleared unconditionally, so an ability learned while the write was in flight
+		/// was marked written by a save that never carried it — and, with nothing else learned,
+		/// never saved at all (issue #267). This is the faction marks' version check, over the
+		/// whole set because knowledge keeps no per-entry version.
 		/// </para>
 		/// </remarks>
-		private void MarkKnowledgePersisted(List<CharacterKnownAbilityData> knownAbilities)
+		private void MarkKnowledgePersisted(Dictionary<long, long> knowledgeVersions)
 		{
-			if (knownAbilities == null)
+			if (knowledgeVersions == null)
 			{
 				return;
 			}
 
-			for (int i = 0; i < knownAbilities.Count; ++i)
+			foreach (KeyValuePair<long, long> captured in knowledgeVersions)
 			{
-				if (TryGetResidentCharacter(knownAbilities[i].CharacterID, out IPlayerCharacter character) &&
-					character.TryGet(out IAbilityController abilityController))
+				if (TryGetResidentCharacter(captured.Key, out IPlayerCharacter character) &&
+					character.TryGet(out IAbilityController abilityController) &&
+					abilityController.KnowledgeVersion == captured.Value)
 				{
 					abilityController.KnowledgeDirty = false;
 				}

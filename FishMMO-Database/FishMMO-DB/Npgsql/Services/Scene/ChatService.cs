@@ -93,8 +93,19 @@ namespace FishMMO.Database.Npgsql.Services
 				// NOTE: Uses EF Core change tracker (AddAsync + SaveChanges) instead of raw SQL like most other
 				// services. Version is explicitly set to 1 to match the DB default; otherwise EF would default
 				// to 0 and the concurrency token check would fail on the first update.
+				// Taken once, outside the retried delegate. See the probe below.
+				Guid requestKey = Guid.NewGuid();
+
 				var result = await ExecuteWriteAsync(async dbContext =>
 				{
+					/* A retry after a reply lost past the commit finds the row its first attempt
+					 * wrote and writes nothing more; it used to log the message twice and deliver it
+					 * twice on every other scene server (issue #267). */
+					if (await dbContext.Chat.AsNoTracking().AnyAsync(e => e.RequestKey == requestKey, cancellationToken).ConfigureAwait(false))
+					{
+						return;
+					}
+
 					var entity = new ChatEntity
 					{
 						CharacterID = characterId,
@@ -106,7 +117,8 @@ namespace FishMMO.Database.Npgsql.Services
 						TimeCreated = DateTime.UtcNow,
 						Channel = channelByte,
 						Message = message,
-						Version = 1
+						Version = 1,
+						RequestKey = requestKey,
 					};
 
 				await dbContext.Chat.AddAsync(entity, cancellationToken).ConfigureAwait(false);
@@ -142,13 +154,35 @@ namespace FishMMO.Database.Npgsql.Services
 					return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, $"Message at index {i}: Message exceeds maximum length.");
 			}
 
-			for (int offset = 0; offset < messages.Count; offset += maxBatchSize)
+			/* ONE transaction around every chunk. Each chunk used to commit on its own and the
+			 * first failure was reported as the failure of the whole call — so a failed call could
+			 * already have committed its earlier chunks, and the caller's retry of the same list
+			 * wrote them again: duplicate rows in the chat log kept for audit, and duplicate
+			 * deliveries on every other scene server, whose pump reads new rows (issue #267 audit).
+			 * Now a call lands whole or not at all, and a transient failure retries the whole
+			 * transaction. maxBatchSize is only the size of each INSERT round trip. */
+			/* One key per row, taken once, outside the retried transaction. The transaction retries
+			 * whole, and the one reply that can be lost after everything landed is the COMMIT's: its
+			 * retry would then write every row again. The batch lands whole or not at all, so the
+			 * first row's key says which (issue #267). */
+			var requestKeys = new Guid[messages.Count];
+			for (int i = 0; i < requestKeys.Length; i++)
 			{
-				var batchCount = Math.Min(maxBatchSize, messages.Count - offset);
+				requestKeys[i] = Guid.NewGuid();
+			}
 
-				var result = await ExecuteWriteAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				Guid firstKey = requestKeys[0];
+				if (await dbContext.Chat.AsNoTracking().AnyAsync(e => e.RequestKey == firstKey, cancellationToken).ConfigureAwait(false))
 				{
-					var now = DateTime.UtcNow;
+					return;
+				}
+
+				var now = DateTime.UtcNow;
+				for (int offset = 0; offset < messages.Count; offset += maxBatchSize)
+				{
+					var batchCount = Math.Min(maxBatchSize, messages.Count - offset);
 					var entities = new ChatEntity[batchCount];
 
 					for (int i = 0; i < batchCount; i++)
@@ -174,20 +208,18 @@ namespace FishMMO.Database.Npgsql.Services
 							TimeCreated = now,
 							Channel = (byte)m.channel,
 							Message = m.message,
-							Version = 1
+							Version = 1,
+							RequestKey = requestKeys[offset + i],
 						};
 					}
 
 					await dbContext.Chat.AddRangeAsync(entities, cancellationToken).ConfigureAwait(false);
-				}, cancellationToken: cancellationToken).ConfigureAwait(false);
+					await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-				if (!result.IsSuccess)
-				{
-					return result;
+					// Written rows are not needed again; do not carry them into the next chunk's save.
+					dbContext.ChangeTracker.Clear();
 				}
-			}
-
-			return DatabaseResult.Success();
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

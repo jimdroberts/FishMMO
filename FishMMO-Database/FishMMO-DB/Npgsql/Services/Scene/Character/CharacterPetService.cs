@@ -90,11 +90,14 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			if (petData.TemplateID <= 0)
+			/* Zero is the only "no template" value. Template ids are the signed deterministic hash of
+			 * the template's type and asset name (CachedScriptableObject.AddToCache), so about half of
+			 * all templates have a NEGATIVE id; rejecting <= 0 here silently refused to save them. */
+			if (petData.TemplateID == 0)
 			{
 				return DatabaseResult.Failure(
 					DatabaseErrorCodes.ValidationError,
-					"Template ID must be greater than 0.");
+					"Template ID must not be 0.");
 			}
 
 			if (petData.Version <= 0)
@@ -226,34 +229,13 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Prevent duplicate keys within the same batch from causing
-			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
-			if (petsToInsert.Count > 1)
-			{
-				var dedupedInsert = new Dictionary<long, CharacterPetData>();
-				foreach (var pet in petsToInsert)
-				{
-					dedupedInsert[pet.CharacterID] = pet;
-				}
-				if (dedupedInsert.Count != petsToInsert.Count)
-				{
-					petsToInsert = dedupedInsert.Values.ToList();
-				}
-			}
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			petsToInsert = BulkBatch.KeepNewest(petsToInsert, pet => pet.CharacterID, pet => pet.Version);
 
-			// Avoid ambiguous multi-match UPDATE ... FROM when duplicate IDs are present.
-			if (petsToUpdate.Count > 1)
-			{
-				var dedupedUpdate = new Dictionary<long, CharacterPetData>();
-				foreach (var pet in petsToUpdate)
-				{
-					dedupedUpdate[pet.ID] = pet;
-				}
-				if (dedupedUpdate.Count != petsToUpdate.Count)
-				{
-					petsToUpdate = dedupedUpdate.Values.ToList();
-				}
-			}
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			petsToUpdate = BulkBatch.KeepNewest(petsToUpdate, pet => pet.ID, pet => pet.Version);
 
 			int suppliedRows = petList.Count;
 
@@ -279,11 +261,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var now = DateTime.UtcNow;
 
+				// Template ids are signed hashes; only 0 means "no template". See PersistAsync.
 				var activeUpdates = petsToUpdate
-					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID > 0)
+					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID != 0)
 					.ToList();
 				var activeInserts = petsToInsert
-					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID > 0)
+					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID != 0)
 					.ToList();
 
 				if (activeUpdates.Count > 0)

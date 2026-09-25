@@ -98,21 +98,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int maxPersistBatchSize = 2000;
 
 		/// <summary>
-		/// Largest batch <c>IChatService.PersistBatchAsync</c> writes as ONE transaction.
-		/// </summary>
-		/// <remarks>
-		/// The service splits a longer list into chunks of at most this many rows and commits each
-		/// chunk on its own, then reports the first chunk that fails as the failure of the whole
-		/// call. A failed call over a longer list may therefore have committed part of it already,
-		/// and retrying that list — which is exactly what the flush does on a failure — writes the
-		/// committed part a second time: duplicate rows in a log that is kept for audit. Every
-		/// flush is held to this size and passes it as the chunk size, so a call is all-or-nothing
-		/// and a retry can never duplicate anything. Mirrors the upper clamp inside
-		/// <c>ChatService.PersistBatchAsync</c>; the two must be changed together.
-		/// </remarks>
-		private const int MaxAtomicPersistBatchSize = 2500;
-
-		/// <summary>
 		/// How long a chat message the database refused with a transient failure keeps being retried.
 		/// </summary>
 		/// <remarks>
@@ -293,7 +278,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			chatTokenBucketCapacity = Mathf.Max(1, chatTokenBucketCapacity);
 			chatTokenRefillRate = Mathf.Max(0.01f, chatTokenRefillRate);
 			persistFlushIntervalSeconds = Mathf.Max(0.01f, persistFlushIntervalSeconds);
-			maxPersistBatchSize = Mathf.Clamp(maxPersistBatchSize, 1, MaxAtomicPersistBatchSize);
+			maxPersistBatchSize = Mathf.Max(1, maxPersistBatchSize);
 			persistRetryWindowSeconds = Mathf.Max(0.0f, persistRetryWindowSeconds);
 			outboundBatchIntervalSeconds = Mathf.Max(0.01f, outboundBatchIntervalSeconds);
 			maxOutboundBatchSize = Mathf.Max(1, maxOutboundBatchSize);
@@ -1064,8 +1049,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// One chunk, so the call is all-or-nothing and a retry cannot duplicate rows. See MaxAtomicPersistBatchSize.
-				DatabaseResult result = await chatService.PersistBatchAsync(batch, maxBatchSize: batch.Count);
+				// All-or-nothing: IChatService.PersistBatchAsync writes the whole list in one
+				// transaction, so a retry after a failure cannot duplicate rows.
+				DatabaseResult result = await chatService.PersistBatchAsync(batch);
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("ChatSystem", $"FlushPersistQueueAsync DB error ({batch.Count} messages): [{result.ErrorCode}] {result.ErrorMessage}");
@@ -1156,13 +1142,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var first = entries.GetRange(0, half);
 			var second = entries.GetRange(half, entries.Count - half);
 
-			DatabaseResult firstResult = await chatService.PersistBatchAsync(first, maxBatchSize: first.Count);
+			DatabaseResult firstResult = await chatService.PersistBatchAsync(first);
 			if (!firstResult.IsSuccess)
 			{
 				await PersistWithIsolationAsync(chatService, first, firstResult, depth + 1);
 			}
 
-			DatabaseResult secondResult = await chatService.PersistBatchAsync(second, maxBatchSize: second.Count);
+			DatabaseResult secondResult = await chatService.PersistBatchAsync(second);
 			if (!secondResult.IsSuccess)
 			{
 				await PersistWithIsolationAsync(chatService, second, secondResult, depth + 1);

@@ -24,9 +24,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="friendCharacterId">The friend character ID.</param>
 		/// <param name="incomingVersion">The authoritative, monotonic version for this persist operation.</param>
 		/// <param name="isBlocked">When true the relationship is a block; when false it is a friend.</param>
+		/// <param name="maxFriends">
+		/// The most active friends the character may hold; 0 or less for no cap. Enforced here, in
+		/// the same transaction as the write and under a lock on the owner's row, so two adds racing
+		/// each other cannot both slip under it. Blocks are never capped, and a pair that is already
+		/// an active friendship is not counted as a new friend.
+		/// </param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
-		Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, bool isBlocked, CancellationToken cancellationToken = default);
+		/// <returns>
+		/// Success; <c>CAPACITY_EXCEEDED</c> when the list is full; <c>NOT_FOUND</c> when the owner is
+		/// missing or deleted; <c>DUPLICATE_REPLAY</c> when the pair is already at this version.
+		/// </returns>
+		Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, bool isBlocked, int maxFriends, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a friend relationship for the specified character if <paramref name="incomingVersion"/> is newer.

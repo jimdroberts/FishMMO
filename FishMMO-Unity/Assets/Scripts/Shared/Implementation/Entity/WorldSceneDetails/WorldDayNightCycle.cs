@@ -117,6 +117,16 @@ namespace FishMMO.Shared
 		public static float? PreviewHeading;
 		/// <summary>A planet or moon to stand on instead of the scene's (test scenes and previews).</summary>
 		public static WorldBody PreviewBody;
+
+		/// <summary>
+		/// The body a scene stands on, as the sky has it: a preview's, else the scene's own, else the
+		/// home world. Whatever depends on the world underfoot — the sea's gravity, what falls —
+		/// asks here, so it cannot disagree with the sky about which world this is.
+		/// </summary>
+		public static WorldBody BodyFor(WorldSceneSettings settings)
+		{
+			return PreviewBody != null ? PreviewBody : SceneTime.BodyOf(settings);
+		}
 		/// <summary>
 		/// Whether a preview's own clock runs on from <see cref="PreviewHours"/>. Off for a preview
 		/// that advances <see cref="PreviewHours"/> itself, so time does not run twice.
@@ -134,6 +144,24 @@ namespace FishMMO.Shared
 		/// drift) run on, so they keep going in a scene with a fixed time of day.
 		/// </summary>
 		public double ClockHours { get; private set; }
+
+		/// <summary>
+		/// The world clock in hours as the sky last read it — a preview's fast or stopped clock
+		/// included — or null before any cycle has run. What else keeps world time reads this, so it
+		/// moves with the sky and not with the wall clock.
+		/// </summary>
+		/// <remarks>
+		/// The sea read the wall clock (<see cref="WorldTime.UnanchoredHours"/>): a preview stopped at
+		/// noon still had its wind, its waves' period and its tide drifting on in real time, and one
+		/// running a hundred and eighty times as fast had a sea whose weather ran at one.
+		/// </remarks>
+		public static double? SkyClockHours { get; private set; }
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void ResetSkyClock()
+		{
+			SkyClockHours = null;
+		}
 
 		public bool IsDaytime => isDaytime;
 
@@ -213,9 +241,10 @@ namespace FishMMO.Shared
 				? PreviewHours.Value + (PreviewClockAdvances ? Time.timeAsDouble / 3600.0 : 0.0)
 				: WorldTime.CurrentHours(timeManager);
 			ClockHours = hours;
+			SkyClockHours = hours;
 			WorldSceneSettings settings = SceneSettings();
 			SolarSystemProfile system = SolarSystemProfile.Active;
-			WorldBody body = PreviewBody != null ? PreviewBody : SceneTime.BodyOf(settings);
+			WorldBody body = BodyFor(settings);
 			double latitude = PreviewLatitude ?? (settings != null ? settings.Latitude : 0.0);
 			double longitude = PreviewLongitude ?? (settings != null ? settings.Longitude : 0.0);
 			float heading = PreviewHeading ?? (settings != null && settings.AtlasEntry != null ? settings.AtlasEntry.HeadingDegrees : 0f);

@@ -208,8 +208,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		private static void ExecuteMechanic(AIController controller, BossTimedMechanic mechanic)
 		{
-			// Force-activate the ability.
-			if (mechanic.AbilityTemplateID > 0)
+			/* Force-activate the ability. != 0, not > 0: template ids are signed hashes, so a
+			 * mechanic naming an ability whose id happens to be negative never fired. */
+			if (mechanic.AbilityTemplateID != 0)
 			{
 				if (controller.Character.TryGet(out IAbilityController abilityController))
 				{

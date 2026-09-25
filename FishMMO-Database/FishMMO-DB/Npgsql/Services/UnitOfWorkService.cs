@@ -83,7 +83,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
-					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to commit the unit of work ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+					return Fault("Failed to commit the unit of work", ex);
 				}
 				finally
 				{
@@ -122,7 +122,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
-					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to roll back the unit of work ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+					return Fault("Failed to roll back the unit of work", ex);
 				}
 				finally
 				{
@@ -275,7 +275,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 			catch (Exception ex)
 			{
-				return Task.FromResult(DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to create database context ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true));
+				return Task.FromResult(Fault<IUnitOfWork>("Failed to create database context", ex));
 			}
 
 			// Must happen here, in the caller's execution context. See the remarks above.
@@ -311,10 +311,34 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				scopeToken.Dispose();
 				context.Dispose();
-				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to begin transaction ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+				return Fault<IUnitOfWork>("Failed to begin transaction", ex);
 			}
 
 			return DatabaseResult<IUnitOfWork>.Success(new NpgsqlUnitOfWork(context, transaction, scopeToken));
+		}
+
+		/// <summary>
+		/// A failure mapped the way every service maps one, prefixed with what was being done.
+		/// </summary>
+		/// <remarks>
+		/// Every catch here used to answer DATABASE_ERROR, transient, whatever was thrown: a commit
+		/// refused for a unique violation or a stale write came back as a blip worth retrying, and a
+		/// caller that retries on IsTransient (the plot claim does) retried a fault that could only
+		/// fail again, while the log never named it (issue #267).
+		/// </remarks>
+		private static DatabaseResult Fault(string what, Exception ex)
+		{
+			var (code, message, isTransient) = DatabaseExceptionMapper.Map(ex);
+			return DatabaseResult.Failure(code, $"{what}: {message}", isTransient);
+		}
+
+		/// <summary>
+		/// <see cref="Fault(string, Exception)"/> for a typed result.
+		/// </summary>
+		private static DatabaseResult<TResult> Fault<TResult>(string what, Exception ex)
+		{
+			var (code, message, isTransient) = DatabaseExceptionMapper.Map(ex);
+			return DatabaseResult<TResult>.Failure(code, $"{what}: {message}", isTransient);
 		}
 	}
 }

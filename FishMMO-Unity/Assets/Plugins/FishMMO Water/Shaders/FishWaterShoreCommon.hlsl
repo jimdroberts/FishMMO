@@ -116,7 +116,8 @@ float FishWaterRunUpHere(float slope, float2 xz, float texelMetres)
 /// <param name="stretch">Which stretch of shore this is, so the waves of a group differ along it.</param>
 float FishWaterSwashFront(float runUp, float along, float stretch)
 {
-	float cycles = _FishWaterShoreTime / max(0.5, _FishWaterSwashPeriod) + along;
+	// Added up on the CPU, not the clock over the period: that moved whenever the period did.
+	float cycles = _FishWaterSwashCycles + along;
 	float t = frac(cycles);
 	/* This wave's share of the full run-up: two thirds to four thirds, fixed for the whole wave —
 	 * and different on different stretches of shore, so one wave of a group floods this stretch

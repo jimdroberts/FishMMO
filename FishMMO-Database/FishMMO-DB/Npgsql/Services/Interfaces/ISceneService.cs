@@ -28,34 +28,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </para>
 	/// <para>
 	/// DequeueAsync uses atomic FOR UPDATE SKIP LOCKED pattern to prevent race conditions during concurrent dequeuing.
-	/// EnqueueAsync is retry-idempotent (protects against EF Core execution-strategy retries after transient failures).
+	/// Both enqueues are retry-safe: each takes a request key once, and a retry after a reply lost past the
+	/// commit answers with the row its first attempt wrote rather than queueing a second load. The uncapped
+	/// EnqueueAsync they replaced (open-world routing in 2026-08, the dungeon finder in 2026-08) had no caller
+	/// left and was removed (issue #267): it inserted a row per attempt and per request, without a cap.
 	/// </para>
 	/// </remarks>
 	public interface ISceneService : IFetchByKeyAction<long, SceneData>, IFetchManyByKeyAction<long, SceneData>
 	{
-		/// <summary>
-		/// Enqueues a new scene load request.
-		/// </summary>
-		/// <param name="worldServerId">World server ID.</param>
-		/// <param name="sceneName">Scene name.</param>
-		/// <param name="sceneType">Scene type.</param>
-		/// <param name="characterId">Character ID (optional, for instances).</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// DatabaseResult containing scene ID on success, or error information on failure.
-		/// </returns>
-		/// <remarks>
-		/// Uses SaveChangesAsync with execution strategy wrapping to ensure transient database failures
-		/// are automatically retried.
-		/// Uses BaseService execution wrappers for automatic transient failure retry and centralized exception mapping.
-		/// </remarks>
-		Task<DatabaseResult<long>> EnqueueAsync(
-			long worldServerId,
-			string sceneName,
-			SceneType sceneType,
-			long characterId = 0,
-			CancellationToken cancellationToken = default);
-
 		/// <summary>
 		/// Enqueues a scene load only while fewer than <paramref name="maxOutstanding"/> loads of
 		/// the same scene are already in flight for this world server.
@@ -72,13 +52,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// The new row's ID, or <c>0</c> when <paramref name="maxOutstanding"/> loads of the same
-		/// (world, scene, type) are already outstanding and no row was created. Failure results
-		/// carry the database error.
+		/// (world, scene, type) are already outstanding and no row was created. A retry after a lost
+		/// reply returns the ID of the row its first attempt created. Failure results carry the
+		/// database error.
 		/// </returns>
 		/// <remarks>
 		/// For the world server's open-world routing, which asks for a scene on every routing
-		/// cycle for as long as anyone is still waiting on it. <see cref="EnqueueAsync"/> inserts
-		/// unconditionally, so a zone that takes twenty seconds to load — an entirely ordinary
+		/// cycle for as long as anyone is still waiting on it. The uncapped enqueue this replaced
+		/// inserted unconditionally, so a zone that takes twenty seconds to load — an entirely ordinary
 		/// cold start — collected a fresh request every two seconds while it did. Scene servers
 		/// dequeue those and load them: ten stacked copies of one open-world zone, each with its
 		/// own physics scene, each sitting empty and therefore not eligible for stale unload
@@ -110,8 +91,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="characterId">Character the new row is created for.</param>
 		/// <param name="partyCharacterIds">
 		/// Every character whose existing instance should block this insert — the party's members,
-		/// including the requester. An empty or null list makes this equivalent to
-		/// <see cref="EnqueueAsync"/>.
+		/// including the requester. An empty or null list, with no party, makes this an unguarded
+		/// insert — still one row per request.
 		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
@@ -263,7 +244,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Uses FromSqlRaw with FOR UPDATE SKIP LOCKED and execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Atomically updates status from Pending to Loading to prevent race conditions.
-		/// Returns failure with error code <c>NO_PENDING_SCENES</c> when no pending scenes exist.
+		/// Returns failure with error code <c>NOT_FOUND</c> when no pending scenes exist.
 		/// </remarks>
 		Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default);
 
@@ -362,7 +343,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </summary>
 		/// <param name="sceneId">Scene row to delete.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>DatabaseResult indicating success, or NotFound when the row is already gone.</returns>
+		/// <returns>DatabaseResult indicating success, including when the row is already gone (see remarks).</returns>
 		/// <remarks>
 		/// The row id is the only identifier for a scene instance that means the same thing in
 		/// every process, so it is the only way to address one. A <c>DeleteByHandleAsync</c>

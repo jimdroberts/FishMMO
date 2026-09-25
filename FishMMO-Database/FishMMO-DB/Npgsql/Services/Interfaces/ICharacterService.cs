@@ -132,10 +132,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Restores a soft-deleted character.
 		/// </summary>
 		/// <remarks>
-		/// Restoring is not the inverse of deleting. A hard delete (the default, when
-		/// <c>KeepDeleteData</c> is off) has already removed the sub-entity rows, so only a
-		/// character deleted with that switch on can be brought back meaningfully; this method
-		/// clears the flag either way and the caller is responsible for knowing which it has.
+		/// Restoring is not the inverse of deleting. With the login server's <c>KeepDeleteData</c>
+		/// on (the shipped setting) deletion leaves the sub-entity rows alone and a restore brings
+		/// the whole character back. With it off, deletion hard-deletes the items and tombstones
+		/// every other sub-entity row at version <c>long.MaxValue</c>; that data was not kept, and
+		/// this method REMOVES those tombstones in the same transaction as the restore. Left in
+		/// place they would outrank every later save of those keys, so the restored character's
+		/// attributes, buffs, abilities and pets would never be written again and its hotkeys
+		/// would fail with STALE_STATE. Tombstones written during play carry their own small
+		/// versions and are not touched.
 		/// It fails when the name has been taken in the meantime, because
 		/// <c>ix_characters_name_lowercase</c> is unique and the row cannot come back under a
 		/// name somebody else now holds.
@@ -337,7 +342,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// The timestamp the claim replaced when the switch may proceed, so a caller that then
 		/// fails to perform the transfer can put it back with
 		/// <see cref="RollbackChannelSwitchAsync"/>; <c>null</c> when the character is still on
-		/// cooldown and nothing was stamped.
+		/// cooldown and nothing was stamped. NotFound when the character does not exist or is deleted.
 		/// </returns>
 		Task<DatabaseResult<DateTime?>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default);
 

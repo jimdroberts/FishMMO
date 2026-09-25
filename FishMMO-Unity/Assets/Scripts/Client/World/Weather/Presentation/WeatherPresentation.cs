@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
@@ -282,10 +283,24 @@ namespace FishMMO.Client
 				return;
 			}
 			WeatherSubstance falling = hasContext ? this.context.Substance : null;
-			precipitation.Render(shown, camera, currentTier, Profile, time, falling);
+			precipitation.Render(shown, camera, currentTier, Profile, time, falling, Underfoot());
 			// Where it lands. Needs the height map, so it draws nothing until that has been built.
 			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid,
 				hasContext ? this.context.Temperature : 0f, falling);
+		}
+
+		/// <summary>
+		/// The world the viewer is standing on, whose gravity and air decide how fast things fall:
+		/// the sky's, which follows a preview of another body, or else the scene's.
+		/// </summary>
+		private WorldBody Underfoot()
+		{
+			CelestialState state = SkySystem.Instance != null ? SkySystem.Instance.State : null;
+			if (state != null && state.Observer != null)
+			{
+				return state.Observer;
+			}
+			return WorldDayNightCycle.BodyFor(hasContext ? context.Settings : null);
 		}
 
 		private void ApplyWind(in WeatherFrame frame)

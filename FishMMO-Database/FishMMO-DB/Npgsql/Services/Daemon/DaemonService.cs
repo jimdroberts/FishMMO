@@ -221,7 +221,15 @@ namespace FishMMO.Database.Npgsql.Services
 			string host = hostName.Trim();
 			string instance = Clamp(instanceId.Trim(), 128);
 
-			return await ExecuteReadAsync(async dbContext =>
+			/* Taken once, outside the retried delegate, and written as the claim. A connection lost
+			 * after the claim committed but before its reply arrived is retried, and the retry used
+			 * to claim a DIFFERENT set, leaving the first claimed by this daemon and never run —
+			 * nothing releases a claim, so those commands simply expired. The retry now takes its
+			 * own claims back by (instance, stamp) (issue #267). A write, so it goes through the
+			 * write wrapper; it had been issued through the read one. */
+			DateTime claimStampUtc = DateTime.UtcNow;
+
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				/* One statement selects and claims. Written in raw SQL because EF cannot express
 				 * FOR UPDATE SKIP LOCKED, and that clause is the whole point: two daemons
@@ -235,28 +243,32 @@ namespace FishMMO.Database.Npgsql.Services
 				 * host_name is a parameter, and it is the daemon's own. A daemon cannot ask for
 				 * another host's work. */
 				string table = dbContext.GetTableName<DaemonCommandEntity>();
+				/* FromSqlRaw materialises the entity, so RETURNING must name every mapped column,
+				 * request_key included: a column missing here fails every claim with
+				 * INVALID_OPERATION. */
 				string sql = $@"
 					UPDATE {table} SET claimed_utc = {{2}}, claimed_by = {{1}}
 					WHERE id IN (
 						SELECT id FROM {table}
 						WHERE host_name = {{0}}
-						  AND claimed_utc IS NULL
+						  AND (claimed_utc IS NULL OR (claimed_utc = {{2}} AND claimed_by = {{1}}))
 						  AND expires_utc > {{2}}
 						ORDER BY requested_utc, id
 						FOR UPDATE SKIP LOCKED
 						LIMIT {{3}}
 					)
 					RETURNING id, host_name, app_name, verb, requested_by, requested_utc, reason,
-					          expires_utc, claimed_utc, claimed_by, completed_utc, succeeded, outcome";
+					          expires_utc, claimed_utc, claimed_by, completed_utc, succeeded, outcome,
+					          request_key";
 
 				var claimed = await dbContext.Set<DaemonCommandEntity>()
-					.FromSqlRaw(sql, host, instance, DateTime.UtcNow, maxCommands)
+					.FromSqlRaw(sql, host, instance, claimStampUtc, maxCommands)
 					.AsNoTracking()
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				return (IReadOnlyList<DaemonCommandData>)claimed.Select(MapCommand).ToList();
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -383,9 +395,25 @@ namespace FishMMO.Database.Npgsql.Services
 			string host = hostName.Trim();
 			string app = appName.Trim();
 			DateTime now = DateTime.UtcNow;
+			// Taken once, outside the retried delegate. See the probe below.
+			Guid requestKey = Guid.NewGuid();
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
+				/* A retry after a reply lost past the commit answers with the command its first
+				 * attempt queued; it used to queue a second, so a daemon could restart a server twice
+				 * for one request (issue #267). */
+				long queued = await dbContext.DaemonCommands
+					.AsNoTracking()
+					.Where(c => c.RequestKey == requestKey)
+					.Select(c => c.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+				if (queued > 0)
+				{
+					return queued;
+				}
+
 				/* The target must be something a daemon actually reported supervising. This is
 				 * what stops the queue being used to invent a target: the set of things a
 				 * command can name is exactly the set some daemon already runs, and that set
@@ -421,6 +449,7 @@ namespace FishMMO.Database.Npgsql.Services
 					RequestedUtc = now,
 					Reason = Clamp(reason.Trim(), 1024),
 					ExpiresUtc = now + lifetime,
+					RequestKey = requestKey,
 				};
 
 				await dbContext.DaemonCommands.AddAsync(command, cancellationToken).ConfigureAwait(false);

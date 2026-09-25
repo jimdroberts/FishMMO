@@ -299,8 +299,8 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!136 &120032079
-CapsuleCollider:
+--- !u!65 &120032079
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -317,10 +317,8 @@ CapsuleCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.5
-  m_Height: 2
-  m_Direction: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 2, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!33 &120032080
 MeshFilter:
@@ -3016,7 +3014,7 @@ MonoBehaviour:
   DayNight: {fileID: 346022001}
   Settings: {fileID: 473463839}
   Profile: {fileID: 11400000, guid: 69baeeda49ea89f268266955933d6961, type: 2}
-  SolarSystem: {fileID: 11400000, guid: e9472bdc60c3d6c49a901f7d540508d1, type: 2}
+  SolarSystem: {fileID: 11400000, guid: a6376d356d9fe9d1b80f42ad5e90d4a5, type: 2}
   SkyProfiles:
   - {fileID: 11400000, guid: f912d7b5e0f01a262b3653ce45ad1fc6, type: 2}
   Presets:

@@ -278,25 +278,27 @@ namespace FishMMO.Server.Implementation
 		{
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var svc))
-				return default;
+			{
+				// No account service is this server failing, not the account missing.
+				return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult { IsSuccess = false, IsServerError = true };
+			}
 
 			var result = await svc.FetchForLoginAsync(identifier, isEmail);
 			if (!result.IsSuccess)
 			{
 				/* NotFound, Forbidden (banned) and ValidationError are the answers the core must not
 				 * tell apart, and it does not: all three take the fake-verifier path. Anything else is
-				 * the database failing to answer, which takes the same path today — the lookup result
-				 * has no way to say "server error" — so a correct password is refused as a wrong one
-				 * and counted as one. It is at least recorded here. Answering it with ServerBusy
-				 * instead needs a server-error flag on SrpAccountLookupResult in FishMMO-Auth; that
-				 * answer depends on no account, so it would leak nothing. */
-				if (result.ErrorCode != DatabaseErrorCodes.NotFound &&
+				 * the database failing to answer, and is flagged as a server error so the core answers
+				 * ServerBusy instead of treating a correct password as a wrong one and counting it
+				 * (issue #267). That answer depends on no account, so it leaks nothing. */
+				bool serverError = result.ErrorCode != DatabaseErrorCodes.NotFound &&
 					result.ErrorCode != DatabaseErrorCodes.Forbidden &&
-					result.ErrorCode != DatabaseErrorCodes.ValidationError)
+					result.ErrorCode != DatabaseErrorCodes.ValidationError;
+				if (serverError)
 				{
-					await Log.Warning(LogPrefix, $"FetchForLoginAsync DB error: [{result.ErrorCode}] {result.ErrorMessage}. The sign-in is answered as a wrong password.");
+					await Log.Warning(LogPrefix, $"FetchForLoginAsync DB error: [{result.ErrorCode}] {result.ErrorMessage}. The sign-in is answered ServerBusy.");
 				}
-				return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult { IsSuccess = false };
+				return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult { IsSuccess = false, IsServerError = serverError };
 			}
 
 			var d = result.Data;
@@ -389,50 +391,58 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>Persists the auth token hash and expiration to the database for later revocation checks.</summary>
-		private async Task PersistTokenHashCoreAsync(string username, string tokenHash, int expirationMinutes)
+		/// <returns>
+		/// True when the hash was recorded. False makes the core refuse the sign-in with ServerBusy:
+		/// world and scene servers treat a hash they cannot find as revoked (TokenServerAuthenticator's
+		/// revocation check fails closed), so a token without its row would be turned away there with
+		/// TokenRevoked after the player had been told the login succeeded (issue #267).
+		/// </returns>
+		private async Task<bool> PersistTokenHashCoreAsync(string username, string tokenHash, int expirationMinutes)
 		{
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
-				return;
+			{
+				await Log.Error(LogPrefix, $"No auth token service to record the token for '{username}'; the sign-in is refused.");
+				return false;
+			}
 			var r = await svc.IssueAsync(tokenHash, username, loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes));
 			if (!r.IsSuccess)
 			{
-				/* Error, not Warning: the token is useless without its row. World and scene servers
-				 * treat a hash they cannot find as revoked (TokenServerAuthenticator's revocation
-				 * check fails closed), so this player is about to be told the login succeeded and
-				 * then be turned away at the world server with TokenRevoked. The hook returns Task,
-				 * so the core cannot hear about it and refuse the sign-in here instead — that needs
-				 * the hook to return the outcome, a FishMMO-Auth change. */
-				await Log.Error(LogPrefix, $"IssueAsync token DB error for '{username}': [{r.ErrorCode}] {r.ErrorMessage}. The issued token will be refused as revoked.");
+				await Log.Error(LogPrefix, $"IssueAsync token DB error for '{username}': [{r.ErrorCode}] {r.ErrorMessage}. The sign-in is refused with ServerBusy.");
+				return false;
 			}
+			return true;
 		}
 
 		/// <summary>
 		/// Verifies a TOTP code or single-use recovery code for the account.
 		/// Handles both 6-digit TOTP and XXXX-XXXX-XXXX-XXXX hex recovery code formats.
-		/// Returns <c>true</c> on success; zeroes the decrypted TOTP secret in all paths.
+		/// Zeroes the decrypted TOTP secret in all paths.
 		/// </summary>
-		private async Task<bool> VerifyTotpCodeCoreAsync(string username, string totpCode, byte[] totpMasterKeySnapshot)
+		/// <returns>
+		/// Valid or Invalid for a code that was checked; ServerError when it could not be checked.
+		/// The core counts only Invalid as a failed attempt. Every database step used to answer a
+		/// plain false when it failed, so a correct code refused for a timeout was reported as
+		/// TwoFactorInvalid and counted toward the two-factor lockout (issue #267).
+		/// </returns>
+		private async Task<SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome> VerifyTotpCodeCoreAsync(string username, string totpCode, byte[] totpMasterKeySnapshot)
 		{
 			if (totpMasterKeySnapshot == null || totpMasterKeySnapshot.Length != 32 ||
 				Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
-				return false;
+			{
+				// A server without its key or its database cannot check anything; the player's code is not at fault.
+				return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.ServerError;
+			}
 
-			/* Every database step below answers false when it fails, and the core counts false as a
-			 * wrong code — towards the two-factor lockout and the per-username limit — and tells the
-			 * player TwoFactorInvalid. A correct code refused for a timeout is therefore
-			 * indistinguishable from a wrong one everywhere but here, so each step that failed for a
-			 * reason other than the code being wrong says so. The answer itself cannot change until
-			 * the hook can report a server error (a FishMMO-Auth change). */
 			var accountResult = await accountService.FetchForLoginAsync(username, username.Contains('@'));
 			if (!accountResult.IsSuccess)
 			{
-				await Log.Warning(LogPrefix, $"Two-factor account fetch failed for '{username}': [{accountResult.ErrorCode}] {accountResult.ErrorMessage}. The code is refused.");
-				return false;
+				await Log.Warning(LogPrefix, $"Two-factor account fetch failed for '{username}': [{accountResult.ErrorCode}] {accountResult.ErrorMessage}. Answered ServerBusy.");
+				return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.ServerError;
 			}
 			if (string.IsNullOrEmpty(accountResult.Data.TotpSecret))
-				return false;
+				return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Invalid;
 
 			/* Shape test lives next to the generator now. This used to be a local copy looking
 			 * for "eleven characters with a hyphen at index five", which GenerateRecoveryCodes
@@ -443,15 +453,15 @@ namespace FishMMO.Server.Implementation
 			if (isRecoveryCode)
 			{
 				if (!Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var rcSvc))
-					return false;
+					return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.ServerError;
 				var codesResult = await rcSvc.FetchUnusedByAccountAsync(username);
 				if (!codesResult.IsSuccess)
 				{
-					await Log.Warning(LogPrefix, $"Recovery code fetch failed for '{username}': [{codesResult.ErrorCode}] {codesResult.ErrorMessage}. The code is refused.");
-					return false;
+					await Log.Warning(LogPrefix, $"Recovery code fetch failed for '{username}': [{codesResult.ErrorCode}] {codesResult.ErrorMessage}. Answered ServerBusy.");
+					return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.ServerError;
 				}
 				if (codesResult.Data == null || codesResult.Data.Count == 0)
-					return false;
+					return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Invalid;
 				string matchedHash = null;
 				foreach (var code in codesResult.Data)
 				{
@@ -461,17 +471,20 @@ namespace FishMMO.Server.Implementation
 						break;
 					}
 				}
-				if (matchedHash == null) return false;
+				if (matchedHash == null) return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Invalid;
 				var consumeResult = await rcSvc.ConsumeCodeAsync(username, matchedHash);
 				if (consumeResult.IsSuccess)
 				{
 					await CancelPendingTwoFactorResetAsync(accountResult.Data.Name, accountResult.Data.Email);
+					return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Valid;
 				}
-				else if (!IsWrongTwoFactorCodeAnswer(consumeResult.ErrorCode))
+				if (IsWrongTwoFactorCodeAnswer(consumeResult.ErrorCode))
 				{
-					await Log.Warning(LogPrefix, $"Recovery code consume failed for '{username}': [{consumeResult.ErrorCode}] {consumeResult.ErrorMessage}. The code is refused.");
+					// Already consumed: the one-use guard doing its job.
+					return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Invalid;
 				}
-				return consumeResult.IsSuccess;
+				await Log.Warning(LogPrefix, $"Recovery code consume failed for '{username}': [{consumeResult.ErrorCode}] {consumeResult.ErrorMessage}. Answered ServerBusy.");
+				return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.ServerError;
 			}
 			else
 			{
@@ -480,19 +493,22 @@ namespace FishMMO.Server.Implementation
 				{
 					plaintextSecret = CryptoHelper.TwoFactor.DecryptTotpSecret(totpMasterKeySnapshot, username, accountResult.Data.TotpSecret);
 					var (valid, windowUsed) = CryptoHelper.TwoFactor.VerifyTotpCode(plaintextSecret, totpCode, accountResult.Data.LastTotpWindow);
-					if (!valid) return false;
+					if (!valid) return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Invalid;
 					var persistResult = accountResult.Data.TotpVerifiedAt == null
 						? await accountService.PersistTotpVerifiedAtAsync(username, windowUsed)
 						: await accountService.PersistLastTotpWindowAsync(username, windowUsed);
 					if (persistResult.IsSuccess)
 					{
 						await CancelPendingTwoFactorResetAsync(accountResult.Data.Name, accountResult.Data.Email);
+						return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Valid;
 					}
-					else if (!IsWrongTwoFactorCodeAnswer(persistResult.ErrorCode))
+					if (IsWrongTwoFactorCodeAnswer(persistResult.ErrorCode))
 					{
-						await Log.Warning(LogPrefix, $"TOTP window persist failed for '{username}': [{persistResult.ErrorCode}] {persistResult.ErrorMessage}. The code is refused.");
+						// The window was already used: the replay guard doing its job.
+						return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.Invalid;
 					}
-					return persistResult.IsSuccess;
+					await Log.Warning(LogPrefix, $"TOTP window persist failed for '{username}': [{persistResult.ErrorCode}] {persistResult.ErrorMessage}. Answered ServerBusy.");
+					return SrpAuthenticatorCore<NetworkConnection>.TwoFactorVerifyOutcome.ServerError;
 				}
 				finally
 				{
@@ -884,11 +900,11 @@ namespace FishMMO.Server.Implementation
 				outer.PersistKickRequestCoreAsync(username);
 
 			/// <inheritdoc/>
-			protected override Task PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes) =>
+			protected override Task<bool> PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes) =>
 				outer.PersistTokenHashCoreAsync(username, tokenHash, expirationMinutes);
 
 			/// <inheritdoc/>
-			protected override Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey) =>
+			protected override Task<TwoFactorVerifyOutcome> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey) =>
 				outer.VerifyTotpCodeCoreAsync(username, totpCode, totpMasterKey);
 
 			// ── Database-backed lockout and closed-test gate ─────────────────

@@ -44,14 +44,11 @@ namespace FishMMO.Shared.Weather
 		[Tooltip("Colour the air takes on while this is falling thickly.")]
 		public Color FogColor = new Color(0.6f, 0.62f, 0.66f, 1f);
 
-		[Tooltip("Multiplies the kind's fall speed. Nitrogen snow in thin air falls faster than water snow in thick.")]
+		[Tooltip("Multiplies the kind's fall speed for what the particles are made of: denser falls faster (sulphuric acid is nearly twice as dense as water), lighter slower. The substance only: the world's own gravity and air are applied separately, so do not fold thin air in here.")]
 		[Range(0.1f, 4f)] public float FallSpeedScale = 1f;
 
 		[Tooltip("Multiplies how far a particle is stretched by its own speed. Above 1 for something that streaks.")]
 		[Range(0f, 4f)] public float StretchScale = 1f;
-
-		[Tooltip("Multiplies how much the wind pushes it about.")]
-		[Range(0f, 4f)] public float WindResponseScale = 1f;
 
 		[Tooltip("How much light it gives off on its own: 0 for snow, above 0 for glowing tephra or an irradiated dust.")]
 		[Range(0f, 1f)] public float Emission;

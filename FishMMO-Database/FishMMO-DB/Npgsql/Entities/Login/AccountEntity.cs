@@ -70,6 +70,14 @@ namespace FishMMO.Database.Npgsql.Entities
 		public string? TotpSecret { get; set; }
 
 		/// <summary>
+		/// A re-enrolment's new secret, encrypted like <see cref="TotpSecret"/>, waiting for a code
+		/// from the new authenticator. Sign-in never reads it: until it is confirmed and promoted, the
+		/// live secret keeps working, so an abandoned re-enrolment changes nothing. Null when no
+		/// re-enrolment is in progress.
+		/// </summary>
+		public string? PendingTotpSecret { get; set; }
+
+		/// <summary>
 		/// Timestamp (UTC) of the first successful TOTP verification, confirming setup completion.
 		/// Null when TOTP setup has not been confirmed.
 		/// </summary>

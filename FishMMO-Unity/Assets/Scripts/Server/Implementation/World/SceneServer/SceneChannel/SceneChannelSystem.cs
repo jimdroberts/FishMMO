@@ -96,12 +96,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// How long a scene server may go without pulsing before its channels stop being offered.
 		/// </summary>
 		/// <remarks>
-		/// The same threshold the world server routes by (<c>WorldSceneSystem.SceneServerPulseStaleSeconds</c>)
-		/// and reaps a dead server's scene rows at. The two have to agree: offering a channel the
-		/// world server will not route to lets a player spend their switch on a destination they
-		/// are then sent away from.
+		/// The threshold the world server routes by and reaps a dead server's scene rows at, read
+		/// from there rather than copied: the two have to agree, and a copy would drift. See
+		/// <see cref="FishMMO.Server.Implementation.World.WorldServer.WorldSceneSystem.SceneServerPulseStaleSeconds"/>.
 		/// </remarks>
-		private const double SceneServerPulseStaleSeconds = 60.0;
+		private const double SceneServerPulseStaleSeconds = FishMMO.Server.Implementation.World.WorldServer.WorldSceneSystem.SceneServerPulseStaleSeconds;
 
 		/// <summary>
 		/// Whether every character load pushes an unsolicited channel list to its client.

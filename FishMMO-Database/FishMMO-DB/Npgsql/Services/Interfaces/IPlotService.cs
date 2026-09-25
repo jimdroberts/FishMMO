@@ -164,6 +164,23 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<int>> TryAdvanceTaxAsync(long plotID, DateTime expectedDueUtc, DateTime nextDueUtc, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Hands a won tax period back: moves the due date back to what it was, if it still holds
+		/// the date this caller advanced it to.
+		/// </summary>
+		/// <param name="plotID">The plot.</param>
+		/// <param name="advancedToUtc">The date <see cref="TryAdvanceTaxAsync"/> set it to.</param>
+		/// <param name="restoreToUtc">The date it held before; must be earlier.</param>
+		/// <returns>1 when the period was handed back, 0 when the date has moved on since.</returns>
+		/// <remarks>
+		/// For a caller that won a period and then could not charge the owner at all (the character
+		/// unreachable, the charge faulting on every attempt). Without it the period simply went
+		/// unbilled: the date only ever moves forward. Pinned the same way as the advance, so it can
+		/// never undo a LATER period another server has since won — that one is left alone and this
+		/// returns 0.
+		/// </remarks>
+		Task<DatabaseResult<int>> TryRestoreTaxDueAsync(long plotID, DateTime advancedToUtc, DateTime restoreToUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Records that a tax payment was missed, without disturbing an earlier miss.
 		/// </summary>
 		/// <param name="plotID">The plot that went unpaid.</param>

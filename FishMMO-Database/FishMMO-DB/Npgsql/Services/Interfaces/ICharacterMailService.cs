@@ -28,9 +28,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="itemAttachmentTemplateID">The attached item template ID (0 for none).</param>
 		/// <param name="itemAttachmentSeed">The attached item seed (0 for none).</param>
 		/// <param name="itemAttachmentAmount">The attached item amount (0 for none).</param>
+		/// <param name="currencyAttachment">The attached currency amount (0 for none).</param>
 		/// <param name="incomingVersion">The authoritative, monotonic version for this persist operation.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
+		/// <remarks>
+		/// Safe to retry: a retry after a lost reply finds the mail the first attempt wrote and
+		/// writes no second one, so an attachment is delivered once. What it cannot settle is a
+		/// failure returned after every retry also failed — the first attempt may still have
+		/// landed, and a caller that refunds the attachment on any failure can then both refund it
+		/// and deliver it. That needs the database unreachable from the moment of the commit for the
+		/// whole retry window.
+		/// </remarks>
 		Task<DatabaseResult> SendAsync(
 			long senderCharacterId,
 			string senderName,
@@ -53,9 +62,16 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// The attachment as it stood before the clear, or no data when the mail had nothing
-		/// attached, does not belong to this character, or has already been claimed.
+		/// attached, does not exist or is deleted, does not belong to this character, has already
+		/// been claimed, or already holds a version at or past <paramref name="incomingVersion"/>.
 		/// </returns>
 		/// <remarks>
+		/// <para>
+		/// <b>One answer for all of those, on purpose.</b> The caller claims with the version it has just
+		/// read plus one, so a stale version means another write reached the mail first — in practice
+		/// another claim — and "there is nothing left to claim" is the true thing to tell the player. A
+		/// separate stale-state failure would read as a server error for what was a lost race.
+		/// </para>
 		/// <para>
 		/// <b>Read and clear are one statement.</b> The attachment columns are zeroed and their
 		/// previous values returned by the same <c>UPDATE</c>, whose <c>WHERE</c> additionally

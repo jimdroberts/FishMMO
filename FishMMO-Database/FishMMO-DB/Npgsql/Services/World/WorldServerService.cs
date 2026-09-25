@@ -29,7 +29,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> PersistAsync(
+		public async Task<DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)>> PersistAsync(
 			string name,
 			string address,
 			ushort port,
@@ -39,7 +39,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
 			{
-				return DatabaseResult<(long, WorldServerData)>.Failure(DatabaseErrorCodes.ValidationError, "Server name and address must not be empty.");
+				return DatabaseResult<(long, WorldServerData, ServerControlState)>.Failure(DatabaseErrorCodes.ValidationError, "Server name and address must not be empty.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -59,7 +59,7 @@ namespace FishMMO.Database.Npgsql.Services
 						port = EXCLUDED.port,
 						character_count = EXCLUDED.character_count,
 						last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
-					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked";
+					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked, shutdown_at_utc";
 
 				return await ExecuteReturningAsync(
 					dbContext,
@@ -75,13 +75,14 @@ namespace FishMMO.Database.Npgsql.Services
 						Port = reader.GetInt32(5),
 						CharacterCount = reader.GetInt32(6),
 						Locked = reader.GetBoolean(7),
+						ShutdownAtUtc = reader.IsDBNull(8) ? (DateTime?)null : reader.GetDateTime(8),
 					},
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
-				? DatabaseResult<(long ServerId, WorldServerData ServerData)>.Success((result.Data.ID, MapEntityToDto(result.Data)))
-				: DatabaseResult<(long ServerId, WorldServerData ServerData)>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				? DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)>.Success((result.Data.ID, MapEntityToDto(result.Data), new ServerControlState(result.Data.Locked, result.Data.ShutdownAtUtc)))
+				: DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -17,9 +17,8 @@ MonoBehaviour:
     it falls, snow in what it leaves.
   Tint: {r: 0.8, g: 0.88, b: 0.94, a: 1}
   FogColor: {r: 0.62, g: 0.72, b: 0.8, a: 1}
-  FallSpeedScale: 0.85
+  FallSpeedScale: 0.55
   StretchScale: 1
-  WindResponseScale: 1.1
   Emission: 0.02
   Cover: 2
   CoverTint: {r: 0.86, g: 0.92, b: 0.96, a: 1}

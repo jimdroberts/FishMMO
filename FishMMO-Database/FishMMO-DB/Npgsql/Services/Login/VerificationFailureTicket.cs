@@ -25,8 +25,11 @@ namespace FishMMO.Database.Npgsql.Services
 	/// without repeating the email address, the phone number or the code.
 	/// </para>
 	/// <para>
-	/// It is opened when the count reaches the threshold exactly, so a player who keeps guessing does not
-	/// open a ticket per guess. An account unknown to the database, or already verified, counts nothing.
+	/// It is opened once the count reaches the threshold, unless the account already has one open, so a
+	/// player who keeps guessing does not open a ticket per guess. It used to open only when the count
+	/// equalled the threshold exactly, so a ticket that failed to open on the third wrong code was never
+	/// opened at all: the fourth and later never equal three (issue #267). An account unknown to the
+	/// database, or already verified, counts nothing.
 	/// </para>
 	/// </remarks>
 	public static class VerificationFailureTicket
@@ -46,12 +49,20 @@ namespace FishMMO.Database.Npgsql.Services
 			/// <summary>Why a ticket that was due could not be opened, or null.</summary>
 			public readonly string? TicketError;
 
+			/// <summary>
+			/// Why the incorrect code could not be counted, or null. Distinct from <see cref="Failures"/>
+			/// being 0, which also means an unknown or verified account: a database fault used to come
+			/// back looking exactly like that, and was never logged.
+			/// </summary>
+			public readonly string? CountError;
+
 			/// <summary>Creates an outcome.</summary>
-			public Outcome(int failures, long ticketId, string? ticketError)
+			public Outcome(int failures, long ticketId, string? ticketError, string? countError = null)
 			{
 				Failures = failures;
 				TicketId = ticketId;
 				TicketError = ticketError;
+				CountError = countError;
 			}
 
 			/// <summary>Whether this failure opened a ticket.</summary>
@@ -79,9 +90,9 @@ namespace FishMMO.Database.Npgsql.Services
 			DatabaseResult<int> counted = await accounts.RecordVerificationFailureAsync(accountName, cancellationToken).ConfigureAwait(false);
 			if (!counted.IsSuccess)
 			{
-				return new Outcome(0, 0, null);
+				return new Outcome(0, 0, null, $"[{counted.ErrorCode}] {counted.ErrorMessage}");
 			}
-			if (counted.Data != AccountVerificationRules.FailedCodesBeforeTicket)
+			if (counted.Data < AccountVerificationRules.FailedCodesBeforeTicket)
 			{
 				return new Outcome(counted.Data, 0, null);
 			}
@@ -91,9 +102,32 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			DatabaseResult<AccountAdminData> account = await accounts.FetchAdminAsync(accountName, cancellationToken).ConfigureAwait(false);
+			string reporter = account.IsSuccess ? account.Data.Name : accountName;
+
+			/* One open ticket at a time. Checked rather than assumed from the count, so a ticket that
+			 * could not be opened on the third wrong code is opened on the next, and one staff have
+			 * closed without verifying the account is followed by a fresh one if the player is still
+			 * stuck. A check that fails opens nothing: a missing ticket is retried on the next wrong
+			 * code, a duplicate is not undone. */
+			DatabaseResult<SupportTicketPage> open = await tickets.SearchAsync(new SupportTicketQuery
+			{
+				ReporterAccount = reporter,
+				Statuses = new[] { SupportTicketStatus.Open, SupportTicketStatus.InProgress, SupportTicketStatus.AwaitingPlayer },
+				Subject = Subject,
+				PageSize = 1,
+			}, cancellationToken).ConfigureAwait(false);
+			if (!open.IsSuccess)
+			{
+				return new Outcome(counted.Data, 0, $"Could not check for an open ticket: [{open.ErrorCode}] {open.ErrorMessage}");
+			}
+			if (open.Data.Items.Count > 0)
+			{
+				return new Outcome(counted.Data, 0, null);
+			}
+
 			DatabaseResult<long> created = await tickets.CreateAsync(new SupportTicketCreate
 			{
-				ReporterAccount = account.IsSuccess ? account.Data.Name : accountName,
+				ReporterAccount = reporter,
 				Category = SupportTicketCategory.Help,
 				Subject = Subject,
 				Body = BuildBody(account.IsSuccess ? account.Data : null),

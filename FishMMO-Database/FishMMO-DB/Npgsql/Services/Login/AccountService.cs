@@ -498,6 +498,96 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistPendingTotpSecretAsync(
+			string accountName,
+			string encryptedTotpSecret,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+			if (string.IsNullOrWhiteSpace(encryptedTotpSecret) || encryptedTotpSecret.Length > 256)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "TOTP secret is required and must not exceed 256 characters.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* Only the pending column. The live secret — the one sign-in reads — is untouched until
+				 * PromotePendingTotpSecretAsync, so a re-enrolment the player abandons changes nothing.
+				 * A later staging simply replaces an earlier one. */
+				var sql = $@"UPDATE {TableName} SET pending_totp_secret = {{0}} WHERE name_lowercase = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { encryptedTotpSecret, Authentication.NormalizeAccountLookup(accountName) }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<string?>> FetchPendingTotpSecretAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<string?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			string normalized = Authentication.NormalizeAccountLookup(accountName);
+			return await ExecuteReadAsync<string?>(async dbContext =>
+			{
+				var row = await dbContext.Accounts
+					.AsNoTracking()
+					.Where(a => a.NameLowercase == normalized)
+					.Select(a => new { a.PendingTotpSecret })
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+				if (row == null)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+				return row.PendingTotpSecret;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> PromotePendingTotpSecretAsync(
+			string accountName,
+			long totpWindow,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			DateTime now = DateTime.UtcNow;
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				/* One statement: the new secret goes live, two-factor is on, the confirmation is
+				 * recorded and the replay guard starts at the window that confirmed it — or none of
+				 * it happens. The window is the confirming code's, so that very code cannot be played
+				 * again at sign-in. */
+				var sql = $@"UPDATE {TableName}
+					SET totp_secret = pending_totp_secret,
+						pending_totp_secret = NULL,
+						totp_enabled = TRUE,
+						totp_verified_at = {{2}},
+						last_totp_window = {{1}}
+					WHERE name_lowercase = {{0}} AND pending_totp_secret IS NOT NULL";
+				int rows = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { Authentication.NormalizeAccountLookup(accountName), totpWindow, now }, cancellationToken)
+					.ConfigureAwait(false);
+				return rows == 1;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> PersistTotpEnabledAsync(
 			string accountName,
 			bool enabled,
@@ -590,7 +680,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET totp_secret = NULL, totp_enabled = false, totp_verified_at = NULL, last_totp_window = 0 WHERE name_lowercase = {{0}}";
+				// A staged re-enrolment goes with it: a pending secret must not outlive two-factor.
+				var sql = $@"UPDATE {TableName} SET totp_secret = NULL, pending_totp_secret = NULL, totp_enabled = false, totp_verified_at = NULL, last_totp_window = 0 WHERE name_lowercase = {{0}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
@@ -625,31 +716,39 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				/* Issued once. The WHERE is the whole of the once-only rule: a code already issued, a DM
-				 * already sent or taken, or an account that verified some other way all match nothing. */
+				 * already sent or taken, or an account that verified some other way all match nothing —
+				 * except the code this very call writes. That exception is what makes a retry safe: the
+				 * update used to commit on its own, so a retry after its reply was lost (or after the
+				 * notify below failed) found a code already issued and answered false for a code it had
+				 * just issued (issue #267). A stored code equal to this one is this call's own, or, one
+				 * time in a million, an earlier identical code, which re-issuing changes nothing about:
+				 * the DM guards still hold.
+				 *
+				 * One statement, so the notification goes out exactly when the code lands: Postgres
+				 * delivers a NOTIFY at commit, and the two used to be separate autocommit statements.
+				 * pg_notify rather than NOTIFY, because NOTIFY takes no bind parameters. No payload: the
+				 * bot re-reads what is owed, so a notification lost to a bot restart costs nothing but
+				 * the wait for its next sweep. */
 				var normalized = Authentication.NormalizeAccountLookup(accountName);
-				var sql = $@"UPDATE {TableName}
-					SET discord_verify_code = {{1}}
-					WHERE name_lowercase = {{0}}
-						AND verified = false
-						AND discord_username IS NOT NULL
-						AND discord_verify_code = 0
-						AND discord_dm_sent_at IS NULL
-						AND discord_dm_claimed_at IS NULL";
-				int rows = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
+				var sql = $@"WITH issued AS (
+						UPDATE {TableName}
+						SET discord_verify_code = {{1}}
+						WHERE name_lowercase = {{0}}
+							AND verified = false
+							AND discord_username IS NOT NULL
+							AND (discord_verify_code = 0 OR discord_verify_code = {{1}})
+							AND discord_dm_sent_at IS NULL
+							AND discord_dm_claimed_at IS NULL
+						RETURNING 1
+					),
+					notified AS (
+						SELECT pg_notify({{2}}, '') FROM issued
+					)
+					SELECT COUNT(*) FROM notified";
+				long issuedRows = await ExecuteScalarLongAsync(
+					dbContext, sql, new object[] { normalized, verifyCode, DiscordVerification.NotifyChannel }, cancellationToken)
 					.ConfigureAwait(false);
-				if (rows == 0)
-				{
-					return false;
-				}
-
-				/* pg_notify rather than NOTIFY, because NOTIFY takes no bind parameters. No payload: the bot
-				 * re-reads what is owed, so a notification lost to a bot restart costs nothing but the wait for
-				 * its next sweep. */
-				await dbContext.Database
-					.ExecuteSqlRawAsync("SELECT pg_notify({0}, '')", new object[] { DiscordVerification.NotifyChannel }, cancellationToken)
-					.ConfigureAwait(false);
-				return true;
+				return issuedRows > 0;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -895,6 +994,43 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public Task<DatabaseResult<bool>> ExpireVerifyCodeAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default)
+			=> ExpireCodeIfCurrentAsync(accountName, verifyCode, "verify_code", "verify_code_expires_utc", cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<bool>> ExpirePhoneVerifyCodeAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default)
+			=> ExpireCodeIfCurrentAsync(accountName, verifyCode, "phone_verify_code", "phone_verify_code_expires_utc", cancellationToken);
+
+		/// <summary>
+		/// Expires one verification code column pair, pinned to the code the caller stored.
+		/// </summary>
+		/// <remarks>
+		/// The column names are compile-time constants chosen by the two public methods above, never
+		/// caller input; the code and the account are parameters.
+		/// </remarks>
+		private async Task<DatabaseResult<bool>> ExpireCodeIfCurrentAsync(string accountName, int verifyCode, string codeColumn, string expiresColumn, CancellationToken cancellationToken)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<bool>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET {expiresColumn} = timezone('UTC', CURRENT_TIMESTAMP)
+					WHERE name_lowercase = {{0}} AND {codeColumn} = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
+					.ConfigureAwait(false);
+				return rowsAffected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> PersistVerificationEmailSentAsync(
 			string accountName,
 			CancellationToken cancellationToken = default)
@@ -1124,14 +1260,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-		}
-
-		/// <inheritdoc/>
-		public Task<DatabaseResult> BanAsync(
-			string accountName,
-			CancellationToken cancellationToken = default)
-		{
-			return BanAsync(accountName, null, null, null, cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -1574,8 +1702,12 @@ namespace FishMMO.Database.Npgsql.Services
 						{since} = CASE WHEN {next} >= {{3}} THEN NULL WHEN {fresh} THEN {{1}} ELSE {since} END,
 						{until} = CASE WHEN {next} >= {{3}} THEN {{4}} ELSE {until} END
 					WHERE name_lowercase = {{0}}
-					RETURNING {until}";
+					RETURNING CASE WHEN {until} > {{1}} THEN {until} END";
 
+				/* Only a lockout still in force. The column keeps a lockout's end after it passes,
+				 * so returning it as stored answered every later failure with a lock that had
+				 * already expired: contrary to "null when not locked", and logged by the login
+				 * server as a live lock on every wrong password (issue #267). */
 				return await ExecuteReturningOrDefaultAsync(
 					dbContext,
 					sql,

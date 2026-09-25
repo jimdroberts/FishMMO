@@ -61,31 +61,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>The party update table is timestamped by whichever scene server wrote it, from its
-		/// own clock.</b> The pump then asks for everything newer than a mark it stamped from
-		/// <em>its</em> clock. Those are different machines, so a scene server whose clock runs
-		/// ahead can set a watermark later than an update another server is about to write with
-		/// its own, slightly earlier, "now" — and that update is then behind the mark before it is
-		/// ever read, and is skipped permanently.
+		/// <b>The party update table is timestamped by the DATABASE clock</b>
+		/// (<c>PartyUpdateService.PersistAsync</c>, issue #267). It used to be stamped by whichever
+		/// scene server wrote it, from its own clock, so one writer running behind another could
+		/// stamp updates the readers had already swept past, and a lagging writer's update could be
+		/// swallowed by the upsert's keep-the-later-timestamp guard. One clock for every writer
+		/// closes both.
 		/// </para>
 		/// <para>
-		/// The watermark is therefore held back by this much. An update from a server up to this
-		/// far behind is still caught; the cost is that updates inside the window are delivered
-		/// twice, which the fetch already allows for (its comparison is inclusive) and which costs
-		/// one redundant roster broadcast.
-		/// </para>
-		/// <para>
-		/// <b>This narrows the window; it does not close it.</b> Skew larger than this still loses
-		/// updates, and the write side has its own version of the problem — the upsert keeps the
-		/// later timestamp, so a lagging server's update can be swallowed outright by a leading
-		/// server's. Closing both properly means timestamping the row from the DATABASE clock and
-		/// carrying the watermark in that same clock, which is a change to the shared update
-		/// service that the guild system would have to make in step. Party leadership does not
-		/// depend on this either way: its repair re-derives state from the rows on a schedule of
-		/// its own rather than from update notifications, which is why it survives a lost one.
+		/// One clock relationship is left: the pump asks for everything at or after a mark it
+		/// stamps from THIS server's clock, and that can disagree with the database's. The mark is
+		/// held back by this much for that reason. An update stamped up to this far ahead of this
+		/// server's idea of "now" is still caught; the cost is that updates inside the window are
+		/// delivered twice, which the fetch already allows for (its comparison is inclusive) and
+		/// which costs one redundant roster broadcast. Party leadership does not depend on this
+		/// either way: its repair re-derives state from the rows on a schedule of its own rather
+		/// than from update notifications, which is why it survives a lost one.
 		/// </para>
 		/// </remarks>
-		[Tooltip("Seconds of scene-server clock skew tolerated when advancing the party update watermark")]
+		[Tooltip("Seconds of skew between this server's clock and the database's tolerated when advancing the party update watermark")]
 		[SerializeField] private float partyUpdateClockSkewAllowanceSeconds = 5.0f;
 
 		/// <summary>
@@ -1710,8 +1704,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * skip one. A duplicate costs one redundant roster broadcast; a skip costs a
 				 * party that disagrees with itself until something else happens to it.
 				 *
-				 * Held back further by the skew allowance, because the rows are timestamped by
-				 * whichever scene server wrote them and this mark is stamped here — two different
+				 * Held back further by the skew allowance, because the rows are timestamped by the
+				 * database's clock and this mark is stamped by this server's — two different
 				 * clocks. See partyUpdateClockSkewAllowanceSeconds. */
 				DateTime fetchStartedUtc = DateTime.UtcNow.AddSeconds(-partyUpdateClockSkewAllowanceSeconds);
 
@@ -3033,11 +3027,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="partyID">Party that owns the instance being joined.</param>
 		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
 		/// <returns>True when membership was persisted; false when it was refused or failed.</returns>
-		public async Task<bool> TryAddCharacterToPartyAsync(NetworkConnection conn, long characterID, long partyID, float healthPCT)
+		public async Task<PartyJoinOutcome> TryAddCharacterToPartyAsync(NetworkConnection conn, long characterID, long partyID, float healthPCT)
 		{
 			if (conn == null || characterID <= 0 || partyID <= 0)
 			{
-				return false;
+				return PartyJoinOutcome.Refused;
 			}
 
 			/* Claimed for the whole join, because the join REPAIRS leadership when it finds a
@@ -3049,7 +3043,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!TryBeginPartyMutation(partyID, out long mutationToken))
 			{
 				await Log.Debug("PartySystem", $"Character {characterID} could not join party {partyID} for an instance: the party is being changed.");
-				return false;
+				return PartyJoinOutcome.Refused;
 			}
 
 			try
@@ -3058,7 +3052,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService) ||
 					!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
 				{
-					return false;
+					return PartyJoinOutcome.Failed;
 				}
 
 				/* Read the roster before persisting, exactly as the invitation path does.
@@ -3070,12 +3064,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!membersResult.IsSuccess || membersResult.Data == null)
 				{
 					await Log.Warning("PartySystem", $"Could not read party {partyID} while joining an instance for character {characterID}: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
-					return false;
+					return PartyJoinOutcome.Failed;
 				}
 
 				if (membersResult.Data.Count >= MaxPartySize)
 				{
-					return false;
+					return PartyJoinOutcome.Full;
 				}
 
 				/* Already a member — treat as success rather than as a failure.
@@ -3088,7 +3082,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					if (membersResult.Data[i].CharacterID == characterID)
 					{
-						return true;
+						return PartyJoinOutcome.Joined;
 					}
 				}
 
@@ -3103,12 +3097,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!existingResult.IsSuccess)
 				{
 					await Log.Warning("PartySystem", $"Could not read the membership of character {characterID} while joining party {partyID} for an instance: [{existingResult.ErrorCode}] {existingResult.ErrorMessage}");
-					return false;
+					return PartyJoinOutcome.Failed;
 				}
 				if (existingResult.Data.HasValue)
 				{
 					await Log.Debug("PartySystem", $"Character {characterID} could not join party {partyID} for an instance: they already belong to party {existingResult.Data.Value.PartyID}.");
-					return false;
+					return PartyJoinOutcome.Refused;
 				}
 
 				CharacterPartyData partyData = new CharacterPartyData(0, 1, characterID, partyID, (byte)PartyRank.Member, healthPCT);
@@ -3118,12 +3112,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (IsMembershipWriteRefusal(persistResult.ErrorCode))
 					{
 						await Log.Debug("PartySystem", $"Character {characterID} could not join party {partyID} for an instance: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+						// The cap enforced in the write itself: the party filled after the read above.
+						return persistResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded
+							? PartyJoinOutcome.Full
+							: PartyJoinOutcome.Refused;
 					}
-					else
-					{
-						await Log.Warning("PartySystem", $"Could not persist the membership of character {characterID} in party {partyID} for an instance: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
-					}
-					return false;
+					await Log.Warning("PartySystem", $"Could not persist the membership of character {characterID} in party {partyID} for an instance: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+					return PartyJoinOutcome.Failed;
 				}
 
 				/* Re-read the roster and repair a party that has been left leaderless.
@@ -3232,12 +3227,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				});
 
-				return true;
+				return PartyJoinOutcome.Joined;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("PartySystem", $"Error joining party {partyID} for instance entry (CharID={characterID}): {ex}");
-				return false;
+				return PartyJoinOutcome.Failed;
 			}
 			finally
 			{

@@ -50,7 +50,6 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Party ID must be greater than zero.");
 			}
 
-			var now = DateTime.UtcNow;
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				/* The table qualifier is required, not stylistic. Inside ON CONFLICT DO UPDATE a
@@ -61,15 +60,23 @@ namespace FishMMO.Database.Npgsql.Services
 				 *
 				 * The statement never ran. It failed on every call, so the guard it implements --
 				 * do not move the timestamp backwards -- was not being applied either. */
+
+				/* Stamped by the DATABASE clock, not this server's. Every scene server writes these
+				 * markers and every other one reads "everything at or after my watermark", so a
+				 * writer whose clock ran behind the readers' stamped changes they had already swept
+				 * past: the change was never delivered, not merely late (issue #267 audit).
+				 * clock_timestamp() is one clock for every writer, and is read at the statement,
+				 * not at transaction start. AT TIME ZONE 'UTC' because the column holds UTC without
+				 * a zone and the server's own zone is whatever it was installed with. */
 				var sql = $@"INSERT INTO {TableName} (party_id, time_created, last_update)
-					VALUES ({{0}}, {{1}}, {{1}})
+					VALUES ({{0}}, clock_timestamp() AT TIME ZONE 'UTC', clock_timestamp() AT TIME ZONE 'UTC')
 					ON CONFLICT (party_id) DO UPDATE
 					SET last_update = EXCLUDED.last_update
 					WHERE {TableName}.last_update < EXCLUDED.last_update";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { partyId, now },
+					new object[] { partyId },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 

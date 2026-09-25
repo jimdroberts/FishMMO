@@ -37,6 +37,8 @@ Shader "FishMMO/Water/Ocean"
         _FoamDistance ("Shore foam depth (m)", Range(0, 12)) = 1.1
         _FoamSharpness ("Foam sharpness", Range(0.01, 1)) = 0.28
         _SurfStrength ("Surf foam", Range(0, 3)) = 1.4
+        _SurfFoamOpacity ("Surf foam opacity at its thickest", Range(0, 1)) = 0.8
+        _SurfFoamVeil ("Thin foam between the surf's froth", Range(0, 1)) = 0.22
         _WhitecapThreshold ("White cap threshold", Range(0, 1)) = 0.70
 
         [Header(Shore)]
@@ -61,7 +63,8 @@ Shader "FishMMO/Water/Ocean"
         _ClarityScale ("Clarity patch size (m)", Range(20, 4000)) = 500
 
         [Header(Development)]
-        [Enum(Off,0, Sediment,1, Clarity field,2, Transmittance,3, Fresnel,4, Opacity,5, Light on the water,6, Shadow,7, Depth to 10m,8, Body colour,9, Behind the surface,10, Reflection,11, Foam,12)]
+        // The names are a C# enum's: the inline form takes at most seven pairs, and these are thirteen.
+        [Enum(FishMMO.Water.WaterDebugView)]
         _DebugView ("Show one term", Float) = 0
     }
 

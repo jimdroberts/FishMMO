@@ -591,6 +591,7 @@ namespace FishMMO.RenderScratch
 
 		/// <summary>Nothing here saves, so the flag is stored and ignored.</summary>
 		public bool KnowledgeDirty { get; set; }
+		public long KnowledgeVersion => 0;
 
 		public SortedDictionary<long, Ability> KnownAbilities { get; } = new SortedDictionary<long, Ability>();
 		public HashSet<int> KnownBaseAbilities { get; } = new HashSet<int>();

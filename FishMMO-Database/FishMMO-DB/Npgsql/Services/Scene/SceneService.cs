@@ -91,47 +91,6 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> EnqueueAsync(
-			long worldServerId,
-			string sceneName,
-			SceneType sceneType,
-			long characterId = 0,
-			CancellationToken cancellationToken = default)
-		{
-			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
-			{
-				return DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
-			}
-
-			var result = await ExecuteWriteAsync(async dbContext =>
-			{
-				var entity = new SceneEntity
-				{
-					WorldServerID = worldServerId,
-					SceneName = sceneName,
-					SceneType = (int)sceneType,
-					SceneStatus = (int)SceneStatus.Pending,
-					CharacterID = characterId,
-					TimeCreated = DateTime.UtcNow
-				};
-				await dbContext.Scenes.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				return entity;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			if (!result.IsSuccess)
-			{
-				return DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
-			}
-
-			if (result.Data.ID <= 0)
-			{
-				return DatabaseResult<long>.Failure(DatabaseErrorCodes.DatabaseError, "Failed to enqueue scene.", isTransient: true);
-			}
-
-			return DatabaseResult<long>.Success(result.Data.ID);
-		}
-
-		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> EnqueueIfUnderOutstandingLimitAsync(
 			long worldServerId,
 			string sceneName,
@@ -149,23 +108,36 @@ namespace FishMMO.Database.Npgsql.Services
 				maxOutstanding = 1;
 			}
 
+			/* Taken once, outside the retried delegate. A retry after a reply lost past the commit
+			 * answers with the load its first attempt queued; it used to either queue a second (still
+			 * under the cap) or report 0, "enough already coming", for a load it had queued itself
+			 * (issue #267). */
+			Guid requestKey = Guid.NewGuid();
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				/* One statement, so the "how many are already coming?" count and the insert
 				 * cannot be interleaved by a second caller. scene_server_id and scene_handle are
 				 * written as 0 because no scene server owns the row yet — DequeueAsync hands it
 				 * to one, and SetReadyAsync stamps both. */
-				var sql = $@"INSERT INTO {TableName}
-						(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created)
-					SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, 0, 0, {{4}}
-					WHERE (
-						SELECT COUNT(*) FROM {TableName}
-						WHERE world_server_id = {{0}}
-							AND scene_name = {{1}}
-							AND scene_type = {{3}}
-							AND scene_status IN ({{2}}, {{5}})
-					) < {{6}}
-					RETURNING id";
+				var sql = $@"WITH mine AS (
+						SELECT id FROM {TableName} WHERE request_key = {{7}}
+					),
+					ins AS (
+						INSERT INTO {TableName}
+							(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, request_key)
+						SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, 0, 0, {{4}}, {{7}}
+						WHERE NOT EXISTS (SELECT 1 FROM mine)
+						AND (
+							SELECT COUNT(*) FROM {TableName}
+							WHERE world_server_id = {{0}}
+								AND scene_name = {{1}}
+								AND scene_type = {{3}}
+								AND scene_status IN ({{2}}, {{5}})
+						) < {{6}}
+						RETURNING id
+					)
+					SELECT id FROM mine UNION ALL SELECT id FROM ins";
 
 				return await ExecuteReturningOrDefaultAsync(
 					dbContext,
@@ -179,6 +151,7 @@ namespace FishMMO.Database.Npgsql.Services
 						DateTime.UtcNow,
 						(int)SceneStatus.Loading,
 						maxOutstanding,
+						requestKey,
 					},
 					reader => reader.GetInt64(0),
 					cancellationToken).ConfigureAwait(false);
@@ -249,6 +222,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 			long owningPartyId = partyId > 0 ? partyId : 0L;
 
+			/* Taken once, outside the retried delegate. A retry after a reply lost past the commit
+			 * answers with the instance its first attempt queued. The guard below used to find that
+			 * instance and report 0, "the party already holds one", for the party's own new instance;
+			 * and the unguarded branch inserted a second (issue #267). */
+			Guid requestKey = Guid.NewGuid();
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				/* One statement, so no other member of the party can insert between the existence
@@ -302,47 +281,72 @@ namespace FishMMO.Database.Npgsql.Services
 
 				/* Arenas count. An arena instance row names only its first seat, so a member sitting
 				 * in a live arena match is found through the match's seats rather than through
-				 * scenes.character_id. One instance per party means one of either kind. */
+				 * scenes.character_id. One instance per party means one of either kind.
+				 *
+				 * AND NOT EXISTS, appended to the held-instance NOT EXISTS below. This was written
+				 * `OR EXISTS (...)`, which inverted it: the predicate read "holds nothing OR sits in
+				 * a live arena", so a member in a live match made the insert run unconditionally —
+				 * opening a dungeon the arena seat was meant to block, and a second instance for a
+				 * party that already held one (issue #267 audit). */
 				string arenaClause = null;
 				if (blocking.Count > 0)
 				{
 					string matchTable = dbContext.GetTableName<Entities.ArenaMatchEntity>();
 					string memberTable = dbContext.GetTableName<Entities.ArenaMatchMemberEntity>();
-					arenaClause = $@"OR EXISTS (
+					arenaClause = $@"AND NOT EXISTS (
 							SELECT 1 FROM {memberTable} m
 							JOIN {matchTable} am ON am.id = m.match_id
 							WHERE m.character_id IN ({ids}) AND am.status < {{{FirstBlockingIndex + blocking.Count}}}
 						)";
 				}
 
+				// The request key rides last, after the two trailing parameters below.
+				int keyIndex = FirstBlockingIndex + blocking.Count + 2;
+
 				string sql;
 				if (heldClauses.Count == 0)
 				{
 					// Nothing to guard against — an ungrouped insert with no requester id. The
-					// unconditional insert is the same statement without the NOT EXISTS.
-					sql = $@"INSERT INTO {TableName}
-							(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private)
-						VALUES ({{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}})
-						RETURNING id";
+					// same statement without the held-instance NOT EXISTS.
+					sql = $@"WITH mine AS (
+							SELECT id FROM {TableName} WHERE request_key = {{{keyIndex}}}
+						),
+						ins AS (
+							INSERT INTO {TableName}
+								(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private, request_key)
+							SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}}, {{{keyIndex}}}
+							WHERE NOT EXISTS (SELECT 1 FROM mine)
+							RETURNING id
+						)
+						SELECT id FROM mine UNION ALL SELECT id FROM ins";
 				}
 				else
 				{
-					sql = $@"INSERT INTO {TableName}
-							(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private)
-						SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}}
-						WHERE NOT EXISTS (
-							SELECT 1 FROM {TableName}
-							WHERE world_server_id = {{0}}
-								AND scene_type IN ({{3}}, {{{FirstBlockingIndex + blocking.Count + 1}}})
-								AND scene_status IN ({{2}}, {{9}}, {{10}})
-								AND ({string.Join(" OR ", heldClauses)})
-						) {arenaClause}
-						RETURNING id";
+					sql = $@"WITH mine AS (
+							SELECT id FROM {TableName} WHERE request_key = {{{keyIndex}}}
+						),
+						ins AS (
+							INSERT INTO {TableName}
+								(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private, request_key)
+							SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}}, {{{keyIndex}}}
+							WHERE NOT EXISTS (SELECT 1 FROM mine)
+							AND NOT EXISTS (
+								SELECT 1 FROM {TableName}
+								WHERE world_server_id = {{0}}
+									AND scene_type IN ({{3}}, {{{FirstBlockingIndex + blocking.Count + 1}}})
+									AND scene_status IN ({{2}}, {{9}}, {{10}})
+									AND ({string.Join(" OR ", heldClauses)})
+							) {arenaClause}
+							RETURNING id
+						)
+						SELECT id FROM mine UNION ALL SELECT id FROM ins";
 				}
 
 				// Two trailing parameters after the member ids: the live-match status ceiling, and
 				// the arena scene type, so an arena instance held by a member blocks a dungeon too.
-				var parameters = new object[FirstBlockingIndex + blocking.Count + 2];
+				// Then the request key.
+				var parameters = new object[keyIndex + 1];
+				parameters[keyIndex] = requestKey;
 				parameters[FirstBlockingIndex + blocking.Count] = (int)ArenaMatchStatus.Ended;
 				parameters[FirstBlockingIndex + blocking.Count + 1] = ArenaSceneType;
 				parameters[0] = worldServerId;

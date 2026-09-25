@@ -59,103 +59,51 @@ namespace FishMMO.RenderScratch
 					Capture(camera, $"cycle-{frame}", $"t={t:0.0}s of {Period:0}s");
 				}
 
-				// Which term is contributing what.
-				shore.SetClock(Period * 0.22f);
-				water.SetClock(11.0 + Period * 0.22f);
-				shore.Material.SetColor("_WetColor", Color.black);
-				shore.Material.SetColor("_SwashColor", Color.black);
-				Capture(camera, "terms-foam-only", "wet+swash black; white = the lip");
-
-				// Is the SHEET running at all? If this shows a band, the swash cycle is alive and
-				// only the lip is missing; if it does not, the whole cycle is returning zero.
-				shore.Material.SetColor("_SwashColor", Color.green);
-				shore.Material.SetFloat("_SwashOpacity", 1f);
-				shore.Material.SetFloat("_EdgeFoam", 0f);
-				Capture(camera, "terms-sheet", "swash sheet in green, foam off");
-
-				// The lip with the contrast curve effectively removed.
-				shore.Material.SetColor("_SwashColor", Color.black);
-				shore.Material.SetFloat("_SwashOpacity", 0f);
-				shore.Material.SetFloat("_EdgeFoam", 3f);
-                shore.Material.SetFloat("_FoamSharpness", 0.02f);
-				Capture(camera, "terms-lip-raw", "lip only, sharpness 0.02");
-
-				/* The barrel, from water level looking ALONG the wave front — the only angle a
-				 * curling crest can be judged from. Seen from above or from behind, a plunging
-				 * breaker and a swollen one look identical. */
-				shore.Material.SetFloat("_Debug", 0f);
-				camera.transform.position = new Vector3(300f, 1.1f, -40f);
-				camera.transform.LookAt(new Vector3(292f, 0.4f, 30f));
-				camera.fieldOfView = 48f;
-				for (int frame = 0; frame < 4; frame++)
-				{
-					float t = 40f + frame * 1.6f;
-					water.SetClock(t);
-					shore.SetClock(t);
-					Capture(camera, $"barrel-{frame}", $"along the front, t={t:0.0}s");
-				}
-				camera.transform.position = new Vector3(238f, 2.0f, -6f);
-				camera.transform.LookAt(new Vector3(268f, -0.6f, 2f));
-				camera.fieldOfView = 55f;
-
-
-				for (int frame = 0; frame < 6; frame++)
-				{
-					float t = frame / 6f * Period;
-					water.SetClock(11.0 + t);
-					shore.SetClock(t);
-					Capture(camera, $"cycle-{frame}", $"t={t:0.0}s of {Period:0}s");
-				}
-
-				// Which term is contributing what.
-				shore.SetClock(Period * 0.22f);
-				water.SetClock(11.0 + Period * 0.22f);
-				shore.Material.SetColor("_WetColor", Color.black);
-				shore.Material.SetColor("_SwashColor", Color.black);
-				Capture(camera, "terms-foam-only", "wet+swash black; white = the lip");
-
-				// Is the SHEET running at all? If this shows a band, the swash cycle is alive and
-				// only the lip is missing; if it does not, the whole cycle is returning zero.
-				shore.Material.SetColor("_SwashColor", Color.green);
-				shore.Material.SetFloat("_SwashOpacity", 1f);
-				shore.Material.SetFloat("_EdgeFoam", 0f);
-				Capture(camera, "terms-sheet", "swash sheet in green, foam off");
-
-				// The lip with the contrast curve effectively removed.
-				shore.Material.SetColor("_SwashColor", Color.black);
-				shore.Material.SetFloat("_SwashOpacity", 0f);
-				shore.Material.SetFloat("_EdgeFoam", 3f);
-                shore.Material.SetFloat("_FoamSharpness", 0.02f);
-				Capture(camera, "terms-lip-raw", "lip only, sharpness 0.02");
-
-				/* The barrel, from water level looking ALONG the wave front — the only angle a
-				 * curling crest can be judged from. Seen from above or from behind, a plunging
-				 * breaker and a swollen one look identical. */
-				shore.Material.SetFloat("_Debug", 0f);
-				camera.transform.position = new Vector3(300f, 1.1f, -40f);
-				camera.transform.LookAt(new Vector3(292f, 0.4f, 30f));
-				camera.fieldOfView = 48f;
-				for (int frame = 0; frame < 4; frame++)
-				{
-					float t = 40f + frame * 1.6f;
-					water.SetClock(t);
-					shore.SetClock(t);
-					Capture(camera, $"barrel-{frame}", $"along the front, t={t:0.0}s");
-				}
-				camera.transform.position = new Vector3(238f, 2.0f, -6f);
-				camera.transform.LookAt(new Vector3(268f, -0.6f, 2f));
-				camera.fieldOfView = 55f;
-
-				// The three terms, raw: red sheet, green lip, blue wet.
-				shore.Material.SetFloat("_Debug", 1f);
+				/* The foam at the waterline from a few metres, standing on the beach: close enough to
+				 * tell lace from a painted band. It was a solid band, every pixel of the lip 45-75%
+				 * white, before the lip was thresholded against the mottle (2026-09-25). */
+				// Eye height on the sand (about 0.5 m up at x 244), looking down the gentle 1:37
+				// beach at the lower swash, which runs up to about x 245 from the waterline at 267.
+				camera.transform.position = new Vector3(244f, 2.3f, -3f);
+				camera.transform.LookAt(new Vector3(256f, 0.1f, 1f));
+				camera.fieldOfView = 50f;
 				for (int frame = 0; frame < 3; frame++)
 				{
-					float t = (0.10f + frame * 0.22f) * Period;
+					float t = (0.12f + frame * 0.2f) * Period;
 					water.SetClock(11.0 + t);
 					shore.SetClock(t);
-					Capture(camera, $"debug-{frame}", $"R sheet G lip B wet, t={t:0.0}s");
+					Capture(camera, $"foam-close-{frame}", $"the lip from the beach, t={t:0.0}s");
 				}
-				shore.Material.SetFloat("_Debug", 0f);
+
+				/* Which term is the white band at the water's edge? Three systems can each draw white
+				 * there — the shore pass's foam, its sheen (the sheet reflecting the sky at a glancing
+				 * angle), and the sea's own surf foam — and a finished frame cannot tell them apart.
+				 * One off at a time, at the same instant as foam-close-1. */
+				float instant = (0.12f + 0.2f) * Period;
+				void Moment()
+				{
+					water.SetClock(11.0 + instant);
+					shore.SetClock(instant);
+				}
+				float sheen = shore.Material.GetFloat("_Sheen");
+				shore.Material.SetFloat("_Sheen", 0f);
+				Moment();
+				Capture(camera, "terms-no-sheen", "the shore's sheen off");
+				shore.Material.SetFloat("_Sheen", sheen);
+
+				float edgeFoam = shore.Material.GetFloat("_EdgeFoam"), residual = shore.Material.GetFloat("_Residual");
+				shore.Material.SetFloat("_EdgeFoam", 0f);
+				shore.Material.SetFloat("_Residual", 0f);
+				Moment();
+				Capture(camera, "terms-no-shore-foam", "the shore's lip and stranded foam off");
+				shore.Material.SetFloat("_EdgeFoam", edgeFoam);
+				shore.Material.SetFloat("_Residual", residual);
+
+				float surf = water.Material.GetFloat("_SurfStrength");
+				water.Material.SetFloat("_SurfStrength", 0f);
+				Moment();
+				Capture(camera, "terms-no-surf", "the sea's surf foam off");
+				water.Material.SetFloat("_SurfStrength", surf);
 
 				Finish(0);
 			}

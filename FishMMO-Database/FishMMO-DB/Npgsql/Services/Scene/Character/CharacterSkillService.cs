@@ -146,23 +146,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more skills had an invalid Version. Version must be greater than 0.");
 			}
 
-			// Prevent duplicate keys within the same batch from causing
-			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
-			if (list.Count > 1)
-			{
-				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterSkillData>();
-				foreach (var skill in list)
-				{
-					deduped[(skill.CharacterID, skill.TemplateID)] = skill;
-				}
-
-				if (deduped.Count != list.Count)
-				{
-					list = deduped.Values.ToList();
-				}
-			}
-
+			// Counted before collapsing, so a key the batch names twice shows as Filtered. See BulkBatch.
 			int suppliedRows = list.Count;
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			list = BulkBatch.KeepNewest(list, skill => (skill.CharacterID, skill.TemplateID), skill => skill.Version);
+
 
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{

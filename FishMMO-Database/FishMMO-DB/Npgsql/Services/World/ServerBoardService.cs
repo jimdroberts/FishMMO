@@ -78,10 +78,16 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				/* Four reads on one context and one connection. The board is polled on a timer,
-				 * and separate round trips would also let the three tiers be read at three
-				 * different instants — so a world server could appear dead next to a scene
-				 * server that was already reporting it alive. */
+				/* Four reads in one REPEATABLE READ, read-only transaction, so all four see one
+				 * snapshot: otherwise the three tiers are read at different instants and a world
+				 * server can appear dead beside a scene server already reporting it alive. One
+				 * context alone did not do it — this said it did (issue #267) — because under the
+				 * default READ COMMITTED every statement takes its own snapshot. */
+				await using var snapshot = await dbContext.Database
+					.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken)
+					.ConfigureAwait(false);
+				await dbContext.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", cancellationToken).ConfigureAwait(false);
+
 				var login = await dbContext.LoginServers
 					.AsNoTracking()
 					.OrderBy(s => s.Name)
@@ -141,6 +147,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 
 				int instances = await dbContext.Scenes.AsNoTracking().CountAsync(cancellationToken).ConfigureAwait(false);
+				await snapshot.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 				return new ServerBoardData
 				{

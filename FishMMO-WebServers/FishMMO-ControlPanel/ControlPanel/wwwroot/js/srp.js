@@ -9,12 +9,12 @@
  *   hash       SHA-512
  *   PAD        left-pad to 512 hex characters (256 bytes)
  *   k          H(N || PAD(g))
- *   x          H(saltBytes || H("username:password"))     salt is NOT padded
+ *   x          H(saltBytes || H(I ":" password))          salt is NOT padded, I = SRP_IDENTITY
  *   v          g^x mod N
  *   u          H(PAD(A) || PAD(B))
  *   S(client)  (B - k * g^x) ^ (a + u * x) mod N
  *   K          H(S)                                        S is NOT padded
- *   M1         H(H(N) XOR H(g) || H(username) || saltBytes || PAD(A) || PAD(B) || K)
+ *   M1         H(H(N) XOR H(g) || H(I) || saltBytes || PAD(A) || PAD(B) || K)
  *              — where H(g) hashes g UNPADDED, unlike the k above
  *   M2         H(PAD(A) || M1 || K)
  *
@@ -135,9 +135,30 @@ export function generateSalt() {
 	return bytesToHex(crypto.getRandomValues(new Uint8Array(64)));
 }
 
-/** x = H(saltBytes || H("username:password")). The salt is used unpadded. */
-export async function derivePrivateKey(saltHex, username, password) {
-	const inner = await hashUtf8(`${username}:${password}`);
+/**
+ * The identity every derivation and proof uses, for every account. It MUST equal
+ * FishMMO.Auth.Implementation.SrpIdentity.Value on the server; changing either invalidates
+ * every stored password.
+ *
+ * Not the account name. The name used to be the identity, and nothing agreed on its spelling:
+ * sign-in hashed what was typed, reset and password change hashed the stored lowercase name, so
+ * a player who registered "Jim" had to type "Jim", could not change their password here, and
+ * after a reset could only sign in as "jim" (issue #267). Every account has its own random salt,
+ * which is what the identity would otherwise protect, so a constant costs nothing.
+ */
+export const SRP_IDENTITY = 'fishmmo';
+
+/**
+ * An account name or email as it is sent: trimmed and lowercased. toLowerCase is locale-independent
+ * (unlike toLocaleLowerCase), and account names are ASCII letters, digits and underscores.
+ */
+export function normalizeIdentifier(identifier) {
+	return String(identifier ?? '').trim().toLowerCase();
+}
+
+/** x = H(saltBytes || H(I ":" password)), I = SRP_IDENTITY. The salt is used unpadded. */
+export async function derivePrivateKey(saltHex, password) {
+	const inner = await hashUtf8(`${SRP_IDENTITY}:${password}`);
 	return hashHex(saltHex, inner);
 }
 
@@ -158,7 +179,7 @@ export function generateEphemeral() {
  * zero, which are the two checks that keep a hostile server from forcing a
  * predictable session.
  */
-export async function deriveSession(clientSecretHex, serverPublicHex, saltHex, username, privateKeyHex) {
+export async function deriveSession(clientSecretHex, serverPublicHex, saltHex, privateKeyHex) {
 	const a = BigInt('0x' + clientSecretHex);
 	const B = BigInt('0x' + serverPublicHex);
 	const x = BigInt('0x' + privateKeyHex);
@@ -174,7 +195,7 @@ export async function deriveSession(clientSecretHex, serverPublicHex, saltHex, u
 	const S = modPow(mod(B - k * modPow(g, x, N), N), a + u * x, N);
 	const K = await hashHex(bigToHex(S));
 
-	// M1 = H(H(N) XOR H(g) || H(username) || salt || A || B || K)
+	// M1 = H(H(N) XOR H(g) || H(I) || salt || A || B || K), I = SRP_IDENTITY
 	//
 	// NOTE the asymmetry, which was found by comparing against the server and is
 	// not guessable: k above hashes g PADDED to the group size, but this XOR term
@@ -183,9 +204,9 @@ export async function deriveSession(clientSecretHex, serverPublicHex, saltHex, u
 	const hN = await hashHex(N_HEX);
 	const hG = await hashHex(bigToHex(g));
 	const hXor = bytesToHex(hexToBytes(hN).map((byte, i) => byte ^ hexToBytes(hG)[i]));
-	const hUsername = await hashUtf8(username);
+	const hIdentity = await hashUtf8(SRP_IDENTITY);
 
-	const M1 = await hashHex(hXor, hUsername, saltHex, pad(A), pad(B), K);
+	const M1 = await hashHex(hXor, hIdentity, saltHex, pad(A), pad(B), K);
 	// A and B are already at the group size here, so pad() is a no-op on them;
 	// it is kept so the intent survives a change to how they arrive.
 

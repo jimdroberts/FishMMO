@@ -25,7 +25,7 @@ Shader "FishMMO/Weather/Curtain"
             #include "FishSkyCommon.hlsl"
 
             float4 _CurtainColor;   // rgb tint, a strength
-            float4 _CurtainParams;  // x fall speed, y time, z streak scale, w snow-ness (0 streaks … 1 flakes)
+            float4 _CurtainParams;  // x fall speed (m/s), y time (s), z streak scale, w snow-ness (0 streaks … 1 flakes)
 
             struct Attributes { float3 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; };
             struct Varyings
@@ -55,10 +55,15 @@ Shader "FishMMO/Weather/Curtain"
                 float facing = abs(dot(normalize(input.normalWS), view));
                 float edge = pow(saturate(facing), 0.7);
                 float top = smoothstep(1.0, 0.7, input.uv.y) * smoothstep(0.0, 0.08, input.uv.y);
-                float t = _CurtainParams.y;
-                float2 uv = float2(input.uv.x * _CurtainParams.z, input.uv.y * 3.0 + t * _CurtainParams.x);
-                float streaks = FishNoise(float2(uv.x, uv.y * lerp(0.08, 1.0, _CurtainParams.w)), 2);
-                float body = FishNoise(float2(input.uv.x * 2.0, input.uv.y * 0.6 - t * 0.01), 0);
+                // What falls, falls at its own speed in metres: laid on the world's height, not the
+                // cylinder's 0..1. Scrolled in the cylinder's units, rain came down a 1300 m curtain at
+                // 260 m/s and snow at 35, and the body drifted UP at 22. A streak is ~5 km tall in
+                // rain and ~430 m in snow, as before; the body, the shaft's thicker and thinner
+                // stretches, comes down with it.
+                float fallen = input.positionWS.y + _CurtainParams.y * _CurtainParams.x;
+                float streakMetres = lerp(5400.0, 430.0, _CurtainParams.w);
+                float streaks = FishNoise(float2(input.uv.x * _CurtainParams.z, fallen / streakMetres), 2);
+                float body = FishNoise(float2(input.uv.x * 2.0, fallen / 2200.0), 0);
                 float alpha = saturate(streaks * 0.6 + body * 0.6) * edge * top * _CurtainColor.a;
                 Light mainLight = GetMainLight();
                 half3 light = SampleSH(half3(0, 1, 0)) + mainLight.color * 0.25;

@@ -91,7 +91,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="guildId">Guild ID.</param>
 		/// <param name="rankOrder">The rank position to delete.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>A result indicating success or failure.</returns>
+		/// <returns>
+		/// Success; <c>IN_USE</c> while a member still holds the rank; <c>NOT_FOUND</c> when there is
+		/// no such rank; <c>VALIDATION_ERROR</c> only for a malformed request.
+		/// </returns>
 		/// <remarks>
 		/// The occupancy test and the delete are ONE statement. Split across two round trips, a
 		/// member could be moved into the rank between them and end up holding a rank that no

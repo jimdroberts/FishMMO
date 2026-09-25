@@ -119,11 +119,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<ChatAdminPage>> SearchAdminAsync(ChatAdminQuery query, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Persists multiple chat messages in batches.
+		/// Persists multiple chat messages in ONE transaction: every message lands, or none does.
 		/// </summary>
+		/// <remarks>
+		/// All-or-nothing is what makes a failed call safe to retry. The rows are the chat audit
+		/// log and other scene servers deliver whatever new rows they find, so a call that had
+		/// committed part of a list before failing would write — and deliver — that part twice when
+		/// the caller retried it.
+		/// </remarks>
 		/// <param name="messages">List of chat messages to persist. Each tuple contains:
 		/// (characterId, characterName, accountName, worldServerId, sceneServerId, channel, message, serverReceivedTime).</param>
-		/// <param name="maxBatchSize">Maximum number of messages per database round-trip (500–2500).</param>
+		/// <param name="maxBatchSize">Messages per INSERT round trip inside the transaction (clamped to 500–2500).
+		/// It does not change atomicity.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
 		Task<DatabaseResult> PersistBatchAsync(

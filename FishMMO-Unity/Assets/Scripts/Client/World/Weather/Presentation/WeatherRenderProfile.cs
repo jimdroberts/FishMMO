@@ -16,14 +16,12 @@ namespace FishMMO.Client
 		public Vector2 Size = new Vector2(0.02f, 0.04f);
 		[Tooltip("Length ÷ width. Above 1 draws a streak along the fall.")]
 		[Min(1f)] public float Stretch = 1f;
-		[Tooltip("Fall speed in m/s at drop size 0 and 1.")]
+		[Tooltip("How fast its typical particle falls on a world like ours, in m/s, at drop size 0 and 1: its terminal speed. Another world's gravity and air are applied on top, and the wind carries it sideways as it carries the air.")]
 		public Vector2 FallSpeed = new Vector2(1f, 1.5f);
 		[Tooltip("How far the particle sways, in metres.")]
 		[Min(0f)] public float Sway;
 		[Tooltip("Sway speed.")]
 		[Min(0f)] public float SwayFrequency = 1f;
-		[Tooltip("How much the wind pushes it: 1 for sand, less for heavy rain.")]
-		[Range(0f, 2f)] public float WindResponse = 0.5f;
 		public Color Tint = Color.white;
 		[Range(0f, 1f)] public float Alpha = 0.6f;
 		[Min(0f)] public float Brightness = 1f;
@@ -61,7 +59,6 @@ namespace FishMMO.Client
 				FallSpeed = FallSpeed * Mathf.Max(0.01f, substance.FallSpeedScale),
 				Sway = Sway,
 				SwayFrequency = SwayFrequency,
-				WindResponse = Mathf.Clamp(WindResponse * Mathf.Max(0f, substance.WindResponseScale), 0f, 2f),
 				// The substance's own colour outright: this is the one thing it IS rather than scales.
 				Tint = substance.Tint,
 				Alpha = Alpha,
@@ -71,11 +68,11 @@ namespace FishMMO.Client
 			};
 		}
 
-		public static PrecipitationLook Rain() => new PrecipitationLook { AtlasRow = 0, Size = new Vector2(0.018f, 0.045f), Stretch = 34f, FallSpeed = new Vector2(7f, 11f), WindResponse = 0.35f, Tint = new Color(0.78f, 0.83f, 0.92f, 1f), Alpha = 0.7f, FogColor = new Color(0.55f, 0.6f, 0.66f, 1f) };
-		public static PrecipitationLook Snow() => new PrecipitationLook { AtlasRow = 1, Size = new Vector2(0.03f, 0.08f), Stretch = 1f, FallSpeed = new Vector2(0.8f, 1.4f), Sway = 0.35f, SwayFrequency = 0.8f, WindResponse = 0.9f, Tint = Color.white, Alpha = 0.9f, FogColor = new Color(0.82f, 0.85f, 0.9f, 1f) };
-		public static PrecipitationLook Hail() => new PrecipitationLook { AtlasRow = 2, Size = new Vector2(0.03f, 0.06f), Stretch = 1f, FallSpeed = new Vector2(10f, 16f), WindResponse = 0.2f, Tint = new Color(0.9f, 0.95f, 1f, 1f), Alpha = 0.95f, FogColor = new Color(0.6f, 0.64f, 0.7f, 1f) };
-		public static PrecipitationLook Ash() => new PrecipitationLook { AtlasRow = 3, Size = new Vector2(0.08f, 0.14f), Stretch = 1f, FallSpeed = new Vector2(0.4f, 0.8f), Sway = 0.5f, SwayFrequency = 0.5f, WindResponse = 0.6f, Tint = new Color(0.55f, 0.53f, 0.5f, 1f), Alpha = 0.95f, FogColor = new Color(0.42f, 0.4f, 0.38f, 1f) };
-		public static PrecipitationLook Sand() => new PrecipitationLook { AtlasRow = 4, Size = new Vector2(0.1f, 0.18f), Stretch = 3f, FallSpeed = new Vector2(0.5f, 1f), Sway = 0.2f, SwayFrequency = 2f, WindResponse = 0.6f, Tint = new Color(0.9f, 0.78f, 0.58f, 1f), Alpha = 0.9f, FogColor = new Color(0.78f, 0.66f, 0.46f, 1f) };
+		public static PrecipitationLook Rain() => new PrecipitationLook { AtlasRow = 0, Size = new Vector2(0.018f, 0.045f), Stretch = 34f, FallSpeed = new Vector2(4f, 7f), Tint = new Color(0.78f, 0.83f, 0.92f, 1f), Alpha = 0.7f, FogColor = new Color(0.55f, 0.6f, 0.66f, 1f) };
+		public static PrecipitationLook Snow() => new PrecipitationLook { AtlasRow = 1, Size = new Vector2(0.03f, 0.08f), Stretch = 1f, FallSpeed = new Vector2(0.8f, 1.4f), Sway = 0.35f, SwayFrequency = 0.8f, Tint = Color.white, Alpha = 0.9f, FogColor = new Color(0.82f, 0.85f, 0.9f, 1f) };
+		public static PrecipitationLook Hail() => new PrecipitationLook { AtlasRow = 2, Size = new Vector2(0.03f, 0.06f), Stretch = 1f, FallSpeed = new Vector2(10f, 16f), Tint = new Color(0.9f, 0.95f, 1f, 1f), Alpha = 0.95f, FogColor = new Color(0.6f, 0.64f, 0.7f, 1f) };
+		public static PrecipitationLook Ash() => new PrecipitationLook { AtlasRow = 3, Size = new Vector2(0.08f, 0.14f), Stretch = 1f, FallSpeed = new Vector2(0.4f, 0.8f), Sway = 0.5f, SwayFrequency = 0.5f, Tint = new Color(0.55f, 0.53f, 0.5f, 1f), Alpha = 0.95f, FogColor = new Color(0.42f, 0.4f, 0.38f, 1f) };
+		public static PrecipitationLook Sand() => new PrecipitationLook { AtlasRow = 4, Size = new Vector2(0.1f, 0.18f), Stretch = 3f, FallSpeed = new Vector2(0.5f, 1f), Sway = 0.2f, SwayFrequency = 2f, Tint = new Color(0.9f, 0.78f, 0.58f, 1f), Alpha = 0.9f, FogColor = new Color(0.78f, 0.66f, 0.46f, 1f) };
 	}
 
 	/// <summary>What a quality level spends on weather.</summary>

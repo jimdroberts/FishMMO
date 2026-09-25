@@ -88,7 +88,12 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Re-seats a vacated character who came back inside the reconnect grace, if their seat was not
 		/// filled meanwhile.
 		/// </summary>
-		/// <returns>True when the seat was vacated and is theirs again.</returns>
+		/// <remarks>
+		/// "Not filled" is counted: the team must have fewer seated players than the match's team size,
+		/// under the match row's lock, which the backfill takes too — so a backfill and a reconnect
+		/// racing for the last seat cannot both have it.
+		/// </remarks>
+		/// <returns>True when the seat was vacated, the team had room, and the seat is theirs again.</returns>
 		Task<DatabaseResult<bool>> ReseatAsync(long matchId, long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>Opens (or closes, with null) the window during which vacated seats may be backfilled.</summary>

@@ -235,6 +235,16 @@ namespace FishMMO.Shared
 		/// Appended, never inserted — the values are on the wire.
 		/// </remarks>
 		InsufficientFunds = 21,
+
+		/// <summary>
+		/// The applicant already holds the most outstanding guild applications allowed.
+		/// </summary>
+		/// <remarks>
+		/// Its own code, not <see cref="GuildFull"/> or <see cref="NotRecruiting"/>: the fix is the
+		/// player's — withdraw an application or wait for one to be answered — and neither of those
+		/// says so. Appended, never inserted — the values are on the wire. Issue #267.
+		/// </remarks>
+		TooManyApplications = 22,
 	}
 
 	/// <summary>

@@ -34,6 +34,11 @@ namespace FishMMO.Database.Npgsql.Entities
 			// UsedAt — null until consumed
 			builder.Property(e => e.UsedAt);
 
+			// Pending — issued with a re-enrolment not yet confirmed; opens nothing until promoted.
+			builder.Property(e => e.Pending)
+				.IsRequired()
+				.HasDefaultValue(false);
+
 			// Filtered UNIQUE index: unused codes per account for fast lookup. Uniqueness
 			// is defence-in-depth so an accidental duplicate insert of the same hash for the
 			// same account is rejected at the DB layer — the application layer must already

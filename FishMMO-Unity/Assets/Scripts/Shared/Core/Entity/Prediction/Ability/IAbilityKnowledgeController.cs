@@ -46,6 +46,13 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		bool KnowledgeDirty { get; set; }
 
+		/// <summary>
+		/// Moves each time something new is learned. A save records the value it captured and clears
+		/// <see cref="KnowledgeDirty"/> only if it has not moved since, so knowledge learned while
+		/// that save was in flight is not marked written by it.
+		/// </summary>
+		long KnowledgeVersion { get; }
+
 		HashSet<int> KnownBaseAbilities { get; }
 		/// <summary>
 		/// Set of known ability event IDs.

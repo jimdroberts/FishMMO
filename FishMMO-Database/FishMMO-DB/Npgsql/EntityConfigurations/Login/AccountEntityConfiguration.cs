@@ -59,6 +59,9 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.TotpSecret)
 				.HasMaxLength(256);
 
+			builder.Property(e => e.PendingTotpSecret)
+				.HasMaxLength(256);
+
 			builder.Property(e => e.TotpVerifiedAt);
 
 			builder.Property(e => e.LastTotpWindow)

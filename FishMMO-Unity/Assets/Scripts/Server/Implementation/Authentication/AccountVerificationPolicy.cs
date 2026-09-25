@@ -127,14 +127,14 @@ namespace FishMMO.Server.Implementation
 		/// never held — and it is stored live for 24 hours. Sign-in re-issues a code only once the
 		/// stored one has expired or is missing, and nothing else in the game re-issues one. So a code
 		/// whose queue insert failed stayed live and undelivered for a day, and the player could not
-		/// verify at all until it lapsed. Rewriting the same code with an expiry of now leaves nothing
-		/// redeemable and makes the very next correct sign-in send a new one.
+		/// verify at all until it lapsed. Expiring that code now leaves nothing redeemable and makes
+		/// the very next correct sign-in send a new one.
 		/// </para>
 		/// <para>
 		/// Best effort and bounded to one write: if it fails as well, the day's wait is what remains,
-		/// and the log says so. The write is unconditional, so it would also retire a code another
-		/// server issued in the few milliseconds since this one's; the queue failure has already cost
-		/// the player a message, and the next sign-in replaces whatever this clears.
+		/// and the log says so. The write is pinned to the code this server stored
+		/// (<c>IAccountService.ExpireVerifyCodeAsync</c>), so a newer code another server issued in
+		/// the meantime is left alone; it used to be an unconditional re-write that retired it.
 		/// </para>
 		/// </remarks>
 		/// <param name="accountService">Account service.</param>
@@ -149,10 +149,13 @@ namespace FishMMO.Server.Implementation
 			AccountVerificationChannels channel,
 			string logSource)
 		{
-			System.DateTime nowUtc = System.DateTime.UtcNow;
-			DatabaseResult expired = channel == AccountVerificationChannels.Sms
-				? await accountService.PersistPhoneVerifyCodeAsync(accountName, verifyCode, nowUtc)
-				: await accountService.PersistVerifyCodeAsync(accountName, verifyCode, nowUtc);
+			/* Pinned to the code this server stored. It used to re-write the code with an expiry of
+			 * now, unconditionally — and if another server had issued a newer code in between, that
+			 * retired the NEW code, the one the player may actually be holding. The conditional
+			 * expiry changes nothing when the account has moved on to another code (issue #267). */
+			DatabaseResult<bool> expired = channel == AccountVerificationChannels.Sms
+				? await accountService.ExpirePhoneVerifyCodeAsync(accountName, verifyCode)
+				: await accountService.ExpireVerifyCodeAsync(accountName, verifyCode);
 			if (!expired.IsSuccess)
 			{
 				await Log.Warning(logSource, $"Could not expire the undelivered {channel} verification code for '{accountName}': [{expired.ErrorCode}] {expired.ErrorMessage}. It stays live, undelivered, until it lapses.");

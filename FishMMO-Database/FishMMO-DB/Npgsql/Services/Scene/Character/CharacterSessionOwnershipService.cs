@@ -166,10 +166,10 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 			catch (Exception ex)
 			{
-				return DatabaseResult.Failure(
-					DatabaseErrorCodes.DatabaseError,
-					$"Failed to assert session ownership ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).",
-					isTransient: true);
+				// Mapped as every service maps a failure: this used to report anything thrown as a
+				// transient DATABASE_ERROR, whatever it was (issue #267).
+				var (code, message, isTransient) = DatabaseExceptionMapper.Map(ex);
+				return DatabaseResult.Failure(code, $"Failed to assert session ownership: {message}", isTransient);
 			}
 		}
 	}

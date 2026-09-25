@@ -406,16 +406,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			/* Given up, and the period cannot be handed back from here: TryAdvanceTaxAsync only moves
-			 * a date forward. What can be kept is the owner's earlier miss, lifted when the period was
-			 * won — put back, so a charge this server could not make does not also forgive a debt
-			 * they already had. A plot with no earlier miss is not marked: the failure was ours. */
+			/* Given up. The period is handed back — the due date returns to dueUtc, pinned to the
+			 * nextDueUtc this server set, so it cannot undo a later period somebody else has won —
+			 * and the next sweep bills it again. It used to go unbilled: the date only moved
+			 * forward (issue #267, IPlotService.TryRestoreTaxDueAsync).
+			 *
+			 * The owner's earlier miss, lifted when the period was won, is put back as well, so a
+			 * charge this server could not make does not also forgive a debt they already had. A
+			 * plot with no earlier miss is not marked: the failure was ours. */
+			DatabaseResult<int> restored = await plotService.TryRestoreTaxDueAsync(plot.ID, nextDueUtc, dueUtc);
 			if (plot.TaxDelinquentSinceUtc.HasValue)
 			{
 				await MarkUnpaidAsync(plotService, plot, dueUtc);
 			}
-			Log.Warning("HousingSystem",
-				$"Plot {plot.ID}'s tax due {dueUtc:u} went unbilled: CharID={plot.OwnerCharacterID} could not be charged in {WonPeriodChargeAttempts} attempts (last: {lastOutcome}).");
+
+			if (restored.IsSuccess && restored.Data == 1)
+			{
+				Log.Warning("HousingSystem",
+					$"Plot {plot.ID}'s tax due {dueUtc:u} could not be charged to CharID={plot.OwnerCharacterID} in {WonPeriodChargeAttempts} attempts (last: {lastOutcome}); the period was handed back and is billed again on the next sweep.");
+			}
+			else
+			{
+				string why = restored.IsSuccess
+					? "the due date had already moved on"
+					: $"handing it back failed: [{restored.ErrorCode}] {restored.ErrorMessage}";
+				Log.Warning("HousingSystem",
+					$"Plot {plot.ID}'s tax due {dueUtc:u} went unbilled: CharID={plot.OwnerCharacterID} could not be charged in {WonPeriodChargeAttempts} attempts (last: {lastOutcome}), and {why}.");
+			}
 		}
 
 		/// <summary>

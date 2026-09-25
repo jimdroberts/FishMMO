@@ -59,7 +59,7 @@ namespace FishMMO.Auth.Implementation
 				connectionAccounts.Remove(connection);
 				connectionAccounts.Add(connection, accountName);
 
-				if (accountConnections.TryGetValue(accountName, out TConnection existingConn) && !ReferenceEquals(existingConn, connection))
+				if (accountConnections.TryGetValue(accountName, out TConnection existingConn) && !ConnectionIdentity.Same(existingConn, connection))
 				{
 					string existingId = getConnectionId(existingConn);
 					string newId = getConnectionId(connection);

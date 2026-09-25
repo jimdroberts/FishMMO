@@ -745,7 +745,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 					int age;
 					try
 					{
-						username = CryptoHelper.StrictUtf8.GetString(decryptedUsername);
+						// Lowercased on receipt as well as by the client, so an older or hostile client
+						// cannot register a spelling the rest of the server does not use. See SrpIdentity.
+						username = SrpIdentity.NormalizeIdentifier(CryptoHelper.StrictUtf8.GetString(decryptedUsername));
 						email = CryptoHelper.StrictUtf8.GetString(decryptedEmail);
 						string ageStr = CryptoHelper.StrictUtf8.GetString(decryptedAge);
 						if (!int.TryParse(ageStr, out age))
@@ -1172,7 +1174,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// safely record another failure, so disconnect the offender immediately
 							// rather than silently skipping the increment (which would let an
 							// attacker stay just under the per-IP block threshold indefinitely).
-							if (!TryTrackIpFailure(mappingData, request.IpAddress))
+							//
+							// Only the client's own refusals count. A database fault is ours, and
+							// counting it walked everyone on a shared address into the per-IP block
+							// during an outage (issue #267).
+							if (result != ClientAuthenticationResult.ServerBusy &&
+								!TryTrackIpFailure(mappingData, request.IpAddress))
 							{
 								NetworkConnection capacityConn = request.Connection;
 								TryEnqueueMainThread(() =>
@@ -1775,7 +1782,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					int verifyCode;
 					try
 					{
-						username = CryptoHelper.StrictUtf8.GetString(decryptedUsername);
+						username = SrpIdentity.NormalizeIdentifier(CryptoHelper.StrictUtf8.GetString(decryptedUsername));
 						string codeStr = CryptoHelper.StrictUtf8.GetString(decryptedVerifyCode);
 						if (!int.TryParse(codeStr, out verifyCode))
 						{
@@ -1879,6 +1886,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 							else if (outcome.TicketError != null)
 							{
 								await Log.Warning("AccountCreationSystem", $"A support ticket was due for '{username}' after {outcome.Failures} incorrect verification codes but could not be opened: {outcome.TicketError}");
+							}
+							else if (outcome.CountError != null)
+							{
+								await Log.Warning("AccountCreationSystem", $"An incorrect verification code for '{username}' could not be counted: {outcome.CountError}");
 							}
 						}
 					}
@@ -2163,6 +2174,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			/* A verification email already waiting carries the code the account holds now, so leave
+			 * both alone. This check used to come AFTER storing a fresh code: the new code replaced
+			 * the old, the new email was skipped as a duplicate, and the one that went out carried a
+			 * code that no longer matched — every entry of it a wrong code, counted towards the
+			 * support ticket (issue #267). */
+			var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
+			if (dupCheck.IsSuccess && dupCheck.Data)
+			{
+				await Log.Debug("AccountCreationSystem", $"Skipping verification email for '{username}' — one is already waiting, with the current code.");
+				return;
+			}
+
 			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
 			// 24 hour TTL: long enough for users to act, short enough that an
 			// exposed code cannot be re-used indefinitely.
@@ -2180,22 +2203,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Enqueue verification email for SMTP delivery.
 			// The background processor will pick this up and send via the configured SMTP server.
-			// Prevent duplicate emails: skip if a pending email already exists for this user.
-			var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
-			if (dupCheck.IsSuccess && dupCheck.Data)
+			string emailSubject = "FishMMO - Verify Your Account";
+			string emailBody = BuildVerificationEmailBody(username, verifyCode);
+			DatabaseResult emailResult = await emailQueueService.EnqueueAsync(email, username, emailSubject, emailBody);
+			if (!emailResult.IsSuccess)
 			{
-				await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification email for '{username}' — a pending email already exists.");
-			}
-			else
-			{
-				string emailSubject = "FishMMO - Verify Your Account";
-				string emailBody = BuildVerificationEmailBody(username, verifyCode);
-				DatabaseResult emailResult = await emailQueueService.EnqueueAsync(email, username, emailSubject, emailBody);
-				if (!emailResult.IsSuccess)
-				{
-					await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification email for '{username}': [{emailResult.ErrorCode}] {emailResult.ErrorMessage}");
-					await AccountVerificationPolicy.ExpireUndeliveredCodeAsync(accountService, username, verifyCode, AccountVerificationChannels.Email, "AccountCreationSystem");
-				}
+				await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification email for '{username}': [{emailResult.ErrorCode}] {emailResult.ErrorMessage}");
+				await AccountVerificationPolicy.ExpireUndeliveredCodeAsync(accountService, username, verifyCode, AccountVerificationChannels.Email, "AccountCreationSystem");
 			}
 		}
 
@@ -2218,19 +2232,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			// Checked before a code is stored, for the reason given in SendEmailVerificationCodeAsync.
+			var dupCheck = await smsQueueService.HasPendingForUserAsync(username, SmsKind.Verification);
+			if (dupCheck.IsSuccess && dupCheck.Data)
+			{
+				await Log.Debug("AccountCreationSystem", $"Skipping verification SMS for '{username}' — one is already waiting, with the current code.");
+				return;
+			}
+
 			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
 			DateTime verifyExpiresUtc = DateTime.UtcNow.AddHours(24);
 			DatabaseResult codeResult = await accountService.PersistPhoneVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
 			if (!codeResult.IsSuccess)
 			{
 				await Log.Error("AccountCreationSystem", $"PersistPhoneVerifyCodeAsync DB error for user '{username}': [{codeResult.ErrorCode}] {codeResult.ErrorMessage}");
-				return;
-			}
-
-			var dupCheck = await smsQueueService.HasPendingForUserAsync(username, SmsKind.Verification);
-			if (dupCheck.IsSuccess && dupCheck.Data)
-			{
-				await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification SMS for '{username}' — a pending message already exists.");
 				return;
 			}
 

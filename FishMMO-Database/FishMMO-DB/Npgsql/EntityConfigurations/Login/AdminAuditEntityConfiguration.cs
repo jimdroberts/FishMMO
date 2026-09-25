@@ -96,6 +96,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			/* No foreign key to accounts, by design. A cascade would delete the record of what
 			 * an operator did when that operator's account is removed, which is the one case the
 			 * log exists to survive. See the remarks on the entity. */
+
+			/* One row per request. A write retried after its reply was lost (the connection dropped
+			 * after the commit) carries the same key and lands on the row its first attempt made,
+			 * instead of writing a second (issue #267). Filtered, so rows written without a key
+			 * never collide. */
+			builder.HasIndex(e => e.RequestKey)
+				.IsUnique()
+				.HasFilter("request_key IS NOT NULL");
 		}
 	}
 }

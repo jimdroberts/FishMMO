@@ -80,7 +80,14 @@ namespace FishMMO.TestHarness.World.Editor
 			// One ground, and it is the wide one: a cloud deck is only honest against a horizon, and
 			// the weather bed's 300 m pad had none. Its top sits a couple of centimetres under zero so
 			// the terrain beside it wins where the two overlap instead of z-fighting with it.
-			Primitive(PrimitiveType.Cylinder, "Ground", new Vector3(0f, -0.52f, 0f), new Vector3(2000f, 0.5f, 2000f), ground, null);
+			GameObject groundObject = Primitive(PrimitiveType.Cylinder, "Ground", new Vector3(0f, -0.52f, 0f), new Vector3(2000f, 0.5f, 2000f), ground, null);
+			/* A box, not the cylinder's own capsule. A capsule much wider than it is tall is a SPHERE,
+			 * and this one was a kilometre across with the whole bed inside it. A ray that starts
+			 * inside a collider does not see it, so the sky occlusion map's rays went straight through
+			 * the ground and recorded it half a kilometre down. Rain and cover never showed it; the
+			 * splashes, which stand on that map, were all drawn down there, out of sight. */
+			Object.DestroyImmediate(groundObject.GetComponent<Collider>());
+			groundObject.AddComponent<BoxCollider>();
 
 			// A hill of real terrain. The world's terrain is on its own shader — a fork of Unity's,
 			// with its own snow that lifts the ground it lies on — and none of that is exercised by

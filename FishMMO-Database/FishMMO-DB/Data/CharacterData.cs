@@ -67,7 +67,10 @@ namespace FishMMO.Database.Data
 		public readonly float RotW;
 		/// <summary>Access level for permissions.</summary>
 		public readonly byte AccessLevel;
-		/// <summary>Whether the character is currently online.</summary>
+		/// <summary>
+		/// Whether the character is currently online: claimed by a server whose lease on it has not
+		/// lapsed, as of the read.
+		/// </summary>
 		public readonly bool Online;
 		/// <summary>Character state flags.</summary>
 		public readonly int Flags;

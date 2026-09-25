@@ -182,6 +182,42 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Stages a re-enrolment's encrypted TOTP secret without touching the live one.
+		/// </summary>
+		/// <remarks>
+		/// Sign-in never reads the pending secret, so an abandoned re-enrolment leaves the account's
+		/// authenticator working (issue #267). A later staging replaces an earlier one. Promoted by
+		/// <see cref="PromotePendingTotpSecretAsync"/> once a code from the new authenticator verifies.
+		/// </remarks>
+		/// <returns>NotFound when the account does not exist.</returns>
+		Task<DatabaseResult> PersistPendingTotpSecretAsync(
+			string accountName,
+			string encryptedTotpSecret,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// The staged re-enrolment secret, encrypted, or null when none is staged.
+		/// </summary>
+		/// <returns>NotFound when the account does not exist.</returns>
+		Task<DatabaseResult<string?>> FetchPendingTotpSecretAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Makes the staged secret live, in one statement: it replaces the live secret, two-factor is
+		/// enabled, the confirmation time is recorded and the replay window starts at
+		/// <paramref name="totpWindow"/>.
+		/// </summary>
+		/// <param name="accountName">The account.</param>
+		/// <param name="totpWindow">The window of the code that confirmed the new authenticator.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>True when a staged secret was promoted; false when none was staged.</returns>
+		Task<DatabaseResult<bool>> PromotePendingTotpSecretAsync(
+			string accountName,
+			long totpWindow,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Stores the encrypted TOTP secret and enables TOTP for an account.
 		/// Called during 2FA enrollment after the server generates the secret.
 		/// </summary>
@@ -417,36 +453,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Bans an account: drops it to <c>AccessLevel.Banned</c>, revokes its auth tokens and
-		/// Control Panel sessions, and queues a kick so the game servers disconnect it.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// All four writes land together or none of them do. A half-applied ban leaves the
-		/// account playing: the access level is the login gate and nothing else, so lowering it
-		/// alone stops the next sign-in and does nothing to the session already connected, while
-		/// revoking tokens alone lets the player sign straight back in. The failure this
-		/// atomicity exists to prevent is exactly that — an operator who is told the ban
-		/// succeeded, watching the banned account keep playing.
-		/// </para>
-		/// <para>
-		/// This layer does no policy checking. Who may ban whom is the caller's decision, and
-		/// every caller must record the ban in the audit log.
-		/// </para>
-		/// </remarks>
-		/// <param name="accountName">Account to ban. Matched case-insensitively.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>Success, or DB_NOT_FOUND when no such account exists.</returns>
-		Task<DatabaseResult> BanAsync(
-			string accountName,
-			CancellationToken cancellationToken = default);
-
-		/// <summary>
 		/// Lifts a ban by restoring <c>AccessLevel.Player</c>.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Deliberately not the inverse of <see cref="BanAsync"/>. It restores the level and
+		/// Deliberately not the inverse of <see cref="BanAsync(string, DateTime?, string?, string?, CancellationToken)"/>. It restores the level and
 		/// nothing else: the auth tokens and panel sessions the ban revoked are correctly gone,
 		/// and reviving them would hand back credentials that may well be the reason for the ban
 		/// and have since been shared or stolen. The player signs in again, which re-issues
@@ -466,18 +477,32 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Bans an account, recording who banned it, why, and when the ban lifts.
+		/// Bans an account: drops it to <c>AccessLevel.Banned</c>, revokes its auth tokens and
+		/// Control Panel sessions, queues a kick so the game servers disconnect it, and records
+		/// who banned it, why, and when the ban lifts.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// The same four writes as <see cref="BanAsync(string, CancellationToken)"/>, in the same
-		/// transaction, plus the three ban columns. A null <paramref name="bannedUntilUtc"/> is a
-		/// permanent ban. A temporary one is lifted by <see cref="FetchForLoginAsync"/> at the
-		/// first sign-in attempt after the instant passes, which restores <c>Player</c>.
+		/// All four writes land together or none of them do. A half-applied ban leaves the
+		/// account playing: the access level is the login gate and nothing else, so lowering it
+		/// alone stops the next sign-in and does nothing to the session already connected, while
+		/// revoking tokens alone lets the player sign straight back in. The failure this
+		/// atomicity exists to prevent is exactly that — an operator who is told the ban
+		/// succeeded, watching the banned account keep playing.
 		/// </para>
 		/// <para>
-		/// No policy checking, as with the plain ban: who may ban whom, and for how long, is the
-		/// caller's decision, and every caller must record the ban in the audit log.
+		/// This layer does no policy checking. Who may ban whom is the caller's decision, and
+		/// every caller must record the ban in the audit log.
+		/// </para>
+		/// <para>
+		/// A null <paramref name="bannedUntilUtc"/> is a permanent ban. A temporary one is lifted by
+		/// <see cref="FetchForLoginAsync"/> at the first sign-in attempt after the instant passes,
+		/// which restores <c>Player</c>.
+		/// </para>
+		/// <para>
+		/// The only ban. A one-argument overload that recorded neither actor nor reason was removed
+		/// (issue #267): an account page showing "banned by: —, reason: —" is a ban nobody can
+		/// explain or appeal, and every real caller already passed both.
 		/// </para>
 		/// </remarks>
 		/// <param name="accountName">Account to ban. Matched case-insensitively.</param>
@@ -547,6 +572,27 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 
 		/// <summary>Records an outstanding SMS verification code. Refused when the account has no number.</summary>
 		Task<DatabaseResult> PersistPhoneVerifyCodeAsync(string accountName, int verifyCode, DateTime expiresUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Expires the account's email verification code NOW, but only if it is still
+		/// <paramref name="verifyCode"/>.
+		/// </summary>
+		/// <returns>True when that code was expired; false when the account holds a different code.</returns>
+		/// <remarks>
+		/// For a code that was stored and then could not be delivered: expiring it makes the next
+		/// sign-in issue a fresh one instead of the player waiting out a code they never received.
+		/// Conditional on the code, because doing it by re-writing the code unconditionally would
+		/// retire a NEWER code another server issued in the meantime — the one the player may be
+		/// holding (issue #267).
+		/// </remarks>
+		Task<DatabaseResult<bool>> ExpireVerifyCodeAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Expires the account's phone verification code NOW, but only if it is still
+		/// <paramref name="verifyCode"/>. See <see cref="ExpireVerifyCodeAsync"/>.
+		/// </summary>
+		/// <returns>True when that code was expired; false when the account holds a different code.</returns>
+		Task<DatabaseResult<bool>> ExpirePhoneVerifyCodeAsync(string accountName, int verifyCode, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Counts one failed sign-in step and locks that step once <paramref name="threshold"/> failures

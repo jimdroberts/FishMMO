@@ -43,9 +43,30 @@ namespace FishMMO.Database
 		public const string AlreadyExists = "ALREADY_EXISTS";
 
 		/// <summary>
+		/// The character already belongs to the group it is asking to join (a guild, for
+		/// instance) — distinct from <see cref="AlreadyExists"/>, which means the REQUEST itself is
+		/// a duplicate, so a caller can tell "you are already in" from "you already asked".
+		/// </summary>
+		public const string AlreadyMember = "ALREADY_MEMBER";
+
+		/// <summary>
 		/// The resource has reached its maximum capacity.
 		/// </summary>
 		public const string CapacityExceeded = "CAPACITY_EXCEEDED";
+
+		/// <summary>
+		/// The requester has reached a per-requester limit (outstanding applications, say) —
+		/// distinct from <see cref="CapacityExceeded"/>, which is the TARGET being full, because
+		/// the two ask the player to do different things.
+		/// </summary>
+		public const string QuotaExceeded = "QUOTA_EXCEEDED";
+
+		/// <summary>
+		/// The resource cannot be removed because something still depends on it (a guild rank that
+		/// members still hold, say). Its own code so it is never confused with a
+		/// <see cref="ValidationError"/> in the request itself.
+		/// </summary>
+		public const string InUse = "IN_USE";
 
 		#endregion
 

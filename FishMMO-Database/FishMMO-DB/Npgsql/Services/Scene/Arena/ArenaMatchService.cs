@@ -308,9 +308,42 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public Task<DatabaseResult<bool>> ReseatAsync(long matchId, long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<bool>> ReseatAsync(long matchId, long characterId, CancellationToken cancellationToken = default)
 		{
-			return SetSeatStatusAsync(matchId, characterId, ArenaSeatStatus.Seated, ArenaSeatStatus.Vacated, cancellationToken);
+			if (matchId <= 0 || characterId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Match and character IDs must be greater than zero.");
+			}
+
+			/* Only while the team still has room, and under the match row's lock. The returning
+			 * player used to be re-seated whenever their row was vacated, so a backfill that had
+			 * already filled the seat left the team one over size (issue #267). The lock is the one
+			 * the backfill takes (GroupFinderQueueService.TryBackfillArenaSeatAsync), and the count
+			 * is taken in a later statement than the lock, as there: under READ COMMITTED a statement
+			 * that locked and counted at once would count from before the lock was granted, and a
+			 * reseat racing a backfill — or another reseat — could both see the one free seat. */
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
+
+				long live = await ExecuteScalarLongAsync(dbContext,
+					$"SELECT COUNT(*) FROM (SELECT id FROM {TableName} WHERE id = {{0}} AND status < {{1}} FOR UPDATE) locked",
+					new object[] { matchId, (int)ArenaMatchStatus.Ended }, cancellationToken).ConfigureAwait(false);
+				if (live == 0)
+				{
+					return false;
+				}
+
+				int affected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {memberTable} m
+					SET status = {{2}}
+					WHERE m.match_id = {{0}} AND m.character_id = {{1}} AND m.status = {{3}}
+						AND (SELECT COUNT(*) FROM {memberTable} s WHERE s.match_id = m.match_id AND s.team = m.team AND s.status = {{2}})
+							< (SELECT team_size FROM {TableName} WHERE id = {{0}})",
+					new object[] { matchId, characterId, (int)ArenaSeatStatus.Seated, (int)ArenaSeatStatus.Vacated },
+					cancellationToken).ConfigureAwait(false);
+				return affected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		private async Task<DatabaseResult<bool>> SetSeatStatusAsync(long matchId, long characterId, ArenaSeatStatus to, ArenaSeatStatus from, CancellationToken cancellationToken)
@@ -324,10 +357,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
 
-				/* State-asserting: only a seated seat vacates, only a vacated one is retaken, and
-				 * only while the match is not over. A reconnect that races a backfill loses cleanly
-				 * because the backfill inserts a new seated row for the newcomer and this row stays
-				 * vacated; the team-count check in the backfill SQL is what keeps them exclusive. */
+				/* State-asserting: only a seated seat vacates, and only while the match is not over.
+				 * Retaking a seat is ReseatAsync's, which also has to count the team. */
 				var sql = $@"UPDATE {memberTable} m
 					SET status = {{2}}
 					FROM {TableName} am

@@ -190,32 +190,22 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more items had an invalid Version. Version must be greater than 0.");
 			}
 
+			// Counted before collapsing, so an identity the batch names twice shows as Filtered. See BulkBatch.
+			int suppliedRows = itemList.Count;
+
 			/* A batch that names one identity twice would make the upsert "affect row a second
 			 * time". Rows with no identity yet cannot collide with anything, so they are all kept;
-			 * the last writer wins for the rest, matching the in-memory container. */
+			 * of the rest, the newest version of each item survives (BulkBatch.KeepNewest). */
 			if (itemList.Count > 1)
 			{
-				var identified = new Dictionary<long, CharacterItemData>();
-				var unidentified = new List<CharacterItemData>();
-				foreach (var item in itemList)
-				{
-					if (item.ID > 0)
-					{
-						identified[item.ID] = item;
-					}
-					else
-					{
-						unidentified.Add(item);
-					}
-				}
+				var identified = BulkBatch.KeepNewest(itemList.Where(i => i.ID > 0).ToList(), i => i.ID, i => i.Version);
+				var unidentified = itemList.Where(i => i.ID <= 0).ToList();
 
 				if (identified.Count + unidentified.Count != itemList.Count)
 				{
-					itemList = identified.Values.Concat(unidentified).ToList();
+					itemList = identified.Concat(unidentified).ToList();
 				}
 			}
-
-			int suppliedRows = itemList.Count;
 
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
@@ -567,6 +557,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			// Two rows claiming one (container, slot) is a state the in-memory container cannot
 			// represent, and the unique index would reject the second. Last writer wins.
+			// Not BulkBatch.KeepNewest: these are usually two different items, and one item's version
+			// says nothing about another's.
 			if (snapshot.Count > 1)
 			{
 				var deduped = new Dictionary<(ItemContainerType Container, int Slot), CharacterItemData>();

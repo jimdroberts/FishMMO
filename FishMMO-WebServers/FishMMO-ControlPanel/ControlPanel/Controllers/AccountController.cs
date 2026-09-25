@@ -785,8 +785,9 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = "A code is required." });
 			}
 
-			bool verified = await twoFactor.VerifyAsync(username, request.Code, HttpContext.RequestAborted);
-			var result = await selfService.ConfirmTwoFactorAsync(username, verified, HttpContext.RequestAborted);
+			// Against the STAGED authenticator: the live one, if any, keeps working until this succeeds.
+			var pending = await twoFactor.VerifyPendingAsync(username, request.Code, HttpContext.RequestAborted);
+			var result = await selfService.ConfirmTwoFactorAsync(username, pending, HttpContext.RequestAborted);
 			if (!result.Ok)
 			{
 				return BadRequest(new { error = result.Error });

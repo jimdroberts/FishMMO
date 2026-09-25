@@ -1792,7 +1792,8 @@ namespace FishMMO.Client
 				WeatherTierSettings tier = profile.TierFor(QualitySettings.GetQualityLevel());
 				if (presentation != null && presentation.HasContext)
 				{
-					curtains.Draw(presentation.Context.Timeline, (uint)presentation.Context.Tick, camera, profile.CurtainMaterial, profile, tier.Curtains, (float)(worldSeconds % 100000.0));
+					curtains.Draw(presentation.Context.Timeline, (uint)presentation.Context.Tick, camera, profile.CurtainMaterial, profile, tier.Curtains, (float)(worldSeconds % 100000.0),
+						State != null ? State.Observer : null);
 				}
 				lightning.Draw(camera, profile.BoltMaterial);
 			}

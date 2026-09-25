@@ -18,7 +18,6 @@ MonoBehaviour:
   FogColor: {r: 0.72, g: 0.66, b: 0.28, a: 1}
   FallSpeedScale: 0.8
   StretchScale: 1
-  WindResponseScale: 1.2
   Emission: 0.05
   Cover: 3
   CoverTint: {r: 0.85, g: 0.8, b: 0.35, a: 1}

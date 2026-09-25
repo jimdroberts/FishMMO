@@ -16,6 +16,7 @@ using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Exceptions;
 using Npgsql;
+using ExceptionOutcome = FishMMO.Database.Npgsql.Services.DatabaseExceptionMapper.Outcome;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -131,8 +132,6 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		protected RetryPolicyConfiguration RetryPolicy => DbContextFactory.RetryPolicy;
 
-		private const string StaleStateDefaultMessage = "Write rejected due to an optimistic concurrency conflict.";
-		private const string DuplicateReplayDefaultMessage = "Write rejected because the incoming Version equals the persisted Version (duplicate replay).";
 		private const string MaxRetriesMessage = "Maximum retry attempts exceeded.";
 		private const string RollbackFailedMessage = "Transaction rollback failed after an operation error.";
 
@@ -148,33 +147,13 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </remarks>
 		private const string CanceledMessage = "The database operation was canceled.";
 
-		/// <summary>
-		/// Outcome classification for exception handling in database operations.
-		/// </summary>
-		private enum ExceptionOutcome
-		{
-			/// <summary>A non-retryable stale state conflict (optimistic concurrency).</summary>
-			StaleState,
-			/// <summary>A duplicate replay exception (same version replay).</summary>
-			DuplicateReplay,
-			/// <summary>A transient failure that can be retried.</summary>
-			Transient,
-			/// <summary>A non-retryable terminal failure.</summary>
-			Terminal
-		}
 
 		/// <summary>
 		/// Classifies an exception to determine the appropriate handling strategy.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private static ExceptionOutcome ClassifyException(Exception ex, string? sqlState)
-		{
-			if (ex is DbUpdateConcurrencyException) return ExceptionOutcome.StaleState;
-			if (ex is StaleStateException) return ExceptionOutcome.StaleState;
-			if (ex is DuplicateReplayException) return ExceptionOutcome.DuplicateReplay;
-			if (IsTransientDatabaseFailure(ex, sqlState)) return ExceptionOutcome.Transient;
-			return ExceptionOutcome.Terminal;
-		}
+		private static ExceptionOutcome ClassifyException(Exception ex, string? sqlState) =>
+			DatabaseExceptionMapper.Classify(ex, sqlState);
 
 		/// <summary>
 		/// Creates a <see cref="DatabaseResult{TResult}"/> failure based on exception classification.
@@ -185,24 +164,12 @@ namespace FishMMO.Database.Npgsql.Services
 			return DatabaseResult<TResult>.Failure(code, message, isTransient);
 		}
 
+
 		/// <summary>
 		/// Maps an exception outcome to error code, message, and transience.
 		/// </summary>
-		private static (string Code, string Message, bool IsTransient) MapExceptionOutcome(Exception ex, ExceptionOutcome outcome)
-		{
-			switch (outcome)
-			{
-				case ExceptionOutcome.StaleState:
-					var staleMessage = ex is StaleStateException staleEx ? staleEx.Message : StaleStateDefaultMessage;
-					return (DatabaseErrorCodes.StaleState, staleMessage, false);
-				case ExceptionOutcome.DuplicateReplay:
-					var dupMessage = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
-					return (DatabaseErrorCodes.DuplicateReplay, dupMessage, false);
-				default:
-					var sqlState = TryGetPostgresSqlState(ex);
-					return MapFinalException(ex, sqlState);
-			}
-		}
+		private static (string Code, string Message, bool IsTransient) MapExceptionOutcome(Exception ex, ExceptionOutcome outcome) =>
+			DatabaseExceptionMapper.MapOutcome(ex, outcome);
 
 		/// <summary>
 		/// Performs rollback on savepoint or transaction as appropriate.
@@ -941,117 +908,12 @@ namespace FishMMO.Database.Npgsql.Services
 			return DatabaseResult<TResult>.Failure(code, message, isTransient);
 		}
 
+
 		/// <summary>
 		/// Maps a terminal (non-retryable) exception into a standardized failure code/message/transience tuple.
 		/// </summary>
-		/// <param name="ex">The exception.</param>
-		/// <param name="sqlState">PostgreSQL SQLSTATE, if available.</param>
-		/// <returns>A tuple of (Code, Message, IsTransient).</returns>
-		private static (string Code, string Message, bool IsTransient) MapFinalException(Exception ex, string? sqlState)
-		{
-			if (ex is DuplicateReplayException duplicateEx)
-			{
-				var message = string.IsNullOrWhiteSpace(duplicateEx.Message) ? DuplicateReplayDefaultMessage : duplicateEx.Message;
-				return (DatabaseErrorCodes.DuplicateReplay, message, false);
-			}
-
-			if (ex is OperationCanceledException)
-			{
-				return (DatabaseErrorCodes.Canceled, "The database operation was canceled.", false);
-			}
-
-			// Prefer explicit, safe database-layer exceptions.
-			// These are designed to avoid leaking SQL/connection details to callers.
-			if (ex is DatabaseException dbEx)
-			{
-				return (
-					string.IsNullOrWhiteSpace(dbEx.ErrorCode) ? DatabaseErrorCodes.DatabaseError : dbEx.ErrorCode,
-					string.IsNullOrWhiteSpace(dbEx.SafeMessage) ? "A database error occurred." : dbEx.SafeMessage,
-					dbEx.IsTransient);
-			}
-
-			if (IsPgBouncerConfigurationSqlState(sqlState))
-			{
-				return (DatabaseErrorCodes.InvalidConfiguration, "Database authentication configuration is invalid.", false);
-			}
-
-			if (sqlState == PostgresSqlState.UniqueViolation)
-			{
-				return (DatabaseErrorCodes.UniqueViolation, "The record already exists.", false);
-			}
-
-			if (sqlState == PostgresSqlState.ForeignKeyViolation)
-			{
-				return (DatabaseErrorCodes.ForeignKeyViolation, "A referenced record was not found.", false);
-			}
-
-			if (sqlState == PostgresSqlState.NotNullViolation)
-			{
-				return (DatabaseErrorCodes.NotNullViolation, "A required field was missing.", false);
-			}
-
-			if (sqlState == PostgresSqlState.CheckViolation)
-			{
-				return (DatabaseErrorCodes.CheckViolation, "One or more values were invalid.", false);
-			}
-
-			if (ex is ArgumentException argEx)
-			{
-				return (DatabaseErrorCodes.InvalidArgument, SanitizeExceptionMessage(argEx.Message), false);
-			}
-
-			if (ex is InvalidOperationException invEx)
-			{
-				/* Carry the inner exception through. EF's LINQ failures say only "An exception was
-				 * thrown while attempting to evaluate a LINQ query parameter expression. See the
-				 * inner exception for more information." — and the inner exception was being
-				 * dropped here, so the one sentence that names the actual fault never reached the
-				 * log. An item snapshot rolling back on every save reported exactly that and
-				 * nothing else, which is unactionable. */
-				string invMessage = SanitizeExceptionMessage(invEx.Message);
-				for (Exception inner = invEx.InnerException; inner != null; inner = inner.InnerException)
-				{
-					invMessage += $" -> [{inner.GetType().Name}] {SanitizeExceptionMessage(inner.Message)}";
-				}
-				return (DatabaseErrorCodes.InvalidOperation, invMessage, false);
-			}
-
-			// Sanitize the outermost exception message to strip .NET parameter-name annotations
-			// while keeping the useful diagnostic content (error description, type info).
-			// The exception type chain is appended for disambiguation — it helps distinguish
-			// Npgsql mapping failures from constraint violations without exposing raw SQL.
-			//
-			// For PostgresException with a known SqlState, the sqlState was already handled
-			// above (UniqueViolation, ForeignKeyViolation, etc.).  For unrecognised SqlStates,
-			// the sanitized message preserves the PostgreSQL error text while the type chain
-			// gives the protocol-level code for operators to look up.
-			var isTransient = IsTransientDatabaseFailure(ex, sqlState);
-			var sanitizedMessage = SanitizeExceptionMessage(ex.Message);
-			var typeChain = BuildSafeExceptionDiagnostic(ex);
-			return (DatabaseErrorCodes.DatabaseError, $"A database error occurred. {sanitizedMessage} ({typeChain}).", isTransient);
-		}
-
-		/// <summary>
-		/// Builds a safe, human-readable diagnostic string from an exception chain for inclusion
-		/// in <see cref="DatabaseResult.ErrorMessage"/>.
-		/// </summary>
-		/// <remarks>
-		/// Walks the exception chain up to 3 levels deep and emits:
-		/// <list type="bullet">
-		///   <item>CLR exception type names — safe, never contain SQL/data</item>
-		///   <item><c>PostgresException.SqlState</c> — safe, 5-char protocol-level code</item>
-		/// </list>
-		/// This method explicitly NEVER emits exception messages, stack traces, or data values.
-		/// Messages from Npgsql/PostgresException can contain column names, constraint names,
-		/// SQL fragments, and connection details that must not be exposed to clients.
-		/// </remarks>
-		/// <param name="ex">The outermost exception.</param>
-		/// <returns>
-		/// A diagnostic string like <c>"InvalidCastException → NpgsqlException → PostgresException[42703]"</c>
-		/// or just the outer type name for single-level exceptions.
-		/// </returns>
-		private static string BuildSafeExceptionDiagnostic(Exception ex)
-			=> ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex);
+		private static (string Code, string Message, bool IsTransient) MapFinalException(Exception ex, string? sqlState) =>
+			DatabaseExceptionMapper.MapFinal(ex, sqlState);
 
 		/// <summary>
 		/// Strips parameter names and internal details from .NET exception messages to prevent
@@ -1066,12 +928,6 @@ namespace FishMMO.Database.Npgsql.Services
 			=> ExceptionDiagnosticHelper.SanitizeExceptionMessage(message);
 
 		/// <summary>
-		/// Determines whether an exception represents a transient failure that is safe to retry.
-		/// </summary>
-		private static bool IsTransientDatabaseFailure(Exception exception, string? sqlState) =>
-			SqlStateHelper.IsTransientDatabaseFailure(exception, sqlState);
-
-		/// <summary>
 		/// Extracts the PostgreSQL SQLSTATE from an exception chain, if present.
 		/// </summary>
 		private static string? TryGetPostgresSqlState(Exception exception) =>
@@ -1082,12 +938,6 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		private static bool IsConnectionSqlState(string? sqlState) =>
 			SqlStateHelper.IsConnectionSqlState(sqlState);
-
-		/// <summary>
-		/// Determines whether a SQLSTATE is a PgBouncer configuration/authentication error.
-		/// </summary>
-		private static bool IsPgBouncerConfigurationSqlState(string? sqlState) =>
-			SqlStateHelper.IsPgBouncerConfigurationSqlState(sqlState);
 
 		/// <summary>
 		/// Executes a raw SQL statement that produces a result set and maps the first returned row.

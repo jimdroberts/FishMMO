@@ -191,16 +191,15 @@ export async function attempt(action, successTitle, successText) {
  * rather than trusted because it answered.
  */
 async function runSrpSignIn(username, password) {
-	const trimmed = String(username).trim();
-	const challenge = await api.srpChallenge(trimmed);
+	// Any spelling of the name signs in: it only picks the account. See srp.SRP_IDENTITY.
+	const challenge = await api.srpChallenge(srp.normalizeIdentifier(username));
 
-	const privateKey = await srp.derivePrivateKey(challenge.salt, trimmed, password);
+	const privateKey = await srp.derivePrivateKey(challenge.salt, password);
 	const ephemeral = srp.generateEphemeral();
 	const clientSession = await srp.deriveSession(
 		ephemeral.secret,
 		challenge.serverPublicEphemeral,
 		challenge.salt,
-		trimmed,
 		privateKey,
 	);
 

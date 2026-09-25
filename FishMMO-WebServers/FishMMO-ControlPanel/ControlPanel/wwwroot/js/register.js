@@ -341,11 +341,12 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 			 * password that never leaves the page. Everything after this line could be read
 			 * in full by anyone on the wire without learning it. */
 			const salt = srp.generateSalt();
-			const privateKey = await srp.derivePrivateKey(salt, values.username, values.password);
+			const privateKey = await srp.derivePrivateKey(salt, values.password);
 			const verifier = await srp.deriveVerifier(privateKey);
 
 			const body = {
-				username: values.username,
+				// Sent lowercase, the only spelling the server stores. See srp.normalizeIdentifier.
+				username: srp.normalizeIdentifier(values.username),
 				salt,
 				verifier,
 				email: values.email,

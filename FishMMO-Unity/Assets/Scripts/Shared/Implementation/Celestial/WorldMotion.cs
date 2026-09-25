@@ -4,8 +4,8 @@ using UnityEngine;
 namespace FishMMO.Shared.Celestial
 {
 	/// <summary>
-	/// How fast the world's small-scale motion runs against the wall clock: the sea's waves, the surf
-	/// on a beach, rain and snow falling, the trees in the wind.
+	/// How fast the world's own motion runs against the wall clock: the sea's waves, the surf on a
+	/// beach, rain and snow falling, the trees in the wind.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -16,19 +16,25 @@ namespace FishMMO.Shared.Celestial
 	/// </para>
 	/// <para>
 	/// <b>Never faster than real time.</b> A preview runs the world clock hundreds of times faster to
-	/// watch a day go by, and waves at that pace are a blur, not a faster sea. So a clock running at
-	/// or above real time runs this at 1, a slower one slows it, and a stopped one stops it.
+	/// watch a day go by, and the sky and the clouds keep up with it. The motion down here does not:
+	/// stopped when the clock stops and slowed when it slows, but held to real time when it races.
+	/// The sea was let follow the clock (2026-09-25) and it could not be made to look right: at the
+	/// sky's hundred and eighty times a four-second wave comes forty times a second, and even at
+	/// twelve times the sea looked wrong. Waves are motion everyone knows by eye; a sped-up cloud is
+	/// just a cloud. What the sea IS still follows the clock — its wind, its waves' height and period,
+	/// its tide are the sky's weather at the sky's time — only how fast it moves does not.
 	/// </para>
 	/// <para>
-	/// The game leaves it at 1: only a preview has any reason to stop the world. It is put back to 1
-	/// whenever play starts, so a preview that stopped it cannot leave a later session's sea frozen.
+	/// The game leaves both at 1: only a preview has any reason to change the world's pace. They are
+	/// put back to 1 whenever play starts, so a preview that stopped them cannot leave a later
+	/// session's sea frozen.
 	/// </para>
 	/// </remarks>
 	public static class WorldMotion
 	{
 		private static float rate = 1f;
 
-		/// <summary>Seconds of motion per real second, 0 to 1.</summary>
+		/// <summary>Seconds of motion per real second, 0 to 1: the sea and its surf, what falls, and the trees.</summary>
 		public static float Rate
 		{
 			get => rate;

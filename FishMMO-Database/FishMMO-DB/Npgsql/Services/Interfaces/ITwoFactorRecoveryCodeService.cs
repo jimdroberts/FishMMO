@@ -13,6 +13,27 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	public interface ITwoFactorRecoveryCodeService
 	{
 		/// <summary>
+		/// Stages a re-enrolment's recovery codes beside the live ones, replacing any earlier staging.
+		/// </summary>
+		/// <remarks>
+		/// A staged code opens nothing — <see cref="FetchUnusedByAccountAsync"/> and
+		/// <see cref="ConsumeCodeAsync"/> never see it — until <see cref="PromotePendingAsync"/>, so an
+		/// abandoned re-enrolment leaves the account's working codes as they were (issue #267).
+		/// </remarks>
+		Task<DatabaseResult> StagePendingAsync(
+			string accountName,
+			IReadOnlyList<string> codeHashes,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Makes the staged codes live and removes the old ones, together.
+		/// </summary>
+		/// <returns>How many staged codes went live; 0, with nothing changed, when none were staged.</returns>
+		Task<DatabaseResult<int>> PromotePendingAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Batch-inserts a set of pre-hashed recovery codes for an account.
 		/// Called during TOTP enrollment or recovery code regeneration.
 		/// </summary>

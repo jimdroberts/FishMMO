@@ -674,10 +674,10 @@ namespace FishMMO.ControlPanel.Controllers
 					error = "Game tokens were revoked, but panel sessions could not be. Nothing on this account is safe to assume signed out yet; try again.",
 				});
 			}
-			audit.Details = new { panelSessionsRevoked = sessions.Data };
+			audit.Details = new { gameTokensRevoked = tokens.Data, panelSessionsRevoked = sessions.Data };
 
-			log.LogWarning("Tokens revoked for '{Account}' by '{Actor}'. Reason: {Reason}",
-				username, User.Identity?.Name, request.Reason);
+			log.LogWarning("Tokens revoked for '{Account}' by '{Actor}' ({Tokens} game tokens, {Sessions} panel sessions). Reason: {Reason}",
+				username, User.Identity?.Name, tokens.Data, sessions.Data, request.Reason);
 			return Ok(new { message = "Game tokens and panel sessions revoked." });
 		}
 

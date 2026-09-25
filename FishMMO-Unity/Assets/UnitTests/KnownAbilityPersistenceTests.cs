@@ -43,6 +43,9 @@ namespace FishMMO.UnitTests
 			return File.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
+		private static int Occurrences(string source, string text) =>
+			source.Split(new[] { text }, StringSplitOptions.None).Length - 1;
+
 		[Test]
 		public void TheCharacterSaveCoversKnowledge()
 		{
@@ -50,10 +53,34 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(source.Contains("List<CharacterKnownAbilityData> KnownAbilities"),
 				"the sub-entity snapshot must carry knowledge, like the other eight tables");
-			LogAssert.IsTrue(source.Contains("AppendKnownAbilityData(character, snapshot.KnownAbilities)"),
-				"and the capture must collect it");
-			LogAssert.IsTrue(source.Contains("SaveKnownAbilitiesAsync(s.KnownAbilities)"),
+			LogAssert.IsTrue(source.Contains("AppendKnownAbilityData(character, snapshot.KnownAbilities, snapshot.KnowledgeVersions)"),
+				"and the capture must collect it, with the version it was captured at");
+			LogAssert.IsTrue(source.Contains("SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions)"),
 				"and both save paths must write it");
+		}
+
+		[Test]
+		public void ASaveClearsTheDirtyMarkOnlyForTheKnowledgeItWrote()
+		{
+			/* The write runs off the main thread, and the dirty mark is cleared when it completes.
+			 * Something learned in between is not in the rows just written, so clearing the mark
+			 * unconditionally lost it until the next learn (issue #267). A learn bumps the version;
+			 * the clear only happens while the version is still the one captured. */
+			string knowledge = ReadSource(KnowledgePath);
+			int raised = Occurrences(knowledge, "KnowledgeDirty = true;");
+			LogAssert.IsTrue(raised > 0, "learning must still raise the mark");
+			LogAssert.AreEqual(raised, Occurrences(knowledge, "KnowledgeDirty = true;\n\t\t\t++KnowledgeVersion;"),
+				"every learn that raises the mark must also move the version");
+
+			string saving = ReadSource(SavingPath);
+			int mark = saving.IndexOf("private void MarkKnowledgePersisted(Dictionary<long, long> knowledgeVersions)", StringComparison.Ordinal);
+			LogAssert.IsTrue(mark >= 0, "the completion must still clear the mark per captured version");
+
+			string body = saving.Substring(mark, Math.Min(800, saving.Length - mark));
+			int check = body.IndexOf("abilityController.KnowledgeVersion == captured.Value", StringComparison.Ordinal);
+			int clear = body.IndexOf("abilityController.KnowledgeDirty = false", StringComparison.Ordinal);
+			LogAssert.IsTrue(check >= 0 && clear > check,
+				"the mark is cleared only when nothing was learned since the capture");
 		}
 
 		[Test]

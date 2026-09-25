@@ -27,5 +27,11 @@ namespace FishMMO.Database.Npgsql.Entities
 		public byte Channel { get; set; }
 		/// <summary>The chat message body text.</summary>
 		public string Message { get; set; }
+
+		/// <summary>
+		/// The writer's once-per-request identity: a retry after a lost reply finds the row its first
+		/// attempt wrote instead of writing a second one. Null for rows written without one.
+		/// </summary>
+		public Guid? RequestKey { get; set; }
 	}
 }

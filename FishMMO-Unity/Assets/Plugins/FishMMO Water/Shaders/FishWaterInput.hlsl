@@ -44,6 +44,8 @@ CBUFFER_START(UnityPerMaterial)
 	half _FoamDistance;
 	half _FoamSharpness;
 	half _SurfStrength;
+	half _SurfFoamOpacity;
+	half _SurfFoamVeil;
 	half _WhitecapThreshold;
 
 	// ── Shore ──

@@ -1096,6 +1096,28 @@ namespace FishMMO.Client
 				case GuildResultType.InsufficientFunds:
 					chat.InstantiateChatMessage(ChatChannel.System, "", $"You cannot afford to found a guild. It costs {DescribeCreationFee()}.");
 					break;
+
+				/* The recruitment results. Every one of these was sent and then dropped here by the
+				 * default branch, so applying to a guild produced no answer at all — not the
+				 * confirmation, not the reason it was refused (issue #267). */
+				case GuildResultType.ApplicationSent:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "Your application has been sent.");
+					break;
+				case GuildResultType.AlreadyApplied:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "You have already applied to that guild.");
+					break;
+				case GuildResultType.NotRecruiting:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild is not recruiting.");
+					break;
+				case GuildResultType.ApplyOnCooldown:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "You have applied too recently. Try again shortly.");
+					break;
+				case GuildResultType.ApplicationNotFound:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "That application is no longer pending.");
+					break;
+				case GuildResultType.TooManyApplications:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "You have too many guild applications waiting. Withdraw one or wait for an answer.");
+					break;
 				default:
 					return;
 			}

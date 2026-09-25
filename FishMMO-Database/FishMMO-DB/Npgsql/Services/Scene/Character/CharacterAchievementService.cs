@@ -55,23 +55,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more achievements had an invalid Version. Version must be greater than 0.");
 			}
 
-			// Prevent duplicate keys within the same batch from causing
-			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
-			if (achievementList.Count > 1)
-			{
-				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterAchievementData>();
-				foreach (var achievement in achievementList)
-				{
-					deduped[(achievement.CharacterID, achievement.TemplateID)] = achievement;
-				}
-
-				if (deduped.Count != achievementList.Count)
-				{
-					achievementList = deduped.Values.ToList();
-				}
-			}
-
+			// Counted before collapsing, so a key the batch names twice shows as Filtered. See BulkBatch.
 			int suppliedRows = achievementList.Count;
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			achievementList = BulkBatch.KeepNewest(achievementList, achievement => (achievement.CharacterID, achievement.TemplateID), achievement => achievement.Version);
+
 
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{

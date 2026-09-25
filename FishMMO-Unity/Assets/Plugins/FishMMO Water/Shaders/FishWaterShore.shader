@@ -16,8 +16,10 @@ Shader "FishMMO/Water/Shore"
         _FoamScale ("Foam size (m)", Range(0.5, 40)) = 2.2
         _EdgeWobble ("Edge raggedness (share of the run-up)", Range(0, 0.6)) = 0.25
         _Underwater ("Reaches under the water (share of the wave height)", Range(0, 2)) = 0.6
-        _FoamSharpness ("Foam sharpness", Range(0.01, 1)) = 0.22
+        _FoamSharpness ("Foam softness at its edges", Range(0.01, 1)) = 0.3
         _EdgeFoam ("Foam at the edge", Range(0, 4)) = 2.6
+        _FoamOpacity ("Foam opacity at its thickest", Range(0, 1)) = 0.8
+        _FoamVeil ("Thin foam between the froth", Range(0, 1)) = 0.22
         _SwashOpacity ("Swash opacity", Range(0, 1)) = 0.20
         _Sheen ("Wet sheen", Range(0, 2)) = 1
         _Residual ("Foam left on the sand", Range(0, 2)) = 1
@@ -68,6 +70,8 @@ Shader "FishMMO/Water/Shore"
                 half _FoamScale;
                 half _FoamSharpness;
                 half _EdgeFoam;
+                half _FoamOpacity;
+                half _FoamVeil;
                 half _SwashOpacity;
                 half _EdgeWobble;
                 half _Underwater;
@@ -214,25 +218,45 @@ Shader "FishMMO/Water/Shore"
                 wet *= smoothstep(-0.05 - 0.1 * runUp, 0.0, rise);
 
                 /* The lip carries the foam; the sheet behind it keeps only a trace, or the whole band
-                 * clears the contrast curve and the lip has nothing to stand out against. The mask is
-                 * applied to the FINISHED foam, where it breaks the line into patches and holes. */
-                half foam = smoothstep(_FoamSharpness * 0.35, _FoamSharpness * 0.35 + _FoamSharpness,
-                    saturate(lip * _EdgeFoam + sheet * sheet * sheet * 0.05));
-                foam *= 0.42 + 0.58 * mask;
+                 * clears the contrast curve and the lip has nothing to stand out against.
+                 *
+                 * THRESHOLDED against the mottle, not scaled by it. Scaled, the leanest part of the
+                 * pattern still kept 42% of the foam, and once the lip's strength saturated — which it
+                 * did at a tenth of its height — every pixel of it was 45-75% white: a solid band, a
+                 * line painted along the beach. The froth on a real swash edge is bubbles in clumps,
+                 * with the water and sand showing between them. So the stronger the lip, the more of
+                 * the pattern passes (a finer octave breaks the clumps into bubbles), even the
+                 * thickest froth lets a little through, and between the clumps is only a thin milky
+                 * veil. Set to this pattern's spread: the froth covers about three fifths of the lip at its
+                 * strongest, a third at three quarters, a tenth at half. */
+                half strength = saturate(lip * _EdgeFoam + sheet * sheet * sheet * 0.05);
+                half bubbles = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV * 5.1 + float2(0.73, 0.19)).r;
+                half lace = mask * 0.7 + bubbles * 0.3;
+                half threshold = 0.62 - 0.5 * strength;
+                half froth = smoothstep(threshold, threshold + _FoamSharpness, lace) * _FoamOpacity;
+                half veil = _FoamVeil * smoothstep(0.05, 0.6, strength);
+                half foam = max(froth, veil) * smoothstep(0.02, 0.15, strength);
 
                 /* The foam the swash LEFT here, from the memory WaterShore keeps. Thresholded against
                  * the mottle rather than scaled by it, so as a line fades it breaks into lace and
                  * then into scattered bubbles. Thinned where the next sheet is washing over it. */
                 float2 fieldUV = (positionWS.xz - _FishWaterShoreRect.xy) / max(1.0, _FishWaterShoreRect.zw);
                 half left = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamMemory, sampler_FishWaterFoamMemory, fieldUV, 0).r;
-                half stranded = smoothstep(0.12, 0.5, left * _Residual * (0.35 + 0.65 * mask)) * (1.0 - sheet * 0.6);
+                half stranded = smoothstep(0.12, 0.5, left * _Residual * (0.35 + 0.65 * mask)) * (1.0 - sheet * 0.6) * _FoamOpacity;
                 foam = max(foam, stranded);
+
+                /* The FILM: where the sheet actually covers the sand. Thick down by the sea it does,
+                 * everywhere; toward the top of its run it thins to a few millimetres and the sand's
+                 * own ripples break through it, so it lies in patches and rivulets with bare wet sand
+                 * between — the mottle decides which. Drawn as one unbroken sheet, its reflection was
+                 * a solid silver band along every beach, which read as a line of foam. */
+                half film = sheet * smoothstep(0.25, 0.6, sheet + (lace - 0.32) * 0.9);
 
                 half3 color = _WetColor.rgb * lit;
                 half alpha = wet * 0.72;
 
-                color = lerp(color, _SwashColor.rgb * lit, sheet);
-                alpha = lerp(alpha, _SwashOpacity, sheet * sheet);
+                color = lerp(color, _SwashColor.rgb * lit, film);
+                alpha = lerp(alpha, _SwashOpacity, film * film);
 
                 color = lerp(color, _FoamColor.rgb * lit, foam);
                 alpha = max(alpha, foam);
@@ -254,21 +278,31 @@ Shader "FishMMO/Water/Shore"
                  *
                  * The surface is the beach's own slope, from the shore field, not the depth buffer's:
                  * water fills the small bumps in sand and lies smooth over them. The ocean's ripple map
-                 * roughens it a little where the sheet is moving. The sun's glint is shadowed per
+                 * roughens it where the sheet is moving — enough that, at a glancing angle, some of it
+                 * tilts to catch the bright sky and some the ground, and the reflection breaks into
+                 * streaks rather than lying there as one mirror. The sun's glint is shadowed per
                  * pixel — from the reconstructed point, which is sound in a full-screen pass where a
                  * shadow coordinate from the vertices was not. */
                 half3 sheen = 0.0;
-                half gloss = saturate(sheet + wet * 0.35 * (1.0 - sheet)) * (1.0 - foam) * _Sheen;
+                half gloss = saturate(film + wet * 0.35 * (1.0 - film)) * (1.0 - foam) * _Sheen;
                 if (gloss > 0.001)
                 {
                     float3 normalWS = normalize(float3(gradient.x, 1.0, gradient.y));
                     float2 rippleUV = positionWS.xz / 3.5 + _FishWaterWind.xy * (_FishWaterShoreTime * 0.05);
-                    half3 ripple = UnpackNormalScale(SAMPLE_TEXTURE2D(_FishWaterNormalTexture, sampler_FishWaterNormalTexture, rippleUV), 0.35 * sheet);
+                    half3 ripple = UnpackNormalScale(SAMPLE_TEXTURE2D(_FishWaterNormalTexture, sampler_FishWaterNormalTexture, rippleUV), 0.8 * film);
                     normalWS = normalize(normalWS + float3(ripple.x, 0.0, ripple.y));
 
+                    /* The swash is not glass. The uprush is churned and the backwash rippled, and a rough
+                     * surface reflects a BLURRED sky and less of it at a glancing angle — its grazing
+                     * reflectance is capped at its smoothness (Schlick with roughness, the form URP's own
+                     * lit shaders use). Drawn at 0.06, a mirror, the sheet threw back 60% of the bright
+                     * horizon from eye height: a silver band down every beach that read as foam. Wet sand
+                     * with no sheet over it is rougher still. */
                     float3 viewWS = normalize(_WorldSpaceCameraPos - positionWS);
-                    half fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(normalWS, viewWS)), 5.0);
-                    half3 sky = GlossyEnvironmentReflection(reflect(-viewWS, normalWS), 0.06, 1.0);
+                    half roughness = lerp(0.45, 0.28, film);
+                    half grazing = max(1.0 - roughness, 0.02);
+                    half fresnel = 0.02 + (grazing - 0.02) * pow(1.0 - saturate(dot(normalWS, viewWS)), 5.0);
+                    half3 sky = GlossyEnvironmentReflection(reflect(-viewWS, normalWS), roughness, 1.0);
 
                     half shadow = MainLightRealtimeShadow(TransformWorldToShadowCoord(positionWS));
                     float3 halfway = normalize(mainLight.direction + viewWS);

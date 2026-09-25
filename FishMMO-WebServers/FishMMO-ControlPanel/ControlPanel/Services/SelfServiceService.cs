@@ -158,26 +158,97 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>
-		/// Generates fresh two-factor enrolment material and stores it, WITHOUT enabling two-factor.
+		/// Generates fresh two-factor enrolment material and STAGES it: nothing sign-in reads changes
+		/// until <see cref="ConfirmTwoFactorAsync"/>.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Enabling happens only in <see cref="ConfirmTwoFactorAsync"/>, once the account holder
-		/// has proved their authenticator actually works. Enabling first would let a mistyped
-		/// scan lock somebody out of their own account permanently.
+		/// The new secret goes into the account's pending column and the new recovery codes in as
+		/// pending codes, beside the live ones. Confirming with a code from the new authenticator
+		/// promotes both at once; abandoning the setup leaves the account exactly as it was. This used
+		/// to write the live secret and replace the live codes here, so a re-enrolment the player did
+		/// not finish — a scan that never happened, a closed tab — left them with an authenticator
+		/// that no longer worked and codes they may never have saved (issue #267).
 		/// </para>
 		/// <para>
-		/// That protection covers a FIRST enrolment only. On an account whose two-factor is already
-		/// on, the secret written here is the one sign-in reads from this moment, so re-enrolling
-		/// replaces the live authenticator at once. The account page therefore demands a fresh
-		/// step-up before it calls this for such an account; see
-		/// <c>AccountController.BeginTwoFactorSetup</c>.
+		/// A first enrolment is staged the same way; confirming it is what turns two-factor on. A
+		/// re-enrolment still needs a fresh step-up to start: whoever confirms holds the new
+		/// authenticator, so without it a borrowed signed-in browser could swap the owner's for its
+		/// own. See <c>AccountController.BeginTwoFactorSetup</c>.
 		/// </para>
 		/// </remarks>
-		public Task<TwoFactorSetup> BeginTwoFactorSetupAsync(
+		public async Task<TwoFactorSetup> BeginTwoFactorSetupAsync(
 			string username,
-			CancellationToken cancellationToken = default) =>
-			EnrolAsync(username, enable: false, cancellationToken);
+			CancellationToken cancellationToken = default)
+		{
+			byte[] masterKek = totpKeys.MasterKek;
+			if (masterKek == null || masterKek.Length != TotpMasterKek.KeyLength)
+			{
+				log.LogError("TOTP master KEK unavailable; enrolment is impossible. {Error}", totpKeys.LoadError);
+				return new TwoFactorSetup(false, "Two-factor is unavailable on this server right now.", null, null);
+			}
+
+			var begun = await unitOfWork.BeginAsync(cancellationToken);
+			if (!begun.IsSuccess)
+			{
+				log.LogWarning("Could not begin staging two-factor for '{User}': [{Code}] {Message}",
+					username, begun.ErrorCode, begun.ErrorMessage);
+				return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+			}
+
+			byte[] secret = null;
+			try
+			{
+				await using IUnitOfWork uow = begun.Data;
+
+				secret = CryptoHelper.TwoFactor.GenerateTotpSecret();
+				string encrypted = CryptoHelper.TwoFactor.EncryptTotpSecret(masterKek, username, secret);
+				var staged = await accounts.PersistPendingTotpSecretAsync(username, encrypted, cancellationToken);
+				if (!staged.IsSuccess)
+				{
+					log.LogWarning("PersistPendingTotpSecretAsync failed for '{User}': [{Code}] {Message}",
+						username, staged.ErrorCode, staged.ErrorMessage);
+					return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+				}
+
+				string[] codes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
+				var hashes = new List<string>(codes.Length);
+				foreach (string code in codes)
+				{
+					hashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
+				}
+				// Codes that were not stored must never be shown: the player would keep them as a way back in.
+				var stagedCodes = await recoveryCodes.StagePendingAsync(username, hashes, cancellationToken);
+				if (!stagedCodes.IsSuccess)
+				{
+					log.LogError("Staging recovery codes failed for '{User}': [{Code}] {Message}",
+						username, stagedCodes.ErrorCode, stagedCodes.ErrorMessage);
+					return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+				}
+
+				var committed = await uow.CommitAsync(cancellationToken);
+				if (!committed.IsSuccess)
+				{
+					log.LogWarning("Staging two-factor for '{User}' could not be committed; nothing changed: [{Code}] {Message}",
+						username, committed.ErrorCode, committed.ErrorMessage);
+					return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+				}
+
+				return new TwoFactorSetup(true, null, CryptoHelper.TwoFactor.BuildOtpauthUri(secret, username), codes);
+			}
+			catch (Exception ex)
+			{
+				log.LogError(ex, "Staging two-factor failed for '{User}'.", username);
+				return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+			}
+			finally
+			{
+				if (secret != null)
+				{
+					CryptographicOperations.ZeroMemory(secret);
+				}
+			}
+		}
 
 		/// <summary>
 		/// Replaces the account's authenticator secret and recovery codes in ONE transaction, and
@@ -319,24 +390,65 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>
-		/// Enables two-factor once a code from the new authenticator verifies.
+		/// Promotes the staged authenticator and recovery codes once a code from the new
+		/// authenticator verifies, and turns two-factor on.
 		/// </summary>
+		/// <param name="username">The signed-in account.</param>
+		/// <param name="pending">The outcome of <c>TwoFactorService.VerifyPendingAsync</c> for the submitted code.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <remarks>
+		/// The secret and the codes go live in one transaction, or neither does: a live secret with the
+		/// old codes, or new codes with the old secret, would leave one of the two unusable.
+		/// </remarks>
 		public async Task<Outcome> ConfirmTwoFactorAsync(
 			string username,
-			bool codeVerified,
+			TwoFactorService.PendingCheck pending,
 			CancellationToken cancellationToken = default)
 		{
-			if (!codeVerified)
+			if (pending.Verdict == TwoFactorService.PendingVerdict.NothingStaged)
+			{
+				return new Outcome(false, "There is no new authenticator waiting to be confirmed. Start the setup again.");
+			}
+			if (pending.Verdict != TwoFactorService.PendingVerdict.Valid)
 			{
 				return new Outcome(false, "That code is not valid.");
 			}
 
-			var enabled = await accounts.PersistTotpEnabledAsync(username, true, cancellationToken);
-			if (!enabled.IsSuccess)
+			var begun = await unitOfWork.BeginAsync(cancellationToken);
+			if (!begun.IsSuccess)
 			{
-				log.LogWarning("PersistTotpEnabledAsync failed for '{User}': [{Code}] {Message}",
-					username, enabled.ErrorCode, enabled.ErrorMessage);
+				log.LogWarning("Could not begin confirming two-factor for '{User}': [{Code}] {Message}",
+					username, begun.ErrorCode, begun.ErrorMessage);
 				return new Outcome(false, "Two-factor could not be enabled.");
+			}
+
+			await using (IUnitOfWork uow = begun.Data)
+			{
+				var promoted = await accounts.PromotePendingTotpSecretAsync(username, pending.Window, cancellationToken);
+				if (!promoted.IsSuccess || !promoted.Data)
+				{
+					log.LogWarning("PromotePendingTotpSecretAsync did not promote for '{User}': [{Code}] {Message}",
+						username, promoted.ErrorCode, promoted.ErrorMessage);
+					return new Outcome(false, promoted.IsSuccess
+						? "There is no new authenticator waiting to be confirmed. Start the setup again."
+						: "Two-factor could not be enabled.");
+				}
+
+				var codes = await recoveryCodes.PromotePendingAsync(username, cancellationToken);
+				if (!codes.IsSuccess)
+				{
+					log.LogError("Promoting staged recovery codes failed for '{User}'; nothing changed: [{Code}] {Message}",
+						username, codes.ErrorCode, codes.ErrorMessage);
+					return new Outcome(false, "Two-factor could not be enabled.");
+				}
+
+				var committed = await uow.CommitAsync(cancellationToken);
+				if (!committed.IsSuccess)
+				{
+					log.LogWarning("Confirming two-factor for '{User}' could not be committed; nothing changed: [{Code}] {Message}",
+						username, committed.ErrorCode, committed.ErrorMessage);
+					return new Outcome(false, "Two-factor could not be enabled.");
+				}
 			}
 			return new Outcome(true, null);
 		}

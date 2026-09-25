@@ -82,10 +82,12 @@ namespace FishMMO.Auth.Implementation
 		{
 			try
 			{
+				// The fixed identity, never UserName: see SrpIdentity. UserName is only which account
+				// this session is for.
 				Session = SrpServer!.DeriveSession(ServerEphemeral!.Secret,
 												  PublicClientEphemeral,
 												  Salt,
-												  UserName,
+												  SrpIdentity.Value,
 												  Verifier,
 												  clientProof);
 				serverProof = Session.Proof;

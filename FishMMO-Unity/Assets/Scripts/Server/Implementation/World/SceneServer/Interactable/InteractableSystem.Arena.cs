@@ -875,7 +875,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					ratingSource = ArenaRatingSource.FromSeason(seasonID, ArenaRating.DefaultRating);
 					band = ArenaRating.ResolveBand(waiters[0].RatingBandBase, waiters[0].RatingBandGrowth, waited, waiters[0].RatingBandMax);
 				}
-				else if (waiters[0].BalanceTeams && waiters[0].RankAttributeTemplateID > 0)
+				// != 0, not > 0: template ids are signed hashes, and 0 is the only "no attribute".
+				else if (waiters[0].BalanceTeams && waiters[0].RankAttributeTemplateID != 0)
 				{
 					ratingSource = ArenaRatingSource.FromAttribute(waiters[0].RankAttributeTemplateID);
 				}

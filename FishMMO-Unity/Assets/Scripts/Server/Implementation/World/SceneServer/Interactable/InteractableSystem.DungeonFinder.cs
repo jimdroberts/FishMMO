@@ -1179,11 +1179,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					 * no leader able to remove them and no way for the finder to resolve the
 					 * instance as theirs on a later visit. Joining first also means a refusal here
 					 * costs nothing: the character has not moved. */
-					if (!await partySystem.TryAddCharacterToPartyAsync(conn, characterID, instance.PartyID, healthPCT))
+					PartyJoinOutcome joined = await partySystem.TryAddCharacterToPartyAsync(conn, characterID, instance.PartyID, healthPCT);
+					if (joined != PartyJoinOutcome.Joined)
 					{
-						/* Almost always a full party. Reported as a full destination because that
-						 * is what it means to the player: the run they clicked has no room. */
-						TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.DestinationFull));
+						/* The reason the player is given is the real one. Every refusal used to be
+						 * "the run is full", a database fault included (issue #267). */
+						SceneTransferRefusalReason reason = joined switch
+						{
+							PartyJoinOutcome.Full => SceneTransferRefusalReason.DestinationFull,
+							PartyJoinOutcome.Failed => SceneTransferRefusalReason.ServerError,
+							_ => SceneTransferRefusalReason.DestinationUnavailable,
+						};
+						TryEnqueueMainThread(() => SendTransferRefused(conn, reason));
 						return;
 					}
 				}

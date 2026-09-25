@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -224,7 +225,9 @@ namespace FishMMO.Client
 			return mesh;
 		}
 
-		public void Draw(WeatherTimeline timeline, uint tick, Camera camera, Material material, WeatherRenderProfile profile, int limit, float time)
+		/// <param name="body">The world the viewer is on, for how fast things fall there. Null is our own.</param>
+		public void Draw(WeatherTimeline timeline, uint tick, Camera camera, Material material, WeatherRenderProfile profile, int limit, float time,
+			WorldBody body = null)
 		{
 			Drawn = 0;
 			if (timeline == null || camera == null || material == null || limit <= 0 || timeline.SceneMode != WeatherSceneMode.Own)
@@ -264,11 +267,18 @@ namespace FishMMO.Client
 					continue;
 				}
 				PrecipitationKind kind = frame.DominantPrecipitation;
-				PrecipitationLook look = profile.LookOf(kind == PrecipitationKind.Snow ? WeatherChannel.SnowWeight
+				WeatherChannel channel = kind == PrecipitationKind.Snow ? WeatherChannel.SnowWeight
 					: kind == PrecipitationKind.Hail ? WeatherChannel.HailWeight
 					: kind == PrecipitationKind.Ash ? WeatherChannel.AshWeight
 					: kind == PrecipitationKind.Sand ? WeatherChannel.SandWeight
-					: WeatherChannel.RainWeight);
+					: WeatherChannel.RainWeight;
+				PrecipitationLook look = profile.LookOf(channel);
+				/* The curtain's streaks fall at the kind's own speed on this world, in metres a second.
+				 * They were scrolled in the cylinder's own units, and the cylinder is 1300 m tall: rain
+				 * came down its curtain at 260 m/s and snow at 35. Constant for the cell, which keeps a
+				 * preset's frame, so the time it is multiplied by is honest. */
+				float fallSpeed = Mathf.Lerp(look.FallSpeed.x, look.FallSpeed.y, frame[WeatherChannel.DropSize])
+					* SurfacePhysics.TerminalSpeedScale(SurfacePhysics.Gravity(body), SurfacePhysics.AirDensity(body), PrecipitationField.TraitsOf(channel).Fine);
 				Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
 				float radius = cell.RadiusMeters * 1.3f;
 				float height = 1300f;
@@ -277,7 +287,7 @@ namespace FishMMO.Client
 				Color color = water && SkySystem.Instance != null ? SkySystem.Instance.InAir(look.FogColor) : look.FogColor;
 				color.a = Mathf.Clamp01(amount * (kind == PrecipitationKind.Sand ? 0.75f : 0.45f));
 				block.SetColor(ColorId, color);
-				block.SetVector(ParamsId, new Vector4(kind == PrecipitationKind.Snow ? 0.08f : 0.6f, time, kind == PrecipitationKind.Rain ? 40f : 16f, kind == PrecipitationKind.Snow ? 1f : 0f));
+				block.SetVector(ParamsId, new Vector4(fallSpeed, time, kind == PrecipitationKind.Rain ? 40f : 16f, kind == PrecipitationKind.Snow ? 1f : 0f));
 				var rp = new RenderParams(material) { camera = camera, matProps = block, worldBounds = new Bounds(matrix.GetColumn(3), new Vector3(radius * 2f, height * 2f, radius * 2f)), shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false };
 				Graphics.RenderMesh(rp, cylinder, 0, matrix);
 				Drawn++;
@@ -306,10 +316,12 @@ namespace FishMMO.Client
 		private static readonly int OverheadDrawId = Shader.PropertyToID("_FishCloudOverheadDraw");
 		private static readonly int OverheadRectId = Shader.PropertyToID("_FishCloudOverheadRect");
 		private static readonly int OverheadId = Shader.PropertyToID("_FishCloudOverhead");
+		private static readonly int OverheadFromId = Shader.PropertyToID("_FishCloudOverheadFrom");
 		private RenderTexture cookie;
 		private RenderTexture raw;
 		private RenderTexture overhead;
 		private Vector2 overheadCentre = new Vector2(float.NaN, float.NaN);
+		private float overheadFrom = float.NaN;
 		private int sinceOverhead = int.MaxValue;
 		private Vector2 drawnCentre = new Vector2(float.NaN, float.NaN);
 		private int sinceDrawn = int.MaxValue;
@@ -427,9 +439,10 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The map of what stands over each patch of ground round the camera, for the rain and the
-		/// snow to fall only under cloud. The same window as the cookie, marched straight up instead
-		/// of toward the light, and redrawn on the same cadence.
+		/// The map of the cloud standing over each patch of ground round the camera, above the
+		/// camera's own height, for what falls from cloud to fall only under it and as hard as the
+		/// cloud is thick. The same window as the cookie, marched straight up instead of toward the
+		/// light, and redrawn on the same cadence.
 		/// </summary>
 		private void DrawOverhead(Material cloudMaterial, Vector3 viewer, float areaMeters, int steps)
 		{
@@ -447,11 +460,14 @@ namespace FishMMO.Client
 			float texel = areaMeters / overhead.width;
 			var centre = new Vector2(Mathf.Round(viewer.x / texel) * texel, Mathf.Round(viewer.z / texel) * texel);
 			sinceOverhead++;
-			if (sinceOverhead >= 3 || centre != overheadCentre)
+			// Measured up from the viewer's height (see the pass), so climbing out of a deck redraws it.
+			if (sinceOverhead >= 3 || centre != overheadCentre || !(Mathf.Abs(viewer.y - overheadFrom) < 5f))
 			{
 				cloudMaterial.SetVector(OverheadDrawId, new Vector4(centre.x, centre.y, areaMeters, steps));
+				cloudMaterial.SetFloat(OverheadFromId, viewer.y);
 				Graphics.Blit(null, overhead, cloudMaterial, 7);
 				overheadCentre = centre;
+				overheadFrom = viewer.y;
 				sinceOverhead = 0;
 			}
 			Shader.SetGlobalTexture(OverheadId, overhead);

@@ -35,5 +35,11 @@ namespace FishMMO.Database.Npgsql.Entities
 
 		/// <summary>Row creation timestamp (UTC).</summary>
 		public DateTime TimeCreated { get; set; }
+
+		/// <summary>
+		/// The writer's once-per-request identity: a retry after a lost reply finds the row its first
+		/// attempt wrote instead of writing a second one. Null for rows written without one.
+		/// </summary>
+		public Guid? RequestKey { get; set; }
 	}
 }

@@ -21,10 +21,9 @@ MonoBehaviour:
     AtlasRow: 0
     Size: {x: 0.008, y: 0.016}
     Stretch: 40
-    FallSpeed: {x: 7, y: 10}
+    FallSpeed: {x: 4, y: 7}
     Sway: 0
     SwayFrequency: 1
-    WindResponse: 0.35
     Tint: {r: 0.75, g: 0.8, b: 0.9, a: 1}
     Alpha: 0.45
     Brightness: 1
@@ -36,7 +35,6 @@ MonoBehaviour:
     FallSpeed: {x: 0.8, y: 1.4}
     Sway: 0.35
     SwayFrequency: 0.8
-    WindResponse: 0.9
     Tint: {r: 1, g: 1, b: 1, a: 1}
     Alpha: 0.9
     Brightness: 1
@@ -48,7 +46,6 @@ MonoBehaviour:
     FallSpeed: {x: 10, y: 16}
     Sway: 0
     SwayFrequency: 1
-    WindResponse: 0.2
     Tint: {r: 0.9, g: 0.95, b: 1, a: 1}
     Alpha: 0.95
     Brightness: 1
@@ -60,7 +57,6 @@ MonoBehaviour:
     FallSpeed: {x: 0.4, y: 0.8}
     Sway: 0.5
     SwayFrequency: 0.5
-    WindResponse: 0.6
     Tint: {r: 0.55, g: 0.53, b: 0.5, a: 1}
     Alpha: 0.95
     Brightness: 1
@@ -72,7 +68,6 @@ MonoBehaviour:
     FallSpeed: {x: 0.5, y: 1}
     Sway: 0.2
     SwayFrequency: 2
-    WindResponse: 0.6
     Tint: {r: 0.9, g: 0.78, b: 0.58, a: 1}
     Alpha: 0.9
     Brightness: 1

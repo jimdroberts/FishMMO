@@ -64,7 +64,7 @@ namespace FishMMO.Auth.Implementation
 				connectionAccounts.Remove(connection);
 				connectionAccounts.Add(connection, accountName);
 
-				if (accountConnections.TryGetValue(accountName, out TConnection existing) && !ReferenceEquals(existing, connection))
+				if (accountConnections.TryGetValue(accountName, out TConnection existing) && !ConnectionIdentity.Same(existing, connection))
 				{
 					_ = Log.Warning(logPrefix, $"Replacing existing connection for account '{accountName}'.");
 				}

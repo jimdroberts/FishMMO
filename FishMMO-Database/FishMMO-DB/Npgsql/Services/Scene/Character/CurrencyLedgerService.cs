@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -46,16 +47,22 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Movement state must be Absorbed or Returned.");
 			}
 
+			/* Taken once, outside the retried delegate: a retry after a reply lost past the commit
+			 * carries the same key and the conflict clause turns it into a no-op, where it used to
+			 * write the row a second time (issue #267). */
+			Guid requestKey = Guid.NewGuid();
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				/* Database server time, as the other append paths use, so rows from different
 				 * scene servers order correctly regardless of clock skew between them. */
-				string sql = $@"INSERT INTO {TableName} (character_id, amount, reason, state, time_created)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, timezone('UTC', CURRENT_TIMESTAMP))";
+				string sql = $@"INSERT INTO {TableName} (character_id, amount, reason, state, time_created, request_key)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, timezone('UTC', CURRENT_TIMESTAMP), {{4}})
+					ON CONFLICT (request_key) WHERE request_key IS NOT NULL DO NOTHING";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { characterID, amount, reason, state },
+					new object[] { characterID, amount, reason, state, requestKey },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}

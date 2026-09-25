@@ -62,7 +62,7 @@ namespace FishMMO.Server.Core
 				 * explains it, so the batch itself is wrong and someone should look. */
 				await Log.Warning(tag,
 					$"{operation}{where}: {write.Filtered} of {write.Supplied} rows were not attempted " +
-					$"(unresolved character or template). {write}");
+					$"(an unresolved character or template, or a key the batch named twice). {write}");
 			}
 			else if (write.Superseded > 0)
 			{

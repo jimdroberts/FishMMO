@@ -155,7 +155,9 @@ namespace FishMMO.ControlPanel.Services
 		/// </remarks>
 		public async Task<RegistrationResult> RegisterAsync(RegistrationInput input, CancellationToken cancellationToken = default)
 		{
-			string username = input.Username;
+			// Lowercased here as well as by the browser, so no client can register a spelling the rest
+			// of the server does not use. See SrpIdentity.
+			string username = SrpIdentity.NormalizeIdentifier(input.Username);
 			string email = input.Email;
 
 			// ── Validation, matching the in-game order ──────────────────────────
@@ -450,6 +452,7 @@ namespace FishMMO.ControlPanel.Services
 			int code,
 			CancellationToken cancellationToken = default)
 		{
+			username = SrpIdentity.NormalizeIdentifier(username);
 			if (!Authentication.IsAllowedUsername(username))
 			{
 				// No account can have this name, so there is nothing to count against.
@@ -479,6 +482,10 @@ namespace FishMMO.ControlPanel.Services
 				log.LogWarning("A support ticket was due for '{User}' after {Failures} incorrect verification codes but could not be opened: {Error}",
 					username, outcome.Failures, outcome.TicketError);
 			}
+			else if (outcome.CountError != null)
+			{
+				log.LogWarning("An incorrect verification code for '{User}' could not be counted: {Error}", username, outcome.CountError);
+			}
 			return (false, InvalidCodeError, false);
 		}
 
@@ -503,6 +510,7 @@ namespace FishMMO.ControlPanel.Services
 		/// </remarks>
 		public async Task ResendAsync(string username, AccountVerificationChannels channel, CancellationToken cancellationToken = default)
 		{
+			username = SrpIdentity.NormalizeIdentifier(username);
 			if (!Authentication.IsAllowedUsername(username) ||
 				(channel != AccountVerificationChannels.Email && channel != AccountVerificationChannels.Sms))
 			{
@@ -575,19 +583,22 @@ namespace FishMMO.ControlPanel.Services
 
 		private async Task SendEmailCodeAsync(string username, string email, CancellationToken cancellationToken)
 		{
+			/* Checked BEFORE a code is stored. A waiting email carries the code the account holds now;
+			 * storing a fresh one first and then skipping the email as a duplicate sent the player a
+			 * code that no longer matched (issue #267). */
+			var duplicate = await emailQueue.HasPendingForUserAsync(username, EmailKind.Verification, cancellationToken);
+			if (duplicate.IsSuccess && duplicate.Data)
+			{
+				log.LogDebug("Skipping verification email for '{User}': one is already waiting, with the current code.", username);
+				return;
+			}
+
 			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
 			var codeResult = await accounts.PersistVerifyCodeAsync(username, verifyCode, DateTime.UtcNow + VerifyCodeLifetime, cancellationToken);
 			if (!codeResult.IsSuccess)
 			{
 				log.LogWarning("PersistVerifyCodeAsync failed for '{User}': [{Code}] {Message}",
 					username, codeResult.ErrorCode, codeResult.ErrorMessage);
-				return;
-			}
-
-			var duplicate = await emailQueue.HasPendingForUserAsync(username, EmailKind.Verification, cancellationToken);
-			if (duplicate.IsSuccess && duplicate.Data)
-			{
-				log.LogDebug("Skipping duplicate verification email for '{User}'.", username);
 				return;
 			}
 

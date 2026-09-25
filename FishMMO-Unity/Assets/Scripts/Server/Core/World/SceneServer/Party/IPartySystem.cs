@@ -5,6 +5,26 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Server.Core.World.SceneServer
 {
 	/// <summary>
+	/// What adding a character to a party for an instance came to.
+	/// </summary>
+	/// <remarks>
+	/// It was a bool, and the dungeon finder reported every false as a full party — a database fault
+	/// included, which told the player the run they clicked had no room when it was the server that
+	/// had failed (issue #267).
+	/// </remarks>
+	public enum PartyJoinOutcome
+	{
+		/// <summary>The character is a member: newly, or already.</summary>
+		Joined = 0,
+		/// <summary>The party has no room.</summary>
+		Full = 1,
+		/// <summary>Refused for another reason: the party was being changed, or the character already belongs to another.</summary>
+		Refused = 2,
+		/// <summary>The database could not be read or written. Nothing was decided.</summary>
+		Failed = 3,
+	}
+
+	/// <summary>
 	/// Engine-agnostic public API for party management on a scene server.
 	/// Implementations manage party membership state for characters connected to
 	/// this scene server, synchronize party updates with persistence, and notify
@@ -65,8 +85,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="characterID">The joining character.</param>
 		/// <param name="partyID">Party that owns the instance being joined.</param>
 		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
-		/// <returns>True when membership was persisted, or the character was already a member.</returns>
-		Task<bool> TryAddCharacterToPartyAsync(TConnection conn, long characterID, long partyID, float healthPCT);
+		/// <returns>
+		/// <see cref="PartyJoinOutcome.Joined"/> when membership was persisted, or the character was
+		/// already a member; otherwise why not, so a caller can tell the player the truth.
+		/// </returns>
+		Task<PartyJoinOutcome> TryAddCharacterToPartyAsync(TConnection conn, long characterID, long partyID, float healthPCT);
 
 		/// <summary>
 		/// Forms a party of one for a character opening a dungeon instance others may join.

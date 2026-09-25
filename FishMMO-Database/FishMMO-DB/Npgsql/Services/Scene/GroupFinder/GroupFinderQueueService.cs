@@ -536,7 +536,8 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					ratingExpr = $"COALESCE((SELECT r.rating FROM {ratingTable} r WHERE r.season_id = {{12}} AND r.character_id = q.character_id), {{13}})";
 				}
-				else if (ratingSource.AttributeTemplateID > 0)
+				// != 0: template ids are signed hashes, and 0 is ArenaRatingSource's "none".
+				else if (ratingSource.AttributeTemplateID != 0)
 				{
 					ratingExpr = $"COALESCE((SELECT a.value FROM {attributeTable} a WHERE a.character_id = q.character_id AND a.template_id = {{12}} AND a.deleted = FALSE LIMIT 1), {{13}})";
 				}
@@ -779,10 +780,21 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var waiter = waiters[0];
 
-				// 3. The seat, then the queue row bound to the instance.
+				/* 3. The seat, then the queue row bound to the instance.
+				 *
+				 * The seat is only taken while the team still has room, counted HERE and not
+				 * trusted from step 1. Step 1 locks the match and counts in the same statement, and
+				 * under READ COMMITTED a statement's snapshot is taken when it starts: a second
+				 * backfill of the same match waits on the lock and then still counts from before the
+				 * first one's seat committed, so both saw one open seat and both took it (issue #267;
+				 * the same defect over-filled parties and guilds). This INSERT runs after the lock is
+				 * held, so it sees every earlier backfill. Zero rows means the team filled first, and
+				 * the check below rolls back as a lost race. */
 				int inserted = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"INSERT INTO {memberTable} (match_id, character_id, team, kills, deaths, score, status, rating_delta)
-					VALUES ({{0}}, {{1}}, {{2}}, 0, 0, 0, {{3}}, 0)",
+					SELECT {{0}}, {{1}}, {{2}}, 0, 0, 0, {{3}}, 0
+					WHERE (SELECT COUNT(*) FROM {memberTable} WHERE match_id = {{0}} AND team = {{2}} AND status = {{3}})
+						< (SELECT team_size FROM {matchTable} WHERE id = {{0}})",
 					new object[] { opening.matchId, waiter.characterId, opening.team, seated },
 					cancellationToken).ConfigureAwait(false);
 

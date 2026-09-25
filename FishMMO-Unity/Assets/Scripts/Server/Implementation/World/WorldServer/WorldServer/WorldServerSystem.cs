@@ -210,7 +210,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return false;
 			}
 
-			DatabaseResult<(long ServerId, WorldServerData ServerData)> result =
+			DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)> result =
 				await worldServerService.PersistAsync(name, serverAddress, port, characterCount, data.IsLocked, cancellationToken);
 
 			if (!result.IsSuccess)
@@ -221,22 +221,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			data.ID = result.Data.ServerId;
 
-			/* Adopt the lock the row came back with.
+			/* Adopt the operator state the row came back with — lock AND scheduled shutdown — through
+			 * the same method every heartbeat uses.
 			 *
-			 * PersistAsync deliberately keeps an existing row's lock on conflict, so a world an
-			 * operator locked and that then restarted without deregistering (a crash, or a
-			 * deregistration that timed out) is still locked in the database. Dropping the value
-			 * here left IsLocked false until the first pulse's state was adopted, two pulses in —
-			 * and WorldServerAuthenticator admitted players to the locked world for that window.
-			 * A scheduled shutdown is not in this row's reply and still arrives with the pulse. */
-			if (data.IsLocked != result.Data.ServerData.Locked)
-			{
-				data.IsLocked = result.Data.ServerData.Locked;
-				if (data.IsLocked)
-				{
-					_ = Log.Warning("WorldServerSystem", "This world server registered LOCKED. New logins are refused; accounts above Player are still admitted.");
-				}
-			}
+			 * PersistAsync deliberately keeps an existing row's operator state on conflict, so a
+			 * world an operator locked, or scheduled for shutdown, and that then restarted without
+			 * deregistering (a crash, or a deregistration that timed out) still carries it in the
+			 * database. Dropping it here left the server unaware until the first pulse's state was
+			 * adopted, two pulses in: WorldServerAuthenticator admitted players to the locked world
+			 * for that window, and a scheduled shutdown went unannounced. The registration reply
+			 * now carries both (issue #267). */
+			ApplyControlState(result.Data.Control);
 			return true;
 		}
 

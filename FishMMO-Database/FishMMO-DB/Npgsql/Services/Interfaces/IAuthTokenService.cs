@@ -17,7 +17,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Called by the LoginServer after successful SRP authentication.
 		/// </summary>
 		/// <param name="tokenHash">SHA-256 hex hash of the signed token blob.</param>
-		/// <param name="accountName">The account the token was issued for.</param>
+		/// <param name="accountName">
+		/// The account the token was issued for, in any case: it is recorded as the account row's own
+		/// (lowercase) name, which the column references.
+		/// </param>
 		/// <param name="loginServerId">The LoginServer that issued the token.</param>
 		/// <param name="expiresUtc">When the token expires.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
@@ -47,7 +50,9 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Revokes all active tokens for a specific account.
 		/// Used when an account is banned, password is changed, or force-logout is required.
 		/// </summary>
-		Task<DatabaseResult> RevokeAllForAccountAsync(
+		/// <param name="accountName">The account, in any case: matched the way accounts are looked up.</param>
+		/// <returns>How many tokens were revoked; zero when the account had none live.</returns>
+		Task<DatabaseResult<int>> RevokeAllForAccountAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
 

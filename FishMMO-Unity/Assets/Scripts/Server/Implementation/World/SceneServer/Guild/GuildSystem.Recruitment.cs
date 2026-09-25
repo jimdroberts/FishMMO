@@ -406,32 +406,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!applyResult.IsSuccess)
 				{
-					/* Mapped from the codes ApplyAsync actually returns. This used to test for
-					 * UNIQUE_VIOLATION, which the service can never produce — its insert is ON
-					 * CONFLICT DO NOTHING and reports a duplicate as ALREADY_EXISTS — so
-					 * AlreadyApplied was never sent and every refusal, a database fault included,
-					 * reached the player as "not recruiting".
-					 *
-					 * ALREADY_EXISTS also covers "already in a guild", but the membership read above
-					 * has just ruled that out (unless it failed, when the INSERT's own check is the
-					 * only one), so a pending application is what it almost always means here.
-					 * CAPACITY_EXCEEDED is either a full guild or this character's outstanding-
-					 * application quota, which the code alone cannot tell apart, so both keep the
-					 * neutral refusal; so does NOT_FOUND (gone, or no longer recruiting). */
+					/* Mapped from the codes ApplyAsync returns — one per refusal since issue #267, so
+					 * each reaches the player as itself. This used to test for UNIQUE_VIOLATION, which
+					 * the service can never produce, and before the service split its codes a full
+					 * guild and a used-up application quota were indistinguishable. NOT_FOUND is a
+					 * guild that is gone or has stopped recruiting; anything else is a fault. */
 					GuildResultType refusal;
-					if (applyResult.ErrorCode == DatabaseErrorCodes.AlreadyExists)
+					switch (applyResult.ErrorCode)
 					{
-						refusal = GuildResultType.AlreadyApplied;
-					}
-					else if (applyResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded ||
-						applyResult.ErrorCode == DatabaseErrorCodes.NotFound)
-					{
-						refusal = GuildResultType.NotRecruiting;
-					}
-					else
-					{
-						await Log.Warning("GuildSystem", $"ApplyToGuildAsync insert failed (CharID={characterID}, GuildID={guildID}): {applyResult.ErrorCode} - {applyResult.ErrorMessage}");
-						refusal = GuildResultType.Failed;
+						case DatabaseErrorCodes.AlreadyExists:
+							refusal = GuildResultType.AlreadyApplied;
+							break;
+						case DatabaseErrorCodes.AlreadyMember:
+							refusal = GuildResultType.AlreadyInGuild;
+							break;
+						case DatabaseErrorCodes.CapacityExceeded:
+							refusal = GuildResultType.GuildFull;
+							break;
+						case DatabaseErrorCodes.QuotaExceeded:
+							refusal = GuildResultType.TooManyApplications;
+							break;
+						case DatabaseErrorCodes.NotFound:
+							refusal = GuildResultType.NotRecruiting;
+							break;
+						default:
+							await Log.Warning("GuildSystem", $"ApplyToGuildAsync insert failed (CharID={characterID}, GuildID={guildID}): {applyResult.ErrorCode} - {applyResult.ErrorMessage}");
+							refusal = GuildResultType.Failed;
+							break;
 					}
 
 					SendGuildResult(conn, refusal);

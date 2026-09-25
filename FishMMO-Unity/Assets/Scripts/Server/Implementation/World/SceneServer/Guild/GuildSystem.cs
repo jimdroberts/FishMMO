@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -613,10 +614,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </para>
 		/// <para>
 		/// <b>It never passes this server's clock as it stood when the query was sent.</b> The
-		/// timestamps are written by whichever scene server made the change, from its own clock; a
-		/// writer running ahead would otherwise drag the mark past updates an accurate writer
-		/// makes a moment later. Capped there, a future-stamped row is merely read again until the
-		/// clocks agree, which costs a re-send, not a lost update.
+		/// timestamps come from the database's clock (<c>GuildUpdateService.PersistAsync</c>; they
+		/// used to come from each writer's own, issue #267), and this server's clock can disagree
+		/// with it. Capped there, a row stamped ahead of this server's "now" is merely read again
+		/// until the clocks agree, which costs a re-send, not a lost update.
 		/// </para>
 		/// <para>
 		/// <b>A guild whose snapshot could not be read holds the mark.</b> Its roster or ladder
@@ -651,6 +652,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync update fetch failed ({guildIds.Count} guilds since {lastFetch:O}): {fetchResult.ErrorCode} - {fetchResult.ErrorMessage}");
 					return;
+				}
+
+				/* A disbanded guild has no update row to find: the row goes with the guild. So the
+				 * guilds this server holds members of are looked up as well, and any that is gone is
+				 * cleared here. Without this, members of a guild disbanded on another server kept it
+				 * until they logged out (issue #267). A failed lookup clears nothing — a guild must
+				 * never be taken from its members on the strength of a read that did not happen. */
+				if (TryGetDbService(out IGuildService guildService))
+				{
+					DatabaseResult<IReadOnlyCollection<long>> existing = await guildService.FetchExistingIdsAsync(guildIds);
+					if (!existing.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync could not check which guilds still exist: {existing.ErrorCode} - {existing.ErrorMessage}");
+					}
+					else
+					{
+						var present = new HashSet<long>(existing.Data);
+						List<long> vanished = null;
+						foreach (long guildID in guildIds)
+						{
+							if (!present.Contains(guildID))
+							{
+								(vanished ??= new List<long>()).Add(guildID);
+							}
+						}
+						if (vanished != null)
+						{
+							TryEnqueueMainThread(() =>
+							{
+								foreach (long guildID in vanished)
+								{
+									ClearLocalGuildMembers(guildID);
+								}
+							});
+						}
+					}
 				}
 
 				if (fetchResult.Data == null || fetchResult.Data.Count < 1)
@@ -782,11 +819,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								// Tell the member connection to leave their guild immediately
 								if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var guildCharacterMappingData) &&
 									guildCharacterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
-									character != null &&
-									character.TryGet(out IGuildController targetGuildController))
+									character != null)
 								{
-									targetGuildController.ID = 0;
-									Server.NetworkWrapper.Broadcast(character.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
+									ClearGuildStanding(character, guildID);
 								}
 							}
 						}
@@ -993,14 +1028,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			RemoveGuildCharacterTracker(guildController.ID, character.ID);
 
 			/* A kick or a leave deletes the membership row from a background task, and this
-			 * character's controller still carries the old guild ID until that delete lands.
-			 * A persist that starts AFTER the delete finds no row and writes nothing — see
-			 * PersistGuildMemberAsync. One that starts BEFORE it is still harmful: its write
-			 * either lands first and bumps the row's version, so the delete (gated on the version
-			 * it read) fails as stale, or lands second and inserts the row straight back. Either
-			 * way the player stays in the guild they were removed from, and disconnecting inside
-			 * that window is a window a player can aim for, so the location write is skipped
-			 * while a removal on this server is in flight. */
+			 * character's controller still carries the old guild ID until that delete lands. The
+			 * location write can no longer undo that — it is an UPDATE that neither inserts nor
+			 * bumps the version the delete is gated on (see PersistGuildMemberAsync) — so this
+			 * skip is no longer a safety measure. It stays because an "Offline" label written onto
+			 * a row that is about to be deleted is a round trip for nothing. */
 			if (runtimeData != null && runtimeData.IsMembershipRemovalInFlight(character.ID))
 			{
 				return;
@@ -1038,10 +1070,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// guild with nobody able to administer it.</item>
 		/// </list>
 		/// <para>
-		/// So a missing row, or a row naming a different guild, means this controller is stale and
-		/// nothing is written. The fetch and the UPSERT are still two round trips, and a delete
-		/// landing between them would still be undone by the UPSERT's insert branch; closing that
-		/// needs a location-only UPDATE in the service, which cannot insert at all.
+		/// So the write is <see cref="ICharacterGuildService.UpdateLocationAsync"/>: one UPDATE of the
+		/// label, matched on character AND guild. A missing row, or a row naming a different guild,
+		/// means this controller is stale, and the update simply matches nothing. It used to be a
+		/// fetch followed by the membership UPSERT, and a delete landing between the two was undone
+		/// by the UPSERT's insert branch; an UPDATE has no insert branch to undo it with.
 		/// </para>
 		/// </remarks>
 		private async Task PersistGuildMemberAsync(long characterID, long guildID, string location)
@@ -1054,32 +1087,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult<CharacterGuildData?> existingResult = await charGuildService.FetchAsync(characterID);
-				if (!existingResult.IsSuccess)
+				/* A location-only UPDATE, never the membership UPSERT. This used to read the row for
+				 * its version and rank and write it back through PersistAsync — and a kick landing
+				 * between the read and the write left no row for the UPSERT to lose to, so it
+				 * INSERTED one and the kicked member was back in the guild for good. The update
+				 * can only change a row that exists, in this guild, and touches nothing but the
+				 * label (issue #267, ICharacterGuildService.UpdateLocationAsync). */
+				DatabaseResult<bool> locationResult = await charGuildService.UpdateLocationAsync(characterID, guildID, location);
+				if (!locationResult.IsSuccess)
 				{
-					/* Nothing is written without the row. Guessing a version used to be the
-					 * fallback, and a guessed version either loses to the real one — a misleading
-					 * STALE_STATE — or, with no row to lose to, inserts one. A location label is
-					 * rewritten on the next connect or disconnect anyway. */
-					await Log.Warning("GuildSystem", $"PersistGuildMemberAsync membership fetch failed (CharID={characterID}, GuildID={guildID}): {existingResult.ErrorCode} - {existingResult.ErrorMessage}");
+					await Log.Warning("GuildSystem", $"PersistGuildMemberAsync DB error (CharID={characterID}, GuildID={guildID}): {locationResult.ErrorCode} - {locationResult.ErrorMessage}");
 					return;
 				}
 
-				if (!existingResult.Data.HasValue || existingResult.Data.Value.GuildID != guildID)
+				if (!locationResult.Data)
 				{
 					// Removed, or moved to another guild, somewhere this server has not heard about yet.
 					await Log.Debug("GuildSystem", $"PersistGuildMemberAsync skipped: CharID={characterID} no longer holds a membership row in GuildID={guildID}.");
-					return;
-				}
-
-				CharacterGuildData existing = existingResult.Data.Value;
-
-				// Sequence-based optimistic concurrency: the row's own version, one past, and its own rank.
-				CharacterGuildData guildData = new CharacterGuildData(0, existing.Version + 1, characterID, guildID, existing.Rank, location);
-				DatabaseResult persistResult = await charGuildService.PersistAsync(guildData, maxGuildSize);
-				if (!persistResult.IsSuccess)
-				{
-					await Log.Warning("GuildSystem", $"PersistGuildMemberAsync DB error (CharID={characterID}, GuildID={guildID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
 					return;
 				}
 				DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
@@ -3520,47 +3544,73 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// The guild is gone, so its land goes back to the world — see ReleaseGuildPlotsAsync.
 				await ReleaseGuildPlotsAsync(guildID);
 
-				TryEnqueueMainThread(() =>
-				{
-					if (Server == null ||
-						!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
-						!mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs) ||
-						!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
-					{
-						return;
-					}
-
-					// Copied before iterating: clearing each member mutates the tracker.
-					List<long> localMembers = new List<long>(memberIDs);
-
-					foreach (long memberID in localMembers)
-					{
-						if (!characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) ||
-							member == null ||
-							!member.TryGet(out IGuildController memberGuildController) ||
-							memberGuildController.ID != guildID)
-						{
-							continue;
-						}
-
-						memberGuildController.ID = 0;
-						memberGuildController.RankOrder = 0;
-						memberGuildController.Permissions = GuildPermissions.None;
-						memberGuildController.LeaderRankOrder = 0;
-
-						if (member.Owner != null)
-						{
-							Server.NetworkWrapper.Broadcast(member.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
-						}
-					}
-
-					mappingData.GuildCharacterTracker.Remove(guildID);
-					mappingData.GuildMemberTracker.Remove(guildID);
-				});
+				// Every other server learns of this through its update pump, which notices the guild is gone.
+				TryEnqueueMainThread(() => ClearLocalGuildMembers(guildID));
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("GuildSystem", $"Error disbanding guild (GuildID={guildID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Takes every local member of a guild that no longer exists out of it. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// For a disband done here, and for one done on another server and noticed by the update
+		/// pump. The same clear in both, so a member of a guild disbanded elsewhere is left in
+		/// exactly the state a local disband leaves them in.
+		/// </remarks>
+		private void ClearLocalGuildMembers(long guildID)
+		{
+			if (Server == null ||
+				!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
+				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+			{
+				return;
+			}
+
+			if (mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs))
+			{
+				// Copied before iterating: clearing each member mutates the tracker.
+				foreach (long memberID in new List<long>(memberIDs))
+				{
+					if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) && member != null)
+					{
+						ClearGuildStanding(member, guildID);
+					}
+				}
+			}
+
+			mappingData.GuildCharacterTracker.Remove(guildID);
+			mappingData.GuildMemberTracker.Remove(guildID);
+		}
+
+		/// <summary>
+		/// Takes one local character out of <paramref name="guildID"/> and tells their client. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Clears the cached standing as well as the id. The update pump used to clear only the id,
+		/// leaving a removed member's rank and permissions cached — a stale pre-filter that kept their
+		/// panel offering actions the server then refused. And it did so without checking the id was
+		/// still this guild's, so a member who had already joined another guild was taken out of THAT
+		/// one (issue #267). Does nothing unless the character is still in <paramref name="guildID"/>.
+		/// </remarks>
+		private void ClearGuildStanding(IPlayerCharacter member, long guildID)
+		{
+			if (!member.TryGet(out IGuildController guildController) || guildController.ID != guildID)
+			{
+				return;
+			}
+
+			guildController.ID = 0;
+			guildController.RankOrder = 0;
+			guildController.Permissions = GuildPermissions.None;
+			guildController.LeaderRankOrder = 0;
+
+			if (member.Owner != null)
+			{
+				Server.NetworkWrapper.Broadcast(member.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
 			}
 		}
 
@@ -3590,10 +3640,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* Interlocked: guild actions finish on worker threads, and a plain ++ from two of them
+			 * could lose a count. Harmless before — a prune ran a little late — but the counter is
+			 * shared state all the same (issue #267). */
 			bool prune = false;
-			if (++guildLogAppendsSincePrune >= guildLogPruneInterval)
+			if (Interlocked.Increment(ref guildLogAppendsSincePrune) >= guildLogPruneInterval)
 			{
-				guildLogAppendsSincePrune = 0;
+				Interlocked.Exchange(ref guildLogAppendsSincePrune, 0);
 				prune = true;
 			}
 

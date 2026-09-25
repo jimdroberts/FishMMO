@@ -105,6 +105,16 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid Version. Version must be greater than 0.");
 			}
 
+			/* Taken once, outside the retried delegate, because with the sender and the recipient it
+			 * is this mail's identity. ExecuteWriteAsync retries a lost connection, and a connection
+			 * can be lost after the INSERT committed but before its reply arrived — the retry then
+			 * inserted a second mail, and with it a second copy of the attachment the sender paid for
+			 * once. The retry now finds the first attempt's row and inserts nothing, so a lost reply
+			 * resolves to the one mail that was sent. Two real sends cannot share the key: a sender
+			 * has one send in flight at a time (the mailbox ingress guard), each a full round trip,
+			 * and the column keeps microseconds. */
+			var sentAtUtc = DateTime.UtcNow;
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var isActiveRecipient = await dbContext.Characters
@@ -117,12 +127,16 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", recipientCharacterId.ToString(), "Recipient character not found or deleted.");
 				}
 
-				var now = DateTime.UtcNow;
+				// The probe is not filtered on `deleted`: a row the first attempt wrote is that send,
+				// even if the recipient has deleted it since.
 				var sql = $@"
 					INSERT INTO {TableName}
 						(sender_id, sender_name, character_id, subject, body, item_attachment_template_id, item_attachment_seed, item_attachment_amount, currency_attachment, read, version, time_created, deleted, time_deleted)
-					VALUES
-						({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, {{8}}, {{9}}, {{10}}, {{11}}, FALSE, NULL)";
+					SELECT
+						{{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, {{8}}, {{9}}, {{10}}, {{11}}, FALSE, NULL
+					WHERE NOT EXISTS (
+						SELECT 1 FROM {TableName}
+						WHERE character_id = {{2}} AND time_created = {{11}} AND sender_id = {{0}})";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
@@ -133,7 +147,7 @@ namespace FishMMO.Database.Npgsql.Services
 					// currencyAttachment was hard-coded to 0 here, so a mail could carry an item but
 					// never money — the column existed, the DTO exposed it, and nothing could put a
 					// value in it.
-					new object[] { senderCharacterId, senderName, recipientCharacterId, subject, body, itemAttachmentTemplateID, itemAttachmentSeed, (long)itemAttachmentAmount, currencyAttachment, false, incomingVersion, now },
+					new object[] { senderCharacterId, senderName, recipientCharacterId, subject, body, itemAttachmentTemplateID, itemAttachmentSeed, (long)itemAttachmentAmount, currencyAttachment, false, incomingVersion, sentAtUtc },
 					cancellationToken)
 					.ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -329,7 +343,7 @@ namespace FishMMO.Database.Npgsql.Services
 					currencyAttachment: m.CurrencyAttachment,
 					itemAttachmentTemplateID: m.ItemAttachmentTemplateID,
 					itemAttachmentSeed: m.ItemAttachmentSeed,
-					itemAttachmentAmount: (int)m.ItemAttachmentAmount
+					itemAttachmentAmount: m.ItemAttachmentAmount
 				)).ToList();
 
 				return (IReadOnlyList<CharacterMailData>)mail;

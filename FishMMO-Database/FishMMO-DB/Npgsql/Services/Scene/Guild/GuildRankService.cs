@@ -39,7 +39,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Success(0);
 			}
 
-			return await ExecuteWriteAsync(async dbContext =>
+			/* A transaction around the whole ladder. The ranks used to be separate autocommitted
+			 * INSERTs, so a failure after the first left a guild with part of a ladder — and the
+			 * seed only ever runs against an EMPTY ladder (GuildSystem.FetchOrSeedLadderAsync), so
+			 * that part was never completed. Leadership is "the highest order that exists", which
+			 * on a ladder missing its top rank makes the officers the leaders and leaves the real
+			 * leader on an order with no row and no permissions (issue #267 audit). */
+			return await ExecuteTransactionAsync<int>(async dbContext =>
 			{
 				int inserted = 0;
 
@@ -254,9 +260,15 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken).ConfigureAwait(false);
 
 				/* Zero rows means the guild itself is gone — disbanded while this request was in
-				 * flight. Reported rather than ignored, because the shift above has to roll back
-				 * with it, which is what returning through the transaction wrapper does. */
-				return inserted > 0 ? ResultInserted : ResultGuildMissing;
+				 * flight. THROWN, not returned: the shifts above must roll back with it, and a value
+				 * returned from inside the transaction commits them. This used to return a sentinel
+				 * under a comment claiming the return rolled back; it only did no harm because
+				 * deleting a guild cascades its ranks and memberships away first. */
+				if (inserted == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Guild", rank.GuildID.ToString());
+				}
+				return ResultInserted;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -265,7 +277,7 @@ namespace FishMMO.Database.Npgsql.Services
 					ResultInserted => DatabaseResult.Success(),
 					ResultCapacity => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, $"Guild already has the maximum of {maxRanks} ranks."),
 					ResultNoHeadroom => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, $"Guild has no rank order free below {maxRankOrder}."),
-					_ => DatabaseResult.Failure(DatabaseErrorCodes.NotFound, "Guild not found."),
+					_ => DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, $"Unexpected rank insert outcome {result.Data}."),
 				}
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -276,8 +288,6 @@ namespace FishMMO.Database.Npgsql.Services
 		private const int ResultCapacity = 1;
 		/// <summary><see cref="InsertAsync"/> outcome: the ladder cannot be shifted up any further.</summary>
 		private const int ResultNoHeadroom = 2;
-		/// <summary><see cref="InsertAsync"/> outcome: the guild no longer exists.</summary>
-		private const int ResultGuildMissing = 3;
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteAsync(long guildId, byte rankOrder, CancellationToken cancellationToken = default)
@@ -316,7 +326,9 @@ namespace FishMMO.Database.Npgsql.Services
 				? result.Data switch
 				{
 					0 => DatabaseResult.Success(),
-					1 => DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Rank still has members."),
+					// IN_USE, not VALIDATION_ERROR: this method also answers VALIDATION_ERROR for a bad
+					// guild id, and the caller has to be able to tell "occupied" from "malformed".
+					1 => DatabaseResult.Failure(DatabaseErrorCodes.InUse, "Rank still has members."),
 					_ => DatabaseResult.Failure(DatabaseErrorCodes.NotFound, "Rank not found."),
 				}
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);

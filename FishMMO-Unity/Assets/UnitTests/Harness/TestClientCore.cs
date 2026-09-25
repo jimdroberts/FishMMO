@@ -142,6 +142,22 @@ namespace FishMMO.UnitTests.Harness
 		/// </summary>
 		/// <param name="token">Token identifier returned by <see cref="InMemoryAccountStore"/> issue methods.</param>
 		/// <param name="timeoutMs">Maximum milliseconds to wait for the result.</param>
+		/// <summary>
+		/// Sends a two-factor code after a <c>TwoFactorRequired</c> answer and awaits the next result.
+		/// </summary>
+		/// <param name="code">The code to send.</param>
+		/// <param name="timeoutMs">Maximum milliseconds to wait for the result.</param>
+		public async Task<ClientAuthenticationResult> SubmitTwoFactorCode(string code, int timeoutMs = 5000)
+		{
+			AuthResultTcs = new TaskCompletionSource<ClientAuthenticationResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+			Task<ClientAuthenticationResult> resultTask = AuthResultTcs.Task;
+			SendTotpCode(code);
+			Task completed = await Task.WhenAny(resultTask, Task.Delay(timeoutMs));
+			if (!object.ReferenceEquals(resultTask, completed))
+				throw new TimeoutException($"SubmitTwoFactorCode did not complete within {timeoutMs} ms.");
+			return await resultTask;
+		}
+
 		public async Task<ClientAuthenticationResult> AttemptTokenLogin(string token, int timeoutMs = 5000)
 		{
 			ResetForNextAttempt();

@@ -311,35 +311,25 @@ namespace FishMMO.Database.Npgsql.Services
 					$"Maintenance window {operationId} already finished ({loaded.Data.Status}). There is nothing left to cancel.");
 			}
 
-			DateTime now = DateTime.UtcNow;
-
-			/* Clearing the deadline, one target at a time, through the same primitive the
-			 * single-server control uses. It nulls shutdown_at_utc and TOUCHES NOTHING ELSE — the
-			 * lock that scheduling set stays set. That is deliberate upstream (halting a shutdown
-			 * and reopening a world are separate decisions) and it is the single most
-			 * misunderstood thing about this feature, so every layer above repeats it. */
-			var cleared = new Dictionary<long, string>();
-			foreach (var target in loaded.Data.Targets.Where(t => !IsTerminal(t.Status)))
-			{
-				/* Cleared even for a target this window has no record of writing. The advance pass
-				 * could have written it a moment ago and not yet recorded the fact, and a deadline
-				 * left behind by a cancelled window is the one outcome nobody would go looking
-				 * for. Clearing a column that is already null costs one statement. */
-				var result = target.Kind == MaintenanceTargetKinds.World
-					? await worldServers.SetShutdownAsync(target.ServerID, null, cancellationToken).ConfigureAwait(false)
-					: await sceneServers.SetShutdownAsync(target.ServerID, null, cancellationToken).ConfigureAwait(false);
-
-				cleared[target.ID] = result.IsSuccess
-					? (target.ShutdownWrittenUtc == null
-						? "Nothing had been written to this server by this window; its deadline was cleared anyway, in case it had been."
-						: now >= loaded.Data.DeadlineUtc
-							? "Deadline cleared, but it had already passed — if this server began stopping it will not come back. It is still LOCKED."
-							: "Deadline cleared. This server is still LOCKED: scheduling locked it and cancelling does not lift that.")
-					: $"The deadline could not be cleared: {result.ErrorMessage} This server may still stop on time.";
-			}
-
+			/* One transaction: lock the window's targets, clear each deadline, record the window
+			 * cancelled. The clears used to run first, each committed on its own, and a pending
+			 * write from an advance pass could land between a clear and the record — scheduling a
+			 * server again under a window that then read Cancelled. Under the targets' row locks a
+			 * write already in flight finishes first and is cleared here, and a later one finds
+			 * Cancelled and does not start: the advance pass's write step re-checks the status
+			 * under the same lock (issue #267 audit). A crash part-way rolls the whole cancel
+			 * back, leaving the window live and its deadlines standing, which is what it reads. */
 			var updated = await ExecuteTransactionAsync(async dbContext =>
 			{
+				string targetTable = dbContext.GetTableName<MaintenanceTargetEntity>();
+				await ExecuteScalarLongAsync(dbContext,
+					$"SELECT COUNT(*) FROM (SELECT id FROM {targetTable} WHERE operation_id = {{0}} ORDER BY id FOR UPDATE) locked",
+					new object[] { operationId },
+					cancellationToken).ConfigureAwait(false);
+
+				// Taken after the locks were granted, which may have been a while.
+				DateTime now = DateTime.UtcNow;
+
 				var operation = await dbContext.Set<MaintenanceOperationEntity>()
 					.Include(o => o.Targets)
 					.FirstOrDefaultAsync(o => o.ID == operationId, cancellationToken)
@@ -351,14 +341,30 @@ namespace FishMMO.Database.Npgsql.Services
 					return false;
 				}
 
+				/* Clearing the deadline, one target at a time, through the same primitive the
+				 * single-server control uses, joined to this transaction. It nulls
+				 * shutdown_at_utc and TOUCHES NOTHING ELSE — the lock that scheduling set stays
+				 * set. That is deliberate upstream (halting a shutdown and reopening a world are
+				 * separate decisions) and it is the single most misunderstood thing about this
+				 * feature, so every layer above repeats it. */
 				foreach (var target in operation.Targets.Where(t => !IsTerminal(t.Status)))
 				{
+					/* Cleared even for a target this window has no record of writing. A deadline
+					 * left behind by a cancelled window is the one outcome nobody would go looking
+					 * for, and clearing a column that is already null costs one statement. */
+					var result = target.Kind == MaintenanceTargetKinds.World
+						? await worldServers.SetShutdownAsync(target.ServerID, null, cancellationToken).ConfigureAwait(false)
+						: await sceneServers.SetShutdownAsync(target.ServerID, null, cancellationToken).ConfigureAwait(false);
+
 					target.Status = MaintenanceStatus.Cancelled;
 					target.ShutdownClearedUtc = now;
-					if (cleared.TryGetValue(target.ID, out string note))
-					{
-						target.Note = Clamp(note, 1024);
-					}
+					target.Note = Clamp(result.IsSuccess
+						? (target.ShutdownWrittenUtc == null
+							? "Nothing had been written to this server by this window; its deadline was cleared anyway, in case it had been."
+							: now >= operation.DeadlineUtc
+								? "Deadline cleared, but it had already passed — if this server began stopping it will not come back. It is still LOCKED."
+								: "Deadline cleared. This server is still LOCKED: scheduling locked it and cancelling does not lift that.")
+						: $"The deadline could not be cleared: {result.ErrorMessage} This server may still stop on time.", 1024);
 				}
 
 				operation.Status = MaintenanceStatus.Cancelled;
@@ -480,9 +486,18 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure(pending.ErrorCode, pending.ErrorMessage, pending.IsTransient);
 			}
 
-			DateTime now = DateTime.UtcNow;
-			var writes = new Dictionary<long, WriteOutcome>();
-
+			/* Each write and the record of it are ONE transaction that holds the target's row
+			 * lock, and the derivation below takes the same locks before it reads. So a target is
+			 * seen either before its write began or after the write was recorded, never between.
+			 *
+			 * They used to be two steps: every write first, then one transaction recording them.
+			 * Another caller — the panel's 30-second advance, a listing, a second start — that
+			 * derived in between found a deadline already passed (a zero-second drain passes it
+			 * before the first write lands) with nothing recorded, and failed the target as never
+			 * written while the server was locked and about to stop. The record this caller then
+			 * tried to apply was dropped, because the window was no longer live (issue #267
+			 * audit). */
+			var writeFailures = new Dictionary<long, string>();
 			foreach (var write in pending.Data)
 			{
 				if (write.Deadline == null)
@@ -490,35 +505,42 @@ namespace FishMMO.Database.Npgsql.Services
 					continue;
 				}
 
-				/* A deadline well in the past is NOT written. The retry exists for a write that
-				 * failed seconds ago, and a zero-second drain is already a hair past by the time
-				 * this runs — hence the grace — but writing a deadline from an hour ago stops
-				 * that server the instant it reads the row, with no countdown and no warning to
-				 * the players on it, long after the operator stopped watching. Those targets are
-				 * failed below instead, which is what actually happened to them. */
-				if (now > write.Deadline.Value.AddSeconds(ShutdownGraceSeconds))
+				var attempt = await WritePendingTargetAsync(write, cancellationToken).ConfigureAwait(false);
+				string? failure = attempt.IsSuccess
+					? attempt.Data
+					: attempt.ErrorMessage ?? "The row could not be written.";
+				if (failure != null)
 				{
-					continue;
+					// Still pending: the next pass tries again, and the derivation says why it waits.
+					writeFailures[write.TargetID] = failure;
 				}
-
-				/* One statement per server: shutdown_at_utc AND locked = true, through the
-				 * existing per-tier control. This is the whole actuation of a maintenance
-				 * window — from here the server itself counts down to an absolute instant on its
-				 * own row, warns its players, and stops. Nothing needs to be running for that. */
-				var result = write.Kind == MaintenanceTargetKinds.World
-					? await worldServers.SetShutdownAsync(write.ServerID, write.Deadline.Value, cancellationToken).ConfigureAwait(false)
-					: await sceneServers.SetShutdownAsync(write.ServerID, write.Deadline.Value, cancellationToken).ConfigureAwait(false);
-
-				writes[write.TargetID] = result.IsSuccess
-					? new WriteOutcome { WrittenUtc = now }
-					: new WriteOutcome { Error = result.ErrorMessage ?? "The row could not be written." };
 			}
 
-			// 2. Apply those outcomes and re-derive every live window from what the servers' own
-			//    rows say. Re-derivation rather than stepping a state machine, so two callers
-			//    racing reach the same answer.
+			// 2. Re-derive every live window from what the servers' own rows say. Re-derivation
+			//    rather than stepping a state machine, so two callers racing reach the same answer.
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				/* Every live window's targets are locked before anything is read, in id order so
+				 * two passes cannot deadlock. A write in flight holds one of these rows until its
+				 * record commits, so this waits for it and then reads the result; a write that
+				 * starts later re-checks, under the same lock, the status this pass decides. The
+				 * reads below are later statements, so under READ COMMITTED they see everything
+				 * that committed while this waited. */
+				string targetTable = dbContext.GetTableName<MaintenanceTargetEntity>();
+				string operationTable = dbContext.GetTableName<MaintenanceOperationEntity>();
+				await ExecuteScalarLongAsync(dbContext,
+					$@"SELECT COUNT(*) FROM (
+						SELECT t.id FROM {targetTable} t
+						JOIN {operationTable} o ON o.id = t.operation_id
+						WHERE o.status IN ({{0}}, {{1}})
+						ORDER BY t.id
+						FOR UPDATE OF t) locked",
+					new object[] { (int)MaintenanceStatus.Draining, (int)MaintenanceStatus.ShuttingDown },
+					cancellationToken).ConfigureAwait(false);
+
+				// Taken after the locks were granted, which may have been a while.
+				DateTime now = DateTime.UtcNow;
+
 				var operations = await dbContext.Set<MaintenanceOperationEntity>()
 					.Include(o => o.Targets)
 					.Where(o => o.Status == MaintenanceStatus.Draining || o.Status == MaintenanceStatus.ShuttingDown)
@@ -531,26 +553,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				var allTargets = operations.SelectMany(o => o.Targets).ToList();
-
-				foreach (var target in allTargets)
-				{
-					if (!writes.TryGetValue(target.ID, out var outcome))
-					{
-						continue;
-					}
-					if (outcome.Error == null)
-					{
-						/* Both columns, from one statement. The lock is recorded separately
-						 * because it outlives the shutdown: cancelling clears one, not the other. */
-						target.ShutdownWrittenUtc = outcome.WrittenUtc;
-						target.LockWrittenUtc = outcome.WrittenUtc;
-					}
-					else
-					{
-						target.Status = MaintenanceStatus.Failed;
-						target.Note = Clamp($"The lock and shutdown could not be written: {outcome.Error}", 1024);
-					}
-				}
 
 				var ids = allTargets.Select(t => t.ServerID).Distinct().ToList();
 
@@ -591,7 +593,8 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						var lookup = target.Kind == MaintenanceTargetKinds.World ? worldByID : sceneByID;
 						lookup.TryGetValue(target.ServerID, out Observation observation);
-						DeriveTarget(operation, target, observation, now);
+						writeFailures.TryGetValue(target.ID, out string? writeFailure);
+						DeriveTarget(operation, target, observation, writeFailure, now);
 					}
 
 					DeriveOperation(operation, now);
@@ -599,6 +602,84 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return operations.Count;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Writes one target's lock and deadline and records that it did, in one transaction
+		/// that holds the target's row lock throughout.
+		/// </summary>
+		/// <returns>
+		/// Null when there is nothing to report — written, no longer wanted, or refused by the
+		/// server tier and recorded as Failed. Otherwise the transient failure that left the
+		/// target pending for the next pass.
+		/// </returns>
+		private async Task<DatabaseResult<string?>> WritePendingTargetAsync(PendingWrite write, CancellationToken cancellationToken)
+		{
+			return await ExecuteTransactionAsync<string?>(async dbContext =>
+			{
+				string targetTable = dbContext.GetTableName<MaintenanceTargetEntity>();
+
+				/* The lock is taken first and the reasons to write are re-checked under it: since
+				 * the pending read, another pass may have written this target, or a cancel or the
+				 * derivation may have finished it. */
+				long live = await ExecuteScalarLongAsync(dbContext,
+					$@"SELECT COUNT(*) FROM (
+						SELECT id FROM {targetTable}
+						WHERE id = {{0}} AND shutdown_written_utc IS NULL AND status IN ({{1}}, {{2}})
+						FOR UPDATE) locked",
+					new object[] { write.TargetID, (int)MaintenanceStatus.Draining, (int)MaintenanceStatus.ShuttingDown },
+					cancellationToken).ConfigureAwait(false);
+				if (live == 0)
+				{
+					return null;
+				}
+
+				/* A deadline well in the past is NOT written. The retry exists for a write that
+				 * failed seconds ago, and a zero-second drain is already a hair past by the time
+				 * this runs — hence the grace — but writing a deadline from an hour ago stops
+				 * that server the instant it reads the row, with no countdown and no warning to
+				 * the players on it, long after the operator stopped watching. The derivation
+				 * fails such a target instead, which is what actually happened to it. Judged
+				 * under the lock, so no write can begin once the derivation may fail the target. */
+				DateTime now = DateTime.UtcNow;
+				if (write.Deadline == null || now > write.Deadline.Value.AddSeconds(ShutdownGraceSeconds))
+				{
+					return null;
+				}
+
+				/* One statement per server: shutdown_at_utc AND locked = true, through the
+				 * existing per-tier control, which joins this transaction. This is the whole
+				 * actuation of a maintenance window — from here the server itself counts down to
+				 * an absolute instant on its own row, warns its players, and stops. Nothing needs
+				 * to be running for that. */
+				var result = write.Kind == MaintenanceTargetKinds.World
+					? await worldServers.SetShutdownAsync(write.ServerID, write.Deadline.Value, cancellationToken).ConfigureAwait(false)
+					: await sceneServers.SetShutdownAsync(write.ServerID, write.Deadline.Value, cancellationToken).ConfigureAwait(false);
+
+				if (result.IsSuccess)
+				{
+					/* Both columns, from one statement. The lock is recorded separately because
+					 * it outlives the shutdown: cancelling clears one, not the other. */
+					await dbContext.Database.ExecuteSqlRawAsync(
+						$"UPDATE {targetTable} SET shutdown_written_utc = {{1}}, lock_written_utc = {{1}} WHERE id = {{0}}",
+						new object[] { write.TargetID, now },
+						cancellationToken).ConfigureAwait(false);
+					return null;
+				}
+
+				string error = result.ErrorMessage ?? "The row could not be written.";
+				if (result.IsTransient)
+				{
+					// Its savepoint rolled back, so nothing was written; the next pass tries again.
+					return error;
+				}
+
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$"UPDATE {targetTable} SET status = {{1}}, note = {{2}} WHERE id = {{0}}",
+					new object[] { write.TargetID, (int)MaintenanceStatus.Failed, Clamp($"The lock and shutdown could not be written: {error}", 1024) },
+					cancellationToken).ConfigureAwait(false);
+				return null;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -624,6 +705,7 @@ namespace FishMMO.Database.Npgsql.Services
 			MaintenanceOperationEntity operation,
 			MaintenanceTargetEntity target,
 			Observation observation,
+			string? writeFailure,
 			DateTime now)
 		{
 			if (IsTerminal(target.Status))
@@ -654,12 +736,26 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (target.ShutdownWrittenUtc == null)
 			{
-				// Nothing has been written yet. The next advance pass retries it; once the
-				// deadline has gone by, retrying would schedule a shutdown in the past.
-				if (pastDeadline)
+				/* Nothing has been written yet, and every pass retries it. Failed only once the
+				 * write step has stopped trying — ShutdownGraceSeconds past the deadline, not the
+				 * deadline itself. A zero-second drain is past its deadline before its first
+				 * write lands, and failing it there called a window that was about to lock its
+				 * servers a failure (issue #267 audit). The write step judges the same instant
+				 * under the same row lock, so the two can never both act on one target. */
+				DateTime lastWrite = (target.ScheduledShutdownUtc ?? operation.DeadlineUtc).AddSeconds(ShutdownGraceSeconds);
+				if (now > lastWrite)
 				{
 					target.Status = MaintenanceStatus.Failed;
-					target.Note = "The lock and shutdown were never written to this server, and the deadline has passed. Nothing happened to it.";
+					target.Note = Clamp(writeFailure == null
+						? "The lock and shutdown were never written to this server, and the deadline has passed. Nothing happened to it."
+						: $"The lock and shutdown were never written to this server, and the deadline has passed. Nothing happened to it. The last attempt failed: {writeFailure}", 1024);
+				}
+				else
+				{
+					target.Note = writeFailure == null
+						? null
+						: Clamp(string.Format(CultureInfo.InvariantCulture,
+							"Not written yet: {0} Every pass retries it until {1:HH:mm:ss} UTC.", writeFailure, lastWrite), 1024);
 				}
 				return;
 			}
@@ -870,13 +966,6 @@ namespace FishMMO.Database.Npgsql.Services
 			public long ServerID { get; set; }
 			public string ServerName { get; set; }
 			public DateTime? Deadline { get; set; }
-		}
-
-		/// <summary>What happened when one target's columns were written.</summary>
-		private sealed class WriteOutcome
-		{
-			public DateTime WrittenUtc { get; set; }
-			public string Error { get; set; }
 		}
 
 		/// <summary>The outcome of planning a window: an id, or a refusal in the operator's words.</summary>

@@ -5,7 +5,8 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Rings bursting where the rain lands (P5's ground collision and splashes).
+	/// Where the rain lands (P5's ground collision and splashes): a ring spreading on standing water
+	/// — the puddles and calm open water — and a faint glint flicked up everywhere else.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -21,6 +22,13 @@ namespace FishMMO.Client
 	/// underneath it.
 	/// </para>
 	/// <para>
+	/// <b>Rings on water, glints on ground, both faint.</b> Rain does not ring dry ground — a ring
+	/// needs water deep enough to carry a wave — so rings go only where the ground's own shader draws
+	/// a puddle, and on calm open water. Everywhere else a drop leaves a soft spurt gone in a tenth
+	/// of a second. Every bolder version — rings everywhere, then crisp crowns of droplets — read as
+	/// something laid on the ground rather than as rain hitting it (Jim, 2026-09-25).
+	/// </para>
+	/// <para>
 	/// <b>Additive to <see cref="PrecipitationField"/>, not a replacement.</b> The falling particles
 	/// are tuned — drop size in heavy rain, streak length, the lean and turbulence that stopped them
 	/// marching in lines — and rewriting that onto compute would put all of it at risk to gain
@@ -33,6 +41,8 @@ namespace FishMMO.Client
 		private static readonly int ParamsId = Shader.PropertyToID("_FishSplashParams");
 		private static readonly int ColorId = Shader.PropertyToID("_FishSplashColor");
 		private static readonly int HeatId = Shader.PropertyToID("_FishSplashHeat");
+		private static readonly int GridId = Shader.PropertyToID("_FishSplashGrid");
+		private static readonly int GlintId = Shader.PropertyToID("_FishSplashGlint");
 
 		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
 		private Mesh mesh;
@@ -41,23 +51,23 @@ namespace FishMMO.Client
 		/// <summary>How far out splashes are scattered, in metres.</summary>
 		public float Radius = 22f;
 
-		/// <summary>How big one splash gets at its widest, in metres.</summary>
+		/// <summary>How far across a ripple on water spreads, in metres; each drop's a little more or less.</summary>
 		public float Size = 0.22f;
 
-		/// <summary>Seconds from landing to gone, on cool ground.</summary>
+		/// <summary>Seconds a ripple lasts, and between ripples in one spot.</summary>
 		public float Lifetime = 0.45f;
 
-		/// <summary>
-		/// How far a corner of a splash may follow the ground away from its centre, as a multiple
-		/// of the splash's own size.
-		/// </summary>
-		/// <remarks>
-		/// The quad drapes over the surface rather than lying flat, or it sinks into any slope and
-		/// the depth test cuts off whichever half went under. This caps how far that can go: at a
-		/// ledge one corner would otherwise be metres from the others and the quad would stretch
-		/// into a spike down the drop. Past the cap, a little clipping beats a streak.
-		/// </remarks>
-		[Min(0.25f)] public float MaximumDrape = 1.5f;
+		/// <summary>How opaque a ripple's leading crest is at its brightest: the crest catching the light.</summary>
+		[Range(0f, 1f)] public float RingOpacity = 0.3f;
+
+		/// <summary>Seconds a glint lasts on cool ground. Each spot throws up the next as soon as one is over.</summary>
+		public float GlintLifetime = 0.12f;
+
+		/// <summary>How high a glint's spurt reaches, in metres.</summary>
+		public float GlintHeight = 0.06f;
+
+		/// <summary>How opaque a glint is at its brightest.</summary>
+		[Range(0f, 1f)] public float GlintOpacity = 0.35f;
 
 		public void Dispose()
 		{
@@ -100,7 +110,13 @@ namespace FishMMO.Client
 				return;
 			}
 
-			int count = Mathf.Max(64, tier.Particles / 8);
+			/* One splash to each cell of two square grids laid on the ground round the camera, as
+			 * many cells as the tier affords: one grid over the whole radius, and one a quarter the
+			 * size over the few metres where a splash is more than a pixel or two. The grids are the
+			 * WORLD's, not the camera's: the shader finds each quad's cell from the camera's own
+			 * cell, so the splashes stay where they land. */
+			int side = Mathf.CeilToInt(Mathf.Sqrt(Mathf.Max(64, tier.Particles / 8)));
+			int count = 2 * side * side;
 			if (mesh == null || meshCount != count)
 			{
 				Dispose();
@@ -111,7 +127,10 @@ namespace FishMMO.Client
 			Vector3 origin = camera.transform.position;
 			block.Clear();
 			block.SetVector(OriginId, new Vector4(origin.x, origin.y, origin.z, time));
-			block.SetVector(ParamsId, new Vector4(Radius, Mathf.Clamp01(rain * 1.4f), Size * Mathf.Lerp(0.7f, 1.4f, frame[WeatherChannel.DropSize]), Lifetime));
+			// Bigger drops make bigger rings and throw their droplets higher.
+			float dropScale = Mathf.Lerp(0.7f, 1.4f, frame[WeatherChannel.DropSize]);
+			block.SetVector(ParamsId, new Vector4(Radius, Mathf.Clamp01(rain * 1.4f), Size * dropScale, Lifetime));
+			block.SetVector(GlintId, new Vector4(GlintLifetime, GlintHeight * dropScale, GlintOpacity, RingOpacity));
 
 			Color tint = substance != null ? substance.Tint : new Color(0.82f, 0.88f, 0.96f);
 			if (SkySystem.Instance != null)
@@ -125,7 +144,8 @@ namespace FishMMO.Client
 			 * ground should behave as it always has — and it ramps from there to scorching, where a
 			 * drop is gone almost as soon as it lands. */
 			float dry = Mathf.Clamp01(Mathf.InverseLerp(0.15f, 0.9f, temperature));
-			block.SetVector(HeatId, new Vector4(dry, MaximumDrape, 0f, 0f));
+			block.SetVector(HeatId, new Vector4(dry, 0f, 0f, 0f));
+			block.SetVector(GridId, new Vector4(side, 2f * Radius / side, 0f, 0f));
 
 			var rp = new RenderParams(profile.SplashMaterial)
 			{

@@ -24,6 +24,8 @@ namespace FishMMO.Auth.Implementation
 		private const int UsernameMinLength = 3;
 		/// <summary>Maximum allowed username length (inclusive).</summary>
 		private const int UsernameMaxLength = 32;
+		/// <summary>Longest email address accepted as a sign-in identifier (RFC 5321's path limit).</summary>
+		private const int EmailMaxLength = 254;
 
 		#endregion
 
@@ -163,7 +165,13 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>True if credentials were accepted; false if rejected by validation rules.</returns>
 		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0, RegistrationProfile? profile = null)
 		{
-			if (!IsAllowedUsername(username) || !IsAllowedPassword(password))
+			/* Signing in takes a username OR an email address — the login panel offers both — while
+			 * registering names the account, so it takes a username only. This used to accept a
+			 * username alone, which refused every email sign-in before anything was sent (issue #267). */
+			bool identifierAllowed = register
+				? IsAllowedUsername(username)
+				: IsAllowedUsername(username) || IsAllowedEmailUsername(username);
+			if (!identifierAllowed || !IsAllowedPassword(password))
 				return false;
 
 			if (register && (string.IsNullOrWhiteSpace(email) || !IsAllowedEmailUsername(email)))
@@ -183,7 +191,8 @@ namespace FishMMO.Auth.Implementation
 				}
 			}
 
-			this.username = username;
+			// One spelling on the wire: see SrpIdentity.NormalizeIdentifier.
+			this.username = SrpIdentity.NormalizeIdentifier(username);
 			this.password = password;
 			this.register = register;
 			this.email = email;
@@ -221,7 +230,7 @@ namespace FishMMO.Auth.Implementation
 			this.age = 0;
 			this.registrationProfile = null;
 
-			verifyRequestUsername = username;
+			verifyRequestUsername = SrpIdentity.NormalizeIdentifier(username);
 			verifyRequestCode = verifyCode;
 			verifyRequestChannel = channel;
 			return true;
@@ -483,14 +492,15 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			// Credential pre-validation
-			if (string.IsNullOrEmpty(this.username) || this.username.Length < UsernameMinLength || this.username.Length > UsernameMaxLength)
+			// Credential pre-validation. An email identifier is longer than any username may be.
+			int identifierMaxLength = this.username != null && this.username.Contains('@') ? EmailMaxLength : UsernameMaxLength;
+			if (string.IsNullOrEmpty(this.username) || this.username.Length < UsernameMinLength || this.username.Length > identifierMaxLength)
 			{
 				/* Reaching the credential path at all is the real problem on a World/Scene hop:
 				 * those connections are supposed to authenticate with the stored token, and the
 				 * credentials are deliberately nulled after login. Say so, rather than reporting
 				 * an empty username as though the player had mistyped it. */
-				_ = Log.Warning(LogPrefix, $"Username is empty or outside allowed length ({UsernameMinLength}-{UsernameMaxLength} characters). No stored auth token was available, so this connection fell back to the credential path.");
+				_ = Log.Warning(LogPrefix, $"Username is empty or outside allowed length ({UsernameMinLength}-{identifierMaxLength} characters). No stored auth token was available, so this connection fell back to the credential path.");
 				ClearKeyMaterial();
 				Disconnect();
 				return;
@@ -528,7 +538,7 @@ namespace FishMMO.Auth.Implementation
 
 			if (register)
 			{
-				srpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
+				srpData.GetSaltAndVerifier(password, out string salt, out string verifier);
 
 				byte[] encryptedEmail;
 				byte[] encryptedAge;
@@ -623,7 +633,7 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			if (srpData.GetProof(this.username!, this.password!, salt, publicServerEphemeral, out string proof))
+			if (srpData.GetProof(this.password!, salt, publicServerEphemeral, out string proof))
 			{
 				username = null;
 				password = null;

@@ -28,13 +28,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="characterCount">Current character count on server.</param>
 		/// <param name="locked">Whether server is locked from accepting new connections.</param>
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
-		/// <returns>DatabaseResult containing tuple (ServerId, ServerData) if successful.</returns>
+		/// <returns>
+		/// DatabaseResult containing (ServerId, ServerData, Control) if successful. Control is the
+		/// row's operator state — the lock and any scheduled shutdown — read in the same statement,
+		/// the same state <see cref="PulseAsync"/> returns, so a server adopts it from the moment it
+		/// registers rather than from its first heartbeat.
+		/// </returns>
 		/// <remarks>
 		/// <para><b>Operation:</b> Attempts INSERT; on unique violation, loads the existing row and updates it.</para>
 		/// <para><b>Returns:</b> The returned ServerId is populated after SaveChanges completes inside the BaseService execution wrapper.</para>
-		/// <para><b>Returns:</b> Failure if name/address empty or operation fails; Success with (ServerId, ServerData) on success.</para>
+		/// <para><b>Returns:</b> Failure if name/address empty or operation fails; Success with (ServerId, ServerData, Control) on success.</para>
 		/// </remarks>
-		Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> PersistAsync(
+		Task<DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)>> PersistAsync(
 			string name,
 			string address,
 			ushort port,

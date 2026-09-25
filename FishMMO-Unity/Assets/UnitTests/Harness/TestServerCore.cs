@@ -49,6 +49,18 @@ namespace FishMMO.UnitTests.Harness
 		/// <summary>Total number of <see cref="DisconnectConnection"/> calls (server-initiated disconnects).</summary>
 		public int DisconnectCount { get; private set; }
 
+		/// <summary>Simulates the database refusing to record an issued token's hash.</summary>
+		public bool FailTokenPersist { get; set; }
+
+		/// <summary>Simulates the account lookup failing to reach the database (not a missing account).</summary>
+		public bool FailAccountLookup { get; set; }
+
+		/// <summary>Simulates a two-factor code that could not be checked because the database failed.</summary>
+		public bool FailTwoFactorCheck { get; set; }
+
+		/// <summary>How many two-factor failures were recorded toward the lockout.</summary>
+		public int TwoFactorFailuresRecorded { get; private set; }
+
 		/// <summary>Most recent cookie issued via <see cref="BroadcastCookieChallenge"/>.</summary>
 		public byte[]? LastChallengeCookie { get; private set; }
 		/// <summary>Most recent server X25519 public key emitted via <see cref="BroadcastServerHandshake"/>.</summary>
@@ -208,7 +220,14 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override Task<SrpAccountLookupResult> FetchAccountForLoginAsync(string identifier, bool isEmail)
 		{
-			if (store.TryGet(identifier, out InMemoryAccountStore.Lookup row))
+			if (FailAccountLookup)
+			{
+				return Task.FromResult(new SrpAccountLookupResult { IsSuccess = false, IsServerError = true });
+			}
+			bool found = isEmail
+				? store.TryGetByEmail(identifier, out InMemoryAccountStore.Lookup row)
+				: store.TryGet(identifier, out row);
+			if (found)
 			{
 				return Task.FromResult(new SrpAccountLookupResult
 				{
@@ -244,21 +263,31 @@ namespace FishMMO.UnitTests.Harness
 			return Task.CompletedTask;
 		}
 
-		protected override Task PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes)
+		protected override Task<bool> PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes)
 		{
+			if (FailTokenPersist)
+			{
+				return Task.FromResult(false);
+			}
 			store.PersistTokenHash(username, tokenHash, expirationMinutes);
-			return Task.CompletedTask;
+			return Task.FromResult(true);
 		}
 
-		protected override Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey)
+		protected override Task<TwoFactorVerifyOutcome> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey)
 		{
+			if (FailTwoFactorCheck) return Task.FromResult(TwoFactorVerifyOutcome.ServerError);
 			string? secret = store.GetTotpSecret(username);
-			if (string.IsNullOrEmpty(secret)) return Task.FromResult(false);
+			if (string.IsNullOrEmpty(secret)) return Task.FromResult(TwoFactorVerifyOutcome.Invalid);
 			byte[] secretBytes = Base32Encoding.ToBytes(secret);
 			Totp totp = new Totp(secretBytes, mode: OtpHashMode.Sha1, step: 30, totpSize: 6);
 			bool ok = totp.VerifyTotp(totpCode, out _, new VerificationWindow(previous: 1, future: 1));
-			return Task.FromResult(ok);
+			return Task.FromResult(ok ? TwoFactorVerifyOutcome.Valid : TwoFactorVerifyOutcome.Invalid);
+		}
 
+		protected override Task<DateTime?> RecordTwoFactorFailureAsync(string accountName)
+		{
+			TwoFactorFailuresRecorded++;
+			return Task.FromResult<DateTime?>(null);
 		}
 		protected override Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc)
 		{

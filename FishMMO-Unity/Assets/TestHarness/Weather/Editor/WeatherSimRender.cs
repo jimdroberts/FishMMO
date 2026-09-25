@@ -95,6 +95,14 @@ namespace FishMMO.TestHarness.Weather.Editor
 			new Stage { Name = "clear", Preset = "Clear", Temperature = 0.2f, Expect = PrecipitationKind.None },
 			new Stage
 			{
+				// Rain landing: faint glints off the ground, rings spreading in the puddles. Damp rather
+				// than soaked: fully wet, every level square metre is a puddle and no glint is ever drawn.
+				Name = "rain-splashes", Preset = "Heavy Rain", Temperature = 0.4f, Time = 0.5, Sun = 1, Expect = PrecipitationKind.Rain,
+				CameraPosition = new Vector3(-2f, 1.6f, -6f), CameraEuler = new Vector3(24f, 20f, 0f),
+				Cover = new WeatherCover { Wet = 0.6f },
+			},
+			new Stage
+			{
 				// The ground after rain: darker, shinier, with standing water in the hollows.
 				Name = "wet-ground", Preset = "Light Rain", Temperature = 0.4f, Time = 0.5, Sun = 1, Expect = PrecipitationKind.Rain,
 				CameraPosition = new Vector3(-2f, 1.4f, -6f), CameraEuler = new Vector3(28f, 20f, 0f),

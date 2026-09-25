@@ -20,9 +20,19 @@ namespace FishMMO.Database
 		public string? ErrorCode { get; }
 
 		/// <summary>
-		/// Gets the safe error message suitable for client communication.
-		/// Null when <see cref="IsSuccess"/> is true; non-null when <see cref="IsSuccess"/> is false.
+		/// Gets the failure's message. Null when <see cref="IsSuccess"/> is true; non-null when
+		/// <see cref="IsSuccess"/> is false.
 		/// </summary>
+		/// <remarks>
+		/// Whether it may be shown to a player depends on <see cref="ErrorCode"/>. A refusal a service
+		/// decided — a validation failure, a stale write, a missing row, a unique or check violation —
+		/// carries the service's own words, and a caller may show them. A fault —
+		/// <see cref="DatabaseErrorCodes.DatabaseError"/>, an invalid operation, a timeout, a failed
+		/// rollback — carries the sanitised exception text and type chain for the log, which can name
+		/// tables and columns: log it and show the reader a fixed message instead. This used to say
+		/// every message was safe for a client, which the fault text never was (issue #267). The
+		/// Control Panel's <c>DatabaseReplies</c> is the rule applied.
+		/// </remarks>
 		public string? ErrorMessage { get; }
 
 		/// <summary>
@@ -146,9 +156,19 @@ namespace FishMMO.Database
 		public string? ErrorCode { get; }
 
 		/// <summary>
-		/// Gets the safe error message suitable for client communication.
-		/// Null when <see cref="IsSuccess"/> is true; non-null when <see cref="IsSuccess"/> is false.
+		/// Gets the failure's message. Null when <see cref="IsSuccess"/> is true; non-null when
+		/// <see cref="IsSuccess"/> is false.
 		/// </summary>
+		/// <remarks>
+		/// Whether it may be shown to a player depends on <see cref="ErrorCode"/>. A refusal a service
+		/// decided — a validation failure, a stale write, a missing row, a unique or check violation —
+		/// carries the service's own words, and a caller may show them. A fault —
+		/// <see cref="DatabaseErrorCodes.DatabaseError"/>, an invalid operation, a timeout, a failed
+		/// rollback — carries the sanitised exception text and type chain for the log, which can name
+		/// tables and columns: log it and show the reader a fixed message instead. This used to say
+		/// every message was safe for a client, which the fault text never was (issue #267). The
+		/// Control Panel's <c>DatabaseReplies</c> is the rule applied.
+		/// </remarks>
 		public string? ErrorMessage { get; }
 
 		/// <summary>

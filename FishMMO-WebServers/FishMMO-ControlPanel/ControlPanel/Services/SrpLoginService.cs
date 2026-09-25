@@ -90,8 +90,16 @@ namespace FishMMO.ControlPanel.Services
 			this.log = log;
 		}
 
+		/// <param name="Username">The identifier the client proves: SRP needs the exact spelling the verifier was derived from.</param>
+		/// <param name="AccountName">
+		/// The account row's own name, which a successful sign-in is issued as. The row stores its
+		/// name lowercase and web_sessions references it, so a session issued for the typed "Jim"
+		/// failed its foreign key and an account registered with a capital letter could never sign
+		/// in. The typed name for a fake exchange, which can never prove.
+		/// </param>
 		private sealed record Exchange(
 			string Username,
+			string AccountName,
 			string Salt,
 			string Verifier,
 			string ServerSecretEphemeral,
@@ -151,11 +159,16 @@ namespace FishMMO.ControlPanel.Services
 		{
 			Sweep();
 
+			// One spelling, whatever the browser sent: the fake salt for an unknown name, the lockout
+			// and the lookup all key on it. See SrpIdentity.
+			username = SrpIdentity.NormalizeIdentifier(username);
+
 			string salt;
 			string verifier;
 			byte accessLevel = (byte)AccessLevel.Player;
 			bool totpEnabled = false;
 			bool isReal = false;
+			string accountName = username;
 			bool verificationRequired = false;
 			bool discordVerifyCodeIssued = false;
 			AccountVerificationChannels outstanding = AccountVerificationChannels.None;
@@ -169,6 +182,7 @@ namespace FishMMO.ControlPanel.Services
 				accessLevel = data.AccessLevel;
 				totpEnabled = data.TotpEnabled;
 				isReal = true;
+				accountName = data.Name;
 
 				/* The same verification gate the LoginServer applies, from the same shared rule. An
 				 * account that owes no code is in: a verified one, one on a server that verifies
@@ -203,7 +217,7 @@ namespace FishMMO.ControlPanel.Services
 			SrpEphemeral ephemeral = server.GenerateEphemeral(verifier);
 
 			string handle = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
-			var exchange = new Exchange(username, salt, verifier, ephemeral.Secret, accessLevel, totpEnabled,
+			var exchange = new Exchange(username, accountName, salt, verifier, ephemeral.Secret, accessLevel, totpEnabled,
 				isReal, verificationRequired, outstanding, discordVerifyCodeIssued, DateTime.UtcNow);
 
 			if (exchanges.Count >= MaxExchanges)
@@ -381,11 +395,13 @@ namespace FishMMO.ControlPanel.Services
 				// Throws SecurityException when the proof does not verify, which is the library's
 				// only signal; ServerSrpData wraps the same call and converts it to a bool.
 				var server = new SrpServer(SrpParameters.Create2048<SHA512>());
+				// The fixed identity every verifier is derived from; see SrpIdentity. The name the
+				// player typed only chose which verifier to prove against.
 				SrpSession session = server.DeriveSession(
 					exchange.ServerSecretEphemeral,
 					clientPublicEphemeral,
 					exchange.Salt,
-					exchange.Username,
+					SrpIdentity.Value,
 					exchange.Verifier,
 					clientProof);
 
@@ -397,7 +413,7 @@ namespace FishMMO.ControlPanel.Services
 					return Failed();
 				}
 
-				return new ProofResult(true, null, session.Proof, exchange.Username, exchange.AccessLevel, exchange.TotpEnabled);
+				return new ProofResult(true, null, session.Proof, exchange.AccountName, exchange.AccessLevel, exchange.TotpEnabled);
 			}
 			catch (Exception ex)
 			{

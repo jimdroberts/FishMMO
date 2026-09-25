@@ -19,7 +19,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="maxCapacity">Guild member cap.</param>
 		/// <param name="maxPendingPerCharacter">Most outstanding applications one character may hold.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>A result indicating success or the reason for refusal.</returns>
+		/// <returns>
+		/// Success, or one code per refusal: <c>NOT_FOUND</c> (no such applicant, or the guild is
+		/// gone or not recruiting), <c>ALREADY_MEMBER</c> (the applicant is already in a guild),
+		/// <c>CAPACITY_EXCEEDED</c> (the guild is full), <c>QUOTA_EXCEEDED</c> (the applicant holds
+		/// the most outstanding applications allowed) and <c>ALREADY_EXISTS</c> (an application to
+		/// this guild is already pending).
+		/// </returns>
 		/// <remarks>
 		/// Every one of those conditions is tested inside the INSERT. Checking them in application
 		/// code and inserting afterwards is a time-of-check-to-time-of-use gap the applicant

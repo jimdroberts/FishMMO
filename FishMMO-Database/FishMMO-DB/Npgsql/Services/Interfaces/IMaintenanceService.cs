@@ -64,6 +64,9 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// A target that cannot be written is recorded as Failed and the rest of the window
 		/// continues. Refusing the whole window because one server's row had gone would leave an
 		/// operator to do the other eleven by hand, which is the thing this exists to prevent.
+		/// A transient failure is not a refusal: the target stays pending, its note says why,
+		/// and every <see cref="AdvanceAsync"/> retries it until <c>ShutdownGraceSeconds</c>
+		/// past the deadline, after which it is Failed as never written.
 		/// </para>
 		/// <para>
 		/// Refused outright when: the reason is empty; there are no targets; the drain is
@@ -91,9 +94,16 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// and the caller must say so.
 		/// </returns>
 		/// <remarks>
+		/// <para>
 		/// A server that has already read its deadline and begun stopping does not come back
 		/// because the column was cleared; the returned notes say which targets were past that
 		/// point.
+		/// </para>
+		/// <para>
+		/// The clears and the record are one transaction under the targets' row locks, so a
+		/// concurrent <see cref="AdvanceAsync"/> cannot write a deadline back between them: a
+		/// write already in flight is cleared here, and a later one finds the target cancelled.
+		/// </para>
 		/// </remarks>
 		Task<DatabaseResult<MaintenanceOperationData>> CancelAsync(
 			long operationId,
@@ -128,6 +138,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Idempotent and safe to call concurrently: it re-derives each target's status from the
 		/// server's own row rather than stepping a state machine forward, so two callers racing
 		/// reach the same answer. Every read on this service calls it.
+		/// </para>
+		/// <para>
+		/// Concurrency rests on row locks, not on the re-derivation alone. Each target's write and
+		/// the record of it are one transaction holding that target's row lock, and the
+		/// derivation locks every live target before reading, so it never sees a server written
+		/// but the write unrecorded. An unwritten target is failed only once
+		/// <c>ShutdownGraceSeconds</c> past its deadline — the instant the write step itself
+		/// stops trying — so a zero-second drain is not failed by a pass that runs before its
+		/// first write lands.
 		/// </para>
 		/// <para>
 		/// It is <b>not</b> what makes a shutdown happen — the servers do that from the deadline

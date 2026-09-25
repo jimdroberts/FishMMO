@@ -325,13 +325,13 @@ export async function render(host, ctx) {
 				 * salt and verifier for the new one. The server sees a proof and two derived
 				 * values; it never sees either password. */
 				const challenge = await api.srpChallenge(account.name);
-				const currentKey = await srp.derivePrivateKey(challenge.salt, account.name, v.current);
+				const currentKey = await srp.derivePrivateKey(challenge.salt, v.current);
 				const ephemeral = srp.generateEphemeral();
 				const session = await srp.deriveSession(
-					ephemeral.secret, challenge.serverPublicEphemeral, challenge.salt, account.name, currentKey);
+					ephemeral.secret, challenge.serverPublicEphemeral, challenge.salt, currentKey);
 
 				const newSalt = srp.generateSalt();
-				const newKey = await srp.derivePrivateKey(newSalt, account.name, v.next);
+				const newKey = await srp.derivePrivateKey(newSalt, v.next);
 				const newVerifier = await srp.deriveVerifier(newKey);
 
 				const result = await api.changeMyPassword({

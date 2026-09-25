@@ -38,6 +38,8 @@ namespace FishMMO.UnitTests.Harness
 			public bool HasPendingKick;
 			public string? LastTokenHash;
 			public int LastTokenExpirationMinutes;
+			/// <summary>The account name the core issued the last token for, exactly as passed.</summary>
+			public string? LastTokenAccountName;
 			public bool LoginLocked;
 			public DateTime? TwoFactorLockedUntil;
 			public bool HasBetaAccess;
@@ -77,15 +79,21 @@ namespace FishMMO.UnitTests.Harness
 		/// <param name="totpSecret">TOTP secret key if TOTP is enabled.</param>
 		/// <param name="email">Optional email address; defaults to username@example.test.</param>
 		/// <param name="isBanned">Whether the account is banned.</param>
-		public void SeedAccount(string username, string password, bool isVerified = true, bool totpEnabled = false, string? totpSecret = null, string? email = null, bool isBanned = false)
+		/// <param name="storedName">
+		/// The name the account row holds, when it differs from <paramref name="username"/>: the
+		/// database stores names lowercase while the verifier is derived from the spelling the
+		/// player registered with. Defaults to <paramref name="username"/>.
+		/// </param>
+		public void SeedAccount(string username, string password, bool isVerified = true, bool totpEnabled = false, string? totpSecret = null, string? email = null, bool isBanned = false, string? storedName = null)
 		{
 			SrpClient srp = new SrpClient(SrpParameters.Create2048<SHA512>());
 			string salt = srp.GenerateSalt();
-			string privateKey = srp.DerivePrivateKey(salt, username, password);
+			// The fixed identity, as a real client derives it: see SrpIdentity.
+			string privateKey = srp.DerivePrivateKey(salt, FishMMO.Auth.Implementation.SrpIdentity.Value, password);
 			string verifier = srp.DeriveVerifier(privateKey);
-			byUsername[username] = new Record
+			byUsername[storedName ?? username] = new Record
 			{
-				Username = username,
+				Username = storedName ?? username,
 				Email = email ?? (username + "@example.test"),
 				Salt = salt,
 				Verifier = verifier,
@@ -118,6 +126,23 @@ namespace FishMMO.UnitTests.Harness
 				Username = username; EmailVerificationPending = emailVerificationPending; PhoneVerificationPending = phoneVerificationPending;
 				PhoneVerifyCodeExpiresUtc = phoneVerifyCodeExpiresUtc; DiscordCodeOwed = discordCodeOwed;
 			}
+		}
+
+		/// <summary>
+		/// Looks an account up by email, case-insensitively, as <c>AccountService.FetchForLoginAsync</c>
+		/// does for an email sign-in.
+		/// </summary>
+		public bool TryGetByEmail(string email, out Lookup result)
+		{
+			foreach (Record rec in byUsername.Values)
+			{
+				if (string.Equals(rec.Email, email, StringComparison.OrdinalIgnoreCase))
+				{
+					return TryGet(rec.Username, out result);
+				}
+			}
+			result = default;
+			return false;
 		}
 
 		public bool TryGet(string username, out Lookup result)
@@ -235,11 +260,20 @@ namespace FishMMO.UnitTests.Harness
 			{
 				r.LastTokenHash = tokenHash;
 				r.LastTokenExpirationMinutes = expirationMinutes;
+				r.LastTokenAccountName = username;
 			}
 		}
 
 		public string? GetLastTokenHash(string username) =>
 			byUsername.TryGetValue(username, out Record? r) ? r.LastTokenHash : null;
+
+		/// <summary>
+		/// The name the last token was issued for, exactly as the core passed it. This store matches
+		/// names case-insensitively, as account lookups do; the token table does not, so the spelling
+		/// has to be checked here.
+		/// </summary>
+		public string? GetLastTokenAccountName(string username) =>
+			byUsername.TryGetValue(username, out Record? r) ? r.LastTokenAccountName : null;
 
 		public bool ContainsAccount(string username) => byUsername.ContainsKey(username);
 

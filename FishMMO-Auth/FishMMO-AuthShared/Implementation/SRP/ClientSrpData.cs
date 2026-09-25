@@ -56,7 +56,7 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Generates a salt and verifier for the given username and password.
+		/// Generates a salt and verifier for the given password.
 		/// Used for account registration or password changes.
 		/// </summary>
 		/// <remarks>
@@ -64,14 +64,17 @@ namespace FishMMO.Auth.Implementation
 		/// for GC collection when this method returns. It cannot be zeroed because .NET strings
 		/// are immutable — see class-level remarks.
 		/// </remarks>
-		/// <param name="username">The username for which to generate the verifier.</param>
 		/// <param name="password">The password for which to generate the verifier.</param>
 		/// <param name="salt">Output salt value.</param>
 		/// <param name="verifier">Output verifier value.</param>
-		public void GetSaltAndVerifier(string username, string password, out string salt, out string verifier)
+		/// <remarks>
+		/// No username: every verifier is derived from <see cref="SrpIdentity.Value"/>, so the name a
+		/// player signs in with — any spelling, or their email — never has to match anything.
+		/// </remarks>
+		public void GetSaltAndVerifier(string password, out string salt, out string verifier)
 		{
 			salt = SrpClient!.GenerateSalt();
-			string privateKey = SrpClient.DerivePrivateKey(salt, username, password);
+			string privateKey = SrpClient.DerivePrivateKey(salt, SrpIdentity.Value, password);
 			verifier = SrpClient.DeriveVerifier(privateKey);
 		}
 
@@ -89,21 +92,20 @@ namespace FishMMO.Auth.Implementation
 		/// hold a stale value. The intended protocol flow calls <see cref="GetProof"/> exactly
 		/// once, followed by <see cref="Verify"/>, then <see cref="Clear"/>.
 		/// </remarks>
-		/// <param name="username">The username for authentication.</param>
 		/// <param name="password">The password for authentication.</param>
 		/// <param name="salt">The salt used for deriving the private key.</param>
 		/// <param name="serverPublicEphemeral">The server's public ephemeral value.</param>
 		/// <param name="proof">Output client proof if authentication succeeds; otherwise, an error message.</param>
 		/// <returns>True if proof generation succeeded; otherwise, false.</returns>
-		public bool GetProof(string username, string password, string salt, string serverPublicEphemeral, out string proof)
+		public bool GetProof(string password, string salt, string serverPublicEphemeral, out string proof)
 		{
-			string privateKey = SrpClient!.DerivePrivateKey(salt, username, password);
+			string privateKey = SrpClient!.DerivePrivateKey(salt, SrpIdentity.Value, password);
 			try
 			{
 				Session = SrpClient!.DeriveSession(ClientEphemeral!.Secret,
 												  serverPublicEphemeral,
 												  salt,
-												  username,
+												  SrpIdentity.Value,
 												  privateKey);
 				proof = Session!.Proof;
 				return true;

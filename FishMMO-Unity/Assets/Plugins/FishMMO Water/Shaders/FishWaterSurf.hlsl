@@ -15,6 +15,7 @@
 
 float _FishWaterSwashPeriod;     // seconds between arriving waves; 0 when the scene has no shore
 float _FishWaterShoreTime;       // the shore's clock, seconds
+float _FishWaterSwashCycles;     // which wave the shore is on: the swash's phase added up, wrapped at 1000
 float4 _FishWaterSwashSea;       // x significant wave height (m), y deep-water wavelength at the peak period (m)
 
 /// <summary>True when a shore is keeping time: the surf follows its clock rather than the sea's.</summary>
@@ -120,7 +121,7 @@ float FishWaterShoreExposure(float2 towardShore, float confidence)
 /// </summary>
 float FishWaterSurfCycles(float2 waterlineXZ)
 {
-	return _FishWaterShoreTime / max(0.5, _FishWaterSwashPeriod) + FishWaterAlongShore(waterlineXZ).x;
+	return _FishWaterSwashCycles + FishWaterAlongShore(waterlineXZ).x;
 }
 
 #endif

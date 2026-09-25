@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -79,6 +80,27 @@ namespace FishMMO.Database.Npgsql.Services
 					.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyCollection<long>>> FetchExistingIdsAsync(IReadOnlyCollection<long> guildIds, CancellationToken cancellationToken = default)
+		{
+			if (guildIds == null || guildIds.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyCollection<long>>.Success(Array.Empty<long>());
+			}
+
+			List<long> ids = guildIds.Where(id => id > 0).Distinct().ToList();
+			return await ExecuteReadAsync<IReadOnlyCollection<long>>(async context =>
+			{
+				List<long> found = await context.Guilds
+					.AsNoTracking()
+					.Where(g => ids.Contains(g.ID))
+					.Select(g => g.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				return new HashSet<long>(found);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

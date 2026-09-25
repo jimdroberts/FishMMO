@@ -637,6 +637,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #include "FishCloudVolume.hlsl"
 
             float4 _FishCloudOverheadDraw;   // xy the window's centre (world xz), z its size (m), w march steps
+            float _FishCloudOverheadFrom;    // the height the columns are measured up from: the viewer's (m)
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -652,7 +653,11 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             float4 Frag(Varyings input) : SV_Target
             {
                 float2 xz = _FishCloudOverheadDraw.xy + (input.uv - 0.5) * _FishCloudOverheadDraw.z;
-                float3 origin = float3(xz.x, 0.0, xz.y);
+                /* From the viewer's height, not the sea's: what can fall on you is the cloud ABOVE
+                 * you. Measured from sea level, a deck below a mountain top still counted as cloud
+                 * overhead and it rained up there out of a clear sky. Inside a deck the column starts
+                 * where you stand; above its top it is empty. */
+                float3 origin = float3(xz.x, _FishCloudOverheadFrom, xz.y);
                 float texel = _FishCloudOverheadDraw.z / 256.0;
                 float density = FishCloudShadowDepth(origin, float3(0.0, 1.0, 0.0), (int)max(2.0, _FishCloudOverheadDraw.w), 0.5, texel);
                 return 1.0 - exp(-density);

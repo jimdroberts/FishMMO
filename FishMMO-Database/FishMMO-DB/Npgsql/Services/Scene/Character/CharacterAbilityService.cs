@@ -171,34 +171,13 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Prevent duplicate keys within the same batch from causing
-			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
-			if (newItems.Count > 1)
-			{
-				var dedupedNew = new Dictionary<(long CharacterID, int TemplateID), CharacterAbilityData>();
-				foreach (var ability in newItems)
-				{
-					dedupedNew[(ability.CharacterID, ability.TemplateID)] = ability;
-				}
-				if (dedupedNew.Count != newItems.Count)
-				{
-					newItems = dedupedNew.Values.ToList();
-				}
-			}
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			newItems = BulkBatch.KeepNewest(newItems, ability => (ability.CharacterID, ability.TemplateID), ability => ability.Version);
 
-			// Avoid ambiguous multi-match UPDATE ... FROM when duplicate IDs are present.
-			if (existingItems.Count > 1)
-			{
-				var dedupedExisting = new Dictionary<long, CharacterAbilityData>();
-				foreach (var ability in existingItems)
-				{
-					dedupedExisting[ability.ID] = ability;
-				}
-				if (dedupedExisting.Count != existingItems.Count)
-				{
-					existingItems = dedupedExisting.Values.ToList();
-				}
-			}
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
+			existingItems = BulkBatch.KeepNewest(existingItems, ability => ability.ID, ability => ability.Version);
 
 			int suppliedRows = list.Count;
 

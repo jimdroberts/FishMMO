@@ -39,17 +39,23 @@ namespace FishMMO.Database.Npgsql.Services
 					"Recipient email, username, subject, and body must not be empty.");
 			}
 
+			/* Taken once, outside the retried delegate: a retry after a reply lost past the commit
+			 * carries the same key and the conflict clause turns it into a no-op, where it used to
+			 * write the row a second time (issue #267). */
+			Guid requestKey = Guid.NewGuid();
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				/* kind is written explicitly rather than left to the column default, so the
 				 * row says what it is even when the default is what it would have been. The
 				 * enum's integer is bound, matching the column's storage. */
-				var sql = $@"INSERT INTO {TableName} (recipient_email, recipient_username, subject, body, kind)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})";
+				var sql = $@"INSERT INTO {TableName} (recipient_email, recipient_username, subject, body, kind, request_key)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}})
+					ON CONFLICT (request_key) WHERE request_key IS NOT NULL DO NOTHING";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { recipientEmail, recipientUsername, subject, body, (int)kind },
+					new object[] { recipientEmail, recipientUsername, subject, body, (int)kind, requestKey },
 					cancellationToken)
 					.ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -90,20 +96,38 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<EmailQueueData>.Failure(
 					DatabaseErrorCodes.ValidationError, "claimedBy must not be empty.");
 
+			/* Taken once, outside the retried delegate, and written as the claim's own stamp. A
+			 * connection lost after the claim committed but before its reply arrived is retried,
+			 * and the retry used to claim the NEXT row, leaving the first claimed by this sender
+			 * and never delivered, since nothing but an operator's queue-board retry releases a
+			 * claim. The retry now finds its own claim by (claimant, stamp) and returns that row
+			 * again (issue #267). */
+			DateTime claimStampUtc = DateTime.UtcNow;
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				// FOR UPDATE SKIP LOCKED atomically claims one row in a concurrent-safe
 				// manner — multiple LoginServers can run this query simultaneously and
 				// each will receive a different row (or none if the queue is empty).
-				var sql = $@"WITH next AS (
+				var sql = $@"WITH mine AS (
+					SELECT id FROM {TableName}
+					WHERE claimed_by = {{0}} AND claimed_at = {{1}} AND sent_at IS NULL
+				),
+				next AS (
 					SELECT id FROM {TableName}
 					WHERE sent_at IS NULL AND claimed_at IS NULL
+					  AND NOT EXISTS (SELECT 1 FROM mine)
 					ORDER BY created_at
 					LIMIT 1
 					FOR UPDATE SKIP LOCKED
+				),
+				pick AS (
+					SELECT id FROM mine
+					UNION ALL
+					SELECT id FROM next
 				)
-				UPDATE {TableName} SET claimed_by = {{0}}, claimed_at = timezone('UTC', CURRENT_TIMESTAMP)
-				FROM next WHERE {TableName}.id = next.id
+				UPDATE {TableName} SET claimed_by = {{0}}, claimed_at = {{1}}
+				FROM pick WHERE {TableName}.id = pick.id
 				RETURNING {TableName}.id, {TableName}.recipient_email, {TableName}.recipient_username,
 				          {TableName}.subject, {TableName}.body, {TableName}.created_at,
 				          {TableName}.attempts, {TableName}.claimed_by, {TableName}.claimed_at,
@@ -116,7 +140,7 @@ namespace FishMMO.Database.Npgsql.Services
 				 * that actually reports them backs off to a minute on an idle shard and then
 				 * makes the next real message wait that long. */
 				var entity = await ExecuteReturningOrDefaultAsync(
-					dbContext, sql, new object[] { claimedBy },
+					dbContext, sql, new object[] { claimedBy, claimStampUtc },
 					reader => new EmailQueueEntity
 					{
 						ID = reader.GetInt64(0),

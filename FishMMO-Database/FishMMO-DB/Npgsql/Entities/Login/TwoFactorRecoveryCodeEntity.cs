@@ -19,6 +19,11 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime? UsedAt { get; set; }
 		/// <summary>Timestamp when the code was created.</summary>
 		public DateTime TimeCreated { get; set; }
+		/// <summary>
+		/// Issued with a re-enrolment that has not been confirmed yet. A pending code opens nothing:
+		/// it becomes live, and the old codes go, only when the new authenticator is confirmed.
+		/// </summary>
+		public bool Pending { get; set; }
 
 		// Navigation property
 		/// <summary>Navigation property to the account entity.</summary>

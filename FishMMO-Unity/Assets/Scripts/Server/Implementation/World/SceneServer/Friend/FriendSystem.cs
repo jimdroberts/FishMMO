@@ -305,14 +305,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				CharacterData friendData = fetchResult.Data.Value;
 
-				// Persist the friendship to the database
-				DatabaseResult saveResult = await friendService.PersistAsync(characterID, friendCharacterID, 1, false);
+				/* Persist the friendship to the database. The cap goes with it: the service counts and
+				 * inserts under a lock on this character's row, so two adds racing each other cannot
+				 * both land. The check in OnServerFriendAddBroadcastReceived only saves a round trip;
+				 * this is the one that holds (issue #267). */
+				DatabaseResult saveResult = await friendService.PersistAsync(characterID, friendCharacterID, 1, false, maxFriends);
 				if (!saveResult.IsSuccess)
 				{
 					/* DUPLICATE_REPLAY is the pair already being friends: every add writes version 1,
 					 * so a second add of the same friend replays the first. That is the client asking
-					 * for what it already has, not a fault. */
-					if (saveResult.ErrorCode != DatabaseErrorCodes.DuplicateReplay)
+					 * for what it already has, not a fault. CAPACITY_EXCEEDED is a full list, refused
+					 * as quietly as the up-front check refuses it. */
+					if (saveResult.ErrorCode != DatabaseErrorCodes.DuplicateReplay &&
+						saveResult.ErrorCode != DatabaseErrorCodes.CapacityExceeded)
 					{
 						await Log.Warning("FriendSystem", $"AddFriendAsync could not persist the friendship (CharID={characterID}, FriendID={friendCharacterID}): [{saveResult.ErrorCode}] {saveResult.ErrorMessage}");
 					}
@@ -329,7 +334,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					// The same character, as RemoveFriendAsync checks: the cap below undoes a row by this ID.
+					// The same character, as RemoveFriendAsync checks.
 					IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 					if (friendController == null || friendController.Character.ID != characterID)
 					{
@@ -342,20 +347,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					/* The row is already written, so refusing here has to take it back out.
-					 *
-					 * The cap was tested when the request arrived, against a list this callback may
-					 * since have grown: the ingress guard is released when the database work ends, a
-					 * frame before this runs, so a second add can pass that test in the gap and both
-					 * reach the database. Returning without undoing the write left the refused friend
-					 * in the table, and the next load handed the character one friend more than the
-					 * cap allows. A player who has simply gone, above, keeps the friend they added —
-					 * that request was valid and is loaded with the rest next time. */
-					if (friendController.Friends.Count >= maxFriends)
-					{
-						EnqueuePersistence(() => DeleteRefusedFriendAsync(characterID, friendCharacterID), characterID);
-						return;
-					}
+					/* No cap test here. The database enforced the cap in the write that just
+					 * committed, so this friendship is within it, and the database is what the next
+					 * load reads. A second, in-memory test used to refuse here and then had to delete
+					 * the committed row again to stay consistent; it existed only because the write
+					 * itself did not check (issue #267). */
 
 					// Add the friend to the characters friend controller
 					friendController.AddFriend(friendCharacterID);
@@ -388,36 +384,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("FriendSystem", $"Error adding friend (CharID={characterID}, FriendID={friendCharacterID}): {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Removes a friendship row that was written for an add the main thread then refused.
-		/// </summary>
-		/// <param name="characterID">Character the add was for.</param>
-		/// <param name="friendCharacterID">Friend that was refused.</param>
-		/// <returns>Asynchronous delete task.</returns>
-		private async Task DeleteRefusedFriendAsync(long characterID, long friendCharacterID)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterFriendService>(out var friendService))
-				{
-					await Log.Warning("FriendSystem", $"Friend {friendCharacterID} was refused for character {characterID} over the cap, but the friend service is unavailable to take the row back out.");
-					return;
-				}
-
-				// long.MaxValue, as RemoveFriendAsync: a removal always outranks the version-1 add it undoes.
-				DatabaseResult deleteResult = await friendService.DeleteAsync(characterID, friendCharacterID, long.MaxValue);
-				if (!deleteResult.IsSuccess)
-				{
-					await Log.Warning("FriendSystem", $"Friend {friendCharacterID} was refused for character {characterID} over the cap, but its row could not be removed: [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("FriendSystem", $"Error removing refused friend (CharID={characterID}, FriendID={friendCharacterID}): {ex}");
 			}
 		}
 

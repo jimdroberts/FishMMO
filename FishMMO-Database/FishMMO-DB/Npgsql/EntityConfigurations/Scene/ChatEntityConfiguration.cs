@@ -63,6 +63,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Covers WHERE scene_server_id = @sceneServerId filtering by channel
 			// Used to exclude local messages: localChannels.Contains(c.Channel) && c.SceneServerID == sceneServerId
 			builder.HasIndex(e => new { e.SceneServerID, e.Channel });
+
+			/* One row per request. A write retried after its reply was lost (the connection dropped
+			 * after the commit) carries the same key and lands on the row its first attempt made,
+			 * instead of writing a second (issue #267). Filtered, so rows written without a key
+			 * never collide. */
+			builder.HasIndex(e => e.RequestKey)
+				.IsUnique()
+				.HasFilter("request_key IS NOT NULL");
 		}
 	}
 }

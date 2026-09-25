@@ -66,10 +66,26 @@ namespace FishMMO.Database.Npgsql.Services
 				Details = Clamp(entry.Details, 4096),
 				IpAddress = Clamp(entry.IpAddress, 64),
 				Source = string.IsNullOrWhiteSpace(entry.Source) ? "panel" : Clamp(entry.Source, 16),
+				// Set once, outside the retried delegate. See the probe below.
+				RequestKey = Guid.NewGuid(),
 			};
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
+				/* A retry after a reply lost past the commit finds the row its first attempt wrote,
+				 * by the key taken once above, and answers with it instead of writing a second
+				 * (issue #267). The unique index on request_key stands behind this. */
+				long written = await dbContext.AdminAuditLog
+					.AsNoTracking()
+					.Where(e => e.RequestKey == entity.RequestKey)
+					.Select(e => e.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+				if (written > 0)
+				{
+					return written;
+				}
+
 				await dbContext.AdminAuditLog.AddAsync(entity, cancellationToken).ConfigureAwait(false);
 				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 				return entity.ID;

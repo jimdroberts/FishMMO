@@ -146,6 +146,80 @@ namespace FishMMO.ControlPanel.Services
 			return new Check(Verdict.Ok, null);
 		}
 
+		/// <summary>What checking a code against a staged, unconfirmed authenticator found.</summary>
+		public enum PendingVerdict
+		{
+			/// <summary>The code came from the staged authenticator.</summary>
+			Valid,
+			/// <summary>The code did not verify, or could not be checked.</summary>
+			Invalid,
+			/// <summary>No authenticator is staged for this account.</summary>
+			NothingStaged,
+		}
+
+		/// <summary>The verdict, and the time window of a valid code for the replay guard.</summary>
+		public readonly record struct PendingCheck(PendingVerdict Verdict, long Window);
+
+		/// <summary>
+		/// Checks a code against the account's STAGED authenticator — the one a re-enrolment has not
+		/// confirmed yet — without touching anything sign-in reads.
+		/// </summary>
+		/// <remarks>
+		/// An authenticator code only: confirming a new authenticator with a recovery code would prove
+		/// nothing about the new one. Nothing is persisted here; the window a valid code used is
+		/// returned for <c>SelfServiceService.ConfirmTwoFactorAsync</c>, which records it as it
+		/// promotes the secret, so the confirming code cannot be replayed at sign-in.
+		/// </remarks>
+		public async Task<PendingCheck> VerifyPendingAsync(string username, string code, CancellationToken cancellationToken = default)
+		{
+			if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(code))
+			{
+				return new PendingCheck(PendingVerdict.Invalid, 0);
+			}
+
+			byte[] masterKek = totpKeys.MasterKek;
+			if (masterKek == null || masterKek.Length != TotpMasterKek.KeyLength)
+			{
+				log.LogError("TOTP master KEK unavailable; no code can be verified. {Error}", totpKeys.LoadError);
+				return new PendingCheck(PendingVerdict.Invalid, 0);
+			}
+
+			var pending = await accounts.FetchPendingTotpSecretAsync(username, cancellationToken);
+			if (!pending.IsSuccess)
+			{
+				log.LogWarning("Could not read the staged authenticator for '{User}': [{Code}] {Message}",
+					username, pending.ErrorCode, pending.ErrorMessage);
+				return new PendingCheck(PendingVerdict.Invalid, 0);
+			}
+			if (string.IsNullOrEmpty(pending.Data))
+			{
+				return new PendingCheck(PendingVerdict.NothingStaged, 0);
+			}
+
+			byte[] plaintextSecret = null;
+			try
+			{
+				plaintextSecret = CryptoHelper.TwoFactor.DecryptTotpSecret(masterKek, username, pending.Data);
+				// No earlier window applies: this secret has never verified a code.
+				var (valid, windowUsed) = CryptoHelper.TwoFactor.VerifyTotpCode(plaintextSecret, code.Trim(), 0);
+				return valid
+					? new PendingCheck(PendingVerdict.Valid, windowUsed)
+					: new PendingCheck(PendingVerdict.Invalid, 0);
+			}
+			catch (CryptographicException ex)
+			{
+				log.LogError(ex, "Could not decrypt the staged TOTP secret for '{User}'.", username);
+				return new PendingCheck(PendingVerdict.Invalid, 0);
+			}
+			finally
+			{
+				if (plaintextSecret != null)
+				{
+					CryptographicOperations.ZeroMemory(plaintextSecret);
+				}
+			}
+		}
+
 		/// <summary>
 		/// Verifies a TOTP code or a recovery code for an account.
 		/// </summary>
@@ -234,5 +308,6 @@ namespace FishMMO.ControlPanel.Services
 				}
 			}
 		}
+
 	}
 }

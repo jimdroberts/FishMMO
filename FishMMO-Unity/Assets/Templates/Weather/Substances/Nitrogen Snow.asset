@@ -13,13 +13,12 @@ MonoBehaviour:
   m_Name: Nitrogen Snow
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherSubstance
   DisplayName: Nitrogen Snow
-  Description: Nitrogen frozen out of the air. Falls faster than water snow, because
-    the air holding it is thinner.
+  Description: Nitrogen frozen out of the air. A flake of it falls much as one of water
+    snow does; on a thin-aired world both fall faster, and that is the world's doing.
   Tint: {r: 0.88, g: 0.93, b: 1, a: 1}
   FogColor: {r: 0.72, g: 0.8, b: 0.9, a: 1}
-  FallSpeedScale: 1.6
+  FallSpeedScale: 1.05
   StretchScale: 1.2
-  WindResponseScale: 1.3
   Emission: 0
   Cover: 2
   CoverTint: {r: 0.9, g: 0.95, b: 1, a: 1}

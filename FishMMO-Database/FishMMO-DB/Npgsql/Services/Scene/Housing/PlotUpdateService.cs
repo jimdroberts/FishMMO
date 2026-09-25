@@ -33,8 +33,6 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Plot ID must be greater than zero.");
 			}
 
-			DateTime now = DateTime.UtcNow;
-
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				/* The guarded UPSERT guilds use. The trailing WHERE keeps the stored timestamp
@@ -42,15 +40,23 @@ namespace FishMMO.Database.Npgsql.Services
 				 * arrive out of order, and letting the older one win would move last_update
 				 * backwards past a poller that had already read it — which is how a change gets
 				 * skipped rather than merely delayed. */
+
+				/* Stamped by the DATABASE clock, not this server's. Every scene server writes these
+				 * markers and every other one reads "everything at or after my watermark", so a
+				 * writer whose clock ran behind the readers' stamped changes they had already swept
+				 * past: the change was never delivered, not merely late (issue #267 audit).
+				 * clock_timestamp() is one clock for every writer, and is read at the statement,
+				 * not at transaction start. AT TIME ZONE 'UTC' because the column holds UTC without
+				 * a zone and the server's own zone is whatever it was installed with. */
 				string sql = $@"INSERT INTO {TableName} (plot_id, time_created, last_update)
-					VALUES ({{0}}, {{1}}, {{1}})
+					VALUES ({{0}}, clock_timestamp() AT TIME ZONE 'UTC', clock_timestamp() AT TIME ZONE 'UTC')
 					ON CONFLICT (plot_id) DO UPDATE
 					SET last_update = EXCLUDED.last_update
 					WHERE {TableName}.last_update < EXCLUDED.last_update";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { plotID, now },
+					new object[] { plotID },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}

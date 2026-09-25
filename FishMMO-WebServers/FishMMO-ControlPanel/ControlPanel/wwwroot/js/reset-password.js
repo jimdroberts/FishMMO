@@ -206,13 +206,14 @@ function renderRedeem(host, ctx, devCode) {
 			const passwordError = checkField(rules.password, values.password);
 			if (passwordError) throw new Error(passwordError);
 
-			/* The account name is an input to the SRP key derivation, so it has to be known
-			 * before the verifier can be computed. The code is what proves the right to ask. */
+			/* The lookup proves the code is live before any work is done, and names the account for
+			 * the confirmation below. The name is no longer an input to the key: see
+			 * srp.SRP_IDENTITY. */
 			const { username } = await api.lookupPasswordReset(code);
 			if (!username) throw new Error('That code is not valid.');
 
 			const salt = srp.generateSalt();
-			const privateKey = await srp.derivePrivateKey(salt, username, values.password);
+			const privateKey = await srp.derivePrivateKey(salt, values.password);
 			const verifier = await srp.deriveVerifier(privateKey);
 
 			const result = await api.completePasswordReset(code, salt, verifier);

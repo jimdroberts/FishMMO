@@ -424,7 +424,7 @@ namespace FishMMO.Water
 						wavelength = Mathf.Max(4f, period * Mathf.Sqrt(Mathf.Max(0.05f, Gravity) * breakingDepth));
 						Vector2 waterline = flat + shoreward * Mathf.Max(0f, edge);
 						// As the shader has it, in single precision: the clock goes in as a float.
-						float cycles = (float)shore.SurfClock / period + AlongShore(waterline).x;
+						float cycles = (float)shore.SurfCycles + AlongShore(waterline).x;
 						phase = 2f * Mathf.PI * (cycles + edge / wavelength) + 0.5f * Mathf.PI;
 					}
 					else
@@ -789,7 +789,8 @@ namespace FishMMO.Water
 				lastRealtime = now;
 			}
 			// Clamped so a domain reload, a breakpoint or a long frame does not jump the sea; scaled
-			// by the world's motion, so the sea stops when the world's time does.
+			// by the world's motion, so the sea stops when the world's time does — and never runs faster
+			// than real time, however fast a preview runs the clock (WorldMotion).
 			double delta = WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f));
 			lastRealtime = now;
 			clock = (clock + delta) % WrapSeconds;

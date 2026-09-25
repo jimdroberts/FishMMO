@@ -42,6 +42,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			 * index it is a full scan of a table that only ever grows. */
 			builder.HasIndex(e => new { e.Reason, e.TimeCreated })
 				.HasDatabaseName("ix_currency_ledger_reason_time");
+
+			/* One row per request. A write retried after its reply was lost (the connection dropped
+			 * after the commit) carries the same key and lands on the row its first attempt made,
+			 * instead of writing a second (issue #267). Filtered, so rows written without a key
+			 * never collide. */
+			builder.HasIndex(e => e.RequestKey)
+				.IsUnique()
+				.HasFilter("request_key IS NOT NULL");
 		}
 	}
 }

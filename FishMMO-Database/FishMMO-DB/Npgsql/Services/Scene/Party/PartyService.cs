@@ -65,12 +65,30 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> CreateAsync(long worldServerId, CancellationToken cancellationToken = default)
 		{
+			// Taken once, outside the retried delegate. See the probe below.
+			Guid requestKey = Guid.NewGuid();
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				/* A retry after a reply lost past the commit answers with the party its first
+				 * attempt created; it used to create a second and return that, leaving the first
+				 * empty and orphaned (issue #267). */
+				long created = await dbContext.Parties
+					.AsNoTracking()
+					.Where(p => p.RequestKey == requestKey)
+					.Select(p => p.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+				if (created > 0)
+				{
+					return new PartyEntity { ID = created };
+				}
+
 				var party = new PartyEntity
 				{
 					WorldServerID = worldServerId,
-					TimeCreated = DateTime.UtcNow
+					TimeCreated = DateTime.UtcNow,
+					RequestKey = requestKey,
 				};
 				await dbContext.Parties.AddAsync(party, cancellationToken).ConfigureAwait(false);
 				return party;

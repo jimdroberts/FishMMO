@@ -69,7 +69,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="characterIds">Every member, including the one who pressed the button.</param>
 		/// <param name="stalePulsedBeforeUtc">Stale threshold, as for <see cref="EnqueueAsync"/>.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>Rows written, equal to the member count on success. Zero when a member could not be queued and nothing was written.</returns>
+		/// <returns>Rows written, equal to the member count on success. A StaleState failure, with nothing written, when a member is already matched elsewhere: the group queues together or not at all.</returns>
 		Task<DatabaseResult<int>> EnqueueGroupAsync(long worldServerId, SceneType sceneType, string sceneName, int difficulty, long groupId, IReadOnlyList<long> characterIds, DateTime stalePulsedBeforeUtc, CancellationToken cancellationToken = default);
 
 		/// <summary>

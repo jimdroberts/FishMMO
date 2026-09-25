@@ -651,7 +651,7 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			if (!ReferenceEquals(pendingState.Connection, conn))
+			if (!ConnectionIdentity.Same(pendingState.Connection, conn))
 			{
 				totpPendingStates.TryRemove(clientId, out _);
 				DisconnectConnection(conn, graceful: true);
@@ -841,7 +841,11 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			bool isEmail = username!.Contains('@');
+			// Lowercased on receipt as well as by the client, so every lookup, lockout key and log
+			// line below sees one spelling whatever the client sent. See SrpIdentity.
+			username = SrpIdentity.NormalizeIdentifier(username!);
+
+			bool isEmail = username.Contains('@');
 
 			if (isEmail)
 			{
@@ -870,6 +874,18 @@ namespace FishMMO.Auth.Implementation
 			{
 				SrpAccountLookupResult lookupResult = await FetchAccountForLoginAsync(username, isEmail);
 				RefreshAuthTtl(conn);
+
+				/* The lookup could not reach the database. Answered as ServerBusy, not by the
+				 * fake-salt path below: that path is for an account that does not exist, and taking
+				 * it here told a player whose password was right that it was wrong, counted the fault
+				 * against the username's failure limits, and could lock the account out during a
+				 * database blip (issue #267). ServerBusy does not depend on the account, so it is no
+				 * enumeration oracle — an attacker cannot choose which lookups fail. */
+				if (!lookupResult.IsSuccess && lookupResult.IsServerError)
+				{
+					RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
+					return;
+				}
 
 				string salt;
 				string verifier;
@@ -1150,6 +1166,15 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
+			/* From here on the player is the account, not the spelling they typed. SRP has to prove
+			 * the exact identifier the verifier was derived from, so a name registered as "Jim" is
+			 * proven as "Jim" — but the account row stores its name lowercase, and every table keyed
+			 * by account (auth_tokens, web_sessions, characters) references that row. The typed
+			 * spelling used to carry on into the token, whose hash then failed its foreign key: an
+			 * account registered with a capital letter could never sign in (issue #267). accountKey
+			 * is the name the database returned for this account at the verify step. */
+			username = accountKey;
+
 			// Defer the AccountUnverified result until *after* a valid M1 proof so
 			// that wrong-password attempts on an unverified account are
 			// indistinguishable from any other failed login (no username-existence
@@ -1280,9 +1305,22 @@ namespace FishMMO.Auth.Implementation
 
 				byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof!, request.EncryptionData);
 
-				byte[]? encryptedToken = (authenticated && IsConnectionActive(conn))
-					? await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username!, accessLevel, ResolveClientRealIp(conn))
-					: null;
+				byte[]? encryptedToken = null;
+				if (authenticated && IsConnectionActive(conn))
+				{
+					encryptedToken = await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username!, accessLevel, ResolveClientRealIp(conn));
+					if (encryptedToken == null)
+					{
+						/* A login with no usable token is not a login. This used to broadcast
+						 * LoginSuccess with a null token — or with a token whose hash had not been
+						 * recorded, which every world server's revocation check treats as revoked —
+						 * so the player reached server select and was bounced back at the world with
+						 * TokenRevoked. ServerBusy says to try again now (issue #267). */
+						await Log.Warning(LogPrefix, $"Login for '{username}' refused: no auth token could be issued (signing key unavailable, or its hash could not be recorded).");
+						RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
+						return;
+					}
+				}
 
 				EnqueueMainThread(conn, () =>
 				{
@@ -1380,10 +1418,31 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			bool totpValid = await VerifyTotpCodeAsync(pendingState.Username!, totpCode, totpMasterKey!);
+			TwoFactorVerifyOutcome verified = await VerifyTotpCodeAsync(pendingState.Username!, totpCode, totpMasterKey!);
 			RefreshAuthTtl(conn);
 
-			if (!totpValid)
+			if (verified == TwoFactorVerifyOutcome.ServerError)
+			{
+				/* The code could not be CHECKED — the database failed — which is not a wrong code.
+				 * It used to be reported and counted as one: TwoFactorInvalid to a player who typed
+				 * the right code, a failure against the username, and a step toward the 2FA lockout,
+				 * so retrying through a database blip could lock the account (issue #267). Nothing is
+				 * counted here. The attempt itself was already counted when the message arrived, so
+				 * retries stay bounded by MaxTotpAttempts; the pending state stays for the retry. */
+				if (pendingState.Attempts > MaxTotpAttempts)
+				{
+					totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
+					EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
+					PurgeConnectionAuthState(conn, disconnect: false);
+				}
+				else
+				{
+					EnqueueMainThread(conn, () => BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: true));
+				}
+				return;
+			}
+
+			if (verified != TwoFactorVerifyOutcome.Valid)
 			{
 				TrackTotpUsernameFailure(pendingState.Username);
 				if (await TryLockAfterTwoFactorFailureAsync(conn, twoFactorKey))
@@ -1411,9 +1470,18 @@ namespace FishMMO.Auth.Implementation
 			verifyCodeExpiryByClientId.TryRemove(GetConnectionClientId(conn), out _);
 
 			byte[] encryptedServerProof = SrpService.EncryptServerProof(pendingState.ServerProof!, pendingState.EncryptionData);
-			byte[]? encryptedToken = (IsConnectionActive(conn))
-				? await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, pendingState.Username!, pendingState.AccessLevel, ResolveClientRealIp(conn))
-				: null;
+			byte[]? encryptedToken = null;
+			if (IsConnectionActive(conn))
+			{
+				encryptedToken = await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, pendingState.Username!, pendingState.AccessLevel, ResolveClientRealIp(conn));
+				if (encryptedToken == null)
+				{
+					// As in the SRP proof path: a login with no usable token is refused, not "succeeded".
+					await Log.Warning(LogPrefix, $"Login for '{pendingState.Username}' refused after 2FA: no auth token could be issued (signing key unavailable, or its hash could not be recorded).");
+					RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
+					return;
+				}
+			}
 
 			EnqueueMainThread(conn, () =>
 			{
@@ -1565,7 +1633,11 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptionData">Per-connection encryption context for the outgoing token.</param>
 		/// <param name="username">Account name to embed in the token.</param>
 		/// <param name="accessLevel">Access level to embed in the token.</param>
-		/// <returns>The encrypted token bytes, or <c>null</c> if signing key is unavailable or encryption failed.</returns>
+		/// <returns>
+		/// The encrypted token bytes, or <c>null</c> if the signing key is unavailable, encryption
+		/// failed, or the token's hash could not be recorded — a token the database does not know is
+		/// refused as revoked by every world server, so it must not be handed out.
+		/// </returns>
 		private async Task<byte[]?> GenerateEncryptedAuthTokenAsync(ConnectionEncryptionData encryptionData, string username, AccessLevel accessLevel, string? realIp = null)
 		{
 			byte[]? signingKey = tokenSigningKey;
@@ -1586,7 +1658,10 @@ namespace FishMMO.Auth.Implementation
 			{
 				string tokenHash = TokenService.HashToken(rawTokenForHashing);
 				CryptographicOperations.ZeroMemory(rawTokenForHashing);
-				await PersistTokenHashAsync(username, tokenHash, (int)TokenExpirationMinutes);
+				if (!await PersistTokenHashAsync(username, tokenHash, (int)TokenExpirationMinutes))
+				{
+					return null;
+				}
 			}
 			else if (rawTokenForHashing != null)
 			{
@@ -1884,7 +1959,11 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="username">Account name.</param>
 		/// <param name="tokenHash">SHA-256 hex hash of the raw token.</param>
 		/// <param name="expirationMinutes">Token validity duration.</param>
-		protected abstract Task PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes);
+		/// <returns>
+		/// True when the hash was recorded. False refuses the login with ServerBusy: a token whose
+		/// hash is not in the database is treated as revoked by every world server.
+		/// </returns>
+		protected abstract Task<bool> PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes);
 
 		/// <summary>
 		/// Verifies a TOTP code for the given username against the database-stored secret.
@@ -1892,8 +1971,12 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="username">Account name.</param>
 		/// <param name="totpCode">6-digit TOTP code (plaintext).</param>
 		/// <param name="totpMasterKey">AES-256 key for decrypting the stored TOTP secret.</param>
-		/// <returns>True if the code is valid; false otherwise.</returns>
-		protected abstract Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey);
+		/// <returns>
+		/// <see cref="TwoFactorVerifyOutcome.Valid"/> or <see cref="TwoFactorVerifyOutcome.Invalid"/>
+		/// for a code that was checked; <see cref="TwoFactorVerifyOutcome.ServerError"/> when it could
+		/// not be checked, which is answered ServerBusy and never counted as a failed attempt.
+		/// </returns>
+		protected abstract Task<TwoFactorVerifyOutcome> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey);
 
 		/// <summary>
 		/// Called after a correct proof when an unverified account is owed an email code. The
@@ -1945,6 +2028,12 @@ namespace FishMMO.Auth.Implementation
 		{
 			/// <summary>Whether the account was found and fetchable.</summary>
 			public bool IsSuccess;
+			/// <summary>
+			/// Set with <see cref="IsSuccess"/> false when the lookup failed because the database
+			/// could not be read, as opposed to there being no such account. Answered ServerBusy
+			/// instead of through the fake-salt path, so a fault is never counted as a wrong password.
+			/// </summary>
+			public bool IsServerError;
 			/// <summary>Whether the account may sign in without a code: verified, or not asked for one by this server.</summary>
 			public bool IsVerified;
 			/// <summary>SRP salt.</summary>
@@ -1959,7 +2048,9 @@ namespace FishMMO.Auth.Implementation
 			public DateTime? VerifyCodeExpiresUtc;
 			/// <summary>
 			/// The canonical account name, when the lookup was by email or case differs. Keys the
-			/// database-backed lockout and the beta gate. Null means "use the identifier".
+			/// database-backed lockout and the beta gate, and is the identity a successful proof signs
+			/// in as: the token, and everything the world server keys by account, carry this name,
+			/// never the typed identifier. Null means "use the identifier".
 			/// </summary>
 			public string? AccountName;
 			/// <summary>For an unverified account: whether the email code is outstanding.</summary>
@@ -1973,6 +2064,17 @@ namespace FishMMO.Auth.Implementation
 			/// <see cref="TryIssueDiscordVerificationCodeAsync"/>.
 			/// </summary>
 			public bool DiscordVerificationCodeOwed;
+		}
+
+		/// <summary>The result of checking a two-factor code. See <see cref="VerifyTotpCodeAsync"/>.</summary>
+		public enum TwoFactorVerifyOutcome
+		{
+			/// <summary>The code was checked and is correct.</summary>
+			Valid = 0,
+			/// <summary>The code was checked and is wrong, expired or already used.</summary>
+			Invalid = 1,
+			/// <summary>The code could not be checked; nothing is known about it.</summary>
+			ServerError = 2,
 		}
 
 		/// <summary>What an unverified sign-in is owed once its proof is correct.</summary>

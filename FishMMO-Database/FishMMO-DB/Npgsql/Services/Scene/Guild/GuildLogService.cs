@@ -41,14 +41,21 @@ namespace FishMMO.Database.Npgsql.Services
 
 			DateTime timeCreated = entry.TimeCreated == default ? DateTime.UtcNow : entry.TimeCreated;
 
+			/* Taken once, outside the retried delegate: a retry after a reply lost past the commit
+			 * carries the same key and the conflict clause turns it into a no-op, where it used to
+			 * write the row a second time (issue #267). */
+			Guid requestKey = Guid.NewGuid();
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				/* A plain INSERT with no conflict clause. Two identical events a millisecond apart
-				 * are two real events, not a duplicate to be collapsed — this is a history, and
-				 * de-duplicating it would hide exactly the repetition somebody reads it to find. */
+				/* The conflict clause collapses only a retry of this same request. Two identical
+				 * events a millisecond apart are two real events with two keys, not a duplicate — this
+				 * is a history, and de-duplicating it would hide exactly the repetition somebody reads
+				 * it to find. */
 				var sql = $@"
-					INSERT INTO {TableName} (guild_id, event_type, actor_character_id, target_character_id, detail, time_created)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}})";
+					INSERT INTO {TableName} (guild_id, event_type, actor_character_id, target_character_id, detail, time_created, request_key)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}})
+					ON CONFLICT (request_key) WHERE request_key IS NOT NULL DO NOTHING";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
@@ -60,6 +67,7 @@ namespace FishMMO.Database.Npgsql.Services
 						entry.TargetCharacterID,
 						detail,
 						timeCreated,
+						requestKey,
 					},
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);

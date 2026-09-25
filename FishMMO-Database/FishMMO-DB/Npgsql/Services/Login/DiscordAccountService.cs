@@ -104,23 +104,31 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
 			}
 
+			/* Taken once, outside the retried delegate, and written as the claim. A connection lost
+			 * after the claim committed but before its reply arrived is retried, and the retry used
+			 * to find the claim already taken and answer false: the bot then neither sent the DM nor
+			 * released a claim it did not know it held, and the code was never delivered. The retry
+			 * now re-takes its own claim, which carries this exact stamp (issue #267). */
+			DateTime claimStampUtc = DateTime.UtcNow;
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
-					SET discord_dm_claimed_at = timezone('UTC', CURRENT_TIMESTAMP)
+					SET discord_dm_claimed_at = {{3}}
 					WHERE name_lowercase = {{0}}
 						AND verified = false
 						AND (verification_channels & {{2}}) <> 0
 						AND discord_username IS NOT NULL
 						AND discord_verify_code <> 0
 						AND discord_dm_sent_at IS NULL
-						AND discord_dm_claimed_at IS NULL
+						AND (discord_dm_claimed_at IS NULL OR discord_dm_claimed_at = {{3}})
 						AND discord_dm_attempts < {{1}}";
 				int rows = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[]
 				{
 					Authentication.NormalizeAccountLookup(accountName),
 					DiscordVerification.MaxSendAttempts,
 					(int)AccountVerificationChannels.Discord,
+					claimStampUtc,
 				}, cancellationToken).ConfigureAwait(false);
 				return rows == 1;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
