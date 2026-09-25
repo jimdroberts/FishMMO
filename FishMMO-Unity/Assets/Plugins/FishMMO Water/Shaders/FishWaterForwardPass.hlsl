@@ -329,10 +329,13 @@ half4 WaterFragment(Varyings input) : SV_Target
 	half foamAlpha = 0.0;
 	if (!underwater)
 	{
-		/* Drifting shoreward, not with the wind. Foam on a beach is carried by the breaking wave,
-		 * so the mask has to travel the way the surf travels or it slides sideways through it. */
+		/* Drifting shoreward in the surf, with the wind everywhere else. Foam on a beach is carried
+		 * by the breaking wave, so there the mask has to travel the way the surf travels or it
+		 * slides sideways through it; out at sea it is the wind's. The direction to the shore is
+		 * defined everywhere — it points at the nearest one from two kilometres out — so it is the
+		 * depth that says where the surf is. */
 		float2 shoreward = FishWaterShoreGradient(input.flatXZ);
-		float2 drift = (dot(shoreward, shoreward) > 0.5 ? shoreward : _FishWaterWind.xy)
+		float2 drift = (wave.depth < 8.0 && dot(shoreward, shoreward) > 0.5 ? shoreward : _FishWaterWind.xy)
 			* _FishWaterTime * 0.5;
 		float2 foamUV = (input.flatXZ + drift) / max(0.5, _FoamScale);
 		half mask = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV).r * 0.65

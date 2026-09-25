@@ -271,6 +271,14 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for the keybinding override blob written by the input system.</summary>
 		public const string InputBindingOverridesKey = "InputBindingOverrides";
 
+		// ── Hotbar ──────────────────────────────────────────────────
+
+		/// <summary>Configuration key for how a game with several hotkey bars shows them.</summary>
+		public const string HotbarLayoutKey = "UI.Hotbar.Layout";
+
+		/// <summary>Configuration key for the bar a paged hotbar shows when no modifier is held.</summary>
+		public const string HotbarPageKey = "UI.Hotbar.Page";
+
 		// ── Chat ────────────────────────────────────────────────────
 
 		/// <summary>Configuration key for the chat log's message font size, in points.</summary>

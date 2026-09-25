@@ -23,13 +23,14 @@ This module contains transport-agnostic collection primitives designed for high-
 
 All tracker classes live in the `FishMMO.Server.Core.Collections` namespace and can be used from both the Core and Implementation server layers.
 
-The four collections are:
+The five collections are:
 
 | Class | Purpose |
 |---|---|
 | `ExpiringKeyTracker<TKey>` | Debounce / rate-limit windows keyed by `TKey` with bounded expiry sweeps |
 | `LastSeenCacheTracker<TKey, TValue>` | Key-value cache where entries expire by inactivity (last-seen); reads extend lifetime |
 | `TimedCache<TKey, TValue>` | Write-through TTL cache where entries expire after a fixed duration from storage; reads do **not** extend lifetime |
+| `SingleFlightCache<TKey, TValue>` | Fixed-TTL cache of **asynchronous reads**: callers arriving while a read is in flight share it, a completed read is served until its TTL (counted from when it started), and a failed read is never cached |
 | `InstanceCapacityHeap` | Max-heap of scene-instance handles ordered by remaining capacity for O(log N) routing |
 
 > **Note:** `ArrivalOrderTracker<TKey>` (oldest-first stale-entry processing for unauthenticated SRP/encryption sweeps) used to live here but has been moved to the engine-independent `FishMMO-Auth.dll` shared library under `FishMMO.Auth.Core.Collections`. Server systems that need it should reference it from there.
@@ -126,6 +127,29 @@ cache.Invalidate("worldKey");
 int removed = cache.SweepExpired(DateTime.UtcNow, TimeSpan.FromSeconds(30), maxScan: 64, maxRemove: 16);
 ```
 
+### Shared Asynchronous Reads with SingleFlightCache
+
+```csharp
+var pages = new SingleFlightCache<LeaderboardPageKey, LeaderboardPageData>();
+
+// The first caller on a miss starts the read; everyone asking for the same key until the read
+// finishes joins it, and everyone after that is served the value until the TTL runs out.
+LeaderboardPageData page = await pages.GetOrFetchAsync(key, TimeSpan.FromSeconds(60), async () =>
+{
+    var result = await service.FetchPageAsync(key.Query, key.Offset, key.Limit);
+    if (!result.IsSuccess)
+    {
+        throw new InvalidOperationException(result.ErrorMessage);   // shared by its callers, never cached
+    }
+    return result.Data;
+});
+
+// Bounded sweep in an update loop (completed entries older than the TTL)
+int removed = pages.SweepExpired(TimeSpan.FromSeconds(60), maxScan: 512, maxRemove: 256);
+```
+
+Use it instead of `TimedCache` when many callers want the same value at once and reading it is the expensive part: `TimedCache` has no notion of a read in progress, so a miss sends every concurrent caller to the database.
+
 ### Oldest-First Tracking with ArrivalOrderTracker
 
 > Moved to `FishMMO-Auth.dll` under `FishMMO.Auth.Core.Collections`. The API is identical; only the namespace has changed. Add `using FishMMO.Auth.Core.Collections;` and reference `FishMMO-Auth.dll` from your assembly.
@@ -199,6 +223,11 @@ These collections are configured at construction time or per-call through method
 - `TimedCache<string, List<SceneData>>` — caches available scene-instance query results.
 - `TimedCache<long, (string, ushort)>` — caches scene-server address lookups.
 
+### LeaderboardSystem
+
+- `SingleFlightCache<LeaderboardPageKey, LeaderboardPageData>` — one entry per page of each board; every player viewing a page shares one database read per cache lifetime.
+- `SingleFlightCache<LeaderboardStandingKey, LeaderboardStandingData>` — a player's own rank on a board, read only when they are not on the page they are viewing.
+
 ### AccountManager
 
 - `ArrivalOrderTracker<NetworkConnection>` *(now in `FishMMO-Auth.dll` — `FishMMO.Auth.Core.Collections`)* — tracks unauthenticated SRP/encryption handshake connections for oldest-first stale-state sweeps. The `AccountManager<TConnection>` base class in FishMMO-Auth owns the tracker; FishMMO-Unity does not need to reference it directly.
@@ -213,6 +242,8 @@ These collections are configured at construction time or per-call through method
 | Sweep respects `maxScan` / `maxRemove` bounds | `SweepExpired()` with many expired entries | Removal count ≤ `maxRemove`, nodes inspected ≤ `maxScan` |
 | Stale queue nodes are skipped | Touch/re-set a key then sweep | Old queue node discarded; entry survives until its refreshed TTL expires |
 | `TimedCache` reads do not extend lifetime | `TryGet()` after `Set()` | Entry still expires relative to `Set()` time, not `TryGet()` time |
+| `SingleFlightCache` shares a read in flight | Two `GetOrFetchAsync()` calls before the first read completes | One fetch; both callers receive the same task |
+| `SingleFlightCache` never caches a failure | A read that throws, then another `GetOrFetchAsync()` | The next call starts a new read |
 | `LastSeenCacheTracker` reads extend lifetime | `TryGetAndTouch()` refreshes last-seen | Entry survives longer after being touched |
 | `InstanceCapacityHeap` assigns highest capacity first | `Push()` multiple handles, `TryAssignFromTop()` | Returns handle with greatest remaining capacity |
 | `InstanceCapacityHeap` auto-removes zero-capacity | Assign until capacity reaches 0 | Entry removed; next `TryAssignFromTop()` returns next largest |
@@ -280,6 +311,7 @@ Assets/Scripts/Server/Core/Collections/
 ├── ExpiringKeyTracker.cs         # Debounce / rate-limit expiry tracker
 ├── InstanceCapacityHeap.cs       # Max-heap for capacity-based instance routing
 ├── LastSeenCacheTracker.cs       # Last-seen TTL cache (reads extend lifetime)
+├── SingleFlightCache.cs          # Fixed-TTL cache of async reads; concurrent callers share one read
 ├── TimedCache.cs                 # Fixed-TTL write-through cache (reads do not extend)
 └── README.md                     # This file
 ```

@@ -795,7 +795,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			long[] objectiveValues = BuildObjectiveValues(quest);
-			quest.Version++;
+			quest.Version = NextQuestVersion(quest);
 			long characterID = character.ID;
 
 			var dto = new CharacterQuestData(
@@ -825,7 +825,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			quest.Version++;
+			quest.Version = NextQuestVersion(quest);
 			long characterID = character.ID;
 			int templateID = quest.Template.ID;
 			long version = quest.Version;
@@ -834,14 +834,66 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Attempts a quest write makes before a transient failure is given up on.
+		/// </summary>
+		private const int MaxQuestWriteAttempts = 3;
+
+		/// <summary>
+		/// Backoff between quest write attempts, multiplied by the attempt number.
+		/// </summary>
+		private const int QuestWriteRetryStepMs = 250;
+
+		/// <summary>
+		/// The version the next write of <paramref name="quest"/> is stamped with.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Monotonic from two directions at once. <c>quest.Version + 1</c> keeps it above the row
+		/// the character loaded with, which the load path restores. The clock keeps a quest that
+		/// has just been ACCEPTED — a fresh instance at version 0 — above the tombstone a previous
+		/// turn-in or abandon of the same template left behind: the delete soft-deletes the row at
+		/// its own version, and the upsert only revives a row whose version it beats, so a
+		/// re-accepted quest counting up from 1 was refused as stale until it had been written more
+		/// times than the one before it. The hotkey bar stamps its rows the same way
+		/// (<c>HotkeySystemRuntimeData.NextHotkeyVersion</c>).
+		/// </para>
+		/// <para>
+		/// Main thread only, like every other mutation of the instance.
+		/// </para>
+		/// </remarks>
+		/// <param name="quest">The quest about to be written.</param>
+		/// <returns>The version to stamp, already greater than the quest's current one.</returns>
+		private static long NextQuestVersion(QuestInstance quest)
+		{
+			return Math.Max(quest.Version + 1, DateTime.UtcNow.Ticks);
+		}
+
+		/// <summary>
 		/// Asynchronously persists a quest to the database.
 		/// </summary>
+		/// <remarks>
+		/// A transient failure is retried a bounded number of times on this same lane, so a later
+		/// write of the quest still queues behind it. There is no other retry: quests are written
+		/// as they change rather than by the periodic save, so a write that is given up on stays
+		/// lost until the quest changes again.
+		/// </remarks>
 		private async Task PersistQuestAsync(ICharacterQuestService service, CharacterQuestData dto)
 		{
 			try
 			{
-				await BulkWriteReporting.ReportAsync("QuestSystem", "Quest save",
-					await service.PersistAsync(new[] { dto }), $"CharID={dto.CharacterID}, TemplateID={dto.TemplateID}");
+				DatabaseResult<BulkWriteResult> result = default;
+				for (int attempt = 1; attempt <= MaxQuestWriteAttempts; ++attempt)
+				{
+					result = await service.PersistAsync(new[] { dto });
+					if (result.IsSuccess || !result.IsTransient || attempt == MaxQuestWriteAttempts)
+					{
+						break;
+					}
+					await Task.Delay(QuestWriteRetryStepMs * attempt);
+				}
+
+				await BulkWriteReporting.ReportAsync("QuestSystem", "Quest save", result,
+					$"CharID={dto.CharacterID}, TemplateID={dto.TemplateID}");
 			}
 			catch (Exception ex)
 			{
@@ -852,14 +904,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously deletes a quest from the database.
 		/// </summary>
+		/// <remarks>
+		/// The delete is the only record of a turn-in: the rewards have already been paid and the
+		/// quest has already left memory, so a delete that never lands brings the quest back at the
+		/// next login, still Complete, to be turned in again. A transient failure is therefore
+		/// retried (bounded, on this lane), and one that survives the retries is logged as the
+		/// error it is.
+		/// </remarks>
 		private async Task DeleteQuestAsync(ICharacterQuestService service, long characterID, int templateID, long version)
 		{
 			try
 			{
-				DatabaseResult result = await service.DeleteQuestAsync(characterID, templateID, version);
+				DatabaseResult result = default;
+				for (int attempt = 1; attempt <= MaxQuestWriteAttempts; ++attempt)
+				{
+					result = await service.DeleteQuestAsync(characterID, templateID, version);
+					if (result.IsSuccess || !result.IsTransient || attempt == MaxQuestWriteAttempts)
+					{
+						break;
+					}
+					await Task.Delay(QuestWriteRetryStepMs * attempt);
+				}
+
 				if (!result.IsSuccess)
 				{
-					await Log.Warning("QuestSystem", $"DeleteQuestAsync DB error (CharID={characterID}, TemplateID={templateID}): {result.ErrorCode} - {result.ErrorMessage}");
+					await Log.Error("QuestSystem",
+						$"DeleteQuestAsync failed (CharID={characterID}, TemplateID={templateID}, Version={version}): [{result.ErrorCode}] {result.ErrorMessage}. " +
+						"The row still stands, so the quest returns at the next login.");
 				}
 			}
 			catch (Exception ex)

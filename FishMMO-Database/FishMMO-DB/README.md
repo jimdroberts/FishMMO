@@ -52,11 +52,14 @@ FishMMO-DB/
 │   ├── Character/                Per-character sub-entity records, including CharacterItemData
 │   │                             and its ItemContainerType discriminator
 │   ├── Enums/                    ChatChannel, SceneStatus, SceneType, CharacterSessionState,
-│   │                             ArenaMatchStatus, ArenaSeatStatus, GroupFinderQueueStatus, …
+│   │                             ArenaMatchStatus, ArenaSeatStatus, GroupFinderQueueStatus,
+│   │                             LeaderboardSourceKind, …
 │   ├── GroupFinder/              GroupFinderQueueData, GroupFinderMatchData
 │   ├── Guild/                    Guild, rank, log, application and update records
 │   ├── Housing/                  PlotData, PlotStructureData, PlotAccessData, PlotVaultData,
 │   │                             PlotUpdateData
+│   ├── Leaderboard/              LeaderboardQuery (which board, who is eligible), the row, page
+│   │                             and standing records ILeaderboardService returns
 │   └── Party/                    Party records
 ├── Migrations/                 EF Core migrations (created by FishMMO-DB-Migrator; gitignored,
 │                                 so a checkout has none until they are generated locally)

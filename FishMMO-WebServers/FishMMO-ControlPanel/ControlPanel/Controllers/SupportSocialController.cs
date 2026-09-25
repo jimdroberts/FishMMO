@@ -31,10 +31,12 @@ namespace FishMMO.ControlPanel.Controllers
 	public sealed class SupportSocialController : ControllerBase
 	{
 		private readonly ISocialBoardService social;
+		private readonly ILogger<SupportSocialController> log;
 
-		public SupportSocialController(ISocialBoardService social)
+		public SupportSocialController(ISocialBoardService social, ILogger<SupportSocialController> log)
 		{
 			this.social = social;
+			this.log = log;
 		}
 
 		/// <summary>Searches guilds by name prefix.</summary>
@@ -48,7 +50,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await social.SearchGuildsAsync(query ?? string.Empty, page, pageSize, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = result.ErrorMessage ?? "That search could not be run." });
+				return DatabaseReplies.Failure(this, result, log, "That search could not be run.");
 			}
 
 			var data = result.Data;
@@ -92,7 +94,7 @@ namespace FishMMO.ControlPanel.Controllers
 				{
 					return NotFound(new { error = "No such guild." });
 				}
-				return BadRequest(new { error = result.ErrorMessage ?? "That guild could not be read." });
+				return DatabaseReplies.Failure(this, result, log, "That guild could not be read.");
 			}
 
 			var g = result.Data;
@@ -157,7 +159,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await social.FetchGuildLogAsync(id, page, pageSize, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = result.ErrorMessage ?? "That guild log could not be read." });
+				return DatabaseReplies.Failure(this, result, log, "That guild log could not be read.");
 			}
 
 			var data = result.Data;
@@ -198,7 +200,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await social.FetchPartiesAsync(worldServerId, page, pageSize, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = result.ErrorMessage ?? "Parties could not be read." });
+				return DatabaseReplies.Failure(this, result, log, "Parties could not be read.");
 			}
 
 			var data = result.Data;

@@ -153,7 +153,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildAuthority editor = await ResolveGuildAuthorityAsync(guildID, editorCharacterID);
 				if (!editor.Has(GuildPermissions.EditRanks))
 				{
-					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					SendGuildResult(conn, AuthorityRefusal(editor));
 					return;
 				}
 
@@ -279,7 +279,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildAuthority creator = await ResolveGuildAuthorityAsync(guildID, creatorCharacterID);
 				if (!creator.Has(GuildPermissions.EditRanks))
 				{
-					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					SendGuildResult(conn, AuthorityRefusal(creator));
 					return;
 				}
 
@@ -312,15 +312,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!createResult.IsSuccess)
 				{
+					await Log.Warning("GuildSystem", $"CreateGuildRankAsync insert failed (GuildID={guildID}, RankOrder={rankOrder}): {createResult.ErrorCode} - {createResult.ErrorMessage}");
+
 					/* The service decided this against the locked ladder, which may differ from
 					 * the one the creator resolved a moment ago — so the refusal carries a fresh
-					 * ladder, not the one the decision above was made on. */
-					RefuseRankEdit(
-						conn,
-						createResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded
-							? GuildResultType.TooManyRanks
-							: GuildResultType.RankNotFound,
-						await ResolveGuildAuthorityAsync(guildID, creatorCharacterID));
+					 * ladder, not the one the decision above was made on. Only the service's own
+					 * refusals are reported as what they are; a database fault used to read as
+					 * "rank not found", which sent the player looking for a problem in the ladder. */
+					GuildResultType refusal = createResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded ? GuildResultType.TooManyRanks
+						: createResult.ErrorCode == DatabaseErrorCodes.NotFound ? GuildResultType.RankNotFound
+						: GuildResultType.Failed;
+
+					RefuseRankEdit(conn, refusal, await ResolveGuildAuthorityAsync(guildID, creatorCharacterID));
 					return;
 				}
 
@@ -402,7 +405,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildAuthority deleter = await ResolveGuildAuthorityAsync(guildID, deleterCharacterID);
 				if (!deleter.Has(GuildPermissions.EditRanks))
 				{
-					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					SendGuildResult(conn, AuthorityRefusal(deleter));
 					return;
 				}
 
@@ -418,12 +421,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult deleteResult = await rankService.DeleteAsync(guildID, rankOrder);
 				if (!deleteResult.IsSuccess)
 				{
-					RefuseRankEdit(
-						conn,
-						deleteResult.ErrorCode == DatabaseErrorCodes.NotFound
-							? GuildResultType.RankNotFound
-							: GuildResultType.RankInUse,
-						await ResolveGuildAuthorityAsync(guildID, deleterCharacterID));
+					await Log.Warning("GuildSystem", $"DeleteGuildRankAsync delete failed (GuildID={guildID}, RankOrder={rankOrder}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+
+					/* The service reports an occupied rank as a VALIDATION_ERROR — it is the
+					 * occupancy test in the delete's own statement — and a missing one as
+					 * NOT_FOUND. Anything else is a fault, and used to reach the player as "rank
+					 * in use", which is a claim about the guild's members that nobody could verify. */
+					GuildResultType refusal = deleteResult.ErrorCode == DatabaseErrorCodes.NotFound ? GuildResultType.RankNotFound
+						: deleteResult.ErrorCode == DatabaseErrorCodes.ValidationError ? GuildResultType.RankInUse
+						: GuildResultType.Failed;
+
+					RefuseRankEdit(conn, refusal, await ResolveGuildAuthorityAsync(guildID, deleterCharacterID));
 					return;
 				}
 
@@ -532,8 +540,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				DatabaseResult<CharacterGuildData?> targetResult = await charGuildService.FetchAsync(targetCharacterID);
-				if (!targetResult.IsSuccess ||
-					!targetResult.Data.HasValue ||
+				if (!targetResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"SetGuildMemberNoteAsync target fetch failed (GuildID={guildID}, Target={targetCharacterID}): {targetResult.ErrorCode} - {targetResult.ErrorMessage}");
+					return;
+				}
+
+				if (!targetResult.Data.HasValue ||
 					targetResult.Data.Value.GuildID != guildID)
 				{
 					return;

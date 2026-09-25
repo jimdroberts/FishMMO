@@ -51,6 +51,13 @@ namespace FishMMO.Database.Npgsql.Entities
 			 * guild_application or scenes: those have no composite starting with character_id, so
 			 * their bare index is the only thing serving the lookup and dropping it means a scan. */
 
+			/* Leaderboards: one achievement template's values, best first (ILeaderboardService). The
+			 * board orders by value DESC within a template and a standing counts the rows above
+			 * one value, so both are a range scan of this index rather than a read of every
+			 * character's every achievement. The save only writes rows whose value moved, and
+			 * those are exactly the rows whose place on a board moved. */
+			builder.HasIndex(e => new { e.TemplateID, e.Value });
+
 			// Foreign key relationship
 			builder.HasOne(e => e.Character)
 				.WithMany(c => c.Achievements)

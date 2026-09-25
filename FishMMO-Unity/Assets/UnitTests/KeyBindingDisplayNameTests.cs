@@ -84,7 +84,12 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual("Pin Target", Caption("PinTarget"), "the pin key");
 			LogAssert.AreEqual("Close UI", Caption("CloseLastUI"), "an identifier is not a caption");
 			LogAssert.AreEqual("Mouse Mode", Caption("ToggleMouseMode"), "nor is a verb a menu entry");
-			LogAssert.AreEqual("Hotbar 1", Caption("Hotkey1"), "a numbered action still needs its noun");
+			/* "Hotbar Key 1", not "Hotbar 1": with several bars (issue #267) "Hotbar 2" is a BAR, and
+			 * the rows below this one are captioned "Hotbar 2 Modifier" — "Hotbar 1" for the first
+			 * key would read as the first bar. */
+			LogAssert.AreEqual("Hotbar Key 1", Caption("Hotkey1"), "a numbered action still needs its noun");
+			LogAssert.AreEqual("Hotbar 2 Modifier", Caption("Hotbar2Modifier"),
+				"actions created at run time for extra bars are captioned too, not shown by name");
 		}
 
 		/// <summary>

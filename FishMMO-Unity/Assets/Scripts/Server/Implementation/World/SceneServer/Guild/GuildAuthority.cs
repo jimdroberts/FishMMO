@@ -60,6 +60,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		public readonly IReadOnlyList<GuildRankData> Ladder;
 
+		/// <summary>Whether the standing could not be resolved because the database did not answer.</summary>
+		/// <remarks>
+		/// Refuses exactly as a non-member does — <see cref="IsMember"/> is false either way, so
+		/// nothing about the fail-closed behaviour depends on a caller reading this. It exists so
+		/// the refusal can be REPORTED honestly: a player whose request failed on a database
+		/// timeout used to be told their rank was too low, which sends them to argue with an
+		/// officer about a permission they actually hold.
+		/// </remarks>
+		public readonly bool LookupFailed;
+
 		/// <summary>
 		/// Creates a resolved standing.
 		/// </summary>
@@ -72,6 +82,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="membershipVersion">Membership row concurrency token.</param>
 		/// <param name="ladder">The guild's rank rows.</param>
 		public GuildAuthority(bool isMember, long guildID, long characterID, byte rankOrder, GuildPermissions permissions, byte leaderRankOrder, long membershipVersion, IReadOnlyList<GuildRankData> ladder)
+			: this(isMember, guildID, characterID, rankOrder, permissions, leaderRankOrder, membershipVersion, ladder, lookupFailed: false)
+		{
+		}
+
+		/// <summary>
+		/// Creates a standing, recording whether it is the product of a failed lookup.
+		/// </summary>
+		private GuildAuthority(bool isMember, long guildID, long characterID, byte rankOrder, GuildPermissions permissions, byte leaderRankOrder, long membershipVersion, IReadOnlyList<GuildRankData> ladder, bool lookupFailed)
 		{
 			IsMember = isMember;
 			GuildID = guildID;
@@ -81,6 +99,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			LeaderRankOrder = leaderRankOrder;
 			MembershipVersion = membershipVersion;
 			Ladder = ladder;
+			LookupFailed = lookupFailed;
 		}
 
 		/// <summary>
@@ -92,6 +111,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public static GuildAuthority None(long guildID, long characterID)
 		{
 			return new GuildAuthority(false, guildID, characterID, 0, GuildPermissions.None, 0, 0, System.Array.Empty<GuildRankData>());
+		}
+
+		/// <summary>
+		/// A standing that permits nothing because it could not be read.
+		/// </summary>
+		/// <param name="guildID">The guild that was asked about.</param>
+		/// <param name="characterID">The character that was asked about.</param>
+		/// <returns>A non-member standing with <see cref="LookupFailed"/> set.</returns>
+		public static GuildAuthority Unavailable(long guildID, long characterID)
+		{
+			return new GuildAuthority(false, guildID, characterID, 0, GuildPermissions.None, 0, 0, System.Array.Empty<GuildRankData>(), lookupFailed: true);
 		}
 
 		/// <summary>

@@ -51,6 +51,11 @@ namespace FishMMO.ControlPanel.Services
 			Invalid,
 			/// <summary>The two-factor step is locked; <see cref="Check.LockedUntilUtc"/> says until when.</summary>
 			Locked,
+			/// <summary>
+			/// The lockout could not be read, so no code was tried and nothing was counted. The caller
+			/// answers "try again shortly", never "invalid".
+			/// </summary>
+			Unavailable,
 		}
 
 		/// <summary>The result of <see cref="VerifyForSignInAsync"/>.</summary>
@@ -76,7 +81,19 @@ namespace FishMMO.ControlPanel.Services
 		{
 			DateTime now = DateTime.UtcNow;
 			var state = await accounts.FetchAuthLockoutAsync(username, cancellationToken);
-			if (state.IsSuccess && state.Data.IsLocked(AuthFailureKind.TwoFactor, now))
+			if (!state.IsSuccess)
+			{
+				/* FAIL CLOSED. The lock is the only thing between a guesser and a six-digit code space,
+				 * and this read failing used to mean "not locked": a code was tried against an account
+				 * that may well be locked, and — the failure counter living in the same database — the
+				 * wrong guess usually went uncounted too. So a lockout that cannot be read tries no code
+				 * at all. FetchAuthLockoutAsync answers success for an unknown account, so only a
+				 * database fault lands here. */
+				log.LogWarning("Could not read the two-factor lockout for '{User}'; no code was tried: [{Code}] {Message}",
+					username, state.ErrorCode, state.ErrorMessage);
+				return new Check(Verdict.Unavailable, null);
+			}
+			if (state.Data.IsLocked(AuthFailureKind.TwoFactor, now))
 			{
 				return new Check(Verdict.Locked, state.Data.TwoFactorLockedUntilUtc);
 			}

@@ -824,9 +824,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						isPrivate,
 						partyMemberIDs);
 
+					/* A real fault, never routine: losing the race to a party member is not a failure
+					 * here but a success carrying 0, handled below. */
 					if (!enqueueResult.IsSuccess)
 					{
-						await Log.Debug("InteractableSystem", "Failed to enqueue new pending scene load request: " + worldServerID + ":" + dungeonName);
+						await Log.Warning("InteractableSystem", $"Could not enqueue a new instance of '{dungeonName}' on world server {worldServerID} for character {characterID}: [{enqueueResult.ErrorCode}] {enqueueResult.ErrorMessage}");
 						TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
 						return;
 					}
@@ -842,31 +844,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						var raceResult = await sceneService.FetchCharacterInstancesAsync(
 							partyMemberIDs, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group, worldServerID, partyID);
 
-						bool raceHoldsOther = false;
-						if (raceResult.IsSuccess)
+						/* A re-search that failed is not one that found nothing. It used to fall
+						 * through to the "blocked by an unusable instance" refusal below, which
+						 * logged a misleading cause and told the player the destination was
+						 * unavailable when the database was. */
+						if (!raceResult.IsSuccess)
 						{
-							foreach (SceneData held in raceResult.Data)
+							await Log.Warning("InteractableSystem",
+								$"Could not re-read held instances for character {characterID} after losing the instance race for '{dungeonName}': [{raceResult.ErrorCode}] {raceResult.ErrorMessage}");
+							TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
+							return;
+						}
+
+						bool raceHoldsOther = false;
+						foreach (SceneData held in raceResult.Data)
+						{
+							if (!IsUsableInstance(held, worldServerID))
 							{
-								if (!IsUsableInstance(held, worldServerID))
-								{
-									continue;
-								}
-								if (!string.Equals(held.SceneName, dungeonName, StringComparison.Ordinal))
-								{
-									raceHoldsOther = true;
-									continue;
-								}
-								if (HasInstanceCapacity(held, capacity))
-								{
-									instanceID = held.ID;
-								}
-								else
-								{
-									destinationFull = true;
-								}
-								raceHoldsOther = false;
-								break;
+								continue;
 							}
+							if (!string.Equals(held.SceneName, dungeonName, StringComparison.Ordinal))
+							{
+								raceHoldsOther = true;
+								continue;
+							}
+							if (HasInstanceCapacity(held, capacity))
+							{
+								instanceID = held.ID;
+							}
+							else
+							{
+								destinationFull = true;
+							}
+							raceHoldsOther = false;
+							break;
 						}
 
 						if (destinationFull)
@@ -887,10 +898,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							/* Blocked by an instance the re-search could not find. The insert guard
 							 * and the search now agree on which rows count, so this needs the two
 							 * to have been looking at different rosters: a member who left the
-							 * party between the two calls, or a party fetch that failed outright.
-							 * Both are transient, and both make "try again" the honest answer —
-							 * creating a second instance to work around the block would produce
-							 * exactly the split party this guard exists to prevent. */
+							 * party between the two calls. That is transient, and makes "try again"
+							 * the honest answer — creating a second instance to work around the
+							 * block would produce exactly the split party this guard exists to
+							 * prevent. */
 							await Log.Warning("InteractableSystem",
 								$"Dungeon entry for character {characterID} was blocked by an existing but unusable instance of '{dungeonName}'; refusing.");
 							TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.DestinationUnavailable));
@@ -956,7 +967,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			await Log.Debug("InteractableSystem", $"Releasing party {formedPartyID}, formed for a dungeon that did not open.");
 
-			await partySystem.RemoveCharacterFromPartyAsync(characterID, formedPartyID, "the dungeon it was formed for did not open");
+			if (!await partySystem.RemoveCharacterFromPartyAsync(characterID, formedPartyID, "the dungeon it was formed for did not open"))
+			{
+				await Log.Warning("InteractableSystem",
+					$"Character {characterID} was left in party {formedPartyID}, formed for a dungeon that did not open: the party system did not remove them.");
+			}
 		}
 
 		/// <summary>
@@ -1074,6 +1089,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				DatabaseResult<SceneData> instanceResult = await sceneService.FetchAsync(instanceID);
 				if (!instanceResult.IsSuccess)
 				{
+					/* Answered like every other refusal on this path, so the reply still says nothing
+					 * about whether the ID exists — but a failure that is not simply "no such row" is
+					 * the database failing, and is logged rather than passed off as a probe. */
+					if (instanceResult.ErrorCode != DatabaseErrorCodes.NotFound)
+					{
+						await Log.Warning("InteractableSystem", $"Could not read instance {instanceID} for character {characterID}'s join: [{instanceResult.ErrorCode}] {instanceResult.ErrorMessage}");
+					}
 					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.InstanceUnavailable));
 					return;
 				}
@@ -1205,10 +1227,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyInParty));
 					return false;
 				case OwnPartyReleaseOutcome.RemovalRefused:
-					/* The membership row still stands, and the join that follows would persist over
-					 * it — moving the character out of a party that is being changed underneath us,
-					 * without telling anyone still in it. Reported as AlreadyInParty because that is
-					 * exactly what is still true. */
+					/* The membership row still stands — the party was being changed underneath us,
+					 * or the party system could not read or delete the row — and the join that
+					 * follows would persist over it, moving the character out of a party without
+					 * telling anyone still in it. Reported as AlreadyInParty because that is exactly
+					 * what is still true. */
 					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyInParty));
 					return false;
 				default:
@@ -1226,7 +1249,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Released,
 			/// <summary>The character shares a party with somebody else and was not moved.</summary>
 			WithOthers,
-			/// <summary>The party system declined the removal; the membership row still stands.</summary>
+			/// <summary>
+			/// The party system did not remove the membership — a change already in flight, or a
+			/// read or delete that failed; the membership row still stands.
+			/// </summary>
 			RemovalRefused,
 			/// <summary>The roster could not be read or the party system is unavailable.</summary>
 			Failed,
@@ -1276,7 +1302,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return OwnPartyReleaseOutcome.Failed;
 			}
 
-			// Alone in it, so leaving retires the party rather than breaking up a group.
+			/* Alone in it, so leaving retires the party rather than breaking up a group.
+			 *
+			 * True only when the membership row is gone (or there never was one). The controller is
+			 * cleared and the client told they left on that answer alone, so a removal that did not
+			 * land has to come back false — which the party system's contract now guarantees for a
+			 * read or delete that fails, not only for a change already in flight. */
 			if (!await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, reason))
 			{
 				return OwnPartyReleaseOutcome.RemovalRefused;
@@ -1573,6 +1604,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				if (!heldResult.IsSuccess)
 				{
+					await Log.Warning("InteractableSystem", $"Could not read the instances held by character {characterID}'s party to close one: [{heldResult.ErrorCode}] {heldResult.ErrorMessage}");
 					TryEnqueueMainThread(() => SendSystemMessage(conn, "The dungeon could not be closed. Please try again."));
 					return;
 				}
@@ -1673,11 +1705,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			Log.Debug("InteractableSystem", $"Releasing unused instance {createdInstanceID}: {reason}.");
 
-			if (!TryEnqueueAsyncWork(() => FailInstanceAsync(createdInstanceID), createdInstanceID))
-			{
-				Log.Warning("InteractableSystem",
-					$"Could not enqueue the release of unused instance {createdInstanceID}; the party is blocked from opening another until the stale-row sweep removes it.");
-			}
+			/* EnqueuePersistence, not TryEnqueueAsyncWork: the entry has already been given up on,
+			 * nobody is waiting on an answer, and a release the worker refused left the whole party
+			 * blocked from every dungeon until the stale-row sweep got to the row. */
+			EnqueuePersistence(() => FailInstanceAsync(createdInstanceID), createdInstanceID);
 		}
 
 		/// <summary>
@@ -1794,7 +1825,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			var membersResult = await charPartyService.FetchManyAsync(partyID);
 			if (!membersResult.IsSuccess || membersResult.Data == null)
 			{
-				await Log.Warning("InteractableSystem", $"Could not read the roster of party {partyID} for a dungeon request.");
+				await Log.Warning("InteractableSystem", $"Could not read the roster of party {partyID} for a finder request: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
 				return null;
 			}
 

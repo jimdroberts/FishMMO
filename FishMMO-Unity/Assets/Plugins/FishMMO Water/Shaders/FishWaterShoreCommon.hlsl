@@ -41,44 +41,28 @@ float2 FishWaterShoreSample(float2 xz)
 // the slope from the ground itself, follows the terrain's contours as standing water does, and
 // follows the tide for nothing, because it is measured from the sea as it stands now.
 
-float _FishWaterSwashPeriod;     // seconds between arriving waves
 float _FishWaterSwashSkew;       // 0 symmetric, 1 a fast rush and a long drain
-float _FishWaterShoreTime;
-float4 _FishWaterSwashSea;       // x significant wave height (m), y deep-water wavelength at the peak period (m)
 float4 _FishWaterWind;           // xy the direction the wind and the sea run toward
 
-// The sea's foam texture, published by WaterSurface: its G channel is a smooth, tiling field.
-TEXTURE2D(_FishWaterFoamTexture);
-SAMPLER(sampler_FishWaterFoamTexture);
+// The clock, the period, the sea and the phase along the shore, shared with the surf train so the
+// swash and the waves that make it are one motion.
+#include "FishWaterSurf.hlsl"
 
 /// <summary>
-/// How the swash at a point differs from the swash along the rest of the shore: x a phase offset in
-/// cycles, y a share of the beach's run-up.
+/// The direction to the nearest shore from the field's distance channel, and how sure it is — worked
+/// out exactly as the sea does it (FishWaterShoreFacing), so the swash and the surf agree about which
+/// shores are sheltered.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <b>Every beach ran up in lockstep.</b> With the swash a function of height alone, every point of
-/// every shore at the same height did the same thing at the same moment — the whole coastline
-/// breathing in and out as one line. A real swash is nothing like that. Swell arrives at an angle,
-/// so each wave reaches one end of a beach before the other and its run-up zips along the sand;
-/// wave groups hit one stretch while the next is draining; and a beach carves itself into cusps, a
-/// few tens of metres apart, where the water runs up the horns and not the bays.
-/// </para>
-/// <para>
-/// So the phase leans along the direction the sea is running — about seventy metres of shore per
-/// wave, a fast oblique zip — and wanders over a smooth field ninety metres across, and the run-up
-/// swells and shrinks over another thirty-five across. All three from the smooth channel of the
-/// foam texture, which already tiles without a seam.
-/// </para>
-/// </remarks>
-float2 FishWaterAlongShore(float2 xz)
+float FishWaterShoreFacingField(float2 xz, float texelMetres, out float2 towardShore)
 {
-	float2 wind = _FishWaterWind.xy;
-	float2 direction = dot(wind, wind) > 1e-4 ? normalize(wind) : float2(0.0, 1.0);
-	float wander = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamTexture, sampler_FishWaterFoamTexture, xz / 90.0, 0).g;
-	float cusps = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamTexture, sampler_FishWaterFoamTexture, xz / 35.0 + 0.37, 0).g;
-	float phase = dot(xz, direction) / 70.0 + wander * 1.6;
-	return float2(phase, 0.7 + 0.6 * cusps);
+	float step = max(1.0, texelMetres);
+	float east = FishWaterShoreSample(xz + float2(step, 0.0)).y - FishWaterShoreSample(xz - float2(step, 0.0)).y;
+	float north = FishWaterShoreSample(xz + float2(0.0, step)).y - FishWaterShoreSample(xz - float2(0.0, step)).y;
+	float2 gradient = -float2(east, north) / (2.0 * step);
+	float length2 = dot(gradient, gradient);
+	float slope = sqrt(max(length2, 1e-16));
+	towardShore = length2 > 1e-8 ? gradient / slope : float2(0.0, 0.0);
+	return length2 > 1e-8 ? saturate((slope - 0.35) / 0.4) : 0.0;
 }
 
 /// <summary>
@@ -103,6 +87,17 @@ float FishWaterRunUp(float slope)
 }
 
 /// <summary>
+/// The run-up on this shore: a beach of this slope under the open sea, scaled by how much of that
+/// sea reaches it — a lee shore gets a quarter of it, as its surf does.
+/// </summary>
+float FishWaterRunUpHere(float slope, float2 xz, float texelMetres)
+{
+	float2 towardShore;
+	float confidence = FishWaterShoreFacingField(xz, texelMetres, towardShore);
+	return FishWaterRunUp(slope) * FishWaterShoreExposure(towardShore, confidence);
+}
+
+/// <summary>
 /// Where the swash front stands right now, in metres above the still water.
 /// </summary>
 /// <remarks>
@@ -121,8 +116,7 @@ float FishWaterRunUp(float slope)
 /// <param name="stretch">Which stretch of shore this is, so the waves of a group differ along it.</param>
 float FishWaterSwashFront(float runUp, float along, float stretch)
 {
-	float period = max(0.5, _FishWaterSwashPeriod);
-	float cycles = _FishWaterShoreTime / period + along;
+	float cycles = _FishWaterShoreTime / max(0.5, _FishWaterSwashPeriod) + along;
 	float t = frac(cycles);
 	/* This wave's share of the full run-up: two thirds to four thirds, fixed for the whole wave —
 	 * and different on different stretches of shore, so one wave of a group floods this stretch

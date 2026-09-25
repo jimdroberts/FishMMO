@@ -1017,88 +1017,119 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 									// Encrypt for DB at-rest storage.
 									string encryptedTotpSecret = CryptoHelper.TwoFactor.EncryptTotpSecret(totpMasterKeySnapshot, username, totpSecret);
-										DatabaseResult totpSecretResult = await accountService.PersistTotpSecretAsync(username, encryptedTotpSecret);
-										if (!totpSecretResult.IsSuccess)
-										{
-											await Log.Warning("AccountCreationSystem", $"PersistTotpSecretAsync DB error for user '{username}': {totpSecretResult.ErrorCode} - {totpSecretResult.ErrorMessage}");
-											// Do NOT enable TOTP when the secret failed to persist.
-											// An account with totp_enabled=true but no valid secret is
-											// permanently locked out — VerifyTotpCodeCoreAsync checks
-											// IsNullOrEmpty(TotpSecret) and returns false.
-										}
-										else
-										{
-											DatabaseResult totpEnabledResult = await accountService.PersistTotpEnabledAsync(username, true);
-											if (!totpEnabledResult.IsSuccess)
-											{
-												await Log.Warning("AccountCreationSystem", $"PersistTotpEnabledAsync DB error for user '{username}': {totpEnabledResult.ErrorCode} - {totpEnabledResult.ErrorMessage}");
-											}
-										}
-									// Generate and hash recovery codes (best-effort).
-									// TOTP setup proceeds even if recovery code persistence fails —
-									// the user can still use their authenticator app without recovery.
-									string[] recoveryCodes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
-									var codeHashes = new List<string>(recoveryCodes.Length);
-									foreach (string code in recoveryCodes)
+									bool totpEnabled = false;
+									DatabaseResult totpSecretResult = await accountService.PersistTotpSecretAsync(username, encryptedTotpSecret);
+									if (!totpSecretResult.IsSuccess)
 									{
-										codeHashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
-									}
-									if (Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var recoveryCodeService))
-									{
-											DatabaseResult recoveryResult = await recoveryCodeService.PersistManyAsync(username, codeHashes);
-											if (!recoveryResult.IsSuccess)
-											{
-												await Log.Warning("AccountCreationSystem", $"PersistManyAsync recovery codes DB error for user '{username}': {recoveryResult.ErrorCode} - {recoveryResult.ErrorMessage}");
-											}
+										await Log.Error("AccountCreationSystem", $"PersistTotpSecretAsync DB error for user '{username}': [{totpSecretResult.ErrorCode}] {totpSecretResult.ErrorMessage}. Account created without 2FA.");
+										// Do NOT enable TOTP when the secret failed to persist.
+										// An account with totp_enabled=true but no valid secret is
+										// permanently locked out — VerifyTotpCodeCoreAsync checks
+										// IsNullOrEmpty(TotpSecret) and returns false.
 									}
 									else
 									{
-										await Log.Warning("AccountCreationSystem", $"ITwoFactorRecoveryCodeService not registered — recovery codes for '{username}' not persisted.");
-									}
-									// Build otpauth URI for the client's authenticator app.
-									// The TwoFactorSetupBroadcast is ALWAYS sent when TOTP is
-									// configured, regardless of recovery code persistence.
-									string otpauthUri = CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username);
-
-									// Encrypt setup data with the session key for secure transport to client.
-									byte[] otpauthUriBytes = Encoding.UTF8.GetBytes(otpauthUri);
-									byte[] recoveryCodesBytes = Encoding.UTF8.GetBytes(string.Join("\n", recoveryCodes));
-
-									uint seq1 = request.EncryptionData.NextSendSequence();
-									byte[] nonce1 = request.EncryptionData.BuildSendNonce(seq1);
-									byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq1);
-									byte[] encOtpauthUri = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce1, otpauthUriBytes, aad1);
-
-									uint seq2 = request.EncryptionData.NextSendSequence();
-									byte[] nonce2 = request.EncryptionData.BuildSendNonce(seq2);
-									byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq2);
-									byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
-
-									// Zeroize plaintext secrets.
-									CryptographicOperationsCompat.ZeroMemory(totpSecret);
-									CryptographicOperationsCompat.ZeroMemory(otpauthUriBytes);
-									CryptographicOperationsCompat.ZeroMemory(recoveryCodesBytes);
-
-									// Capture for main-thread dispatch.
-									byte[] capturedEncUri = encOtpauthUri;
-									byte[] capturedEncCodes = encRecoveryCodes;
-									uint capturedSetupSeq = seq2;
-									string capturedUsername = username;
-									NetworkConnection setupConn = request.Connection;
-
-									TryEnqueueMainThread(() =>
-									{
-										if (setupConn != null && setupConn.IsActive)
+										DatabaseResult totpEnabledResult = await accountService.PersistTotpEnabledAsync(username, true);
+										if (!totpEnabledResult.IsSuccess)
 										{
-											Server.NetworkWrapper.Broadcast(setupConn,
-												new TwoFactorSetupBroadcast()
-												{
-													OtpauthUri = capturedEncUri,
-													RecoveryCodes = capturedEncCodes,
-													Seq = capturedSetupSeq,
-												}, false, Channel.Reliable);
+											await Log.Error("AccountCreationSystem", $"PersistTotpEnabledAsync DB error for user '{username}': [{totpEnabledResult.ErrorCode}] {totpEnabledResult.ErrorMessage}. Account created without 2FA.");
 										}
-									});
+										else
+										{
+											totpEnabled = true;
+										}
+									}
+
+									/* Show the player only what the database will honour.
+									 *
+									 * The setup broadcast used to go out whatever the writes above did, so a
+									 * failed secret or enable write still walked the player through scanning
+									 * a QR code: they left believing the mandatory second factor was on, and
+									 * sign-in — which asks for a code only when totp_enabled is set — never
+									 * asked. With nothing enabled there is nothing to set up, so nothing is
+									 * sent: the account is in the same state as the catch below describes,
+									 * and the client's reply timeout already treats a missing setup message
+									 * as "skip this step" and carries on to verification. */
+									if (!totpEnabled)
+									{
+										CryptographicOperationsCompat.ZeroMemory(totpSecret);
+									}
+									else
+									{
+										// Generate and hash recovery codes (best-effort).
+										// TOTP setup proceeds even if recovery code persistence fails —
+										// the user can still use their authenticator app without recovery.
+										// What it must not do is hand over codes that were never stored:
+										// codes the player writes down as their fallback, and that then
+										// fail on the day the authenticator is lost, are worse than none.
+										// So an unstored set is withheld and the setup carries an empty one.
+										string[] recoveryCodes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
+										var codeHashes = new List<string>(recoveryCodes.Length);
+										foreach (string code in recoveryCodes)
+										{
+											codeHashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
+										}
+										bool recoveryCodesStored = false;
+										if (Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var recoveryCodeService))
+										{
+											DatabaseResult recoveryResult = await recoveryCodeService.PersistManyAsync(username, codeHashes);
+											if (!recoveryResult.IsSuccess)
+											{
+												await Log.Error("AccountCreationSystem", $"PersistManyAsync recovery codes DB error for user '{username}': [{recoveryResult.ErrorCode}] {recoveryResult.ErrorMessage}. 2FA is enabled without recovery codes; none were sent.");
+											}
+											else
+											{
+												recoveryCodesStored = true;
+											}
+										}
+										else
+										{
+											await Log.Error("AccountCreationSystem", $"ITwoFactorRecoveryCodeService not registered — recovery codes for '{username}' not persisted; none were sent.");
+										}
+										// Build otpauth URI for the client's authenticator app.
+										// Sent whenever TOTP was enabled, with or without recovery codes.
+										string otpauthUri = CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username);
+
+										// Encrypt setup data with the session key for secure transport to client.
+										byte[] otpauthUriBytes = Encoding.UTF8.GetBytes(otpauthUri);
+										byte[] recoveryCodesBytes = Encoding.UTF8.GetBytes(recoveryCodesStored ? string.Join("\n", recoveryCodes) : string.Empty);
+
+										uint seq1 = request.EncryptionData.NextSendSequence();
+										byte[] nonce1 = request.EncryptionData.BuildSendNonce(seq1);
+										byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq1);
+										byte[] encOtpauthUri = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce1, otpauthUriBytes, aad1);
+
+										uint seq2 = request.EncryptionData.NextSendSequence();
+										byte[] nonce2 = request.EncryptionData.BuildSendNonce(seq2);
+										byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq2);
+										byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
+
+										// Zeroize plaintext secrets.
+										CryptographicOperationsCompat.ZeroMemory(totpSecret);
+										CryptographicOperationsCompat.ZeroMemory(otpauthUriBytes);
+										CryptographicOperationsCompat.ZeroMemory(recoveryCodesBytes);
+
+										// Capture for main-thread dispatch.
+										byte[] capturedEncUri = encOtpauthUri;
+										byte[] capturedEncCodes = encRecoveryCodes;
+										uint capturedSetupSeq = seq2;
+										string capturedUsername = username;
+										NetworkConnection setupConn = request.Connection;
+
+										TryEnqueueMainThread(() =>
+										{
+											if (setupConn != null && setupConn.IsActive)
+											{
+												Server.NetworkWrapper.Broadcast(setupConn,
+													new TwoFactorSetupBroadcast()
+													{
+														OtpauthUri = capturedEncUri,
+														RecoveryCodes = capturedEncCodes,
+														Seq = capturedSetupSeq,
+													}, false, Channel.Reliable);
+											}
+										});
+									}
 								}
 								catch (Exception tfaEx)
 								{
@@ -1130,6 +1161,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 								DatabaseErrorCodes.ValidationError => ClientAuthenticationResult.InvalidUsernameOrPassword,
 								_ => ClientAuthenticationResult.ServerBusy,
 							};
+							if (result == ClientAuthenticationResult.ServerBusy)
+							{
+								// The collapsed answers are the client's doing and stay quiet; a fault
+								// is the operator's, and without this line it left no trace at all.
+								await Log.Warning("AccountCreationSystem", $"PersistAsync DB error for user '{username}': [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
+							}
 
 							// Fail-closed: when the IP failure tracker is at capacity we cannot
 							// safely record another failure, so disconnect the offender immediately
@@ -1259,13 +1296,28 @@ namespace FishMMO.Server.Implementation.LoginServer
 			try
 			{
 				var result = await emailQueueService.DequeueNextAsync(claimedBy);
-				if (!result.IsSuccess) return;
+				if (!result.IsSuccess)
+				{
+					// NotFound is an empty queue, the ordinary answer on most sweeps.
+					if (result.ErrorCode != DatabaseErrorCodes.NotFound)
+					{
+						await Log.Warning("AccountCreationSystem", $"Email queue dequeue failed: [{result.ErrorCode}] {result.ErrorMessage}");
+					}
+					return;
+				}
 
 				var email = result.Data;
 				bool sent = await smtpService.SendEmailAsync(email.RecipientEmail, email.Subject, email.Body);
 				if (sent)
 				{
-					await emailQueueService.MarkSentAsync(email.ID);
+					/* The message is out either way; this only stops it looking pending. A failure
+					 * leaves the row claimed and unsent, which no sweep picks up again, so it is
+					 * not re-sent — but it is worth a line, because it still reads as undelivered. */
+					DatabaseResult sentResult = await emailQueueService.MarkSentAsync(email.ID);
+					if (!sentResult.IsSuccess)
+					{
+						await Log.Warning("AccountCreationSystem", $"Failed to mark email {email.ID} sent for '{email.RecipientUsername}': [{sentResult.ErrorCode}] {sentResult.ErrorMessage}");
+					}
 
 					// Mark the account so login is blocked until the user verifies.
 					// Before this point (VerificationEmailSentAt is null), unverified
@@ -1284,7 +1336,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 				else
 				{
-					await emailQueueService.MarkFailedAsync(email.ID, "SMTP send returned false.");
+					/* MarkFailedAsync is what releases the claim while attempts remain, and
+					 * DequeueNextAsync only ever selects unclaimed rows — so if this write fails, the
+					 * message is never retried by any login server. Nothing can fix that from here,
+					 * but it must not be silent: it is a player's mail — often a verification
+					 * code — gone for good. */
+					DatabaseResult failedResult = await emailQueueService.MarkFailedAsync(email.ID, "SMTP send returned false.");
+					if (!failedResult.IsSuccess)
+					{
+						await Log.Error("AccountCreationSystem", $"Failed to release email {email.ID} for '{email.RecipientUsername}' after an SMTP failure: [{failedResult.ErrorCode}] {failedResult.ErrorMessage}. It stays claimed and will not be retried.");
+					}
 				}
 			}
 			catch (Exception ex)
@@ -1792,6 +1853,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							result = ClientAuthenticationResult.AccountVerified;
 						}
+						else if (dbResult.ErrorCode != DatabaseErrorCodes.ValidationError)
+						{
+							/* Every way of the code being wrong — wrong, expired, unknown account, already
+							 * verified — is the one ValidationError, so anything else is the database failing
+							 * to answer. That used to be counted as a wrong code: the player was told their
+							 * correct code was wrong, and it went towards the support ticket opened after
+							 * three, the per-IP block and the per-username lockout. ServerBusy says only that
+							 * the server could not check, which is the same for every account, so it tells
+							 * an observer nothing the wrong-code answer would not; and it is not the
+							 * InvalidUsernameOrPassword the failure tracking below counts. */
+							await Log.Warning("AccountCreationSystem", $"PersistVerifiedByCodeAsync DB error for user '{username}': [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
+							result = ClientAuthenticationResult.ServerBusy;
+						}
 						else
 						{
 							result = ClientAuthenticationResult.InvalidUsernameOrPassword;
@@ -2080,6 +2154,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>Generates, stores and queues the email verification code.</summary>
 		private async Task SendEmailVerificationCodeAsync(IAccountService accountService, string username, string email)
 		{
+			/* No queue, no code: storing one that nothing will deliver only starts its 24 hours, and
+			 * sign-in will not issue another until they are up. Left missing instead, the first
+			 * correct sign-in once a queue exists sends one. */
+			if (!Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+			{
+				await Log.Warning("AccountCreationSystem", $"IEmailQueueService not registered — verification email for '{username}' not enqueued.");
+				return;
+			}
+
 			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
 			// 24 hour TTL: long enough for users to act, short enough that an
 			// exposed code cannot be re-used indefinitely.
@@ -2087,33 +2170,32 @@ namespace FishMMO.Server.Implementation.LoginServer
 			DatabaseResult verifyResult = await accountService.PersistVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
 			if (!verifyResult.IsSuccess)
 			{
-				await Log.Warning("AccountCreationSystem", $"PersistVerifyCodeAsync DB error for user '{username}': {verifyResult.ErrorCode} - {verifyResult.ErrorMessage}");
+				/* Stop here, as the SMS twin does. Mailing on regardless sent the player a code the
+				 * database never held: every attempt to enter it was a wrong code, counted towards
+				 * the support ticket opened after three. With no code stored, sign-in treats one as
+				 * due and sends a real one. */
+				await Log.Warning("AccountCreationSystem", $"PersistVerifyCodeAsync DB error for user '{username}': [{verifyResult.ErrorCode}] {verifyResult.ErrorMessage}. No verification email sent.");
+				return;
 			}
 
 			// Enqueue verification email for SMTP delivery.
 			// The background processor will pick this up and send via the configured SMTP server.
-			if (Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+			// Prevent duplicate emails: skip if a pending email already exists for this user.
+			var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
+			if (dupCheck.IsSuccess && dupCheck.Data)
 			{
-				// Prevent duplicate emails: skip if a pending email already exists for this user.
-				var dupCheck = await emailQueueService.HasPendingForUserAsync(username, EmailKind.Verification);
-				if (dupCheck.IsSuccess && dupCheck.Data)
-				{
-					await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification email for '{username}' — a pending email already exists.");
-				}
-				else
-				{
-					string emailSubject = "FishMMO - Verify Your Account";
-					string emailBody = BuildVerificationEmailBody(username, verifyCode);
-					DatabaseResult emailResult = await emailQueueService.EnqueueAsync(email, username, emailSubject, emailBody);
-					if (!emailResult.IsSuccess)
-					{
-						await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification email for '{username}': {emailResult.ErrorCode} - {emailResult.ErrorMessage}");
-					}
-				}
+				await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification email for '{username}' — a pending email already exists.");
 			}
 			else
 			{
-				await Log.Warning("AccountCreationSystem", $"IEmailQueueService not registered — verification email for '{username}' not enqueued.");
+				string emailSubject = "FishMMO - Verify Your Account";
+				string emailBody = BuildVerificationEmailBody(username, verifyCode);
+				DatabaseResult emailResult = await emailQueueService.EnqueueAsync(email, username, emailSubject, emailBody);
+				if (!emailResult.IsSuccess)
+				{
+					await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification email for '{username}': [{emailResult.ErrorCode}] {emailResult.ErrorMessage}");
+					await AccountVerificationPolicy.ExpireUndeliveredCodeAsync(accountService, username, verifyCode, AccountVerificationChannels.Email, "AccountCreationSystem");
+				}
 			}
 		}
 
@@ -2129,18 +2211,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			// No queue, no code — for the reason given in SendEmailVerificationCodeAsync.
+			if (!Server.Database.ServiceRegistry.TryGet<ISmsQueueService>(out var smsQueueService))
+			{
+				await Log.Warning("AccountCreationSystem", $"ISmsQueueService not registered — verification SMS for '{username}' not enqueued.");
+				return;
+			}
+
 			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
 			DateTime verifyExpiresUtc = DateTime.UtcNow.AddHours(24);
 			DatabaseResult codeResult = await accountService.PersistPhoneVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
 			if (!codeResult.IsSuccess)
 			{
-				await Log.Error("AccountCreationSystem", $"PersistPhoneVerifyCodeAsync DB error for user '{username}': {codeResult.ErrorCode} - {codeResult.ErrorMessage}");
-				return;
-			}
-
-			if (!Server.Database.ServiceRegistry.TryGet<ISmsQueueService>(out var smsQueueService))
-			{
-				await Log.Warning("AccountCreationSystem", $"ISmsQueueService not registered — verification SMS for '{username}' not enqueued.");
+				await Log.Error("AccountCreationSystem", $"PersistPhoneVerifyCodeAsync DB error for user '{username}': [{codeResult.ErrorCode}] {codeResult.ErrorMessage}");
 				return;
 			}
 
@@ -2154,7 +2237,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			DatabaseResult smsResult = await smsQueueService.EnqueueAsync(phone, username, BuildVerificationSmsBody(verifyCode), SmsKind.Verification);
 			if (!smsResult.IsSuccess)
 			{
-				await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification SMS for '{username}': {smsResult.ErrorCode} - {smsResult.ErrorMessage}");
+				await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification SMS for '{username}': [{smsResult.ErrorCode}] {smsResult.ErrorMessage}");
+				await AccountVerificationPolicy.ExpireUndeliveredCodeAsync(accountService, username, verifyCode, AccountVerificationChannels.Sms, "AccountCreationSystem");
 			}
 		}
 

@@ -165,8 +165,8 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That maintenance window could not be started." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That maintenance window could not be started.");
 			}
 
 			var operation = result.Data;
@@ -224,10 +224,10 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await maintenance.CancelAsync(id, User.Identity?.Name ?? "", request.Reason, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				return result.ErrorCode == DatabaseErrorCodes.NotFound
 					? NotFound(new { error = $"There is no maintenance window {id}." })
-					: BadRequest(new { error = result.ErrorMessage ?? "That maintenance window could not be cancelled." });
+					: DatabaseReplies.Failure(this, result, log, "That maintenance window could not be cancelled.");
 			}
 
 			var operation = result.Data;

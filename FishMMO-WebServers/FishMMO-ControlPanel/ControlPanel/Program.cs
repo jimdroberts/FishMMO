@@ -85,6 +85,10 @@ builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<IBetaCodeService, BetaCodeService>();
 builder.Services.AddScoped<ITwoFactorResetRequestService, TwoFactorResetRequestService>();
 builder.Services.AddScoped<ISmsQueueService, SmsQueueService>();
+/* Transactions spanning more than one service call. Two-factor enrolment and the self-service reset
+ * write a secret, recovery codes and a request's status together; apart, a failure part-way left an
+ * account with codes that did not match its authenticator, or a reset spent for nothing. */
+builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkService>();
 /* Advances maintenance windows without a viewer. A window's actuation is finished the moment
  * it starts — the deadline is on each server's own row — but the retry of any write the start
  * did not manage, and every status after it, happen only when something reads. */

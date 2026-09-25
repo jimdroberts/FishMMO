@@ -317,7 +317,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<CharacterData?> found = await characterService.FetchAsync(name, null);
 				if (!found.IsSuccess)
 				{
-					return new[] { $"Could not look '{OperatorCommandParsing.Truncate(name, 32)}' up: {found.ErrorMessage}" };
+					return new[] { $"Could not look '{OperatorCommandParsing.Truncate(name, 32)}' up: [{found.ErrorCode}] {found.ErrorMessage}" };
 				}
 				if (found.Data == null)
 				{
@@ -336,6 +336,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					lines.Add(DescribeStoredMute("Character", mute.Data.Character));
 					lines.Add(DescribeStoredMute("Account", mute.Data.Account));
+				}
+				else
+				{
+					/* Said, not skipped. Two missing lines read as "no mute to report", which is the
+					 * one conclusion a failed read cannot support. */
+					lines.Add($"Mute state could not be read: [{mute.ErrorCode}] {mute.ErrorMessage}");
 				}
 				return lines;
 			});
@@ -362,7 +368,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await characterService.FetchAdminByAccountAsync(account, includeDeleted: false);
 				if (!result.IsSuccess)
 				{
-					return new[] { $"Could not read '{OperatorCommandParsing.Truncate(account, 32)}': {result.ErrorMessage}" };
+					return new[] { $"Could not read '{OperatorCommandParsing.Truncate(account, 32)}': [{result.ErrorCode}] {result.ErrorMessage}" };
 				}
 
 				IReadOnlyList<CharacterAdminData> rows = result.Data ?? Array.Empty<CharacterAdminData>();
@@ -404,7 +410,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<AccountAdminData> result = await accountService.FetchAdminAsync(account);
 				if (!result.IsSuccess || result.Data == null)
 				{
-					return new[] { $"No account named '{OperatorCommandParsing.Truncate(account, 32)}'." };
+					return new[] { DescribeLookupFailure(result, $"No account named '{OperatorCommandParsing.Truncate(account, 32)}'.", $"the account '{OperatorCommandParsing.Truncate(account, 32)}'") };
 				}
 
 				AccountAdminData data = result.Data;

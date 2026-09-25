@@ -50,30 +50,73 @@ float4 _FishOcclusionRect;
 float4 _FishOcclusionRange;
 TEXTURE2D(_FishOcclusionTex);
 SAMPLER(sampler_FishOcclusionTex);
+// The open water: x its still level (world metres, tide included), y 1 when there is any, z the
+// significant height of its waves (m). The map is cast at solid ground and a ray goes straight
+// through water, so the sea is laid over it here: wherever the ground is lower, the water is the
+// highest surface, and rain, snow and splashes stop on it instead of on the bed underneath.
+float4 _FishOcclusionWater;
 
-// The highest surface above a point, in world metres. Heights are stored in 16 bits across R and G.
-float FishSkyOcclusionHeight(float3 worldPos)
+// One texel of the map, decoded. Heights are 16 bits split across R and G, which the sampler cannot
+// filter: blending the two bytes separately garbles every value that carries from one to the other.
+float FishSkyOcclusionTexel(float2 texel, float resolution)
 {
-    float2 uv = (worldPos.xz - _FishOcclusionRect.xy) / max(_FishOcclusionRect.zw, 1e-3);
-    float4 texel = SAMPLE_TEXTURE2D_LOD(_FishOcclusionTex, sampler_FishOcclusionTex, uv, 0);
-    float encoded = texel.r * (255.0 / 256.0) + texel.g * (1.0 / 256.0);
+    float4 t = SAMPLE_TEXTURE2D_LOD(_FishOcclusionTex, sampler_FishOcclusionTex, (texel + 0.5) / resolution, 0);
+    float encoded = t.r * (255.0 / 256.0) + t.g * (1.0 / 256.0);
     return _FishOcclusionRange.x + encoded * _FishOcclusionRange.y;
 }
 
-// 1 where the sky is open above a point, 0 under a roof. Outside the map, or without one, open.
+// The highest SOLID surface above a point, in world metres: the map alone, BILINEAR.
+//
+// Read as one texel, the answer was a flat step per texel — and on a slope the ground under a texel
+// falls away from its one recorded height toward the downhill edge and jumps back at the next. Every
+// test against it (is this surface under something? how much rain reaches it?) came out as a
+// sawtooth ramp in squares, and the puddle threshold magnified it into the checkerboard of wet and
+// dry squares on sloping terrain. Blended between the four texel centres the rays were cast at, the
+// map follows the slope, and ground reads as level with itself.
+float FishSkyOcclusionGround(float3 worldPos)
+{
+    float texelMetres = max(1e-3, _FishOcclusionRange.w);
+    float resolution = max(1.0, _FishOcclusionRect.z / texelMetres);
+    float2 st = (worldPos.xz - _FishOcclusionRect.xy) / texelMetres - 0.5;
+    float2 i = floor(st);
+    float2 f = st - i;
+    float a = FishSkyOcclusionTexel(i, resolution);
+    float b = FishSkyOcclusionTexel(i + float2(1.0, 0.0), resolution);
+    float c = FishSkyOcclusionTexel(i + float2(0.0, 1.0), resolution);
+    float d = FishSkyOcclusionTexel(i + float2(1.0, 1.0), resolution);
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+// The highest surface above a point, water included: where anything falling from the sky ends up.
+float FishSkyOcclusionHeight(float3 worldPos)
+{
+    float top = FishSkyOcclusionGround(worldPos);
+    return _FishOcclusionWater.y > 0.5 ? max(top, _FishOcclusionWater.x) : top;
+}
+
+// 1 above the open water, 0 a quarter of a metre under it; 1 everywhere when there is no water.
+// Independent of the map, so it holds past the map's edge too: the sea bed a hundred metres off
+// gathers no snow either.
+float FishWaterOpen(float3 worldPos)
+{
+    return _FishOcclusionWater.y > 0.5 ? saturate((worldPos.y - _FishOcclusionWater.x) * 4.0 + 1.0) : 1.0;
+}
+
+// 1 where the sky is open above a point, 0 under a roof or under the water. Outside the map, or
+// without one, open to the sky — but never under the sea.
 float FishSkyOpen(float3 worldPos)
 {
-    if (_FishOcclusionRange.z < 0.5)
+    float open = 1.0;
+    if (_FishOcclusionRange.z > 0.5)
     {
-        return 1.0;
+        float2 uv = (worldPos.xz - _FishOcclusionRect.xy) / max(_FishOcclusionRect.zw, 1e-3);
+        if (all(uv >= 0.0) && all(uv <= 1.0))
+        {
+            float top = FishSkyOcclusionGround(worldPos);
+            open = saturate((worldPos.y - top) * 2.0 + 1.0);
+        }
     }
-    float2 uv = (worldPos.xz - _FishOcclusionRect.xy) / max(_FishOcclusionRect.zw, 1e-3);
-    if (any(uv < 0.0) || any(uv > 1.0))
-    {
-        return 1.0;
-    }
-    float top = FishSkyOcclusionHeight(worldPos);
-    return saturate((worldPos.y - top) * 2.0 + 1.0);
+    return min(open, FishWaterOpen(worldPos));
 }
 
 // How much cloud stands over a point, 0 clear sky to 1 solid: the sky's own overhead map, a window

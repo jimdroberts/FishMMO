@@ -717,7 +717,21 @@ namespace FishMMO.Server.Implementation
 							 * an observer could exploit this — keep Debug disabled in production. */
 							// Treat "not found" as a non-event: an attacker could otherwise probe
 							// for valid token hashes by observing log differences.
-							await Log.Debug(LogPrefix, $"RevokeByHashAsync returned {r.ErrorCode} for client-initiated revoke.");
+							//
+							// That reasoning covers NotFound (and ValidationError, a malformed
+							// hash) only. A timeout or dropped connection happens whatever the
+							// token was, so its log line says nothing about the token — and it
+							// is the case that matters: the logout's revocation did not land and
+							// the token stays usable until it expires. It is logged as the fault
+							// it is.
+							if (r.ErrorCode == FishMMO.Database.DatabaseErrorCodes.NotFound || r.ErrorCode == FishMMO.Database.DatabaseErrorCodes.ValidationError)
+							{
+								await Log.Debug(LogPrefix, $"RevokeByHashAsync returned {r.ErrorCode} for client-initiated revoke.");
+							}
+							else
+							{
+								await Log.Warning(LogPrefix, $"RevokeByHashAsync DB error for client-initiated revoke: [{r.ErrorCode}] {r.ErrorMessage}. The token remains valid until it expires.");
+							}
 						}
 					}
 					catch (Exception ex)

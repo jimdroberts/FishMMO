@@ -387,7 +387,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 				// --- Check character count limit ---
 
 				DatabaseResult<int> countResult = await characterService.CountAsync(accountName);
-				if (!countResult.IsSuccess || countResult.Data >= MaxCharacters)
+				if (!countResult.IsSuccess)
+				{
+					/* Still a refusal — a count that could not be read cannot vouch for the cap —
+					 * but not "too many characters", which sent the player off to delete one for
+					 * what was a database fault. */
+					await Log.Error("CharacterCreateSystem", $"Failed to count characters for account '{accountName}': [{countResult.ErrorCode}] {countResult.ErrorMessage}");
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+							{
+								Result = CharacterCreateResult.Error,
+							}, true, Channel.Reliable);
+						}
+					});
+					return;
+				}
+				if (countResult.Data >= MaxCharacters)
 				{
 					TryEnqueueMainThread(() =>
 					{
@@ -475,6 +493,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 							DatabaseErrorCodes.ValidationError => CharacterCreateResult.InvalidCharacterName,
 							_ => CharacterCreateResult.Error,
 						};
+						if (clientResult == CharacterCreateResult.Error)
+						{
+							// The name answers are the player's to fix; anything else is a fault
+							// the operator has to see, including a success that minted no ID.
+							await Log.Error("CharacterCreateSystem", $"Failed to create character '{msg.CharacterName}' for account '{accountName}': [{createResult.ErrorCode}] {createResult.ErrorMessage} (ID={createResult.Data})");
+						}
 						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)

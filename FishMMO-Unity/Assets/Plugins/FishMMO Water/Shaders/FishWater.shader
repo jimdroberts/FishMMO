@@ -48,7 +48,7 @@ Shader "FishMMO/Water/Ocean"
         [Header(Shore waves)]
         _ShoreWaveLength ("Surf wavelength (m)", Range(4, 160)) = 40
         _ShoreWaveHeight ("Surf height (m)", Range(0, 8)) = 1.1
-        _ShoreWavePitch ("Barrel (crest throw)", Range(0, 4)) = 0.7
+        _ShoreWavePitch ("Barrel (1 = vertical face)", Range(0, 4)) = 1.6
         _ShoreWaveFoam ("Surf foam", Range(0, 3)) = 1.5
 
         [Header(Waves)]

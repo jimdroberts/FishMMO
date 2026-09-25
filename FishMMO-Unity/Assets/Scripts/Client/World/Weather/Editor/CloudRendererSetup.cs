@@ -53,20 +53,7 @@ namespace FishMMO.Client
 				AssetDatabase.AddObjectToAsset(created, data);
 				AssetDatabase.SaveAssets();
 
-				var serialized = new SerializedObject(data);
-				SerializedProperty features = serialized.FindProperty("m_RendererFeatures");
-				SerializedProperty map = serialized.FindProperty("m_RendererFeatureMap");
-				features.arraySize++;
-				features.GetArrayElementAtIndex(features.arraySize - 1).objectReferenceValue = created;
-				// The map is the feature list's identity: one 8-byte local id per feature, in order.
-				long id = LocalId(created);
-				map.arraySize = features.arraySize * 8;
-				for (int i = 0; i < 8; i++)
-				{
-					map.GetArrayElementAtIndex((features.arraySize - 1) * 8 + i).intValue = (int)((id >> (i * 8)) & 0xFF);
-				}
-				serialized.ApplyModifiedProperties();
-				EditorUtility.SetDirty(data);
+				Append(data, created);
 				added++;
 				Debug.Log($"[Clouds] Added the volumetric cloud pass to {System.IO.Path.GetFileNameWithoutExtension(path)}.");
 			}
@@ -174,53 +161,23 @@ namespace FishMMO.Client
 			return added;
 		}
 
-		/// <summary>Adds the weather screen overlay to every renderer that has none.</summary>
-		public static int EnsureOverlay()
-		{
-			int added = 0;
-			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
-			{
-				string path = AssetDatabase.GUIDToAssetPath(guid);
-				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
-				if (data == null)
-				{
-					continue;
-				}
-				bool present = false;
-				foreach (ScriptableRendererFeature feature in data.rendererFeatures)
-				{
-					if (feature is FishWeatherOverlayFeature)
-					{
-						present = true;
-						break;
-					}
-				}
-				if (present)
-				{
-					continue;
-				}
-				var created = ScriptableObject.CreateInstance<FishWeatherOverlayFeature>();
-				created.name = "Fish Weather Overlay";
-				AssetDatabase.AddObjectToAsset(created, data);
-				AssetDatabase.SaveAssets();
-				Append(data, created);
-				added++;
-				Debug.Log($"[Overlay] Added the weather overlay to {System.IO.Path.GetFileNameWithoutExtension(path)}.");
-			}
-			if (added > 0)
-			{
-				AssetDatabase.SaveAssets();
-			}
-			return added;
-		}
-
 		/// <summary>
 		/// Appends a feature to a renderer's list, keeping the feature map in step.
 		/// </summary>
 		/// <remarks>
-		/// The map is the list's identity: eight bytes of local file id per feature, in order. A
-		/// feature appended without it loads as a null entry and the renderer silently drops it,
-		/// which looks exactly like the pass not working.
+		/// <para>
+		/// The map is the list's identity: ONE local file id per feature, in order — URP's
+		/// <c>List&lt;long&gt;</c>, which the asset writes out as eight hex bytes per entry. A feature
+		/// appended without it loads as a null entry and the renderer silently drops it, which
+		/// looks exactly like the pass not working.
+		/// </para>
+		/// <para>
+		/// This used to treat the map as a byte array, eight entries per feature holding one byte
+		/// each, which left every renderer's map eight times too long and matching nothing. URP
+		/// quietly rebuilt it in memory on load (a map whose count disagrees with the list is
+		/// treated as missing), so nothing broke — but the one thing the map exists for, relinking
+		/// a feature whose script failed to load, could never have worked from it.
+		/// </para>
 		/// </remarks>
 		private static void Append(ScriptableRendererData data, ScriptableRendererFeature feature)
 		{
@@ -229,12 +186,8 @@ namespace FishMMO.Client
 			SerializedProperty map = serialized.FindProperty("m_RendererFeatureMap");
 			features.arraySize++;
 			features.GetArrayElementAtIndex(features.arraySize - 1).objectReferenceValue = feature;
-			long id = LocalId(feature);
-			map.arraySize = features.arraySize * 8;
-			for (int i = 0; i < 8; i++)
-			{
-				map.GetArrayElementAtIndex((features.arraySize - 1) * 8 + i).intValue = (int)((id >> (i * 8)) & 0xFF);
-			}
+			map.arraySize = features.arraySize;
+			map.GetArrayElementAtIndex(features.arraySize - 1).longValue = LocalId(feature);
 			serialized.ApplyModifiedProperties();
 			EditorUtility.SetDirty(data);
 		}

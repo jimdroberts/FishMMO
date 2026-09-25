@@ -87,6 +87,20 @@ namespace FishMMO.Water
 		private double clock;
 		private double lastRealtime = -1.0;
 
+		// ── The rhythm the sea's surf train keeps time with (FishWaterSurf.hlsl) ──
+
+		/// <summary>The shore's clock, in seconds: what the swash and the surf train both run on.</summary>
+		public double SurfClock => clock;
+
+		/// <summary>Seconds between arriving waves, as last published; 0 before the first frame.</summary>
+		public float SurfPeriod { get; private set; }
+
+		/// <summary>The significant height of the sea making the surf, in metres, as last published.</summary>
+		public float SurfSeaHeight { get; private set; }
+
+		/// <summary>The deep-water wavelength at the period the waves arrive at, in metres.</summary>
+		public float SurfDeepWavelength { get; private set; }
+
 		private void OnEnable()
 		{
 			surface = GetComponent<WaterSurface>();
@@ -101,6 +115,10 @@ namespace FishMMO.Water
 		private void OnDisable()
 		{
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+			/* No shore keeping time any more: the sea's surf train goes back to its own clock. Left
+			 * set, it would run on a shore clock that no longer advances, and the surf would freeze. */
+			Shader.SetGlobalFloat(PeriodId, 0f);
+			SurfPeriod = 0f;
 			ReleaseMemory();
 			if (memoryMaterial != null)
 			{
@@ -290,13 +308,16 @@ namespace FishMMO.Water
 				}
 			}
 
-			Shader.SetGlobalFloat(PeriodId, Mathf.Max(0.5f, period));
+			SurfPeriod = Mathf.Max(0.5f, period);
+			Shader.SetGlobalFloat(PeriodId, SurfPeriod);
 			Shader.SetGlobalFloat(ReachId, Mathf.Max(0.5f, reach));
 			/* What the run-up is worked out from, per beach, in the shader: the wave height, and the
 			 * deep-water wavelength at the period the waves arrive at, g·T²/2π. */
 			float gravity = surface != null ? Mathf.Max(0.05f, surface.Gravity) : 9.81f;
 			float deepWavelength = gravity * period * period / (2f * Mathf.PI);
-			Shader.SetGlobalVector(SeaId, new Vector4(Mathf.Max(0.05f, waveHeight), deepWavelength, 0f, 0f));
+			SurfSeaHeight = Mathf.Max(0.05f, waveHeight);
+			SurfDeepWavelength = deepWavelength;
+			Shader.SetGlobalVector(SeaId, new Vector4(SurfSeaHeight, SurfDeepWavelength, 0f, 0f));
 			Shader.SetGlobalFloat(SkewId, Mathf.Clamp01(Skew));
 			Shader.SetGlobalFloat(TimeId, (float)clock);
 

@@ -367,13 +367,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
 				{
+					await Log.Warning("SceneServerSystem", $"Currency ledger: could not record operator adjustment of {amount} for CharID={characterID}: ICurrencyLedgerService unavailable.");
 					return;
 				}
 
 				DatabaseResult record = await ledgerService.RecordAsync(characterID, amount, (int)CurrencyMovementReason.AdminAdjustment, (int)state);
 				if (!record.IsSuccess)
 				{
-					await Log.Warning("SceneServerSystem", $"Currency ledger: could not record operator adjustment of {amount} for CharID={characterID}. {record.ErrorMessage}");
+					await Log.Warning("SceneServerSystem", $"Currency ledger: could not record operator adjustment of {amount} for CharID={characterID}: [{record.ErrorCode}] {record.ErrorMessage}");
 				}
 			}, characterID);
 		}

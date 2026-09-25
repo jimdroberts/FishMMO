@@ -111,6 +111,16 @@ namespace FishMMO.DiscordBot
 					services.AddSingleton<IDiscordAccountService>(provider =>
 						new DiscordAccountService(provider.GetRequiredService<NpgsqlDbContextFactory>()));
 
+					/* The account services the Control Panel moderates through. The mod commands call the
+					 * same methods — BanAsync is one transaction for the level, the tokens, the sessions and
+					 * the kick — and write the same audit log, instead of editing the account row directly. */
+					services.AddSingleton<IAccountService>(provider =>
+						new AccountService(provider.GetRequiredService<NpgsqlDbContextFactory>()));
+					services.AddSingleton<IKickRequestService>(provider =>
+						new KickRequestService(provider.GetRequiredService<NpgsqlDbContextFactory>()));
+					services.AddSingleton<IAdminAuditService>(provider =>
+						new AdminAuditService(provider.GetRequiredService<NpgsqlDbContextFactory>()));
+
 					services.AddSingleton<BotConfigurationService>();
 					services.AddSingleton<ChatRelayPolicy>();
 					services.AddSingleton<RateLimiterService>();

@@ -497,6 +497,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (!lastAppliedAny.TryGetValue(characterID, out long currentAny) || currentAny < sequence)
 					{
 						lastAppliedAny[characterID] = sequence;
+						PruneAppliedIdentitiesLocked(characterID, sequence);
 					}
 					if (isSnapshot &&
 						(!lastAppliedSnapshot.TryGetValue(characterID, out long currentSnapshot) || currentSnapshot < sequence))
@@ -623,7 +624,215 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					reconcileRequests.Remove(characterID);
 					reconcileFailures.Remove(characterID);
 					reconcileNotBeforeUtc.Remove(characterID);
+					pendingIdentities.Remove(characterID);
 					departedUtc[characterID] = DateTime.UtcNow;
+				}
+			}
+
+			/// <summary>
+			/// Identities the database has issued for items that were captured without one, per
+			/// character, by the container and slot the row was written at.
+			/// </summary>
+			/// <remarks>
+			/// <para>
+			/// <b>The window this closes.</b> An item's first write returns its identity on a worker,
+			/// and the identity reaches the live item a main-thread drain later. A snapshot captured
+			/// before that drain saw the item with no identity, and — running after the first write
+			/// on the same lane — deleted the row that write had just created and inserted the item
+			/// again under a second, freshly drawn identity. The first write-back then gave the item
+			/// the identity of a row that no longer existed, and the snapshot's write-back was ignored
+			/// because the item was no longer waiting. Every later incremental write of that item
+			/// inserted a second row beside the snapshot's, and every delete of it matched nothing,
+			/// so a crash before the next snapshot duplicated or resurrected it.
+			/// </para>
+			/// <para>
+			/// A snapshot now looks here before it writes a row with no identity (see
+			/// <see cref="WithPendingIdentities"/>) and re-states the item under the identity it was
+			/// already given. Entries are recorded inside the write's transaction — before the commit,
+			/// so a snapshot of the other side of an exchange, waiting on the same character row lock,
+			/// cannot start before they exist — and dropped outright when the write is known not to
+			/// have committed.
+			/// </para>
+			/// <para>
+			/// <b>Applied is not the same as finished with.</b> A snapshot captured BEFORE the
+			/// write-back was applied still carries the item with no identity, and can run after it.
+			/// So applying an entry stamps it with the capture sequence of that moment instead of
+			/// removing it: a snapshot captured at or before that sequence still needs it, one
+			/// captured after already has the identity on the item — and must NOT be offered it, or a
+			/// different unidentified item that later lands in the same slot would be written under an
+			/// identity another item owns. The entry goes once a batch captured after the stamp has
+			/// been claimed, because <see cref="TryClaimSequence"/> then refuses every snapshot
+			/// captured before it.
+			/// </para>
+			/// </remarks>
+			private readonly Dictionary<long, Dictionary<(ItemContainerType Container, int Slot), (CharacterItemIdAssignment Assignment, long AppliedAt)>> pendingIdentities =
+				new Dictionary<long, Dictionary<(ItemContainerType, int), (CharacterItemIdAssignment, long)>>();
+
+			/// <summary>
+			/// Records identities a write has just been issued.
+			/// </summary>
+			/// <param name="characterID">The character whose items they are.</param>
+			/// <param name="assignments">The identities the write returned.</param>
+			public void RecordPendingIdentities(long characterID, IReadOnlyList<CharacterItemIdAssignment> assignments)
+			{
+				if (assignments == null || assignments.Count == 0)
+				{
+					return;
+				}
+
+				lock (gate)
+				{
+					if (!pendingIdentities.TryGetValue(characterID, out var bySlot))
+					{
+						bySlot = new Dictionary<(ItemContainerType, int), (CharacterItemIdAssignment, long)>(assignments.Count);
+						pendingIdentities[characterID] = bySlot;
+					}
+					for (int i = 0; i < assignments.Count; ++i)
+					{
+						CharacterItemIdAssignment assignment = assignments[i];
+						if (assignment.ID <= 0)
+						{
+							continue;
+						}
+						// A snapshot re-delivering an entry must not reset a stamp it already has.
+						if (bySlot.TryGetValue((assignment.Container, assignment.Slot), out var held) &&
+							held.Assignment.ID == assignment.ID)
+						{
+							continue;
+						}
+						bySlot[(assignment.Container, assignment.Slot)] = (assignment, 0L);
+					}
+				}
+			}
+
+			/// <summary>
+			/// Finds the identity already issued for the item a batch captured, unidentified, at a slot.
+			/// </summary>
+			/// <remarks>
+			/// Checked against the template as well as the slot, for the reason
+			/// <c>ApplyAssignedIdentities</c> checks it: the slot is locked while its item waits, but an
+			/// identity handed to a different item would let one row describe two.
+			/// </remarks>
+			/// <param name="sequence">The capture sequence of the batch asking.</param>
+			public bool TryGetPendingIdentity(long characterID, ItemContainerType container, int slot, int templateID, long sequence, out CharacterItemIdAssignment assignment)
+			{
+				lock (gate)
+				{
+					if (pendingIdentities.TryGetValue(characterID, out var bySlot) &&
+						bySlot.TryGetValue((container, slot), out var held) &&
+						(held.AppliedAt == 0 || sequence <= held.AppliedAt) &&
+						(held.Assignment.TemplateID == 0 || held.Assignment.TemplateID == templateID))
+					{
+						assignment = held.Assignment;
+						return true;
+					}
+					assignment = default;
+					return false;
+				}
+			}
+
+			/// <summary>
+			/// Stamps entries the main thread has just applied with the current capture sequence.
+			/// Main thread only, which is what makes the stamp mean "before or after the apply".
+			/// </summary>
+			public void MarkIdentitiesApplied(long characterID, IReadOnlyList<CharacterItemIdAssignment> assignments)
+			{
+				if (assignments == null || assignments.Count == 0)
+				{
+					return;
+				}
+
+				lock (gate)
+				{
+					if (!pendingIdentities.TryGetValue(characterID, out var bySlot))
+					{
+						return;
+					}
+					for (int i = 0; i < assignments.Count; ++i)
+					{
+						CharacterItemIdAssignment assignment = assignments[i];
+						if (bySlot.TryGetValue((assignment.Container, assignment.Slot), out var held) &&
+							held.Assignment.ID == assignment.ID &&
+							held.AppliedAt == 0)
+						{
+							// Every batch captured from here on is issued a higher sequence.
+							bySlot[(assignment.Container, assignment.Slot)] = (held.Assignment, Math.Max(1L, nextSequence));
+						}
+					}
+				}
+			}
+
+			/// <summary>
+			/// Drops entries outright, for a write known not to have committed or a character that has
+			/// left.
+			/// </summary>
+			/// <remarks>
+			/// Removes an entry only while it still names the same identity: a later write may have
+			/// recorded a new one for the same slot, and that one is still waiting.
+			/// </remarks>
+			public void ForgetPendingIdentities(long characterID, IReadOnlyList<CharacterItemIdAssignment> assignments)
+			{
+				if (assignments == null || assignments.Count == 0)
+				{
+					return;
+				}
+
+				lock (gate)
+				{
+					if (!pendingIdentities.TryGetValue(characterID, out var bySlot))
+					{
+						return;
+					}
+					for (int i = 0; i < assignments.Count; ++i)
+					{
+						CharacterItemIdAssignment assignment = assignments[i];
+						if (bySlot.TryGetValue((assignment.Container, assignment.Slot), out var held) &&
+							held.Assignment.ID == assignment.ID)
+						{
+							bySlot.Remove((assignment.Container, assignment.Slot));
+						}
+					}
+					if (bySlot.Count == 0)
+					{
+						pendingIdentities.Remove(characterID);
+					}
+				}
+			}
+
+			/// <summary>
+			/// Drops applied entries no snapshot can still need. Call under <see cref="gate"/>.
+			/// </summary>
+			/// <remarks>
+			/// Strictly AFTER the stamp: once a batch captured after the apply has been claimed, every
+			/// snapshot captured at or before it is refused. A batch captured exactly at the stamp may
+			/// be the snapshot that still needs the entry — claims are serialised by the character row
+			/// lock, so nothing prunes it while that snapshot's own statements are running.
+			/// </remarks>
+			private void PruneAppliedIdentitiesLocked(long characterID, long appliedWatermark)
+			{
+				if (!pendingIdentities.TryGetValue(characterID, out var bySlot))
+				{
+					return;
+				}
+				List<(ItemContainerType, int)> done = null;
+				foreach (var kvp in bySlot)
+				{
+					if (kvp.Value.AppliedAt != 0 && kvp.Value.AppliedAt < appliedWatermark)
+					{
+						(done ??= new List<(ItemContainerType, int)>()).Add(kvp.Key);
+					}
+				}
+				if (done == null)
+				{
+					return;
+				}
+				for (int i = 0; i < done.Count; ++i)
+				{
+					bySlot.Remove(done[i]);
+				}
+				if (bySlot.Count == 0)
+				{
+					pendingIdentities.Remove(characterID);
 				}
 			}
 
@@ -666,6 +875,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						departedUtc.Remove(characterID);
 						lastAppliedAny.Remove(characterID);
 						lastAppliedSnapshot.Remove(characterID);
+						// The despawn flush can record identities after ForgetCharacter, like the watermarks.
+						pendingIdentities.Remove(characterID);
 					}
 					return expired.Count;
 				}
@@ -684,6 +895,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					reconcileRequests.Clear();
 					reconcileFailures.Clear();
 					reconcileNotBeforeUtc.Clear();
+					pendingIdentities.Clear();
 				}
 			}
 		}
@@ -799,6 +1011,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <c>ReleaseBatchLocks</c> on every exit that will never produce one.
 			/// </summary>
 			public List<(ItemContainerType Container, int Slot)> LockedSlots;
+
+			/// <summary>
+			/// True for a flush captured as the character leaves (logout, reattach, linger, shutdown).
+			/// </summary>
+			/// <remarks>
+			/// Its identities have nobody to be delivered to: the character is despawned, lingering
+			/// (and so outside CharactersByID), or the process is stopping with the main thread
+			/// blocked on this very flush — where waiting for a main-thread hop would only burn the
+			/// shutdown deadline. The rows it writes are what the next load reads.
+			/// </remarks>
+			public bool IsDepartureFlush;
 
 			public void AddLockedSlot(ItemContainerType container, int slot)
 			{
@@ -1624,6 +1847,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				for (int b = 0; b < run.Batches.Length; ++b)
 				{
 					ItemWriteBatch batch = run.Batches[b];
+					// Recorded before the commit that then failed; they name rows that do not exist.
+					itemWriteJournal.ForgetPendingIdentities(batch.CharacterID, batch.AssignedIdentities);
 					if (batch.LockedSlots != null)
 					{
 						var identitySlots = new List<int>(batch.LockedSlots.Count);
@@ -1828,6 +2053,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!commit.IsSuccess)
 				{
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: commit failed for {batch.Operation} (CharID={batch.CharacterID}): {commit.ErrorCode} - {commit.ErrorMessage}");
+					// The identities the steps recorded name rows that were never committed.
+					itemWriteJournal.ForgetPendingIdentities(batch.CharacterID, batch.AssignedIdentities);
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 					ReleaseBatchLocks(batch);
 					return;
@@ -1848,24 +2075,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * rolled back would name a row that does not exist, and the next write would quote
 				 * it as an existing item — an upsert that updates nothing and reports a stale
 				 * version forever. */
-				if (batch.AssignedIdentities != null && batch.AssignedIdentities.Count > 0)
+				if (batch.IsDepartureFlush)
+				{
+					// Nobody to deliver them to; see IsDepartureFlush.
+					itemWriteJournal.ForgetPendingIdentities(batch.CharacterID, batch.AssignedIdentities);
+				}
+				else if (batch.AssignedIdentities != null && batch.AssignedIdentities.Count > 0)
 				{
 					IReadOnlyList<CharacterItemIdAssignment> assignments = batch.AssignedIdentities;
 					long characterID = batch.CharacterID;
-					if (!TryEnqueueMainThread<ICharacterInventorySystemMainThreadQueueData>(
-							() => ApplyAssignedIdentities(characterID, assignments)))
+					/* Waited for rather than tried once, as the exchange's hops are: a write-back that
+					 * is dropped leaves committed rows whose items do not know them. */
+					if (!await PostMainThreadAsync(() => ApplyAssignedIdentities(characterID, assignments)))
 					{
-						// The queue is full. The items keep id 0, so the next write creates fresh
-						// rows for them and the snapshot after that assigns identities again — churn,
-						// not loss. Worth a line because sustained back-pressure here means the main
-						// thread is stalling.
+						/* The main thread has not drained for the whole wait. The slots stay LOCKED.
+						 *
+						 * They used to be released here, which was worse than the stall: an unlocked
+						 * item with no identity could be moved, and the move inserted a second row for
+						 * it beside the one this batch had just committed; or removed, and the delete
+						 * was skipped for want of an identity, leaving the committed row to bring it
+						 * back. Either survived until the next snapshot, and a crash before then kept
+						 * it. Locked, the item cannot be captured again under id 0, the identities stay
+						 * in the journal, and the reconcile snapshot requested here re-states the items
+						 * under them and delivers them again — its write-back is what unlocks. */
 						await Log.Warning("CharacterInventorySystem",
-							$"ApplyItemBatchAsync: could not queue {assignments.Count} item identity write-back(s) for character {characterID}; they will be reassigned on a later write.");
-						/* The slots must not stay locked for an identity that will never be
-						 * applied. Unlocked, the items keep id 0 and the next snapshot inserts
-						 * them afresh — and prunes the rows this batch created, so the churn the
-						 * comment above describes is bounded to one snapshot interval. */
-						ReleaseBatchLocks(batch);
+							$"ApplyItemBatchAsync: could not deliver {assignments.Count} item identity write-back(s) for character {characterID}; their slots stay locked until a reconcile snapshot delivers them.");
+						itemWriteJournal.RequestReconcile(characterID);
 					}
 				}
 			}
@@ -1968,6 +2203,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				// The character left this scene server between the write and the drain. Its items
 				// went with it, and the server that has it now will assign identities of its own.
+				itemWriteJournal.ForgetPendingIdentities(characterID, assignments);
 				return;
 			}
 
@@ -1994,6 +2230,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					// Already identified by an earlier write-back. The slot is no longer waiting.
 					container.UnlockSlot(assignment.Slot);
+
+					/* The same identity twice is the ordinary case: a snapshot that re-stated a
+					 * waiting item under the identity its first write was given delivers it again.
+					 * A DIFFERENT one means two rows were written for this item and the item names
+					 * the one this assignment did not come from — which the pending-identity journal
+					 * exists to prevent, so it is reported, and the reconcile snapshot re-states the
+					 * item under the identity it carries and prunes the other row. */
+					if (item.ID != assignment.ID)
+					{
+						Log.Warning("CharacterInventorySystem",
+							$"Character {characterID}: item {item.ID} at {assignment.Container} slot {assignment.Slot} was also written as row {assignment.ID}; requesting a reconcile snapshot to prune the second row.");
+						itemWriteJournal.RequestReconcile(characterID);
+					}
 					continue;
 				}
 
@@ -2047,6 +2296,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						break;
 				}
 			}
+
+			/* Applied — or declined, which leaves the item for the next snapshot to identify. Stamped
+			 * rather than dropped: a snapshot captured before this point still has these items with
+			 * no identity and may yet run. See ItemWriteJournal.pendingIdentities. */
+			itemWriteJournal.MarkIdentitiesApplied(characterID, assignments);
 
 			if (character.Owner == null)
 			{
@@ -2102,7 +2356,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <c>(character_id, slot)</c> rather than doing something subtle.
 		/// </para>
 		/// </remarks>
-		private static async Task<DatabaseResult> ApplyBatchStepsAsync(IDatabaseServiceRegistry registry, ItemWriteBatch batch)
+		private async Task<DatabaseResult> ApplyBatchStepsAsync(IDatabaseServiceRegistry registry, ItemWriteBatch batch)
 		{
 			bool hasItemWork = batch.IsSnapshot
 				? batch.SnapshotContainers != null && batch.SnapshotContainers.Count > 0
@@ -2118,6 +2372,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (batch.IsSnapshot)
 				{
+					/* An item captured with no identity may already have one that simply has not
+					 * reached it yet — its first write committed ahead of this snapshot on the same
+					 * lane, and the write-back is still queued for the main thread. Written as it was
+					 * captured, the snapshot would delete that row and insert the item under a second
+					 * identity. It is re-stated under the one it was given instead, and that identity
+					 * is delivered again with this batch's write-back. See
+					 * ItemWriteJournal.pendingIdentities. Read here, after the ownership row lock, so
+					 * identities an exchange recorded before its commit are visible. */
+					List<CharacterItemIdAssignment> carried = null;
+					List<CharacterItemData> rows = WithPendingIdentities(batch.CharacterID, batch.Sequence, batch.ItemWrites ?? EmptyItemWrites, ref carried);
+
 					/* The snapshot names the containers it read, so a character missing one of its
 					 * controllers leaves that container's rows alone rather than having them pruned
 					 * on the strength of a list nobody built. */
@@ -2125,7 +2390,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						await itemService.SaveSnapshotAsync(
 							batch.CharacterID,
 							batch.SnapshotContainers,
-							batch.ItemWrites ?? EmptyItemWrites);
+							rows);
 
 					if (!result.IsSuccess)
 					{
@@ -2139,7 +2404,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * rather than something the next snapshot can be relied on to repeat. */
 					if (result.Data != null && result.Data.Count > 0)
 					{
-						batch.AssignedIdentities = result.Data;
+						if (carried != null)
+						{
+							carried.AddRange(result.Data);
+						}
+						else
+						{
+							batch.AssignedIdentities = result.Data;
+						}
+					}
+					if (carried != null)
+					{
+						batch.AssignedIdentities = carried;
 					}
 				}
 				else
@@ -2231,7 +2507,51 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!attributeResult.IsSuccess) return attributeResult;
 			}
 
+			/* Every statement succeeded, so the identities this batch was issued are recorded now —
+			 * still inside the transaction, deliberately. A snapshot for the other character of an
+			 * exchange is waiting on that character's row lock, and starts the moment the commit
+			 * releases it: recorded after the commit, the identities could arrive too late for it.
+			 * A commit that then fails forgets them again. */
+			itemWriteJournal.RecordPendingIdentities(batch.CharacterID, batch.AssignedIdentities);
+
 			return DatabaseResult.Success();
+		}
+
+		/// <summary>
+		/// Returns the snapshot rows with every unidentified item that already has an identity in
+		/// flight re-stated under it. Worker thread.
+		/// </summary>
+		/// <param name="characterID">The character being snapshotted.</param>
+		/// <param name="sequence">The snapshot's capture sequence.</param>
+		/// <param name="rows">The rows as captured. Not modified.</param>
+		/// <param name="carried">Receives each identity that was substituted, so the batch's
+		/// write-back delivers it again. Left null when nothing was substituted.</param>
+		/// <returns><paramref name="rows"/> itself when nothing changed, otherwise a copy.</returns>
+		private List<CharacterItemData> WithPendingIdentities(long characterID, long sequence, List<CharacterItemData> rows, ref List<CharacterItemIdAssignment> carried)
+		{
+			List<CharacterItemData> resolved = null;
+			for (int i = 0; i < rows.Count; ++i)
+			{
+				CharacterItemData row = rows[i];
+				if (row.ID > 0 ||
+					!itemWriteJournal.TryGetPendingIdentity(characterID, row.Container, row.Slot, row.TemplateID, sequence, out CharacterItemIdAssignment pending))
+				{
+					continue;
+				}
+
+				resolved ??= new List<CharacterItemData>(rows);
+				resolved[i] = new CharacterItemData(
+					id: pending.ID,
+					version: row.Version,
+					characterID: row.CharacterID,
+					container: row.Container,
+					templateID: row.TemplateID,
+					slot: row.Slot,
+					seed: row.Seed,
+					amount: row.Amount);
+				(carried ??= new List<CharacterItemIdAssignment>(1)).Add(pending);
+			}
+			return resolved ?? rows;
 		}
 
 		/// <summary>
@@ -2441,6 +2761,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return null;
 			}
+			batch.IsDepartureFlush = true;
 			return () => ApplyItemBatchAsync(batch);
 		}
 

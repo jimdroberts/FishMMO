@@ -64,11 +64,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
 				!TryGetDbService(out IGuildRankService rankService))
 			{
-				return GuildAuthority.None(guildID, characterID);
+				return GuildAuthority.Unavailable(guildID, characterID);
 			}
 
+			/* A read that FAILED and a read that found nothing both refuse, but they are not the
+			 * same answer: the first is logged here, where its cause is still known, and comes back
+			 * as Unavailable so the caller can tell the player "failed" rather than "your rank is
+			 * too low". */
 			DatabaseResult<CharacterGuildData?> membershipResult = await charGuildService.FetchAsync(characterID);
-			if (!membershipResult.IsSuccess || !membershipResult.Data.HasValue)
+			if (!membershipResult.IsSuccess)
+			{
+				await Log.Warning("GuildSystem", $"ResolveGuildAuthorityAsync membership fetch failed (CharID={characterID}, GuildID={guildID}): {membershipResult.ErrorCode} - {membershipResult.ErrorMessage}");
+				return GuildAuthority.Unavailable(guildID, characterID);
+			}
+
+			if (!membershipResult.Data.HasValue)
 			{
 				return GuildAuthority.None(guildID, characterID);
 			}
@@ -80,10 +90,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return GuildAuthority.None(guildID, characterID);
 			}
 
+			// FetchOrSeedLadderAsync logs its own failures.
 			IReadOnlyList<GuildRankData> ladder = await FetchOrSeedLadderAsync(guildID, rankService);
 			if (ladder == null)
 			{
-				return GuildAuthority.None(guildID, characterID);
+				return GuildAuthority.Unavailable(guildID, characterID);
 			}
 
 			byte leaderRankOrder = 0;
@@ -177,10 +188,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DatabaseResult<IReadOnlyList<GuildRankData>> reReadResult = await rankService.FetchManyAsync(guildID);
 			if (!reReadResult.IsSuccess || reReadResult.Data == null)
 			{
+				await Log.Warning("GuildSystem", $"FetchOrSeedLadderAsync re-read after seeding failed (GuildID={guildID}): {reReadResult.ErrorCode} - {reReadResult.ErrorMessage}");
 				return null;
 			}
 
 			return reReadResult.Data;
+		}
+
+		/// <summary>
+		/// The refusal to report when a resolved standing does not permit an action.
+		/// </summary>
+		/// <param name="authority">The standing the request was decided on.</param>
+		/// <returns>
+		/// <see cref="GuildResultType.Failed"/> when the standing could not be read at all,
+		/// otherwise <see cref="GuildResultType.InsufficientRank"/>.
+		/// </returns>
+		private static GuildResultType AuthorityRefusal(GuildAuthority authority)
+		{
+			return authority.LookupFailed ? GuildResultType.Failed : GuildResultType.InsufficientRank;
 		}
 
 		/// <summary>
@@ -583,23 +608,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// The lowest rank order a guild actually has, for admitting a new member.
 		/// </summary>
 		/// <param name="guildID">The guild being joined.</param>
-		/// <returns>The bottom rung, or the seeded member order when the ladder is unreadable.</returns>
+		/// <returns>The bottom rung, or null when the ladder could not be read.</returns>
 		/// <remarks>
+		/// <para>
 		/// A new member joins the BOTTOM of the ladder as the guild defines it, not a constant.
-		/// The fallback reproduces the historical behaviour rather than refusing the join: a
-		/// database hiccup during an accept should not cost the player their invitation, and the
-		/// pump reconciles the rank from the row on its next pass regardless.
+		/// </para>
+		/// <para>
+		/// An unreadable ladder is NOT answered with the seeded member order any more. That
+		/// fallback was defended on two grounds and neither held: refusing does not cost the
+		/// player their invitation — the join path leaves it pending on every refusal but a
+		/// vanished guild, so they can simply accept again — and the pump does not reconcile the
+		/// rank, it re-reads the row this would have written. A guild that had deleted its order-1
+		/// rank admitted the member into a rank with no row, which holds no permissions.
+		/// </para>
 		/// </remarks>
-		private async Task<byte> ResolveLowestRankOrderAsync(long guildID)
+		private async Task<byte?> ResolveLowestRankOrderAsync(long guildID)
 		{
 			if (!TryGetDbService(out IGuildRankService rankService))
 			{
-				return GuildRankDefaults.MemberRankOrder;
+				return null;
 			}
 
+			// FetchOrSeedLadderAsync logs its own failures.
 			IReadOnlyList<GuildRankData> ladder = await FetchOrSeedLadderAsync(guildID, rankService);
-			if (ladder == null || ladder.Count == 0)
+			if (ladder == null)
 			{
+				return null;
+			}
+
+			if (ladder.Count == 0)
+			{
+				/* Read successfully, seeded, and still empty: the guild row is gone, because the
+				 * seed inserts only for a guild that exists. Nothing to join, and the persist that
+				 * follows will say so; the seeded order is as good an answer as any to hand it. */
 				return GuildRankDefaults.MemberRankOrder;
 			}
 

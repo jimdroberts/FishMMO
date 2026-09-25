@@ -19,7 +19,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Handles party chat messages, querying party members asynchronously from the database
 		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
-		/// synchronous DB save — the async path handles persistence when broadcast succeeds.
+		/// synchronous DB save — the async path persists the message itself.
 		/// </summary>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
@@ -56,7 +56,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Asynchronously fetches party members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success (unless called from the message pump).
+		/// and persists the chat message (unless called from the message pump) whether or not the lookup succeeds.
 		/// </summary>
 		/// <param name="partyID">Party identifier used to resolve recipients.</param>
 		/// <param name="senderID">Sender character identifier.</param>
@@ -72,13 +72,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
+				/* Persisted FIRST, and whatever the member lookup below does.
+				 *
+				 * The lookup only decides who on THIS scene server hears the line. The row is what
+				 * carries it to the party members on every other scene server — their pumps fetch
+				 * it and replay it — and it is the audit record that it was said. Persisting only
+				 * after a successful lookup meant a lookup that failed dropped the message from the
+				 * whole shard and from the log, with nothing to tell the sender or an operator.
+				 * Only live player messages: pump-sourced ones are already persisted. */
+				if (persist)
+				{
+					// Enqueue for batch DB persistence instead of per-message async write.
+					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, partyID + " " + trimmed, receivedTicks);
+				}
+
 				if (!TryGetDbService(out ICharacterPartyService partyService))
 				{
 					return;
 				}
 
 				DatabaseResult<IReadOnlyList<CharacterPartyData>> result = await partyService.FetchManyAsync(partyID);
-				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("ChatSystem", $"OnPartyChatAsync could not read the members of party {partyID}; the line was not delivered on this scene server: [{result.ErrorCode}] {result.ErrorMessage}");
+					return;
+				}
+				if (result.Data == null || result.Data.Count < 1)
 				{
 					return;
 				}
@@ -109,13 +128,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 					}
 				});
-
-				// Only persist for live player messages — pump-sourced messages are already persisted.
-				if (persist)
-				{
-					// Enqueue for batch DB persistence instead of per-message async write.
-					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, partyID + " " + trimmed, receivedTicks);
-				}
 			}
 			catch (Exception ex)
 			{
@@ -126,7 +138,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Handles guild chat messages, querying guild members asynchronously from the database
 		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
-		/// synchronous DB save — the async path handles persistence when broadcast succeeds.
+		/// synchronous DB save — the async path persists the message itself.
 		/// </summary>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
@@ -163,7 +175,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Asynchronously fetches guild members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success (unless called from the message pump).
+		/// and persists the chat message (unless called from the message pump) whether or not the lookup succeeds.
 		/// </summary>
 		/// <param name="guildID">Guild identifier used to resolve recipients.</param>
 		/// <param name="senderID">Sender character identifier.</param>
@@ -179,13 +191,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
+				/* Persisted FIRST, and whatever the member lookup below does.
+				 *
+				 * The lookup only decides who on THIS scene server hears the line. The row is what
+				 * carries it to the guild members on every other scene server — their pumps fetch
+				 * it and replay it — and it is the audit record that it was said. Persisting only
+				 * after a successful lookup meant a lookup that failed dropped the message from the
+				 * whole shard and from the log, with nothing to tell the sender or an operator.
+				 * Only live player messages: pump-sourced ones are already persisted. */
+				if (persist)
+				{
+					// Enqueue for batch DB persistence instead of per-message async write.
+					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, guildID + " " + trimmed, receivedTicks);
+				}
+
 				if (!TryGetDbService(out ICharacterGuildService guildService))
 				{
 					return;
 				}
 
 				DatabaseResult<IReadOnlyList<CharacterGuildData>> result = await guildService.FetchManyAsync(guildID);
-				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("ChatSystem", $"OnGuildChatAsync could not read the members of guild {guildID}; the line was not delivered on this scene server: [{result.ErrorCode}] {result.ErrorMessage}");
+					return;
+				}
+				if (result.Data == null || result.Data.Count < 1)
 				{
 					return;
 				}
@@ -216,13 +247,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 					}
 				});
-
-				// Only persist for live player messages — pump-sourced messages are already persisted.
-				if (persist)
-				{
-					// Enqueue for batch DB persistence instead of per-message async write.
-					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, guildID + " " + trimmed, receivedTicks);
-				}
 			}
 			catch (Exception ex)
 			{

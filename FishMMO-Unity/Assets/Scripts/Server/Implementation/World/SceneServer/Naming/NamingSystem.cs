@@ -316,7 +316,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				DatabaseResult<CharacterData?> result = await characterService.FetchAsync(characterID);
-				if (!result.IsSuccess || !result.Data.HasValue)
+				if (!result.IsSuccess)
+				{
+					// Unanswered, as a missing character is, but not silently: the client's request
+					// simply goes unresolved until it asks again.
+					await Log.Warning("NamingSystem", $"Could not read the name of character {characterID}: [{result.ErrorCode}] {result.ErrorMessage}");
+					return;
+				}
+				if (!result.Data.HasValue)
 				{
 					return;
 				}
@@ -368,7 +375,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				DatabaseResult<string> result = await guildService.FetchNameAsync(guildID);
-				if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Data))
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("NamingSystem", $"Could not read the name of guild {guildID}: [{result.ErrorCode}] {result.ErrorMessage}");
+					return;
+				}
+				if (string.IsNullOrWhiteSpace(result.Data))
 				{
 					return;
 				}
@@ -563,7 +575,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				else
 				{
-					if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
+					/* Only an ANSWER is cached. The service returns success with no row for a name
+					 * nobody has, and a validation failure for one nobody can have; either is safe to
+					 * remember. Any other failure is the database not answering, and it used to be
+					 * cached as "no such character" too — refreshed by every lookup that hit it, so a
+					 * player retrying a /tell or an invite kept the entry alive and was told the name
+					 * did not exist for as long as they kept trying. */
+					bool answered = result.IsSuccess || result.ErrorCode == DatabaseErrorCodes.ValidationError;
+					if (!answered)
+					{
+						await Log.Warning("NamingSystem", $"Could not look up character name '{nameLowerCase}': [{result.ErrorCode}] {result.ErrorMessage}");
+					}
+					else if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
 					{
 						mappingData.CharacterMissingByNameCache.Upsert(nameLowerCase, 1, DateTime.UtcNow);
 					}

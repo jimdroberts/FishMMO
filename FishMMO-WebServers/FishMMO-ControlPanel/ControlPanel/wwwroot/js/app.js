@@ -499,6 +499,10 @@ function renderResetHandover(result) {
 	const body = signinCard('Enrol your new authenticator', result.username, true);
 	body.innerHTML = `
 		${handoverMarkup(result)}
+		${result.otherSessionsSignedOut === false
+			? ui.banner('warn', 'Other sign-ins may still be open',
+				'The reset is complete, but not every other browser and game client could be signed out. Change your password once you are in to end them all.')
+			: ''}
 		${result.signedOut
 			? ui.banner('warn', 'Sign in again to finish',
 				'Save everything above, then sign in with your password and enter a code from the NEW authenticator.')
@@ -693,7 +697,16 @@ function renderTopbar() {
 	bar.querySelector('#menu-toggle').addEventListener('click', openNav);
 	bar.querySelector('#theme-toggle').addEventListener('click', toggleTheme);
 	bar.querySelector('#sign-out').addEventListener('click', async () => {
-		await api.signOut();
+		/* The server deletes this browser's cookie either way. A failure means the session row could
+		 * not be revoked, so a copy of the cookie elsewhere still works for a while: this browser is
+		 * signed out regardless, and the operator is told the rest. */
+		let warning = null;
+		try {
+			await api.signOut();
+		} catch (err) {
+			warning = err?.message || 'The session could not be ended on the server.';
+		}
+		if (warning) ui.toast('Signed out here only', warning, 'warn');
 		state.session = null;
 		state.route = null;
 		if (state.cleanup) state.cleanup();
@@ -829,7 +842,21 @@ function showForbidden(route) {
 window.addEventListener('hashchange', navigate);
 
 (async function boot() {
-	const existing = await api.getSession();
+	let existing;
+	try {
+		existing = await api.getSession();
+	} catch (err) {
+		/* The server answers 503 when it could not check the session at all — the database did not
+		 * answer. The cookie is kept for exactly this case, so the honest screen is "try again", not
+		 * the sign-in form: signing in would fail the same way, and the session may be perfectly good. */
+		const body = signinCard('Control Panel', 'Unavailable');
+		body.innerHTML = `
+			${ui.banner('danger', 'The panel cannot check your session right now', err?.message || 'Try again shortly.')}
+			<button class="btn btn-primary btn-block" type="button" id="boot-retry">Try again</button>`;
+		body.querySelector('#boot-retry').addEventListener('click', () => window.location.reload());
+		document.getElementById('boot')?.remove();
+		return;
+	}
 	if (existing) {
 		await onSignedIn(existing);
 	} else {

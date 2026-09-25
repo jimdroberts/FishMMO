@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using FishMMO.Database;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Services;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -43,6 +44,16 @@ namespace FishMMO.WebServer
 				{
 					var svc = scope.ServiceProvider.GetRequiredService<IDeploymentSecretService>();
 					var result = await svc.FetchAsync("client_gate_secret", CancellationToken.None);
+					/* Only a missing row is "run the installer". Any other failure is the database not
+					 * answering, and saying "not found" for it sent operators to Configure Server Keys,
+					 * which generates and upserts a NEW gate secret — breaking every shipped client — to
+					 * fix a connection problem the installer cannot even see. */
+					if (!result.IsSuccess && result.ErrorCode != DatabaseErrorCodes.NotFound)
+					{
+						throw new InvalidOperationException(
+							$"deployment_secrets could not be read, so the gate secret was not checked: [{result.ErrorCode}] {result.ErrorMessage}. " +
+							"This is a database connection problem, not a missing key: do NOT regenerate server keys for it.");
+					}
 					if (!result.IsSuccess || string.IsNullOrEmpty(result.Data))
 					throw new InvalidOperationException(
 						"Gate secret not found in deployment_secrets database table. " +

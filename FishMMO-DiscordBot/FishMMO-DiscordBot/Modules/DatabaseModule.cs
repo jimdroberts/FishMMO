@@ -16,7 +16,7 @@ namespace FishMMO.DiscordBot.Modules
 	[RequireUserPermission(GuildPermission.Administrator)]
 	public class DatabaseModule : ModuleBase<SocketCommandContext>
 	{
-		private readonly NpgsqlDbContext dbContext;
+		private readonly NpgsqlDbContextFactory dbContextFactory;
 		private readonly ILogger<DatabaseModule> logger;
 
 		/// <summary>
@@ -27,11 +27,17 @@ namespace FishMMO.DiscordBot.Modules
 		/// <summary>
 		/// Initializes a new instance of the <see cref="DatabaseModule"/> class.
 		/// </summary>
-		/// <param name="dbContext">The database context for this command scope.</param>
+		/// <param name="dbContextFactory">Creates the context each command uses and disposes.</param>
 		/// <param name="logger">Logger instance.</param>
-		public DatabaseModule(NpgsqlDbContext dbContext, ILogger<DatabaseModule> logger)
+		/// <remarks>
+		/// The factory, not a context. Commands run against the ROOT service provider, and a transient
+		/// <see cref="NpgsqlDbContext"/> resolved from the root is tracked there for disposal until the
+		/// process exits — so this module used to leak one context per command. Each command now creates
+		/// its own and disposes it, as the other modules do through a scope.
+		/// </remarks>
+		public DatabaseModule(NpgsqlDbContextFactory dbContextFactory, ILogger<DatabaseModule> logger)
 		{
-			this.dbContext = dbContext;
+			this.dbContextFactory = dbContextFactory;
 			this.logger = logger;
 		}
 
@@ -55,6 +61,7 @@ namespace FishMMO.DiscordBot.Modules
 					"GetAccount command executed by {User} in {Guild} for account '{AccountName}'.",
 					Context.User.Username, Context.Guild?.Name ?? "DM", accountName);
 
+				using var dbContext = dbContextFactory.CreateDbContext();
 				var account = await dbContext.Accounts.AsQueryable()
 					.FirstOrDefaultAsync(a => a.Name == accountName);
 
@@ -136,6 +143,7 @@ namespace FishMMO.DiscordBot.Modules
 					"GetCharacter command executed by {User} in {Guild} for character '{CharacterName}'.",
 					Context.User.Username, Context.Guild?.Name ?? "DM", characterName);
 
+				using var dbContext = dbContextFactory.CreateDbContext();
 				var character = await dbContext.Characters.AsQueryable()
 					.FirstOrDefaultAsync(c => c.Name == characterName);
 
@@ -168,6 +176,7 @@ namespace FishMMO.DiscordBot.Modules
 					"WorldServers command executed by {User} in {Guild}.",
 					Context.User.Username, Context.Guild?.Name ?? "DM");
 
+				using var dbContext = dbContextFactory.CreateDbContext();
 				var servers = await dbContext.WorldServers.AsQueryable().ToListAsync();
 
 				if (servers.Count == 0)
@@ -216,6 +225,7 @@ namespace FishMMO.DiscordBot.Modules
 					"SceneServers command executed by {User} in {Guild}.",
 					Context.User.Username, Context.Guild?.Name ?? "DM");
 
+				using var dbContext = dbContextFactory.CreateDbContext();
 				var servers = await dbContext.SceneServers.AsQueryable().ToListAsync();
 
 				if (servers.Count == 0)
@@ -264,6 +274,7 @@ namespace FishMMO.DiscordBot.Modules
 					"Scenes command executed by {User} in {Guild}.",
 					Context.User.Username, Context.Guild?.Name ?? "DM");
 
+				using var dbContext = dbContextFactory.CreateDbContext();
 				var scenes = await dbContext.Scenes.AsQueryable()
 					.OrderBy(s => s.WorldServerID)
 					.ThenBy(s => s.SceneName)

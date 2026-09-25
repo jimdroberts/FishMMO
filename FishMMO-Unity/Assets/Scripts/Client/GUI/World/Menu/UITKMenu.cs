@@ -27,6 +27,8 @@ namespace FishMMO.Client
 		private const string CHANNELS_BUTTON_NAME = "menu-channels-btn";
 		/// <summary>Name of the instance-management button element in the UXML.</summary>
 		private const string INSTANCE_BUTTON_NAME = "menu-instance-btn";
+		/// <summary>Name of the leaderboards button element in the UXML.</summary>
+		private const string LEADERBOARDS_BUTTON_NAME = "menu-leaderboards-btn";
 		/// <summary>Name of the quit-to-login button element in the UXML.</summary>
 		private const string QUIT_TO_LOGIN_BUTTON_NAME = "menu-quit-to-login-btn";
 		/// <summary>Name of the quit button element in the UXML.</summary>
@@ -60,6 +62,12 @@ namespace FishMMO.Client
 			if (instanceButton != null)
 			{
 				instanceButton.clicked += OnButtonInstance;
+			}
+
+			Button leaderboardsButton = Root.Q<Button>(LEADERBOARDS_BUTTON_NAME);
+			if (leaderboardsButton != null)
+			{
+				leaderboardsButton.clicked += OnButtonLeaderboards;
 			}
 
 			Button quitToLoginButton = Root.Q<Button>(QUIT_TO_LOGIN_BUTTON_NAME);
@@ -165,6 +173,26 @@ namespace FishMMO.Client
 			}
 
 			ReportUnavailable("Dungeon information is not available right now.");
+		}
+
+		/// <summary>
+		/// Opens the PvP and PvE leaderboards.
+		/// </summary>
+		/// <remarks>
+		/// Reached from here rather than from a key binding: boards are looked at now and then, not
+		/// mid-fight, and the menu is the one panel a player can always open. The window asks the
+		/// server for its board as it opens. The menu stays open behind it, as it does for the
+		/// other destinations here.
+		/// </remarks>
+		public void OnButtonLeaderboards()
+		{
+			if (UIManager.TryGetTK(UITKLeaderboards.PanelName, out UITKLeaderboards leaderboards))
+			{
+				leaderboards.Show();
+				return;
+			}
+
+			ReportUnavailable("Leaderboards are not available right now.");
 		}
 
 		/// <summary>

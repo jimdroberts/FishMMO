@@ -151,6 +151,8 @@ namespace FishMMO.Client
 		private const string UI_SCALE_VALUE_NAME = "ui-scale-value";
 		private const string CHAT_FONT_SLIDER_NAME = "chat-font-slider";
 		private const string CHAT_FONT_VALUE_NAME = "chat-font-value";
+		private const string HOTBAR_SECTION_NAME = "options-hotbar-section";
+		private const string HOTBAR_LAYOUT_NAME = "hotbar-layout-dropdown";
 		private const string RESET_LAYOUT_NAME = "options-reset-layout-btn";
 		private const string PROFILE_DROPDOWN_NAME = "ui-profile-dropdown";
 		private const string PROFILE_LOAD_NAME = "ui-profile-load-btn";
@@ -309,16 +311,16 @@ namespace FishMMO.Client
 			{ "Cancel", "Cancel" },
 			{ "CloseLastUI", "Close UI" },
 			{ "Chat", "Chat" },
-			{ "Hotkey1", "Hotbar 1" },
-			{ "Hotkey2", "Hotbar 2" },
-			{ "Hotkey3", "Hotbar 3" },
-			{ "Hotkey4", "Hotbar 4" },
-			{ "Hotkey5", "Hotbar 5" },
-			{ "Hotkey6", "Hotbar 6" },
-			{ "Hotkey7", "Hotbar 7" },
-			{ "Hotkey8", "Hotbar 8" },
-			{ "Hotkey9", "Hotbar 9" },
-			{ "Hotkey0", "Hotbar 0" },
+			{ "Hotkey1", "Hotbar Key 1" },
+			{ "Hotkey2", "Hotbar Key 2" },
+			{ "Hotkey3", "Hotbar Key 3" },
+			{ "Hotkey4", "Hotbar Key 4" },
+			{ "Hotkey5", "Hotbar Key 5" },
+			{ "Hotkey6", "Hotbar Key 6" },
+			{ "Hotkey7", "Hotbar Key 7" },
+			{ "Hotkey8", "Hotbar Key 8" },
+			{ "Hotkey9", "Hotbar Key 9" },
+			{ "Hotkey0", "Hotbar Key 0" },
 			{ "Inventory", "Inventory" },
 			{ "Abilities", "Abilities" },
 			{ "Equipment", "Equipment" },
@@ -347,7 +349,15 @@ namespace FishMMO.Client
 			{
 				return actionName;
 			}
-			return ActionDisplayNames.TryGetValue(actionName, out string display) ? display : actionName;
+			if (ActionDisplayNames.TryGetValue(actionName, out string display))
+			{
+				return display;
+			}
+
+			/* The extra hotkey bars' modifier and page actions are created at run time, as many as
+			 * the game has bars, so they cannot be rows in a fixed table; the class that creates
+			 * them names them. */
+			return HotkeyKeyMap.TryGetDisplayName(actionName, out display) ? display : actionName;
 		}
 
 		/// <summary>
@@ -476,6 +486,8 @@ namespace FishMMO.Client
 		private Label uiScaleValueLabel;
 		private Slider chatFontSlider;
 		private Label chatFontValueLabel;
+		private VisualElement hotbarSection;
+		private DropdownField hotbarLayoutDropdown;
 		private DropdownField profileDropdown;
 		private Label profileStatus;
 
@@ -655,6 +667,8 @@ namespace FishMMO.Client
 			uiScaleValueLabel = Root.Q<Label>(UI_SCALE_VALUE_NAME);
 			chatFontSlider = Root.Q<Slider>(CHAT_FONT_SLIDER_NAME);
 			chatFontValueLabel = Root.Q<Label>(CHAT_FONT_VALUE_NAME);
+			hotbarSection = Root.Q<VisualElement>(HOTBAR_SECTION_NAME);
+			hotbarLayoutDropdown = Root.Q<DropdownField>(HOTBAR_LAYOUT_NAME);
 			profileDropdown = Root.Q<DropdownField>(PROFILE_DROPDOWN_NAME);
 			profileStatus = Root.Q<Label>(PROFILE_STATUS_NAME);
 
@@ -673,6 +687,7 @@ namespace FishMMO.Client
 			InitializeNameplateSettings();
 			InitializeInterfaceSettings();
 			InitializeChatSettings();
+			InitializeHotbarSettings();
 			InitializeColorSettings();
 			InitializeProfileSection();
 
@@ -2301,6 +2316,52 @@ namespace FishMMO.Client
 				{
 					chatFontSlider.SetValueWithoutNotify(value);
 				}
+			});
+		}
+
+		// ── Hotbars ─────────────────────────────────────────────────
+
+		/// <summary>
+		/// Binds the hotbar layout dropdown to <see cref="ClientHotbarSettings"/>, or hides the
+		/// section when the game has a single bar.
+		/// </summary>
+		/// <remarks>
+		/// Hidden rather than disabled for a single-bar game: both layouts of one bar are the same
+		/// bar in the same place, and a choice that changes nothing reads as a broken control. The
+		/// bar count is a compile-time game setting, so whichever way this goes it goes for the
+		/// whole session.
+		/// <para>
+		/// Written through <see cref="ClientHotbarSettings.SetLayout"/>, which raises the event the
+		/// hotkey bar and every panel stacked above it listen to — they are separate documents, and
+		/// without it a switch to Paged would leave them lifted over rows that are no longer drawn
+		/// until the next scene load.
+		/// </para>
+		/// </remarks>
+		private void InitializeHotbarSettings()
+		{
+			if (hotbarSection != null)
+			{
+				hotbarSection.style.display = ClientHotbarSettings.BarCount > 1 ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+
+			if (hotbarLayoutDropdown == null)
+			{
+				return;
+			}
+
+			hotbarLayoutDropdown.choices = new List<string>(ClientHotbarSettings.LayoutLabels);
+			hotbarLayoutDropdown.SetValueWithoutNotify(
+				ClientHotbarSettings.LayoutLabels[(int)ClientHotbarSettings.Layout]);
+
+			hotbarLayoutDropdown.RegisterValueChangedCallback((evt) =>
+			{
+				// The index, not the label, for the reason the crosshair style dropdown gives.
+				int index = hotbarLayoutDropdown.index;
+				if (index < 0 || index >= ClientHotbarSettings.LayoutLabels.Length)
+				{
+					return;
+				}
+				ClientHotbarSettings.SetLayout((ClientHotbarSettings.HotbarLayout)index);
 			});
 		}
 

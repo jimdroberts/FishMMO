@@ -656,7 +656,8 @@ MonoBehaviour:
   onDamagedTriggers: []
   onHealTriggers: []
   onHealedTriggers: []
-  onKillTriggers: []
+  onKillTriggers:
+  - {fileID: 11400000, guid: 155ec26bfae141ad8af762f8d250e094, type: 2}
   onKilledTriggers: []
   onResurrectTriggers: []
   onResurrectedTriggers: []

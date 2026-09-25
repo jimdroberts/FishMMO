@@ -374,6 +374,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private readonly List<long> dueLeadershipRechecks = new List<long>();
 
 		/// <summary>
+		/// Parties whose change announcement the database refused transiently, owed another try.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The party update row is the only way a change made here reaches the other scene servers
+		/// hosting the party's members: their pumps re-read a party when its row moves, and at no
+		/// other time. A membership or rank change whose announcement failed was already committed,
+		/// so nothing else would ever announce it — those servers went on showing the old roster,
+		/// letting evicted members act as members, until something unrelated changed the party.
+		/// </para>
+		/// <para>
+		/// Main-thread only: added to from worker tasks through the main-thread queue and drained
+		/// by the periodic update. A set, so a party that fails repeatedly is owed one announcement,
+		/// not one per failure — the row only has to move once for every pump to re-read it.
+		/// </para>
+		/// </remarks>
+		private readonly HashSet<long> pendingPartyUpdateRetries = new HashSet<long>();
+
+		/// <summary>
 		/// Scratch map from Unity scene handle to the local members of one party standing in it.
 		/// </summary>
 		/// <remarks>
@@ -642,6 +661,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			pendingLeadershipRechecks.Clear();
 			dueLeadershipRechecks.Clear();
+			pendingPartyUpdateRetries.Clear();
 			leadershipAuditBuffer.Clear();
 			leadershipAuditCursor = 0;
 
@@ -1233,6 +1253,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			SweepPartyRuntimeCaches();
 			DrainLeadershipRechecks();
+			DrainPartyUpdateRetries();
 			AuditPartyLeadership();
 
 			if (!Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var runtimeData))
@@ -1292,7 +1313,125 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * still be re-fetched, which is the skew allowance. Several times that is generous,
 			 * and past it the record is only holding memory for a party that has stopped
 			 * changing. */
-			sweepData.SweepProcessedPartyUpdates(nowUtc, TimeSpan.FromSeconds(Mathf.Max(60.0f, partyUpdateClockSkewAllowanceSeconds * 10.0f)));
+			sweepData.SweepProcessedPartyUpdates(nowUtc, PartyUpdateRetryHorizon);
+		}
+
+		/// <summary>
+		/// How long a party update stays worth re-reading, and how long its processed record is kept.
+		/// </summary>
+		/// <remarks>
+		/// One value for both on purpose. The pump holds its watermark back for an update whose
+		/// roster it could not read (see <see cref="FetchAndProcessPartyUpdatesAsync"/>), and every
+		/// update behind that mark is fetched again each tick and skipped only because its
+		/// processed record says it was handled. Holding the mark back past the records' lifetime
+		/// would turn that skip into a full re-read and re-broadcast of every such party, every tick.
+		/// </remarks>
+		private TimeSpan PartyUpdateRetryHorizon => TimeSpan.FromSeconds(Mathf.Max(60.0f, partyUpdateClockSkewAllowanceSeconds * 10.0f));
+
+		/// <summary>
+		/// Re-sends the change announcements the database refused, off the main thread.
+		/// </summary>
+		private void DrainPartyUpdateRetries()
+		{
+			if (pendingPartyUpdateRetries.Count < 1)
+			{
+				return;
+			}
+
+			/* Copied out, and the set emptied before the work runs: a retry that fails again adds
+			 * its party back through the main-thread queue, which must find the set free to take
+			 * it rather than about to be cleared. */
+			List<long> partyIDs = new List<long>(pendingPartyUpdateRetries);
+			pendingPartyUpdateRetries.Clear();
+
+			if (!TryEnqueueAsyncWork(() => RetryPartyUpdateAnnouncementsAsync(partyIDs)))
+			{
+				// A full worker queue is a busy moment; the announcements are still owed.
+				for (int i = 0; i < partyIDs.Count; ++i)
+				{
+					pendingPartyUpdateRetries.Add(partyIDs[i]);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Retries each owed party change announcement.
+		/// </summary>
+		/// <param name="partyIDs">Parties to announce.</param>
+		/// <returns>Asynchronous retry task.</returns>
+		private async Task RetryPartyUpdateAnnouncementsAsync(List<long> partyIDs)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					TryEnqueueMainThread(() =>
+					{
+						for (int i = 0; i < partyIDs.Count; ++i)
+						{
+							pendingPartyUpdateRetries.Add(partyIDs[i]);
+						}
+					});
+					return;
+				}
+
+				for (int i = 0; i < partyIDs.Count; ++i)
+				{
+					await AnnouncePartyChangeAsync(partyUpdateService, partyIDs[i], nameof(RetryPartyUpdateAnnouncementsAsync));
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error retrying party update announcements: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Announces a committed change to a party, so every scene server hosting one of its members
+		/// re-reads it — and arranges a retry when the database refuses transiently.
+		/// </summary>
+		/// <remarks>
+		/// Call only after the change itself has been written. The announcement is the change's
+		/// delivery to the rest of the shard, not part of the change, so its failure never undoes
+		/// anything; it is owed instead. A non-transient refusal is not retried: the only one this
+		/// write meets in practice is the party having been deleted since, which leaves nothing to
+		/// announce.
+		/// </remarks>
+		/// <param name="partyUpdateService">Party update service.</param>
+		/// <param name="partyID">Party that changed.</param>
+		/// <param name="caller">Name used in the log line.</param>
+		/// <returns>Asynchronous announcement task.</returns>
+		private async Task AnnouncePartyChangeAsync(IPartyUpdateService partyUpdateService, long partyID, string caller)
+		{
+			DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+			if (updateResult.IsSuccess)
+			{
+				return;
+			}
+
+			if (!updateResult.IsTransient)
+			{
+				await Log.Warning("PartySystem", $"{caller} party update notification failed (PartyID={partyID}): [{updateResult.ErrorCode}] {updateResult.ErrorMessage}");
+				return;
+			}
+
+			await Log.Warning("PartySystem", $"{caller} party update notification failed (PartyID={partyID}); it will be retried: [{updateResult.ErrorCode}] {updateResult.ErrorMessage}");
+			TryEnqueueMainThread(() => pendingPartyUpdateRetries.Add(partyID));
+		}
+
+		/// <summary>
+		/// Answers a requester whose party action the database could not complete. Worker-safe.
+		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <remarks>
+		/// The same answer a refused queue slot gets, and for the same reason: the request was
+		/// sound and trying it again may well succeed. Left unanswered, the client's panel simply
+		/// waits on a reply that is never coming, and the player clicks again into the same fault.
+		/// </remarks>
+		private void AnswerDatabaseFault(NetworkConnection conn)
+		{
+			TryEnqueueMainThread(() => SendServerBusy(conn));
 		}
 
 		/// <summary>
@@ -1578,7 +1717,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Async DB fetch
 				DatabaseResult<List<PartyUpdateData>> fetchResult = await partyUpdateService.FetchAsync(partyIds, lastFetch);
-				if (!fetchResult.IsSuccess || fetchResult.Data == null || fetchResult.Data.Count < 1)
+
+				/* A failed fetch leaves the watermark where it was, so nothing is skipped — the next
+				 * tick asks again. Logged because this pump is the only way a change made on another
+				 * scene server reaches this one, and an outage of it is otherwise silent. */
+				if (!fetchResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"Party update pump fetch failed: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}");
+					return;
+				}
+
+				if (fetchResult.Data == null || fetchResult.Data.Count < 1)
 				{
 					return;
 				}
@@ -1591,6 +1740,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Dictionary<long, DateTime> processedUpdateStamps = new Dictionary<long, DateTime>();
 
 				Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData dedupeData);
+
+				/* Where the watermark may move to: fetchStartedUtc, unless a roster read below fails.
+				 *
+				 * A failed read leaves its update unprocessed so a later tick retries it — but that
+				 * tick only sees the update while it is still at or after the watermark, and the
+				 * watermark was moving to fetchStartedUtc regardless. That left the retry a window
+				 * exactly the skew allowance wide: a roster read failing for longer than that lost
+				 * the update for good, and the change it carried never reached this server's members
+				 * until something else changed the party. The mark is held at the oldest update
+				 * still owed a read instead — bounded by PartyUpdateRetryHorizon, past which the
+				 * processed records that keep the re-reads cheap have been swept. */
+				DateTime watermarkUtc = fetchStartedUtc;
+				DateTime retryHorizonUtc = fetchStartedUtc - PartyUpdateRetryHorizon;
 
 				foreach (PartyUpdateData update in updates)
 				{
@@ -1657,25 +1819,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						 * happened. */
 						processedUpdateStamps[update.PartyID] = update.LastUpdate;
 					}
+					else if (update.LastUpdate >= retryHorizonUtc)
+					{
+						await Log.Warning("PartySystem", $"Party update pump could not read the roster of party {update.PartyID}; it is read again next tick: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
+
+						if (update.LastUpdate < watermarkUtc)
+						{
+							watermarkUtc = update.LastUpdate;
+						}
+					}
+					else
+					{
+						await Log.Error("PartySystem", $"Party update pump has been unable to read the roster of party {update.PartyID} for longer than {PartyUpdateRetryHorizon.TotalSeconds:0}s; giving up on the update of {update.LastUpdate:O}. Its members on this server keep the roster they had until the party next changes: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
+					}
 				}
 
 				if (partyMembersMap.Count < 1)
 				{
-					/* Everything in this fetch had already been dealt with — but the watermark
+					/* Nothing in this fetch produced a roster to send — every update in it had
+					 * already been dealt with, or had its roster read fail — but the watermark
 					 * still has to move.
 					 *
 					 * Leaving it where it was would freeze it the first time a tick found nothing
 					 * new: the same rows stay inside the window, every later tick skips them all,
 					 * and the mark never advances again until some unrelated party changes. The
 					 * fetch would then be re-reading every local party's update row for as long as
-					 * the server ran. Advancing to the same instant the normal path uses is sound
-					 * for the same reason it is sound there — everything at or before it has been
-					 * handled. */
+					 * the server ran. Advancing to the same mark the normal path uses is sound for
+					 * the same reason it is sound there — everything before it has been handled,
+					 * and anything whose read failed is at or after it. */
 					TryEnqueueMainThread(() =>
 					{
 						if (Server?.DataContainerRegistry.TryGet(out IPartySystemRuntimeData watermarkData) == true)
 						{
-							watermarkData.LastFetchTime = fetchStartedUtc;
+							watermarkData.LastFetchTime = watermarkUtc;
 						}
 					});
 					return;
@@ -1689,10 +1865,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					// Update last fetch time
+					// Update last fetch time — held back for any update whose roster read failed; see watermarkUtc.
 					if (Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData rtData))
 					{
-						rtData.LastFetchTime = fetchStartedUtc;
+						rtData.LastFetchTime = watermarkUtc;
 					}
 
 					if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mapData))
@@ -1923,12 +2099,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Fire-and-forget async DB persist
 			long characterID = character.ID;
 			long partyID = partyController.ID;
-			byte rank = (byte)partyController.Rank;
 			float healthPCT = character.TryGet(out ICharacterAttributeController attrController)
 				? attrController.GetHealthResourceAttributeCurrentPercentage()
 				: 0.0f;
 
-			EnqueuePersistence(() => PersistPartyMemberAndNotifyAsync(characterID, partyID, rank, healthPCT), characterID);
+			EnqueuePersistence(() => PersistPartyMemberAndNotifyAsync(characterID, partyID, healthPCT), characterID);
 		}
 
 		/// <summary>
@@ -2021,10 +2196,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="characterID">Character identifier to persist.</param>
 		/// <param name="partyID">Party identifier associated with the character.</param>
-		/// <param name="rank">Party rank value to persist.</param>
 		/// <param name="healthPCT">Current health percentage snapshot.</param>
 		/// <returns>Asynchronous persistence task.</returns>
-		private async Task PersistPartyMemberAndNotifyAsync(long characterID, long partyID, byte rank, float healthPCT)
+		/// <remarks>
+		/// Takes no rank: the rank written is always the one already on the row. See the note at
+		/// the write.
+		/// </remarks>
+		private async Task PersistPartyMemberAndNotifyAsync(long characterID, long partyID, float healthPCT)
 		{
 			try
 			{
@@ -2043,6 +2221,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				DatabaseResult<CharacterPartyData?> existingResult = await charPartyService.FetchAsync(characterID);
 
+				/* A failed read refreshes nothing.
+				 *
+				 * It used to fall through to the refresh below on the grounds that the upsert was
+				 * harmless there, and it was not. With no row read, the version defaulted to 1 and
+				 * the rank to the connecting character's own copy — and when the row is ABSENT, the
+				 * case the check below exists for, a version-1 upsert does not refresh anything: it
+				 * INSERTS. A character kicked while offline was put back into the party they had
+				 * been removed from whenever this one read failed, carrying whatever rank they had
+				 * loaded with; if that was Leader, the pump's two-leader repair then kept whichever
+				 * of the two had the lower ID, which could be them. A health figure is not worth a
+				 * membership write nobody can prove is safe. */
+				if (!existingResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"PersistPartyMemberAndNotifyAsync could not read the membership of character {characterID} (PartyID={partyID}); nothing refreshed: [{existingResult.ErrorCode}] {existingResult.ErrorMessage}");
+					return;
+				}
+
 				/* Connecting is not a membership event, so this must never CREATE one.
 				 *
 				 * A character kicked while they were offline still carries the party ID their
@@ -2051,12 +2246,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * player into the party they had been removed from — the offline twin of the
 				 * disconnect-resurrection exploit the removal markers exist to close.
 				 *
-				 * Only a fetch that SUCCEEDED and found nothing is treated as proof of absence. A
-				 * failed read is a database fault, not evidence, and is allowed to fall through to
-				 * the ordinary refresh below where the upsert is harmless. */
-				if (existingResult.IsSuccess && !existingResult.Data.HasValue)
+				 * Only a fetch that SUCCEEDED and found nothing is treated as proof of absence;
+				 * a failed one returned above without writing. */
+				if (!existingResult.Data.HasValue)
 				{
 					await Log.Debug("PartySystem", $"Character {characterID} connected believing they were in party {partyID}, but they have no membership row. Clearing it.");
+					ClearStalePartyMembershipOnMainThread(characterID, partyID);
+					return;
+				}
+
+				CharacterPartyData existing = existingResult.Data.Value;
+
+				if (existing.PartyID != partyID)
+				{
+					/* They belong to a different party than the one they arrived believing in.
+					 *
+					 * Nothing is written to EITHER party: writing to the one they named would
+					 * be writing to a party they are not in, and adopting the other from here
+					 * would be a connect handler quietly performing a membership change. What
+					 * is cleared is the state this server built from the wrong answer — the
+					 * connect handler has already put them in the tracker under the party they
+					 * named, and left there this server would pump that party's roster and
+					 * vitals at somebody who is not in it. */
+					await Log.Warning("PartySystem", $"Character {characterID} connected as a member of party {partyID} but their row names party {existing.PartyID}; clearing the stale membership.");
 					ClearStalePartyMembershipOnMainThread(characterID, partyID);
 					return;
 				}
@@ -2067,44 +2279,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * Writing it back here would hand the rank to a player who has just been demoted
 				 * and give the party two leaders, which the pump then has to unpick. Connecting
 				 * refreshes health and nothing else. */
-				long version = 1;
-				byte effectiveRank = rank;
-				if (existingResult.IsSuccess && existingResult.Data.HasValue)
-				{
-					CharacterPartyData existing = existingResult.Data.Value;
-
-					if (existing.PartyID != partyID)
-					{
-						/* They belong to a different party than the one they arrived believing in.
-						 *
-						 * Nothing is written to EITHER party: writing to the one they named would
-						 * be writing to a party they are not in, and adopting the other from here
-						 * would be a connect handler quietly performing a membership change. What
-						 * is cleared is the state this server built from the wrong answer — the
-						 * connect handler has already put them in the tracker under the party they
-						 * named, and left there this server would pump that party's roster and
-						 * vitals at somebody who is not in it. */
-						await Log.Warning("PartySystem", $"Character {characterID} connected as a member of party {partyID} but their row names party {existing.PartyID}; clearing the stale membership.");
-						ClearStalePartyMembershipOnMainThread(characterID, partyID);
-						return;
-					}
-
-					version = existing.Version + 1;
-					effectiveRank = existing.Rank;
-				}
-
-				CharacterPartyData partyData = new CharacterPartyData(0, version, characterID, partyID, effectiveRank, healthPCT);
+				CharacterPartyData partyData = new CharacterPartyData(0, existing.Version + 1, characterID, partyID, existing.Rank, healthPCT);
 				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
 				if (!persistResult.IsSuccess)
 				{
-					await Log.Warning("PartySystem", $"PersistPartyMemberAndNotifyAsync DB error (CharID={characterID}, PartyID={partyID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+					await Log.Warning("PartySystem", $"PersistPartyMemberAndNotifyAsync DB error (CharID={characterID}, PartyID={partyID}): [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
 					return;
 				}
-				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-				if (!updateResult.IsSuccess)
-				{
-					await Log.Warning("PartySystem", $"PersistPartyMemberAndNotifyAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-				}
+				await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(PersistPartyMemberAndNotifyAsync));
 			}
 			catch (Exception ex)
 			{
@@ -2167,11 +2349,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-				if (!updateResult.IsSuccess)
-				{
-					await Log.Warning("PartySystem", $"PersistPartyUpdateAsync DB error (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-				}
+				await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(PersistPartyUpdateAsync));
 			}
 			catch (Exception ex)
 			{
@@ -2254,9 +2432,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				/* Asked of the DATABASE before a party row is created for the answer.
+				 *
+				 * The broadcast handler tested IPartyController.ID, and a membership row can outlive
+				 * a cleared controller (see AcceptPartyInviteAsync). Creating first used to meet that
+				 * row at the membership write, which the version gate refuses — so every click on
+				 * Create made another party with nobody in it, answered nothing, and logged nothing,
+				 * and the empty rows accumulated because nothing ever removes one. */
+				DatabaseResult<CharacterPartyData?> existingResult = await charPartyService.FetchAsync(characterID);
+				if (!existingResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"CreatePartyAsync could not read the membership of character {characterID}: [{existingResult.ErrorCode}] {existingResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (existingResult.Data.HasValue)
+				{
+					await Log.Debug("PartySystem", $"Character {characterID} asked to create a party but already belongs to party {existingResult.Data.Value.PartyID}; refused.");
+					return;
+				}
+
 				DatabaseResult<long> createResult = await partyService.CreateAsync(worldServerID);
 				if (!createResult.IsSuccess)
 				{
+					await Log.Warning("PartySystem", $"CreatePartyAsync could not create a party for character {characterID}: [{createResult.ErrorCode}] {createResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
 					return;
 				}
 
@@ -2266,6 +2466,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
 				if (!persistResult.IsSuccess)
 				{
+					await Log.Warning("PartySystem", $"CreatePartyAsync could not make character {characterID} the leader of new party {newPartyID}: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+
+					/* The party row exists but has no members, and nothing else will ever put one in
+					 * it or take it out — the same reasoning, and the same removal, as
+					 * TryCreatePartyForInstanceAsync. */
+					await DeleteEmptyPartyAsync(partyService, newPartyID, nameof(CreatePartyAsync));
+					AnswerDatabaseFault(conn);
 					return;
 				}
 
@@ -2416,14 +2623,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * refreshes, so a demoted ex-leader passes it for up to a pump interval. Their
 				 * invitation would otherwise be delivered as if it came from the party's leader,
 				 * and accepting it would add somebody to a party they had no authority over. */
-				if (!await IsCurrentPartyLeaderAsync(charPartyService, inviterCharacterID, inviterPartyID))
+				bool? leads = await IsCurrentPartyLeaderAsync(charPartyService, inviterCharacterID, inviterPartyID);
+				if (!leads.HasValue)
+				{
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (!leads.Value)
 				{
 					return;
 				}
 
 				// Check that the party is not full
 				DatabaseResult<int> countResult = await charPartyService.CountAsync(inviterPartyID);
-				if (!countResult.IsSuccess || countResult.Data >= MaxPartySize)
+				if (!countResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"Could not count the members of party {inviterPartyID} for an invitation: [{countResult.ErrorCode}] {countResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (countResult.Data >= MaxPartySize)
 				{
 					return;
 				}
@@ -2431,14 +2650,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* Blocking has existed in the friend table since it was written and nothing has
 				 * ever read the column. Asked about the TARGET, not the inviter: the question is
 				 * whether the person about to receive a modal has refused contact from the
-				 * sender. */
-				if (Server.Database.ServiceRegistry.TryGet<ICharacterFriendService>(out var friendService))
+				 * sender.
+				 *
+				 * A check that cannot be made refuses the invitation. It used to let it through —
+				 * a failed read and a missing service both read as "not blocked" — so a database
+				 * fault was exactly the moment a player who had blocked the inviter got the modal
+				 * anyway. A block is the target's decision and is not the sender's to have waived
+				 * by an outage; the inviter is told to try again. */
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterFriendService>(out var friendService))
 				{
-					DatabaseResult<bool> blockedResult = await friendService.IsBlockedAsync(targetCharacterID, inviterCharacterID);
-					if (blockedResult.IsSuccess && blockedResult.Data)
-					{
-						return;
-					}
+					await Log.Warning("PartySystem", $"Party invitation from {inviterCharacterID} to {targetCharacterID} refused: the friend service is unavailable to check for a block.");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+
+				DatabaseResult<bool> blockedResult = await friendService.IsBlockedAsync(targetCharacterID, inviterCharacterID);
+				if (!blockedResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"Party invitation from {inviterCharacterID} to {targetCharacterID} refused: the block check failed: [{blockedResult.ErrorCode}] {blockedResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (blockedResult.Data)
+				{
+					return;
 				}
 
 				// Marshal the invitation logic back to the main thread
@@ -2653,6 +2888,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<CharacterPartyData?> existingResult = await charPartyService.FetchAsync(characterID);
 				if (!existingResult.IsSuccess)
 				{
+					await Log.Warning("PartySystem", $"AcceptPartyInviteAsync could not read the membership of character {characterID} (PartyID={partyID}): [{existingResult.ErrorCode}] {existingResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
 					return;
 				}
 				if (existingResult.Data.HasValue)
@@ -2663,7 +2900,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Check party capacity
 				DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
-				if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count >= MaxPartySize)
+				if (!membersResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"AcceptPartyInviteAsync could not read the roster of party {partyID} (CharID={characterID}): [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (membersResult.Data == null || membersResult.Data.Count >= MaxPartySize)
 				{
 					return;
 				}
@@ -2672,15 +2915,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
 				if (!persistResult.IsSuccess)
 				{
+					/* Losing the race for the last slot, or to the party's disbanding, is a refusal
+					 * like the full-roster one above and is answered the same way. Anything else is
+					 * the database failing, and the accepter is told to try again. */
+					if (IsMembershipWriteRefusal(persistResult.ErrorCode))
+					{
+						await Log.Debug("PartySystem", $"Character {characterID} could not join party {partyID}: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+						return;
+					}
+
+					await Log.Warning("PartySystem", $"AcceptPartyInviteAsync could not persist the membership of character {characterID} in party {partyID}: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
 					return;
 				}
 
 				// Tell the other servers to update their party lists
-				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-				if (!updateResult.IsSuccess)
-				{
-					await Log.Warning("PartySystem", $"AcceptPartyInviteAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-				}
+				await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(AcceptPartyInviteAsync));
 
 				// Marshal state changes + broadcast to main thread
 				TryEnqueueMainThread(() =>
@@ -2819,7 +3069,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
 				if (!membersResult.IsSuccess || membersResult.Data == null)
 				{
-					await Log.Warning("PartySystem", $"Could not read party {partyID} while joining an instance for character {characterID}.");
+					await Log.Warning("PartySystem", $"Could not read party {partyID} while joining an instance for character {characterID}: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
 					return false;
 				}
 
@@ -2852,6 +3102,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<CharacterPartyData?> existingResult = await charPartyService.FetchAsync(characterID);
 				if (!existingResult.IsSuccess)
 				{
+					await Log.Warning("PartySystem", $"Could not read the membership of character {characterID} while joining party {partyID} for an instance: [{existingResult.ErrorCode}] {existingResult.ErrorMessage}");
 					return false;
 				}
 				if (existingResult.Data.HasValue)
@@ -2864,6 +3115,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
 				if (!persistResult.IsSuccess)
 				{
+					if (IsMembershipWriteRefusal(persistResult.ErrorCode))
+					{
+						await Log.Debug("PartySystem", $"Character {characterID} could not join party {partyID} for an instance: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+					}
+					else
+					{
+						await Log.Warning("PartySystem", $"Could not persist the membership of character {characterID} in party {partyID} for an instance: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+					}
 					return false;
 				}
 
@@ -2892,11 +3151,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Tell the other scene servers to refresh their copies of this party.
-				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-				if (!updateResult.IsSuccess)
-				{
-					await Log.Warning("PartySystem", $"Instance join party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-				}
+				await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(TryAddCharacterToPartyAsync));
 
 				/* The controller and the client's own view are updated on the main thread, before
 				 * the finder disconnects the character to move it.
@@ -3029,6 +3284,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<long> createResult = await partyService.CreateAsync(worldServerID);
 				if (!createResult.IsSuccess || createResult.Data <= 0)
 				{
+					await Log.Warning("PartySystem", $"Could not create a party for an instance (CharID={characterID}): [{createResult.ErrorCode}] {createResult.ErrorMessage}");
 					return 0;
 				}
 
@@ -3038,16 +3294,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
 				if (!persistResult.IsSuccess)
 				{
+					await Log.Warning("PartySystem", $"Could not make character {characterID} the leader of new instance party {newPartyID}: [{persistResult.ErrorCode}] {persistResult.ErrorMessage}");
+
 					/* The party row exists but has no members, and nothing else will ever put one
 					 * in it. Removed rather than left behind: an empty party is invisible, so it
 					 * would accumulate silently, and the instance about to be opened would be
 					 * recorded against a party nobody belongs to — which is exactly the leaderless
 					 * state the join path has to repair. */
-					DatabaseResult deleteResult = await partyService.DeleteAsync(newPartyID);
-					if (!deleteResult.IsSuccess)
-					{
-						await Log.Warning("PartySystem", $"Could not remove empty party {newPartyID} after a failed instance-party creation.");
-					}
+					await DeleteEmptyPartyAsync(partyService, newPartyID, nameof(TryCreatePartyForInstanceAsync));
 					return 0;
 				}
 
@@ -3081,6 +3335,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("PartySystem", $"Error creating a party for an instance (CharID={characterID}): {ex}");
 				return 0;
+			}
+		}
+
+		/// <summary>
+		/// Removes a party row created moments ago whose first member could not be written.
+		/// </summary>
+		/// <param name="partyService">Party service.</param>
+		/// <param name="partyID">The empty party.</param>
+		/// <param name="caller">Name used in the log line.</param>
+		/// <returns>Asynchronous delete task.</returns>
+		private static async Task DeleteEmptyPartyAsync(IPartyService partyService, long partyID, string caller)
+		{
+			DatabaseResult deleteResult = await partyService.DeleteAsync(partyID);
+			if (!deleteResult.IsSuccess)
+			{
+				await Log.Warning("PartySystem", $"{caller} could not remove empty party {partyID} after its first member failed to persist; the row is orphaned: [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
 			}
 		}
 
@@ -3254,7 +3524,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			await Log.Warning("PartySystem", $"{message}: {result.ErrorCode} - {result.ErrorMessage}");
+			await Log.Warning("PartySystem", $"{message}: [{result.ErrorCode}] {result.ErrorMessage}");
+		}
+
+		/// <summary>
+		/// Whether a refused membership write is the party answering rather than the database failing.
+		/// </summary>
+		/// <param name="errorCode">The failed write's error code.</param>
+		/// <returns>True for the refusals <c>ICharacterPartyService.PersistAsync</c> makes on purpose.</returns>
+		/// <remarks>
+		/// Full (<c>CAPACITY_EXCEEDED</c>), gone (<c>NOT_FOUND</c>), or a row that moved underneath the
+		/// write (<c>STALE_STATE</c>, <c>DUPLICATE_REPLAY</c>). Those are outcomes of a race the player
+		/// lost, and are answered as the full-roster check is; everything else is a fault worth a
+		/// warning and a "try again".
+		/// </remarks>
+		private static bool IsMembershipWriteRefusal(string errorCode)
+		{
+			return errorCode == DatabaseErrorCodes.CapacityExceeded ||
+				   errorCode == DatabaseErrorCodes.NotFound ||
+				   errorCode == DatabaseErrorCodes.StaleState ||
+				   errorCode == DatabaseErrorCodes.DuplicateReplay;
 		}
 
 		/// <summary>
@@ -3469,11 +3758,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					/* Announced so the other scene servers hosting this party's members re-read
 					 * it. It is also what brings the pump back to this party, which is how a
 					 * repair that only half-landed gets finished. */
-					DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-					if (!updateResult.IsSuccess)
-					{
-						await Log.Warning("PartySystem", $"{caller} leadership repair notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-					}
+					await AnnouncePartyChangeAsync(partyUpdateService, partyID, $"{caller} leadership repair");
 				}
 
 				return repair;
@@ -3506,8 +3791,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="charPartyService">Membership service.</param>
 		/// <param name="characterID">Character claiming leadership.</param>
 		/// <param name="partyID">Party they claim to lead.</param>
-		/// <returns>True only when the row exists, names this party, and carries the Leader rank.</returns>
-		private static async Task<bool> IsCurrentPartyLeaderAsync(ICharacterPartyService charPartyService, long characterID, long partyID)
+		/// <returns>
+		/// True only when the row exists, names this party, and carries the Leader rank; false when
+		/// it does not; <c>null</c> when the row could not be read, which the caller answers as a
+		/// fault rather than as a refusal the player earned.
+		/// </returns>
+		private static async Task<bool?> IsCurrentPartyLeaderAsync(ICharacterPartyService charPartyService, long characterID, long partyID)
 		{
 			if (charPartyService == null || characterID <= 0 || partyID <= 0)
 			{
@@ -3515,7 +3804,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			DatabaseResult<CharacterPartyData?> result = await charPartyService.FetchAsync(characterID);
-			if (!result.IsSuccess || !result.Data.HasValue)
+			if (!result.IsSuccess)
+			{
+				await Log.Warning("PartySystem", $"Could not read the membership of character {characterID} to confirm they lead party {partyID}: [{result.ErrorCode}] {result.ErrorMessage}");
+				return null;
+			}
+			if (!result.Data.HasValue)
 			{
 				return false;
 			}
@@ -3707,12 +4001,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					/* Logged, not retried here. The pump asks the same question of every party it
 					 * refreshes, so a party that stays leaderless is repaired on a later tick from
 					 * fresher rows than the ones that just failed. */
-					await Log.Warning("PartySystem", $"{caller} leadership transfer failed (PartyID={partyID}, NewLeader={lowestMember.CharacterID}): {promoteResult.ErrorCode} - {promoteResult.ErrorMessage}");
+					await Log.Warning("PartySystem", $"{caller} leadership transfer failed (PartyID={partyID}, NewLeader={successorMember.CharacterID}): [{promoteResult.ErrorCode}] {promoteResult.ErrorMessage}");
 					return default;
 				}
 
-				await Log.Debug("PartySystem", $"{caller} promoted character {lowestMember.CharacterID} to leader of party {partyID}.");
-				return new PartyLeadershipRepair(true, lowestMember.CharacterID);
+				/* The member actually promoted, which the online preference above can make somebody
+				 * other than the lowest ID. This used to report lowestMember regardless, naming the
+				 * wrong character in the log and in PromotedCharacterID — the value the instance
+				 * join reads to decide whether the joiner is now the leader. */
+				await Log.Debug("PartySystem", $"{caller} promoted character {successorMember.CharacterID} to leader of party {partyID}.");
+				return new PartyLeadershipRepair(true, successorMember.CharacterID);
 			}
 
 			/* More than one leader. The lowest-numbered keeps it and the rest are demoted, so the
@@ -3748,6 +4046,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// What became of a request to remove one member's row from a party.
+		/// </summary>
+		private enum PartyMemberRemoval : byte
+		{
+			/// <summary>The row was deleted, or went with the party it belonged to.</summary>
+			Removed,
+			/// <summary>The database says the character is not a member of this party; nothing to delete.</summary>
+			NotAMember,
+			/// <summary>The row could not be read or deleted, and still stands.</summary>
+			Failed,
+		}
+
+		/// <summary>
 		/// Removes one membership row, transferring leadership or retiring the party as required.
 		/// </summary>
 		/// <remarks>
@@ -3761,32 +4072,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// members and no leader. The join path repairs that state if it is ever reached anyway,
 		/// but not creating it is better than repairing it.
 		/// </para>
+		/// <para>
+		/// <b>Three answers, not two.</b> This used to return true whenever the member had been
+		/// found, including when the delete that followed failed — so a player whose Leave hit a
+		/// database fault was told they had left and had their controller cleared while the row
+		/// kept them on every other member's roster, unable to leave again or to join anyone else.
+		/// And "not found" and "could not read" were the same false, which a caller that wanted
+		/// the membership gone had to treat as success. Only <see cref="PartyMemberRemoval.Failed"/>
+		/// means the row still stands.
+		/// </para>
 		/// </remarks>
 		/// <param name="characterID">Member being removed.</param>
 		/// <param name="partyID">Party they are being removed from.</param>
 		/// <param name="caller">Name used in warnings, so a failure says which path produced it.</param>
-		/// <returns>True when the member was found and the removal was attempted.</returns>
-		private async Task<bool> RemovePartyMemberRowsAsync(long characterID, long partyID, string caller)
+		/// <returns>What became of the row.</returns>
+		private async Task<PartyMemberRemoval> RemovePartyMemberRowsAsync(long characterID, long partyID, string caller)
 		{
 			if (Server?.Database?.ServiceRegistry == null ||
-				!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService) ||
+				!Server.Database.ServiceRegistry.TryGet<IPartyService>(out var partyService) ||
+				!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
 			{
-				return false;
-			}
-			if (!Server.Database.ServiceRegistry.TryGet<IPartyService>(out var partyService))
-			{
-				return false;
-			}
-			if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
-			{
-				return false;
+				await Log.Warning("PartySystem", $"{caller} could not remove character {characterID} from party {partyID}: a party service is unavailable.");
+				return PartyMemberRemoval.Failed;
 			}
 
 			// Fetch current members
 			DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
-			if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count == 0)
+			if (!membersResult.IsSuccess)
 			{
-				return false;
+				await Log.Warning("PartySystem", $"{caller} could not read the roster of party {partyID} to remove character {characterID}: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
+				return PartyMemberRemoval.Failed;
+			}
+			if (membersResult.Data == null || membersResult.Data.Count == 0)
+			{
+				// No rows at all: the party is gone, and the character's membership with it.
+				return PartyMemberRemoval.NotAMember;
 			}
 
 			IReadOnlyList<CharacterPartyData> members = membersResult.Data;
@@ -3810,7 +4131,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// causing incorrect optimistic concurrency tokens. Abort early.
 			if (!leavingMemberFound)
 			{
-				return false;
+				return PartyMemberRemoval.NotAMember;
 			}
 
 			int remainingCount = remainingMembers.Count;
@@ -3852,34 +4173,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DatabaseResult deleteResult = await charPartyService.DeleteAsync(characterID, leavingMember.Version + 1);
 			if (!deleteResult.IsSuccess)
 			{
-				await Log.Warning("PartySystem", $"{caller} member delete failed (CharID={characterID}, PartyID={partyID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+				await Log.Warning("PartySystem", $"{caller} member delete failed (CharID={characterID}, PartyID={partyID}): [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
 			}
 
 			if (remainingCount < 1)
 			{
-				// Delete the party
+				/* The last member leaving retires the party, and deleting the party cascades to every
+				 * membership row in it — so a member delete that failed above is finished here, and
+				 * the removal stands or falls with the party delete. */
 				DatabaseResult partyDeleteResult = await partyService.DeleteAsync(partyID);
 				if (!partyDeleteResult.IsSuccess)
 				{
-					await Log.Warning("PartySystem", $"{caller} party delete failed (PartyID={partyID}): {partyDeleteResult.ErrorCode} - {partyDeleteResult.ErrorMessage}");
+					await Log.Warning("PartySystem", $"{caller} party delete failed (PartyID={partyID}): [{partyDeleteResult.ErrorCode}] {partyDeleteResult.ErrorMessage}");
 				}
-				DatabaseResult<int> updateDeleteResult = await partyUpdateService.DeleteAsync(partyID);
-				if (!updateDeleteResult.IsSuccess)
+				else
 				{
-					await Log.Warning("PartySystem", $"{caller} party update delete failed (PartyID={partyID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
+					DatabaseResult<int> updateDeleteResult = await partyUpdateService.DeleteAsync(partyID);
+					if (!updateDeleteResult.IsSuccess)
+					{
+						await Log.Warning("PartySystem", $"{caller} party update delete failed (PartyID={partyID}): [{updateDeleteResult.ErrorCode}] {updateDeleteResult.ErrorMessage}");
+					}
 				}
-			}
-			else
-			{
-				// Tell the other servers to update their party lists
-				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-				if (!updateResult.IsSuccess)
-				{
-					await Log.Warning("PartySystem", $"{caller} party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-				}
+
+				return deleteResult.IsSuccess || partyDeleteResult.IsSuccess
+					? PartyMemberRemoval.Removed
+					: PartyMemberRemoval.Failed;
 			}
 
-			return true;
+			/* Told to the other servers whether or not the delete landed. Leadership may already
+			 * have been handed on above, and when the delete then fails the leaver still holds the
+			 * rank too — a two-leader party that the pump collapses back to one, but only once
+			 * something brings it to this party, and this is that something. */
+			await AnnouncePartyChangeAsync(partyUpdateService, partyID, caller);
+
+			return deleteResult.IsSuccess ? PartyMemberRemoval.Removed : PartyMemberRemoval.Failed;
 		}
 
 		/// <summary>
@@ -3899,6 +4226,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="characterID">Character being removed.</param>
 		/// <param name="partyID">Party it is being removed from.</param>
 		/// <param name="reason">Why, for the log line.</param>
+		/// <returns>
+		/// True when the membership is gone — removed now, or not there to begin with. False
+		/// whenever the row still stands: the party was mid-change, or the database could not read
+		/// or delete it.
+		/// </returns>
 		public async Task<bool> RemoveCharacterFromPartyAsync(long characterID, long partyID, string reason)
 		{
 			/* Claimed like every other removal. This one runs while a character is still loading,
@@ -3919,15 +4251,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
-				if (await RemovePartyMemberRowsAsync(characterID, partyID, nameof(RemoveCharacterFromPartyAsync)))
+				PartyMemberRemoval removal = await RemovePartyMemberRowsAsync(characterID, partyID, nameof(RemoveCharacterFromPartyAsync));
+				switch (removal)
 				{
-					await Log.Debug("PartySystem", $"Character {characterID} was removed from party {partyID}: {reason}.");
-				}
+					case PartyMemberRemoval.Removed:
+						await Log.Debug("PartySystem", $"Character {characterID} was removed from party {partyID}: {reason}.");
+						return true;
 
-				/* True even when the rows call reported false. That result means the membership
-				 * was not found, which is the state the caller wanted; a genuine failure to reach
-				 * the database throws and is caught below. */
-				return true;
+					case PartyMemberRemoval.NotAMember:
+						// The state the caller wanted already holds.
+						return true;
+
+					default:
+						/* The row still stands. This used to report success here, on the belief that a
+						 * database failure would throw — it does not; the services return one — so a
+						 * caller about to join its character to another party went ahead over a live
+						 * membership row, for exactly the reason the mutation-claim refusal above is
+						 * reported as a failure. The rows call has logged why. */
+						await Log.Warning("PartySystem", $"Character {characterID} could not be removed from party {partyID} ({reason}): the membership row still stands.");
+						return false;
+				}
 			}
 			catch (Exception ex)
 			{
@@ -3953,11 +4296,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!await RemovePartyMemberRowsAsync(characterID, partyID, nameof(LeavePartyAsync)))
+				PartyMemberRemoval removal = await RemovePartyMemberRowsAsync(characterID, partyID, nameof(LeavePartyAsync));
+
+				/* The row still stands, so the player is still in the party: their controller is
+				 * left as it is, and they are told to try again rather than that they have left.
+				 * Clearing it here is what used to strand them — shown out of a party the database
+				 * kept them in, with no Leave button to press again. */
+				if (removal == PartyMemberRemoval.Failed)
 				{
+					AnswerDatabaseFault(conn);
 					return;
 				}
 
+				/* NotAMember is cleared exactly as a removal is. The database already has them out
+				 * of this party, so a controller still naming it is stale; it used to be left in
+				 * place with no answer, and the Leave button then did nothing, every time. */
 				TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive || conn.FirstObject == null)
@@ -4117,7 +4470,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * the disconnect persist write it straight back. */
 				BeginMembershipRemoval(memberID);
 
-				deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(partyID, memberID, characterID, mutationToken), guardKey, characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(conn, partyID, memberID, characterID, mutationToken), guardKey, characterID);
 				if (!deferGuardRelease)
 				{
 					EndMembershipRemoval(memberID);
@@ -4137,12 +4490,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously removes a member from the party, verifying rank permission and notifying other servers.
 		/// </summary>
+		/// <param name="conn">Requester connection, answered when the database cannot complete the kick.</param>
 		/// <param name="partyID">Party identifier containing the member.</param>
 		/// <param name="memberID">Target member character identifier.</param>
 		/// <param name="requesterCharacterID">Requester character identifier.</param>
 		/// <param name="mutationToken">Party mutation claim taken by the caller.</param>
 		/// <returns>Asynchronous remove-member task.</returns>
-		private async Task RemovePartyMemberAsync(long partyID, long memberID, long requesterCharacterID, long mutationToken)
+		private async Task RemovePartyMemberAsync(NetworkConnection conn, long partyID, long memberID, long requesterCharacterID, long mutationToken)
 		{
 			try
 			{
@@ -4162,14 +4516,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * refreshes — so an ex-leader who has just handed the rank on still passes that
 				 * test for up to a pump interval and could throw members out of a party somebody
 				 * else now runs. */
-				if (!await IsCurrentPartyLeaderAsync(charPartyService, requesterCharacterID, partyID))
+				bool? leads = await IsCurrentPartyLeaderAsync(charPartyService, requesterCharacterID, partyID);
+				if (!leads.HasValue)
+				{
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (!leads.Value)
 				{
 					return;
 				}
 
 				// Fetch the target member to get their version for the versioned delete
 				DatabaseResult<CharacterPartyData?> fetchResult = await charPartyService.FetchAsync(memberID);
-				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+				if (!fetchResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"RemovePartyMemberAsync could not read the membership of character {memberID} (PartyID={partyID}): [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (!fetchResult.Data.HasValue)
 				{
 					return;
 				}
@@ -4215,15 +4581,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					});
 
 					// Tell the other servers to update their party lists.
-					DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-					if (!updateResult.IsSuccess)
-					{
-						await Log.Warning("PartySystem", $"RemovePartyMemberAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-					}
+					await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(RemovePartyMemberAsync));
 				}
 				else
 				{
-					await Log.Warning("PartySystem", $"RemovePartyMemberAsync member delete failed (PartyID={partyID}, MemberID={memberID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+					await Log.Warning("PartySystem", $"RemovePartyMemberAsync member delete failed (PartyID={partyID}, MemberID={memberID}): [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
 				}
 			}
 			catch (Exception ex)
@@ -4306,7 +4669,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID, newRank, mutationToken), guardKey, leaderCharacterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(conn, partyID, leaderCharacterID, targetMemberID, newRank, mutationToken), guardKey, leaderCharacterID);
 				if (!deferGuardRelease)
 				{
 					EndPartyMutation(partyID, mutationToken);
@@ -4325,13 +4688,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously swaps ranks between the current leader and the target member.
 		/// </summary>
+		/// <param name="conn">Requester connection, answered when the database cannot complete the change.</param>
 		/// <param name="partyID">Party identifier containing both members.</param>
 		/// <param name="leaderCharacterID">Current leader character identifier.</param>
 		/// <param name="targetMemberID">Target member character identifier.</param>
 		/// <param name="newRank">New rank for the target member.</param>
 		/// <param name="mutationToken">Party mutation claim taken by the caller.</param>
 		/// <returns>Asynchronous rank-change task.</returns>
-		private async Task ChangePartyRankAsync(long partyID, long leaderCharacterID, long targetMemberID, PartyRank newRank, long mutationToken)
+		private async Task ChangePartyRankAsync(NetworkConnection conn, long partyID, long leaderCharacterID, long targetMemberID, PartyRank newRank, long mutationToken)
 		{
 			try
 			{
@@ -4347,13 +4711,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Fetch both members to get their versions
 				DatabaseResult<CharacterPartyData?> leaderResult = await charPartyService.FetchAsync(leaderCharacterID);
-				if (!leaderResult.IsSuccess || !leaderResult.Data.HasValue)
+				if (!leaderResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"ChangePartyRankAsync could not read the membership of leader {leaderCharacterID} (PartyID={partyID}): [{leaderResult.ErrorCode}] {leaderResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (!leaderResult.Data.HasValue)
 				{
 					return;
 				}
 
 				DatabaseResult<CharacterPartyData?> targetResult = await charPartyService.FetchAsync(targetMemberID);
-				if (!targetResult.IsSuccess || !targetResult.Data.HasValue)
+				if (!targetResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"ChangePartyRankAsync could not read the membership of character {targetMemberID} (PartyID={partyID}): [{targetResult.ErrorCode}] {targetResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
+					return;
+				}
+				if (!targetResult.Data.HasValue)
 				{
 					return;
 				}
@@ -4388,6 +4764,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult promoteResult = await charPartyService.UpdateRankAsync(targetMemberID, partyID, (byte)newRank, targetData.Version + 1);
 				if (!promoteResult.IsSuccess)
 				{
+					/* A row that moved or went since it was read is a race the requester lost, and is
+					 * refused as the same-party check above is. Anything else is the database failing,
+					 * and the requester is told to try again. */
+					if (IsMembershipWriteRefusal(promoteResult.ErrorCode))
+					{
+						await Log.Debug("PartySystem", $"ChangePartyRankAsync could not promote {targetMemberID} in party {partyID}: [{promoteResult.ErrorCode}] {promoteResult.ErrorMessage}");
+						return;
+					}
+
+					await Log.Warning("PartySystem", $"ChangePartyRankAsync could not promote {targetMemberID} in party {partyID}: [{promoteResult.ErrorCode}] {promoteResult.ErrorMessage}");
+					AnswerDatabaseFault(conn);
 					return;
 				}
 
@@ -4401,21 +4788,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					DatabaseResult rollbackResult = await charPartyService.UpdateRankAsync(targetMemberID, partyID, targetData.Rank, targetData.Version + 2);
 					if (!rollbackResult.IsSuccess)
 					{
-						await Log.Error("PartySystem", $"CRITICAL: Promoted target {targetMemberID} but failed to demote old leader {leaderCharacterID} AND failed to rollback in party {partyID}. Party has two leaders until manually corrected.");
+						/* Two leaders, which EnsurePartyLeadershipAsync collapses to the lower ID the next
+						 * time the pump or the audit reads this party. Announced so that happens on the
+						 * next pump tick rather than whenever the round-robin audit comes round to it. */
+						await Log.Error("PartySystem", $"Promoted target {targetMemberID} but failed to demote old leader {leaderCharacterID} ([{demoteResult.ErrorCode}] {demoteResult.ErrorMessage}) AND failed to roll the promotion back ([{rollbackResult.ErrorCode}] {rollbackResult.ErrorMessage}) in party {partyID}. The party has two leaders until the leadership repair settles it.");
+						await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(ChangePartyRankAsync));
 					}
 					else
 					{
-						await Log.Warning("PartySystem", $"Promoted target {targetMemberID} but failed to demote old leader {leaderCharacterID} in party {partyID}. Rolled back promotion successfully.");
+						await Log.Warning("PartySystem", $"Promoted target {targetMemberID} but failed to demote old leader {leaderCharacterID} in party {partyID}: [{demoteResult.ErrorCode}] {demoteResult.ErrorMessage}. Rolled back promotion successfully.");
 					}
+
+					// The hand-over did not complete as asked, whichever way the rollback went; the requester may try again.
+					AnswerDatabaseFault(conn);
 					return;
 				}
 
 				// Tell the other servers to update their party lists
-				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-				if (!updateResult.IsSuccess)
-				{
-					await Log.Warning("PartySystem", $"ChangePartyRankAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-				}
+				await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(ChangePartyRankAsync));
 			}
 			catch (Exception ex)
 			{

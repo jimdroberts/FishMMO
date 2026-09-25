@@ -172,9 +172,12 @@ function outcomeCell(ui, a) {
 }
 
 /* Where the action came from changes what it means: a chat command was typed by somebody
- * already in the world, on a character, with no panel session behind it. */
+ * already in the world, on a character, with no panel session behind it; a Discord row was a
+ * moderation command in the Discord server, by the game account that Discord user is linked to. */
 function sourceCell(ui, a) {
-	return a.source === 'game' ? ui.badge('in game', 'accent') : ui.badge('panel', 'info');
+	if (a.source === 'game') return ui.badge('in game', 'accent');
+	if (a.source === 'discord') return ui.badge('discord', 'warn');
+	return ui.badge('panel', 'info');
 }
 
 /**
@@ -221,7 +224,7 @@ function detailPanel(ui, a) {
 					<dt>IP address</dt><dd class="mono">${a.ipAddress ? ui.esc(a.ipAddress) : '<span class="faint">—</span>'}</dd>
 					<dt>Session</dt><dd class="tnum">${a.sessionId
 						? ui.esc(a.sessionId)
-						: `<span class="faint">${a.source === 'game' ? 'none — typed in the world' : 'none'}</span>`}</dd>
+						: `<span class="faint">${a.source === 'game' ? 'none — typed in the world' : a.source === 'discord' ? 'none — a Discord command' : 'none'}</span>`}</dd>
 				</dl>
 			</div>
 		</div>`;

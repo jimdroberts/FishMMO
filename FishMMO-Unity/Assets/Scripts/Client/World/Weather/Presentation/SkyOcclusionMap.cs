@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
 {
@@ -6,16 +7,26 @@ namespace FishMMO.Client
 	/// A top-down map of the highest surface around the camera, so rain and snow stop at roofs.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// Built from downward raycasts against the scene's own physics (world scenes have local
 	/// physics), a few hundred per frame, and rebuilt once the camera has moved a quarter of the
 	/// map away. The heights go to the GPU as 16 bits across two channels of an 8-bit texture,
 	/// which every target samples in a vertex shader, WebGL2 included.
+	/// </para>
+	/// <para>
+	/// <b>The sea is a surface too.</b> A ray goes straight through water, so the map on its own
+	/// had rain and snow falling through the sea onto the bed under it. The open water's still
+	/// level (<see cref="SurfaceWater"/>) is laid over the map — here, and in the shaders from
+	/// <c>_FishOcclusionWater</c> — rather than baked into it: the tide moves it all the time, and
+	/// the rays never need casting again for that.
+	/// </para>
 	/// </remarks>
 	public sealed class SkyOcclusionMap
 	{
 		public static readonly int TextureId = Shader.PropertyToID("_FishOcclusionTex");
 		public static readonly int RectId = Shader.PropertyToID("_FishOcclusionRect");
 		public static readonly int RangeId = Shader.PropertyToID("_FishOcclusionRange");
+		public static readonly int WaterId = Shader.PropertyToID("_FishOcclusionWater");
 
 		private const float CastAbove = 250f;
 		private const float CastDistance = 800f;
@@ -39,7 +50,10 @@ namespace FishMMO.Client
 		public float SizeMeters => resolution * texelMeters;
 		public Texture2D Texture => texture;
 
-		/// <summary>The highest surface at a point, or false when the point is off the map.</summary>
+		/// <summary>
+		/// The highest surface at a point — the ground, or the water where the ground is lower —
+		/// or false when the point is off the map.
+		/// </summary>
 		public bool TryGetHeight(float x, float z, out float height)
 		{
 			height = float.NegativeInfinity;
@@ -56,7 +70,22 @@ namespace FishMMO.Client
 				return false;
 			}
 			height = heights[iz * resolution + ix];
+			if (SurfaceWater.TryGetLevel(out float water))
+			{
+				height = Mathf.Max(height, water);
+			}
 			return true;
+		}
+
+		/// <summary>
+		/// Tells the shaders where the open water is: x its still level, y 1 when there is any, z the
+		/// significant height of its waves. Every frame, because the tide never stops.
+		/// </summary>
+		public static void BindWater()
+		{
+			Shader.SetGlobalVector(WaterId, SurfaceWater.TryGetLevel(out float level)
+				? new Vector4(level, 1f, SurfaceWater.WaveHeight, 0f)
+				: Vector4.zero);
 		}
 
 		/// <summary>True when something solid is overhead at a position.</summary>
@@ -158,6 +187,7 @@ namespace FishMMO.Client
 			valid = false;
 			nextRay = -1;
 			Shader.SetGlobalVector(RangeId, Vector4.zero);
+			Shader.SetGlobalVector(WaterId, Vector4.zero);
 		}
 
 		/// <summary>Sets the map size, discarding any map.</summary>

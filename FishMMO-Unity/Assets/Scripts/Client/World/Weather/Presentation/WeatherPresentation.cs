@@ -22,7 +22,6 @@ namespace FishMMO.Client
 		public const float SmoothingSeconds = 0.6f;
 
 		private static WeatherPresentation instance;
-		private static readonly int AtlasId = Shader.PropertyToID("_FishWeatherAtlas");
 
 		/// <summary>An explicit profile (the test scene); otherwise the loaded one.</summary>
 		public WeatherRenderProfile Profile;
@@ -197,6 +196,7 @@ namespace FishMMO.Client
 			Camera camera = TargetCamera != null ? TargetCamera : Camera.main;
 			WeatherTierSettings tier = profile.TierFor(QualitySettings.GetQualityLevel());
 
+			SkyOcclusionMap.BindWater();
 			if (camera != null)
 			{
 				Scene scene = hasContext && context.Scene.IsValid() ? context.Scene : camera.gameObject.scene;
@@ -204,7 +204,10 @@ namespace FishMMO.Client
 				occlusion.Update(camera.transform.position, physics, tier, profile.OcclusionLayers);
 			}
 			float shelter = hasContext ? context.Shelter : 0f;
-			if (camera != null && occlusion.IsCovered(camera.transform.position))
+			/* Under water is under cover, and all at once: the rain overhead is muffled the moment the
+			 * sea closes over the camera. Asked of the moving surface, not the still level, so it
+			 * changes on the same frame the underwater view does. */
+			if (camera != null && (occlusion.IsCovered(camera.transform.position) || SurfaceWater.IsUnder(camera.transform.position)))
 			{
 				shelter = Mathf.Max(shelter, 1f);
 			}
@@ -240,10 +243,6 @@ namespace FishMMO.Client
 
 			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash,
 				hasContext ? context.Substance : null);
-			/* The screen overlay draws the same sprites that fall past the camera, so what lands on
-			 * the view is what is falling: a snowflake, not a disc. Transparent when there is no
-			 * atlas, so a missing texture shows nothing rather than a square of grey. */
-			Shader.SetGlobalTexture(AtlasId, profile.PrecipitationAtlas != null ? profile.PrecipitationAtlas : Texture2D.blackTexture);
 			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
 			WeatherFogPresenter.Apply(shown, profile);
 			ApplyWind(shown);
@@ -276,6 +275,12 @@ namespace FishMMO.Client
 			// falls, and a shower that follows the cloud above you wants the field sampled on the
 			// CPU, which is work for when the cloud system has settled.
 			// this.context, not the render callback's parameter of the same name.
+			/* Nothing falls through the sea. From under it the rain is up in the air, seen only
+			 * through the window overhead, and what it throws up is on the surface, not down here. */
+			if (SurfaceWater.IsUnder(camera.transform.position))
+			{
+				return;
+			}
 			WeatherSubstance falling = hasContext ? this.context.Substance : null;
 			precipitation.Render(shown, camera, currentTier, Profile, time, falling);
 			// Where it lands. Needs the height map, so it draws nothing until that has been built.

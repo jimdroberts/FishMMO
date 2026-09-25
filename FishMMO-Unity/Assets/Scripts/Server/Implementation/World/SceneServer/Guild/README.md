@@ -266,7 +266,7 @@ Outbound, the system sends `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `Gu
 
 `ApplyToGuildAsync` refuses an applicant already in a guild, one blocked by guild leadership (`IsBlockedByGuildLeadershipAsync`), one over `maxPendingApplicationsPerCharacter`, or one inside `applicationCooldownSeconds`. The outstanding cap and the per-guild uniqueness are both enforced inside the INSERT.
 
-`ResolveGuildApplicationAsync` is where the interesting races are settled, because an application sits around for as long as it takes an officer to look at it: in that window the guild can fill up, disband or stop recruiting, and the applicant can join elsewhere, block the recruiter, or apply again from a second client. An accept re-checks that the applicant is still unguilded, then goes on to `AdmitApplicantAsync`, which admits them through the ordinary `JoinGuildAsync` path — tolerating an applicant who is offline or on another scene server, whose own server picks the membership row up on its next pump, because requiring them to be logged in and in the right zone at the moment an officer clicks Accept would make the queue nearly useless.
+`ResolveGuildApplicationAsync` is where the interesting races are settled, because an application sits around for as long as it takes an officer to look at it: in that window the guild can fill up, disband or stop recruiting, and the applicant can join elsewhere, block the recruiter, or apply again from a second client. An accept re-checks that the applicant is still unguilded, then goes on to `AdmitApplicantAsync`, which admits them through the ordinary `JoinGuildAsync` path — tolerating an applicant who is offline or on another scene server, who receives the membership when their character next loads (login or zone change), because requiring them to be logged in and in the right zone at the moment an officer clicks Accept would make the queue nearly useless. It is not the pump that delivers it: the pump refreshes only characters its server already knows are members. `JoinGuildAsync` returns its outcome, which is sent to the accepting officer — their queue entry is gone either way — and `ApplicationAccepted` is logged only when the admission succeeded.
 
 ### Rank Ladder Paths
 
@@ -278,7 +278,7 @@ A refusal answers through `RefuseRankEdit`, which sends both the `GuildResultTyp
 
 ### Leave / Remove / Rank Change Path
 
-**Leave** (`LeaveGuildAsync`): fetches the current members; when the leaver holds the top seat and members remain it finds the most senior remaining rank order and promotes a random member of that rank into the leader seat — and if no successor can be found at all it **refuses the leave**, logging an error, rather than leaving the guild leaderless. It then deletes the leaving member, and — when nobody remains — deletes the guild, its update marker, and releases its housing plots (`IPlotService.ReleaseAllForGuildAsync`). Otherwise it triggers the guild-update marker. Marshals back to reset the controller, remove the tracker, and broadcast `GuildLeaveBroadcast`.
+**Leave** (`LeaveGuildAsync`): fetches the current members; when the leaver holds the top seat and members remain it finds the most senior remaining rank order and promotes a random member of that rank into the leader seat — and if no successor can be found at all it **refuses the leave**, logging an error, rather than leaving the guild leaderless. It then deletes the leaving member, and — when nobody remains — deletes the guild, its update marker, and releases its housing plots (`ReleaseGuildPlotsAsync`). Otherwise it triggers the guild-update marker. Marshals back (`CompleteLocalLeave`) to reset the controller, remove the tracker, and broadcast `GuildLeaveBroadcast`. Two cases stop short of that: a leaver with **no row** in the roster (removed on another server before this one heard) writes nothing at all and only clears the stale local state — the remaining-member count would otherwise be one short, and a two-member guild would be deleted with its other member still in it — and a member **delete that fails** refuses the leave with `Failed` instead of telling the player they left while the row stays.
 
 **Remove** (`RemoveGuildMemberAsync`): re-resolves the requester's authority, verifies the same guild, applies `GuildRules.CanKick` (you cannot kick somebody at or above you), deletes the member, triggers the guild-update marker, appends the log, and marshals back to remove the tracker.
 
@@ -294,9 +294,9 @@ A refusal answers through `RefuseRankEdit`, which sends both the `GuildResultTyp
 2. Snapshots tracked guild IDs and the last fetch time on the main thread.
 3. Enqueues async work: `FetchAndProcessGuildUpdatesAsync`.
    - Fetches guild update rows since `lastFetch` via `IGuildUpdateService.FetchAsync`.
-   - For each updated guild, fetches the current member rows via `ICharacterGuildService.FetchManyAsync` and the rank ladder.
+   - For each updated guild, fetches the current member rows via `ICharacterGuildService.FetchManyAsync` and the rank ladder. A guild enters the pass only with both; one whose roster or ladder could not be read is logged and held for the next pass.
    - Marshals to the main thread:
-     - Updates `LastFetchTime` to `DateTime.UtcNow`.
+     - Advances `LastFetchTime` to one tick past the newest `LastUpdate` the pass processed — the rows' own timestamps — but never past this server's clock at the moment the query was sent (a writer whose clock runs ahead would otherwise drag the mark past later updates), and no further than the oldest update it could not read. Using `DateTime.UtcNow` at marshal time silently skipped every update written while the pass was running.
      - Computes removed members (in the previous cache but not in the current set) and sends `GuildLeaveBroadcast` where applicable.
      - Refreshes the `GuildMemberTracker` cache.
      - Broadcasts `GuildAddMultipleBroadcast` (`BuildRoster` → `GuildAddEntry` rows, with officer notes included only for viewers holding `ViewOfficerNotes`) to all local online guild members.
@@ -308,7 +308,8 @@ Roster entries carry `LastOnlineUnixSeconds` (via `ToUnixSeconds`), not .NET tic
 ### Failure Semantics
 
 - Null/invalid requests return early (silent no-op).
-- Permission, seniority, ladder-integrity and guild-capacity checks fail closed; `GuildAuthority.None` is the value every resolution failure produces.
+- Permission, seniority, ladder-integrity and guild-capacity checks fail closed; `GuildAuthority.None` is the value a missing membership produces, and `GuildAuthority.Unavailable` (also a non-member, with `LookupFailed` set) the value a failed read produces, so the refusal is reported as `Failed` rather than `InsufficientRank`.
+- A database read that FAILED is never read as its default: not as "not found", "not blocked", a count of zero or an empty ladder. It is logged with its error code and message and answered `Failed`; the domain refusals (`GuildNotFound`, `GuildFull`, `TargetIsBlocked`, …) are sent only when the database actually said so.
 - The main-thread pre-filter is a convenience, never the decision: every mutating path re-resolves authority from the database before writing.
 - Async failures are logged and do not block the main thread.
 - Main-thread completion paths revalidate connection/object/controller state before mutating or broadcasting.
@@ -460,13 +461,15 @@ OnServerGuildResolveApplicationBroadcastReceived → ResolveGuildApplicationAsyn
       ├─ Re-check that the applicant is still unguilded (they may have joined
       │    elsewhere; the membership table is keyed per character, so a second
       │    row would fail or quietly move them out of the guild they chose)
-      ├─ AppendGuildLog(ApplicationAccepted)
-      └─ AdmitApplicantAsync → JoinGuildAsync
-           ├─ Persist membership at ResolveLowestRankOrderAsync(guildID)
-           ├─ AppendGuildLog(Joined)
-           └─ IGuildUpdateService.PersistAsync
-           (the applicant may be offline or on another scene server: the join
-            still happens, and their server picks it up on its next pump)
+      ├─ AdmitApplicantAsync → JoinGuildAsync → GuildResultType
+      │    ├─ Persist membership at ResolveLowestRankOrderAsync(guildID)
+      │    │     (an unreadable ladder refuses the join rather than guessing)
+      │    ├─ AppendGuildLog(Joined)
+      │    └─ IGuildUpdateService.PersistAsync
+      │    (the applicant may be offline or on another scene server: the join
+      │     still happens, and they receive it when their character next loads)
+      ├─ Success → AppendGuildLog(ApplicationAccepted)
+      └─ SendGuildResult(officer, outcome)
 ```
 
 ### Disband
@@ -496,8 +499,10 @@ OnPeriodicUpdate(deltaTime)
 │     │
 │     ├─ Async: IGuildUpdateService.FetchAsync(since lastFetch)
 │     ├─ For each updated guild: ICharacterGuildService.FetchManyAsync + the rank ladder
+│     │     (either read failing → logged, guild held for the next pass)
 │     └─ TryEnqueueMainThread
-│        ├── LastFetchTime = DateTime.UtcNow
+│        ├── LastFetchTime = newest processed LastUpdate + 1 tick, capped at
+│        │     the query's start time and the oldest update that could not be read
 │        ├── Compute removed members (previous cache − current DB members)
 │        ├── For removed local members: reset controller, broadcast GuildLeaveBroadcast
 │        ├── Refresh GuildMemberTracker
@@ -522,9 +527,10 @@ CharacterSystem_OnConnect(conn, character)
 │
 ├─ 1. Validate character has IGuildController with ID > 0
 ├─ 2. AddGuildCharacterTracker(guildID, characterID)
-└─ 3. TryEnqueueAsyncWork → PersistGuildMemberAsync(characterID, guildID, rank, sceneName)
-       ├─ Fetch existing version (optimistic concurrency)
-       ├─ Persist member data
+└─ 3. EnqueuePersistence → PersistGuildMemberAsync(characterID, guildID, sceneName)
+       ├─ Fetch the membership row; failed read, no row, or a row in another
+       │     guild → write nothing (the controller is stale; never re-create)
+       ├─ Persist the row's OWN rank with the new location, at its version + 1
        └─ Trigger guild-update marker
 
 CharacterSystem_OnDisconnect(conn, character)
@@ -532,9 +538,10 @@ CharacterSystem_OnDisconnect(conn, character)
 ├─ 1. ClearPendingInvitation(character.ID)
 ├─ 2. Validate character has IGuildController with ID > 0
 ├─ 3. RemoveGuildCharacterTracker(guildID, characterID)
-└─ 4. TryEnqueueAsyncWork → PersistGuildMemberAsync(characterID, guildID, rank, "Offline")
-       ├─ Fetch existing version (optimistic concurrency)
-       ├─ Persist member data with "Offline" location
+└─ 4. Skipped while a leave/kick of this character is in flight here; otherwise
+       EnqueuePersistence → PersistGuildMemberAsync(characterID, guildID, "Offline")
+       ├─ Same row-first rules as connect
+       ├─ Persist the row's own rank with "Offline" location
        └─ Trigger guild-update marker
 ```
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -6,6 +7,7 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
 using FishMMO.Shared;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
 using UnityEngine;
@@ -45,6 +47,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// here and is retried until its instance appears.
 		/// </remarks>
 		private readonly HashSet<int> pendingScenes = new HashSet<int>();
+
+		/// <summary>
+		/// Scenes whose resolve reached the database and failed there, waiting to be handed back to
+		/// <see cref="pendingScenes"/>.
+		/// </summary>
+		/// <remarks>
+		/// A scene is marked resolved before its registration is queued, so a resolve that then
+		/// failed in the database used to leave it marked for good: every foundation kept a plot ID
+		/// of zero, nothing in the scene could be claimed, and the sync skipped it — until the scene
+		/// happened to reload. The failure is reported from the worker, so it arrives through a
+		/// concurrent queue rather than the bounded main-thread queue: handing a scene back must not
+		/// be the one thing that can be refused for being too busy.
+		/// </remarks>
+		private readonly ConcurrentQueue<int> failedSceneResolves = new ConcurrentQueue<int>();
+
+		/// <summary>
+		/// When each scene handed back by <see cref="failedSceneResolves"/> may next be tried.
+		/// </summary>
+		/// <remarks>
+		/// Pending scenes are otherwise retried every frame, which is right for a scene waiting on
+		/// its instance details and wrong for one waiting on a database that has just failed.
+		/// </remarks>
+		private readonly Dictionary<int, DateTime> sceneResolveRetryAfterUtc = new Dictionary<int, DateTime>();
+
+		/// <summary>
+		/// Seconds between attempts to resolve a scene whose last resolve failed in the database.
+		/// </summary>
+		private const float SceneResolveRetrySeconds = 30f;
 
 		/// <summary>
 		/// Maximum queued main-thread actions processed per frame.
@@ -141,7 +171,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void PruneStructureCache()
 		{
-			if (structuresByPlot.Count < 1)
+			if (structuresByPlot.Count < 1 && reservedPlacements.Count < 1)
 			{
 				return;
 			}
@@ -166,6 +196,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					(stale ??= new List<long>()).Add(plotID);
 				}
 			}
+			foreach (long plotID in reservedPlacements.Keys)
+			{
+				if (!live.Contains(plotID))
+				{
+					(stale ??= new List<long>()).Add(plotID);
+				}
+			}
 
 			if (stale == null)
 			{
@@ -175,6 +212,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (long plotID in stale)
 			{
 				structuresByPlot.Remove(plotID);
+				reservedPlacements.Remove(plotID);
 			}
 		}
 
@@ -183,6 +221,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void RetryPendingScenes()
 		{
+			/* Scenes whose resolve failed in the database come back here first: unmarked, so the
+			 * resolve can run again, and held off for a while, so it does not run again every frame
+			 * against a database that has just refused it. */
+			while (failedSceneResolves.TryDequeue(out int failedHandle))
+			{
+				resolvedScenes.Remove(failedHandle);
+				pendingScenes.Add(failedHandle);
+				sceneResolveRetryAfterUtc[failedHandle] = DateTime.UtcNow + TimeSpan.FromSeconds(SceneResolveRetrySeconds);
+			}
+
 			if (pendingScenes.Count < 1)
 			{
 				return;
@@ -192,6 +240,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			int[] handles = new int[pendingScenes.Count];
 			pendingScenes.CopyTo(handles);
 
+			DateTime now = DateTime.UtcNow;
 			foreach (int handle in handles)
 			{
 				/* A scene that has since unloaded takes its foundations with it, so it stops being
@@ -199,6 +248,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (PlotFoundation.Registry.ForScene(handle).Count < 1)
 				{
 					pendingScenes.Remove(handle);
+					sceneResolveRetryAfterUtc.Remove(handle);
+					continue;
+				}
+
+				if (sceneResolveRetryAfterUtc.TryGetValue(handle, out DateTime retryAfterUtc) && now < retryAfterUtc)
+				{
 					continue;
 				}
 
@@ -259,6 +314,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			PlotFoundation.Registry.OnClaimRequested -= Registry_OnClaimRequested;
 			resolvedScenes.Clear();
 			pendingScenes.Clear();
+			sceneResolveRetryAfterUtc.Clear();
+			while (failedSceneResolves.TryDequeue(out _))
+			{
+			}
 
 			// Anything still queued is a purchase half-finished; run it rather than drop it.
 			DrainHousingMainThreadQueue(drainAll: true);
@@ -328,18 +387,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Registers a scene's plots and pushes the resulting rows back onto its foundations.
 		/// </summary>
+		/// <remarks>
+		/// All or nothing. Ownership, access and contents are applied together or not at all, and a
+		/// read that fails hands the scene back to be tried again (<see cref="RetrySceneResolve"/>)
+		/// rather than applying what did arrive. Applying part of it is worse than applying none:
+		/// grants that failed to load would read as a house nobody may enter, and contents that
+		/// failed to load would read as an empty plot that anything may be built across.
+		/// </remarks>
 		private async Task ResolveSceneAsync(int sceneHandle, long worldServerID, string sceneName, List<string> keys)
 		{
 			if (!TryGetDbService(out IPlotService plotService))
 			{
 				Log.Error("HousingSystem", $"Plot registration for '{sceneName}' skipped: IPlotService unavailable.");
+				RetrySceneResolve(sceneHandle);
 				return;
 			}
 
 			DatabaseResult<int> registered = await plotService.RegisterAsync(worldServerID, sceneName, keys);
 			if (!registered.IsSuccess)
 			{
-				Log.Error("HousingSystem", $"Plot registration for '{sceneName}' failed: {registered.ErrorMessage}");
+				Log.Error("HousingSystem", $"Plot registration for '{sceneName}' failed; retrying in {SceneResolveRetrySeconds:0}s: [{registered.ErrorCode}] {registered.ErrorMessage}");
+				RetrySceneResolve(sceneHandle);
 				return;
 			}
 			if (registered.Data > 0)
@@ -358,7 +426,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<int> backfilled = await plotService.BackfillTaxDueAsync(worldServerID, backfillDue.Value);
 				if (!backfilled.IsSuccess)
 				{
-					Log.Warning("HousingSystem", $"Could not backfill tax dates for world {worldServerID}: {backfilled.ErrorMessage}");
+					// Not a reason to hold the scene back: it is idempotent and runs on the next resolve.
+					Log.Warning("HousingSystem", $"Could not backfill tax dates for world {worldServerID}: [{backfilled.ErrorCode}] {backfilled.ErrorMessage}");
 				}
 				else if (backfilled.Data > 0)
 				{
@@ -369,7 +438,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DatabaseResult<List<PlotData>> plots = await plotService.FetchBySceneAsync(worldServerID, sceneName);
 			if (!plots.IsSuccess || plots.Data == null)
 			{
-				Log.Error("HousingSystem", $"Could not read plots for '{sceneName}': {plots.ErrorMessage}");
+				Log.Error("HousingSystem", $"Could not read plots for '{sceneName}'; retrying in {SceneResolveRetrySeconds:0}s: [{plots.ErrorCode}] {plots.ErrorMessage}");
+				RetrySceneResolve(sceneHandle);
 				return;
 			}
 
@@ -379,6 +449,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * — and a player who reached a door during that window would be told no for a reason
 			 * that had nothing to do with them. */
 			Dictionary<long, Dictionary<long, PlotPermission>> grantsByPlot = await FetchAccessGrantsAsync(plots.Data);
+			if (grantsByPlot == null)
+			{
+				RetrySceneResolve(sceneHandle);
+				return;
+			}
 
 			/* What is standing on each plot, read in the same pass and for the same reason. Placement
 			 * tests a new piece against everything already there, so the alternative is a round trip
@@ -392,12 +467,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 			Dictionary<long, List<PlotStructureData>> structures = await FetchStructuresAsync(plotIDs);
+			if (structures == null)
+			{
+				RetrySceneResolve(sceneHandle);
+				return;
+			}
 
 			// Unity objects may only be touched on the main thread.
 			if (!TryEnqueueHousingMainThread(() => ApplyResolvedPlots(sceneHandle, sceneName, plots.Data, grantsByPlot, structures)))
 			{
-				Log.Warning("HousingSystem", $"Could not apply resolved plots for '{sceneName}'.");
+				Log.Warning("HousingSystem", $"Could not apply resolved plots for '{sceneName}'; retrying in {SceneResolveRetrySeconds:0}s.");
+				RetrySceneResolve(sceneHandle);
 			}
+		}
+
+		/// <summary>
+		/// Hands a scene whose resolve failed back to be tried again. Safe from any thread.
+		/// </summary>
+		private void RetrySceneResolve(int sceneHandle)
+		{
+			failedSceneResolves.Enqueue(sceneHandle);
 		}
 
 		/// <summary>
@@ -454,6 +543,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * state that grants the least. */
 				PlotState state = PlotStateExtensions.FromStored(plot.State);
 
+				/* Both reads succeeded or this would not be running (see ResolveSceneAsync), so a plot
+				 * missing from either one genuinely has nobody on its list and nothing built on it. */
 				grantsByPlot.TryGetValue(plot.ID, out Dictionary<long, PlotPermission> grants);
 				foundation.ApplyResolvedState(plot.ID, owner, state, grants ?? new Dictionary<long, PlotPermission>());
 
@@ -463,6 +554,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				++resolved;
 			}
+
+			sceneResolveRetryAfterUtc.Remove(sceneHandle);
 
 			Log.Debug("HousingSystem", $"Resolved {resolved} plot(s) in '{sceneName}'.");
 		}
@@ -568,11 +661,109 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private async Task ClaimPlotAsync(IPlayerCharacter player, IPlotFoundation foundation, long plotID, long characterID, long price)
 		{
-			if (!TryGetDbService(out IPlotService plotService))
+			/* Restarted whole, and only for a transient fault. A unit of work does not retry inside
+			 * itself — Postgres aborts the transaction, so the only sound retry is a fresh one — and a
+			 * claim is a player's click with nobody left to tell if it quietly fails once. */
+			ClaimAttempt attempt = ClaimAttempt.TransientFault;
+			for (int i = 1; i <= MaxClaimAttempts && attempt == ClaimAttempt.TransientFault; ++i)
 			{
-				Log.Error("HousingSystem", "Claim failed: IPlotService unavailable.");
+				attempt = await TryClaimCleanAsync(plotID, characterID);
+			}
+			if (attempt != ClaimAttempt.Claimed)
+			{
 				return;
 			}
+
+			MarkPlotChanged(plotID);
+
+			/* The claim emptied the database's copy of the plot's guest list and contents; this
+			 * server's copies are emptied in the same main-thread step that applies the new owner, so
+			 * there is no frame in which the new owner holds a plot still carrying the last one's keys
+			 * or furniture. Both are main-thread state, and this runs on the worker. */
+			if (price <= 0)
+			{
+				if (!TryEnqueueHousingMainThread(() =>
+				{
+					ForgetPlotContents(plotID);
+					ApplyClaimedState(foundation, PlotOwner.ForCharacter(characterID));
+				}))
+				{
+					Log.Warning("HousingSystem", $"Could not apply the claim of plot {plotID} locally; the plot sync corrects its owner, and its placement cache the next time the scene resolves.");
+				}
+				return;
+			}
+
+			// The charge touches in-memory attributes, so it has to go back to the main thread.
+			if (!TryEnqueueHousingMainThread(() =>
+			{
+				ForgetPlotContents(plotID);
+				CompletePlotPurchase(player, foundation, plotID, characterID, price);
+			}))
+			{
+				Log.Error("HousingSystem",
+					$"Plot {plotID} was claimed for CharID={characterID} but the charge could not be scheduled; releasing it.");
+				if (TryGetDbService(out IPlotService plotService))
+				{
+					await ReleaseClaimAsync(plotService, plotID, characterID);
+				}
+			}
+		}
+
+		/// <summary>
+		/// How many times a claim's transaction is started before a transient fault is given up on.
+		/// </summary>
+		private const int MaxClaimAttempts = 3;
+
+		/// <summary>How one attempt at a claim's transaction ended.</summary>
+		private enum ClaimAttempt
+		{
+			/// <summary>The plot was taken and wiped, and the transaction committed.</summary>
+			Claimed = 0,
+			/// <summary>Somebody else holds it, or the character already owns land. Nothing changed.</summary>
+			Refused = 1,
+			/// <summary>A fault that trying again will not fix. Nothing changed.</summary>
+			Faulted = 2,
+			/// <summary>A fault a fresh transaction may get past. Nothing changed.</summary>
+			TransientFault = 3,
+		}
+
+		/// <summary>
+		/// Takes an unowned plot for a character and clears what the last owner left on it, as one
+		/// transaction.
+		/// </summary>
+		/// <remarks>
+		/// The land arrives clean, both ways, and in the same commit that takes it.
+		///
+		/// <para>A released plot's guest list stays in the database until something removes it, and a
+		/// grant is honoured on any occupied plot whoever issued it — so a list that outlived the
+		/// claim would give the last owner's friends keys to the new owner's house the moment it was
+		/// finished. Anything still standing is cleared for the same reason: guild land released when
+		/// a guild disbanded is released and nothing else, so its hall is still on it.</para>
+		///
+		/// <para>Both used to be separate writes queued after the claim, and when either failed the
+		/// claim stood anyway with the stale rows under it. Inside the claim's transaction a failure
+		/// takes the claim back with it — and costs the player nothing, because the charge only
+		/// follows a committed claim.</para>
+		/// </remarks>
+		private async Task<ClaimAttempt> TryClaimCleanAsync(long plotID, long characterID)
+		{
+			if (!TryGetDbService(out IPlotService plotService) ||
+				!TryGetDbService(out IPlotAccessService accessService) ||
+				!TryGetDbService(out IPlotStructureService structureService) ||
+				!TryGetDbService(out IUnitOfWorkService unitOfWorkService))
+			{
+				Log.Error("HousingSystem", "Claim failed: a housing database service is unavailable.");
+				return ClaimAttempt.Faulted;
+			}
+
+			DatabaseResult<IUnitOfWork> begin = await unitOfWorkService.BeginAsync();
+			if (!begin.IsSuccess || begin.Data == null)
+			{
+				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} could not begin a unit of work: [{begin.ErrorCode}] {begin.ErrorMessage}");
+				return begin.IsTransient ? ClaimAttempt.TransientFault : ClaimAttempt.Faulted;
+			}
+
+			await using IUnitOfWork unitOfWork = begin.Data;
 
 			DatabaseResult<int> claim = await plotService.TryClaimAsync(
 				plotID,
@@ -583,6 +774,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!claim.IsSuccess)
 			{
+				await unitOfWork.RollbackAsync();
+
 				/* A unique violation here is the one-house-per-player index firing, not a fault. Two
 				 * claims on two scene servers can both pass the NOT EXISTS check inside the
 				 * statement; the index is what stops the second becoming a second house. Reported at
@@ -590,47 +783,50 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (claim.ErrorCode == DatabaseErrorCodes.UniqueViolation)
 				{
 					Log.Debug("HousingSystem", $"CharID={characterID} already owns a plot and cannot claim {plotID}.");
-					return;
+					return ClaimAttempt.Refused;
 				}
 
-				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} errored: {claim.ErrorMessage}");
-				return;
+				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} errored: [{claim.ErrorCode}] {claim.ErrorMessage}");
+				return claim.IsTransient ? ClaimAttempt.TransientFault : ClaimAttempt.Faulted;
 			}
 			if (claim.Data != 1)
 			{
 				/* Somebody else owns it, or this character already owns one. Nothing was taken, so
 				 * there is nothing to undo either way. */
+				await unitOfWork.RollbackAsync();
 				Log.Debug("HousingSystem", $"CharID={characterID} lost the race for plot {plotID}, or already owns land.");
-				return;
+				return ClaimAttempt.Refused;
 			}
 
-			/* The land arrives clean, both ways.
-			 *
-			 * An abandoned plot carries its previous owner's grants until something removes them,
-			 * and reclamation is a write that can be interrupted — so the claim clears them rather
-			 * than trusting that it was. The same goes for anything left standing: guild land
-			 * released when a guild disbanded was never vaulted, and an interrupted reclamation can
-			 * leave a house on land the row says is free. Neither should become the new owner's
-			 * problem, and a claim is rare enough that the two extra writes cost nothing. */
-			ClearAccessGrants(plotID);
-			ClearStructures(plotID);
-			UncachePlot(plotID);
-
-			MarkPlotChanged(plotID);
-
-			if (price <= 0)
+			DatabaseResult<int> revoked = await accessService.RevokeAllAsync(plotID);
+			if (!revoked.IsSuccess)
 			{
-				ApplyClaimedStateOnMainThread(foundation, PlotOwner.ForCharacter(characterID));
-				return;
+				await unitOfWork.RollbackAsync();
+				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} rolled back: the previous guest list could not be cleared. [{revoked.ErrorCode}] {revoked.ErrorMessage}");
+				return revoked.IsTransient ? ClaimAttempt.TransientFault : ClaimAttempt.Faulted;
 			}
 
-			// The charge touches in-memory attributes, so it has to go back to the main thread.
-			if (!TryEnqueueHousingMainThread(() => CompletePlotPurchase(player, foundation, plotID, characterID, price)))
+			DatabaseResult<int> demolished = await structureService.DemolishAllAsync(plotID);
+			if (!demolished.IsSuccess)
 			{
-				Log.Error("HousingSystem",
-					$"Plot {plotID} was claimed for CharID={characterID} but the charge could not be scheduled; releasing it.");
-				await ReleaseClaimAsync(plotService, plotID, characterID);
+				await unitOfWork.RollbackAsync();
+				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} rolled back: what was left standing could not be cleared. [{demolished.ErrorCode}] {demolished.ErrorMessage}");
+				return demolished.IsTransient ? ClaimAttempt.TransientFault : ClaimAttempt.Faulted;
 			}
+
+			DatabaseResult commit = await unitOfWork.CommitAsync();
+			if (!commit.IsSuccess)
+			{
+				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} could not be committed: [{commit.ErrorCode}] {commit.ErrorMessage}");
+				return commit.IsTransient ? ClaimAttempt.TransientFault : ClaimAttempt.Faulted;
+			}
+
+			if (demolished.Data > 0)
+			{
+				Log.Debug("HousingSystem", $"Cleared {demolished.Data} structure(s) left standing on plot {plotID} as CharID={characterID} claimed it.");
+			}
+
+			return ClaimAttempt.Claimed;
 		}
 
 		/// <summary>
@@ -642,9 +838,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				ApplyClaimedState(foundation, PlotOwner.ForCharacter(characterID));
 
-				/* Recorded only now, after the deduction is durable. A ledger entry that precedes
-				 * its deduction would be returned by escrow reconciliation and hand back money that
-				 * was never taken — see the invariant in #148. */
+				/* Recorded only now, after the deduction. The attribute save was queued on this
+				 * character's lane a moment ago, so this record runs behind it; a ledger entry that
+				 * preceded its deduction would be returned by escrow reconciliation and hand back
+				 * money that was never taken — see the invariant in #148. */
 				RecordLandPurchase(characterID, price);
 				return;
 			}
@@ -672,10 +869,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * was made, because the buyer could not pay — so the lot should look untouched rather
 			 * than like a house somebody lost. */
 			DatabaseResult<int> release = await plotService.ReleaseAsync(plotID, characterID, 0, (int)PlotStateExtensions.OnReleased());
-			if (!release.IsSuccess || release.Data != 1)
+			if (!release.IsSuccess)
 			{
+				/* Not retried here: the service has already retried a transient fault with backoff,
+				 * so this is a database that stayed down past that budget. Error, and worded for
+				 * whoever reads it, because nothing sweeps such claims — the land stays with a
+				 * character who did not pay until somebody releases it. */
 				Log.Error("HousingSystem",
-					$"Plot {plotID} could not be released from CharID={characterID}; it is owned by someone who did not pay.");
+					$"Plot {plotID} could not be released from CharID={characterID}, who did not pay for it; it must be released by hand: [{release.ErrorCode}] {release.ErrorMessage}");
+				return;
+			}
+			if (release.Data != 1)
+			{
+				// Pinned to this owner, so zero means the claim was no longer theirs to give back.
+				Log.Warning("HousingSystem", $"Plot {plotID} was no longer held by CharID={characterID} when their unpaid claim was released.");
 				return;
 			}
 
@@ -686,22 +893,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Tells the other scene servers that a plot changed hands.
 		/// </summary>
 		/// <remarks>
-		/// Best effort and never awaited by the transaction. A missed notification delays the other
-		/// channels noticing until their next poll; blocking the purchase on it would make a
+		/// Never awaited by the change it announces: blocking a purchase on it would make a
 		/// bookkeeping write able to fail a sale.
+		///
+		/// <para>But not best effort either. The other channels learn about a plot from these rows
+		/// and nothing else — <see cref="SyncPlotsAsync"/> reads <c>plot_updates</c> — so a mark that
+		/// never lands is not a late notification, it is a missing one: the other channels keep the
+		/// old owner, the old state, or a revoked guest's key until they next load the scene. So it
+		/// goes through <see cref="EnqueuePersistence"/>, because every caller has already committed
+		/// the change, and a failure is an error rather than silence.</para>
 		/// </remarks>
 		private void MarkPlotChanged(long plotID)
 		{
-			if (!TryEnqueueAsyncWork(async () =>
+			EnqueuePersistence(async () =>
 			{
-				if (TryGetDbService(out IPlotUpdateService plotUpdateService))
+				if (!TryGetDbService(out IPlotUpdateService plotUpdateService))
 				{
-					await plotUpdateService.PersistAsync(plotID);
+					Log.Error("HousingSystem", $"Could not record the update for plot {plotID}: IPlotUpdateService unavailable. Other channels will not see it until they next load the scene.");
+					return;
 				}
-			}))
-			{
-				Log.Warning("HousingSystem", $"Could not record the update for plot {plotID}; other channels will see it late.");
-			}
+
+				DatabaseResult marked = await plotUpdateService.PersistAsync(plotID);
+				if (!marked.IsSuccess)
+				{
+					Log.Error("HousingSystem",
+						$"Could not record the update for plot {plotID}; other channels will not see it until they next load the scene: [{marked.ErrorCode}] {marked.ErrorMessage}");
+				}
+			}, plotID);
 		}
 
 		/// <summary>
@@ -718,6 +936,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
 				{
+					Log.Warning("HousingSystem", $"Currency ledger: could not record {amount} (land purchase) for CharID={characterID}: ICurrencyLedgerService unavailable.");
 					return;
 				}
 
@@ -730,22 +949,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!record.IsSuccess)
 				{
 					Log.Warning("HousingSystem",
-						$"Currency ledger: could not record {amount} (land purchase) for CharID={characterID}. {record.ErrorMessage}");
+						$"Currency ledger: could not record {amount} (land purchase) for CharID={characterID}: [{record.ErrorCode}] {record.ErrorMessage}");
 				}
 			}, characterID))
 			{
 				Log.Warning("HousingSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
-			}
-		}
-
-		/// <summary>
-		/// Applies a completed claim to a foundation from the main thread.
-		/// </summary>
-		private void ApplyClaimedStateOnMainThread(IPlotFoundation foundation, PlotOwner owner)
-		{
-			if (!TryEnqueueHousingMainThread(() => ApplyClaimedState(foundation, owner)))
-			{
-				Log.Warning("HousingSystem", "Could not apply the plot claim; it will correct on the next resolve.");
 			}
 		}
 
@@ -803,7 +1011,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				dtos.Add(new CharacterAttributeData(0, kvp.Value.Version, characterID, kvp.Key, kvp.Value.Value, kvp.Value.CurrentValue));
 			}
 
-			return TryEnqueueAsyncWork(async () => await attributeService.PersistAsync(dtos), characterID);
+			/* TryEnqueueAsyncWork rather than EnqueuePersistence: a refusal here is reported to
+			 * CharacterCurrency.TrySpend, which refunds before anything else has happened. A save
+			 * that runs and fails is left to the periodic save — the attributes stay dirty until a
+			 * write is confirmed — but it is reported, so a failing save is not silent. */
+			return TryEnqueueAsyncWork(async () =>
+			{
+				try
+				{
+					await BulkWriteReporting.ReportAsync("HousingSystem", "Housing currency save",
+						await attributeService.PersistAsync(dtos), $"CharID={characterID}");
+				}
+				catch (Exception ex)
+				{
+					Log.Error("HousingSystem", $"Housing currency save failed (CharID={characterID}): {ex}");
+				}
+			}, characterID);
 		}
 	}
 }

@@ -170,7 +170,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			reportPlayerNextTicks[account] = now + ReportPlayerIntervalTicks;
 
 			/* A report the server was too busy to queue is not a report filed: the player was told to
-			 * try again in a moment, so the moment must not be sixty seconds. */
+			 * try again in a moment, so the moment must not be sixty seconds.
+			 *
+			 * Nor is one the database failed to write, or refused a field of — the player is told
+			 * the same "try again", and the same reasoning gives the attempt back. Only the service's
+			 * flood limit keeps it charged: that refusal means the player has filed enough, and this
+			 * throttle then saves the database the round trip of saying so again. */
 			if (!SubmitTicket(
 				character,
 				SupportTicketCategory.PlayerReport,
@@ -179,7 +184,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				targetAccount,
 				resolvedName,
 				targetCharacterID,
-				AnswerReportByCharacterID))
+				(characterID, filed, floodLimited, ticketID, message) =>
+				{
+					if (!filed && !floodLimited)
+					{
+						RefundReportThrottle(account, now);
+					}
+					AnswerReportByCharacterID(characterID, filed, floodLimited, ticketID, message);
+				}))
+			{
+				reportPlayerNextTicks.Remove(account);
+			}
+		}
+
+		/// <summary>
+		/// Gives back a report-panel throttle charged for a filing that did not happen. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Only the charge this request made is removed. The answer arrives a database round trip
+		/// later, and if the account has been charged again since then that newer charge belongs
+		/// to a request still in flight.
+		/// </remarks>
+		/// <param name="account">The reporting account.</param>
+		/// <param name="chargedTicks">The time the charge was stamped, as passed to the throttle.</param>
+		private void RefundReportThrottle(string account, long chargedTicks)
+		{
+			if (reportPlayerNextTicks.TryGetValue(account, out long next) &&
+				next == chargedTicks + ReportPlayerIntervalTicks)
 			{
 				reportPlayerNextTicks.Remove(account);
 			}
@@ -239,7 +270,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Resolved by id for the reason <c>ReplySupportByCharacterID</c> is: the reporter may have
 		/// gone while the create ran. A reporter who has gone is not told; the ticket is filed.
 		/// </remarks>
-		private void AnswerReportByCharacterID(long characterID, bool filed, long ticketID, string message)
+		private void AnswerReportByCharacterID(long characterID, bool filed, bool floodLimited, long ticketID, string message)
 		{
 			if (!TryGetOnlineCharacterMapping(out var mapping) ||
 				!mapping.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character) ||

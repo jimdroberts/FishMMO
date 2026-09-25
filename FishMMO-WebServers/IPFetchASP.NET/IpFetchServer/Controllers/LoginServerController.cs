@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using FishMMO.Database;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -33,7 +34,7 @@ public class LoginServerController : ControllerBase
 	/// </summary>
 	/// <param name="dbContextFactory">Factory used to create instances of <see cref="NpgsqlDbContext"/>.</param>
 	/// <param name="memoryCache">In-memory cache used to store and retrieve cached login server lists.</param>
-	/// <param name="connectionTokenKeyService">Service for registering connection token HMAC keys in the database.</param>
+	/// <param name="connectionTokenKeyService">Service that reads the shared connection token HMAC key from the database.</param>
 	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, IMemoryCache memoryCache, IConnectionTokenKeyService? connectionTokenKeyService = null)
 	{
 		this.dbContextFactory = dbContextFactory;
@@ -47,8 +48,8 @@ public class LoginServerController : ControllerBase
 	/// </summary>
 	/// <returns>
 	/// An <see cref="IActionResult"/> containing HTTP 200 with the list of ports
-	/// on success, HTTP 404 if no servers are available, or
-	/// HTTP 503 if the database context could not be created.
+	/// on success, HTTP 404 if no servers are available, HTTP 503 if the database
+	/// could not be read, or HTTP 500 if the signing key is not configured.
 	/// </returns>
 	[HttpGet]
 	public async Task<IActionResult> GetLoginServers()
@@ -73,18 +74,24 @@ public class LoginServerController : ControllerBase
 			{
 				if (!memoryCache.TryGetValue(cacheKey, out loginServerPorts))
 				{
-					using NpgsqlDbContext dbContext = dbContextFactory.CreateDbContext();
-					if (dbContext == null)
+					/* The factory throws rather than returning null, and so does the query when the
+					 * database is down. Both used to escape to the global exception handler as a 500 —
+					 * "the server is broken" — for what is a 503, "try again". */
+					try
 					{
-						await Log.Error("LoginServerController", "Failed to create DbContext for LoginServerController.");
+						using NpgsqlDbContext dbContext = dbContextFactory.CreateDbContext();
+
+						// Project to an immutable array before caching.
+						loginServerPorts = await dbContext.LoginServers
+							.AsNoTracking()
+							.Select(l => l.Port)
+							.ToArrayAsync(HttpContext.RequestAborted);
+					}
+					catch (Exception ex) when (ex is not OperationCanceledException)
+					{
+						await Log.Error("LoginServerController", $"Could not read the login server directory: {ex.Message}");
 						return StatusCode(StatusCodes.Status503ServiceUnavailable, "Login server directory temporarily unavailable.");
 					}
-
-					// Project to an immutable array before caching.
-					loginServerPorts = await dbContext.LoginServers
-						.AsNoTracking()
-						.Select(l => l.Port)
-						.ToArrayAsync(HttpContext.RequestAborted);
 
 					// Never cache an empty list — after a LoginServer restart it takes
 					// 60-90s for the server to re-register. A cached empty result would
@@ -135,11 +142,10 @@ public class LoginServerController : ControllerBase
 		// When keyId is configured, it is included in the payload so the receiving
 		// game server can select the correct verification key for multi-region
 		// deployments.  Legacy deployments without a keyId are still supported.
-		var hmacKey = GetConnectionTokenHmacKey();
-		if (hmacKey == null)
+		var (hmacKey, keyFailure) = await GetConnectionTokenHmacKeyAsync(HttpContext.RequestAborted);
+		if (keyFailure != null || hmacKey == null)
 		{
-			await Log.Error("LoginServerController", "ConnectionToken HMAC key not configured.");
-			return StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error.");
+			return keyFailure ?? StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error.");
 		}
 		if (hmacKey.Length < 32)
 		{
@@ -169,12 +175,11 @@ public class LoginServerController : ControllerBase
 		await Log.Debug("LoginServerController",
 			$"Issued stateless connection token for IP {realIp} (expires in 60s)");
 
-		// Register the signing key in the database so game servers can discover it
-		// for verification. The database is the sole source for keys.
-		if (connectionTokenKeyService != null)
-		{
-			_ = RegisterConnectionTokenKeyAsync(keyId ?? "shared", hmacKey, HttpContext.RequestAborted);
-		}
+		/* Nothing is written back. Every request used to fire-and-forget an upsert of the key it had
+		 * just read from the database — a write per anonymous request, racing the installer: a request
+		 * that read the old key before a rotation wrote it back after, silently reverting it, and the
+		 * upsert's is_active = true reactivated a key an operator had deactivated. The key is already
+		 * in the database, which is where the game servers read it from; the installer is its writer. */
 
 		// Wrap in a "Ports" envelope so Unity's JsonUtility can deserialize
 		// the response without manual string rewriting on the client.
@@ -182,62 +187,59 @@ public class LoginServerController : ControllerBase
 	}
 
 	/// <summary>
-	/// Registers the connection token HMAC key in the database so game servers
-	/// (Login/World/Scene) can discover and use it for token verification without
-	/// environment variable coordination.
-	/// This is a best-effort operation — failures are logged but never propagated
-	/// to the client. The database is the sole source for this key.
+	/// Reads the shared HMAC key for connection token signing from the connection_token_keys table
+	/// (key_id='shared'). All IpFetchServers share one key. No environment variable fallback.
 	/// </summary>
-	/// <param name="keyId">The logical key identifier (e.g., region code, or "default").</param>
-	/// <param name="hmacKey">The raw HMAC-SHA256 key bytes.</param>
-	/// <param name="ct">Cancellation token.</param>
-	private async Task RegisterConnectionTokenKeyAsync(string keyId, byte[] hmacKey, CancellationToken ct)
+	/// <remarks>
+	/// <para>
+	/// Awaited, and every failure answered for what it is. This was a synchronous
+	/// <c>GetAwaiter().GetResult()</c> on a request thread inside a bare <c>catch</c>, and any failure
+	/// at all came back as "HMAC key not configured" and a 500 — so a database blip was logged as a
+	/// configuration error, and sent operators looking for a missing key that was there all along.
+	/// </para>
+	/// <para>
+	/// An inactive key is refused. The game servers verify only against active keys, so a token signed
+	/// with one would be rejected at the login server with nothing here to say why.
+	/// </para>
+	/// </remarks>
+	/// <returns>The key, or the reply to give instead.</returns>
+	private async Task<(byte[]? Key, IActionResult? Failure)> GetConnectionTokenHmacKeyAsync(CancellationToken ct)
 	{
-		if (connectionTokenKeyService == null) return;
+		if (connectionTokenKeyService == null)
+		{
+			await Log.Error("LoginServerController", "ConnectionToken HMAC key cannot be read: no key service is registered.");
+			return (null, StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error."));
+		}
 
-		try
+		var result = await connectionTokenKeyService.FetchByKeyIdAsync("shared", ct);
+		if (!result.IsSuccess)
 		{
-			var result = await connectionTokenKeyService.UpsertAsync(keyId, hmacKey, ct);
-			if (result.IsSuccess)
+			if (result.ErrorCode == DatabaseErrorCodes.NotFound)
 			{
-				await Log.Debug("LoginServerController",
-					$"Registered connection token key '{keyId}' in database.");
+				await Log.Error("LoginServerController",
+					"ConnectionToken HMAC key not configured: there is no 'shared' row in connection_token_keys. Run the installer's Configure Server Keys.");
+				return (null, StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error."));
 			}
-			else
-			{
-				await Log.Warning("LoginServerController",
-					$"Failed to register connection token key '{keyId}' in database: {result.ErrorMessage}");
-			}
-		}
-		catch (OperationCanceledException)
-		{
-			// Shutdown or request aborted — not actionable.
-		}
-		catch (Exception ex)
-		{
-			await Log.Warning("LoginServerController",
-				$"Could not register connection token key '{keyId}' in database: {ex.Message}");
-		}
-	}
 
-	/// <summary>
-	/// Resolves the shared HMAC key for connection token signing.
-	/// Loaded from the connection_token_keys database table (key_id='shared').
-	/// All IpFetchServers share one key. No environment variable fallback.
-	/// Returns null if the database is unavailable or the key is not found.
-	/// </summary>
-	private byte[]? GetConnectionTokenHmacKey()
-	{
-		if (connectionTokenKeyService == null) return null;
-		try
-		{
-			var result = connectionTokenKeyService.FetchByKeyIdAsync("shared", HttpContext.RequestAborted)
-				.GetAwaiter().GetResult();
-			if (result.IsSuccess && result.Data.HmacKey is byte[] dbKey && dbKey.Length >= 32)
-				return dbKey;
+			await Log.Error("LoginServerController",
+				$"ConnectionToken HMAC key could not be read: [{result.ErrorCode}] {result.ErrorMessage}. This is a database problem, not a missing key.");
+			return (null, StatusCode(StatusCodes.Status503ServiceUnavailable, "Login server directory temporarily unavailable."));
 		}
-		catch { /* DB unavailable */ }
-		return null;
+
+		if (!result.Data.IsActive)
+		{
+			await Log.Error("LoginServerController",
+				"ConnectionToken HMAC key 'shared' is deactivated; game servers will not verify tokens signed with it. Refusing to sign.");
+			return (null, StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error."));
+		}
+
+		if (result.Data.HmacKey == null)
+		{
+			await Log.Error("LoginServerController", "ConnectionToken HMAC key 'shared' has no key material.");
+			return (null, StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error."));
+		}
+
+		return (result.Data.HmacKey, null);
 	}
 
 	/// <summary>

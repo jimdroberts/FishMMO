@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using FishMMO.Auth.Implementation;
+using FishMMO.ControlPanel.Controllers;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
@@ -34,7 +35,7 @@ namespace FishMMO.ControlPanel.Services
 	///   <item><description>(panel) Persist the profile and chosen channels, then redeem the beta code.</description></item>
 	///   <item><description>Auto-verify when the development policy says so or the server verifies nothing; otherwise send a code on every channel <see cref="AccountVerificationRules.Effective"/> names, or verify without one when it names none.</description></item>
 	///   <item><description>Generate a TOTP secret, encrypt it under the deployment master KEK, persist it, then enable TOTP.</description></item>
-	///   <item><description>Generate recovery codes, hash them, persist them best-effort.</description></item>
+	///   <item><description>Generate recovery codes, hash them, persist them. (panel) The secret, the enable and the codes are one transaction — see <see cref="SelfServiceService.EnrolAsync"/>.</description></item>
 	///   <item><description>Return the otpauth URI and the plaintext recovery codes once.</description></item>
 	/// </list>
 	/// <para>
@@ -76,13 +77,12 @@ namespace FishMMO.ControlPanel.Services
 		private readonly IEmailQueueService emailQueue;
 		private readonly ISmsQueueService smsQueue;
 		private readonly IBetaCodeService betaCodes;
-		private readonly ITwoFactorRecoveryCodeService recoveryCodes;
 		private readonly ISupportTicketService supportTickets;
-		private readonly TotpKeyProvider totpKeys;
 		private readonly PanelRegistrationOptions options;
 		private readonly VerificationOptions verification;
 		private readonly BetaOptions beta;
 		private readonly VerificationResendThrottle throttle;
+		private readonly SelfServiceService selfService;
 		private readonly ILogger<AccountRegistrationService> log;
 
 		public AccountRegistrationService(
@@ -90,22 +90,20 @@ namespace FishMMO.ControlPanel.Services
 			IEmailQueueService emailQueue,
 			ISmsQueueService smsQueue,
 			IBetaCodeService betaCodes,
-			ITwoFactorRecoveryCodeService recoveryCodes,
 			ISupportTicketService supportTickets,
-			TotpKeyProvider totpKeys,
 			PanelRegistrationOptions options,
 			VerificationOptions verification,
 			BetaOptions beta,
 			VerificationResendThrottle throttle,
+			SelfServiceService selfService,
 			ILogger<AccountRegistrationService> log)
 		{
+			this.selfService = selfService;
 			this.accounts = accounts;
 			this.emailQueue = emailQueue;
 			this.smsQueue = smsQueue;
 			this.betaCodes = betaCodes;
-			this.recoveryCodes = recoveryCodes;
 			this.supportTickets = supportTickets;
-			this.totpKeys = totpKeys;
 			this.options = options;
 			this.verification = verification;
 			this.beta = beta;
@@ -127,6 +125,7 @@ namespace FishMMO.ControlPanel.Services
 		/// <param name="Field">The form field an error belongs to, when it belongs to one.</param>
 		/// <param name="VerificationPending">Channels a code was sent on; any one of them verifies the account.</param>
 		/// <param name="BetaWarning">Set when the account exists but the beta code could not be attached to it.</param>
+		/// <param name="TwoFactorWarning">Set when the account exists but two-factor could not be set up on it.</param>
 		public sealed record RegistrationResult(
 			bool Ok,
 			string Error,
@@ -136,7 +135,12 @@ namespace FishMMO.ControlPanel.Services
 			string OtpauthUri,
 			IReadOnlyList<string> RecoveryCodes,
 			bool BetaRedeemed,
-			string BetaWarning);
+			string BetaWarning,
+			string TwoFactorWarning = null);
+
+		/// <summary>What a new account is told when it was created without two-factor.</summary>
+		public const string TwoFactorNotSetUpWarning =
+			"Your account was created, but two-factor could not be set up on it. Sign in and set it up from My account.";
 
 		private static RegistrationResult Refuse(string error, string field = null) =>
 			new(false, error, field, false, AccountVerificationChannels.None, null, null, false, null);
@@ -216,6 +220,15 @@ namespace FishMMO.ControlPanel.Services
 			{
 				IReadOnlyCollection<string> programs = beta.Enabled ? beta.Programs : Array.Empty<string>();
 				var redeemable = await betaCodes.CheckRedeemableAsync(betaCode, programs, cancellationToken);
+				if (!redeemable.IsSuccess && DatabaseReplies.IsFault(redeemable.ErrorCode))
+				{
+					/* The database did not answer, which says nothing about the code. Telling the player
+					 * it is invalid sent them hunting for a typo; this refusal is the same for every code,
+					 * real or guessed, so it tells a script nothing either. */
+					log.LogWarning("Beta code check failed during registration: [{Code}] {Message}",
+						redeemable.ErrorCode, redeemable.ErrorMessage);
+					return Refuse("Your beta code could not be checked right now. Try again shortly.", "betaCode");
+				}
 				if (!redeemable.IsSuccess || !redeemable.Data)
 				{
 					return Refuse(InvalidBetaCodeError, "betaCode");
@@ -334,69 +347,24 @@ namespace FishMMO.ControlPanel.Services
 				new(true, null, null, autoVerified, pending, otpauthUri, codes, betaRedeemed, betaWarning);
 
 			// ── Mandatory two-factor enrolment ──────────────────────────────────
-			byte[] masterKek = totpKeys.MasterKek;
-			if (masterKek == null || masterKek.Length != TotpMasterKek.KeyLength)
+			/* The account exists and can log in whatever happens here; failing the whole registration
+			 * over two-factor would be worse, and this matches the in-game behaviour where a 2FA failure
+			 * is caught and the account is kept.
+			 *
+			 * What changed is that the secret, the enable and the recovery codes are now one
+			 * transaction (SelfServiceService.EnrolAsync), and a failure is TOLD to the player. The
+			 * writes used to be separate and best-effort, and the handover screen was shown whatever
+			 * happened: a player could scan an authenticator for an account whose two-factor had not
+			 * been switched on, or write down ten recovery codes that were never stored. Now it is all
+			 * or nothing, and "nothing" comes with a warning saying to set it up from My account. */
+			var setup = await selfService.EnrolAsync(username, enable: true, cancellationToken);
+			if (!setup.Ok)
 			{
-				// The account exists and can log in; it simply has no TOTP. Failing the whole
-				// registration here would be worse, and this matches the in-game behaviour where
-				// a 2FA failure is caught and the account is kept.
-				log.LogError("TOTP master KEK unavailable — '{User}' was created WITHOUT two-factor.", username);
-				return Done(null, null);
+				log.LogError("'{User}' was created WITHOUT two-factor: {Error}", username, setup.Error);
+				return Done(null, null) with { TwoFactorWarning = TwoFactorNotSetUpWarning };
 			}
 
-			byte[] totpSecret = null;
-			try
-			{
-				totpSecret = CryptoHelper.TwoFactor.GenerateTotpSecret();
-				string encrypted = CryptoHelper.TwoFactor.EncryptTotpSecret(masterKek, username, totpSecret);
-
-				var secretResult = await accounts.PersistTotpSecretAsync(username, encrypted, cancellationToken);
-				if (!secretResult.IsSuccess)
-				{
-					// Never enable TOTP without a stored secret: an account with totp_enabled and
-					// no secret is permanently locked out, because verification checks the secret
-					// for emptiness and returns false.
-					log.LogWarning("PersistTotpSecretAsync failed for '{User}': [{Code}] {Message}",
-						username, secretResult.ErrorCode, secretResult.ErrorMessage);
-					return Done(null, null);
-				}
-
-				var enableResult = await accounts.PersistTotpEnabledAsync(username, true, cancellationToken);
-				if (!enableResult.IsSuccess)
-				{
-					log.LogWarning("PersistTotpEnabledAsync failed for '{User}': [{Code}] {Message}",
-						username, enableResult.ErrorCode, enableResult.ErrorMessage);
-				}
-
-				// Recovery codes are best-effort, exactly as in-game: an authenticator that works
-				// without recovery codes beats a registration that fails.
-				string[] codes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
-				var hashes = new List<string>(codes.Length);
-				foreach (string code in codes)
-				{
-					hashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
-				}
-				var recoveryResult = await recoveryCodes.PersistManyAsync(username, hashes, cancellationToken);
-				if (!recoveryResult.IsSuccess)
-				{
-					log.LogWarning("Recovery code persistence failed for '{User}': [{Code}] {Message}",
-						username, recoveryResult.ErrorCode, recoveryResult.ErrorMessage);
-				}
-
-				return Done(CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username), codes);
-			}
-			catch (Exception ex)
-			{
-				log.LogError(ex, "Two-factor enrolment failed for '{User}'; the account exists without it.", username);
-				return Done(null, null);
-			}
-			finally
-			{
-				if (totpSecret != null)
-				{
-					CryptographicOperations.ZeroMemory(totpSecret);
-				}
-			}
+			return Done(setup.OtpauthUri, setup.RecoveryCodes);
 		}
 
 		/// <summary>
@@ -464,13 +432,20 @@ namespace FishMMO.ControlPanel.Services
 		/// account outright; there is no second code to ask for afterwards.
 		/// </para>
 		/// <para>
-		/// Every failure is counted through <see cref="VerificationFailureTicket.RecordAsync"/>, in the
+		/// Every wrong code is counted through <see cref="VerificationFailureTicket.RecordAsync"/>, in the
 		/// database the login server counts into, and the third in a row opens a support ticket. What that
 		/// did is logged and never returned: the answer is <see cref="InvalidCodeError"/> whatever
 		/// happened, so the endpoint cannot be used to learn anything about an account.
 		/// </para>
+		/// <para>
+		/// A wrong code, an unknown account and a verified one all come back from the service as the
+		/// same VALIDATION_ERROR, so counting only that keeps every one of them identical. A database
+		/// fault is not a wrong code: it used to be counted as one, so a correct code typed during an
+		/// outage was told it was invalid and moved the account towards an automatic ticket. It is
+		/// answered with "try again" instead — the same for every account, so it says nothing either.
+		/// </para>
 		/// </remarks>
-		public async Task<(bool Ok, string Error)> VerifyAsync(
+		public async Task<(bool Ok, string Error, bool Retry)> VerifyAsync(
 			string username,
 			int code,
 			CancellationToken cancellationToken = default)
@@ -478,13 +453,19 @@ namespace FishMMO.ControlPanel.Services
 			if (!Authentication.IsAllowedUsername(username))
 			{
 				// No account can have this name, so there is nothing to count against.
-				return (false, InvalidCodeError);
+				return (false, InvalidCodeError, false);
 			}
 
 			var result = await accounts.PersistVerifiedByCodeAsync(username, code, cancellationToken);
 			if (result.IsSuccess)
 			{
-				return (true, null);
+				return (true, null, false);
+			}
+			if (result.ErrorCode != DatabaseErrorCodes.ValidationError)
+			{
+				log.LogWarning("Verification code for '{User}' could not be checked; not counted: [{Code}] {Message}",
+					username, result.ErrorCode, result.ErrorMessage);
+				return (false, "Your code could not be checked right now. Try again shortly.", true);
 			}
 
 			VerificationFailureTicket.Outcome outcome = await VerificationFailureTicket.RecordAsync(accounts, supportTickets, username, cancellationToken);
@@ -498,7 +479,7 @@ namespace FishMMO.ControlPanel.Services
 				log.LogWarning("A support ticket was due for '{User}' after {Failures} incorrect verification codes but could not be opened: {Error}",
 					username, outcome.Failures, outcome.TicketError);
 			}
-			return (false, InvalidCodeError);
+			return (false, InvalidCodeError, false);
 		}
 
 		/// <summary>

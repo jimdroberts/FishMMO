@@ -153,6 +153,24 @@ namespace FishMMO.Client
 			root.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 			barRoot?.UnregisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
 			barRoot?.RegisterCallback<GeometryChangedEvent>(OnPlacementGeometryChanged);
+
+			/* Above the hotbar's extra stacked rows, if it has any; see UITKHudLayout. Vertical only,
+			 * and as a margin, so PlaceInRow's horizontal centring and a dragged bar's own position
+			 * are both untouched by it. Static event: removed before it is added, as above. */
+			UITKHudLayout.ApplyStackInset(barRoot);
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
+			ClientHotbarSettings.OnChanged += ClientHotbarSettings_OnChanged;
+		}
+
+		/// <summary>Moves the bar with the hotbar's stacked rows when the player changes its layout.</summary>
+		private void ClientHotbarSettings_OnChanged() => UITKHudLayout.ApplyStackInset(barRoot);
+
+		/// <summary>Drops the hotbar settings subscription, which is static and would hold this panel.</summary>
+		public override void OnDestroying()
+		{
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
+
+			base.OnDestroying();
 		}
 
 		/// <summary>Re-centres the default row whenever the panel or the bar changes size.</summary>

@@ -110,7 +110,7 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = result.ErrorMessage ?? "That search could not be run." });
+				return DatabaseReplies.Failure(this, result, log, "That search could not be run.");
 			}
 
 			var data = result.Data;
@@ -131,7 +131,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await accounts.FetchAdminAsync(username, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return NotFound(new { error = "No such account." });
+				return DatabaseReplies.Failure(this, result, log, "That account could not be read.", notFound: "No such account.");
 			}
 
 			/* An exact per-account fetch, not the character search filtered afterwards. The
@@ -147,17 +147,34 @@ namespace FishMMO.ControlPanel.Controllers
 			var reset = await resetRequests.FetchPendingAsync(result.Data.Name, HttpContext.RequestAborted);
 			var beta = await betaCodes.FetchForAccountAsync(result.Data.Name, HttpContext.RequestAborted);
 
+			/* A section that could not be read is NAMED, never shown empty. Each of these reads has an
+			 * empty answer that is ordinary — no characters, no pending reset, no beta codes — so an
+			 * empty list standing in for a failed read is indistinguishable from the truth, and it is
+			 * the page staff decide a ban or a two-factor cancellation on. The account the operator
+			 * asked for is still shown; the page says which parts of it are missing. */
+			var incomplete = new List<string>();
+			if (!characterResult.IsSuccess) NoteUnread(incomplete, "characters", username, characterResult.ErrorCode, characterResult.ErrorMessage);
+			if (!reset.IsSuccess) NoteUnread(incomplete, "pendingTwoFactorReset", username, reset.ErrorCode, reset.ErrorMessage);
+			if (!beta.IsSuccess) NoteUnread(incomplete, "betaCodes", username, beta.ErrorCode, beta.ErrorMessage);
+
 			return Ok(Flatten(
 				new[]
 				{
 					Summarise(result.Data),
 					Detail(result.Data, reset.IsSuccess ? reset.Data : null, beta.IsSuccess ? beta.Data : null),
+					new { incomplete },
 				},
 				characterResult.IsSuccess
-					// An empty list rather than an error: an account with no characters is ordinary,
-					// and failing the page over it would hide the account the operator asked for.
 					? characterResult.Data.Select(SupportCharactersController.Summarise)
 					: Enumerable.Empty<object>()));
+		}
+
+		/// <summary>Records a section of an account page that could not be read, and logs why.</summary>
+		private void NoteUnread(List<string> incomplete, string section, string username, string? errorCode, string? errorMessage)
+		{
+			incomplete.Add(section);
+			log.LogWarning("Account page for '{Account}': {Section} could not be read: [{Code}] {Message}",
+				username, section, errorCode, errorMessage);
 		}
 
 		/// <summary>
@@ -210,8 +227,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var cleared = await accounts.ClearAuthLockoutAsync(username, HttpContext.RequestAborted);
 			if (!cleared.IsSuccess)
 			{
-				audit.Outcome = cleared.ErrorMessage;
-				return BadRequest(new { error = cleared.ErrorMessage ?? "The lockout could not be cleared." });
+				audit.Outcome = DatabaseReplies.Outcome(cleared);
+				return DatabaseReplies.Failure(this, cleared, log, "The lockout could not be cleared.");
 			}
 
 			log.LogWarning("Sign-in lockout cleared for '{Account}' by '{Actor}' (was locked: {Locked}). Reason: {Reason}",
@@ -248,8 +265,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var pending = await resetRequests.FetchPendingAsync(target.Name, HttpContext.RequestAborted);
 			if (!pending.IsSuccess)
 			{
-				audit.Outcome = pending.ErrorMessage;
-				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The pending reset could not be read." });
+				audit.Outcome = DatabaseReplies.Outcome(pending);
+				return DatabaseReplies.Failure(this, pending, log, "The pending reset could not be read.");
 			}
 			if (pending.Data == null)
 			{
@@ -274,8 +291,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var shortened = await resetRequests.ShortenAsync(pending.Data.ID, effective, User.Identity?.Name, request.Reason.Trim(), HttpContext.RequestAborted);
 			if (!shortened.IsSuccess)
 			{
-				audit.Outcome = shortened.ErrorMessage;
-				return BadRequest(new { error = shortened.ErrorMessage ?? "The reset could not be brought forward." });
+				audit.Outcome = DatabaseReplies.Outcome(shortened);
+				return DatabaseReplies.Failure(this, shortened, log, "The reset could not be brought forward.");
 			}
 
 			log.LogWarning("Two-factor reset for '{Account}' brought forward to {Effective:o} by '{Actor}'. Reason: {Reason}",
@@ -309,8 +326,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var cancelled = await resetRequests.CancelAsync(target.Name, User.Identity?.Name, request.Reason.Trim(), HttpContext.RequestAborted);
 			if (!cancelled.IsSuccess)
 			{
-				audit.Outcome = cancelled.ErrorMessage;
-				return BadRequest(new { error = cancelled.ErrorMessage ?? "The reset could not be cancelled." });
+				audit.Outcome = DatabaseReplies.Outcome(cancelled);
+				return DatabaseReplies.Failure(this, cancelled, log, "The reset could not be cancelled.");
 			}
 			if (!cancelled.Data)
 			{
@@ -354,8 +371,14 @@ namespace FishMMO.ControlPanel.Controllers
 			var account = await accounts.FetchAdminAsync(username, cancellation);
 			if (!account.IsSuccess)
 			{
-				return NotFound(new { error = "No such account." });
+				return DatabaseReplies.Failure(this, account, log, "That account could not be read.", notFound: "No such account.");
 			}
+
+			/* Every section below has an ordinary empty answer — no reports, no staff actions, no
+			 * characters, no pending reset — so a read that failed must be NAMED rather than shown as
+			 * that empty answer. "No prior reports and no moderation history" is exactly what would
+			 * earn a repeat offender a first warning. */
+			var incomplete = new List<string>();
 
 			// The stored name: tickets and audit rows copy it in, and match it exactly.
 			string name = account.Data.Name;
@@ -368,6 +391,7 @@ namespace FishMMO.ControlPanel.Controllers
 				Page = 1,
 				PageSize = HistoryTicketCount,
 			}, cancellation);
+			if (!against.IsSuccess) NoteUnread(incomplete, "reportsAgainst", name, against.ErrorCode, against.ErrorMessage);
 
 			/* The ticket being read is not "another report". Excluded here, where the total is known:
 			 * the page is ten rows sorted by priority, so a client could only subtract a ticket that
@@ -392,11 +416,19 @@ namespace FishMMO.ControlPanel.Controllers
 				Page = 1,
 				PageSize = HistoryTicketCount,
 			}, cancellation);
+			if (!filed.IsSuccess) NoteUnread(incomplete, "filed", name, filed.ErrorCode, filed.ErrorMessage);
 
 			var characterResult = await characters.FetchAdminByAccountAsync(name, true, cancellation);
 			IReadOnlyList<CharacterAdminData> owned = characterResult.IsSuccess
 				? characterResult.Data
 				: Array.Empty<CharacterAdminData>();
+			if (!characterResult.IsSuccess)
+			{
+				/* Moderation rows are read per character too, so an unread character list leaves the
+				 * staff actions incomplete as well, and the page must not present them as the whole. */
+				NoteUnread(incomplete, "characters", name, characterResult.ErrorCode, characterResult.ErrorMessage);
+				NoteUnread(incomplete, "moderation", name, characterResult.ErrorCode, characterResult.ErrorMessage);
+			}
 
 			/* The account's own rows, then each character's. Characters are audited under their id,
 			 * so "everything staff did about this player" is one query per target; bounded, because
@@ -413,6 +445,10 @@ namespace FishMMO.ControlPanel.Controllers
 			{
 				moderation.AddRange(accountRows.Data.Items);
 			}
+			else if (!incomplete.Contains("moderation"))
+			{
+				NoteUnread(incomplete, "moderation", name, accountRows.ErrorCode, accountRows.ErrorMessage);
+			}
 			foreach (CharacterAdminData character in owned.Take(HistoryCharacterLimit))
 			{
 				var rows = await auditLog.SearchAsync(new AdminAuditQuery
@@ -426,13 +462,19 @@ namespace FishMMO.ControlPanel.Controllers
 				{
 					moderation.AddRange(rows.Data.Items);
 				}
+				else if (!incomplete.Contains("moderation"))
+				{
+					NoteUnread(incomplete, "moderation", name, rows.ErrorCode, rows.ErrorMessage);
+				}
 			}
 
 			// Cheap, and the one piece of account security a report is most often really about.
 			var pendingReset = await resetRequests.FetchPendingAsync(name, cancellation);
+			if (!pendingReset.IsSuccess) NoteUnread(incomplete, "pendingTwoFactorReset", name, pendingReset.ErrorCode, pendingReset.ErrorMessage);
 
 			return Ok(new
 			{
+				incomplete,
 				account = Summarise(account.Data),
 				pendingTwoFactorReset = pendingReset.IsSuccess ? ProjectReset(pendingReset.Data) : null,
 				reportsAgainst = TicketList(against, excludeTicketId, excluded),
@@ -458,17 +500,18 @@ namespace FishMMO.ControlPanel.Controllers
 		}
 
 		/// <summary>A ticket search as the history shows it: the rows, and how many there are in all.</summary>
+		/// <remarks>A search that failed has no count, not a count of zero; the section is named in <c>incomplete</c>.</remarks>
 		private static object TicketList(Database.DatabaseResult<SupportTicketPage> result, long? excludeId, int excludedFromTotal) => result.IsSuccess
 			? new
 			{
-				totalCount = Math.Max(0, result.Data.TotalCount - excludedFromTotal),
+				totalCount = (int?)Math.Max(0, result.Data.TotalCount - excludedFromTotal),
 				items = result.Data.Items
 					.Where(t => excludeId == null || t.ID != excludeId.Value)
 					.Select(t => SupportTicketsController.Project(t, includeMessages: false)),
 			}
 			: new
 			{
-				totalCount = 0,
+				totalCount = (int?)null,
 				items = Enumerable.Empty<object>(),
 			};
 
@@ -491,8 +534,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await kickRequests.PersistAsync(username, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That kick request could not be written." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That kick request could not be written.");
 			}
 
 			log.LogInformation("Kick request written for '{Account}' by '{Actor}'. Reason: {Reason}",
@@ -506,7 +549,8 @@ namespace FishMMO.ControlPanel.Controllers
 		/// <remarks>
 		/// All four in one transaction, in the database layer. A half-applied ban leaves the
 		/// account playing, which is the failure the atomicity exists to prevent — and it is
-		/// what the Discord bot does today by composing the writes separately.
+		/// what the Discord bot's ban once did by composing the writes separately; it now calls
+		/// the same service method.
 		/// </remarks>
 		[HttpPost("{username}/ban")]
 		[Authorize(Policy = PanelPolicies.SupportStepUp)]
@@ -527,11 +571,14 @@ namespace FishMMO.ControlPanel.Controllers
 
 			audit.Details = new { previousLevel = (AccessLevel)target.AccessLevel };
 
-			var result = await accounts.BanAsync(username, HttpContext.RequestAborted);
+			/* Who and why go onto the account row as well as into the audit log. The account page and
+			 * the history panel read banned_by and ban_reason from the row, and the overload without
+			 * them left both empty for every ban placed from here. */
+			var result = await accounts.BanAsync(username, null, User.Identity?.Name, request.Reason.Trim(), HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That account could not be banned." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That account could not be banned.");
 			}
 
 			log.LogWarning("Account '{Account}' banned by '{Actor}'. Reason: {Reason}",
@@ -566,8 +613,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var existing = await accounts.FetchAdminAsync(username, HttpContext.RequestAborted);
 			if (!existing.IsSuccess)
 			{
-				audit.Outcome = "Refused: no such account.";
-				return NotFound(new { error = "No such account." });
+				audit.Outcome = DatabaseReplies.IsNotFound(existing.ErrorCode) ? "Refused: no such account." : DatabaseReplies.Outcome(existing);
+				return DatabaseReplies.Failure(this, existing, log, "That account could not be read.", notFound: "No such account.");
 			}
 			audit.TargetName = username;
 
@@ -580,8 +627,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await accounts.UnbanAsync(username, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That ban could not be lifted." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That ban could not be lifted.");
 			}
 
 			log.LogWarning("Account '{Account}' unbanned by '{Actor}'. Reason: {Reason}",
@@ -604,15 +651,30 @@ namespace FishMMO.ControlPanel.Controllers
 			var tokens = await authTokens.RevokeAllForAccountAsync(username, HttpContext.RequestAborted);
 			if (!tokens.IsSuccess)
 			{
-				audit.Outcome = tokens.ErrorMessage;
-				return BadRequest(new { error = tokens.ErrorMessage ?? "Those tokens could not be revoked." });
+				audit.Outcome = DatabaseReplies.Outcome(tokens);
+				return DatabaseReplies.Failure(this, tokens, log, "Those tokens could not be revoked.");
 			}
 
 			/* Panel sessions too. An operator revoking "every token" and leaving a live browser
 			 * session behind has not done what they were told they did, and the gap is exactly
-			 * where a compromised account keeps its foothold. */
+			 * where a compromised account keeps its foothold.
+			 *
+			 * So a failure here fails the request. It used to be folded into the audit detail as a
+			 * count of zero — indistinguishable from an account that had no sessions — under a 200
+			 * the filter recorded as a success. Both revocations are idempotent, so the operator's
+			 * retry simply does the whole thing again. */
 			var sessions = await webSessions.RevokeAllForAccountAsync(username, HttpContext.RequestAborted);
-			audit.Details = new { panelSessionsRevoked = sessions.IsSuccess ? sessions.Data : 0 };
+			if (!sessions.IsSuccess)
+			{
+				log.LogError("Game tokens for '{Account}' were revoked by '{Actor}' but panel sessions were NOT: [{Code}] {Message}",
+					username, User.Identity?.Name, sessions.ErrorCode, sessions.ErrorMessage);
+				audit.Outcome = $"Partial: game tokens revoked, panel sessions NOT revoked [{sessions.ErrorCode}].";
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+				{
+					error = "Game tokens were revoked, but panel sessions could not be. Nothing on this account is safe to assume signed out yet; try again.",
+				});
+			}
+			audit.Details = new { panelSessionsRevoked = sessions.Data };
 
 			log.LogWarning("Tokens revoked for '{Account}' by '{Actor}'. Reason: {Reason}",
 				username, User.Identity?.Name, request.Reason);
@@ -642,22 +704,40 @@ namespace FishMMO.ControlPanel.Controllers
 			var cleared = await accounts.ClearTotpAsync(username, HttpContext.RequestAborted);
 			if (!cleared.IsSuccess)
 			{
-				audit.Outcome = cleared.ErrorMessage;
-				return BadRequest(new { error = cleared.ErrorMessage ?? "Two-factor could not be reset." });
+				audit.Outcome = DatabaseReplies.Outcome(cleared);
+				return DatabaseReplies.Failure(this, cleared, log, "Two-factor could not be reset.");
 			}
 
 			/* The codes go with the secret. Leaving them would leave a set of working
-			 * single-use passwords for an account whose second factor is supposedly cleared. */
+			 * single-use passwords for an account whose second factor is supposedly cleared.
+			 *
+			 * Either follow-on failing fails the request rather than answering "cleared" over it:
+			 * the operator must know the reset is not finished, and every step here is idempotent,
+			 * so the retry repeats the lot. */
 			var codes = await recoveryCodes.DeleteAllForAccountAsync(username, HttpContext.RequestAborted);
 			if (!codes.IsSuccess)
 			{
 				log.LogError("Recovery codes for '{Account}' survived a two-factor reset: [{Code}] {Message}",
 					username, codes.ErrorCode, codes.ErrorMessage);
 				audit.Outcome = "Partial: the secret was cleared but the recovery codes were not.";
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+				{
+					error = "The authenticator was cleared, but the recovery codes could not be. They still work; try again.",
+				});
 			}
 
 			// Sessions that already satisfied two-factor must not keep that standing.
-			await webSessions.RevokeAllForAccountAsync(username, HttpContext.RequestAborted);
+			var sessions = await webSessions.RevokeAllForAccountAsync(username, HttpContext.RequestAborted);
+			if (!sessions.IsSuccess)
+			{
+				log.LogError("Two-factor reset for '{Account}': panel sessions were NOT revoked: [{Code}] {Message}",
+					username, sessions.ErrorCode, sessions.ErrorMessage);
+				audit.Outcome = $"Partial: the secret and recovery codes were cleared, panel sessions NOT revoked [{sessions.ErrorCode}].";
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+				{
+					error = "Two-factor was cleared, but the account's panel sessions could not be signed out. Try again.",
+				});
+			}
 
 			log.LogWarning("Two-factor reset for '{Account}' by '{Actor}'. Reason: {Reason}",
 				username, User.Identity?.Name, request.Reason);
@@ -685,8 +765,11 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await accounts.FetchAdminAsync(username, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = "Refused: no such account.";
-				return (null, NotFound(new { error = "No such account." }));
+				/* Only NOT_FOUND is "no such account". A database that did not answer is a 503 and
+				 * says so in the audit row too; recording it as a refusal would log a lookup of a
+				 * real account as an operator probing for one that does not exist. */
+				audit.Outcome = DatabaseReplies.IsNotFound(result.ErrorCode) ? "Refused: no such account." : DatabaseReplies.Outcome(result);
+				return (null, DatabaseReplies.Failure(this, result, log, "That account could not be read.", notFound: "No such account."));
 			}
 
 			audit.TargetName = username;

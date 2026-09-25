@@ -564,7 +564,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Ownership-gated: this write carries the claim the lingering body was holding, so
 			// if that claim lapsed while the body stood there the reclaimed state is refused
 			// rather than overwriting whichever server took the character.
-			if (!await SaveCharacterAsync(charData, new CharacterSessionInfo(heldToken, serverID)))
+			CharacterSaveOutcome outcome = await SaveCharacterOutcomeAsync(charData, new CharacterSessionInfo(heldToken, serverID));
+
+			/* Refused because the claim is gone — and then nothing below may run. The body's
+			 * sub-entity tables carry no ownership check, so writing them would overwrite the
+			 * owner's state; and the load below skips the claim on the strength of the token it is
+			 * handed, so it would spawn a second live copy of a character another server is
+			 * running. The eviction has been requested and the token is somebody else's, so there
+			 * is nothing to release. The client goes back to the world server, which routes it to
+			 * the server that owns the character now. */
+			if (outcome == CharacterSaveOutcome.OwnershipLost)
+			{
+				TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.SessionSuperseded));
+				return;
+			}
+
+			if (outcome == CharacterSaveOutcome.Retry)
 			{
 				await Log.Error("CharacterSystem",
 					$"Failed to persist reclaimed body for character {charData.ID}; the reload may restore pre-logout state.");
@@ -585,7 +600,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Before the load below, like the character row above it: the load re-reads every
 			// one of these tables, and PetSystem restores the pet off the back of the spawn.
-			await SaveSubEntitiesSequentiallyAsync(subEntities);
+			await SaveSubEntitiesSequentiallyAsync(subEntities, charData.ID);
 
 			// The character ID travels with the token: LoadCharacterAsync has to be able to hand
 			// this claim back on any path that abandons the load, including the ones that fail

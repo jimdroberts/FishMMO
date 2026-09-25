@@ -391,35 +391,4 @@ namespace FishMMO.Shared
 	{
 		public ArenaHistoryEntry[] Entries;
 	}
-
-	/// <summary>
-	/// Client → Server request for the season leaderboard.
-	/// </summary>
-	public struct ArenaLeaderboardRequestBroadcast : IBroadcast
-	{
-		public long InteractableID;
-	}
-
-	/// <summary>One row of the leaderboard.</summary>
-	[Serializable]
-	public struct ArenaLeaderboardEntry
-	{
-		public long CharacterID;
-		public string CharacterName;
-		public int Rating;
-		public int Wins;
-		public int Losses;
-	}
-
-	/// <summary>
-	/// Server → Client the season leaderboard.
-	/// </summary>
-	public struct ArenaLeaderboardBroadcast : IBroadcast
-	{
-		public long SeasonID;
-		public string SeasonName;
-		public ArenaLeaderboardEntry[] Entries;
-		/// <summary>The recipient's own rank on the full board, or 0 when unranked.</summary>
-		public int YourRank;
-	}
 }

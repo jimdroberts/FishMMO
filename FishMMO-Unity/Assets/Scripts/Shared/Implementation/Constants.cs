@@ -345,10 +345,57 @@ namespace FishMMO.Shared
 			public static readonly string LocalScenePath = "Assets/LOCAL/Scenes/";
 
 			/// <summary>
-			/// Maximum number of configurable player hotkeys.
+			/// Number of hotkey bars every character has. A game-specific setting: one reproduces
+			/// the classic single strip, and anything above it gives the player that many bars.
 			/// </summary>
-			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public const int MaximumPlayerHotkeys = 12;
+			/// <remarks>
+			/// <para>Configuration value baked at compile time; changing requires a rebuild of the
+			/// client AND the servers, which must agree on it — the server validates every binding
+			/// against <see cref="MaximumPlayerHotkeys"/>.</para>
+			/// <para>
+			/// Safe to change on a live game. Bars are appended after the ones that exist, so
+			/// raising it adds empty bars and lowering it only stops loading the trailing ones;
+			/// their rows stay in the database and come back if the count is raised again, when the
+			/// connect-time prune revalidates them like any other binding.
+			/// </para>
+			/// <para>
+			/// How the extra bars are laid out — all stacked, or one at a time with pages — is the
+			/// player's choice in Options, not the game's; see <c>ClientHotbarSettings</c>. The
+			/// keys that reach them are one modifier per bar (Ctrl for the second, Alt for the
+			/// third, unbound beyond that) held with the first bar's keys; see <c>HotkeyKeyMap</c>.
+			/// </para>
+			/// </remarks>
+			public const int HotkeyBarCount = 1;
+
+			/// <summary>
+			/// Number of slots on each hotkey bar.
+			/// </summary>
+			/// <remarks>
+			/// <para>Configuration value baked at compile time; changing requires a rebuild.</para>
+			/// <para>
+			/// Twelve matches the first bar's default keys — left and right mouse, then 1 to 0 — so
+			/// every slot has a key. More slots than that are clickable and can be given a key in
+			/// Options only by rebinding; fewer simply leave the last keys unused.
+			/// </para>
+			/// <para>
+			/// Unlike <see cref="HotkeyBarCount"/>, NOT safe to change once characters have
+			/// bindings. Slots are stored under one flat index, bar by bar
+			/// (<c>bar * HotkeySlotsPerBar + position</c>), so a different width re-deals every
+			/// stored binding after the first bar onto a different bar and position.
+			/// </para>
+			/// </remarks>
+			public const int HotkeySlotsPerBar = 12;
+
+			/// <summary>
+			/// Total hotkey slots per character: every slot on every bar.
+			/// </summary>
+			/// <remarks>
+			/// Configuration value baked at compile time; derived from <see cref="HotkeyBarCount"/>
+			/// and <see cref="HotkeySlotsPerBar"/>, which are the two values a game sets. Everything
+			/// that sizes, validates or persists the bar — the character's hotkey list, the server's
+			/// slot check, the stored rows — works in this flat index and knows nothing of bars.
+			/// </remarks>
+			public const int MaximumPlayerHotkeys = HotkeyBarCount * HotkeySlotsPerBar;
 		}
 
 		public static class Layers

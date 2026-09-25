@@ -1,4 +1,5 @@
 using System.Globalization;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
@@ -95,13 +96,20 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>A two-factor reset was completed: the old authenticator and recovery codes no longer work.</summary>
-		public Task ResetCompletedAsync(string username, CancellationToken cancellationToken = default)
+		/// <param name="signedOutElsewhere">
+		/// Whether every other browser and game client was signed out. Said only when it is true: the
+		/// mail used to claim it unconditionally, including when the revocations had failed.
+		/// </param>
+		public Task ResetCompletedAsync(string username, bool signedOutElsewhere, CancellationToken cancellationToken = default)
 		{
 			return SendAsync(username, "FishMMO - Two-factor reset completed",
 				$"Hello {username},\n\n" +
 				"The two-factor reset on your FishMMO account was completed. Your previous authenticator and every " +
-				"previous recovery code no longer work, a new authenticator is being enrolled, and every other browser " +
-				"and game client was signed out.\n\n" +
+				"previous recovery code no longer work, and a new authenticator is being enrolled. " +
+				(signedOutElsewhere
+					? "Every other browser and game client was signed out.\n\n"
+					: "Other browsers and game clients could NOT all be signed out, so something may still be signed in; " +
+					  "change your password to end every session.\n\n") +
 				"If this was not you, your account has been taken over. Contact support immediately.\n",
 				cancellationToken);
 		}
@@ -111,9 +119,25 @@ namespace FishMMO.ControlPanel.Services
 			try
 			{
 				var account = await accounts.FetchForLoginAsync(username, false, cancellationToken);
-				if (!account.IsSuccess || string.IsNullOrWhiteSpace(account.Data.Email))
+				if (!account.IsSuccess)
 				{
-					log.LogInformation("No security notice for '{User}' ('{Subject}'): no eligible account or no address on file.", username, subject);
+					/* NOT_FOUND and FORBIDDEN are the answers "no such account" and "banned": nobody to
+					 * mail, and that is ordinary. Anything else is the database failing, and a security
+					 * notice that was owed and not sent is worth a warning with the reason. */
+					if (account.ErrorCode is DatabaseErrorCodes.NotFound or DatabaseErrorCodes.Forbidden)
+					{
+						log.LogInformation("No security notice for '{User}' ('{Subject}'): no eligible account.", username, subject);
+					}
+					else
+					{
+						log.LogWarning("Security notice '{Subject}' for '{User}' NOT queued: the account could not be read: [{Code}] {Message}",
+							subject, username, account.ErrorCode, account.ErrorMessage);
+					}
+					return;
+				}
+				if (string.IsNullOrWhiteSpace(account.Data.Email))
+				{
+					log.LogInformation("No security notice for '{User}' ('{Subject}'): no address on file.", username, subject);
 					return;
 				}
 

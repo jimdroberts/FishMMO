@@ -126,7 +126,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * players are known by and are worth as little as possible to enumerate.
 				 *
 				 * A database error is deliberately reported the same way rather than surfaced,
-				 * for the same reason: the sender learns "not delivered", never why. */
+				 * for the same reason: the sender learns "not delivered", never why. The operator
+				 * does learn why — a fault answered as "offline" is otherwise invisible. A name that
+				 * fails validation is the sender's typing, not a fault, and is not logged: a player
+				 * could otherwise write to the server log at chat rate. */
+				if (!result.IsSuccess && result.ErrorCode != DatabaseErrorCodes.ValidationError)
+				{
+					await Log.Warning("ChatSystem", $"OnTellChatAsync could not look up tell target '{targetName}'; answered as offline: [{result.ErrorCode}] {result.ErrorMessage}");
+				}
+
 				bool resolved = result.IsSuccess && result.Data.HasValue && result.Data.Value.ID > 0;
 				if (!resolved)
 				{

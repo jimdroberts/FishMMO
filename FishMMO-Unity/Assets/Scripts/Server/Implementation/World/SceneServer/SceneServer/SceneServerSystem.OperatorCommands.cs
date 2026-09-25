@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FishMMO.Auth.Core;
+using FishMMO.Database;
 using FishMMO.Logging;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
@@ -324,6 +325,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Reply(character, "The server is busy and could not run that command. Try again in a moment.");
 			}
+		}
+
+		/// <summary>
+		/// The answer for a database lookup that came back without the row it asked for.
+		/// </summary>
+		/// <remarks>
+		/// "No such thing" only when the database said so — not found, or a name that could not
+		/// name anything. Every lookup used to answer "no account named X" for any failure at all,
+		/// so an operator whose command met a database fault was told the account did not exist,
+		/// and went looking for a typo that was not there.
+		/// </remarks>
+		/// <param name="result">The failed lookup, or a successful one that carried nothing.</param>
+		/// <param name="notFound">The answer when there genuinely is no such row.</param>
+		/// <param name="what">What was being read, for the fault answer.</param>
+		private static string DescribeLookupFailure<T>(DatabaseResult<T> result, string notFound, string what)
+		{
+			if (result.IsSuccess ||
+				result.ErrorCode == DatabaseErrorCodes.NotFound ||
+				result.ErrorCode == DatabaseErrorCodes.ValidationError)
+			{
+				return notFound;
+			}
+			return $"Could not read {what}: [{result.ErrorCode}] {result.ErrorMessage}";
 		}
 
 		#endregion

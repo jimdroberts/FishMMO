@@ -327,7 +327,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<AccountAdminData> existing = await accountService.FetchAdminAsync(accountName);
 				if (!existing.IsSuccess || existing.Data == null)
 				{
-					return $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.";
+					return DescribeLookupFailure(existing, $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.", $"the account '{OperatorCommandParsing.Truncate(accountName, 32)}'");
 				}
 
 				var currentLevel = (AccessLevel)existing.Data.AccessLevel;
@@ -388,7 +388,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<AccountAdminData> existing = await accountService.FetchAdminAsync(accountName);
 				if (!existing.IsSuccess || existing.Data == null)
 				{
-					return $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.";
+					return DescribeLookupFailure(existing, $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.", $"the account '{OperatorCommandParsing.Truncate(accountName, 32)}'");
 				}
 
 				var currentLevel = (AccessLevel)existing.Data.AccessLevel;
@@ -404,7 +404,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult result = await accountService.BanAsync(accountName, null, actorAccount, reason);
 				if (!result.IsSuccess)
 				{
-					return $"Could not ban '{accountName}': {result.ErrorMessage}";
+					return $"Could not ban '{accountName}': [{result.ErrorCode}] {result.ErrorMessage}";
 				}
 
 				await Log.Warning("SceneServerSystem",

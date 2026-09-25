@@ -176,7 +176,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void EnqueueSubEntitySaves(SubEntitySnapshot s)
 		{
 			if (s.Buffs.Count > 0) EnqueuePersistence(() => SaveBuffsAsync(s.Buffs));
-			if (s.Attributes.Count > 0) EnqueuePersistence(() => SaveAttributesAsync(s.Attributes));
+			if (s.Attributes.Count > 0)
+			{
+				/* Keyed by character, like the abilities below, so a character's attribute rows queue
+				 * FIFO with its item batches — which write the same rows. Unkeyed, a periodic save
+				 * captured AFTER an equip or a trade could land BEFORE it, and its newer versions then
+				 * superseded the batch's attribute rows. The item layer rightly treats a short write as
+				 * a failure, so the equip or the trade was rolled back and reconciled for nothing but
+				 * lane order. One statement per character rather than one per pass is the price. */
+				foreach (var group in s.Attributes.GroupBy(a => a.CharacterID))
+				{
+					List<CharacterAttributeData> rows = group.ToList();
+					EnqueuePersistence(() => SaveAttributesAsync(rows), group.Key);
+				}
+			}
 			if (s.Abilities.Count > 0)
 			{
 				foreach (var group in s.Abilities.GroupBy(a => a.CharacterID))
@@ -198,14 +211,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// The despawn and reattach paths, where the next reader of these rows is about to run.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Sequential on purpose: everything the next owner is about to read has to be in the
 		/// database before the claim it reads under is available, and a saturated pool could
 		/// reorder parallel writes behind the release.
+		/// </para>
+		/// <para>
+		/// <b>Transient failures are retried here, before the release, and nowhere else.</b> These
+		/// paths hand the character on: its dirty marks leave with the despawned object, so unlike
+		/// the periodic save there is no next pass to carry a failed table. Retrying after the
+		/// release is not an option either — these tables carry no ownership check, and the next
+		/// owner's versions restart from the rows it loaded, so a late write of ours could land
+		/// over state it has since changed. A bounded retry inside the claim is the only safe place.
+		/// </para>
 		/// </remarks>
-		private async Task SaveSubEntitiesSequentiallyAsync(SubEntitySnapshot s)
+		/// <param name="s">The snapshot to write.</param>
+		/// <param name="characterID">The character it belongs to, for the log.</param>
+		private async Task SaveSubEntitiesSequentiallyAsync(SubEntitySnapshot s, long characterID)
 		{
-			if (s.Attributes.Count > 0) await SaveAttributesAsync(s.Attributes);
-			if (s.Buffs.Count > 0) await SaveBuffsAsync(s.Buffs);
+			if (s.Attributes.Count > 0) await SaveWithRetryAsync(() => SaveAttributesAsync(s.Attributes), "attributes", characterID);
+			if (s.Buffs.Count > 0) await SaveWithRetryAsync(() => SaveBuffsAsync(s.Buffs), "buffs", characterID);
 			if (s.Abilities.Count > 0)
 			{
 				/* Grouped by owning character for the reason EnqueueSubEntitySaves gives: the ability
@@ -213,15 +238,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * take its owner's rows down with it on the very save the next server reads under. */
 				foreach (var group in s.Abilities.GroupBy(a => a.CharacterID))
 				{
-					await SaveAbilitiesAsync(group.ToList());
+					List<CharacterAbilityData> rows = group.ToList();
+					await SaveWithRetryAsync(() => SaveAbilitiesAsync(rows), "abilities", characterID);
 				}
 			}
-			if (s.Pets.Count > 0) await SavePetsAsync(s.Pets);
-			if (s.Achievements.Count > 0) await SaveAchievementsAsync(s.Achievements);
-			if (s.Waypoints.Count > 0) await SaveWaypointsAsync(s.Waypoints);
-			if (s.Factions.Count > 0) await SaveFactionsAsync(s.Factions);
-			if (s.Archetypes.Count > 0) await SaveArchetypesAsync(s.Archetypes);
-			if (s.KnownAbilities.Count > 0) await SaveKnownAbilitiesAsync(s.KnownAbilities);
+			if (s.Pets.Count > 0) await SaveWithRetryAsync(() => SavePetsAsync(s.Pets), "pet", characterID);
+			if (s.Achievements.Count > 0) await SaveWithRetryAsync(() => SaveAchievementsAsync(s.Achievements), "achievements", characterID);
+			if (s.Waypoints.Count > 0) await SaveWithRetryAsync(() => SaveWaypointsAsync(s.Waypoints), "waypoints", characterID);
+			if (s.Factions.Count > 0) await SaveWithRetryAsync(() => SaveFactionsAsync(s.Factions), "factions", characterID);
+			if (s.Archetypes.Count > 0) await SaveWithRetryAsync(() => SaveArchetypesAsync(s.Archetypes), "archetype", characterID);
+			if (s.KnownAbilities.Count > 0) await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities), "known abilities", characterID);
+		}
+
+		/// <summary>Attempts one sub-entity table gets on the hand-off paths before it is given up on.</summary>
+		private const int MaxSubEntityWriteAttempts = 3;
+
+		/// <summary>Backoff between those attempts, multiplied by the attempt number.</summary>
+		private const int SubEntityWriteRetryStepMs = 150;
+
+		/// <summary>
+		/// Runs one sub-entity write until it is done or the bounded attempts run out.
+		/// </summary>
+		/// <param name="write">The write. Returns false only for a failure worth another attempt.</param>
+		/// <param name="what">The table, for the log.</param>
+		/// <param name="characterID">The character, for the log.</param>
+		private static async Task SaveWithRetryAsync(Func<Task<bool>> write, string what, long characterID)
+		{
+			for (int attempt = 1; attempt <= MaxSubEntityWriteAttempts; ++attempt)
+			{
+				if (await write())
+				{
+					return;
+				}
+				if (attempt < MaxSubEntityWriteAttempts)
+				{
+					await Task.Delay(SubEntityWriteRetryStepMs * attempt);
+				}
+			}
+
+			// Each attempt has logged its own failure; this is the line that says what it cost.
+			await Log.Error("CharacterSystem",
+				$"Character {characterID}: the {what} write failed {MaxSubEntityWriteAttempts} times on hand-off and was given up; the changes since the last successful save are lost.");
 		}
 
 		/// <summary>
@@ -388,20 +445,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// What became of one character-row save.
+		/// </summary>
+		private enum CharacterSaveOutcome : byte
+		{
+			/// <summary>The row is written.</summary>
+			Saved,
+			/// <summary>A transient failure: the same snapshot is worth writing again.</summary>
+			Retry,
+			/// <summary>Refused for a reason retrying cannot change (stale, missing, invalid).</summary>
+			Rejected,
+			/// <summary>The claim is gone and another server owns the character.</summary>
+			OwnershipLost,
+		}
+
+		/// <summary>
 		/// Saves a single character asynchronously via the database service.
 		/// </summary>
 		/// <returns>
 		/// <c>true</c> when the row is persisted, or when the write was rejected for a reason
 		/// that retrying cannot change; <c>false</c> for transient failures worth retrying.
 		/// </returns>
+		/// <remarks>
+		/// A lost claim reads as <c>true</c> here — there is nothing to retry — which is right for a
+		/// caller that only writes the row. A caller that goes on to write the character's other
+		/// tables, or to load it, must use <see cref="SaveCharacterOutcomeAsync"/> and stop.
+		/// </remarks>
 		private async Task<bool> SaveCharacterAsync(CharacterData charData, CharacterSessionInfo? ownership = null)
+		{
+			return await SaveCharacterOutcomeAsync(charData, ownership) != CharacterSaveOutcome.Retry;
+		}
+
+		/// <summary>
+		/// Saves a single character and reports exactly what happened to the write.
+		/// </summary>
+		private async Task<CharacterSaveOutcome> SaveCharacterOutcomeAsync(CharacterData charData, CharacterSessionInfo? ownership = null)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
-					return false;
+					return CharacterSaveOutcome.Retry;
 				}
 
 				/* Write through the ownership-gated path whenever this server holds a claim.
@@ -420,7 +505,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (result.IsSuccess)
 				{
-					return true;
+					return CharacterSaveOutcome.Saved;
 				}
 
 				if (result.ErrorCode == DatabaseErrorCodes.Forbidden)
@@ -437,7 +522,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						"This means the session lease lapsed while the character was still resident — " +
 						"check for database outages or async-worker saturation lasting over the lease duration.");
 					RequestEviction(charData.ID, "session claim lost");
-					return true;
+					return CharacterSaveOutcome.OwnershipLost;
 				}
 
 				await Log.Warning("CharacterSystem", $"SaveCharacterAsync DB error for character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
@@ -446,12 +531,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// this snapshot would keep losing to the same version guard.
 				return result.ErrorCode == DatabaseErrorCodes.StaleState ||
 					   result.ErrorCode == DatabaseErrorCodes.NotFound ||
-					   result.ErrorCode == DatabaseErrorCodes.ValidationError;
+					   result.ErrorCode == DatabaseErrorCodes.ValidationError
+					? CharacterSaveOutcome.Rejected
+					: CharacterSaveOutcome.Retry;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveCharacterAsync failed for character {charData.ID}: {ex}");
-				return false;
+				return CharacterSaveOutcome.Retry;
 			}
 		}
 
@@ -468,7 +555,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			// Save first — we must persist while still holding the session lock, and prove that
 			// ownership in the same statement so a lapsed lease cannot overwrite the new owner.
-			bool saved = await SaveCharacterAsync(charData, sessionInfo);
+			CharacterSaveOutcome outcome = await SaveCharacterOutcomeAsync(charData, sessionInfo);
+
+			/* The claim is gone: another server owns this character and has been authoritative
+			 * since it loaded. The row write was refused for that reason, and everything below
+			 * would be written over the owner's state regardless — the sub-entity tables carry no
+			 * ownership check of their own (OnDeinitialize skips them for the same reason). There
+			 * is nothing to release either: the token in the row is somebody else's. The eviction
+			 * has already been requested; stop here. */
+			if (outcome == CharacterSaveOutcome.OwnershipLost)
+			{
+				return;
+			}
+			bool saved = outcome != CharacterSaveOutcome.Retry;
 
 			/* Items before the release, for the same reason as the sub-entities below. The flush
 			 * is a full snapshot of all three containers in one transaction, captured on the main
@@ -491,7 +590,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * reorder them behind the release. */
 			if (subEntities != null)
 			{
-				await SaveSubEntitiesSequentiallyAsync(subEntities);
+				await SaveSubEntitiesSequentiallyAsync(subEntities, charData.ID);
 			}
 
 			// Release regardless of whether the save landed. Holding the claim back because a
@@ -1328,8 +1427,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* Zero is "no template", and nothing else is. Template ids are signed deterministic
+			 * hashes, so a negative one is as valid as a positive one — refusing everything below
+			 * one skipped the save of roughly half of all pets. (ICharacterPetService applies the
+			 * same wrong test on its side, and must be corrected there too before those pets land.) */
 			int templateID = pet.PetAbilityTemplate != null ? pet.PetAbilityTemplate.ID : 0;
-			if (templateID <= 0)
+			if (templateID == 0)
 			{
 				Log.Warning("CharacterSystem", $"Character {character.ID} has a pet with no resolvable ability template; its state was not persisted.");
 				return;
@@ -1471,14 +1574,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// pet's health onto the wrong creature.
 		/// </remarks>
 		/// <param name="pets">Snapshots to write.</param>
-		private async Task SavePetsAsync(List<PetSnapshot> pets)
+		/// <returns>False only when a write failed in a way worth another attempt.</returns>
+		private async Task<bool> SavePetsAsync(List<PetSnapshot> pets)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null || pets == null || pets.Count == 0)
 				{
-					return;
+					return true;
 				}
+
+				bool done = true;
 
 				/* Each of the three writes is reported and none aborts the others. A superseded
 				 * pet row means a newer write for that character already landed — a dismissal, or
@@ -1489,7 +1595,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (Server.Database.ServiceRegistry.TryGet<ICharacterPetService>(out var petService))
 				{
 					var petRows = pets.Select(p => p.Pet).ToList();
-					await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet save", await petService.PersistAsync(petRows));
+					DatabaseResult<BulkWriteResult> result = await petService.PersistAsync(petRows);
+					done &= await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet save", result) || !result.IsTransient;
 				}
 
 				if (Server.Database.ServiceRegistry.TryGet<ICharacterPetAttributeService>(out var petAttributeService))
@@ -1497,7 +1604,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					var attributeRows = pets.SelectMany(p => p.Attributes).ToList();
 					if (attributeRows.Count > 0)
 					{
-						await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet attribute save", await petAttributeService.PersistAsync(attributeRows));
+						DatabaseResult<BulkWriteResult> result = await petAttributeService.PersistAsync(attributeRows);
+						done &= await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet attribute save", result) || !result.IsTransient;
 					}
 				}
 
@@ -1506,48 +1614,56 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					var buffRows = pets.SelectMany(p => p.Buffs).ToList();
 					if (buffRows.Count > 0)
 					{
-						await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet buff save", await petBuffService.PersistAsync(buffRows));
+						DatabaseResult<BulkWriteResult> result = await petBuffService.PersistAsync(buffRows);
+						done &= await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet buff save", result) || !result.IsTransient;
 					}
 				}
+
+				return done;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SavePetsAsync failed: {ex}");
+				return false;
 			}
 		}
 
 		/// <summary>
 		/// Persists a snapshot of buff state asynchronously.
 		/// </summary>
-		private async Task SaveBuffsAsync(List<CharacterBuffData> buffs)
+		/// <returns>False only when the write failed in a way worth another attempt.</returns>
+		private async Task<bool> SaveBuffsAsync(List<CharacterBuffData> buffs)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterBuffService>(out var buffService))
 				{
-					return;
+					return true;
 				}
 
-				await BulkWriteReporting.ReportAsync("CharacterSystem", "Buff save", await buffService.PersistAsync(buffs));
+				DatabaseResult<BulkWriteResult> result = await buffService.PersistAsync(buffs);
+				return await BulkWriteReporting.ReportAsync("CharacterSystem", "Buff save", result) || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveBuffsAsync failed: {ex}");
+				return false;
 			}
 		}
 
 		/// <summary>
 		/// Persists a snapshot of attribute state asynchronously.
 		/// </summary>
-		private async Task SaveAttributesAsync(List<CharacterAttributeData> attributes)
+		/// <returns>False only when the write failed in a way worth another attempt.</returns>
+		private async Task<bool> SaveAttributesAsync(List<CharacterAttributeData> attributes)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterAttributeService>(out var attrService))
 				{
-					return;
+					return true;
 				}
 
 				DatabaseResult<BulkWriteResult> result = await attrService.PersistAsync(attributes);
@@ -1569,10 +1685,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					TryEnqueueMainThread(() => MarkAttributesPersisted(attributes));
 				}
+
+				return written || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveAttributesAsync failed: {ex}");
+				return false;
 			}
 		}
 
@@ -1648,14 +1767,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of crafted ability state asynchronously.
 		/// </summary>
-		private async Task SaveAbilitiesAsync(List<CharacterAbilityData> abilities)
+		/// <returns>False only when the write failed in a way worth another attempt.</returns>
+		private async Task<bool> SaveAbilitiesAsync(List<CharacterAbilityData> abilities)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterAbilityService>(out var abilityService))
 				{
-					return;
+					return true;
 				}
 
 				DatabaseResult<BulkWriteResult> result = await abilityService.PersistAsync(abilities);
@@ -1674,10 +1794,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					TryEnqueueMainThread(() => MarkAbilitiesPersisted(abilities));
 				}
+
+				return written || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveAbilitiesAsync failed: {ex}");
+				return false;
 			}
 		}
 
@@ -1762,14 +1885,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of achievement progress asynchronously.
 		/// </summary>
-		private async Task SaveAchievementsAsync(List<CharacterAchievementData> achievements)
+		/// <returns>False only when the write failed in a way worth another attempt.</returns>
+		private async Task<bool> SaveAchievementsAsync(List<CharacterAchievementData> achievements)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterAchievementService>(out var achievementService))
 				{
-					return;
+					return true;
 				}
 
 				DatabaseResult<BulkWriteResult> result = await achievementService.PersistAsync(achievements);
@@ -1780,10 +1904,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					TryEnqueueMainThread(() => MarkAchievementsPersisted(achievements));
 				}
+
+				return written || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveAchievementsAsync failed: {ex}");
+				return false;
 			}
 		}
 
@@ -1835,18 +1962,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Merges discovered-waypoint pages into the database asynchronously.
 		/// </summary>
-		private async Task SaveWaypointsAsync(List<CharacterWaypointData> waypoints)
+		/// <returns>
+		/// False when the merge did not land. Any failure counts: the merge is an OR, so repeating
+		/// one that did land loses nothing.
+		/// </returns>
+		private async Task<bool> SaveWaypointsAsync(List<CharacterWaypointData> waypoints)
 		{
 			if (Server?.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ICharacterWaypointService>(out var waypointService))
 			{
-				return;
+				return true;
 			}
 
 			if (await WaypointPersistence.MergeAsync(waypointService, waypoints, "CharacterSystem"))
 			{
 				TryEnqueueMainThread(() => WaypointPersistence.MarkPersisted(waypoints, ResolveResidentCharacterForWaypoints));
+				return true;
 			}
+			return false;
 		}
 
 		/// <summary>Resolves a connected or lingering character for waypoint write confirmation. Main thread.</summary>
@@ -1894,14 +2027,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of faction standings asynchronously.
 		/// </summary>
-		private async Task SaveFactionsAsync(List<CharacterFactionData> factions)
+		/// <returns>False only when the write failed in a way worth another attempt.</returns>
+		private async Task<bool> SaveFactionsAsync(List<CharacterFactionData> factions)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterFactionService>(out var factionService))
 				{
-					return;
+					return true;
 				}
 
 				DatabaseResult<BulkWriteResult> result = await factionService.PersistAsync(factions);
@@ -1911,10 +2045,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					TryEnqueueMainThread(() => MarkFactionsPersisted(factions));
 				}
+
+				return written || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveFactionsAsync failed: {ex}");
+				return false;
 			}
 		}
 
@@ -1968,14 +2105,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of ability knowledge asynchronously.
 		/// </summary>
-		private async Task SaveKnownAbilitiesAsync(List<CharacterKnownAbilityData> knownAbilities)
+		/// <returns>False only when the write failed in a way worth another attempt.</returns>
+		private async Task<bool> SaveKnownAbilitiesAsync(List<CharacterKnownAbilityData> knownAbilities)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService))
 				{
-					return;
+					return true;
 				}
 
 				DatabaseResult<BulkWriteResult> result = await knownAbilityService.PersistAsync(knownAbilities);
@@ -1985,10 +2123,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					TryEnqueueMainThread(() => MarkKnowledgePersisted(knownAbilities));
 				}
+
+				return written || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveKnownAbilitiesAsync failed: {ex}");
+				return false;
 			}
 		}
 
@@ -1996,10 +2137,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Clears the knowledge dirty mark on every character a completed write covered. Main thread.
 		/// </summary>
 		/// <remarks>
-		/// Not gated on <c>Filtered == 0</c>, unlike the faction and attribute marks. A knowledge
-		/// row carries no per-entry version to advance — every row is written at version 1 — so a
-		/// row the database already holds is EXPECTED to filter, and treating that as a failed
-		/// write would leave the character permanently dirty and rewrite the whole set every save.
+		/// <para>
+		/// Not gated on <c>Filtered == 0</c>, unlike the faction and attribute marks — but not for
+		/// the reason this used to give. Every knowledge row is written at version 1, so a row the
+		/// database already holds comes back SUPERSEDED, not filtered, and would pass that gate.
+		/// </para>
+		/// <para>
+		/// What does come back filtered is any row whose template id is not positive: the service
+		/// refuses those as invalid. Template ids are signed deterministic hashes, so that is
+		/// roughly half of all templates, and every save of a character that knows one reports it.
+		/// Gating here would pin such a character dirty and rewrite its whole set every pass while
+		/// still never storing those rows. The fix belongs in the service (accept any non-zero id);
+		/// until then, clearing on a landed write is the lesser cost.
+		/// </para>
 		/// </remarks>
 		private void MarkKnowledgePersisted(List<CharacterKnownAbilityData> knownAbilities)
 		{
@@ -2069,14 +2219,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists archetype rows asynchronously.
 		/// </summary>
-		private async Task SaveArchetypesAsync(List<CharacterArchetypeData> archetypes)
+		/// <returns>False only when the write failed in a way worth another attempt.</returns>
+		private async Task<bool> SaveArchetypesAsync(List<CharacterArchetypeData> archetypes)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterArchetypeService>(out var archetypeService))
 				{
-					return;
+					return true;
 				}
 
 				DatabaseResult<BulkWriteResult> result = await archetypeService.PersistAsync(archetypes);
@@ -2086,10 +2237,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					TryEnqueueMainThread(() => MarkArchetypesPersisted(archetypes));
 				}
+
+				return written || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveArchetypesAsync failed: {ex}");
+				return false;
 			}
 		}
 

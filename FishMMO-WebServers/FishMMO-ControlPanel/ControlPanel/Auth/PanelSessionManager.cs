@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using FishMMO.Auth.Core;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
@@ -94,27 +95,52 @@ namespace FishMMO.ControlPanel.Auth
 			return (true, sessionId, result.Data, null);
 		}
 
+		/// <summary>How a session check ended.</summary>
+		public enum Validity
+		{
+			/// <summary>A live session.</summary>
+			Valid,
+			/// <summary>No such session, or one revoked, expired or idle: the cookie is dead.</summary>
+			Invalid,
+			/// <summary>
+			/// The database could not answer. Says nothing about the session, so nothing may be done to
+			/// it — not refused as dead, not trusted as live.
+			/// </summary>
+			Unavailable,
+		}
+
 		/// <summary>
 		/// Loads a session by its raw identifier and applies the revoked, expiry and idle checks.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// A session past its idle timeout is revoked here rather than merely refused, so an
 		/// abandoned browser cannot be resurrected by a stolen cookie inside the absolute window.
+		/// </para>
+		/// <para>
+		/// A failed read is <see cref="Validity.Unavailable"/>, never <see cref="Validity.Invalid"/>.
+		/// Treating the two alike made the handler delete the cookie of every operator whose request
+		/// arrived during a database blip, signing the whole staff out of the panel they needed during
+		/// the incident.
+		/// </para>
 		/// </remarks>
-		public async Task<(bool Ok, WebSessionData Session, string Hash)> ValidateAsync(
+		public async Task<(Validity Result, WebSessionData Session, string Hash)> ValidateAsync(
 			string sessionId,
 			CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(sessionId))
 			{
-				return (false, default, null);
+				return (Validity.Invalid, default, null);
 			}
 
 			string hash = Hash(sessionId);
 			var result = await sessions.FetchByHashAsync(hash, cancellationToken);
 			if (!result.IsSuccess)
 			{
-				return (false, default, hash);
+				// NOT_FOUND is an answer: no such session. A malformed hash cannot name one either.
+				return result.ErrorCode is DatabaseErrorCodes.NotFound or DatabaseErrorCodes.ValidationError
+					? (Validity.Invalid, default, hash)
+					: (Validity.Unavailable, default, hash);
 			}
 
 			WebSessionData session = result.Data;
@@ -122,7 +148,7 @@ namespace FishMMO.ControlPanel.Auth
 
 			if (session.Revoked || session.ExpiresUtc <= now)
 			{
-				return (false, default, hash);
+				return (Validity.Invalid, default, hash);
 			}
 
 			TimeSpan idle = session.TwoFactorSatisfied
@@ -131,11 +157,12 @@ namespace FishMMO.ControlPanel.Auth
 
 			if (now - session.LastSeenUtc > idle)
 			{
+				// Refused whether or not the revoke lands: the idle check itself is the gate.
 				await sessions.RevokeByHashAsync(hash, cancellationToken);
-				return (false, default, hash);
+				return (Validity.Invalid, default, hash);
 			}
 
-			return (true, session, hash);
+			return (Validity.Valid, session, hash);
 		}
 
 		/// <summary>Stamps activity on a live session.</summary>
@@ -168,8 +195,17 @@ namespace FishMMO.ControlPanel.Auth
 		}
 
 		/// <summary>Revokes one session.</summary>
-		public Task RevokeAsync(string hash, CancellationToken cancellationToken = default) =>
-			sessions.RevokeByHashAsync(hash, cancellationToken);
+		/// <returns><c>false</c> when the revocation did not persist.</returns>
+		/// <remarks>
+		/// Returned rather than swallowed, for the reason <see cref="PromoteAsync"/> gives: this used to be
+		/// typed <c>Task</c>, which made the result unobservable, and sign-out answered success while
+		/// the session row lived on.
+		/// </remarks>
+		public async Task<bool> RevokeAsync(string hash, CancellationToken cancellationToken = default)
+		{
+			var result = await sessions.RevokeByHashAsync(hash, cancellationToken);
+			return result.IsSuccess;
+		}
 
 		/// <summary>Revokes every session for an account, returning how many rows changed.</summary>
 		public Task<FishMMO.Database.DatabaseResult<int>> RevokeAllAsync(string accountName, CancellationToken cancellationToken = default) =>

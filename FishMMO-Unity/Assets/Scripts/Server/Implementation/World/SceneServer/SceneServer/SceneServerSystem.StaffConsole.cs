@@ -268,6 +268,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							BuildStaffTicketQuery(filter, account, level, page, StaffTicketQueueBroadcast.PageSize));
 						if (!result.IsSuccess || result.Data == null)
 						{
+							await Log.Warning("SceneServerSystem", $"Staff ticket queue could not be read for '{account}': [{result.ErrorCode}] {result.ErrorMessage}");
 							failure = "The ticket queue could not be read.";
 						}
 						else
@@ -350,6 +351,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									Body = OperatorCommandParsing.Truncate(m.Body ?? string.Empty, StaffTicketTextLength),
 								})
 								.ToArray();
+						}
+						else if (!result.IsSuccess && result.ErrorCode != DatabaseErrorCodes.NotFound)
+						{
+							/* A fault is not "no such ticket". Answered Found = false, it read to the
+							 * console as a ticket that does not exist. */
+							await Log.Warning("SceneServerSystem", $"Staff ticket detail {ticketID} could not be read for '{account}': [{result.ErrorCode}] {result.ErrorMessage}");
+							failure = $"Ticket #{ticketID} could not be read.";
 						}
 					}
 				}

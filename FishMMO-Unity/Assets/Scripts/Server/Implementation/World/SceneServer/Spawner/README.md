@@ -251,7 +251,8 @@ Typical use: a camp that does not return while its guard stands.
 
 | Check | How to Verify | Expected Result |
 |-------|---------------|-----------------|
-| Nothing ships | `SpawnTableBakeTests.ABuiltWorldScene_ReferencesNoSpawnerAndNoSpawnerData` | Built world scenes reference no spawner |
+| Nothing ships | `SpawnTableBakeTests.ABuiltWorldScene_ReferencesNoSpawnerDataAndNoServerScript` | Built world scenes reference no prefab only a spawner names, and no server-assembly script |
+| The check is live | `SpawnTableBakeTests.TheDependencyCheck_WouldSeeSpawnerDataThatReachedTheBuild` | The same scene with its spawners untagged does report their prefabs |
 | Tables up to date | `SpawnTableBakeTests.EverySceneWithSpawners_HasABakedTableThatMatchesIt` | Every scene's table matches its spawners |
 | Tag enforced | `SpawnTableBakeTests.AnUntaggedSpawner_IsRetaggedBeforeItsSceneIsSaved` | Saving a scene retags an untagged spawner |
 | Server group only | `SpawnTableBakeTests.ServerDataAssets_AreAddressableInTheServerGroupOnly` | Tables and catalogues are addressable only where clients never build |

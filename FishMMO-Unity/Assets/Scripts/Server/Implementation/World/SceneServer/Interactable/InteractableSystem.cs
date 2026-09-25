@@ -246,6 +246,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			activeDialogueSessions.Clear();
 			characterDialogueChoices.Clear();
 			connectedDialogueCharacters.Clear();
+			if (unconfirmedDialogueChoices.Count > 0)
+			{
+				// Nothing is left to retry them; logged (character, template:mask) so they can be applied by hand.
+				var lines = new List<string>(unconfirmedDialogueChoices.Count);
+				foreach (KeyValuePair<long, Dictionary<int, short>> character in unconfirmedDialogueChoices)
+				{
+					foreach (KeyValuePair<int, short> template in character.Value)
+					{
+						lines.Add($"{character.Key}/{template.Key}:{template.Value}");
+					}
+				}
+				Log.Error("InteractableSystem", $"Shutting down with unconfirmed dialogue choices (CharID/TemplateID:mask): {string.Join(", ", lines)}");
+				unconfirmedDialogueChoices.Clear();
+			}
 		}
 
 		/// <summary>

@@ -84,7 +84,38 @@ namespace FishMMO.Client
 			}
 
 			Controls = new PlayerControls();
+
+			/* Between the two, and nowhere else. The extra hotkey bars' modifier and page actions are
+			 * created at run time because how many there are is a game setting; an enabled map
+			 * refuses new actions, and the saved overrides can only be applied to bindings that
+			 * already exist — so after the asset, before the overrides. */
+			HotkeyKeyMap.AddBarActions(Controls);
+
 			LoadBindingOverrides();
+		}
+
+		/// <summary>
+		/// Raised whenever the effective key bindings may have changed: overrides loaded, a rebind or
+		/// reset saved.
+		/// </summary>
+		/// <remarks>
+		/// The hotkey bar draws each slot's key in its corner from the live bindings, and a rebind
+		/// happens in the Options panel, a separate document. Without a notice the bar went on
+		/// showing the key a slot used to have.
+		/// </remarks>
+		public static event Action OnBindingsChanged;
+
+		/// <summary>Notifies binding subscribers, reporting rather than propagating a handler's failure.</summary>
+		private static void RaiseBindingsChanged()
+		{
+			try
+			{
+				OnBindingsChanged?.Invoke();
+			}
+			catch (Exception ex)
+			{
+				Log.Error("PlayerInputController", "A key-binding subscriber threw.", ex);
+			}
 		}
 
 		/// <summary>Ensures the static Controls instance is created and its maps are enabled.</summary>
@@ -124,6 +155,7 @@ namespace FishMMO.Client
 				return;
 			}
 			ClientSettings.SetString(ClientSettings.InputBindingOverridesKey, Controls.SaveBindingOverridesAsJson());
+			RaiseBindingsChanged();
 		}
 
 #if UNITY_EDITOR
@@ -1087,6 +1119,8 @@ namespace FishMMO.Client
 					"the default bindings are in effect.", ex);
 				ClientSettings.SetString(ClientSettings.InputBindingOverridesKey, string.Empty);
 			}
+
+			RaiseBindingsChanged();
 		}
 	}
 }

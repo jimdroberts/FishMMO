@@ -174,8 +174,8 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That server could not be updated." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That server could not be updated.");
 			}
 
 			log.LogWarning("{Kind} server {Id} {State} by '{Actor}'. Reason: {Reason}",
@@ -235,8 +235,8 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That shutdown could not be scheduled." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That shutdown could not be scheduled.");
 			}
 
 			log.LogWarning("{Kind} server {Id} shutdown scheduled for {Deadline:O} by '{Actor}'. Reason: {Reason}",
@@ -278,8 +278,8 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That shutdown could not be cancelled." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That shutdown could not be cancelled.");
 			}
 
 			log.LogWarning("{Kind} server {Id} shutdown cancelled by '{Actor}'. Reason: {Reason}",

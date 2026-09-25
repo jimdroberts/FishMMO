@@ -211,7 +211,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string actorAccount = character.Account;
+			long actorID = character.ID;
 			string storedReason = reason.Length == 0 ? null : reason;
+			long mutedUntilTicks = untilUtc?.Ticks ?? ChatMutePolicy.NoEnd;
 
 			RunModerationOnCharacter(character, name, "mute", async (characters, accounts, target) =>
 			{
@@ -220,17 +222,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					: await characters.PersistMuteAsync(target.CharacterID, untilUtc, actorAccount, storedReason);
 				if (!write.IsSuccess)
 				{
-					return $"Could not mute {target.Name}: {write.ErrorMessage}";
+					return $"Could not mute {target.Name}: [{write.ErrorCode}] {write.ErrorMessage}";
 				}
 
 				string account = target.Account;
-				TryEnqueueMainThread(() => RefreshChatMutes(account));
+				long mutedCharacterID = accountWide ? 0 : target.CharacterID;
+				bool applying = TryEnqueueMainThread(() => RefreshChatMutes(account, actorID, mutedCharacterID, mutedUntilTicks, storedReason));
 
 				await Log.Warning("SceneServerSystem",
 					$"'{actorAccount}' muted {(accountWide ? "account '" + target.Account + "'" : "character '" + target.Name + "'")} {span}: {storedReason ?? "no reason"}");
 
 				return $"Muted {(accountWide ? "the account of " : string.Empty)}{target.Name} {span}. " +
-					"It applies now on this scene server and elsewhere when they next load.";
+					(applying
+						? "It applies now on this scene server and elsewhere when they next load."
+						: "It is saved, but this scene server is too busy to apply it now; it applies when they next load.");
 			});
 		}
 
@@ -245,6 +250,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string actorAccount = character.Account;
+			long actorID = character.ID;
 
 			RunModerationOnCharacter(character, name, "unmute", async (characters, accounts, target) =>
 			{
@@ -253,18 +259,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					: await characters.ClearMuteAsync(target.CharacterID);
 				if (!write.IsSuccess)
 				{
-					return $"Could not unmute {target.Name}: {write.ErrorMessage}";
+					return $"Could not unmute {target.Name}: [{write.ErrorCode}] {write.ErrorMessage}";
 				}
 
 				string account = target.Account;
-				TryEnqueueMainThread(() => RefreshChatMutes(account));
+				long unmutedCharacterID = accountWide ? 0 : target.CharacterID;
+				bool applying = TryEnqueueMainThread(() => RefreshChatMutes(account, actorID, unmutedCharacterID, 0, null));
 
 				await Log.Warning("SceneServerSystem",
 					$"'{actorAccount}' unmuted {(accountWide ? "account '" + target.Account + "'" : "character '" + target.Name + "'")}.");
 
-				return accountWide
+				string lifted = accountWide
 					? $"The account mute on {target.Name}'s account is lifted. A character mute, if any, stays."
 					: $"{target.Name}'s own mute is lifted. An account mute, if any, stays.";
+				return applying
+					? lifted
+					: lifted + " This scene server is too busy to apply it now; it applies when they next load.";
 			});
 		}
 
@@ -324,7 +334,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					DatabaseResult<CharacterData?> found = await characters.FetchAsync(name, null);
 					if (!found.IsSuccess)
 					{
-						return $"Could not look '{OperatorCommandParsing.Truncate(name, 32)}' up: {found.ErrorMessage}";
+						return $"Could not look '{OperatorCommandParsing.Truncate(name, 32)}' up: [{found.ErrorCode}] {found.ErrorMessage}";
 					}
 					if (found.Data == null)
 					{
@@ -342,7 +352,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<AccountAdminData> account = await accounts.FetchAdminAsync(target.Account);
 				if (!account.IsSuccess || account.Data == null)
 				{
-					return $"The account of {target.Name} could not be read.";
+					return $"The account of {target.Name} could not be read: [{account.ErrorCode}] {account.ErrorMessage}";
 				}
 				var level = (AccessLevel)account.Data.AccessLevel;
 				if (level >= actorLevel)
@@ -358,11 +368,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Re-reads the mute state of every character on an account that this scene server holds, and applies it.
 		/// </summary>
 		/// <remarks>
-		/// Re-read rather than computed from the write that just happened. A character mute and an
-		/// account mute both apply, so lifting one must leave the other in force, and only the rows
-		/// know whether there is another. Main thread; the reads run on the worker.
+		/// <para>Re-read rather than computed from the write that just happened. A character mute and
+		/// an account mute both apply, so lifting one must leave the other in force, and only the rows
+		/// know whether there is another. Main thread; the reads run on the worker.</para>
+		///
+		/// <para>When a re-read cannot be made, the write that was just made is applied instead — a
+		/// mute extends what the character is held to, and lifting one leaves what they have alone,
+		/// since only the rows could say whether another mute still stands. The operator is told
+		/// either way. A re-read that failed used to be logged and nothing more: the operator had
+		/// already been told the mute applied here, and the player went on talking.</para>
 		/// </remarks>
-		private void RefreshChatMutes(string account)
+		/// <param name="account">The account whose online characters to refresh.</param>
+		/// <param name="actorID">The operator to tell if a character could not be refreshed.</param>
+		/// <param name="mutedCharacterID">The one character the write was for, or 0 when it was for the whole account.</param>
+		/// <param name="mutedUntilTicks">When the mute just written ends (<see cref="ChatMutePolicy.NoEnd"/> for never), or 0 for a lifted mute.</param>
+		/// <param name="muteReason">The reason written with the mute.</param>
+		private void RefreshChatMutes(string account, long actorID, long mutedCharacterID, long mutedUntilTicks, string muteReason)
 		{
 			if (string.IsNullOrEmpty(account) || !TryGetOnlineCharacters(out var mapping))
 			{
@@ -376,11 +397,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
+				// A write for one character changed nothing for the others on the account.
+				if (mutedCharacterID != 0 && online.ID != mutedCharacterID)
+				{
+					continue;
+				}
+
 				long characterID = online.ID;
-				TryEnqueueAsyncWork(async () =>
+				long fallbackUntilTicks = mutedUntilTicks;
+				if (!TryEnqueueAsyncWork(async () =>
 				{
 					if (!TryGetDbService(out ICharacterService characters))
 					{
+						await Log.Error("SceneServerSystem", $"Chat mute for character {characterID} could not be re-read: ICharacterService unavailable.");
+						TryEnqueueMainThread(() => ApplyMuteFallback(characterID, actorID, fallbackUntilTicks, muteReason));
 						return;
 					}
 
@@ -388,7 +418,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (!state.IsSuccess)
 					{
 						await Log.Warning("SceneServerSystem",
-							$"Chat mute for character {characterID} could not be re-read: {state.ErrorMessage}");
+							$"Chat mute for character {characterID} could not be re-read: [{state.ErrorCode}] {state.ErrorMessage}");
+						TryEnqueueMainThread(() => ApplyMuteFallback(characterID, actorID, fallbackUntilTicks, muteReason));
 						return;
 					}
 
@@ -403,8 +434,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							held.ChatMuteReason = reason;
 						}
 					});
-				}, characterID);
+				}, characterID))
+				{
+					ApplyMuteFallback(characterID, actorID, fallbackUntilTicks, muteReason);
+				}
 			}
+		}
+
+		/// <summary>
+		/// Applies a just-written mute to a character whose mute state could not be re-read, and
+		/// tells the operator. Main thread.
+		/// </summary>
+		/// <param name="mutedUntilTicks">The mute just written, or 0 when one was lifted.</param>
+		private void ApplyMuteFallback(long characterID, long actorID, long mutedUntilTicks, string muteReason)
+		{
+			if (!TryGetOnlineCharacters(out var mapping) ||
+				!mapping.CharactersByID.TryGetValue(characterID, out IPlayerCharacter held) ||
+				held == null)
+			{
+				return;
+			}
+
+			if (mutedUntilTicks > 0)
+			{
+				if (mutedUntilTicks > held.ChatMutedUntilTicks)
+				{
+					held.ChatMutedUntilTicks = mutedUntilTicks;
+					held.ChatMuteReason = muteReason;
+				}
+				ReplyByCharacterID(actorID, $"{held.CharacterName}'s mute state could not be re-read here; the new mute was applied from the write.");
+				return;
+			}
+
+			ReplyByCharacterID(actorID, $"{held.CharacterName}'s mute state could not be re-read here, so any mute stays in force on this scene server until they next load.");
 		}
 
 		#endregion
@@ -450,7 +512,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<AccountAdminData> existing = await accounts.FetchAdminAsync(accountName);
 				if (!existing.IsSuccess || existing.Data == null)
 				{
-					return $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.";
+					return DescribeLookupFailure(existing, $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.", $"the account '{OperatorCommandParsing.Truncate(accountName, 32)}'");
 				}
 
 				var level = (AccessLevel)existing.Data.AccessLevel;
@@ -476,7 +538,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult result = await accounts.BanAsync(accountName, until, actorAccount, reason);
 				if (!result.IsSuccess)
 				{
-					return $"Could not ban '{accountName}': {result.ErrorMessage}";
+					return $"Could not ban '{accountName}': [{result.ErrorCode}] {result.ErrorMessage}";
 				}
 
 				await Log.Warning("SceneServerSystem",
@@ -509,7 +571,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<AccountAdminData> existing = await accounts.FetchAdminAsync(accountName);
 				if (!existing.IsSuccess || existing.Data == null)
 				{
-					return $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.";
+					return DescribeLookupFailure(existing, $"No account named '{OperatorCommandParsing.Truncate(accountName, 32)}'.", $"the account '{OperatorCommandParsing.Truncate(accountName, 32)}'");
 				}
 				if ((AccessLevel)existing.Data.AccessLevel != AccessLevel.Banned)
 				{
@@ -523,7 +585,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult result = await accounts.UnbanAsync(accountName);
 				if (!result.IsSuccess)
 				{
-					return $"Could not lift the ban on '{accountName}': {result.ErrorMessage}";
+					return $"Could not lift the ban on '{accountName}': [{result.ErrorCode}] {result.ErrorMessage}";
 				}
 
 				await Log.Warning("SceneServerSystem", $"'{actorAccount}' lifted the ban on account '{accountName}'.");

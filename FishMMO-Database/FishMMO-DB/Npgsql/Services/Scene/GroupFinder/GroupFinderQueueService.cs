@@ -907,46 +907,6 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
-		/// Runs a query on the context's connection and transaction and maps every row.
-		/// </summary>
-		/// <remarks>
-		/// The base class offers single-row readers only; the group former needs the whole
-		/// candidate set, locked, on the transaction it is inside.
-		/// </remarks>
-		private static async Task<List<TRow>> ReadRowsAsync<TRow>(
-			NpgsqlDbContext dbContext,
-			string sql,
-			object[] parameters,
-			Func<DbDataReader, TRow> map,
-			CancellationToken cancellationToken)
-		{
-			var connection = dbContext.Database.GetDbConnection();
-			if (connection.State != ConnectionState.Open)
-			{
-				await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-			}
-
-			using var command = connection.CreateCommand();
-			command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
-			command.CommandText = ParameterPlaceholderRegex.Replace(sql, "@p$1");
-			for (int i = 0; i < parameters.Length; i++)
-			{
-				var param = command.CreateParameter();
-				param.ParameterName = "@p" + i;
-				param.Value = parameters[i] ?? DBNull.Value;
-				command.Parameters.Add(param);
-			}
-
-			var rows = new List<TRow>();
-			using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-			while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-			{
-				rows.Add(map(reader));
-			}
-			return rows;
-		}
-
-		/// <summary>
 		/// Maps a queue entity to its DTO.
 		/// </summary>
 		private static GroupFinderQueueData MapEntityToDto(GroupFinderQueueEntity entity)

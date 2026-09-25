@@ -43,6 +43,7 @@ The source of truth for active hotkey bindings is the runtime list on `IPlayerCh
 - Single hotkey update via `HotkeySetBroadcast` with full connection, character, and slot validation
 - Batch hotkey update via `HotkeySetMultipleBroadcast` with per-entry independent validation (invalid entries are skipped; valid entries still apply)
 - Automatic per-character hotkey list initialization seeded with `Constants.Configuration.MaximumPlayerHotkeys` entries
+- Multiple hotkey bars without a bar anywhere on the server: `MaximumPlayerHotkeys` is `HotkeyBarCount * HotkeySlotsPerBar` (both game settings in `Constants.Configuration`), and a slot index is `bar * HotkeySlotsPerBar + position`. The server, the wire and the `character_hotkeys` rows all work in that flat index; only the client draws bars. Raising `HotkeyBarCount` is safe on a live game (new bars are appended); changing `HotkeySlotsPerBar` re-deals stored bindings and is not.
 - Slot range validation (`0 <= slot < hotkeyCount`) and hotkey type enum range validation (`0..MaxHotkeyType`)
 - `ReferenceID` lower-bound validation (rejects values below `-1`)
 - Ingress debounce protection per connection per operation type via `IngressGuard`

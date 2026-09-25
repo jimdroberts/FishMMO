@@ -502,7 +502,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					// Verify character exists and belongs to this account
 					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchAsync(characterName);
-					if (!fetchResult.IsSuccess || fetchResult.Data == null)
+					if (!fetchResult.IsSuccess)
+					{
+						/* A failed read, not an answer. FetchAsync reports a missing character as
+						 * success with no data, so only that case below is the client asking for a
+						 * character that is not there. Folding the two together disconnected a player
+						 * as a terminal protocol violation — no reconnect — for a database hiccup. */
+						await Log.Error("CharacterSelectSystem", $"Failed to fetch character '{characterName}' for selection: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}");
+						SendSelectFailure(conn);
+						return;
+					}
+					if (fetchResult.Data == null)
 					{
 						TryEnqueueMainThread(() =>
 						{
@@ -621,7 +631,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					// Defense-in-depth validation: after selection, confirm this account resolves to the expected selected character.
 					// SetSelectedAsync must remain account-scoped at the SQL layer (e.g., WHERE id = @id AND account = @account).
 					DatabaseResult<CharacterData?> selectedResult = await characterService.FetchByAccountAsync(accountName, selected: true);
-					if (!selectedResult.IsSuccess || selectedResult.Data == null ||
+					if (!selectedResult.IsSuccess)
+					{
+						await Log.Error("CharacterSelectSystem", $"Character select verification read failed for account '{accountName}': [{selectedResult.ErrorCode}] {selectedResult.ErrorMessage}");
+						SendSelectFailure(conn);
+						return;
+					}
+					if (selectedResult.Data == null ||
 						!string.Equals(selectedResult.Data.Value.Name, characterName, StringComparison.OrdinalIgnoreCase))
 					{
 						await Log.Warning("CharacterSelectSystem", $"Character select ownership verification failed for account '{accountName}' and character '{characterName}'.");
@@ -693,6 +709,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSelectSystem", $"Error processing character select: {ex}");
+
+				// Answered like every other refusal of this request, for the reason given in
+				// OnServerCharacterSelectBroadcastReceived: an unanswered selection leaves the
+				// client's panel locked until its reply deadline runs out.
+				SendSelectFailure(conn);
 			}
 			finally
 			{

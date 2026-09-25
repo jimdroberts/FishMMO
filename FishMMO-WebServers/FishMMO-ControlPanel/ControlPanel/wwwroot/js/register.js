@@ -589,6 +589,7 @@ export function renderRegistered(host, result, { onDone }) {
 
 			<div class="stack" style="margin-top:var(--sp-4)">
 				${result.betaWarning ? ui.banner('warn', 'Beta code not applied', result.betaWarning) : ''}
+				${result.twoFactorWarning ? ui.banner('warn', 'Two-factor is not set up', result.twoFactorWarning) : ''}
 				${handoverMarkup(result)}
 				<div id="verification-host">
 					${pending.length ? '' : ui.banner('ok', 'The account is ready', 'You can sign in now.')}

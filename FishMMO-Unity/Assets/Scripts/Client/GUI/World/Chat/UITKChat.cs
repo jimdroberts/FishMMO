@@ -453,6 +453,13 @@ namespace FishMMO.Client
 			ClientChatSettings.OnChanged += OnChatFontSizeChanged;
 			ApplyChatFontSize();
 
+			/* The log's lower edge clears the hotbar's extra stacked rows, if it has any, by giving
+			 * up height rather than by moving: its top edge is what the toast stack and the party
+			 * frame are measured against. See UITKHudLayout. Idempotent for the same reason. */
+			ClientHotbarSettings.OnChanged -= ApplyHotbarInset;
+			ClientHotbarSettings.OnChanged += ApplyHotbarInset;
+			ApplyHotbarInset();
+
 			ChatHelper.InitializeOnce(GetChannelCommand);
 
 			if (!welcomeSeeded)
@@ -548,6 +555,17 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			ClientChatSettings.OnChanged -= OnChatFontSizeChanged;
+			ClientHotbarSettings.OnChanged -= ApplyHotbarInset;
+		}
+
+		/// <summary>Shortens the log so its lower edge clears the hotbar's extra stacked rows.</summary>
+		/// <remarks>
+		/// A log the player has dragged somewhere keeps its full height: it no longer sits beside the
+		/// bar, and the inset margin moves nothing for a panel anchored by its top.
+		/// </remarks>
+		private void ApplyHotbarInset()
+		{
+			UITKHudLayout.ApplyChatInset(Root?.Q("chat-root"), HasPlayerPosition);
 		}
 
 		/// <summary>

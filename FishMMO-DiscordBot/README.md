@@ -115,7 +115,7 @@ into the output directory as `appsettings.json` / `appsettings.Production.json`.
 | `DatabaseModule` | Read-only DB queries gated behind admin permissions. `getaccount` shows the account's Discord username, whether a Discord user is linked, whether Discord is verified, and whether the verification DM went out. |
 | `GeneralModule` | Ping, status, server uptime. |
 | `LinkModule` | `/link` issues a short-lived code the player types into game chat; `/unlink` removes the link. Both read and write the link in the database. |
-| `ModerationModule` | Mute / unmute / ban / unban for the chat bridge (uses `BridgeBanService`). |
+| `ModerationModule` | `mod kick` / `mod ban` / `mod unban` on game accounts, and ban / unban for the chat bridge (uses `BridgeBanService`). The game-account commands need the Discord user linked to a Game Master or Admin game account, apply the Control Panel's guards (not yourself, not a peer or superior), call the same account services the panel does, and write each attempt to the admin audit log with source `discord`. |
 
 ### Services (long-running workers)
 

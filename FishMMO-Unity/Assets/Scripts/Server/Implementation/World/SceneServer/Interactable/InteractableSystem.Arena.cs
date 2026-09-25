@@ -65,14 +65,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public WorldSceneDetails SceneDetails;
 		}
 
-		/// <summary>Ingress guard operation code for arena board lookups (profile, history, leaderboard).</summary>
+		/// <summary>Ingress guard operation code for arena board lookups (profile, history).</summary>
 		private const byte ArenaLookupOperation = 15;
 
 		/// <summary>Minimum milliseconds between arena board lookups from one connection.</summary>
 		private const int ArenaLookupDebounceMilliseconds = 1000;
-
-		/// <summary>Rows the leaderboard shows.</summary>
-		private const int ArenaLeaderboardRows = 50;
 
 		/// <summary>Matches the history shows.</summary>
 		private const int ArenaHistoryRows = 20;
@@ -86,7 +83,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<ArenaQueueBroadcast>(OnServerArenaQueueBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ArenaProfileRequestBroadcast>(OnServerArenaProfileRequestReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ArenaHistoryRequestBroadcast>(OnServerArenaHistoryRequestReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<ArenaLeaderboardRequestBroadcast>(OnServerArenaLeaderboardRequestReceived, true);
 
 			/* Game masters may step into a running match to watch it. A spectator has no seat, so
 			 * the team registry reports them as an ally to everyone and nobody can hit them or be
@@ -118,7 +114,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<ArenaQueueBroadcast>(OnServerArenaQueueBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ArenaProfileRequestBroadcast>(OnServerArenaProfileRequestReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ArenaHistoryRequestBroadcast>(OnServerArenaHistoryRequestReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<ArenaLeaderboardRequestBroadcast>(OnServerArenaLeaderboardRequestReceived);
 			ChatHelper.RemoveCommands(new[] { "/spectatearena", "/spectateteam" });
 			DeinitializeArenaMatches();
 		}
@@ -181,7 +176,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				DatabaseResult<ArenaMatchData?> matchResult = await matchService.FetchAsync(matchID);
-				if (!matchResult.IsSuccess || !matchResult.Data.HasValue)
+				if (!matchResult.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"Arena: could not read match {matchID} for character {characterID} to spectate: [{matchResult.ErrorCode}] {matchResult.ErrorMessage}");
+					TryEnqueueMainThread(() => SendSystemMessage(conn, "The match could not be looked up right now. Please try again."));
+					return;
+				}
+				if (!matchResult.Data.HasValue)
 				{
 					TryEnqueueMainThread(() => SendSystemMessage(conn, "No such arena match."));
 					return;
@@ -194,7 +195,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
+				// NotFound is the instance being gone, which the message below already says.
 				DatabaseResult<SceneData> instanceResult = await sceneService.FetchAsync(match.InstanceID);
+				if (!instanceResult.IsSuccess && instanceResult.ErrorCode != DatabaseErrorCodes.NotFound)
+				{
+					await Log.Warning("InteractableSystem", $"Arena: could not read instance {match.InstanceID} of match {matchID}: [{instanceResult.ErrorCode}] {instanceResult.ErrorMessage}");
+				}
 				if (!instanceResult.IsSuccess || !IsUsableInstance(instanceResult.Data, worldServerID))
 				{
 					TryEnqueueMainThread(() => SendSystemMessage(conn, "That match's arena is not available."));
@@ -563,7 +569,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<IGroupFinderQueueService>(out var queueService) ||
 					!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService) ||
-					!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
+					!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService) ||
+					!Server.Database.ServiceRegistry.TryGet<IArenaPenaltyService>(out var penaltyService))
 				{
 					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError, SceneType.PvP));
 					return;
@@ -625,23 +632,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 				}
 
-				// Deserters and decliners wait out their lock before queuing again.
-				if (Server.Database.ServiceRegistry.TryGet<IArenaPenaltyService>(out var penaltyService))
+				/* Deserters and decliners wait out their lock before queuing again.
+				 *
+				 * A lock that cannot be read refuses the request rather than letting it through.
+				 * This is the only place a lock is enforced — the forming transaction re-checks
+				 * seats and instances, not penalties — so reading a failure as "no locks" let any
+				 * locked player queue whenever the read happened to fail. */
+				var lockResult = await penaltyService.FetchActiveAsync(memberIDs);
+				if (!lockResult.IsSuccess)
 				{
-					var lockResult = await penaltyService.FetchActiveAsync(memberIDs);
-					if (lockResult.IsSuccess && lockResult.Data.Count > 0)
-					{
-						bool onlyMe = lockResult.Data.Count == 1 && lockResult.Data[0].CharacterID == characterID;
-						GroupFinderRefusalReason why = onlyMe ? GroupFinderRefusalReason.QueueLocked : GroupFinderRefusalReason.PartyMemberBusy;
-						TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, why, SceneType.PvP));
-						return;
-					}
+					await Log.Warning("InteractableSystem", $"Arena: could not read the queue locks of character {characterID}'s group: [{lockResult.ErrorCode}] {lockResult.ErrorMessage}");
+					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError, SceneType.PvP));
+					return;
+				}
+				if (lockResult.Data.Count > 0)
+				{
+					bool onlyMe = lockResult.Data.Count == 1 && lockResult.Data[0].CharacterID == characterID;
+					GroupFinderRefusalReason why = onlyMe ? GroupFinderRefusalReason.QueueLocked : GroupFinderRefusalReason.PartyMemberBusy;
+					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, why, SceneType.PvP));
+					return;
 				}
 
 				var heldResult = await sceneService.FetchCharacterInstancesAsync(
 					partyRoster, DbSceneType(SceneType.Group), worldServerID, context.PartyID);
 				if (!heldResult.IsSuccess)
 				{
+					await Log.Warning("InteractableSystem", $"Arena: could not read the instances held by character {characterID}'s group: [{heldResult.ErrorCode}] {heldResult.ErrorMessage}");
 					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError, SceneType.PvP));
 					return;
 				}
@@ -660,6 +676,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				var liveResult = await matchService.FetchCharactersInLiveMatchesAsync(partyRoster);
 				if (!liveResult.IsSuccess)
 				{
+					await Log.Warning("InteractableSystem", $"Arena: could not read which of character {characterID}'s group are in live matches: [{liveResult.ErrorCode}] {liveResult.ErrorMessage}");
 					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError, SceneType.PvP));
 					return;
 				}
@@ -672,16 +689,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
+				/* Two different refusals. "Somebody here is already matched" — a solo upsert that
+				 * declined to re-point a live-matched row (Data 0), or a group transaction rolled back
+				 * with StaleState for the same reason — is PartyMemberBusy, and routine. Anything else
+				 * is the database failing, which is a ServerError and worth a warning; both used to be
+				 * reported as busy, the solo one without a line in the log. */
 				bool queued;
+				bool busy;
 				if (groupID > 0)
 				{
 					DatabaseResult<int> groupResult = await queueService.EnqueueGroupAsync(
 						worldServerID, DbSceneType(SceneType.PvP), sceneName, context.Format, groupID, memberIDs, GroupFinderStaleBefore);
 					queued = groupResult.IsSuccess && groupResult.Data == memberIDs.Count;
-					if (!queued)
+					busy = groupResult.IsSuccess || groupResult.ErrorCode == DatabaseErrorCodes.StaleState;
+					if (!queued && busy)
 					{
 						await Log.Debug("InteractableSystem",
-							$"Arena: party {groupID} could not be queued for '{sceneName}': {groupResult.ErrorCode} - {groupResult.ErrorMessage}");
+							$"Arena: party {groupID} could not be queued for '{sceneName}': a member is already matched. [{groupResult.ErrorCode}] {groupResult.ErrorMessage}");
+					}
+					else if (!queued)
+					{
+						await Log.Warning("InteractableSystem",
+							$"Arena: party {groupID} could not be queued for '{sceneName}': [{groupResult.ErrorCode}] {groupResult.ErrorMessage}");
 					}
 				}
 				else
@@ -689,11 +718,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					DatabaseResult<long> soloResult = await queueService.EnqueueAsync(
 						worldServerID, characterID, DbSceneType(SceneType.PvP), sceneName, context.Format, GroupFinderStaleBefore);
 					queued = soloResult.IsSuccess && soloResult.Data > 0;
+					busy = soloResult.IsSuccess;
+					if (!soloResult.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem",
+							$"Arena: character {characterID} could not be queued for '{sceneName}': [{soloResult.ErrorCode}] {soloResult.ErrorMessage}");
+					}
 				}
 
 				if (!queued)
 				{
-					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, GroupFinderRefusalReason.PartyMemberBusy, SceneType.PvP));
+					GroupFinderRefusalReason why = busy ? GroupFinderRefusalReason.PartyMemberBusy : GroupFinderRefusalReason.ServerError;
+					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, why, SceneType.PvP));
 					return;
 				}
 
@@ -769,7 +805,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			for (int i = 0; i < ArenaBackfillPerPump && stillWaiting.Count > 0; ++i)
 			{
 				var backfill = await queueService.TryBackfillArenaSeatAsync(worldServerID, sceneName, format, GroupFinderStaleBefore);
-				if (!backfill.IsSuccess || !backfill.Data.Filled)
+				if (!backfill.IsSuccess)
+				{
+					await LogMatchmakingFailureAsync(backfill, $"Arena: no seat backfilled for '{sceneName}' format {format}");
+					break;
+				}
+				if (!backfill.Data.Filled)
 				{
 					break;
 				}
@@ -788,6 +829,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.PvP), sceneName, format, GroupFinderStaleBefore);
 			if (!countResult.IsSuccess)
 			{
+				await Log.Warning("InteractableSystem", $"Arena: could not count the waiters for '{sceneName}' format {format}; no match is formed this pump: [{countResult.ErrorCode}] {countResult.ErrorMessage}");
 				return;
 			}
 			int waiting = countResult.Data;
@@ -812,15 +854,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				int band = 0;
 				if (ranked)
 				{
-					if (Server.Database.ServiceRegistry.TryGet<IArenaRatingService>(out var ratingService))
+					/* A ranked format is not formed without its season. Formed anyway, as it used to
+					 * be when this read failed, the match had no rating source — no band, no balance
+					 * by rating — and was then played and rated as ranked. The waiters keep their
+					 * place and the next pump tries again. */
+					if (!Server.Database.ServiceRegistry.TryGet<IArenaRatingService>(out var ratingService))
 					{
-						var seasonResult = await ratingService.GetOrCreateActiveSeasonAsync();
-						if (seasonResult.IsSuccess)
-						{
-							seasonID = seasonResult.Data.ID;
-							ratingSource = ArenaRatingSource.FromSeason(seasonID, ArenaRating.DefaultRating);
-						}
+						await Log.Warning("InteractableSystem", $"Arena: IArenaRatingService unavailable; no ranked match is formed for '{sceneName}' format {format}.");
+						ReportArenaWaiting(stillWaiting, waiting);
+						return;
 					}
+					var seasonResult = await ratingService.GetOrCreateActiveSeasonAsync();
+					if (!seasonResult.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"Arena: no season could be resolved; no ranked match is formed for '{sceneName}' format {format} this pump: [{seasonResult.ErrorCode}] {seasonResult.ErrorMessage}");
+						ReportArenaWaiting(stillWaiting, waiting);
+						return;
+					}
+					seasonID = seasonResult.Data.ID;
+					ratingSource = ArenaRatingSource.FromSeason(seasonID, ArenaRating.DefaultRating);
 					band = ArenaRating.ResolveBand(waiters[0].RatingBandBase, waiters[0].RatingBandGrowth, waited, waiters[0].RatingBandMax);
 				}
 				else if (waiters[0].BalanceTeams && waiters[0].RankAttributeTemplateID > 0)
@@ -832,16 +884,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				var formResult = await queueService.TryFormArenaMatchAsync(
 					worldServerID, sceneName, format, templateID, teamCount, teamSize, GroupFinderStaleBefore, 128, ratingSource, composeOptions);
 
+				/* The hosting server stamps the match itself if this does not land — it reads the
+				 * row's season and resolves one when it finds none — so a failure is logged, not
+				 * repaired here. */
 				if (formResult.IsSuccess && formResult.Data.Formed && ranked && seasonID > 0 &&
 					Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 				{
-					await matchService.SetRankedAsync(formResult.Data.MatchID, seasonID);
+					DatabaseResult<bool> stamp = await matchService.SetRankedAsync(formResult.Data.MatchID, seasonID);
+					if (!stamp.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"Arena: match {formResult.Data.MatchID} formed ranked but could not be stamped in season {seasonID}; its host will stamp it: [{stamp.ErrorCode}] {stamp.ErrorMessage}");
+					}
 				}
 
 				if (!formResult.IsSuccess)
 				{
-					await Log.Debug("InteractableSystem",
-						$"Arena: no match formed for '{sceneName}' format {format}: {formResult.ErrorCode} - {formResult.ErrorMessage}");
+					await LogMatchmakingFailureAsync(formResult, $"Arena: no match formed for '{sceneName}' format {format}");
 				}
 				else if (formResult.Data.Formed)
 				{
@@ -868,6 +926,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 			}
 
+			ReportArenaWaiting(stillWaiting, waiting);
+		}
+
+		/// <summary>Tells whoever is still waiting for an arena how many are waiting, when the number moved.</summary>
+		private void ReportArenaWaiting(List<GroupFinderPumpItem> stillWaiting, int waiting)
+		{
 			int reportedWaiting = waiting;
 			foreach (GroupFinderPumpItem waiter in stillWaiting)
 			{
@@ -889,7 +953,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		// ──────────────────────────────────────────────────────────────────
-		//  Board lookups: profile, history, leaderboard
+		//  Board lookups: profile, history
+		//
+		//  The board's leaderboard view is not answered here. It reads the arena rating board
+		//  through LeaderboardSystem, the same cached read the Leaderboards panel uses, so the
+		//  two can never disagree about who is ranked or where.
 		// ──────────────────────────────────────────────────────────────────
 
 		/// <summary>Validates that a connection is standing at the board it names. Main thread only.</summary>
@@ -948,6 +1016,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				var seasonResult = await ratingService.GetOrCreateActiveSeasonAsync();
 				if (!seasonResult.IsSuccess)
 				{
+					await Log.Warning("InteractableSystem", $"Arena: no season for character {characterID}'s profile: [{seasonResult.ErrorCode}] {seasonResult.ErrorMessage}");
 					return;
 				}
 				ArenaSeasonData season = seasonResult.Data;
@@ -961,9 +1030,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					QueueLockReason = string.Empty,
 				};
 
+				/* A read that failed is not sent as the defaults. The profile would otherwise tell a
+				 * rated player they are unrated, or a locked one that they may queue — neither is a
+				 * better answer than none, which leaves the board showing what it had. */
 				var ids = new List<long>(1) { characterID };
 				var ratingResult = await ratingService.FetchRatingsAsync(season.ID, ids);
-				if (ratingResult.IsSuccess && ratingResult.Data.Count > 0)
+				if (!ratingResult.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"Arena: could not read character {characterID}'s rating for their profile: [{ratingResult.ErrorCode}] {ratingResult.ErrorMessage}");
+					return;
+				}
+				if (ratingResult.Data.Count > 0)
 				{
 					ArenaRatingData r = ratingResult.Data[0];
 					profile.Rating = r.Rating;
@@ -976,7 +1053,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (Server.Database.ServiceRegistry.TryGet<IArenaPenaltyService>(out var penaltyService))
 				{
 					var lockResult = await penaltyService.FetchActiveAsync(ids);
-					if (lockResult.IsSuccess && lockResult.Data.Count > 0)
+					if (!lockResult.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"Arena: could not read character {characterID}'s queue lock for their profile: [{lockResult.ErrorCode}] {lockResult.ErrorMessage}");
+						return;
+					}
+					if (lockResult.Data.Count > 0)
 					{
 						profile.QueueLockSeconds = Math.Max(1, (int)Math.Ceiling((lockResult.Data[0].LockedUntilUtc - DateTime.UtcNow).TotalSeconds));
 						profile.QueueLockReason = lockResult.Data[0].Reason ?? string.Empty;
@@ -1046,6 +1128,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				var historyResult = await matchService.FetchRecentForCharacterAsync(characterID, ArenaHistoryRows);
 				if (!historyResult.IsSuccess)
 				{
+					await Log.Warning("InteractableSystem", $"Arena: could not read character {characterID}'s match history: [{historyResult.ErrorCode}] {historyResult.ErrorMessage}");
 					return;
 				}
 
@@ -1081,115 +1164,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			catch (Exception ex)
 			{
 				await Log.Error("InteractableSystem", $"Error building the arena history of character {characterID}: {ex}");
-			}
-			finally
-			{
-				EndIngressGuard(guardKey);
-			}
-		}
-
-		/// <summary>The season leaderboard, for the board.</summary>
-		public void OnServerArenaLeaderboardRequestReceived(NetworkConnection conn, ArenaLeaderboardRequestBroadcast msg, FishNet.Transporting.Channel channel)
-		{
-			if (!TryBeginIngressGuard(conn.ClientId, ArenaLookupOperation, ArenaLookupDebounceMilliseconds, out long guardKey))
-			{
-				return;
-			}
-			bool asyncOwns = false;
-			try
-			{
-				if (!TryResolveArenaLookup(conn, msg.InteractableID, out IPlayerCharacter character))
-				{
-					return;
-				}
-				long characterID = character.ID;
-				asyncOwns = TryEnqueueAsyncWork(() => SendArenaLeaderboardAsync(conn, characterID, guardKey), conn, characterID);
-			}
-			finally
-			{
-				if (!asyncOwns)
-				{
-					EndIngressGuard(guardKey);
-				}
-			}
-		}
-
-		private async Task SendArenaLeaderboardAsync(NetworkConnection conn, long characterID, long guardKey)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<IArenaRatingService>(out var ratingService) ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
-				{
-					return;
-				}
-
-				var seasonResult = await ratingService.GetOrCreateActiveSeasonAsync();
-				if (!seasonResult.IsSuccess)
-				{
-					return;
-				}
-				ArenaSeasonData season = seasonResult.Data;
-
-				var topResult = await ratingService.FetchTopAsync(season.ID, ArenaLeaderboardRows);
-				if (!topResult.IsSuccess)
-				{
-					return;
-				}
-
-				var ids = new List<long>(topResult.Data.Count);
-				foreach (ArenaRatingData r in topResult.Data)
-				{
-					ids.Add(r.CharacterID);
-				}
-				var names = new Dictionary<long, string>(ids.Count);
-				var namesResult = await characterService.FetchNamesAsync(ids);
-				if (namesResult.IsSuccess)
-				{
-					foreach (CharacterNameData n in namesResult.Data)
-					{
-						names[n.CharacterID] = n.Name;
-					}
-				}
-
-				var entries = new ArenaLeaderboardEntry[topResult.Data.Count];
-				int yourRank = 0;
-				for (int i = 0; i < entries.Length; ++i)
-				{
-					ArenaRatingData r = topResult.Data[i];
-					if (r.CharacterID == characterID)
-					{
-						yourRank = i + 1;
-					}
-					entries[i] = new ArenaLeaderboardEntry
-					{
-						CharacterID = r.CharacterID,
-						CharacterName = names.TryGetValue(r.CharacterID, out string name) ? name : "Unknown",
-						Rating = r.Rating,
-						Wins = r.Wins,
-						Losses = r.Losses,
-					};
-				}
-
-				var board = new ArenaLeaderboardBroadcast
-				{
-					SeasonID = season.ID,
-					SeasonName = season.Name ?? string.Empty,
-					Entries = entries,
-					YourRank = yourRank,
-				};
-				TryEnqueueMainThread(() =>
-				{
-					if (conn != null && conn.IsActive)
-					{
-						Server.NetworkWrapper.Broadcast(conn, board, true, FishNet.Transporting.Channel.Reliable);
-					}
-				});
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("InteractableSystem", $"Error building the arena leaderboard for character {characterID}: {ex}");
 			}
 			finally
 			{

@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -95,6 +96,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		[Tooltip("Maximum messages written to the database per flush (overflow carries to next flush)")]
 		[SerializeField] private int maxPersistBatchSize = 2000;
+
+		/// <summary>
+		/// Largest batch <c>IChatService.PersistBatchAsync</c> writes as ONE transaction.
+		/// </summary>
+		/// <remarks>
+		/// The service splits a longer list into chunks of at most this many rows and commits each
+		/// chunk on its own, then reports the first chunk that fails as the failure of the whole
+		/// call. A failed call over a longer list may therefore have committed part of it already,
+		/// and retrying that list — which is exactly what the flush does on a failure — writes the
+		/// committed part a second time: duplicate rows in a log that is kept for audit. Every
+		/// flush is held to this size and passes it as the chunk size, so a call is all-or-nothing
+		/// and a retry can never duplicate anything. Mirrors the upper clamp inside
+		/// <c>ChatService.PersistBatchAsync</c>; the two must be changed together.
+		/// </remarks>
+		private const int MaxAtomicPersistBatchSize = 2500;
+
+		/// <summary>
+		/// How long a chat message the database refused with a transient failure keeps being retried.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A transient failure means the database was unreachable, not that anything was wrong with
+		/// the rows, so the answer is to try the same rows again later — not to bisect a batch that
+		/// every half of will fail equally, and then discard it. The chat log is kept for audit, and
+		/// an outage used to cost it every message sent while the outage lasted.
+		/// </para>
+		/// <para>
+		/// Bounded by age rather than by attempt count because the message already carries the one
+		/// clock that matters — when the server received it. A message still unwritten after this
+		/// long is discarded with an error, which caps the retry queue at this window's worth of
+		/// chat however long the database stays down. Late is not free, either: a whisper, party or
+		/// guild line reaches players on OTHER scene servers only once its row is written, so a
+		/// retried message is delivered there as late as it was written.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Seconds a chat message refused by a transient database failure is retried before it is discarded")]
+		[SerializeField] private float persistRetryWindowSeconds = 300.0f;
+
+		/// <summary>
+		/// Non-zero while an asynchronous persist flush is in flight. See <see cref="OnPeriodicPersistFlush"/>.
+		/// </summary>
+		private int persistFlushInFlight;
 
 		/// <summary>
 		/// Maximum time the shutdown flush blocks the main thread waiting on the database.
@@ -250,10 +293,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			chatTokenBucketCapacity = Mathf.Max(1, chatTokenBucketCapacity);
 			chatTokenRefillRate = Mathf.Max(0.01f, chatTokenRefillRate);
 			persistFlushIntervalSeconds = Mathf.Max(0.01f, persistFlushIntervalSeconds);
-			maxPersistBatchSize = Mathf.Max(1, maxPersistBatchSize);
+			maxPersistBatchSize = Mathf.Clamp(maxPersistBatchSize, 1, MaxAtomicPersistBatchSize);
+			persistRetryWindowSeconds = Mathf.Max(0.0f, persistRetryWindowSeconds);
 			outboundBatchIntervalSeconds = Mathf.Max(0.01f, outboundBatchIntervalSeconds);
 			maxOutboundBatchSize = Mathf.Max(1, maxOutboundBatchSize);
 			maxBufferedWorldMessages = Mathf.Max(1, maxBufferedWorldMessages);
+
+			/* Cleared here rather than trusted. This object outlives a play session in the editor,
+			 * and a flag left set by one that was torn down mid-flush would stop the next from ever
+			 * persisting a line of chat. */
+			Interlocked.Exchange(ref persistFlushInFlight, 0);
 
 			Log.Debug("ChatSystem", $"Initialized (MessagePumpRate={MessagePumpRate}s, FetchCount={MessageFetchCount})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -492,7 +541,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Async DB fetch on background thread
 				DatabaseResult<List<ChatData>> result = await chatService.FetchAsync(lastFetchTime, lastFetchPosition, fetchCount, sceneServerID);
 
-				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+				/* A failed fetch leaves the cursor where it was, so nothing is skipped — the next pump
+				 * asks again. It is still logged: this pump is the only way a whisper, party or guild
+				 * line reaches a player on another scene server, and an outage of it is otherwise
+				 * invisible until players notice. */
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("ChatSystem", $"Chat message pump fetch failed: [{result.ErrorCode}] {result.ErrorMessage}");
+					return;
+				}
+
+				if (result.Data == null || result.Data.Count < 1)
 				{
 					return;
 				}
@@ -893,6 +952,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Periodic callback that dispatches <see cref="FlushPersistQueueAsync"/> onto the async worker.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>One flush at a time.</b> This fires every <see cref="persistFlushIntervalSeconds"/>
+		/// (0.1s by default) and the async worker runs unordered items concurrently, so without the
+		/// in-flight flag any flush slower than the interval — a 2000-row write under load, or a
+		/// failed batch being bisected — had the next one start beside it. They shared
+		/// <see cref="IChatSystemRuntimeData.PersistBatchBuffer"/>: the second cleared and refilled
+		/// the list while the first's write was still reading it, so a flush could write another
+		/// flush's rows (duplicating them and losing its own), throw on an index that had gone, or
+		/// hand its failure path a list that was no longer its batch. The chat log is kept for
+		/// audit, and it was being silently corrupted in exactly the busy moments worth auditing.
+		/// </para>
+		/// <para>
+		/// A private list per flush would have fixed only the corruption. Overlapping writes also
+		/// commit out of order — each stamps <c>time_created</c> when it runs, not when it commits —
+		/// and the other scene servers' pumps page the table by that stamp, so a slow flush that
+		/// commits after a faster, later one lands behind their cursors and its whispers, party and
+		/// guild lines are never delivered off this server. Serialising the flushes is what keeps
+		/// the rows in commit order.
+		/// </para>
+		/// </remarks>
 		private void OnPeriodicPersistFlush(float deltaTime)
 		{
 			if (!Initialized ||
@@ -909,8 +989,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// The flush in flight takes whatever has queued since, up to its batch size, next time.
+			if (Interlocked.CompareExchange(ref persistFlushInFlight, 1, 0) != 0)
+			{
+				return;
+			}
+
 			if (!TryEnqueueAsyncWork(() => FlushPersistQueueAsync()))
 			{
+				Interlocked.Exchange(ref persistFlushInFlight, 0);
 				Log.Error("ChatSystem", "Failed to enqueue chat persist flush. Messages remain queued for next cycle.");
 			}
 		}
@@ -918,7 +1005,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Drains the <see cref="IChatSystemRuntimeData.PendingPersistQueue"/> and writes all entries
 		/// to the database in a single batch via <c>PersistBatchAsync</c>.
-		/// Runs on a background thread via the async worker.
+		/// Runs on a background thread via the async worker, one at a time — see
+		/// <see cref="OnPeriodicPersistFlush"/>, which took the in-flight flag this releases.
 		/// </summary>
 		private async Task FlushPersistQueueAsync()
 		{
@@ -949,9 +1037,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var sceneRuntimeData)
 					? sceneRuntimeData.ID : 0;
 
-				// Reuse the persistent batch buffer to avoid per-flush allocation.
-				var batch = runtimeData.PersistBatchBuffer;
-				batch.Clear();
+				/* A list of this flush's own, not the shared PersistBatchBuffer.
+				 *
+				 * The write reads the list after its first await, and a retry reads it again. The
+				 * in-flight flag keeps a second async flush away from it, but not the synchronous
+				 * shutdown flush, which drains into that buffer on the main thread — and the runtime
+				 * data clears and nulls the buffer immediately afterwards, whether or not a write is
+				 * still reading it. The buffer is left to the shutdown path alone. */
+				var batch = new List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)>();
 
 				while (batch.Count < maxPersistBatchSize && runtimeData.PendingPersistQueue.TryDequeue(out PendingChatPersist entry))
 				{
@@ -971,10 +1064,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult result = await chatService.PersistBatchAsync(batch);
+				// One chunk, so the call is all-or-nothing and a retry cannot duplicate rows. See MaxAtomicPersistBatchSize.
+				DatabaseResult result = await chatService.PersistBatchAsync(batch, maxBatchSize: batch.Count);
 				if (!result.IsSuccess)
 				{
-					await Log.Warning("ChatSystem", $"FlushPersistQueueAsync DB error ({batch.Count} messages): {result.ErrorCode} - {result.ErrorMessage}");
+					await Log.Warning("ChatSystem", $"FlushPersistQueueAsync DB error ({batch.Count} messages): [{result.ErrorCode}] {result.ErrorMessage}");
 
 					/* One unwritable row used to cost the whole batch — up to
 					 * maxPersistBatchSize (2000) messages, because PersistBatchAsync is a single
@@ -982,17 +1076,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * failed. The chat log is kept for audit, so a single malformed row silently
 					 * erasing two thousand others is the worst possible failure mode.
 					 *
-					 * Retry by bisection: halve the batch until the failing rows are isolated,
-					 * and lose only those. A transient failure (database down) fails every half,
-					 * which is why the recursion is depth-capped — see
-					 * PersistWithIsolationAsync. */
-					var isolation = new List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)>(batch);
-					await PersistWithIsolationAsync(chatService, isolation, 0);
+					 * What happens next depends on WHY it failed. A transient failure (the database
+					 * unreachable) says nothing about the rows, so they go back on the queue — see
+					 * persistRetryWindowSeconds. Anything else is a row the database will not take,
+					 * so the batch is bisected until the failing rows are isolated and only those
+					 * are lost — see PersistWithIsolationAsync. */
+					await PersistWithIsolationAsync(chatService, batch, result, 0);
 				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("ChatSystem", $"Error in FlushPersistQueueAsync: {ex}");
+			}
+			finally
+			{
+				Interlocked.Exchange(ref persistFlushInFlight, 0);
 			}
 		}
 
@@ -1000,25 +1098,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Maximum bisection depth used to isolate a failing row inside a persist batch.
 		/// </summary>
 		/// <remarks>
-		/// Bounds the error path. A row-specific failure is found in log2(batch) halvings, but a
-		/// database that is simply unavailable fails every half, and without a cap that turns one
-		/// failed flush into 2 * batchSize more doomed round-trips. At depth 6 a 2000-message
-		/// batch is narrowed to blocks of about 32 and the remainder is dropped with a log line —
-		/// enough granularity that a poison row costs tens of messages rather than thousands,
-		/// while a dead database costs at most 126 extra attempts before the flush gives up.
+		/// Bounds the error path. A row-specific failure is found in log2(batch) halvings, and
+		/// without a cap a batch full of bad rows turns one failed flush into 2 * batchSize more
+		/// round-trips. At depth 6 a 2000-message batch is narrowed to blocks of about 32 and a
+		/// block still failing there is dropped with a log line — enough granularity that a poison
+		/// row costs tens of messages rather than thousands, at a cost of at most 126 extra
+		/// attempts. A database that is simply unavailable no longer reaches this at all: its
+		/// failure is transient, and a transient failure is re-queued instead of bisected.
 		/// </remarks>
 		private const int maxPersistIsolationDepth = 6;
 
 		/// <summary>
-		/// Re-attempts a failed persist batch by halving it, so that only the entries that
-		/// genuinely cannot be written are lost.
+		/// Settles a persist batch whose write failed: re-queues it when the failure was transient,
+		/// otherwise halves it so that only the entries that genuinely cannot be written are lost.
 		/// </summary>
 		/// <param name="chatService">Chat persistence service.</param>
-		/// <param name="entries">Entries from a batch whose write failed.</param>
+		/// <param name="entries">Entries whose write just failed.</param>
+		/// <param name="failure">The failure that write returned.</param>
 		/// <param name="depth">Current bisection depth; recursion stops at <see cref="maxPersistIsolationDepth"/>.</param>
 		private async Task PersistWithIsolationAsync(
 			IChatService chatService,
 			List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)> entries,
+			DatabaseResult failure,
 			int depth)
 		{
 			if (entries == null || entries.Count < 1)
@@ -1031,17 +1132,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Server.ServerState != ConnectionState.Started ||
 				(Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) && runtimeData.IsShuttingDown))
 			{
+				await Log.Warning("ChatSystem",
+					$"Discarding {entries.Count} chat message(s) that could not be persisted before shutdown: [{failure.ErrorCode}] {failure.ErrorMessage}");
 				return;
 			}
 
+			if (failure.IsTransient)
+			{
+				await RequeueForPersistRetryAsync(entries, failure);
+				return;
+			}
+
+			/* This write has already failed, so a leaf is settled from the failure in hand rather
+			 * than by asking the database the same question again. */
 			if (entries.Count == 1 || depth >= maxPersistIsolationDepth)
 			{
-				DatabaseResult leaf = await chatService.PersistBatchAsync(entries);
-				if (!leaf.IsSuccess)
-				{
-					await Log.Warning("ChatSystem",
-						$"Discarding {entries.Count} chat message(s) that could not be persisted: {leaf.ErrorCode} - {leaf.ErrorMessage}");
-				}
+				await Log.Warning("ChatSystem",
+					$"Discarding {entries.Count} chat message(s) that could not be persisted: [{failure.ErrorCode}] {failure.ErrorMessage}");
 				return;
 			}
 
@@ -1049,16 +1156,68 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var first = entries.GetRange(0, half);
 			var second = entries.GetRange(half, entries.Count - half);
 
-			DatabaseResult firstResult = await chatService.PersistBatchAsync(first);
+			DatabaseResult firstResult = await chatService.PersistBatchAsync(first, maxBatchSize: first.Count);
 			if (!firstResult.IsSuccess)
 			{
-				await PersistWithIsolationAsync(chatService, first, depth + 1);
+				await PersistWithIsolationAsync(chatService, first, firstResult, depth + 1);
 			}
 
-			DatabaseResult secondResult = await chatService.PersistBatchAsync(second);
+			DatabaseResult secondResult = await chatService.PersistBatchAsync(second, maxBatchSize: second.Count);
 			if (!secondResult.IsSuccess)
 			{
-				await PersistWithIsolationAsync(chatService, second, depth + 1);
+				await PersistWithIsolationAsync(chatService, second, secondResult, depth + 1);
+			}
+		}
+
+		/// <summary>
+		/// Puts entries refused by a transient database failure back on the persist queue, and
+		/// discards those that have been waiting longer than <see cref="persistRetryWindowSeconds"/>.
+		/// </summary>
+		/// <remarks>
+		/// Re-queued at the back rather than the front, which a concurrent queue cannot do anyway.
+		/// Nothing depends on the order: every row carries the time the server received it, and
+		/// that — not its position in the table — is the time the log records.
+		/// </remarks>
+		/// <param name="entries">Entries whose write failed transiently.</param>
+		/// <param name="failure">The failure, for the log line.</param>
+		private async Task RequeueForPersistRetryAsync(
+			List<(long characterId, string characterName, string accountName, long worldServerId, long sceneServerId, FishMMO.Database.Data.Enums.ChatChannel channel, string message, DateTime serverReceivedTime)> entries,
+			DatabaseResult failure)
+		{
+			if (Server?.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) != true ||
+				runtimeData.PendingPersistQueue == null)
+			{
+				await Log.Error("ChatSystem",
+					$"Discarding {entries.Count} chat message(s): the database was unavailable and the persist queue is gone. [{failure.ErrorCode}] {failure.ErrorMessage}");
+				return;
+			}
+
+			long oldestRetainedTicks = DateTime.UtcNow.AddSeconds(-persistRetryWindowSeconds).Ticks;
+			int expired = 0;
+
+			for (int i = 0; i < entries.Count; ++i)
+			{
+				var entry = entries[i];
+				if (entry.serverReceivedTime.Ticks < oldestRetainedTicks)
+				{
+					++expired;
+					continue;
+				}
+
+				runtimeData.PendingPersistQueue.Enqueue(new PendingChatPersist(
+					entry.characterId,
+					entry.characterName,
+					entry.accountName,
+					entry.worldServerId,
+					(ChatChannel)(byte)entry.channel,
+					entry.message,
+					entry.serverReceivedTime.Ticks));
+			}
+
+			if (expired > 0)
+			{
+				await Log.Error("ChatSystem",
+					$"Discarding {expired} chat message(s) the database has refused for longer than {persistRetryWindowSeconds:0}s: [{failure.ErrorCode}] {failure.ErrorMessage}");
 			}
 		}
 

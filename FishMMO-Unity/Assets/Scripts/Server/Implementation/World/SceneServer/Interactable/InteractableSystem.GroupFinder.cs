@@ -204,6 +204,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			/// <summary>Arena: template id of the PvP Rank attribute, for unranked balancing; 0 when unresolved.</summary>
 			public int RankAttributeTemplateID;
+
+			/// <summary>
+			/// The player asked to leave and the delete failed. The pump keeps retrying it as a
+			/// cancel with <see cref="GroupFinderRefusalReason.Left"/>; until it lands the row is
+			/// still this server's to pulse and to honour if it is matched.
+			/// </summary>
+			public bool LeaveRequested;
+
+			/// <summary>
+			/// A conditional delete found no waiting row to remove: it was matched, or it is gone.
+			/// The next pump reads the row instead of cancelling again, so a match is moved and a
+			/// missing row is reported rather than the cancel repeating forever.
+			/// </summary>
+			public bool RowCheckDue;
 		}
 
 		/// <summary>
@@ -453,6 +467,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					new List<long>(1) { characterID }, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group, worldServerID);
 				if (!heldResult.IsSuccess)
 				{
+					await Log.Warning("InteractableSystem", $"Group finder could not read the instances held by character {characterID}: [{heldResult.ErrorCode}] {heldResult.ErrorMessage}");
 					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError));
 					return;
 				}
@@ -615,10 +630,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				DatabaseResult<bool> result = await queueService.DeleteAsync(characterID, onlyIfWaiting: true);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"Group finder could not remove character {characterID}'s queue row on leave; the pump retries it: [{result.ErrorCode}] {result.ErrorMessage}");
+				}
 
 				TryEnqueueMainThread(() =>
 				{
-					if (result.IsSuccess && !result.Data &&
+					/* A failed delete is not a leave. The row is still there and still matchable by
+					 * every server's pump, so forgetting the entry here — as this used to — stopped
+					 * the pulse and the dispatch while leaving the row in the queue: a group could
+					 * form around a player who had been told they left, and wait for a transfer
+					 * nobody would ever make. The entry is kept and the pump retries the leave. */
+					if (!result.IsSuccess)
+					{
+						if (groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry pending) &&
+							pending.State == GroupFinderState.Waiting)
+						{
+							pending.LeaveRequested = true;
+						}
+						else
+						{
+							SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError);
+						}
+						return;
+					}
+
+					if (!result.Data &&
 						groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry stillThere) &&
 						stillThere.State == GroupFinderState.Waiting)
 					{
@@ -661,11 +699,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
+			/* EnqueuePersistence, not TryEnqueueAsyncWork: the entry is already forgotten and there
+			 * is nobody left to tell about a refusal, so a dropped removal would leave a matched
+			 * character's party seat held by somebody who logged out. */
 			long characterID = character.ID;
-			if (!TryEnqueueAsyncWork(() => RemoveDisconnectedWaiterAsync(characterID), characterID))
-			{
-				Log.Warning("InteractableSystem", $"Group finder: could not enqueue removal of disconnected character {characterID}'s row; the stale sweep will reap it.");
-			}
+			EnqueuePersistence(() => RemoveDisconnectedWaiterAsync(characterID), characterID);
 		}
 
 		/// <summary>
@@ -685,7 +723,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (!removed.IsSuccess)
 				{
 					await Log.Warning("InteractableSystem",
-						$"Group finder could not delete disconnected character {characterID}'s queue row: {removed.ErrorCode} - {removed.ErrorMessage}");
+						$"Group finder could not delete disconnected character {characterID}'s queue row; the stale sweep will reap it: [{removed.ErrorCode}] {removed.ErrorMessage}");
 					return;
 				}
 
@@ -699,7 +737,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				long partyID = removed.Data.Value.PartyID;
 				if (Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
 				{
-					await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "matched by the group finder but logged out before being moved");
+					if (!await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "matched by the group finder but logged out before being moved"))
+					{
+						await Log.Warning("InteractableSystem",
+							$"Group finder: character {characterID} logged out while matched into party {partyID} and could not be removed from it; the party keeps an absent member.");
+					}
 				}
 				else
 				{
@@ -779,7 +821,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					continue;
 				}
 
-				if (entry.State == GroupFinderState.Waiting)
+				if (entry.State == GroupFinderState.Waiting && entry.RowCheckDue)
+				{
+					/* The last cancel found no waiting row to delete. This pump reads the row
+					 * instead of cancelling again: a matched row is moved, a missing one reported.
+					 * Cancelling again would find the same nothing, every pump, and the match it was
+					 * honouring would never be read. */
+					entry.RowCheckDue = false;
+				}
+				else if (entry.State == GroupFinderState.Waiting)
 				{
 					/* Things the character did while waiting take them out of the queue: walking
 					 * into a dungeon, accepting a party invitation, or walking away from the
@@ -792,8 +842,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					 * queue: pre-made groups queue for arenas together. */
 					bool inParty = entry.Kind == SceneType.Group &&
 						entry.Character.TryGet(out IPartyController partyController) && partyController.ID != 0;
-					GroupFinderRefusalReason cancel = GroupFinderRules.ResolveWaitingCancel(
-						entry.Character.IsInInstance(), inParty, IsNearEntrance(entry));
+					GroupFinderRefusalReason cancel = entry.LeaveRequested
+						? GroupFinderRefusalReason.Left
+						: GroupFinderRules.ResolveWaitingCancel(entry.Character.IsInInstance(), inParty, IsNearEntrance(entry));
 
 					if (cancel != GroupFinderRefusalReason.None)
 					{
@@ -901,10 +952,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						return;
 					}
 
+					/* A failed delete keeps the entry. Forgetting it, as this used to, told the
+					 * player they were out while the row stayed in the queue — unpulsed but still
+					 * matchable for the stale window — so a group could form around somebody who had
+					 * walked away. Kept, the next pump sees the same reason and tries again. */
 					DatabaseResult<bool> result = await queueService.DeleteAsync(characterID, onlyIfWaiting: true);
-					if (result.IsSuccess && !result.Data)
+					if (!result.IsSuccess)
 					{
-						// Matched in the meantime. The entry stays; the next pump moves them.
+						await Log.Warning("InteractableSystem", $"Group finder could not cancel character {characterID}'s queue row ({reason}); retrying next pump: [{result.ErrorCode}] {result.ErrorMessage}");
+						return;
+					}
+
+					if (!result.Data)
+					{
+						/* Nothing waiting to delete: matched in the meantime, or the row is gone. The
+						 * entry stays, and the next pump reads the row rather than cancelling again —
+						 * a match is moved (a leave that lost the race to a match is refused, as the
+						 * leave handler refuses one), and a missing row is reported. */
+						TryEnqueueMainThread(() =>
+						{
+							if (groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry stillThere))
+							{
+								stillThere.LeaveRequested = false;
+								stillThere.RowCheckDue = true;
+							}
+						});
 						return;
 					}
 
@@ -941,7 +1013,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					 * it has waiters, because the rows that need sweeping belong to servers that
 					 * are no longer here to do it. Bounded per call; a backlog drains over sweeps. */
 					var sweepResult = await queueService.DeleteStaleAsync(DateTime.UtcNow.AddSeconds(-2.0 * groupFinderStalePulseSeconds), 256);
-					if (sweepResult.IsSuccess && sweepResult.Data > 0)
+					if (!sweepResult.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"Group finder could not sweep stale queue rows: [{sweepResult.ErrorCode}] {sweepResult.ErrorMessage}");
+					}
+					else if (sweepResult.Data > 0)
 					{
 						await Log.Debug("InteractableSystem", $"Group finder swept {sweepResult.Data} stale queue rows.");
 					}
@@ -953,7 +1029,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					if (Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var arenaService))
 					{
 						var cancelResult = await arenaService.CancelAbandonedAsync(DateTime.UtcNow.AddMinutes(-10), 64);
-						if (cancelResult.IsSuccess && cancelResult.Data > 0)
+						if (!cancelResult.IsSuccess)
+						{
+							await Log.Warning("InteractableSystem", $"Arena: could not cancel abandoned matches: [{cancelResult.ErrorCode}] {cancelResult.ErrorMessage}");
+						}
+						else if (cancelResult.Data > 0)
 						{
 							await Log.Warning("InteractableSystem", $"Arena: cancelled {cancelResult.Data} abandoned matches whose instances no longer exist.");
 						}
@@ -971,12 +1051,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					ids.Add(item.CharacterID);
 				}
 
-				await queueService.PulseAsync(ids);
+				/* Not fatal on its own: the next pump pulses again, and the stale window spans
+				 * several pumps. But a pulse that keeps failing lets this server's rows go stale and
+				 * be swept, and the waiters are then told they were removed — which should not be
+				 * the first anybody hears of it. */
+				var pulseResult = await queueService.PulseAsync(ids);
+				if (!pulseResult.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"Group finder could not pulse {ids.Count} queue rows: [{pulseResult.ErrorCode}] {pulseResult.ErrorMessage}");
+				}
 
 				var rowsResult = await queueService.FetchByCharactersAsync(ids);
 				if (!rowsResult.IsSuccess)
 				{
-					await Log.Warning("InteractableSystem", $"Group finder could not read its queue rows: {rowsResult.ErrorCode} - {rowsResult.ErrorMessage}");
+					await Log.Warning("InteractableSystem", $"Group finder could not read its queue rows: [{rowsResult.ErrorCode}] {rowsResult.ErrorMessage}");
 					return;
 				}
 
@@ -1163,6 +1251,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.Group), sceneName, difficulty, GroupFinderStaleBefore);
 			if (!countResult.IsSuccess)
 			{
+				await Log.Warning("InteractableSystem", $"Group finder could not count the waiters for '{sceneName}' at difficulty {difficulty}; no group is formed this pump: [{countResult.ErrorCode}] {countResult.ErrorMessage}");
 				return;
 			}
 			int waiting = countResult.Data;
@@ -1183,9 +1272,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					/* A rollback is reported as a failure — a member joined a party between the
 					 * select and the insert, or somebody's instance guard fired. Not an error in
-					 * the pump; the next pump tries again without them. */
-					await Log.Debug("InteractableSystem",
-						$"Group finder did not form a group for '{sceneName}' at difficulty {difficulty}: {formResult.ErrorCode} - {formResult.ErrorMessage}");
+					 * the pump; the next pump tries again without them. Those carry StaleState;
+					 * anything else is the database failing, and is logged as such. */
+					await LogMatchmakingFailureAsync(formResult, $"Group finder did not form a group for '{sceneName}' at difficulty {difficulty}");
 				}
 				else if (formResult.Data.Formed)
 				{
@@ -1236,6 +1325,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
+		/// Logs a matchmaking transaction that did not complete, at the level it deserves.
+		/// </summary>
+		/// <remarks>
+		/// The forming and backfill transactions roll back with <see cref="DatabaseErrorCodes.StaleState"/>
+		/// when somebody's eligibility changed under the lock — routine under concurrency, and the
+		/// next pump tries again without them. Anything else is the database failing, and used to be
+		/// logged at Debug alongside the routine case, where nobody would see it.
+		/// </remarks>
+		/// <param name="result">The failed result.</param>
+		/// <param name="what">What was not done, for the log line.</param>
+		private static Task LogMatchmakingFailureAsync<T>(DatabaseResult<T> result, string what)
+		{
+			string line = $"{what}: [{result.ErrorCode}] {result.ErrorMessage}";
+			return result.ErrorCode == DatabaseErrorCodes.StaleState
+				? Log.Debug("InteractableSystem", line)
+				: Log.Warning("InteractableSystem", line);
+		}
+
+		/// <summary>
 		/// Places one waiter into one open run: claims their row, then joins the run's party.
 		/// </summary>
 		/// <remarks>
@@ -1253,18 +1361,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			DatabaseResult<bool> claim = await queueService.TryClaimForInstanceAsync(waiter.CharacterID, run.PartyID, run.ID);
-			if (!claim.IsSuccess || !claim.Data)
+			if (!claim.IsSuccess)
+			{
+				await Log.Warning("InteractableSystem", $"Group finder could not claim character {waiter.CharacterID} for instance {run.ID}: [{claim.ErrorCode}] {claim.ErrorMessage}");
+				return false;
+			}
+			if (!claim.Data)
 			{
 				return false;
 			}
 
 			if (!await partySystem.TryAddCharacterToPartyAsync(waiter.Connection, waiter.CharacterID, run.PartyID, waiter.HealthPCT))
 			{
+				/* A release that fails leaves the row matched to a run whose party refused them.
+				 * The next pump reads it as a match, and DispatchMatchedAsync — which checks the
+				 * membership a match names before moving anybody — takes them out of the queue
+				 * instead of moving them into somebody else's run as a stranger. */
 				DatabaseResult<bool> release = await queueService.ReleaseClaimAsync(waiter.CharacterID, run.ID);
-				if (!release.IsSuccess || !release.Data)
+				if (!release.IsSuccess)
 				{
 					await Log.Warning("InteractableSystem",
-						$"Group finder could not release character {waiter.CharacterID}'s claim on instance {run.ID} after the party refused them; the row will be corrected by the next pump or the sweep.");
+						$"Group finder could not release character {waiter.CharacterID}'s claim on instance {run.ID} after the party refused them; the next pump takes them out of the queue: [{release.ErrorCode}] {release.ErrorMessage}");
+				}
+				else if (!release.Data)
+				{
+					await Log.Warning("InteractableSystem",
+						$"Group finder found no claim of character {waiter.CharacterID}'s on instance {run.ID} to release after the party refused them.");
 				}
 				return false;
 			}
@@ -1280,9 +1402,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Reads the matched character's party rank and hands the transfer to the main thread.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// The rank is read here rather than carried on the queue row because it is the party's to
 		/// change: leadership may already have moved by the time a member on a slow server is
 		/// transferred, and what they are told on the way out should be what is true.
+		/// </para>
+		/// <para>
+		/// The same read decides whether the match is honoured at all. A row matched into a party
+		/// the character is not in — a late-join whose claim could not be released after the
+		/// party refused them, or a member the group has since dropped — is not a transfer: moving
+		/// them would put a stranger in somebody else's run, with no leader able to remove them.
+		/// They are taken out of the queue and told. A read that fails decides nothing either way:
+		/// the row stays matched and the next pump reads it again.
+		/// </para>
 		/// </remarks>
 		private async Task DispatchMatchedAsync(long characterID, long partyID, long instanceID)
 		{
@@ -1293,6 +1425,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (membership.IsSuccess && membership.Data.HasValue && membership.Data.Value.PartyID == partyID)
 				{
 					rank = (PartyRank)membership.Data.Value.Rank;
+				}
+				else if (membership.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem",
+						$"Group finder: character {characterID}'s row is matched into party {partyID} (instance {instanceID}), which they are not in; taking them out of the queue instead of moving them.");
+					await DeleteGroupFinderRowAsync(characterID);
+					TryEnqueueMainThread(() =>
+					{
+						if (groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry entry))
+						{
+							NetworkConnection conn = entry.Connection;
+							ForgetGroupFinderEntry(characterID);
+							SendGroupFinderRefusal(conn, GroupFinderRefusalReason.Removed, entry.Kind);
+						}
+					});
+					return;
+				}
+				else
+				{
+					await Log.Warning("InteractableSystem", $"Group finder could not read character {characterID}'s party membership before moving them; retrying next pump: [{membership.ErrorCode}] {membership.ErrorMessage}");
+					return;
 				}
 			}
 
@@ -1418,9 +1571,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				try
 				{
+					/* Whether they actually left decides what they are told about the party. The
+					 * controller used to be cleared and PartyLeaveBroadcast sent whatever the removal
+					 * did, so a removal the party system refused — a mutation already in flight, or a
+					 * membership row it could not read or delete — left them in the party in the
+					 * database and out of it on their screen. Refused, they stay a member: the group
+					 * is real, and the entrance will take them to its run. */
+					bool removed = true;
 					if (partyID > 0 && Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
 					{
-						await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "matched by the group finder but never became free to travel");
+						removed = await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "matched by the group finder but never became free to travel");
+						if (!removed)
+						{
+							await Log.Warning("InteractableSystem", $"Group finder: character {characterID} could not be removed from party {partyID} after missing its transfer; they remain a member.");
+						}
 					}
 
 					/* An arena seat is left for the match coordinator: the match's gathering timeout
@@ -1435,7 +1599,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 
 						IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
-						if (partyID > 0 && partyController != null && partyController.ID == partyID)
+						if (removed && partyID > 0 && partyController != null && partyController.ID == partyID)
 						{
 							partyController.ID = 0;
 							partyController.Rank = PartyRank.None;

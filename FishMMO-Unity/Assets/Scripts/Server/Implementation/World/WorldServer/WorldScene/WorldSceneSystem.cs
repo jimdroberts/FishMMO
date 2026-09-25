@@ -664,7 +664,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Fetch available scene instances (cache-aware)
 			var availableScenes = await FetchAvailableScenesAsync(sceneService, runtimeData, worldServerID, sceneName, maxClientsPerInstance);
-			if (availableScenes == null || availableScenes.Count < 1)
+			if (availableScenes == null)
+			{
+				/* The read failed (logged by the helper), which is not the same as there being no
+				 * instance. Reading it as "none" requested a fresh instance of a zone whose running
+				 * ones were merely unreadable — a spare empty copy that then sat for minutes. The
+				 * waiting connections have not been snapshotted yet, so they stay queued as they are
+				 * and the next cycle reads again. */
+				routedLastCycleByScene[sceneName] = 0;
+				return;
+			}
+			if (availableScenes.Count < 1)
 			{
 				// Nothing to route to and nothing placed: the wait is on a scene instance being
 				// created, which is what CleanupAndEnqueueNewSceneIfNeededAsync requests below.
@@ -732,6 +742,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Batch-fetch any cache-miss server addresses
+			bool serverFetchFailed = false;
 			if (uncachedServerIds.Count > 0)
 			{
 				var batchResult = await sceneServerService.FetchSceneServersByIDsAsync(uncachedServerIds);
@@ -774,6 +785,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 				else
 				{
+					serverFetchFailed = true;
+					await Log.Warning("WorldSceneSystem", $"Scene server batch fetch failed for {uncachedServerIds.Count} server(s) hosting '{sceneName}': [{batchResult.ErrorCode}] {batchResult.ErrorMessage}");
+
 					// Invalidate stale entries for any servers that failed to fetch
 					foreach (long serverId in uncachedServerIds)
 					{
@@ -799,6 +813,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (instanceIDs.Count < 1)
 			{
+				if (serverFetchFailed)
+				{
+					// Unresolved because the read failed, not because the servers are gone: as with
+					// a failed instance fetch above, leave the queue as it is rather than request a
+					// fresh instance of a zone that may be running fine.
+					routedLastCycleByScene[sceneName] = 0;
+					return;
+				}
+
 				// Scene rows exist but none resolved to a reachable scene server, so a fresh
 				// instance is what these clients are waiting for.
 				queueReasonByScene[sceneName] = WorldSceneQueueReason.SceneLoading;
@@ -1014,7 +1037,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						DatabaseResult rebindResult = await charService.UpdateSceneAsync(charData.ID, worldServerID, sceneName, preferredHandle);
 						if (!rebindResult.IsSuccess)
 						{
-							await Log.Warning("WorldSceneSystem", $"Pass1 rebind DB error (CharID={charData.ID}): {rebindResult.ErrorCode} - {rebindResult.ErrorMessage}");
+							/* For the same reason, a rebind that did not land must not be followed by
+							 * the connect: the Scene Server would read the stale tuple and refuse the
+							 * client, costing it a disconnect and a trip back through here. Give the
+							 * slot back and let the next pass try again. */
+							await Log.Warning("WorldSceneSystem", $"Pass1 rebind DB error (CharID={charData.ID}): [{rebindResult.ErrorCode}] {rebindResult.ErrorMessage}. Re-queuing for the next routing cycle.");
+							capacityByHandle[preferredHandle] = prefRemaining;
+							RequeueOpenWorldConnection(conn, sceneName);
+							continue;
 						}
 						await Log.Info("WorldSceneSystem", $"Pass1 rebind: Character {charData.ID} world={charData.WorldServerID}->{worldServerID} scene={charData.SceneHandle}->{preferredHandle}");
 					}
@@ -1062,7 +1092,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, worldServerID, sceneName, assignedHandle);
 						if (!updateResult.IsSuccess)
 						{
-							await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+							// As in Pass 1: without the rebind the Scene Server refuses the client,
+							// so wait a cycle rather than send it. The heap slot is simply spent for
+							// this pass; the next one rebuilds capacity from the scene rows.
+							await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): [{updateResult.ErrorCode}] {updateResult.ErrorMessage}. Re-queuing for the next routing cycle.");
+							RequeueOpenWorldConnection(conn, sceneName);
+							continue;
 						}
 					}
 
@@ -1263,7 +1298,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 			// Get the selected character data (single-row fetch, includes flags and instance info)
 			var charResult = await charService.FetchByAccountAsync(accountName, selected: true);
-			if (!charResult.IsSuccess || !charResult.Data.HasValue)
+			if (!charResult.IsSuccess)
+			{
+				/* A failed read says nothing about the character, so it is not a reason to kick.
+				 * The open-world path learned the same lesson (see ProcessOpenWorldQueueAsync's
+				 * batch fetch): kicking here sent every reconnecting player back through the login
+				 * pipeline on a database hiccup. Wait a routing cycle instead. */
+				await Log.Warning("WorldSceneSystem", $"Selected character fetch failed for account '{accountName}': [{charResult.ErrorCode}] {charResult.ErrorMessage}. Re-queuing for the next routing cycle.");
+				RequeueInstanceConnection(conn, 0L);
+				return;
+			}
+			if (!charResult.Data.HasValue)
 			{
 				TryEnqueueMainThread(() => Kick(conn, "invalid character ID", DisconnectNoticeReason.CharacterUnavailable));
 				return;
@@ -1284,7 +1329,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				DatabaseResult bindResult = await charService.UpdateSceneAsync(charData.ID, currentWorldServerID, charData.SceneName, charData.SceneHandle);
 				if (!bindResult.IsSuccess)
 				{
-					await Log.Warning("WorldSceneSystem", $"Failed to bind character {charData.ID} to world server {currentWorldServerID}: {bindResult.ErrorCode} - {bindResult.ErrorMessage}");
+					await Log.Warning("WorldSceneSystem", $"Failed to bind character {charData.ID} to world server {currentWorldServerID}: [{bindResult.ErrorCode}] {bindResult.ErrorMessage}");
+
+					/* Only the instance route depends on this write. A character headed for the open
+					 * world is rebound by that routing pass itself, so it loses nothing and goes on.
+					 * An instanced one would be sent to a scene server that has to refuse it for the
+					 * stale world_server_id, so it waits a routing cycle for the bind to land. */
+					if (characterFlags.IsFlagged(CharacterFlags.IsInInstance))
+					{
+						RequeueInstanceConnection(conn, 0L);
+						return;
+					}
 				}
 			}
 
@@ -1306,8 +1361,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			 * on every retry until the linger expires.
 			 *
 			 * If the instance is gone (its scene server died, taking the row with it) the fetch
-			 * below fails and the fallback clears the flag, which is the correct outcome: the
-			 * body went with the server. */
+			 * below reports the row missing and the fallback clears the flag, which is the
+			 * correct outcome: the body went with the server. */
 
 			long instanceID = charData.InstanceID;
 			if (instanceID <= 0)
@@ -1319,8 +1374,20 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			var sceneResult = await sceneService.FetchAsync(instanceID);
 			if (!sceneResult.IsSuccess)
 			{
-				// Includes the row having been reaped by SweepStaleSceneRowsAsync, which is the
-				// ordinary end state for an instance that never became ready.
+				/* Only a row that is actually missing releases the character. That includes the
+				 * row having been reaped by SweepStaleSceneRowsAsync, which is the ordinary end
+				 * state for an instance that never became ready.
+				 *
+				 * A read that merely failed is not that. Falling back on it persisted the cleared
+				 * instance and combat-logout flags for a character whose instance was alive, and
+				 * sent them to the open world while the instance's scene server still held their
+				 * body and session claim. Wait a routing cycle and ask again. */
+				if (!IsRowAbsent(sceneResult))
+				{
+					await Log.Warning("WorldSceneSystem", $"Instance scene {instanceID} fetch failed for character {charData.ID}: [{sceneResult.ErrorCode}] {sceneResult.ErrorMessage}. Re-queuing for the next routing cycle.");
+					RequeueInstanceConnection(conn, instanceID);
+					return;
+				}
 				await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
 				return;
 			}
@@ -1332,6 +1399,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// Ensure the Scene Server is running. "Registered" is not the same as "running":
 				// a crashed scene server's registration outlives it, so the pulse is what says.
 				var sceneServerResult = await sceneServerService.FetchAsync(sceneData.SceneServerID);
+
+				/* The branch below deletes the instance's scene row, so it may only be reached on an
+				 * answer: the registration is gone, or it is there and has stopped pulsing. A read
+				 * that failed answers neither. Treating it as "unreachable" deleted the row of a
+				 * live, populated instance — the scene server kept running it, but every other
+				 * member's next reconnect then found no row and was ejected too. */
+				if (!sceneServerResult.IsSuccess && !IsRowAbsent(sceneServerResult))
+				{
+					await Log.Warning("WorldSceneSystem", $"Scene server {sceneData.SceneServerID} fetch failed for instance {sceneData.ID}: [{sceneServerResult.ErrorCode}] {sceneServerResult.ErrorMessage}. Re-queuing for the next routing cycle.");
+					RequeueInstanceConnection(conn, sceneData.ID);
+					return;
+				}
 
 				// Live, not routable: a locked scene server still hands back the instances it is
 				// hosting. See IsSceneServerRoutable for why a lock must not evict from a dungeon.
@@ -1403,14 +1482,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// throws during processing, re-add to the queue so the connection
 				// is not orphaned and will be retried on the next cycle.
 				await Log.Error("WorldSceneSystem", $"ProcessInstanceConnectionAsync error for {accountName}: {ex}");
-				TryEnqueueMainThread(() =>
-				{
-					if (conn != null && conn.IsActive &&
-						Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var md))
-					{
-						AddToQueue(conn, 0L, md.WaitingInstanceConnections, md.InstanceConnectionScenes);
-					}
-				});
+				RequeueInstanceConnection(conn, 0L);
 			}
 		}
 
@@ -1443,16 +1515,29 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
 				var scenesResult = await sceneService.FetchManyAsync(worldServerID);
-				sceneCharacterCount = 0;
-				if (scenesResult.IsSuccess && scenesResult.Data != null)
+				if (scenesResult.IsSuccess)
 				{
-					foreach (var scene in scenesResult.Data)
+					sceneCharacterCount = 0;
+					if (scenesResult.Data != null)
 					{
-						sceneCharacterCount += scene.CharacterCount;
+						foreach (var scene in scenesResult.Data)
+						{
+							sceneCharacterCount += scene.CharacterCount;
+						}
 					}
+					runtimeData.CachedSceneCharacterCount = sceneCharacterCount;
+					runtimeData.CachedSceneCharacterCountUtc = now;
 				}
-				runtimeData.CachedSceneCharacterCount = sceneCharacterCount;
-				runtimeData.CachedSceneCharacterCountUtc = now;
+				else
+				{
+					/* Keep the last known count and leave its timestamp alone, so the next cycle
+					 * asks again. Counting a failed read as zero, and caching that for the TTL,
+					 * dropped every player in a scene out of ConnectionCount: the MaxPlayers gate
+					 * in WorldServerAuthenticator admitted past the cap and the world's pulse
+					 * published a near-empty population to the server list. */
+					await Log.Warning("WorldSceneSystem", $"Scene population fetch failed (WorldServerID={worldServerID}): [{scenesResult.ErrorCode}] {scenesResult.ErrorMessage}. Keeping the last known count.");
+					sceneCharacterCount = runtimeData.CachedSceneCharacterCount;
+				}
 			}
 
 			TryEnqueueMainThread(() =>
@@ -1856,7 +1941,16 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			var fetchResult = await charService.FetchByAccountAsync(accountName, selected: true);
-			if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+			if (!fetchResult.IsSuccess)
+			{
+				/* A failed read, not a missing character: put the connection back on the instance
+				 * queue, whose next pass re-reads the row and comes back here if it still belongs
+				 * in the open world. The queue TTL bounds the retries. */
+				await Log.Warning("WorldSceneSystem", $"Selected character fetch failed for account '{accountName}' during open-world fallback: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}. Re-queuing for the next routing cycle.");
+				RequeueInstanceConnection(conn, 0L);
+				return;
+			}
+			if (!fetchResult.Data.HasValue)
 			{
 				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene", DisconnectNoticeReason.CharacterUnavailable));
 				return;
@@ -2271,6 +2365,43 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
+		/// Puts a connection back on the instance waiting queue for another routing pass.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="ProcessInstanceConnectionAsync"/> takes the connection off the queue before
+		/// its database work, so a pass that cannot decide — a read that failed rather than
+		/// answered — has to put it back or the connection is dropped from routing entirely. The
+		/// wait clock survives the round trip (see <see cref="RemoveFromQueue"/>), so the queue
+		/// TTL still bounds how many passes a database outage can cost before the client is let go.
+		/// </remarks>
+		/// <param name="conn">Connection to put back on the queue.</param>
+		/// <param name="instanceKey">Instance scene row it waits on, or 0 when not yet known.</param>
+		private void RequeueInstanceConnection(NetworkConnection conn, long instanceKey)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn != null && conn.IsActive &&
+					Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+				{
+					AddToQueue(conn, instanceKey, mappingData.WaitingInstanceConnections, mappingData.InstanceConnectionScenes);
+				}
+			});
+		}
+
+		/// <summary>
+		/// Whether a failed point read proves the row is not there, rather than saying nothing
+		/// about it.
+		/// </summary>
+		/// <remarks>
+		/// NotFound is the service's answer for a missing row, and ValidationError its answer for a
+		/// key that cannot name one. Anything else — a timeout, a dropped connection — is a read
+		/// that did not happen, and must not be acted on as though the row were gone.
+		/// </remarks>
+		private static bool IsRowAbsent<T>(DatabaseResult<T> result) =>
+			result.ErrorCode == DatabaseErrorCodes.NotFound ||
+			result.ErrorCode == DatabaseErrorCodes.ValidationError;
+
+		/// <summary>
 		/// Enqueues a race-guarded <see cref="WorldSceneConnectBroadcast"/> for a connection.
 		/// Skips the broadcast if the connection has been re-queued during async processing.
 		/// </summary>
@@ -2425,7 +2556,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Falls through to <c>ISceneService.FetchAvailableAsync</c> on cache miss or when
 		/// caching is disabled (<see cref="sceneInstanceCacheTtlSeconds"/> = 0).
 		/// </summary>
-		/// <returns>The list of available <see cref="SceneData"/>, or <c>null</c> on failure.</returns>
+		/// <returns>
+		/// The available <see cref="SceneData"/> (empty when there is none), or <c>null</c> when the
+		/// read failed — which the caller must not mistake for "none".
+		/// </returns>
 		private async Task<IReadOnlyList<SceneData>> FetchAvailableScenesAsync(
 			ISceneService sceneService,
 			WorldSceneSystemRuntimeData runtimeData,
@@ -2441,9 +2575,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			var result = await sceneService.FetchAvailableAsync(worldServerID, sceneName, maxClients);
-			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+			if (!result.IsSuccess)
 			{
+				await Log.Warning("WorldSceneSystem", $"Available scene fetch failed for '{sceneName}' (WorldServerID={worldServerID}): [{result.ErrorCode}] {result.ErrorMessage}");
 				return null;
+			}
+			if (result.Data == null || result.Data.Count < 1)
+			{
+				return Array.Empty<SceneData>();
 			}
 
 			if (ttl > TimeSpan.Zero)

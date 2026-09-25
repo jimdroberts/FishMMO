@@ -61,7 +61,7 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = "Your tickets could not be loaded." });
+				return DatabaseReplies.Failure(this, result, log, "Your tickets could not be loaded.");
 			}
 
 			var data = result.Data;
@@ -125,10 +125,13 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				/* The service's message is written to be read by the player — it says how many
+				/* A refusal's message is written to be read by the player — it says how many
 				 * tickets they already have open, or that they filed one moments ago. Replacing
-				 * it with something generic would leave them guessing. */
-				return BadRequest(new { error = result.ErrorMessage ?? "That ticket could not be filed." });
+				 * it with something generic would leave them guessing. A database FAULT is not
+				 * the service speaking: its text is the exception's, can name a host or a column,
+				 * and is never shown to a player — they get a 503 and the generic sentence, and
+				 * the real text goes to the log. See DatabaseReplies. */
+				return DatabaseReplies.Failure(this, result, log, "That ticket could not be filed. Try again shortly.");
 			}
 
 			log.LogInformation("Ticket {Id} filed by '{Account}' from the panel.", result.Data, User.Identity?.Name);
@@ -182,7 +185,8 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = result.ErrorMessage ?? "That reply could not be added." });
+				// As in File: a refusal is passed through, a fault never is.
+				return DatabaseReplies.Failure(this, result, log, "That reply could not be added. Try again shortly.");
 			}
 
 			return Ok(new
@@ -205,7 +209,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await tickets.FetchAsync(id, includeInternal: false, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return (null, NotFound(new { error = "No such ticket." }));
+				return (null, DatabaseReplies.Failure(this, result, log, "That ticket could not be read. Try again shortly.", notFound: "No such ticket."));
 			}
 
 			if (!string.Equals(result.Data.ReporterAccount, User.Identity?.Name, StringComparison.OrdinalIgnoreCase))

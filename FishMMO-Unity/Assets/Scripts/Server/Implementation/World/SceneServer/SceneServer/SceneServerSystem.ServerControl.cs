@@ -54,6 +54,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Control state of each world this server hosts scenes for, published by the pulse
 		/// worker. Boxed for the same reason.
 		/// </summary>
+		/// <remarks>
+		/// Every hosted world has an entry; a world whose row could not be read maps to
+		/// <c>null</c>, meaning "keep what was adopted last" — not "no longer hosted".
+		/// </remarks>
 		private object pendingWorldControlStates;
 
 		/// <summary>This scene server's own control state, as last adopted. Main thread only.</summary>
@@ -151,18 +155,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			var states = new Dictionary<long, ServerControlState>(hostedWorldServerIDs.Count);
+			var states = new Dictionary<long, ServerControlState?>(hostedWorldServerIDs.Count);
 			for (int i = 0; i < hostedWorldServerIDs.Count; ++i)
 			{
 				long worldServerID = hostedWorldServerIDs[i];
 				DatabaseResult<ServerControlState> result = await worldServerService.FetchControlStateAsync(worldServerID);
 				if (!result.IsSuccess)
 				{
-					/* A world whose row cannot be read is deliberately skipped rather than
-					 * treated as shutting down. The conservative direction here is to keep
-					 * playing: a transient database failure must not evict everyone from a world
-					 * that is perfectly healthy. A world that is genuinely gone is handled by
-					 * the stale-scene sweeps instead. */
+					/* A world whose row cannot be read is deliberately not treated as shutting
+					 * down. The conservative direction here is to keep playing: a transient database
+					 * failure must not evict everyone from a world that is perfectly healthy. A world
+					 * that is genuinely gone is handled by the stale-scene sweeps instead.
+					 *
+					 * Nor as gone: it is published as null, "keep the last state adopted". Left out
+					 * altogether, as it used to be, it read as a world no longer hosted, and its
+					 * countdown bookkeeping was thrown away — so the next good read announced every
+					 * mark already passed a second time, and cleared the world's players again. */
+					await Log.Warning("SceneServerSystem", $"Control state of world server {worldServerID} could not be read; keeping the last one adopted. [{result.ErrorCode}] {result.ErrorMessage}");
+					states[worldServerID] = null;
 					continue;
 				}
 				states[worldServerID] = result.Data;
@@ -194,7 +204,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (publishedWorlds != null)
 			{
 				Volatile.Write(ref pendingWorldControlStates, null);
-				AdoptWorldControlStates((Dictionary<long, ServerControlState>)publishedWorlds);
+				AdoptWorldControlStates((Dictionary<long, ServerControlState?>)publishedWorlds);
 			}
 
 			DateTime nowUtc = DateTime.UtcNow;
@@ -301,7 +311,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Adopts the control state of the worlds this server hosts scenes for.
 		/// </summary>
-		private void AdoptWorldControlStates(Dictionary<long, ServerControlState> states)
+		private void AdoptWorldControlStates(Dictionary<long, ServerControlState?> states)
 		{
 			// Forget worlds this server no longer hosts anything for, so their countdown
 			// bookkeeping does not accumulate for the life of the process.
@@ -328,15 +338,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			foreach (var kvp in states)
 			{
+				if (!kvp.Value.HasValue)
+				{
+					// Unreadable this pulse: whatever was adopted last stands, bookkeeping and all.
+					continue;
+				}
+
+				ServerControlState state = kvp.Value.Value;
 				if (worldControlStates.TryGetValue(kvp.Key, out ServerControlState previous) &&
-					previous.ShutdownAtUtc != kvp.Value.ShutdownAtUtc)
+					previous.ShutdownAtUtc != state.ShutdownAtUtc)
 				{
 					// Cancelled or rescheduled: either way the old countdown is void, and a new
 					// deadline has to be actionable again.
 					announcedShutdownThresholds.Remove(kvp.Key);
 					worldShutdownsApplied.Remove(kvp.Key);
 				}
-				worldControlStates[kvp.Key] = kvp.Value;
+				worldControlStates[kvp.Key] = state;
 			}
 		}
 

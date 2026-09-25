@@ -61,14 +61,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// foundations and most of them have no grants at all; asking per plot would be dozens of
 		/// round trips to learn that almost nothing is shared.
 		/// </remarks>
+		/// <returns>
+		/// The grants keyed by plot, or <c>null</c> when they could not be read. The difference is the
+		/// one <see cref="PlotFoundation.ApplyResolvedState"/> draws: an empty list means nobody has
+		/// been let in, and a failed read handed back as one used to lock every guest out of every
+		/// house it touched — and, through the sync, put them out of the ones they were standing in.
+		/// </returns>
 		private async Task<Dictionary<long, Dictionary<long, PlotPermission>>> FetchAccessGrantsAsync(List<PlotData> plots)
 		{
 			Dictionary<long, Dictionary<long, PlotPermission>> byPlot = new Dictionary<long, Dictionary<long, PlotPermission>>();
 
-			if (plots == null || plots.Count < 1 ||
-				!TryGetDbService(out IPlotAccessService accessService))
+			if (plots == null || plots.Count < 1)
 			{
 				return byPlot;
+			}
+
+			if (!TryGetDbService(out IPlotAccessService accessService))
+			{
+				Log.Error("HousingSystem", "Could not read plot access grants: IPlotAccessService unavailable.");
+				return null;
 			}
 
 			List<long> plotIDs = new List<long>(plots.Count);
@@ -88,8 +99,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DatabaseResult<List<PlotAccessData>> grants = await accessService.FetchByPlotsAsync(plotIDs);
 			if (!grants.IsSuccess || grants.Data == null)
 			{
-				Log.Error("HousingSystem", $"Could not read plot access grants: {grants.ErrorMessage}");
-				return byPlot;
+				Log.Error("HousingSystem", $"Could not read plot access grants: [{grants.ErrorCode}] {grants.ErrorMessage}");
+				return null;
 			}
 
 			foreach (PlotAccessData grant in grants.Data)
@@ -117,6 +128,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Grants or narrows one character's access to a plot.
 		/// </summary>
+		/// <param name="conn">The granter's connection, answered once the database has replied.</param>
 		/// <param name="granter">The character handing out the access.</param>
 		/// <param name="foundation">The plot in question.</param>
 		/// <param name="targetCharacterID">Who is being granted.</param>
@@ -126,8 +138,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <see cref="PlotPermission.InviteFriends"/> cannot mint permissions the owner never gave
 		/// them. Without that the model collapses to its weakest link: whoever can invite can invite
 		/// themselves into everything.
+		///
+		/// <para>Answered from the write, not from the request. The granter used to be told it had
+		/// worked, and sent the guest list, before the grant existed anywhere — so the list they got
+		/// back never had the new name on it, and a write that failed had already been reported as
+		/// done.</para>
 		/// </remarks>
-		public bool TryGrantAccess(IPlayerCharacter granter, IPlotFoundation foundation, long targetCharacterID, PlotPermission requested)
+		/// <returns>
+		/// False when the granter may not grant this, which the caller answers. True when this has
+		/// answered, or will once the database has.
+		/// </returns>
+		public bool TryGrantAccess(NetworkConnection conn, IPlayerCharacter granter, IPlotFoundation foundation, long targetCharacterID, PlotPermission requested)
 		{
 			if (granter == null || foundation is not PlotFoundation plot || !IsHousingEnabled)
 			{
@@ -168,28 +189,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (!TryGetDbService(out IPlotAccessService accessService))
 				{
+					Log.Error("HousingSystem", $"Could not grant access to plot {plotID} for CharID={targetCharacterID}: IPlotAccessService unavailable.");
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
 					return;
 				}
 
 				DatabaseResult<int> result = await accessService.GrantAsync(plotID, targetCharacterID, mask, granterID);
 				if (!result.IsSuccess)
 				{
-					Log.Error("HousingSystem", $"Could not grant access to plot {plotID} for CharID={targetCharacterID}: {result.ErrorMessage}");
+					Log.Error("HousingSystem", $"Could not grant access to plot {plotID} for CharID={targetCharacterID}: [{result.ErrorCode}] {result.ErrorMessage}");
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
 					return;
 				}
 
 				/* Applied locally as well as recorded, so the granter sees it take effect now rather
 				 * than on the next cross-channel poll. The other channels learn about it the same
 				 * way they learn about everything else. */
-				if (!TryEnqueueHousingMainThread(() => ApplyGrantEverywhere(plotID, targetCharacterID, granted)))
+				if (!TryEnqueueHousingMainThread(() =>
 				{
-					Log.Warning("HousingSystem", $"Could not apply the access grant for plot {plotID} locally.");
+					ApplyGrantEverywhere(plotID, targetCharacterID, granted);
+					SendHousingResult(conn, plotID, HousingResult.Success);
+					SendAccessList(conn, plot);
+				}))
+				{
+					Log.Warning("HousingSystem", $"Could not apply the access grant for plot {plotID} locally; the plot sync applies it.");
 				}
 				MarkPlotChanged(plotID);
 			}, granterID))
 			{
 				Log.Warning("HousingSystem", $"Could not enqueue the access grant for plot {plotID}.");
-				return false;
+				SendHousingResult(conn, plotID, HousingResult.Failed);
 			}
 
 			return true;
@@ -203,7 +232,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// friend exactly where they were, free to stay as long as they did not walk out — and free
 		/// to log out there and come back to it later.
 		/// </remarks>
-		public bool TryRevokeAccess(IPlayerCharacter revoker, IPlotFoundation foundation, long targetCharacterID)
+		/// <returns>
+		/// False when the revoker may not revoke, which the caller answers. True when this has
+		/// answered, or will once the database has.
+		/// </returns>
+		public bool TryRevokeAccess(NetworkConnection conn, IPlayerCharacter revoker, IPlotFoundation foundation, long targetCharacterID)
 		{
 			if (revoker == null || foundation is not PlotFoundation plot || !IsHousingEnabled)
 			{
@@ -224,28 +257,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			long plotID = plot.PlotID;
+			PlotPermission previous = plot.GrantFor(targetCharacterID);
 
 			/* Locally first, and before the write is confirmed. The player being revoked is standing
 			 * in the house now, and the round trip is the window in which they are inside a plot the
-			 * owner has already decided they may not be in. If the write then fails the next resolve
-			 * puts the grant back, which is the harmless direction to be wrong in. */
+			 * owner has already decided they may not be in — so they go now, not when the database
+			 * answers. */
 			ApplyGrantEverywhere(plotID, targetCharacterID, PlotPermission.None);
+			EvictTrespassers(plot);
 
 			/* EnqueuePersistence: the revocation is already applied in memory, and the next plot
 			 * resolve re-reads the grants from the database. A refused enqueue used to hand the
-			 * revoked player their key back on that resolve. */
+			 * revoked player their key back on that resolve.
+			 *
+			 * A write that runs and fails is answered, not left for a resolve to undo. The database
+			 * still holds the grant, and so does every other channel, since nothing marked the plot
+			 * changed; the owner used to be told it was done all the same. So the key goes back here
+			 * too — this server agreeing with the database and the other channels — and the owner is
+			 * told it failed, so they can try again rather than believe it was done. */
 			EnqueuePersistence(async () =>
 			{
 				if (!TryGetDbService(out IPlotAccessService accessService))
 				{
+					Log.Error("HousingSystem", $"Could not revoke access to plot {plotID} for CharID={targetCharacterID}: IPlotAccessService unavailable.");
+					RestoreRevokedGrantOnMainThread(conn, plot, targetCharacterID, previous);
 					return;
 				}
 
 				DatabaseResult<int> result = await accessService.RevokeAsync(plotID, targetCharacterID);
 				if (!result.IsSuccess)
 				{
-					Log.Error("HousingSystem", $"Could not revoke access to plot {plotID} for CharID={targetCharacterID}: {result.ErrorMessage}");
+					Log.Error("HousingSystem", $"Could not revoke access to plot {plotID} for CharID={targetCharacterID}: [{result.ErrorCode}] {result.ErrorMessage}");
+					RestoreRevokedGrantOnMainThread(conn, plot, targetCharacterID, previous);
 					return;
+				}
+
+				if (!TryEnqueueHousingMainThread(() =>
+				{
+					SendHousingResult(conn, plotID, HousingResult.Success);
+					SendAccessList(conn, plot);
+				}))
+				{
+					Log.Warning("HousingSystem", $"Could not confirm the revocation on plot {plotID} to the revoker.");
 				}
 
 				MarkPlotChanged(plotID);
@@ -255,13 +308,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Clears every grant on a plot, in the database and on every copy of it here.
+		/// Puts back a grant whose revocation the database refused, and tells the revoker.
+		/// Callable from the worker.
+		/// </summary>
+		private void RestoreRevokedGrantOnMainThread(NetworkConnection conn, PlotFoundation plot, long targetCharacterID, PlotPermission previous)
+		{
+			long plotID = plot.PlotID;
+
+			if (!TryEnqueueHousingMainThread(() =>
+			{
+				if (previous != PlotPermission.None)
+				{
+					ApplyGrantEverywhere(plotID, targetCharacterID, previous);
+				}
+				SendHousingResult(conn, plotID, HousingResult.Failed);
+				SendAccessList(conn, plot);
+			}))
+			{
+				Log.Warning("HousingSystem", $"Could not report the failed revocation on plot {plotID}; this server keeps the key revoked until the plot next syncs.");
+			}
+		}
+
+		/// <summary>
+		/// Empties the guest list on every copy of a plot here, once the database has. Main thread only.
 		/// </summary>
 		/// <remarks>
-		/// Run when a plot changes hands. A new owner must not inherit the last one's guest list, and
-		/// an owner who reclaims land later must not find the people they evicted still holding keys.
+		/// Memory only. The rows are removed inside the transaction that takes or reclaims the land
+		/// (see <see cref="TryClaimCleanAsync"/> and <see cref="TryReleaseIntoVaultAsync"/>), not by a
+		/// separate write afterwards: a separate write could fail while the change of hands stood, and
+		/// a grant is honoured on any occupied plot whoever issued it, so the last owner's guests kept
+		/// their keys to the next owner's house.
 		/// </remarks>
-		public void ClearAccessGrants(long plotID)
+		private static void ForgetAccessGrants(long plotID)
 		{
 			if (plotID <= 0)
 			{
@@ -272,24 +350,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				foundation.ApplyAccessGrants(new Dictionary<long, PlotPermission>());
 			}
-
-			/* EnqueuePersistence: this runs when a plot changes hands. Every foundation's grants
-			 * are already cleared above; a refused enqueue used to leave the previous owner's
-			 * guest list in the database, and the next resolve gave those keys to strangers in
-			 * the new owner's house. Keyed on the plot so it orders behind that plot's grants. */
-			EnqueuePersistence(async () =>
-			{
-				if (!TryGetDbService(out IPlotAccessService accessService))
-				{
-					return;
-				}
-
-				DatabaseResult<int> result = await accessService.RevokeAllAsync(plotID);
-				if (!result.IsSuccess)
-				{
-					Log.Error("HousingSystem", $"Could not clear access grants on plot {plotID}: {result.ErrorMessage}");
-				}
-			}, plotID);
 		}
 
 		/// <summary>

@@ -11,8 +11,9 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// Ratings are keyed by season; a new season starts everyone over. The rating maths lives in
-	/// the shared <c>ArenaRating</c> rules, not here — this service only stores the results and
-	/// answers the leaderboard.
+	/// the shared <c>ArenaRating</c> rules, not here — this service only stores the results. The
+	/// season leaderboard is read through <see cref="ILeaderboardService"/>, which applies the
+	/// same eligibility (no deleted characters, no banned accounts) to every board.
 	/// </remarks>
 	public interface IArenaRatingService
 	{
@@ -46,8 +47,5 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="seasonId">Season the match counted towards.</param>
 		/// <param name="results">Per character: the new rating and whether they won.</param>
 		Task<DatabaseResult<int>> UpsertRatingsAsync(long seasonId, IReadOnlyList<(long characterId, int newRating, bool won)> results, CancellationToken cancellationToken = default);
-
-		/// <summary>The highest rated characters of a season, with their names resolved by the caller.</summary>
-		Task<DatabaseResult<IReadOnlyList<ArenaRatingData>>> FetchTopAsync(long seasonId, int limit, CancellationToken cancellationToken = default);
 	}
 }

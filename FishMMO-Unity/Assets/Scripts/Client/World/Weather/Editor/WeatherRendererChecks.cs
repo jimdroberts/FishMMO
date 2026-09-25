@@ -13,11 +13,10 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Clouds, height fog, volumetric fog and the screen overlay are renderer features, and a
-	/// renderer that has none of them draws a scene that is configured perfectly as though there
-	/// were no weather at all — no error, no warning, just a clear sky over a rainstorm. The three
-	/// renderers in the project carry all four today; a quality tier added later would not, and
-	/// nothing would say so.
+	/// Clouds, height fog and volumetric fog are renderer features, and a renderer that has none of
+	/// them draws a scene that is configured perfectly as though there were no weather at all — no
+	/// error, no warning, just a clear sky over a rainstorm. The three renderers in the project
+	/// carry all three today; a quality tier added later would not, and nothing would say so.
 	/// </para>
 	/// <para>
 	/// Registered into the shared audit rather than called by it, because the feature types live in
@@ -40,7 +39,6 @@ namespace FishMMO.Client
 			(typeof(FishCloudsFeature), "Fish Clouds", "the volumetric clouds"),
 			(typeof(FishHeightFogFeature), "Fish Height Fog", "the fog lying in the low ground"),
 			(typeof(FishVolumetricFogFeature), "Fish Volumetric Fog", "the god rays and the light shafts"),
-			(typeof(FishWeatherOverlayFeature), "Fish Weather Overlay", "rain and snow on the camera"),
 		};
 
 		private static void Inspect(List<WorldSystemProblem> into)
@@ -75,7 +73,7 @@ namespace FishMMO.Client
 				SceneName = null,
 				Severity = WorldSystemSeverity.Warning,
 				Message = $"is missing {missing.Count} weather render pass(es): {string.Join("; ", missing)}.",
-				Remedy = "Add the weather's cloud, height fog, volumetric fog and overlay passes to every URP renderer.",
+				Remedy = "Add the weather's cloud, height fog and volumetric fog passes to every URP renderer.",
 				CanFix = true,
 				WritesScene = false,
 				ProjectFix = AddPasses,
@@ -107,7 +105,6 @@ namespace FishMMO.Client
 			WeatherRenderAssets.Ensure();
 			CloudRendererSetup.EnsureHeightFog();
 			CloudRendererSetup.EnsureVolumetricFog();
-			CloudRendererSetup.EnsureOverlay();
 			AssetDatabase.SaveAssets();
 
 			/* Asked of the renderers rather than counted from the calls above, because Ensure()

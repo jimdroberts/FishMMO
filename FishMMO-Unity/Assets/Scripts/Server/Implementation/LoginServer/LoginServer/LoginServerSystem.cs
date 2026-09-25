@@ -258,11 +258,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 					Server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var totpSecretService))
 				{
 					var totpKekResult = await totpSecretService.FetchAsync(TotpMasterKek.DatabaseKey, cancellationToken);
-					string totpKekValue = totpKekResult.IsSuccess ? totpKekResult.Data : null;
-					if (!TotpMasterKek.TryDecode(totpKekValue, out totpMasterKey, out string decodeError))
+					if (!totpKekResult.IsSuccess && totpKekResult.ErrorCode != DatabaseErrorCodes.NotFound)
 					{
-						totpKekError = decodeError;
+						/* A read that failed is not a missing row. Passing its null on to TryDecode
+						 * reported it as one, so the log sent the operator to provision a secret that
+						 * was already there. */
+						totpKekError = $"reading '{TotpMasterKek.DatabaseKey}' from deployment_secrets failed: [{totpKekResult.ErrorCode}] {totpKekResult.ErrorMessage}";
 						totpMasterKey = null;
+					}
+					else
+					{
+						string totpKekValue = totpKekResult.IsSuccess ? totpKekResult.Data : null;
+						if (!TotpMasterKek.TryDecode(totpKekValue, out totpMasterKey, out string decodeError))
+						{
+							totpKekError = decodeError;
+							totpMasterKey = null;
+						}
 					}
 				}
 

@@ -20,19 +20,22 @@
 // answer prints the map's own squares onto every rounded thing it covers — a tree's crown ends up
 // with a blocky cap. Falling off over about a metre and a half keeps a roof sheltering what is
 // under it while letting a curved surface shade its own cover smoothly.
+//
+// Nothing settles under the sea either: the bed holds no snow, ash or sand, and is not "wet" the way
+// ground in the rain is. That holds past the map's edge, so it is applied outside the map's test.
 float FishSurfaceExposure(float3 worldPos)
 {
-    if (_FishOcclusionRange.z < 0.5)
+    float exposure = 1.0;
+    if (_FishOcclusionRange.z > 0.5)
     {
-        return 1.0;
+        float2 uv = (worldPos.xz - _FishOcclusionRect.xy) / max(_FishOcclusionRect.zw, 1e-3);
+        if (all(uv >= 0.0) && all(uv <= 1.0))
+        {
+            float top = FishSkyOcclusionGround(worldPos);
+            exposure = saturate((worldPos.y - top) * 0.65 + 1.0);
+        }
     }
-    float2 uv = (worldPos.xz - _FishOcclusionRect.xy) / max(_FishOcclusionRect.zw, 1e-3);
-    if (any(uv < 0.0) || any(uv > 1.0))
-    {
-        return 1.0;
-    }
-    float top = FishSkyOcclusionHeight(worldPos);
-    return saturate((worldPos.y - top) * 0.65 + 1.0);
+    return min(exposure, FishWaterOpen(worldPos));
 }
 
 // How much of a flat-lying cover (snow, ash, sand) a surface holds: all of it on the level, none
@@ -46,9 +49,21 @@ float FishCoverFacing(float3 worldNormal, float3 worldPos, float slopeBias)
 
 // ── Noise ──────────────────────────────────────────────────────────────
 
+// A number in [0, 1) from a point on the ground plane, by integer arithmetic. It was a sin() hash,
+// and those lose their precision at the coordinates of a real scene — a few kilometres from the
+// origin the argument is hundreds of thousands of radians — and start repeating in stripes and
+// blocks, differently on every GPU. Resolved to a sixteenth, so the fractional salts the callers add
+// still pick different values.
 float FishSurfaceHash(float2 p)
 {
-    return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+    int2 q = int2(floor(p * 16.0));
+    uint h = asuint(q.x) * 73856093u ^ asuint(q.y) * 19349663u;
+    h ^= h >> 16;
+    h *= 0x7feb352du;
+    h ^= h >> 15;
+    h *= 0x846ca68bu;
+    h ^= h >> 16;
+    return float(h & 0xFFFFFFu) / 16777216.0;
 }
 
 // Value noise on the ground plane, for puddle edges and the drift in a snow line.
@@ -120,7 +135,12 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
     float wet = saturate(here.y) * exposure * occlusion;
     if (wet > 0.001)
     {
-        float level = saturate(normalWS.y * 1.5 - 0.35);
+        /* Water only stands on nearly level ground. This let it pool up to 45 degrees (a normal
+         * pointing only a quarter up still scored), so wetness turned into puddles all over sloping
+         * terrain. Now full on ground flatter than about eight degrees and none past twenty. A ramp
+         * rather than a cut, because this is the shaded normal, bumped by the surface's own normal
+         * map: a cut would speckle, a ramp only roughens the puddle's edge, as real ones are. */
+        float level = smoothstep(0.93, 0.99, normalWS.y);
         float gather = FishSurfaceNoise(worldPos.xz * 0.35);
         float puddle = saturate((wet * 1.6 - 0.45 - gather * 0.8) * 3.0) * level;
 

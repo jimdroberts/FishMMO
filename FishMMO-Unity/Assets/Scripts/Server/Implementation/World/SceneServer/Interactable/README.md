@@ -33,7 +33,7 @@ The system's own C# is split across partial classes of `InteractableSystem`, one
 | `InteractableSystem.Dialogue.cs` | `DialogueChoiceBroadcast` — server-authoritative dialogue sessions |
 | `InteractableSystem.DungeonFinder.cs` | `DungeonFinderListBroadcast` / `DungeonFinderCreateBroadcast` / `DungeonFinderJoinBroadcast` — browsing, opening and joining a run. `DungeonFinderBroadcast` is now purely the server's message opening the panel and is **not** accepted from a client. |
 | `InteractableSystem.GroupFinder.cs` | `GroupFinderQueueBroadcast` / `GroupFinderLeaveBroadcast` — the shared cross-server queue table, its per-server pump, group formation and late-join backfill |
-| `InteractableSystem.Arena.cs` | `ArenaQueueBroadcast`, `ArenaProfileRequestBroadcast`, `ArenaHistoryRequestBroadcast`, `ArenaLeaderboardRequestBroadcast` — arena boards queue solo or as a pre-made party onto the same group finder queue as arena rows |
+| `InteractableSystem.Arena.cs` | `ArenaQueueBroadcast`, `ArenaProfileRequestBroadcast`, `ArenaHistoryRequestBroadcast` — arena boards queue solo or as a pre-made party onto the same group finder queue as arena rows |
 | `InteractableSystem.ArenaMatch.cs` | `ArenaReadyResponseBroadcast` — the match coordinator: Gathering → ReadyCheck → Countdown → Live → Ended, for every arena match hosted on this scene server |
 | `InteractableSystem.Mailbox.cs` | `MailFetchBroadcast` / `MailSendBroadcast` / `MailDeleteBroadcast` / `MailClaimAttachmentBroadcast` |
 | `InteractableSystem.Container.cs` | `ContainerTakeItemBroadcast` — retrieving items from an open container |
@@ -69,7 +69,7 @@ All interaction entry points share a single per-connection `IngressGuard` with a
 - ECA-triggered dialogue sessions (no physical interactable required) via `DisplayDialogueAction` static event
 - Dungeon finder split into three separately-authorised requests: list (browse), create (open a run), join (enter somebody else's). Entrance validation, existing-instance lookup, party-member instance conflict checking, async scene enqueue, main-thread character state marshaling, and the `/closedungeon` / `/closeinstance` chat commands
 - Group finder: a database queue table shared by every scene server on the world server, a per-server pump that heartbeats and acts on its own queued characters, formation in one locking transaction (so no matchmaker process is needed and two servers racing produce one group), late-join backfill into runs already open, a leash to the board, and stale-row sweeping
-- Arena queueing on the same queue rows: solo or as a pre-made party (every member connected here, inside the same board's leash, free of instances and live matches, and fitting one team of the format — all or none). Team assignment is written by `IGroupFinderQueueService.TryFormArenaMatchAsync`. Profile, history and leaderboard lookups answer from the database
+- Arena queueing on the same queue rows: solo or as a pre-made party (every member connected here, inside the same board's leash, free of instances and live matches, and fitting one team of the format — all or none). Team assignment is written by `IGroupFinderQueueService.TryFormArenaMatchAsync`. Profile and history lookups answer from the database; the board's leaderboard view reads the arena rating board through `LeaderboardSystem`, the same cached read the Leaderboards window uses
 - Arena match coordination, owned by whichever scene server hosts the instance: Gathering (wait for seats, drop absentees), ReadyCheck (a decline or a silence cancels and locks the culprit out of the queue), Countdown (move to team spawns; `ArenaTeamRegistry` reports every seat as an ally so nobody can be hurt yet), Live (kills, objectives, respawns at team spawn, backfill window, disconnect grace, ends on score limit / clock / walkover), Ended (tallies, result, ratings, PvP attributes, reward hook, results screen)
 - Corpse looting of a shared pile: the corpse is the authority, the client sends only a scene object ID and a slot index, and every looter's window is kept in step. Its own ingress operation code with a 50 ms debounce rather than the one-second general interaction debounce
 - Waypoint fast travel validated end to end on the server (the map's scene must be the character's scene, the waypoint must be live in that scene instance, and `WaypointTravel.TryTravel` applies can-act / not-in-combat / standing at a discovered waypoint / discovered / conditions), with every refusal reported so the map can re-enable its button and say why. Discovery itself is an ECA action on the waypoint's trigger; this system hears `IWaypointController.OnWaypointUnlocked` and merges the page into the database
@@ -181,7 +181,6 @@ general interaction guard governed by `interactionDebounceMilliseconds`.
 | Constant | Value | Description |
 |---|---|---|
 | `MaxListedInstances` | 24 | Cap on runs returned by a dungeon finder list request |
-| `ArenaLeaderboardRows` | 50 | Rows returned by a leaderboard request |
 | `ArenaHistoryRows` | 20 | Rows returned by a history request |
 | `ArenaBackfillPerPump` | 4 | Backfill seats attempted per pump |
 | `ArenaTickSeconds` | 1.0 | The arena match coordinator's tick |
@@ -192,7 +191,7 @@ general interaction guard governed by `interactionDebounceMilliseconds`.
 | Thread | Work |
 |---|---|
 | Main thread | Request validation, ingress guards, handler dispatch, dialogue session management, debounce sweep, main-thread queue drain, broadcast dispatch |
-| Async worker | Database reads/writes: inventory, ability and known-ability persistence, dungeon finder scene assignment and party-instance checks, mail fetch/send/delete/claim, the group finder queue pump (heartbeat, read back, form, backfill, stale sweep), arena queue rows, match formation and result writes, arena profile/history/leaderboard lookups, and waypoint page merges |
+| Async worker | Database reads/writes: inventory, ability and known-ability persistence, dungeon finder scene assignment and party-instance checks, mail fetch/send/delete/claim, the group finder queue pump (heartbeat, read back, form, backfill, stale sweep), arena queue rows, match formation and result writes, arena profile/history lookups, and waypoint page merges |
 
 ## Usage Examples
 
@@ -224,7 +223,6 @@ general interaction guard governed by `interactionDebounceMilliseconds`.
 | `ArenaQueueBroadcast` | `OnServerArenaQueueBroadcastReceived` | `InteractableSystem.Arena.cs` | Queue for an arena format, solo or as a pre-made party |
 | `ArenaProfileRequestBroadcast` | `OnServerArenaProfileRequestReceived` | `InteractableSystem.Arena.cs` | Read a character's arena rating and record |
 | `ArenaHistoryRequestBroadcast` | `OnServerArenaHistoryRequestReceived` | `InteractableSystem.Arena.cs` | Read recent matches |
-| `ArenaLeaderboardRequestBroadcast` | `OnServerArenaLeaderboardRequestReceived` | `InteractableSystem.Arena.cs` | Read the season leaderboard |
 | `ArenaReadyResponseBroadcast` | `OnServerArenaReadyResponseReceived` | `InteractableSystem.ArenaMatch.cs` | Accept or decline the ready check |
 | `WaypointTravelRequestBroadcast` | `OnServerWaypointTravelRequestBroadcastReceived` | `InteractableSystem.Waypoint.cs` | Fast travel to a discovered waypoint |
 
@@ -484,7 +482,7 @@ conventionally wired to do.
 | `Teleporter` | Teleports via direct transform or named destination; achievement |
 | `Waypoint` | The shipped `Waypoint Interact` trigger runs `UnlockWaypointAction` and the discovery achievement. Travel is **not** an interaction: it is requested from the map, validated by the server, and the arrival runs `OnTravelTriggers` |
 | `WorldItem` | Picks up the item with a concurrency guard, adjusts stack or despawns; achievement |
-| `ArenaBoard` | Opens the arena panel: queueing, profile, history, leaderboard |
+| `ArenaBoard` | Opens the arena panel: queueing, profile, history, and the season leaderboard (served by `LeaderboardSystem`) |
 | `ArenaObjective` | A flag stand or control point; its trigger runs `InteractWithArenaObjectiveAction`, which the match coordinator scores |
 
 Because the mapping is authored per prefab rather than compiled in, two
@@ -770,7 +768,7 @@ Interactable/
 ├── README.md                                  # This document
 ├── InteractableSystem.cs                      # Main SceneServer interactable subsystem (validation, dispatch, NPC look-at, update loop)
 ├── InteractableSystem.AbilityCraft.cs         # Partial: ability craft broadcast handling and async persistence
-├── InteractableSystem.Arena.cs                # Partial: arena board queueing (solo and pre-made party), profile/history/leaderboard
+├── InteractableSystem.Arena.cs                # Partial: arena board queueing (solo and pre-made party), profile/history
 ├── InteractableSystem.ArenaMatch.cs           # Partial: the arena match state machine for matches hosted here
 ├── InteractableSystem.Container.cs            # Partial: container take-item broadcast handling
 ├── InteractableSystem.Corpse.cs               # Partial: corpse loot pile, item/currency/take-all/close

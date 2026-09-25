@@ -31,10 +31,12 @@ namespace FishMMO.ControlPanel.Controllers
 	public sealed class SupportChatController : ControllerBase
 	{
 		private readonly IChatService chat;
+		private readonly ILogger<SupportChatController> log;
 
-		public SupportChatController(IChatService chat)
+		public SupportChatController(IChatService chat, ILogger<SupportChatController> log)
 		{
 			this.chat = chat;
+			this.log = log;
 		}
 
 		/// <summary>Searches persisted chat, newest message first.</summary>
@@ -71,8 +73,10 @@ namespace FishMMO.ControlPanel.Controllers
 				/* The service's message is shown rather than replaced. Its one validation refusal —
 				 * a message search with nothing to narrow it — names the three filters that would
 				 * make the search runnable, and an operator who is told "that search could not be
-				 * run" instead just retries the same thing. */
-				return BadRequest(new { error = result.ErrorMessage ?? "That search could not be run." });
+				 * run" instead just retries the same thing. A database fault is the exception: its
+				 * text is the exception's, not the service's, and it becomes a 503 with the generic
+				 * sentence — see DatabaseReplies. */
+				return DatabaseReplies.Failure(this, result, log, "That search could not be run.");
 			}
 
 			var data = result.Data;

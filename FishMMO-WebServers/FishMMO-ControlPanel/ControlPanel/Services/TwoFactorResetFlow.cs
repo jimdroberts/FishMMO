@@ -37,6 +37,10 @@ namespace FishMMO.ControlPanel.Services
 	/// the only thing in front of it.
 	/// </description></item>
 	/// <item><description>
+	/// Completion is one transaction: the request is spent together with the new factor, or not at all.
+	/// A failure part-way leaves the request pending and the old factor in place.
+	/// </description></item>
+	/// <item><description>
 	/// A password reset never satisfies two-factor and a recovery code never resets a password: nothing
 	/// here touches the SRP credentials, and <see cref="PasswordResetService"/> touches nothing here.
 	/// </description></item>
@@ -45,32 +49,32 @@ namespace FishMMO.ControlPanel.Services
 	public sealed class TwoFactorResetFlow
 	{
 		private readonly ITwoFactorResetRequestService requests;
-		private readonly IAccountService accounts;
 		private readonly IAuthTokenService authTokens;
 		private readonly IWebSessionService webSessions;
 		private readonly SelfServiceService selfService;
 		private readonly SecurityNoticeService notices;
+		private readonly IUnitOfWorkService unitOfWork;
 		private readonly TotpKeyProvider totpKeys;
 		private readonly TwoFactorResetOptions resetOptions;
 		private readonly ILogger<TwoFactorResetFlow> log;
 
 		public TwoFactorResetFlow(
 			ITwoFactorResetRequestService requests,
-			IAccountService accounts,
 			IAuthTokenService authTokens,
 			IWebSessionService webSessions,
 			SelfServiceService selfService,
 			SecurityNoticeService notices,
+			IUnitOfWorkService unitOfWork,
 			TotpKeyProvider totpKeys,
 			TwoFactorResetOptions resetOptions,
 			ILogger<TwoFactorResetFlow> log)
 		{
 			this.requests = requests;
-			this.accounts = accounts;
 			this.authTokens = authTokens;
 			this.webSessions = webSessions;
 			this.selfService = selfService;
 			this.notices = notices;
+			this.unitOfWork = unitOfWork;
 			this.totpKeys = totpKeys;
 			this.resetOptions = resetOptions;
 			this.log = log;
@@ -90,24 +94,37 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>The outcome of a completion, with the new factor when there is one.</summary>
+		/// <param name="SignedOutElsewhere">
+		/// Whether every game token and every other panel session was revoked. The reset stands either
+		/// way; the player is told plainly when something may still be signed in.
+		/// </param>
 		public sealed record Completion(
 			CompletionStatus Status,
 			string Error,
 			DateTime? EffectiveUtc,
 			string OtpauthUri,
-			IReadOnlyList<string> RecoveryCodes);
+			IReadOnlyList<string> RecoveryCodes,
+			bool SignedOutElsewhere = false);
 
-		/// <summary>The pending request, or null. Failures read as null and are logged.</summary>
-		public async Task<TwoFactorResetRequestData> PendingAsync(string username, CancellationToken cancellationToken = default)
+		/// <summary>
+		/// The pending request: <c>Read</c> is false when the database could not be asked, which is not
+		/// the same answer as a successful read that found no request.
+		/// </summary>
+		/// <remarks>
+		/// This used to return a bare null for both, and every caller took a failed read for "there is
+		/// no reset" — telling the player their request had gone, and letting completion report
+		/// NoRequest over a database outage.
+		/// </remarks>
+		public async Task<(bool Read, TwoFactorResetRequestData Request)> PendingAsync(string username, CancellationToken cancellationToken = default)
 		{
 			var pending = await requests.FetchPendingAsync(username, cancellationToken);
 			if (!pending.IsSuccess)
 			{
 				log.LogWarning("Could not read the pending two-factor reset for '{User}': [{Code}] {Message}",
 					username, pending.ErrorCode, pending.ErrorMessage);
-				return null;
+				return (false, null);
 			}
-			return pending.Data;
+			return (true, pending.Data);
 		}
 
 		/// <summary>
@@ -117,7 +134,13 @@ namespace FishMMO.ControlPanel.Services
 		public async Task<(TwoFactorResetRequestData Request, string Error)> RequestAsync(
 			string username, string requestedIp, CancellationToken cancellationToken = default)
 		{
-			TwoFactorResetRequestData existing = await PendingAsync(username, cancellationToken);
+			var (read, existing) = await PendingAsync(username, cancellationToken);
+			if (!read)
+			{
+				/* Not a guess that there is none. Opening one anyway would return an existing request
+				 * unchanged, but this method would then email the holder as though it were new. */
+				return (null, "The reset could not be requested. Try again shortly.");
+			}
 			if (existing != null)
 			{
 				return (existing, null);
@@ -148,7 +171,11 @@ namespace FishMMO.ControlPanel.Services
 		/// </remarks>
 		public async Task<Completion> CompleteAsync(string username, CancellationToken cancellationToken = default)
 		{
-			TwoFactorResetRequestData pending = await PendingAsync(username, cancellationToken);
+			var (read, pending) = await PendingAsync(username, cancellationToken);
+			if (!read)
+			{
+				return new Completion(CompletionStatus.Failed, "Your reset could not be checked right now. Nothing was changed; try again shortly.", null, null, null);
+			}
 			if (pending == null)
 			{
 				return new Completion(CompletionStatus.NoRequest, "There is no pending two-factor reset on this account.", null, null, null);
@@ -158,8 +185,8 @@ namespace FishMMO.ControlPanel.Services
 				return new Completion(CompletionStatus.NotYetEffective, "This reset has not taken effect yet.", pending.EffectiveUtc, null, null);
 			}
 
-			/* Checked before the request is spent. Spending it and then finding no key to encrypt a
-			 * new secret under would use up the player's week for nothing. */
+			/* Checked before a transaction is opened, so the refusal is immediate. The enrolment checks
+			 * the key again inside, and a failure there rolls the request's completion back with it. */
 			byte[] kek = totpKeys.MasterKek;
 			if (kek == null || kek.Length != TotpMasterKek.KeyLength)
 			{
@@ -167,33 +194,61 @@ namespace FishMMO.ControlPanel.Services
 				return new Completion(CompletionStatus.Failed, "Two-factor is unavailable on this server right now. Your reset is still pending; try again later.", pending.EffectiveUtc, null, null);
 			}
 
-			// One conditional UPDATE: a request a normal sign-in just cancelled cannot be completed.
-			var completed = await requests.CompleteAsync(pending.ID, username, cancellationToken);
-			if (!completed.IsSuccess || !completed.Data)
+			/* ONE transaction: the request is spent, the new secret and recovery codes are written and
+			 * two-factor is asserted on, or none of it happens. ITwoFactorResetRequestService says the
+			 * factor change belongs in the same unit of work as CompleteAsync, and this is why: done as
+			 * separate writes, an enrolment that failed after the request was spent used up the
+			 * player's week for nothing and left them to contact support. Now a failure anywhere leaves
+			 * the request pending and the old factor untouched, and the player simply tries again. */
+			const string NothingChanged = "The reset could not be completed right now. Nothing was changed and your reset is still pending; try again shortly.";
+			var begun = await unitOfWork.BeginAsync(cancellationToken);
+			if (!begun.IsSuccess)
 			{
-				return new Completion(CompletionStatus.NoRequest, "This reset is no longer pending.", null, null, null);
+				log.LogError("Two-factor reset for '{User}' could not begin its transaction: [{Code}] {Message}",
+					username, begun.ErrorCode, begun.ErrorMessage);
+				return new Completion(CompletionStatus.Failed, NothingChanged, pending.EffectiveUtc, null, null);
 			}
 
-			/* The enrolment path the account page uses: a new secret overwrites the stored one and the
-			 * recovery codes are replaced. totp_enabled is left ON, so the old factor stops working and
-			 * a factor is still demanded — by the game as much as by this panel. */
-			var setup = await selfService.BeginTwoFactorSetupAsync(username, cancellationToken);
-			if (!setup.Ok)
+			SelfServiceService.TwoFactorSetup setup;
+			await using (IUnitOfWork uow = begun.Data)
 			{
-				log.LogError("Two-factor reset for '{User}' was COMPLETED but a new authenticator could not be issued: {Error}. The previous factor is still in place.",
-					username, setup.Error);
-				return new Completion(CompletionStatus.Failed,
-					"The reset was used but a new authenticator could not be issued, so your previous authenticator is unchanged. Contact support.",
-					null, null, null);
+				// One conditional UPDATE: a request a normal sign-in just cancelled cannot be completed.
+				var completed = await requests.CompleteAsync(pending.ID, username, cancellationToken);
+				if (!completed.IsSuccess)
+				{
+					log.LogError("Two-factor reset for '{User}': the request could not be completed: [{Code}] {Message}",
+						username, completed.ErrorCode, completed.ErrorMessage);
+					return new Completion(CompletionStatus.Failed, NothingChanged, pending.EffectiveUtc, null, null);
+				}
+				if (!completed.Data)
+				{
+					return new Completion(CompletionStatus.NoRequest, "This reset is no longer pending.", null, null, null);
+				}
+
+				/* The enrolment path the account page uses, with two-factor asserted on in the same
+				 * transaction: a new secret overwrites the stored one and the recovery codes are
+				 * replaced, so the old factor stops working and a factor is still demanded — by the
+				 * game as much as by this panel. */
+				setup = await selfService.WriteEnrolmentAsync(username, enable: true, cancellationToken);
+				if (!setup.Ok)
+				{
+					log.LogError("Two-factor reset for '{User}' could not issue a new authenticator ({Error}); the request was left pending.",
+						username, setup.Error);
+					return new Completion(CompletionStatus.Failed, NothingChanged, pending.EffectiveUtc, null, null);
+				}
+
+				var committed = await uow.CommitAsync(cancellationToken);
+				if (!committed.IsSuccess)
+				{
+					log.LogError("Two-factor reset for '{User}' could not be committed; the request was left pending: [{Code}] {Message}",
+						username, committed.ErrorCode, committed.ErrorMessage);
+					return new Completion(CompletionStatus.Failed, NothingChanged, pending.EffectiveUtc, null, null);
+				}
 			}
 
-			var enabled = await accounts.PersistTotpEnabledAsync(username, true, cancellationToken);
-			if (!enabled.IsSuccess)
-			{
-				log.LogError("Two-factor reset for '{User}': could not re-assert totp_enabled: [{Code}] {Message}",
-					username, enabled.ErrorCode, enabled.ErrorMessage);
-			}
-
+			/* After the commit, deliberately: the new factor is in place and handed over whatever
+			 * happens below. A revocation that fails is logged and REPORTED — the handover screen and
+			 * the notice both say something may still be signed in — rather than claimed. */
 			var tokens = await authTokens.RevokeAllForAccountAsync(username, cancellationToken);
 			if (!tokens.IsSuccess)
 			{
@@ -208,10 +263,12 @@ namespace FishMMO.ControlPanel.Services
 					username, sessions.ErrorCode, sessions.ErrorMessage);
 			}
 
-			log.LogWarning("Two-factor reset COMPLETED for '{User}': new authenticator issued, tokens and sessions revoked.", username);
-			await notices.ResetCompletedAsync(username, cancellationToken);
+			bool signedOut = tokens.IsSuccess && sessions.IsSuccess;
+			log.LogWarning("Two-factor reset COMPLETED for '{User}': new authenticator issued; tokens and sessions revoked: {SignedOut}.",
+				username, signedOut);
+			await notices.ResetCompletedAsync(username, signedOut, cancellationToken);
 
-			return new Completion(CompletionStatus.Completed, null, pending.EffectiveUtc, setup.OtpauthUri, setup.RecoveryCodes);
+			return new Completion(CompletionStatus.Completed, null, pending.EffectiveUtc, setup.OtpauthUri, setup.RecoveryCodes, signedOut);
 		}
 
 		/// <summary>The request as the browser sees it. Never the IP of whoever asked.</summary>

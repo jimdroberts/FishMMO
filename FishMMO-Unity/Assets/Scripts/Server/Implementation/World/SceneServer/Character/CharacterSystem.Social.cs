@@ -50,7 +50,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var guildService))
 				{
 					DatabaseResult<IReadOnlyList<CharacterGuildData>> guildResult = await guildService.FetchManyAsync(guildID);
-					if (guildResult.IsSuccess && guildResult.Data != null && guildResult.Data.Count > 0)
+					if (!guildResult.IsSuccess)
+					{
+						await Log.Warning("CharacterSystem", $"SendAllCharacterDataAsync: could not read the roster of guild {guildID} for character {characterID}: [{guildResult.ErrorCode}] {guildResult.ErrorMessage}");
+					}
+					else if (guildResult.Data != null && guildResult.Data.Count > 0)
 					{
 						IReadOnlyList<CharacterGuildData> members = guildResult.Data;
 
@@ -76,11 +80,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						GuildPermissions viewerPermissions = GuildPermissions.None;
 						byte leaderRankOrder = 0;
 						GuildRankEntry[] rankEntries = Array.Empty<GuildRankEntry>();
+						/* Whether the ladder was actually read. A failed read used to fall through with
+						 * the defaults above and publish them: an empty ladder to the client, and None /
+						 * 0 into the server's own cache of the character's standing — overwriting any
+						 * mask GuildSystem had already published, so a guild leader was refused by its
+						 * pre-filters until the ladder was next published, because a read failed.
+						 * Unread, neither is published; the roster still goes out, and the officer notes
+						 * stay withheld (None is the safe side). */
+						bool ladderRead = false;
 						if (Server.Database.ServiceRegistry.TryGet<IGuildRankService>(out var rankService))
 						{
 							DatabaseResult<IReadOnlyList<GuildRankData>> ladderResult = await rankService.FetchManyAsync(guildID);
-							if (ladderResult.IsSuccess && ladderResult.Data != null)
+							if (!ladderResult.IsSuccess)
 							{
+								await Log.Warning("CharacterSystem", $"SendAllCharacterDataAsync: could not read the rank ladder of guild {guildID} for character {characterID}: [{ladderResult.ErrorCode}] {ladderResult.ErrorMessage}");
+							}
+							else if (ladderResult.Data != null)
+							{
+								ladderRead = true;
 								rankEntries = new GuildRankEntry[ladderResult.Data.Count];
 								for (int i = 0; i < ladderResult.Data.Count; ++i)
 								{
@@ -133,6 +150,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									Members = addBroadcasts.ToArray(),
 								}, true, Channel.Reliable);
 
+								if (!ladderRead)
+								{
+									return;
+								}
+
 								/* The ladder goes out WITH the roster, not on request. Every
 								 * roster row renders its rank by NAME, and the name lives only in
 								 * the ladder — a client that had the roster but not the ladder
@@ -169,7 +191,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var partyService))
 				{
 					DatabaseResult<IReadOnlyList<CharacterPartyData>> partyResult = await partyService.FetchManyAsync(partyID);
-					if (partyResult.IsSuccess && partyResult.Data != null && partyResult.Data.Count > 0)
+					if (!partyResult.IsSuccess)
+					{
+						await Log.Warning("CharacterSystem", $"SendAllCharacterDataAsync: could not read the roster of party {partyID} for character {characterID}: [{partyResult.ErrorCode}] {partyResult.ErrorMessage}");
+					}
+					else if (partyResult.Data != null && partyResult.Data.Count > 0)
 					{
 						var addBroadcasts = partyResult.Data.Select(x => new PartyAddEntry()
 						{
@@ -200,6 +226,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					foreach (long friendID in friendIDs)
 					{
 						DatabaseResult<CharacterData?> friendResult = await characterService.FetchAsync(friendID);
+						if (!friendResult.IsSuccess)
+						{
+							/* Unknown, and reported as such here. Still listed — as offline — because
+							 * this payload is what puts the friend in the client's list at all, and a
+							 * dropped entry would hide the friend for the session; offline is the
+							 * guess their own status change corrects. */
+							await Log.Warning("CharacterSystem", $"SendAllCharacterDataAsync: could not read friend {friendID} of character {characterID}: [{friendResult.ErrorCode}] {friendResult.ErrorMessage}; listing them as offline.");
+						}
 						bool online = friendResult.IsSuccess && friendResult.Data.HasValue && friendResult.Data.Value.Online;
 						friends.Add(new FriendAddBroadcast()
 						{

@@ -160,6 +160,8 @@ namespace FishMMO.ControlPanel.Controllers
 				recoveryCodes = result.RecoveryCodes,
 				betaRedeemed = result.BetaRedeemed,
 				betaWarning = result.BetaWarning,
+				// Set when the account was created without two-factor; nothing to hand over is shown then.
+				twoFactorWarning = result.TwoFactorWarning,
 			});
 		}
 
@@ -253,10 +255,11 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = "A username and verification code are required." });
 			}
 
-			var (ok, error) = await registration.VerifyAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
+			var (ok, error, retry) = await registration.VerifyAsync(request.Username.Trim(), request.Code, HttpContext.RequestAborted);
 			if (!ok)
 			{
-				return BadRequest(new { error });
+				// A database fault, which was not counted as a wrong code; the same answer for every account.
+				return retry ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { error }) : BadRequest(new { error });
 			}
 			return Ok(new
 			{
@@ -400,9 +403,15 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = result.Error });
 			}
 
+			/* Whether everything was signed out is said, not assumed: the reset stands either way, but
+			 * somebody resetting a password they think is compromised needs to know if a session
+			 * survived it. Only the code's holder gets this answer, so it tells nobody anything new. */
 			return Ok(new
 			{
-				message = "Password reset. Every browser and game client signed in to this account has been signed out.",
+				message = result.SignedOutEverywhere
+					? "Password reset. Every browser and game client signed in to this account has been signed out."
+					: "Password reset, but not everything signed in to this account could be signed out. Sign in and change the password once more to end every session.",
+				signedOutEverywhere = result.SignedOutEverywhere,
 				twoFactorUnchanged = true,
 			});
 		}
@@ -490,7 +499,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await accounts.FetchForLoginAsync(username, false, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return NotFound(new { error = "That account no longer exists." });
+				return DatabaseReplies.Failure(this, result, log, "Your account could not be loaded. Try again shortly.",
+					notFound: "That account no longer exists.");
 			}
 
 			var data = result.Data;
@@ -562,6 +572,14 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await betaCodes.RedeemAsync(username, request.Code.Trim(), HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
+				/* Every refusal — NOT_FOUND included — stays one 400 with the service's words: a 404
+				 * for an unknown code beside a 400 for a used-up one would tell a script which guesses
+				 * were real codes. Only a database fault is answered differently, because its text is
+				 * the exception's, not the service's, and says nothing about the code. */
+				if (DatabaseReplies.IsFault(result.ErrorCode))
+				{
+					return DatabaseReplies.Failure(this, result, log, "Your beta code could not be checked. Try again shortly.");
+				}
 				return BadRequest(new { error = result.ErrorMessage ?? AccountRegistrationService.InvalidBetaCodeError });
 			}
 			return Ok(new { message = $"Beta code redeemed for {result.Data.Program}.", program = result.Data.Program });
@@ -647,9 +665,19 @@ namespace FishMMO.ControlPanel.Controllers
 			/* Revoke EVERY session for the account, this one included, then mint a fresh one
 			 * for the browser in front of us. Revoking all and re-issuing is simpler and safer
 			 * than trying to spare one row: there is no path where a stale session survives
-			 * because an exclusion was computed wrongly. */
+			 * because an exclusion was computed wrongly.
+			 *
+			 * A password is changed because somebody may have it, so a revocation that fails is
+			 * logged and SAID. It used to fold into a count of zero while the reply announced that
+			 * every other browser had been signed out — the one sentence the account holder acts on. */
 			var revoked = await sessions.RevokeAllAsync(username, HttpContext.RequestAborted);
+			if (!revoked.IsSuccess)
+			{
+				log.LogError("Password changed for '{User}' but panel sessions were NOT revoked: [{Code}] {Message}",
+					username, revoked.ErrorCode, revoked.ErrorMessage);
+			}
 			int revokedSessions = revoked.IsSuccess ? revoked.Data : 0;
+			bool everythingSignedOut = revoked.IsSuccess && result.GameTokensRevoked;
 
 			var reissued = await sessions.IssueAsync(
 				username, GetAccessLevel(), twoFactorSatisfied: true,
@@ -671,8 +699,13 @@ namespace FishMMO.ControlPanel.Controllers
 
 			return Ok(new
 			{
-				message = "Password changed. Every other browser and game client has been signed out.",
+				message = everythingSignedOut
+					? "Password changed. Every other browser and game client has been signed out."
+					: "Password changed, but not everything signed in to this account could be signed out. " +
+					  "Sign out your other sessions below, or change the password again shortly.",
 				revokedSessions = Math.Max(0, revokedSessions - 1),
+				// False when another browser or game client may still be signed in.
+				everythingSignedOut,
 				signedOut = !reissued.Ok,
 			});
 		}
@@ -693,21 +726,50 @@ namespace FishMMO.ControlPanel.Controllers
 			{
 				return BadRequest(new { error = result.Error });
 			}
-			return Ok(new { message = "Email changed. Check the new address for a verification code.", verificationSent = true });
+			/* The address changed either way, and the account is unverified from here. When no code
+			 * went out, the player is sent to Resend rather than told to wait for one. */
+			return Ok(new
+			{
+				message = result.VerificationSent
+					? "Email changed. Check the new address for a verification code."
+					: "Email changed, but a verification code could not be sent. Use Resend on the sign-in page to get one.",
+				verificationSent = result.VerificationSent,
+			});
 		}
 
 		/// <summary>Starts two-factor enrolment. Does not enable it.</summary>
+		/// <remarks>
+		/// <para>
+		/// For an account whose two-factor is already ON this is a re-enrolment, and it replaces the
+		/// live authenticator and every recovery code the moment it runs: the secret it writes is the
+		/// one sign-in reads. That is the same weight as disabling two-factor or regenerating the codes,
+		/// so it takes the same fresh step-up those do. Without it, a borrowed signed-in browser could
+		/// swap the owner's authenticator for one of its own.
+		/// </para>
+		/// <para>
+		/// A first enrolment needs no step-up — there is no authenticator to prove, and nothing is
+		/// enabled until <c>2fa/confirm</c>.
+		/// </para>
+		/// </remarks>
 		[HttpPost("2fa/setup")]
 		[Authorize(Policy = PanelPolicies.Self)]
 		public async Task<IActionResult> BeginTwoFactorSetup()
 		{
 			string username = User.Identity?.Name;
+			if (User.FindFirstValue(PanelClaims.TotpEnrolled) == "true" && !HasFreshStepUp())
+			{
+				return StatusCode(StatusCodes.Status428PreconditionRequired, new
+				{
+					error = "Replacing your authenticator needs a fresh two-factor code.",
+				});
+			}
+
 			var setup = await selfService.BeginTwoFactorSetupAsync(username, HttpContext.RequestAborted);
 			if (!setup.Ok)
 			{
 				return BadRequest(new { error = setup.Error });
 			}
-			// Shown once. Two-factor is not on until the code is confirmed below.
+			// Shown once. For a first enrolment two-factor is not on until the code is confirmed below.
 			return Ok(new { otpauthUri = setup.OtpauthUri, recoveryCodes = setup.RecoveryCodes });
 		}
 

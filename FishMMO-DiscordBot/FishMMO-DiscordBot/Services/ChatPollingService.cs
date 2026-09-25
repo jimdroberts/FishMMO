@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.DiscordBot.Services
@@ -163,7 +164,11 @@ namespace FishMMO.DiscordBot.Services
 				return;
 			}
 
-			lastProcessedChatId = newChatMessages[newChatMessages.Count - 1].ID;
+			/* The cursor moves once the batch's database reads below have succeeded, not before. It
+			 * used to move first, so a read that threw — or a Discord send that threw part-way through
+			 * the batch — lost every message after it for good. Now a failed read leaves the batch to be
+			 * read again, and each send is caught on its own, so one refusal costs one message. */
+			long batchEndId = newChatMessages[newChatMessages.Count - 1].ID;
 
 			// Check for account link verification codes in all new messages
 			foreach (var msg in newChatMessages)
@@ -237,116 +242,137 @@ namespace FishMMO.DiscordBot.Services
 				}
 			}
 
+			// Every read this batch needs has succeeded; nothing below reads the database.
+			lastProcessedChatId = batchEndId;
+
 			foreach (var chatMessage in newChatMessages)
 			{
-				/* THE relay gate. Nothing reaches Discord without passing an explicit allowlist.
-				 *
-				 * This check used to be the `Channel != Discord` filter on the query above and
-				 * nothing else, which meant every channel the game has — including whispers,
-				 * guild chat and party chat — was published to a public Discord channel. See
-				 * ChatRelayPolicy for what the allowlist contains and why private channels cannot
-				 * be added to it from configuration.
-				 *
-				 * The gate is here rather than in the query on purpose: the query still has to
-				 * see every row so the cursor advances past channels we do not relay, and so the
-				 * account-link verification pass below can spot a verification code wherever a
-				 * player typed it. Neither of those republishes anything. */
-				if (!relayPolicy.IsRelayable(chatMessage.Channel))
+				try
 				{
-					continue;
+					await ForwardAsync(chatMessage, guildId, worldServerNames, sceneServerNames, characterNames);
+				}
+				catch (Exception ex)
+				{
+					logger.LogError(ex, "Could not forward chat message {ChatId} to Discord; continuing with the rest of the batch.", chatMessage.ID);
+				}
+			}
+		}
+
+		/// <summary>Relays one chat row to its Discord channel, if it passes the relay gate.</summary>
+		private async Task ForwardAsync(
+			ChatEntity chatMessage,
+			ulong guildId,
+			Dictionary<long, string> worldServerNames,
+			Dictionary<long, string> sceneServerNames,
+			Dictionary<long, string> characterNames)
+		{
+			/* THE relay gate. Nothing reaches Discord without passing an explicit allowlist.
+			 *
+			 * This check used to be the `Channel != Discord` filter on the query above and
+			 * nothing else, which meant every channel the game has — including whispers,
+			 * guild chat and party chat — was published to a public Discord channel. See
+			 * ChatRelayPolicy for what the allowlist contains and why private channels cannot
+			 * be added to it from configuration.
+			 *
+			 * The gate is here rather than in the query on purpose: the query still has to
+			 * see every row so the cursor advances past channels we do not relay, and so the
+			 * account-link verification pass below can spot a verification code wherever a
+			 * player typed it. Neither of those republishes anything. */
+			if (!relayPolicy.IsRelayable(chatMessage.Channel))
+			{
+				return;
+			}
+
+			// Skip bridge-banned characters/accounts
+			if (bridgeBanService.IsBridgeBanned(chatMessage.CharacterName, chatMessage.AccountName))
+			{
+				logger.LogDebug(
+					"Skipping bridge-banned message from '{CharacterName}' (Account: '{AccountName}').",
+					chatMessage.CharacterName, chatMessage.AccountName);
+				return;
+			}
+
+			var channelState = dynamicChannelManager.GetManagedChannelState(
+				guildId,
+				chatMessage.WorldServerID,
+				chatMessage.SceneServerID);
+
+			if (channelState == null)
+			{
+				if (!worldServerNames.TryGetValue(chatMessage.WorldServerID, out string? worldName))
+				{
+					logger.LogError(
+						"WorldServer with ID {WorldId} not found in database. Cannot create Discord channel.",
+						chatMessage.WorldServerID);
+					return;
+				}
+				if (!sceneServerNames.TryGetValue(chatMessage.SceneServerID, out string? sceneName))
+				{
+					logger.LogError(
+						"SceneServer with ID {SceneId} not found in database. Cannot create Discord channel.",
+						chatMessage.SceneServerID);
+					return;
 				}
 
-				// Skip bridge-banned characters/accounts
-				if (bridgeBanService.IsBridgeBanned(chatMessage.CharacterName, chatMessage.AccountName))
-				{
-					logger.LogDebug(
-						"Skipping bridge-banned message from '{CharacterName}' (Account: '{AccountName}').",
-						chatMessage.CharacterName, chatMessage.AccountName);
-					continue;
-				}
-
-				var channelState = dynamicChannelManager.GetManagedChannelState(
+				channelState = await dynamicChannelManager.GetOrCreateChannelState(
 					guildId,
 					chatMessage.WorldServerID,
-					chatMessage.SceneServerID);
+					worldName,
+					chatMessage.SceneServerID,
+					sceneName);
 
 				if (channelState == null)
 				{
-					if (!worldServerNames.TryGetValue(chatMessage.WorldServerID, out string? worldName))
-					{
-						logger.LogError(
-							"WorldServer with ID {WorldId} not found in database. Cannot create Discord channel.",
-							chatMessage.WorldServerID);
-						continue;
-					}
-					if (!sceneServerNames.TryGetValue(chatMessage.SceneServerID, out string? sceneName))
-					{
-						logger.LogError(
-							"SceneServer with ID {SceneId} not found in database. Cannot create Discord channel.",
-							chatMessage.SceneServerID);
-						continue;
-					}
-
-					channelState = await dynamicChannelManager.GetOrCreateChannelState(
-						guildId,
-						chatMessage.WorldServerID,
-						worldName,
-						chatMessage.SceneServerID,
-						sceneName);
-
-					if (channelState == null)
-					{
-						logger.LogError(
-							"Failed to create Discord channel for World {WorldId}, Scene {SceneId}.",
-							chatMessage.WorldServerID, chatMessage.SceneServerID);
-						continue;
-					}
+					logger.LogError(
+						"Failed to create Discord channel for World {WorldId}, Scene {SceneId}.",
+						chatMessage.WorldServerID, chatMessage.SceneServerID);
+					return;
 				}
+			}
 
-				string characterName = chatMessage.CharacterName ?? "System";
-				if (chatMessage.CharacterID != 0 && string.IsNullOrEmpty(chatMessage.CharacterName))
+			string characterName = chatMessage.CharacterName ?? "System";
+			if (chatMessage.CharacterID != 0 && string.IsNullOrEmpty(chatMessage.CharacterName))
+			{
+				if (characterNames.TryGetValue(chatMessage.CharacterID, out string? resolvedName))
 				{
-					if (characterNames.TryGetValue(chatMessage.CharacterID, out string? resolvedName))
-					{
-						characterName = resolvedName;
-					}
-					else
-					{
-						characterName = "Unknown Character";
-					}
-				}
-
-				string messageText = chatMessage.Message ?? string.Empty;
-				string worldPrefix = $"{chatMessage.WorldServerID} ";
-				if (messageText.StartsWith(worldPrefix))
-				{
-					messageText = messageText.Substring(worldPrefix.Length).Trim();
-				}
-
-				// Sanitize for Discord: escape mentions to prevent @everyone/@here abuse from game chat
-				messageText = messageText
-					.Replace("@everyone", "@\u200Beveryone")
-					.Replace("@here", "@\u200Bhere");
-				characterName = characterName
-					.Replace("@everyone", "@\u200Beveryone")
-					.Replace("@here", "@\u200Bhere");
-
-				var discordChannel = discordClient.GetChannel(channelState.DiscordChannelId) as IMessageChannel;
-				if (discordChannel != null)
-				{
-					string channelLabel = ((ChatChannel)chatMessage.Channel).ToString();
-					await discordChannel.SendMessageAsync(
-						$"[{chatMessage.TimeCreated:HH:mm:ss}] [{channelLabel}] {characterName}: {messageText}",
-						allowedMentions: AllowedMentions.None);
-
-					dynamicChannelManager.UpdateChannelActivity(guildId, chatMessage.WorldServerID, chatMessage.SceneServerID);
+					characterName = resolvedName;
 				}
 				else
 				{
-					logger.LogWarning(
-						"Discord channel ID {ChannelId} for World {WorldId}/Scene {SceneId} not found or not a message channel.",
-						channelState.DiscordChannelId, chatMessage.WorldServerID, chatMessage.SceneServerID);
+					characterName = "Unknown Character";
 				}
+			}
+
+			string messageText = chatMessage.Message ?? string.Empty;
+			string worldPrefix = $"{chatMessage.WorldServerID} ";
+			if (messageText.StartsWith(worldPrefix))
+			{
+				messageText = messageText.Substring(worldPrefix.Length).Trim();
+			}
+
+			// Sanitize for Discord: escape mentions to prevent @everyone/@here abuse from game chat
+			messageText = messageText
+				.Replace("@everyone", "@\u200Beveryone")
+				.Replace("@here", "@\u200Bhere");
+			characterName = characterName
+				.Replace("@everyone", "@\u200Beveryone")
+				.Replace("@here", "@\u200Bhere");
+
+			var discordChannel = discordClient.GetChannel(channelState.DiscordChannelId) as IMessageChannel;
+			if (discordChannel != null)
+			{
+				string channelLabel = ((ChatChannel)chatMessage.Channel).ToString();
+				await discordChannel.SendMessageAsync(
+					$"[{chatMessage.TimeCreated:HH:mm:ss}] [{channelLabel}] {characterName}: {messageText}",
+					allowedMentions: AllowedMentions.None);
+
+				dynamicChannelManager.UpdateChannelActivity(guildId, chatMessage.WorldServerID, chatMessage.SceneServerID);
+			}
+			else
+			{
+				logger.LogWarning(
+					"Discord channel ID {ChannelId} for World {WorldId}/Scene {SceneId} not found or not a message channel.",
+					channelState.DiscordChannelId, chatMessage.WorldServerID, chatMessage.SceneServerID);
 			}
 		}
 

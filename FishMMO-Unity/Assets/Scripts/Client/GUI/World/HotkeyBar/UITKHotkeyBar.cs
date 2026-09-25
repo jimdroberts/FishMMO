@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -35,6 +34,15 @@ namespace FishMMO.Client
 	/// can actually invalidate a binding (container slot updates, equip/unequip, ability learned,
 	/// hotkey broadcast) and coalesced to at most one sweep per frame.
 	/// </para>
+	/// <para>
+	/// <b>Several bars, one model.</b> A game may give every character more than one bar
+	/// (<see cref="Constants.Configuration.HotkeyBarCount"/>). They are drawn as rows of one
+	/// strip, the first at the bottom, and all of them index the same flat slot list the server
+	/// knows — <see cref="HotkeyBarLayout"/> is the only place that thinks in bars. The player
+	/// chooses in Options whether every row is on screen or one at a time
+	/// (<see cref="ClientHotbarSettings"/>); either way the same keys reach the same slots, a
+	/// position key plus a bar's modifier (see <see cref="HotkeyKeyMap"/>).
+	/// </para>
 	/// </remarks>
 	public class UITKHotkeyBar : UITKCharacterControl
 	{
@@ -43,6 +51,18 @@ namespace FishMMO.Client
 
 		/// <summary>Name of the container element that holds the generated hotkey slots.</summary>
 		private const string LIST_NAME = "hotkey-list";
+
+		/// <summary>USS class applied to each generated bar: one row of slots.</summary>
+		private const string ROW_CLASS = "hotkey-row";
+
+		/// <summary>USS class of the page controls beside a paged bar.</summary>
+		private const string PAGER_CLASS = "hotkey-pager";
+
+		/// <summary>USS class of the page up and page down buttons.</summary>
+		private const string PAGER_BUTTON_CLASS = "hotkey-pager__button";
+
+		/// <summary>USS class of the page number between the buttons.</summary>
+		private const string PAGER_LABEL_CLASS = "hotkey-pager__label";
 
 		/// <summary>USS class applied to each generated hotkey slot root.</summary>
 		private const string SLOT_CLASS = "hotkey-slot";
@@ -116,9 +136,6 @@ namespace FishMMO.Client
 			/// <summary>The cooldown sweep fraction currently written into <see cref="Cooldown"/>.</summary>
 			public float AppliedCooldownFraction = -1.0f;
 
-			/// <summary>True while this slot's input is held down.</summary>
-			public bool IsPressed;
-
 			/// <summary>True when the held activation still owes the controller a Release().</summary>
 			public bool AwaitingRelease;
 		}
@@ -141,11 +158,39 @@ namespace FishMMO.Client
 		private HotkeyBinding liftedBinding;
 		private int liftedSlotIndex = -1;
 
-		/// <summary>All created hotkey slots in index order. Belongs to the current visual tree.</summary>
+		/// <summary>
+		/// All created hotkey slots in flat slot order, every bar's in turn. Belongs to the current
+		/// visual tree.
+		/// </summary>
 		private readonly List<HotkeySlot> slots = new List<HotkeySlot>();
 
-		/// <summary>The container element that holds the generated hotkey slot roots.</summary>
+		/// <summary>One row element per bar, in bar order. Belongs to the current visual tree.</summary>
+		private readonly List<VisualElement> rows = new List<VisualElement>();
+
+		/// <summary>The container element that holds the generated bar rows.</summary>
 		private VisualElement list;
+
+		/// <summary>The page controls, present only when there is more than one bar.</summary>
+		private VisualElement pager;
+
+		/// <summary>The page number shown between the page buttons.</summary>
+		private Label pageLabel;
+
+		/// <summary>Pairs each position key's press with its release on the bar the press landed on.</summary>
+		private readonly HotkeyPressRouter pressRouter = new HotkeyPressRouter(HotkeyBarLayout.SlotsPerBar);
+
+		/// <summary>The bar a paged hotbar shows while no modifier is held.</summary>
+		private int restingPage;
+
+		/// <summary>The bar a paged hotbar is showing right now: a held modifier's, else the resting page.</summary>
+		private int shownPage;
+
+		/// <summary>Whether the page keys were down last frame, for their press edges.</summary>
+		private bool pageUpHeld;
+		private bool pageDownHeld;
+
+		/// <summary>Set when the key bindings changed, so the key hints are redrawn on the next tick.</summary>
+		private bool labelsDirty;
 
 		/// <summary>
 		/// Set when something happened that could have invalidated a binding or an icon.
@@ -176,9 +221,12 @@ namespace FishMMO.Client
 			EnsureBindings();
 
 			/* On a re-run the elements in `slots` belong to the tree that was just replaced.
-			 * Dropping them first is what stops BuildSlots appending a second set of twelve. */
+			 * Dropping them first is what stops BuildBars appending a second set. */
 			slots.Clear();
+			rows.Clear();
 			list = null;
+			pager = null;
+			pageLabel = null;
 
 			VisualElement root = Root;
 			if (root != null)
@@ -186,7 +234,7 @@ namespace FishMMO.Client
 				list = root.Q(LIST_NAME);
 			}
 
-			BuildSlots(Constants.Configuration.MaximumPlayerHotkeys);
+			BuildBars(HotkeyBarLayout.BarCount);
 
 			ICooldownController.OnAddCooldown -= CooldownController_OnAddOrUpdateCooldown;
 			ICooldownController.OnAddCooldown += CooldownController_OnAddOrUpdateCooldown;
@@ -195,6 +243,21 @@ namespace FishMMO.Client
 			ICooldownController.OnRemoveCooldown -= CooldownController_OnRemoveCooldown;
 			ICooldownController.OnRemoveCooldown += CooldownController_OnRemoveCooldown;
 
+			/* Static events, so removed before they are added for the reason the cooldown ones are:
+			 * this hook re-runs whenever the tree is replaced. */
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
+			ClientHotbarSettings.OnChanged += ClientHotbarSettings_OnChanged;
+			PlayerInputController.OnBindingsChanged -= PlayerInputController_OnBindingsChanged;
+			PlayerInputController.OnBindingsChanged += PlayerInputController_OnBindingsChanged;
+
+			restingPage = ClientHotbarSettings.Page;
+			shownPage = restingPage;
+			ApplyLayout();
+
+			/* The hints are written as the slots are built, but the key bindings they read may not
+			 * exist yet at that moment, and the notice that they were loaded may have gone out before
+			 * this subscribed. One refresh on the first tick costs nothing and cannot be missed. */
+			labelsDirty = true;
 			bindingsDirty = true;
 		}
 
@@ -217,6 +280,8 @@ namespace FishMMO.Client
 			ICooldownController.OnAddCooldown -= CooldownController_OnAddOrUpdateCooldown;
 			ICooldownController.OnUpdateCooldown -= CooldownController_OnAddOrUpdateCooldown;
 			ICooldownController.OnRemoveCooldown -= CooldownController_OnRemoveCooldown;
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
+			PlayerInputController.OnBindingsChanged -= PlayerInputController_OnBindingsChanged;
 
 			UnsubscribeCharacterEvents();
 
@@ -330,9 +395,9 @@ namespace FishMMO.Client
 			{
 				ApplySlotSprite(slots[i], null, occupied: false);
 				ApplyCooldownFraction(slots[i], 0.0f);
-				slots[i].IsPressed = false;
 				slots[i].AwaitingRelease = false;
 			}
+			pressRouter.Reset();
 
 			anyCooldownActive = false;
 			bindingsDirty = false;
@@ -410,21 +475,186 @@ namespace FishMMO.Client
 		private void Ability_OnReset() => bindingsDirty = true;
 
 		/// <summary>
-		/// Builds the requested number of hotkey slots, capped to the configured maximum.
+		/// Builds one row of slots per bar, and the page controls when there is more than one bar.
 		/// </summary>
-		/// <param name="amount">The number of hotkey slots to create.</param>
-		private void BuildSlots(int amount)
+		/// <remarks>
+		/// Rows are added in bar order to a <c>column-reverse</c> list, so the first bar is the
+		/// bottom row and stays exactly where the single strip always was; the rows above it are the
+		/// ones the panels over the bar make room for (<see cref="UITKHudLayout"/>). Every slot goes
+		/// into <see cref="slots"/> at its flat index whatever row it is drawn in.
+		/// </remarks>
+		/// <param name="bars">
+		/// How many bars to build: the game's <see cref="HotkeyBarLayout.BarCount"/>, passed in so
+		/// the stacked geometry can be measured for several bars in a game that ships one.
+		/// </param>
+		private void BuildBars(int bars)
 		{
 			if (list == null)
 			{
 				return;
 			}
 
-			for (int i = 0; i < amount && i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
+			// The list is the UXML's own element, so on a re-run over the same tree it still holds
+			// the previous rows.
+			list.Clear();
+
+			int perBar = HotkeyBarLayout.SlotsPerBar;
+			for (int bar = 0; bar < bars; ++bar)
 			{
-				HotkeySlot slot = CreateSlot(i);
-				list.Add(slot.Root);
-				slots.Add(slot);
+				VisualElement row = new VisualElement();
+				row.AddToClassList(ROW_CLASS);
+				row.pickingMode = PickingMode.Ignore;
+
+				for (int position = 0; position < perBar; ++position)
+				{
+					HotkeySlot slot = CreateSlot(HotkeyBarLayout.SlotIndex(bar, position));
+					row.Add(slot.Root);
+					slots.Add(slot);
+				}
+
+				list.Add(row);
+				rows.Add(row);
+			}
+
+			if (bars > 1)
+			{
+				BuildPager();
+			}
+		}
+
+		/// <summary>
+		/// Builds the page up / page number / page down column that sits beside a paged bar.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Absolutely positioned against the list, so it takes no part in the strip's width and the
+		/// bar stays centred on the screen whether the pager is showing or not — the resource bars
+		/// under the HUD's centre line are placed against the same centre.
+		/// </para>
+		/// <para>
+		/// Paging is a PRESS, like binding, and the buttons wear the slot marker for the same reason
+		/// the slots do: a player carrying an ability to the second bar pages to it and puts it down,
+		/// so the press that turns the page must not be the press that cancels the carry
+		/// (<see cref="UITKControl.SLOT_MARKER_CLASS"/>).
+		/// </para>
+		/// </remarks>
+		private void BuildPager()
+		{
+			pager = new VisualElement();
+			pager.AddToClassList(PAGER_CLASS);
+			pager.pickingMode = PickingMode.Ignore;
+
+			VisualElement up = CreatePagerButton("▲", +1);
+			pageLabel = new Label();
+			pageLabel.AddToClassList(PAGER_LABEL_CLASS);
+			pageLabel.pickingMode = PickingMode.Ignore;
+			VisualElement down = CreatePagerButton("▼", -1);
+
+			pager.Add(up);
+			pager.Add(pageLabel);
+			pager.Add(down);
+			list.Add(pager);
+		}
+
+		/// <summary>Creates one page button that turns the page by <paramref name="delta"/> when pressed.</summary>
+		private VisualElement CreatePagerButton(string glyph, int delta)
+		{
+			Label button = new Label(glyph);
+			button.AddToClassList(PAGER_BUTTON_CLASS);
+			button.AddToClassList(SLOT_MARKER_CLASS);
+			button.RegisterCallback<PointerDownEvent>(evt =>
+			{
+				if (evt.button == 0)
+				{
+					TurnPage(delta);
+				}
+			});
+			return button;
+		}
+
+		/// <summary>
+		/// Shows the rows the layout calls for and the page controls a paged bar needs.
+		/// </summary>
+		/// <remarks>
+		/// Display, not visibility, for the rows a paged bar is not showing: a hidden row would still
+		/// take its height, and the point of paging is that the strip is one row tall. Nothing in a
+		/// hidden row is lost — the slots, their icons and their cooldowns are all still kept up to
+		/// date, so a page that comes back is already current.
+		/// </remarks>
+		private void ApplyLayout()
+		{
+			bool paged = IsPaged;
+
+			for (int bar = 0; bar < rows.Count; ++bar)
+			{
+				rows[bar].style.display = !paged || bar == shownPage ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+
+			if (pager != null)
+			{
+				pager.style.display = paged ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+			if (pageLabel != null)
+			{
+				pageLabel.text = (shownPage + 1).ToString();
+			}
+		}
+
+		/// <summary>True when the bars are shown one at a time.</summary>
+		private static bool IsPaged =>
+			HotkeyBarLayout.BarCount > 1 &&
+			ClientHotbarSettings.Layout == ClientHotbarSettings.HotbarLayout.Paged;
+
+		/// <summary>
+		/// Moves a paged bar's resting page, and shows it unless a held modifier is showing another.
+		/// </summary>
+		/// <param name="delta">+1 for the next bar up, -1 for the one below; wraps at either end.</param>
+		private void TurnPage(int delta)
+		{
+			if (!IsPaged)
+			{
+				return;
+			}
+
+			restingPage = HotkeyBarLayout.StepPage(restingPage, delta);
+			ClientHotbarSettings.SetPage(restingPage);
+			ShowPage(HotkeyBarLayout.ResolveShownPage(HotkeyKeyMap.FirstHeldModifierBar(), restingPage));
+		}
+
+		/// <summary>Shows one bar of a paged hotbar, if it is not the one already showing.</summary>
+		private void ShowPage(int page)
+		{
+			if (page == shownPage)
+			{
+				return;
+			}
+
+			shownPage = page;
+			ApplyLayout();
+		}
+
+		/// <summary>Re-lays the bar out when the player switches between stacked and paged.</summary>
+		private void ClientHotbarSettings_OnChanged()
+		{
+			shownPage = restingPage;
+			ApplyLayout();
+		}
+
+		/// <summary>Redraws the key hints on the next tick after a rebind.</summary>
+		private void PlayerInputController_OnBindingsChanged() => labelsDirty = true;
+
+		/// <summary>Rewrites every slot's key hint from the live bindings.</summary>
+		private void RefreshLabels()
+		{
+			labelsDirty = false;
+
+			for (int i = 0; i < slots.Count; ++i)
+			{
+				HotkeySlot slot = slots[i];
+				if (slot.Label != null)
+				{
+					slot.Label.text = HotkeyKeyMap.SlotLabel(HotkeyBarLayout.BarOf(slot.Index), HotkeyBarLayout.PositionOf(slot.Index));
+				}
 			}
 		}
 
@@ -453,11 +683,7 @@ namespace FishMMO.Client
 			cooldown.style.height = Length.Percent(0.0f);
 			slotRoot.Add(cooldown);
 
-			string keyMap = HotkeyKeyMap.Get(index)
-				.Replace("Hotkey ", string.Empty)
-				.Replace("Left Mouse", "LMB")
-				.Replace("Right Mouse", "RMB");
-			Label label = new Label(keyMap);
+			Label label = new Label(HotkeyKeyMap.SlotLabel(HotkeyBarLayout.BarOf(index), HotkeyBarLayout.PositionOf(index)));
 			label.AddToClassList(LABEL_CLASS);
 			slotRoot.Add(label);
 
@@ -543,6 +769,11 @@ namespace FishMMO.Client
 			if (bindingsDirty)
 			{
 				RefreshAllSlots();
+			}
+
+			if (labelsDirty)
+			{
+				RefreshLabels();
 			}
 
 			/* A lift whose drag was put down anywhere but on this bar — the root's cancel press,
@@ -662,6 +893,12 @@ namespace FishMMO.Client
 		/// the controller provides for exactly this and which the AI path already used — and the
 		/// release edge calls <c>Release()</c>.
 		/// </para>
+		/// <para>
+		/// Keys are sampled per POSITION, not per slot: one key drives the same position on every
+		/// bar, and the bar modifiers held at the press decide which bar it lands on
+		/// (<see cref="HotkeyBarLayout.ResolvePressBar"/>). <see cref="pressRouter"/> remembers that
+		/// bar until the key comes up, so the release always reaches the slot the press started.
+		/// </para>
 		/// </remarks>
 		private void UpdateInput()
 		{
@@ -670,31 +907,63 @@ namespace FishMMO.Client
 				return;
 			}
 
+			bool typing = UIManager.InputControlHasFocus();
 			bool inputBlocked = Character == null ||
 				PlayerInputController.MouseMode ||
-				UIManager.InputControlHasFocus();
+				typing;
 
-			for (int i = 0; i < slots.Count; ++i)
+			/* The modifiers and the page keys are read in mouse mode as well. A paged bar follows a
+			 * held modifier so the player can see the bar they are about to use — and that includes
+			 * the player who has an ability on the cursor and wants to put it on another bar. Only
+			 * typing silences them, for the reason it silences every other key: Ctrl held to copy
+			 * text in chat is not a request to look at the second bar. */
+			int heldModifierBar = typing ? -1 : HotkeyKeyMap.FirstHeldModifierBar();
+			bool paged = IsPaged;
+
+			if (paged)
 			{
-				HotkeySlot slot = slots[i];
-				bool pressed = !inputBlocked && IsHotkeyPressed(i);
-
-				if (pressed == slot.IsPressed)
+				bool up = !typing && HotkeyKeyMap.IsPageUpPressed();
+				bool down = !typing && HotkeyKeyMap.IsPageDownPressed();
+				if (up && !pageUpHeld)
 				{
-					continue;
+					TurnPage(+1);
 				}
+				if (down && !pageDownHeld)
+				{
+					TurnPage(-1);
+				}
+				pageUpHeld = up;
+				pageDownHeld = down;
 
-				slot.IsPressed = pressed;
+				ShowPage(HotkeyBarLayout.ResolveShownPage(heldModifierBar, restingPage));
+			}
 
-				if (pressed)
+			int targetBar = HotkeyBarLayout.ResolvePressBar(heldModifierBar, paged, restingPage);
+			int positions = HotkeyBarLayout.SlotsPerBar;
+
+			for (int position = 0; position < positions; ++position)
+			{
+				bool pressed = !inputBlocked && HotkeyKeyMap.IsPositionPressed(position);
+
+				pressRouter.Step(position, pressed, targetBar, out int pressedBar, out int releasedBar);
+
+				if (releasedBar >= 0 && TryGetSlot(releasedBar, position, out HotkeySlot released))
+				{
+					ReleaseSlot(released);
+				}
+				if (pressedBar >= 0 && TryGetSlot(pressedBar, position, out HotkeySlot slot))
 				{
 					ActivateSlot(slot);
 				}
-				else
-				{
-					ReleaseSlot(slot);
-				}
 			}
+		}
+
+		/// <summary>The slot drawn at a position on a bar, if the bar has been built.</summary>
+		private bool TryGetSlot(int bar, int position, out HotkeySlot slot)
+		{
+			int index = HotkeyBarLayout.SlotIndex(bar, position);
+			slot = index >= 0 && index < slots.Count ? slots[index] : null;
+			return slot != null;
 		}
 
 		/// <summary>
@@ -1209,49 +1478,6 @@ namespace FishMMO.Client
 				return cooldownController.ResolveAuthoritativeTick(localTick);
 			}
 			return localTick;
-		}
-
-		/// <summary>
-		/// Returns whether the hotkey at the given index is currently pressed via the Input System.
-		/// </summary>
-		/// <param name="hotkeyIndex">The hotkey index.</param>
-		/// <returns>True if the corresponding input is pressed.</returns>
-		private static bool IsHotkeyPressed(int hotkeyIndex)
-		{
-			if (PlayerInputController.Controls == null)
-			{
-				return false;
-			}
-
-			switch (hotkeyIndex)
-			{
-				case 0:
-					return Mouse.current != null && Mouse.current.leftButton.isPressed;
-				case 1:
-					return Mouse.current != null && Mouse.current.rightButton.isPressed;
-				case 2:
-					return PlayerInputController.Controls.Player.Hotkey1.IsPressed();
-				case 3:
-					return PlayerInputController.Controls.Player.Hotkey2.IsPressed();
-				case 4:
-					return PlayerInputController.Controls.Player.Hotkey3.IsPressed();
-				case 5:
-					return PlayerInputController.Controls.Player.Hotkey4.IsPressed();
-				case 6:
-					return PlayerInputController.Controls.Player.Hotkey5.IsPressed();
-				case 7:
-					return PlayerInputController.Controls.Player.Hotkey6.IsPressed();
-				case 8:
-					return PlayerInputController.Controls.Player.Hotkey7.IsPressed();
-				case 9:
-					return PlayerInputController.Controls.Player.Hotkey8.IsPressed();
-				case 10:
-					return PlayerInputController.Controls.Player.Hotkey9.IsPressed();
-				case 11:
-					return PlayerInputController.Controls.Player.Hotkey0.IsPressed();
-				default:
-					return false;
-			}
 		}
 	}
 }

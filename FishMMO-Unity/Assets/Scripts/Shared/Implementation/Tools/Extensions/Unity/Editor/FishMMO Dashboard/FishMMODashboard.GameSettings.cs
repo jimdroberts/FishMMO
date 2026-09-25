@@ -1294,6 +1294,8 @@ namespace FishMMO.Shared
 			AddConstantRow(configSection, "Server Bootstrap Scene Path", Constants.Configuration.ServerBootstrapScenePath);
 			AddConstantRow(configSection, "World Scene Path", Constants.Configuration.WorldScenePath);
 			AddConstantRow(configSection, "Local Scene Path", Constants.Configuration.LocalScenePath);
+			AddConstantRow(configSection, "Hotkey Bars", Constants.Configuration.HotkeyBarCount.ToString());
+			AddConstantRow(configSection, "Hotkey Slots Per Bar", Constants.Configuration.HotkeySlotsPerBar.ToString());
 			AddConstantRow(configSection, "Maximum Player Hotkeys", Constants.Configuration.MaximumPlayerHotkeys.ToString());
 			foldout.Add(configSection);
 

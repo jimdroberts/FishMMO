@@ -373,7 +373,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// paired with the claim held for each so the shutdown write can prove
 					// ownership. A server that lost a claim before shutting down must not use
 					// its final flush to overwrite the state of whichever server owns it now.
-					var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership, List<CharacterBuffData> Buffs, List<CharacterAttributeData> Attributes, List<CharacterAbilityData> Abilities)>();
+					Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem);
+					var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership, SubEntitySnapshot SubEntities, Func<Task> ItemFlush)>();
 					foreach (var character in data.CharactersByID.Values)
 					{
 						try
@@ -382,17 +383,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								? held
 								: (CharacterSessionInfo?)null;
 
-							// Buffs, attributes and abilities are snapshotted alongside the row
-							// because reading them requires the Unity main thread. Only the writes
-							// below are allowed to run off it.
-							var buffs = new List<CharacterBuffData>(8);
-							var attributes = new List<CharacterAttributeData>(16);
-							var abilities = new List<CharacterAbilityData>(8);
-							AppendBuffData(character, buffs);
-							AppendAttributeData(character, attributes);
-							AppendAbilityData(character, abilities);
+							/* Everything a logout would write, captured the way a logout captures it.
+							 *
+							 * The connection events were unsubscribed above, so this is the ONLY save a
+							 * connected character gets on a graceful shutdown — and it used to carry
+							 * its own hand-picked list of three tables: buffs, attributes, abilities.
+							 * Pets, achievements, waypoints, factions, archetypes and knowledge changed
+							 * since the last periodic save were lost on every restart, and so was the
+							 * item snapshot that backstops any incremental item write that had failed.
+							 * SubEntitySnapshot is the one list of sub-entity tables for exactly this
+							 * reason, so it is used here too; and the item flush is captured as
+							 * SaveAndDespawnCharacter captures it.
+							 *
+							 * The row first: the pet rows share the version BuildCharacterData stamps.
+							 * Only the writes below are allowed to run off the main thread. */
+							CharacterData row = BuildCharacterData(character);
+							var subEntities = new SubEntitySnapshot();
+							AppendSubEntities(character, subEntities);
+							Func<Task> itemFlush = inventorySystem?.CaptureDespawnFlush(character, ownership);
 
-							characterDataList.Add((BuildCharacterData(character), ownership, buffs, attributes, abilities));
+							characterDataList.Add((row, ownership, subEntities, itemFlush));
 						}
 						catch (Exception ex)
 						{
@@ -439,30 +449,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									}
 								}
 
-								/* Persist this character's buffs, attributes and abilities before
-								 * moving on to the next one. Interleaving rather than batching is
-								 * deliberate: when the shutdown deadline expires early, this leaves
-								 * whole characters saved instead of every character holding a row
-								 * with none of the state that row implies.
+								/* Persist this character's items and sub-entities before moving on to
+								 * the next one, in the order the logout path writes them. Interleaving
+								 * rather than batching is deliberate: when the shutdown deadline expires
+								 * early, this leaves whole characters saved instead of every character
+								 * holding a row with none of the state that row implies.
 								 *
 								 * Skipped once the claim is gone. The row write was refused for
-								 * exactly that reason, and these tables carry no ownership check of
-								 * their own — writing them anyway would overwrite the state of
-								 * whichever server owns the character now. */
+								 * exactly that reason, and the sub-entity tables carry no ownership
+								 * check of their own — writing them anyway would overwrite the state of
+								 * whichever server owns the character now. (The item flush does check,
+								 * and would be refused; it is skipped for the same reason.) */
 								if (!ownershipLost)
 								{
-									if (entry.Buffs.Count > 0)
+									if (entry.ItemFlush != null)
 									{
-										await SaveBuffsAsync(entry.Buffs);
+										await entry.ItemFlush();
 									}
-									if (entry.Attributes.Count > 0)
-									{
-										await SaveAttributesAsync(entry.Attributes);
-									}
-									if (entry.Abilities.Count > 0)
-									{
-										await SaveAbilitiesAsync(entry.Abilities);
-									}
+									await SaveSubEntitiesSequentiallyAsync(entry.SubEntities, entry.Data.ID);
 								}
 							}
 							catch (Exception ex)
@@ -479,13 +483,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							cancellationToken.ThrowIfCancellationRequested();
 							try
 							{
-								if (kvp.Value.CharacterData.HasValue)
+								/* The same steps, in the same order, as RunPendingFlushAsync: the row
+								 * through the ownership-gated save while a claim is still held, then the
+								 * despawn item flush, then the release. This used to write the row through
+								 * the ungated PersistAsync whatever claim it held, discard the result, and
+								 * never run the item flush at all — so a flush the pool had dropped was
+								 * dropped a second time here, and its claim handed back without it. */
+								PendingCharacterFlush pending = kvp.Value;
+								if (pending.CharacterData.HasValue)
 								{
-									await characterService.PersistAsync(kvp.Value.CharacterData.Value, cancellationToken);
+									await SaveCharacterAsync(pending.CharacterData.Value, pending.Session);
 								}
-								if (kvp.Value.Session.HasValue)
+								if (pending.ItemFlush != null)
 								{
-									await ReleaseCharacterSessionAsync(kvp.Key, kvp.Value.Session.Value.ServerID, kvp.Value.Session.Value.Token);
+									await pending.ItemFlush();
+								}
+								if (pending.Session.HasValue)
+								{
+									await ReleaseCharacterSessionAsync(kvp.Key, pending.Session.Value.ServerID, pending.Session.Value.Token);
 								}
 							}
 							catch (Exception ex)

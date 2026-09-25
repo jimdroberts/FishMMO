@@ -99,14 +99,15 @@ namespace FishMMO.ControlPanel.Controllers
 				log.LogWarning("Edit of character {Id} by '{Actor}' failed: [{Code}] {Message}",
 					id, User.Identity?.Name, result.ErrorCode, result.ErrorMessage);
 
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				audit.Details = new { result.ErrorCode };
 
 				if (string.Equals(result.ErrorCode, FishMMO.Database.DatabaseErrorCodes.StaleState, StringComparison.OrdinalIgnoreCase))
 				{
 					return Conflict(new { error = result.ErrorMessage });
 				}
-				return BadRequest(new { error = result.ErrorMessage ?? "That character could not be edited." });
+				// Already logged above, with the character and the actor.
+				return DatabaseReplies.Failure(this, result, null, "That character could not be edited.");
 			}
 
 			audit.Details = new { edit.X, edit.Y, edit.Z, edit.SceneName, edit.BindScene, edit.AccessLevel };
@@ -126,7 +127,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await characters.FetchAdminAsync(id, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return NotFound(new { error = "No such character." });
+				return DatabaseReplies.Failure(this, result, log, "That character could not be read.", notFound: "No such character.");
 			}
 
 			var state = CharacterEditLock.For(result.Data);
@@ -167,14 +168,15 @@ namespace FishMMO.ControlPanel.Controllers
 				log.LogWarning("Restore of character {Id} by '{Actor}' failed: [{Code}] {Message}",
 					id, User.Identity?.Name, result.ErrorCode, result.ErrorMessage);
 
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				audit.Details = new { result.ErrorCode };
 
 				if (IsUniqueViolation(result.ErrorCode))
 				{
 					return Conflict(new { error = "That character's name has been taken since it was deleted." });
 				}
-				return BadRequest(new { error = result.ErrorMessage ?? "That character could not be restored." });
+				// Already logged above, with the character and the actor.
+				return DatabaseReplies.Failure(this, result, null, "That character could not be restored.");
 			}
 
 			log.LogInformation("Character {Id} restored by '{Actor}'. Reason: {Reason}",
@@ -205,7 +207,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var current = await characters.FetchAdminAsync(id, HttpContext.RequestAborted);
 			if (!current.IsSuccess)
 			{
-				return NotFound(new { error = "No such character." });
+				audit.Outcome = DatabaseReplies.IsNotFound(current.ErrorCode) ? "Refused: no such character." : DatabaseReplies.Outcome(current);
+				return DatabaseReplies.Failure(this, current, log, "That character could not be read.", notFound: "No such character.");
 			}
 
 			/* Recorded under the OLD name. The question asked later is "what happened to the
@@ -227,14 +230,15 @@ namespace FishMMO.ControlPanel.Controllers
 				log.LogWarning("Rename of character {Id} by '{Actor}' failed: [{Code}] {Message}",
 					id, User.Identity?.Name, result.ErrorCode, result.ErrorMessage);
 
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				audit.Details = new { newName = request.NewName, result.ErrorCode };
 
 				if (IsUniqueViolation(result.ErrorCode))
 				{
 					return Conflict(new { error = "That name is already taken." });
 				}
-				return BadRequest(new { error = result.ErrorMessage ?? "That character could not be renamed." });
+				// Already logged above, with the character and the actor.
+				return DatabaseReplies.Failure(this, result, null, "That character could not be renamed.");
 			}
 
 			audit.Details = new { from = oldName, to = request.NewName.Trim() };

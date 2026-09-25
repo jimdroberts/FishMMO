@@ -202,7 +202,12 @@ export async function render(host, ctx) {
 			resultHost.innerHTML = '';
 			try {
 				const result = await api.changeMyEmail(email);
-				resultHost.innerHTML = ui.banner('ok', result.message ?? 'Email changed.');
+				/* The address changes even when no code could be sent; the server says which, and a
+				 * player with no code on its way is sent to Resend rather than left waiting. The reload
+				 * below redraws this card, so the partial case is a lasting toast as well. */
+				const sent = result.verificationSent !== false;
+				resultHost.innerHTML = ui.banner(sent ? 'ok' : 'warn', result.message ?? 'Email changed.');
+				if (!sent) ui.toast('No verification code sent', result.message ?? '', 'warn', 12000);
 				await reload();
 			} catch (err) {
 				resultHost.innerHTML = ui.banner('danger', err.message || 'That email could not be saved.');
@@ -339,7 +344,10 @@ export async function render(host, ctx) {
 
 				e.target.reset();
 				buttons.forEach((el) => (el.disabled = false));
-				resultHost.innerHTML = ui.banner('ok', result.message ?? 'Password changed.',
+				/* The server says when a sign-out did not land; that is the part of a password change
+				 * somebody worried about their account acts on, so it is shown as a warning. */
+				const partial = result.everythingSignedOut === false;
+				resultHost.innerHTML = ui.banner(partial ? 'warn' : 'ok', result.message ?? 'Password changed.',
 					result.revokedSessions ? `${result.revokedSessions} other session(s) signed out.` : '');
 
 				if (result.signedOut) {
@@ -375,9 +383,12 @@ export async function render(host, ctx) {
 	 * only after a code from the new authenticator verifies.
 	 */
 	async function runEnrolment(title) {
+		/* Re-enrolling an account that already has two-factor replaces the live authenticator at
+		 * once, so the server asks for a fresh step-up first (428); a first enrolment never does. */
+		const replacing = Boolean(account.totpEnabled);
 		let setup;
 		try {
-			setup = await api.beginTwoFactorSetup();
+			setup = await ctx.withStepUp(() => api.beginTwoFactorSetup());
 		} catch (err) {
 			ui.toast('Could not start enrolment', err.message || '', 'danger');
 			return;
@@ -428,9 +439,17 @@ export async function render(host, ctx) {
 		if (done) {
 			ui.toast('Two-factor enabled', '', 'ok');
 			await reload();
+		} else if (replacing) {
+			/* Re-enrolment wrote the new secret and codes when it started, and two-factor was on
+			 * throughout, so the authenticator shown above is already the only one that works.
+			 * Saying "unchanged" here would send the player back to an authenticator that no
+			 * longer signs them in. */
+			ui.toast('Your authenticator was already replaced',
+				'Only the new authenticator and the new recovery codes shown work now. Re-enrol again if you did not save them.', 'warn', 12000);
+			await reload();
 		} else {
-			// Abandoning after the secret was stored leaves the account with a secret it has
-			// not confirmed. That is harmless — two-factor is still off — but say so.
+			// Abandoning a FIRST enrolment after the secret was stored leaves the account with a
+			// secret it has not confirmed. That is harmless — two-factor is still off — but say so.
 			ui.toast('Enrolment not completed', 'Two-factor is unchanged.', 'warn');
 		}
 	}

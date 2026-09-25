@@ -157,6 +157,9 @@ namespace FishMMO.Client
 		/// <summary>The container element that holds the buff/debuff icons.</summary>
 		private VisualElement list;
 
+		/// <summary>The strip element the stylesheet anchors to the bottom (<c>buff-root</c>).</summary>
+		private VisualElement stripRoot;
+
 		/// <summary>
 		/// Queries the list container and subscribes to buff lifecycle events.
 		/// </summary>
@@ -174,7 +177,13 @@ namespace FishMMO.Client
 			if (root != null)
 			{
 				list = root.Q(LIST_NAME);
+				stripRoot = root.Q("buff-root");
 			}
+
+			// Above the hotbar's extra stacked rows, if it has any; see UITKHudLayout.
+			UITKHudLayout.ApplyStackInset(stripRoot);
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
+			ClientHotbarSettings.OnChanged += ClientHotbarSettings_OnChanged;
 
 			IBuffController.OnBuffTick -= BuffController_OnBuffTick;
 			IBuffController.OnBuffTick += BuffController_OnBuffTick;
@@ -210,11 +219,15 @@ namespace FishMMO.Client
 			UnsubscribeAddRemove();
 
 			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
 
 			ClearAll();
 
 			base.OnDestroying();
 		}
+
+		/// <summary>Moves the strip with the hotbar's stacked rows when the player changes its layout.</summary>
+		private void ClientHotbarSettings_OnChanged() => UITKHudLayout.ApplyStackInset(stripRoot);
 
 		/// <summary>
 		/// Seeds the strip from the character's current buffs when a character is applied.

@@ -165,6 +165,10 @@ namespace FishMMO.ControlPanel.Controllers
 			}
 
 			var check = await twoFactor.VerifyForSignInAsync(username, request.Code, authenticatorOnly: false, HttpContext.RequestAborted);
+			if (check.Verdict == TwoFactorService.Verdict.Unavailable)
+			{
+				return Unavailable();
+			}
 			if (check.Verdict == TwoFactorService.Verdict.Locked)
 			{
 				return StatusCode(LockedStatus, LockedBody(check.LockedUntilUtc));
@@ -192,6 +196,10 @@ namespace FishMMO.ControlPanel.Controllers
 			}
 
 			var check = await twoFactor.VerifyForSignInAsync(username, request.Code, authenticatorOnly: false, HttpContext.RequestAborted);
+			if (check.Verdict == TwoFactorService.Verdict.Unavailable)
+			{
+				return Unavailable();
+			}
 			if (check.Verdict == TwoFactorService.Verdict.Locked)
 			{
 				return StatusCode(LockedStatus, LockedBody(check.LockedUntilUtc));
@@ -221,7 +229,13 @@ namespace FishMMO.ControlPanel.Controllers
 		public async Task<IActionResult> GetTwoFactorReset()
 		{
 			string username = User.Identity?.Name;
-			var pending = await reset.PendingAsync(username, HttpContext.RequestAborted);
+			var (read, pending) = await reset.PendingAsync(username, HttpContext.RequestAborted);
+			if (!read)
+			{
+				/* Not "no reset pending": a player told their request has gone may ask again, or give up
+				 * on one that is still counting down. */
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Your reset could not be checked right now. Try again shortly." });
+			}
 			return Ok(TwoFactorResetFlow.Describe(pending, resetOptions));
 		}
 
@@ -304,6 +318,8 @@ namespace FishMMO.ControlPanel.Controllers
 				recoveryCodes = outcome.RecoveryCodes,
 				// When true the browser must sign in again (with the password) and confirm from there.
 				signedOut = !reissued.Ok,
+				// False when some other browser or game client may still be signed in; see TwoFactorResetFlow.
+				otherSessionsSignedOut = outcome.SignedOutElsewhere,
 			});
 		}
 
@@ -330,6 +346,10 @@ namespace FishMMO.ControlPanel.Controllers
 			}
 
 			var check = await twoFactor.VerifyForSignInAsync(username, request.Code, authenticatorOnly: true, HttpContext.RequestAborted);
+			if (check.Verdict == TwoFactorService.Verdict.Unavailable)
+			{
+				return Unavailable();
+			}
 			if (check.Verdict == TwoFactorService.Verdict.Locked)
 			{
 				return StatusCode(LockedStatus, LockedBody(check.LockedUntilUtc));
@@ -349,6 +369,13 @@ namespace FishMMO.ControlPanel.Controllers
 		{
 			if (User.Identity?.IsAuthenticated != true)
 			{
+				/* "Not signed in" and "could not tell" are different answers. The handler keeps the
+				 * cookie when the database fails; answering null here would show the sign-in screen
+				 * to somebody whose session is fine and merely could not be read. */
+				if (HttpContext.Items.ContainsKey(PanelAuthenticationHandler.UnavailableKey))
+				{
+					return Unavailable();
+				}
 				return Ok((object)null);
 			}
 
@@ -369,16 +396,36 @@ namespace FishMMO.ControlPanel.Controllers
 		}
 
 		/// <summary>Ends this session.</summary>
+		/// <remarks>
+		/// The cookie is deleted whatever happens, but "signed out" is only answered once the session
+		/// row is revoked. Deleting the cookie ends this browser's copy; the row is what ends every
+		/// other copy of it, and a logout that reported success while the row lived on left a copied
+		/// cookie working until the idle timeout.
+		/// </remarks>
 		[HttpPost("logout")]
 		[AllowAnonymous]
 		public async Task<IActionResult> Logout()
 		{
+			/* From the cookie when there is no authenticated session to read it from — which is also the
+			 * case when the database could not authenticate this request. Revoking by the cookie's own
+			 * hash can only ever end the session the caller already holds. */
 			string hash = User.FindFirstValue(PanelClaims.SessionHash);
-			if (hash != null)
+			if (hash == null &&
+				Request.Cookies.TryGetValue(PanelSessionManager.CookieName, out string cookie) &&
+				!string.IsNullOrWhiteSpace(cookie))
 			{
-				await sessions.RevokeAsync(hash, HttpContext.RequestAborted);
+				hash = PanelSessionManager.Hash(cookie);
 			}
+			bool revoked = hash == null || await sessions.RevokeAsync(hash, HttpContext.RequestAborted);
 			Response.Cookies.Delete(PanelSessionManager.CookieName);
+			if (!revoked)
+			{
+				log.LogError("Sign-out for '{User}' could not revoke the session on the server.", User.Identity?.Name);
+				return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+				{
+					error = "This browser is signed out, but the session could not be ended on the server. It ends by itself after a short idle period; sign in and out again to end it now.",
+				});
+			}
 			return Ok(new { ok = true });
 		}
 
@@ -421,6 +468,10 @@ namespace FishMMO.ControlPanel.Controllers
 		};
 
 		private bool IsTwoFactorSatisfied() => User.FindFirstValue(PanelClaims.TwoFactorSatisfied) == "true";
+
+		/// <summary>The answer when the database could not decide: never "invalid", never "locked".</summary>
+		private IActionResult Unavailable() =>
+			StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Try again shortly." });
 
 		private byte GetAccessLevel()
 		{

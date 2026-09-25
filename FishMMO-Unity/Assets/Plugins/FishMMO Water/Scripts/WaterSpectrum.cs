@@ -196,10 +196,11 @@ namespace FishMMO.Water
 			float t = (float)seconds;
 			for (int i = 0; i < count; i++)
 			{
-				float phase = omega[i] * t;
+				// Backward, as TimeSpectrum runs it: the sign that sends the waves downwind.
+				float phase = -omega[i] * t;
 				float cos = Mathf.Cos(phase);
 				float sin = Mathf.Sin(phase);
-				// h = h0·e^{iωt} + conj(h0 mirrored)·e^{-iωt}, exactly as TimeSpectrum forms it.
+				// h = h0·e^{-iωt} + conj(h0 mirrored)·e^{+iωt}, exactly as TimeSpectrum forms it.
 				hr[i] = ax[i] * cos - ay[i] * sin + bx[i] * cos - by[i] * sin;
 				hi[i] = ax[i] * sin + ay[i] * cos - bx[i] * sin - by[i] * cos;
 			}

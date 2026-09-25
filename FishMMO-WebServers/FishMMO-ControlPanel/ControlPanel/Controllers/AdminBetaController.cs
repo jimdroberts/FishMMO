@@ -151,8 +151,8 @@ namespace FishMMO.ControlPanel.Controllers
 				User.Identity?.Name, note, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "Those codes could not be minted." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "Those codes could not be minted.");
 			}
 
 			log.LogWarning("'{Actor}' minted {Count} beta code(s) for program '{Program}' ({MaxUses} use(s) each). Reason: {Reason}",
@@ -180,12 +180,12 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await betaCodes.RevokeAsync(id, User.Identity?.Name, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				if (result.ErrorCode == DatabaseErrorCodes.NotFound)
 				{
 					return NotFound(new { error = "There is no such beta code." });
 				}
-				return BadRequest(new { error = result.ErrorMessage ?? "That code could not be revoked." });
+				return DatabaseReplies.Failure(this, result, log, "That code could not be revoked.");
 			}
 
 			log.LogWarning("'{Actor}' revoked beta code {Id}. Reason: {Reason}", User.Identity?.Name, id, request.Reason);

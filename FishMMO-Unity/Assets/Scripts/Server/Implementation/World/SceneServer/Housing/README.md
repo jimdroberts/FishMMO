@@ -79,17 +79,21 @@ against a specific failure. They are not interchangeable.
 - **Claim the plot, then take the money.** The plot is the contended thing — two players on two
   scene servers can want it in the same second — so the atomic step goes first and the common
   failure, losing the race, costs the loser nothing and needs no refund. Charging first would run a
-  refund every time two people wanted the same land.
-- **Charge the vault fee, then remove the row.** The opposite, and for the same underlying reason: a
-  vault row is contended by nobody but its owner, so the only race is a double click, and the
-  removal settles it. The failure this admits — being charged for a row already gone — is refunded;
-  the other order loses the furniture for free, which cannot be undone.
+  refund every time two people wanted the same land. The claim clears the last owner's guest list
+  and anything left standing **in the same transaction** that takes the plot: as separate writes
+  after it, a failure left the claim standing with the old keys under it.
+- **Charge the vault fee, then remove the row, then hand over** — once retrieval opens. A vault row
+  is contended by nobody but its owner, so the only race is a double click, and the removal settles
+  it; a fee taken for a row already gone is refunded. Retrieval is refused for now, because there is
+  nowhere yet to hand a stored structure to — it used to charge and delete the row and give nothing.
 - **Win the right to bill, then collect.** Advancing the due date is pinned to the date the sweep
   read, so a period produces one charge however many servers sweep it. No leader, and it survives
-  any of them dying.
-- **Release the land, then vault its contents.** Released-then-vaulted leaves a moment where free
-  land still has a house on it, which the next owner can see and report. The reverse leaves a moment
-  where somebody still owns a plot whose house has silently vanished.
+  any of them dying. Any earlier missed-payment mark comes off in the **same commit** as the payment
+  (offline) or the period win (online, put back with its original date if they then cannot pay) —
+  never in a write after it, because the sweep reclaims on that mark alone.
+- **Release the land and vault its contents in one transaction**, with the guest list. Released
+  first and vaulted by a later write, a failed vault left a house on claimable land, and the claim
+  cleared it — demolished, with nothing in the vault.
 
 ## Tuning (the `HousingSystem` asset)
 
@@ -137,9 +141,10 @@ redecorate is not a superset of trusting them to bring other people round. Nobod
 permission they do not hold themselves (`PlotAccess.ClampGrant`); without that the model collapses
 to its weakest link, since whoever can invite could invite themselves into everything.
 
-Grants are only honoured on an **occupied** plot. Rows outlive the ownership that created them, and
-clearing them is a write that can fail — so ignoring them outside the one state where they apply
-makes that cleanup a tidiness matter rather than a security one.
+Grants are only honoured on an **occupied** plot, and a grant is honoured whoever issued it. Rows
+outlive the ownership that created them, so a change of hands clears them inside the transaction
+that makes it — a claim, or a reclamation — rather than trusting a later write: a stale list on a new
+owner's plot would open their house to the last owner's friends the moment it was finished.
 
 **Eviction is half of the system.** An access rule enforced at the doorway is a rule a player
 defeats by not walking through it: standing still while a friend revokes their key, or logging out
@@ -150,9 +155,10 @@ from under people, and on a sweep, so "may I be here" is the same question as "m
 
 Reclaiming a plot destroys something a player built and paid for. Doing that with no way back would
 make one missed payment the most punishing event in the game, and would make going on holiday a
-risk. What stood on the plot is moved to the owner's vault instead, where they may buy it back —
-`baseFee * (1 + daysStored * rate)`, which is both an incentive to collect promptly and a gold sink
-— or give it up.
+risk. What stood on the plot is moved to the owner's vault instead, where they will be able to buy it
+back — `baseFee * (1 + daysStored * rate)`, which is both an incentive to collect promptly and a gold
+sink — or give it up. The fee is quoted and forfeiting works; buying back waits on a destination for
+a stored structure (see below).
 
 The fee's base and rate are frozen onto each row rather than read from configuration, so rebalancing
 what a structure costs cannot change what a player owes on something already in their vault.
@@ -163,7 +169,9 @@ Channels are ephemeral copies of a scene and hold no world state of their own. R
 stamps ownership and state onto its foundations, which is correct at that moment and wrong the
 instant anybody claims, releases or loses a plot from anywhere else. `plot_updates` closes that gap:
 every write marks its plot changed and `HousingSystem.Sync` polls for the marks — the same shape
-guilds use, for the same reason.
+guilds use, for the same reason. The mark is the *only* way another channel hears of a change, so a
+mark that fails is logged as an error, and each world's poll window moves on only once a poll has
+read and applied everything it found.
 
 Anything applied locally is applied to **every** loaded copy of the plot (`Registry.ForPlot`), or the
 same house would be open in one channel and shut in the next.
@@ -175,6 +183,9 @@ same house would be open in one channel and shut in the next.
 - **Structures are not spawned.** Placements are validated, persisted and read back, but no prefab
   is instantiated from `PlotStructureTemplate.Prefab` — a plot's contents exist in the database and
   in the server's placement cache, not yet in the world.
+- **Vault retrieval.** A vault row is a structure template and a count, and structures are neither
+  items nor carried, so there is nowhere to hand one back to. `RetrieveFromVault` answers `Failed`
+  without charging until there is.
 - **Guild land is deferred, not taxed**, and has no vault. Both wait on a guild treasury.
 - **No voluntary release.** `IPlotService.ReleaseAsync` supports it; nothing calls it except the
   failed-purchase and reclamation paths.

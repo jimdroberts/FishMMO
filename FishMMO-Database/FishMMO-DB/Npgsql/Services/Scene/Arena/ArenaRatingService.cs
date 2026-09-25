@@ -176,31 +176,6 @@ namespace FishMMO.Database.Npgsql.Services
 			return result;
 		}
 
-		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<ArenaRatingData>>> FetchTopAsync(long seasonId, int limit, CancellationToken cancellationToken = default)
-		{
-			if (seasonId <= 0)
-			{
-				return DatabaseResult<IReadOnlyList<ArenaRatingData>>.Failure(DatabaseErrorCodes.ValidationError, "Season ID must be greater than zero.");
-			}
-
-			limit = Math.Clamp(limit, 1, 200);
-
-			var result = await ExecuteReadAsync<IReadOnlyList<ArenaRatingData>>(async dbContext =>
-			{
-				// Games > 0 keeps a freshly-inserted default row out of the board; ties break by fewer games.
-				var rows = await dbContext.ArenaRatings
-					.FromSqlRaw($@"SELECT * FROM {TableName} WHERE season_id = {{0}} AND games > 0 ORDER BY rating DESC, games ASC, id ASC LIMIT {{1}}", seasonId, limit)
-					.AsNoTracking()
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				return rows.Select(MapRating).ToList();
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result;
-		}
-
 		private static long[] Distinct(IReadOnlyList<long> ids)
 		{
 			if (ids == null || ids.Count == 0)

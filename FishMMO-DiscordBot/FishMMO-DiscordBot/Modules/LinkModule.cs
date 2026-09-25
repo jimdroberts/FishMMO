@@ -51,6 +51,9 @@ namespace FishMMO.DiscordBot.Modules
 			var existing = await accountLinkingService.GetLinkedAccountAsync(Context.User.Id);
 			if (!existing.IsSuccess)
 			{
+				logger.LogError(
+					"Could not read the account link for Discord user {UserId} ({ErrorCode}: {ErrorMessage}).",
+					Context.User.Id, existing.ErrorCode, existing.ErrorMessage);
 				await ReplyAsync("An error occurred while checking your linked account. Please try again later.");
 				return;
 			}

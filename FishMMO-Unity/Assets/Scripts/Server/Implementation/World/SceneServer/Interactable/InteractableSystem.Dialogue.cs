@@ -101,6 +101,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private readonly HashSet<long> dialogueChoicesLoaded = new HashSet<long>();
 
 		/// <summary>
+		/// Choice bits whose merge into <c>character_dialogue_choices</c> has not been confirmed,
+		/// keyed by character ID → template ID → bitmask. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// The write-through cache is only as good as its write. A merge that failed used to be
+		/// logged and forgotten, and the cache was dropped on disconnect on the understanding that
+		/// every bit in it was already stored — so the next login read a mask without the bit and
+		/// the one-time reward was offered again. A bit now stays here until a merge that carried it
+		/// succeeds: every later merge for the character carries it, the disconnect retries it, and
+		/// a reload ORs it back into the cache. The merge is an OR, so carrying a bit twice costs
+		/// nothing. Entries only exist while the database is refusing writes.
+		/// </remarks>
+		private readonly Dictionary<long, Dictionary<int, short>> unconfirmedDialogueChoices = new Dictionary<long, Dictionary<int, short>>();
+
+		/// <summary>
 		/// Characters whose dialogue choice fetch is currently in flight, and the unscaled time it
 		/// started at.
 		/// </summary>
@@ -139,9 +154,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		/// <param name="characterID">The character that disconnected.</param>
 		/// <remarks>
-		/// Both the session and the cached masks go. Every bit in the cache has already been
-		/// merged into <c>character_dialogue_choices</c>, so nothing is lost by dropping it, and
-		/// holding it past the disconnect buys only a table that fills up with players who left.
+		/// Both the session and the cached masks go. Every bit in the cache has either been merged
+		/// into <c>character_dialogue_choices</c> or is still held in
+		/// <see cref="unconfirmedDialogueChoices"/>, which outlives the disconnect and is retried
+		/// here — so nothing is lost by dropping the cache, and holding it past the disconnect buys
+		/// only a table that fills up with players who left.
 		/// </remarks>
 		internal void ReleaseDialogueCharacter(long characterID)
 		{
@@ -154,6 +171,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * let a reconnect start a second fetch whose result lands in the same dictionary as
 			 * the first. The continuation checks the connected set and discards a result for a
 			 * character that has gone. */
+
+			// The last chance this server has to record them while the character is still ours.
+			if (unconfirmedDialogueChoices.ContainsKey(characterID))
+			{
+				EnqueueDialogueChoiceMerge(characterID);
+			}
 		}
 
 		/// <summary>
@@ -285,6 +308,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				 * drop it, and the merge on the database side would then never see it again. */
 				templateChoices.TryGetValue(row.TemplateID, out short existing);
 				templateChoices[row.TemplateID] = (short)((ushort)existing | (ushort)row.Choices);
+			}
+
+			/* Bits taken here whose merge never landed — a failure in an earlier session on this
+			 * server — are not in the fetched rows. They are spent all the same, so they go back
+			 * into the cache, and the merge is tried again now the character is back. */
+			if (unconfirmedDialogueChoices.TryGetValue(characterID, out Dictionary<int, short> unconfirmed))
+			{
+				foreach (KeyValuePair<int, short> kvp in unconfirmed)
+				{
+					templateChoices.TryGetValue(kvp.Key, out short existing);
+					templateChoices[kvp.Key] = (short)((ushort)existing | (ushort)kvp.Value);
+				}
+				EnqueueDialogueChoiceMerge(characterID);
 			}
 
 			dialogueChoicesLoaded.Add(characterID);
@@ -772,10 +808,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="choices">The updated choice bitmask.</param>
 		/// <remarks>
 		/// Write-through: the cache is updated and the mask merged into
-		/// <c>character_dialogue_choices</c> in the same call, so there is no window in which the
-		/// server believes a one-time choice is spent but the database does not. The database write
-		/// is enqueued even when the in-memory cache refuses the entry at capacity — the cache is
-		/// an optimisation, the row is the fact.
+		/// <c>character_dialogue_choices</c> in the same call, and a merge that fails is held in
+		/// <see cref="unconfirmedDialogueChoices"/> and carried by the next one, so the server
+		/// never forgets a spent choice the database has not yet recorded. The database write is
+		/// enqueued even when the in-memory cache refuses the entry at capacity — the cache is an
+		/// optimisation, the row is the fact.
 		/// </remarks>
 		private void SetCachedChoices(long characterId, int templateId, short choices)
 		{
@@ -845,7 +882,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// in-memory state has already been committed and the choice's reward is about to be
 		/// granted, so a silently dropped write is the repeat-reward exploit reopening. The write
 		/// itself is an OR-merge and therefore idempotent, which is what makes the queue's
-		/// direct-thread-pool fallback safe to use here.
+		/// direct-thread-pool fallback safe to use here — and what lets a merge that failed be
+		/// carried again by the next one, see <see cref="unconfirmedDialogueChoices"/>.
 		/// </remarks>
 		private void PersistCachedChoices(long characterId, int templateId, short choices)
 		{
@@ -854,33 +892,103 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (Server?.Database?.ServiceRegistry == null ||
-				!Server.Database.ServiceRegistry.TryGet<ICharacterDialogueChoiceService>(out var service))
+			// Held until a merge carrying it is confirmed, whatever happens to the write below.
+			if (!unconfirmedDialogueChoices.TryGetValue(characterId, out Dictionary<int, short> unconfirmed))
 			{
-				Log.Warning("InteractableSystem", $"PersistCachedChoices: ICharacterDialogueChoiceService unavailable; dialogue choices for CharID={characterId} were not persisted.");
-				return;
+				unconfirmed = new Dictionary<int, short>();
+				unconfirmedDialogueChoices[characterId] = unconfirmed;
 			}
+			unconfirmed.TryGetValue(templateId, out short pending);
+			unconfirmed[templateId] = (short)((ushort)pending | (ushort)choices);
 
-			CharacterDialogueChoiceData dto = new CharacterDialogueChoiceData(characterId, templateId, choices);
-			EnqueuePersistence(() => PersistCachedChoicesAsync(service, dto), characterId);
+			EnqueueDialogueChoiceMerge(characterId);
 		}
 
 		/// <summary>
-		/// Asynchronously merges one dialogue choice bitmask into the database.
+		/// Merges every unconfirmed choice mask a character has into the database. Main thread only.
 		/// </summary>
-		private async Task PersistCachedChoicesAsync(ICharacterDialogueChoiceService service, CharacterDialogueChoiceData dto)
+		private void EnqueueDialogueChoiceMerge(long characterId)
 		{
+			if (!unconfirmedDialogueChoices.TryGetValue(characterId, out Dictionary<int, short> unconfirmed) ||
+				unconfirmed.Count == 0)
+			{
+				return;
+			}
+
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ICharacterDialogueChoiceService>(out var service))
+			{
+				Log.Warning("InteractableSystem", $"PersistCachedChoices: ICharacterDialogueChoiceService unavailable; dialogue choices for CharID={characterId} were not persisted yet.");
+				return;
+			}
+
+			// A snapshot: bits added after this point are not confirmed by this merge.
+			var dtos = new List<CharacterDialogueChoiceData>(unconfirmed.Count);
+			foreach (KeyValuePair<int, short> kvp in unconfirmed)
+			{
+				dtos.Add(new CharacterDialogueChoiceData(characterId, kvp.Key, kvp.Value));
+			}
+			EnqueuePersistence(() => PersistCachedChoicesAsync(service, dtos), characterId);
+		}
+
+		/// <summary>
+		/// Asynchronously merges a character's dialogue choice bitmasks into the database.
+		/// </summary>
+		private async Task PersistCachedChoicesAsync(ICharacterDialogueChoiceService service, List<CharacterDialogueChoiceData> dtos)
+		{
+			long characterId = dtos[0].CharacterID;
 			try
 			{
-				DatabaseResult result = await service.MergeAsync(new[] { dto });
+				DatabaseResult result = await service.MergeAsync(dtos);
 				if (!result.IsSuccess)
 				{
-					await Log.Warning("InteractableSystem", $"PersistCachedChoicesAsync DB error (CharID={dto.CharacterID}, TemplateID={dto.TemplateID}): {result.ErrorCode} - {result.ErrorMessage}");
+					await Log.Warning("InteractableSystem", $"PersistCachedChoicesAsync DB error (CharID={characterId}, {dtos.Count} templates); held for the next merge: [{result.ErrorCode}] {result.ErrorMessage}");
+					return;
+				}
+
+				if (!TryEnqueueMainThread(() => ConfirmDialogueChoices(dtos)))
+				{
+					// Unconfirmed is the safe direction: the bits are merged again next time, which the OR makes harmless.
+					await Log.Warning("InteractableSystem", $"PersistCachedChoicesAsync: main-thread queue rejected the confirmation for CharID={characterId}; the masks will be merged again.");
 				}
 			}
 			catch (System.Exception ex)
 			{
-				await Log.Error("InteractableSystem", $"PersistCachedChoicesAsync failed (CharID={dto.CharacterID}, TemplateID={dto.TemplateID}): {ex}");
+				await Log.Error("InteractableSystem", $"PersistCachedChoicesAsync failed (CharID={characterId}, {dtos.Count} templates): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the bits a successful merge carried from the unconfirmed set. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Only the bits the merge carried: one set after its snapshot was taken is still owed.
+		/// </remarks>
+		private void ConfirmDialogueChoices(List<CharacterDialogueChoiceData> merged)
+		{
+			for (int i = 0; i < merged.Count; ++i)
+			{
+				CharacterDialogueChoiceData dto = merged[i];
+				if (!unconfirmedDialogueChoices.TryGetValue(dto.CharacterID, out Dictionary<int, short> unconfirmed) ||
+					!unconfirmed.TryGetValue(dto.TemplateID, out short pending))
+				{
+					continue;
+				}
+
+				short remaining = (short)((ushort)pending & ~(ushort)dto.Choices);
+				if (remaining == 0)
+				{
+					unconfirmed.Remove(dto.TemplateID);
+				}
+				else
+				{
+					unconfirmed[dto.TemplateID] = remaining;
+				}
+
+				if (unconfirmed.Count == 0)
+				{
+					unconfirmedDialogueChoices.Remove(dto.CharacterID);
+				}
 			}
 		}
 

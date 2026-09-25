@@ -85,7 +85,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await tickets.SearchAsync(query, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = result.ErrorMessage ?? "That search could not be run." });
+				return DatabaseReplies.Failure(this, result, log, "That search could not be run.");
 			}
 
 			var data = result.Data;
@@ -107,7 +107,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await tickets.FetchAsync(id, includeInternal: true, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return NotFound(new { error = "No such ticket." });
+				return DatabaseReplies.Failure(this, result, log, "That ticket could not be read.", notFound: "No such ticket.");
 			}
 			if (result.Data.RequiredAccessLevel > ActorTier)
 			{
@@ -139,7 +139,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var current = await tickets.FetchAsync(id, includeInternal: false, HttpContext.RequestAborted);
 			if (!current.IsSuccess)
 			{
-				return NotFound(new { error = "No such ticket." });
+				audit.Outcome = DatabaseReplies.IsNotFound(current.ErrorCode) ? "Refused: no such ticket." : DatabaseReplies.Outcome(current);
+				return DatabaseReplies.Failure(this, current, log, "That ticket could not be read.", notFound: "No such ticket.");
 			}
 
 			/* The tier first, before anything is looked up about the named assignee: a refusal must not
@@ -157,6 +158,13 @@ namespace FishMMO.ControlPanel.Controllers
 				var staff = await accounts.FetchAdminAsync(assignee, HttpContext.RequestAborted);
 				if (!staff.IsSuccess)
 				{
+					/* A name that is not an account is the operator's typo, and a 400 about the field.
+					 * A database that did not answer says nothing about the name, and must not claim to. */
+					if (DatabaseReplies.IsFault(staff.ErrorCode))
+					{
+						audit.Outcome = DatabaseReplies.Outcome(staff);
+						return DatabaseReplies.Failure(this, staff, log, "The assignee's account could not be read.");
+					}
 					audit.Outcome = "Refused: no such account.";
 					return BadRequest(new { error = $"There is no account called {assignee}." });
 				}
@@ -173,8 +181,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await tickets.AssignAsync(id, assignee, ActorTier, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That ticket could not be assigned." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That ticket could not be assigned.");
 			}
 
 			log.LogInformation("Ticket {Id} assigned to '{Assignee}' by '{Actor}'.", id, assignee ?? "(nobody)", User.Identity?.Name);
@@ -208,8 +216,8 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That message could not be added." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That message could not be added.");
 			}
 
 			return Ok(new { message = request.Internal ? "Note added. The player cannot see it." : "Reply sent." });
@@ -237,8 +245,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await tickets.SetStatusAsync(id, status, User.Identity?.Name, request.Resolution, ActorTier, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That status could not be set." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That status could not be set.");
 			}
 
 			log.LogInformation("Ticket {Id} set to {Status} by '{Actor}'.", id, status, User.Identity?.Name);
@@ -265,8 +273,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await tickets.SetPriorityAsync(id, request.Priority.Value, ActorTier, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That priority could not be set." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That priority could not be set.");
 			}
 			return Ok(new { message = $"Priority set to {request.Priority}." });
 		}
@@ -300,8 +308,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await tickets.SetTierAsync(id, (byte)request.Tier, User.Identity?.Name, request.Reason, ActorTier, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That ticket could not be moved." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That ticket could not be moved.");
 			}
 
 			log.LogInformation("Ticket {Id} moved to tier {Tier} by '{Actor}'.", id, request.Tier, User.Identity?.Name);

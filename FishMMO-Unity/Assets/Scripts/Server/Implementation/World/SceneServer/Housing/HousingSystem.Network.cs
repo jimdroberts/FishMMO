@@ -211,6 +211,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Tells one client how a request went, from the worker.
+		/// </summary>
+		/// <remarks>
+		/// For the answers that only exist once the database has replied. A request that fails there
+		/// is answered like any other refusal; a client that hears nothing sends it again, and for a
+		/// request that did half its work locally the second copy is the one that goes wrong.
+		/// </remarks>
+		private void SendHousingResultOnMainThread(NetworkConnection conn, long plotID, HousingResult result)
+		{
+			if (!TryEnqueueHousingMainThread(() => SendHousingResult(conn, plotID, result)))
+			{
+				Log.Warning("HousingSystem", $"Could not send the {result} answer for plot {plotID}.");
+			}
+		}
+
+		/// <summary>
 		/// Opens a build session.
 		/// </summary>
 		private void OnServerHousingBeginBuilding(NetworkConnection conn, HousingBeginBuildingBroadcast msg, Channel channel)
@@ -291,8 +307,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			SendHousingResult(conn, msg.PlotID,
-				TryFinishBuilding(player, foundation) ? HousingResult.Success : HousingResult.NotTheOwner);
+			// Accepted requests are answered once the database has replied; see TryFinishBuilding.
+			if (!TryFinishBuilding(conn, player, foundation))
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.NotTheOwner);
+			}
 		}
 
 		/// <summary>
@@ -377,12 +396,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * the wire and may carry bits this build has no name for. */
 			PlotPermission requested = PlotAccess.Sanitize(msg.Permissions);
 
-			bool granted = TryGrantAccess(player, foundation, msg.CharacterID, requested);
-			SendHousingResult(conn, msg.PlotID, granted ? HousingResult.Success : HousingResult.NotPermitted);
-
-			if (granted)
+			// Accepted grants are answered, with the updated list, once the database has replied.
+			if (!TryGrantAccess(conn, player, foundation, msg.CharacterID, requested))
 			{
-				SendAccessList(conn, foundation);
+				SendHousingResult(conn, msg.PlotID, HousingResult.NotPermitted);
 			}
 		}
 
@@ -410,16 +427,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			bool revoked = TryRevokeAccess(player, foundation, msg.CharacterID);
-			SendHousingResult(conn, msg.PlotID, revoked ? HousingResult.Success : HousingResult.NotPermitted);
-
-			if (revoked)
+			/* An accepted revocation evicts at once and is answered once the database has replied;
+			 * see TryRevokeAccess. */
+			if (!TryRevokeAccess(conn, player, foundation, msg.CharacterID))
 			{
-				/* Evicted immediately rather than waiting for the sweep. The revoked friend may be
-				 * standing in the house right now, and the owner who just shut them out should not
-				 * watch them linger for half a second afterwards. */
-				EvictTrespassers(foundation);
-				SendAccessList(conn, foundation);
+				SendHousingResult(conn, msg.PlotID, HousingResult.NotPermitted);
 			}
 		}
 
@@ -487,7 +499,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			FetchVault(player, (entries, fees) => SendVault(conn, entries, fees));
+			FetchVault(player,
+				(entries, fees) => SendVault(conn, entries, fees),
+				() => SendHousingResult(conn, 0, HousingResult.Failed));
 		}
 
 		/// <summary>
@@ -536,7 +550,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			RetrieveFromVault(player, msg.VaultID);
+			RetrieveFromVault(conn, player, msg.VaultID);
 		}
 
 		/// <summary>
@@ -558,7 +572,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			ForfeitFromVault(player, msg.VaultID);
+			ForfeitFromVault(conn, player, msg.VaultID);
 		}
 	}
 }

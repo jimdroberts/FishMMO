@@ -406,9 +406,15 @@ namespace FishMMO.Server.Implementation
 
 			var result = await svc.FetchByIdAsync(signingKeyId);
 
-			if (!result.IsSuccess || result.Data.HmacKey == null)
+			if (!result.IsSuccess)
 			{
-				await Log.Warning(LogPrefix, $"Signing key {signingKeyId} not found for LoginServer {loginServerId}.");
+				// Not always "not found": a timeout lands here too, and reads the same to the client.
+				await Log.Warning(LogPrefix, $"Signing key {signingKeyId} fetch failed for LoginServer {loginServerId}: [{result.ErrorCode}] {result.ErrorMessage}");
+				return null;
+			}
+			if (result.Data.HmacKey == null)
+			{
+				await Log.Warning(LogPrefix, $"Signing key {signingKeyId} for LoginServer {loginServerId} has no key material.");
 				return null;
 			}
 
@@ -441,9 +447,14 @@ namespace FishMMO.Server.Implementation
 			}
 
 			var result = await svc.FetchByLoginServerIdAsync(loginServerId);
-			if (!result.IsSuccess || result.Data.HmacKey == null)
+			if (!result.IsSuccess)
 			{
-				await Log.Warning(LogPrefix, $"Current signing key not found for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Current signing key fetch failed for LoginServer {loginServerId}: [{result.ErrorCode}] {result.ErrorMessage}");
+				return (null, 0);
+			}
+			if (result.Data.HmacKey == null)
+			{
+				await Log.Warning(LogPrefix, $"Current signing key for LoginServer {loginServerId} has no key material.");
 				return (null, 0);
 			}
 
@@ -468,7 +479,18 @@ namespace FishMMO.Server.Implementation
 				return true; // Treat service-unavailable as revoked (fail-closed).
 
 			var result = await svc.FetchByHashAsync(tokenHash);
-			if (!result.IsSuccess) return true; // DB error → fail-closed.
+			if (!result.IsSuccess)
+			{
+				/* Fail closed either way. NotFound is a token this deployment never issued (or has
+				 * already cleaned up) and is expected; anything else is the database not answering,
+				 * which sends a valid player back to the login screen as TokenRevoked — worth a line,
+				 * since from the client it looks exactly like a revocation. */
+				if (result.ErrorCode != DatabaseErrorCodes.NotFound)
+				{
+					await Log.Warning(LogPrefix, $"Token revocation check failed: [{result.ErrorCode}] {result.ErrorMessage}. Treating the token as revoked (fail-closed).");
+				}
+				return true;
+			}
 			return result.Data.Revoked;
 		}
 
@@ -582,7 +604,7 @@ namespace FishMMO.Server.Implementation
 				var r = await tokenSvc.IssueAsync(tokenHash, accountName, loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes));
 				if (!r.IsSuccess)
 				{
-					await Log.Warning(LogPrefix, $"Renewal IssueAsync DB error for '{accountName}': {r.ErrorCode} - {r.ErrorMessage}");
+					await Log.Warning(LogPrefix, $"Renewal IssueAsync DB error for '{accountName}': [{r.ErrorCode}] {r.ErrorMessage}");
 					return false;
 				}
 

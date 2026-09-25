@@ -138,6 +138,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(username, selected: true);
 			if (!fetchResult.IsSuccess)
 			{
+				await Log.Warning("WorldServerAuthenticator", $"Selected character fetch failed for account '{username}': [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}. Answering ServerBusy.");
 				loginAttemptByAccount.Remove(username);
 				return ClientAuthenticationResult.ServerBusy;
 			}
@@ -152,6 +153,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				DatabaseResult<CharacterLockState> lockResult = await characterService.FetchLockAsync(fetchResult.Data.Value.ID);
 				if (!lockResult.IsSuccess)
 				{
+					await Log.Warning("WorldServerAuthenticator", $"Character lock fetch failed for account '{username}': [{lockResult.ErrorCode}] {lockResult.ErrorMessage}. Refusing entry (fail-closed).");
 					loginAttemptByAccount.Remove(username);
 					return ClientAuthenticationResult.ServerBusy;
 				}

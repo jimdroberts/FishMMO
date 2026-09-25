@@ -240,17 +240,18 @@ namespace FishMMO.Server.Implementation
 				DatabaseResult<List<KickRequestData>> dbResult = await kickRequestService.FetchAsync(
 					data.LastFetchTime, data.LastPosition, UpdateFetchCount);
 
-				if (!dbResult.IsSuccess || dbResult.Data == null || dbResult.Data.Count == 0)
+				/* A failed fetch leaves the cursor where it was, so the requests are read again on the
+				 * next poll. It is still logged: an operator's kick that never lands, with nothing in
+				 * the log to say the poll is failing, looks exactly like a kick that was never issued. */
+				if (!dbResult.IsSuccess)
 				{
+					await Log.Warning("KickRequestSystem", $"Kick request poll failed: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
 					return;
 				}
 
-				// Update polling position under lock for safe cross-thread visibility.
-				KickRequestData latest = dbResult.Data[dbResult.Data.Count - 1];
-				lock (this.kickLock)
+				if (dbResult.Data == null || dbResult.Data.Count == 0)
 				{
-					data.LastFetchTime = latest.TimeCreated;
-					data.LastPosition = latest.ID;
+					return;
 				}
 
 				// Process last-login checks in batches to avoid saturating the DB connection pool.
@@ -271,22 +272,43 @@ namespace FishMMO.Server.Implementation
 					}
 				}
 
+				/* The polling position advances past each request only once its kick is actually on
+				 * its way to the main thread (or was found stale).
+				 *
+				 * It used to advance past the whole page before any of them were queued, and the
+				 * queue's refusal was ignored, so a kick that met a full main-thread queue was simply
+				 * gone: the cursor was already beyond it, nothing retried it, and the operator's kick
+				 * never landed. Stopping at the first refusal leaves that request and everything after
+				 * it to be read again on the next poll; the ones queued before it are not repeated. */
+				KickRequestData lastSettled = default;
+				bool anySettled = false;
+
 				// Process results — kick any accounts that haven't reconnected since the request
 				for (int i = 0; i < dbResult.Data.Count; i++)
 				{
 					KickRequestData kickRequest = dbResult.Data[i];
 					DatabaseResult<DateTime> lastLoginResult = loginResults[i];
 
-					// If the last successful login happened after the kick request,
-					// the account reconnected and the kick is stale.
-					if (lastLoginResult.IsSuccess && lastLoginResult.Data >= kickRequest.TimeCreated)
+					/* A failed read proceeds with the kick, and says so. Missing evidence that the
+					 * account reconnected is not evidence that it did, and an operator's kick is the
+					 * one to honour when the two cannot be told apart — but an account kicked twice
+					 * because the check could not run should leave a trace explaining why. */
+					if (!lastLoginResult.IsSuccess)
 					{
+						await Log.Warning("KickRequestSystem", $"Could not read the last login of '{kickRequest.AccountName}'; kicking without knowing whether it reconnected since the request: [{lastLoginResult.ErrorCode}] {lastLoginResult.ErrorMessage}");
+					}
+					else if (lastLoginResult.Data >= kickRequest.TimeCreated)
+					{
+						// If the last successful login happened after the kick request,
+						// the account reconnected and the kick is stale.
+						lastSettled = kickRequest;
+						anySettled = true;
 						continue;
 					}
 
 					// Marshal Kick to main thread - FishNet is not thread-safe
 					string accountName = kickRequest.AccountName;
-					TryEnqueueMainThread(() =>
+					bool queued = TryEnqueueMainThread(() =>
 					{
 						/* A combat-logout body has no connection, so the lookup below never finds
 						 * it and the kick used to do nothing at all to a character that had logged
@@ -344,6 +366,25 @@ namespace FishMMO.Server.Implementation
 							DisconnectWithNotice(conn, DisconnectNoticeReason.AdministrativeKick, terminal: true);
 						}
 					});
+
+					if (!queued)
+					{
+						await Log.Error("KickRequestSystem", $"Main-thread queue refused the kick of '{accountName}'; it and the {dbResult.Data.Count - i - 1} request(s) after it will be read again on the next poll.");
+						break;
+					}
+
+					lastSettled = kickRequest;
+					anySettled = true;
+				}
+
+				// Update polling position under lock for safe cross-thread visibility.
+				if (anySettled)
+				{
+					lock (this.kickLock)
+					{
+						data.LastFetchTime = lastSettled.TimeCreated;
+						data.LastPosition = lastSettled.ID;
+					}
 				}
 			}
 			catch (Exception ex)

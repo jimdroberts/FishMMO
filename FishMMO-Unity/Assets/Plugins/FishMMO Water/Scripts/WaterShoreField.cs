@@ -200,6 +200,12 @@ namespace FishMMO.Water
 			 * with whatever the clamp returns and draw a false beach along the scene's edge. */
 			float pad = Mathf.Max(32f, (maxX - minX) * 0.05f);
 			area = Rect.MinMaxRect(minX - pad, minZ - pad, maxX + pad, maxZ + pad);
+			/* SQUARE, padding the short side with more open water. The texture is square, so a
+			 * rectangular scene gave rectangular texels — 3.49 by 2.96 m on Cov Viaduct — while the
+			 * distance transform counted steps as if they were square, and every distance measured
+			 * north-south came out an eighth too long. */
+			float side = Mathf.Max(area.width, area.height);
+			area = new Rect(area.center.x - side * 0.5f, area.center.y - side * 0.5f, side, side);
 
 			/* Resolution FOLLOWS the scene, rather than the scene being squeezed into a fixed
 			 * resolution: a small bay and a twenty-kilometre coast want very different grids, and
@@ -258,7 +264,7 @@ namespace FishMMO.Water
 			 * zero crossing, so bilinear filtering of a coarse grid gives a blocky contour, while
 			 * distance is smooth through the edge and stays smooth at any resolution.
 			 */
-			Distance(pixels, resolution, area.width / resolution);
+			Distance(pixels, resolution, TexelMetres);
 
 			field.SetPixels(pixels);
 			field.Apply(false, false);
@@ -273,69 +279,121 @@ namespace FishMMO.Water
 		/// Fills the green channel with the signed distance, in metres, to the water's edge.
 		/// </summary>
 		/// <remarks>
-		/// A two-pass chamfer transform: one sweep down-right, one up-left, each taking the best
-		/// of its neighbours plus the step between them. It is exact to a few per cent for a cost
-		/// of two passes, where a true Euclidean transform needs several — and a few per cent of a
-		/// metre is far below anything the surf does with it.
+		/// <para>
+		/// <b>Exact, not a chamfer.</b> This was a two-pass chamfer transform — each texel taking the
+		/// best of its neighbours plus one step or a diagonal — which is cheap and is not a distance:
+		/// its contours are octagons, its gradient kinks along eight directions, and around an
+		/// island it was off by two and a half metres either way, a tenth of a surf wavelength. The
+		/// surf's crests are this field's contours and its throw is this field's gradient, so the
+		/// octagon went straight onto the water. Felzenszwalb and Huttenlocher's transform is exact
+		/// and still linear: a lower envelope of parabolas along each row, then along each column.
+		/// </para>
+		/// <para>
+		/// The edge lies between a wet texel and a dry one, so each side is measured to the nearest
+		/// texel of the other and half a texel is taken off: a wet texel beside a dry one is half a
+		/// texel from the water's edge, not on it.
+		/// </para>
 		/// </remarks>
 		private static void Distance(Color[] pixels, int resolution, float metresPerTexel)
 		{
-			const float Straight = 1f;
-			// The diagonal step of a unit grid; using 1 here makes the field visibly square.
-			const float Diagonal = 1.41421356f;
-			float far = resolution * 4f;
-
-			// Seed: zero on the texels that straddle the waterline, far everywhere else.
-			var distance = new float[pixels.Length];
-			for (int y = 0; y < resolution; y++)
+			int count = pixels.Length;
+			var toDry = new float[count];
+			var toWet = new float[count];
+			for (int i = 0; i < count; i++)
 			{
-				for (int x = 0; x < resolution; x++)
-				{
-					int index = y * resolution + x;
-					bool wet = pixels[index].r > 0f;
-					bool edge = false;
-					if (x > 0 && (pixels[index - 1].r > 0f) != wet) edge = true;
-					if (x < resolution - 1 && (pixels[index + 1].r > 0f) != wet) edge = true;
-					if (y > 0 && (pixels[index - resolution].r > 0f) != wet) edge = true;
-					if (y < resolution - 1 && (pixels[index + resolution].r > 0f) != wet) edge = true;
-					distance[index] = edge ? 0f : far;
-				}
+				bool wet = pixels[i].r > 0f;
+				toDry[i] = wet ? Far : 0f;
+				toWet[i] = wet ? 0f : Far;
 			}
-
-			for (int y = 0; y < resolution; y++)
-			{
-				for (int x = 0; x < resolution; x++)
-				{
-					int i = y * resolution + x;
-					float best = distance[i];
-					if (x > 0) best = Mathf.Min(best, distance[i - 1] + Straight);
-					if (y > 0) best = Mathf.Min(best, distance[i - resolution] + Straight);
-					if (x > 0 && y > 0) best = Mathf.Min(best, distance[i - resolution - 1] + Diagonal);
-					if (x < resolution - 1 && y > 0) best = Mathf.Min(best, distance[i - resolution + 1] + Diagonal);
-					distance[i] = best;
-				}
-			}
-			for (int y = resolution - 1; y >= 0; y--)
-			{
-				for (int x = resolution - 1; x >= 0; x--)
-				{
-					int i = y * resolution + x;
-					float best = distance[i];
-					if (x < resolution - 1) best = Mathf.Min(best, distance[i + 1] + Straight);
-					if (y < resolution - 1) best = Mathf.Min(best, distance[i + resolution] + Straight);
-					if (x < resolution - 1 && y < resolution - 1) best = Mathf.Min(best, distance[i + resolution + 1] + Diagonal);
-					if (x > 0 && y < resolution - 1) best = Mathf.Min(best, distance[i + resolution - 1] + Diagonal);
-					distance[i] = best;
-				}
-			}
+			SquaredDistance(toDry, resolution);
+			SquaredDistance(toWet, resolution);
 
 			// Negative on dry land, positive in the water, so one number says both which side of
 			// the edge a point is on and how far.
-			for (int i = 0; i < pixels.Length; i++)
+			for (int i = 0; i < count; i++)
 			{
-				float metres = distance[i] * metresPerTexel;
-				pixels[i].g = pixels[i].r > 0f ? metres : -metres;
+				bool wet = pixels[i].r > 0f;
+				/* Capped: a field with no dry texel at all, or no wet one, leaves the stand-in for
+				 * infinity in place, and ten billion metres overflows the half-float texture to inf —
+				 * and the surf's phase to NaN. Four widths of the field is further than any wave cares. */
+				float texels = Mathf.Min(Mathf.Sqrt(wet ? toDry[i] : toWet[i]), resolution * 4f) - 0.5f;
+				float metres = Mathf.Max(0f, texels) * metresPerTexel;
+				pixels[i].g = wet ? metres : -metres;
 			}
+		}
+
+		/// <summary>Stands in for infinity: finite, so the envelope's arithmetic never meets inf - inf.</summary>
+		private const float Far = 1e20f;
+
+		/// <summary>
+		/// Squared Euclidean distance, in texels, from every texel to the nearest one holding 0 —
+		/// in place, rows then columns (Felzenszwalb and Huttenlocher, 2012).
+		/// </summary>
+		private static void SquaredDistance(float[] grid, int resolution)
+		{
+			var line = new float[resolution];
+			var result = new float[resolution];
+			var hull = new int[resolution];
+			var bounds = new float[resolution + 1];
+			for (int y = 0; y < resolution; y++)
+			{
+				System.Array.Copy(grid, y * resolution, line, 0, resolution);
+				Envelope(line, result, hull, bounds, resolution);
+				System.Array.Copy(result, 0, grid, y * resolution, resolution);
+			}
+			for (int x = 0; x < resolution; x++)
+			{
+				for (int y = 0; y < resolution; y++)
+				{
+					line[y] = grid[y * resolution + x];
+				}
+				Envelope(line, result, hull, bounds, resolution);
+				for (int y = 0; y < resolution; y++)
+				{
+					grid[y * resolution + x] = result[y];
+				}
+			}
+		}
+
+		/// <summary>
+		/// One line of the transform: the lower envelope of the parabolas (q - p)² + f(q), then
+		/// read off at every p.
+		/// </summary>
+		private static void Envelope(float[] f, float[] d, int[] hull, float[] bounds, int n)
+		{
+			int k = 0;
+			hull[0] = 0;
+			bounds[0] = float.NegativeInfinity;
+			bounds[1] = float.PositiveInfinity;
+			for (int q = 1; q < n; q++)
+			{
+				float s = Intersection(f, q, hull[k]);
+				while (s <= bounds[k])
+				{
+					k--;
+					s = Intersection(f, q, hull[k]);
+				}
+				k++;
+				hull[k] = q;
+				bounds[k] = s;
+				bounds[k + 1] = float.PositiveInfinity;
+			}
+			k = 0;
+			for (int q = 0; q < n; q++)
+			{
+				while (bounds[k + 1] < q)
+				{
+					k++;
+				}
+				float offset = q - hull[k];
+				d[q] = offset * offset + f[hull[k]];
+			}
+		}
+
+		/// <summary>Where the parabolas rooted at q and p cross.</summary>
+		private static float Intersection(float[] f, int q, int p)
+		{
+			return ((f[q] + (float)q * q) - (f[p] + (float)p * p)) / (2f * (q - p));
 		}
 
 		/// <summary>The highest ground at a world XZ across every terrain in the scene.</summary>

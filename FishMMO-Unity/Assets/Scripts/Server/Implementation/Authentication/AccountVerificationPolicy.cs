@@ -1,4 +1,8 @@
+using System.Threading.Tasks;
+using FishMMO.Database;
 using FishMMO.Database.Data.Enums;
+using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Logging;
 using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation
@@ -112,6 +116,48 @@ namespace FishMMO.Server.Implementation
 		/// <param name="nowUtc">The current UTC time.</param>
 		public static bool IsSmsCodeResendDue(System.DateTime? phoneVerifyCodeExpiresUtc, System.DateTime nowUtc) =>
 			phoneVerifyCodeExpiresUtc == null || phoneVerifyCodeExpiresUtc.Value <= nowUtc;
+
+		/// <summary>
+		/// Expires an email or SMS verification code that was stored but could not be queued for
+		/// delivery, so the next sign-in issues a fresh one.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A code is stored before it is queued — the other order could deliver a code the database
+		/// never held — and it is stored live for 24 hours. Sign-in re-issues a code only once the
+		/// stored one has expired or is missing, and nothing else in the game re-issues one. So a code
+		/// whose queue insert failed stayed live and undelivered for a day, and the player could not
+		/// verify at all until it lapsed. Rewriting the same code with an expiry of now leaves nothing
+		/// redeemable and makes the very next correct sign-in send a new one.
+		/// </para>
+		/// <para>
+		/// Best effort and bounded to one write: if it fails as well, the day's wait is what remains,
+		/// and the log says so. The write is unconditional, so it would also retire a code another
+		/// server issued in the few milliseconds since this one's; the queue failure has already cost
+		/// the player a message, and the next sign-in replaces whatever this clears.
+		/// </para>
+		/// </remarks>
+		/// <param name="accountService">Account service.</param>
+		/// <param name="accountName">Account whose code is retired.</param>
+		/// <param name="verifyCode">The code that was stored and not delivered.</param>
+		/// <param name="channel">Which code: <see cref="AccountVerificationChannels.Email"/> or <see cref="AccountVerificationChannels.Sms"/>.</param>
+		/// <param name="logSource">Log source of the caller.</param>
+		public static async Task ExpireUndeliveredCodeAsync(
+			IAccountService accountService,
+			string accountName,
+			int verifyCode,
+			AccountVerificationChannels channel,
+			string logSource)
+		{
+			System.DateTime nowUtc = System.DateTime.UtcNow;
+			DatabaseResult expired = channel == AccountVerificationChannels.Sms
+				? await accountService.PersistPhoneVerifyCodeAsync(accountName, verifyCode, nowUtc)
+				: await accountService.PersistVerifyCodeAsync(accountName, verifyCode, nowUtc);
+			if (!expired.IsSuccess)
+			{
+				await Log.Warning(logSource, $"Could not expire the undelivered {channel} verification code for '{accountName}': [{expired.ErrorCode}] {expired.ErrorMessage}. It stays live, undelivered, until it lapses.");
+			}
+		}
 
 		/// <summary>
 		/// Reads a boolean key. <see cref="IServerConfiguration"/> has no boolean accessor, so every

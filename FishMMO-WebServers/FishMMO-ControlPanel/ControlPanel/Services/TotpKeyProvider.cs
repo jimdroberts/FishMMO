@@ -1,4 +1,5 @@
 using FishMMO.Auth.Implementation;
+using FishMMO.Database;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.ControlPanel.Services
@@ -32,6 +33,18 @@ namespace FishMMO.ControlPanel.Services
 		public async Task<bool> LoadAsync(IDeploymentSecretService secrets, CancellationToken cancellationToken = default)
 		{
 			var result = await secrets.FetchAsync(TotpMasterKek.DatabaseKey, cancellationToken);
+			if (!result.IsSuccess && result.ErrorCode != DatabaseErrorCodes.NotFound)
+			{
+				/* Only NOT_FOUND means the row is missing. Anything else is the database not answering,
+				 * and it must not be reported as a missing key: that message sends the operator to the
+				 * installer's Configure Server Keys, which regenerates and overwrites the client gate
+				 * secret and the signing KEK — breaking every shipped client — to fix a connection
+				 * problem the installer cannot see. */
+				MasterKek = null;
+				LoadError = $"deployment_secrets could not be read, so the '{TotpMasterKek.DatabaseKey}' row was not checked: " +
+							$"[{result.ErrorCode}] {result.ErrorMessage}. This is a database connection problem, not a missing key.";
+				return false;
+			}
 			string value = result.IsSuccess ? result.Data : null;
 
 			if (!TotpMasterKek.TryDecode(value, out byte[] key, out string error))

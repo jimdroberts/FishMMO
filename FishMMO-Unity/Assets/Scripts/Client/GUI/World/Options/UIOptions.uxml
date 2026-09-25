@@ -275,6 +275,21 @@
                 </ui:VisualElement>
 
                 <!--
+                    Hotkey bars. How many there are is the game's setting; how they are shown is
+                    the player's. A game with one bar has nothing to choose between, so the whole
+                    section hides itself then: see UITKOptions.InitializeHotbarSettings.
+                -->
+                <ui:VisualElement name="options-hotbar-section">
+                    <ui:Label text="HOTBARS" class="fish-attr-category options-section" />
+                    <ui:VisualElement class="options-row">
+                        <ui:Label text="Bar Layout" class="fish-label options-row-label" />
+                        <ui:DropdownField name="hotbar-layout-dropdown" class="fish-dropdown options-row-field" />
+                    </ui:VisualElement>
+                    <ui:Label text="Stacked shows every bar at once. Paged shows one; hold a bar's modifier to see and use it."
+                              class="fish-hint options-hint" />
+                </ui:VisualElement>
+
+                <!--
                     Chat text. Deliberately NOT a second use of Interface Scale above: that
                     slider resizes every panel and stops at 1.5x, so it cannot help a player
                     who can read the rest of the HUD but not the chat log. Tabs and the

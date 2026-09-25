@@ -460,7 +460,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long releasingID = sessionCharacterID;
 				sessionToken = Guid.Empty;
 				sessionCharacterID = 0;
-				await ReleaseCharacterSessionAsync(releasingID, serverID, releasing);
+
+				/* A release that did not stick goes to the retry queue, as ReleaseSessionSafely's
+				 * does. It used to be dropped: a load abandoned because the database was failing is
+				 * exactly when the release fails too, and the claim then stood Online, held by
+				 * nothing in this process, until its lease expired — every scene server refusing the
+				 * player in the meantime. */
+				if (!await ReleaseCharacterSessionAsync(releasingID, serverID, releasing))
+				{
+					QueuePendingFlush(releasingID, null, new CharacterSessionInfo(releasing, serverID));
+				}
 			}
 
 			try
@@ -469,12 +478,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!serviceRegistry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 				{
+					// A configuration fault, not a player's: logged here rather than inside the
+					// disconnect, which runs only if the connection is still there to be told.
+					await Log.Error("CharacterSystem", "LoadCharacterAsync: IUnitOfWorkService is not registered; no character can be loaded.");
 					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
-							Log.Debug("CharacterSystem", "Failed to resolve IUnitOfWorkService.");
 							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 						}
 					});
@@ -505,7 +516,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// retrying inside an open transaction would hold that transaction for the whole
 				// backoff.
 				DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
-				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+				if (!fetchResult.IsSuccess)
+				{
+					/* The read failed, which says nothing about whether the account has a character.
+					 * It used to be folded into "no selected character" — logged at Debug with no
+					 * cause, and answered TERMINALLY, so a database hiccup at login told the client to
+					 * abandon its reconnect loop. A failed read is a server error the next attempt may
+					 * not have. */
+					await Log.Warning("CharacterSystem",
+						$"LoadCharacterAsync: could not read the selected character for account {accountName}: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}");
+					await ReleaseHeldSessionAsync();
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
+						}
+					});
+					return;
+				}
+				if (!fetchResult.Data.HasValue)
 				{
 					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
@@ -541,12 +571,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							$"Character {characterID} ('{charData.Name}') is locked by staff until {lockResult.Data.LockedUntil:u}; refusing the load.");
 					}
 
+					/* Closed either way, but only a lock that was actually READ is terminal. A lock
+					 * that could not be read refuses this attempt and leaves the client's reconnect
+					 * loop running: the next attempt may read it, and the character may not be
+					 * locked at all. */
+					bool lockRead = lockResult.IsSuccess;
 					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
-							DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
+							if (lockRead)
+							{
+								DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
+							}
+							else
+							{
+								DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
+							}
 						}
 					});
 					return;
@@ -593,9 +635,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<CharacterData?> ownedFetch = await characterService.FetchByAccountAsync(accountName, selected: true);
 				if (!ownedFetch.IsSuccess || !ownedFetch.Data.HasValue || ownedFetch.Data.Value.ID != characterID)
 				{
-					// The account's selected character changed between the two reads, so the
-					// claim we hold is for a character this connection is no longer loading.
-					await Log.Warning("CharacterSystem", $"Selected character changed while claiming {characterID}; abandoning load.");
+					// Either the re-read failed, or the account's selected character changed between
+					// the two reads and the claim we hold is for a character this connection is no
+					// longer loading. The log says which.
+					if (!ownedFetch.IsSuccess)
+					{
+						await Log.Warning("CharacterSystem",
+							$"Could not re-read character {characterID} after claiming it: [{ownedFetch.ErrorCode}] {ownedFetch.ErrorMessage}; abandoning load.");
+					}
+					else
+					{
+						await Log.Warning("CharacterSystem", $"Selected character changed while claiming {characterID}; abandoning load.");
+					}
 					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable));
 					return;
@@ -630,6 +681,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							instanceSceneName = resolution.SceneName;
 							instanceSceneHandle = resolution.SceneHandle;
 							break;
+
+						case InstanceResolutionOutcome.Unreadable:
+							/* The database could not say where the instance is. That is not evidence
+							 * the instance is gone, so the flag is left alone — clearing it on a read
+							 * failure evicted players from dungeons that were running perfectly well,
+							 * and wrote the eviction down. This attempt is refused instead, without the
+							 * terminal flag, so the client's reconnect loop tries again. */
+							await Log.Warning("CharacterSystem",
+								$"Character {charData.ID} is in instance {charData.InstanceID}, which could not be resolved ({resolution.Reason}); refusing this load attempt and leaving the character in the instance.");
+							await ReleaseHeldSessionAsync();
+							TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError));
+							return;
 
 						case InstanceResolutionOutcome.HostedElsewhere:
 							/* The instance is alive, just not here. Clearing the flag would evict
@@ -707,13 +770,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
-				if (!uowResult.IsSuccess)
+				if (!uowResult.IsSuccess || uowResult.Data == null)
 				{
+					// A database fault: logged here with its cause, not at Debug inside the
+					// disconnect, which runs only if the connection is still there to be told.
+					await Log.Warning("CharacterSystem",
+						$"LoadCharacterAsync: could not begin the unit of work for character {characterID}: [{uowResult.ErrorCode}] {uowResult.ErrorMessage}");
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
-							Log.Debug("CharacterSystem", "Failed to begin UnitOfWork for character load.");
 							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 						}
 					});
@@ -1055,6 +1121,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			HostedElsewhere = 1,
 			/// <summary>The instance cannot be entered and the character must be released from it.</summary>
 			Unavailable = 2,
+			/// <summary>The database could not be read, so nothing is known about the instance.</summary>
+			Unreadable = 3,
 		}
 
 		/// <summary>Result of resolving a character's <c>InstanceID</c> to a live scene instance.</summary>
@@ -1091,6 +1159,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <summary>The instance cannot be entered.</summary>
 			public static InstanceResolution Unavailable(string reason)
 				=> new InstanceResolution(InstanceResolutionOutcome.Unavailable, null, 0, 0, reason);
+
+			/// <summary>The lookup itself failed; the instance may be perfectly healthy.</summary>
+			public static InstanceResolution Unreadable(string reason)
+				=> new InstanceResolution(InstanceResolutionOutcome.Unreadable, null, 0, 0, reason);
 		}
 
 		/// <summary>
@@ -1106,6 +1178,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// checked against the locally loaded scene as well as against the database, because the
 		/// row can outlive the scene it describes if a scene server unloads a scene and the
 		/// delete has not landed yet.
+		/// <para>
+		/// The one exception is a read that FAILED, which resolves to
+		/// <see cref="InstanceResolutionOutcome.Unreadable"/>. A failed read is not a condition of
+		/// the instance at all, and releasing the character on one evicted players from running
+		/// dungeons whenever the database hiccuped. The caller refuses that attempt instead; the
+		/// client's reconnect budget bounds it, and the next read decides.
+		/// </para>
 		/// </remarks>
 		/// <param name="charData">The character being loaded.</param>
 		/// <param name="serverID">This scene server's database ID.</param>
@@ -1125,9 +1204,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DatabaseResult<SceneData> sceneResult = await sceneService.FetchAsync(charData.InstanceID);
 			if (!sceneResult.IsSuccess)
 			{
-				// Includes the row having been reaped by the world server's stale-scene sweep,
-				// which is the ordinary end state for an instance that never became ready.
-				return InstanceResolution.Unavailable($"instance scene row {charData.InstanceID} could not be read: {sceneResult.ErrorCode}");
+				// A missing row is the ordinary end state for an instance the world server's
+				// stale-scene sweep reaped. Anything else is a failed read, which proves nothing
+				// about the instance and must not release the character from it.
+				if (sceneResult.ErrorCode == DatabaseErrorCodes.NotFound)
+				{
+					return InstanceResolution.Unavailable($"instance scene row {charData.InstanceID} no longer exists");
+				}
+				return InstanceResolution.Unreadable($"instance scene row {charData.InstanceID} could not be read: [{sceneResult.ErrorCode}] {sceneResult.ErrorMessage}");
 			}
 
 			SceneData sceneData = sceneResult.Data;
@@ -1157,7 +1241,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * Liveness is the thing that distinguishes the two cases, so ask. A host that has
 				 * stopped pulsing is gone, and with it the instance, whatever the row still says.
 				 */
-				if (await IsSceneServerLiveAsync(sceneData.SceneServerID))
+				bool? hostLive = await IsSceneServerLiveAsync(sceneData.SceneServerID);
+				if (hostLive == null)
+				{
+					return InstanceResolution.Unreadable($"the registration of scene server {sceneData.SceneServerID}, which hosts instance scene {charData.InstanceID}, could not be read");
+				}
+				if (hostLive.Value)
 				{
 					return InstanceResolution.HostedElsewhere(sceneData.SceneServerID);
 				}
@@ -1209,7 +1298,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// has to be read.
 		/// </remarks>
 		/// <param name="sceneServerID">Scene server to check.</param>
-		private async Task<bool> IsSceneServerLiveAsync(long sceneServerID)
+		/// <returns>
+		/// Whether it is live, or null when its registration could not be read — which is not an
+		/// answer either way.
+		/// </returns>
+		private async Task<bool?> IsSceneServerLiveAsync(long sceneServerID)
 		{
 			if (sceneServerID <= 0 ||
 				Server?.Database?.ServiceRegistry == null ||
@@ -1224,7 +1317,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!result.IsSuccess)
 			{
 				// The registration is gone, so the server shut down cleanly and took its scenes.
-				return false;
+				if (result.ErrorCode == DatabaseErrorCodes.NotFound)
+				{
+					return false;
+				}
+
+				// A failed read, which was answered "dead" alike — and a dead host is what clears
+				// the character's instance flag. The caller refuses the attempt instead.
+				await Log.Warning("CharacterSystem",
+					$"IsSceneServerLiveAsync: could not read scene server {sceneServerID}: [{result.ErrorCode}] {result.ErrorMessage}");
+				return null;
 			}
 
 			return (DateTime.UtcNow - result.Data.LastPulse) < SceneServerPulseStaleAfter;
@@ -1735,6 +1837,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					long[] objectiveValues = ParseObjectiveValues(quest.ObjectiveValues);
 					questController.SetQuest(questTemplate, (QuestStatus)quest.Status, objectiveValues);
+
+					/* The row's version, restored exactly as achievements and factions restore theirs.
+					 *
+					 * It used to be dropped here, so every loaded quest restarted at version 0 while
+					 * its row stood at whatever the last session had reached. Each write this session
+					 * then quoted a version the row already outranked: progress and completion were
+					 * refused as stale (at Debug, so nobody saw), and the turn-in's delete was refused
+					 * the same way — the rewards were paid, the quest left memory, and the row came
+					 * back as Complete at the next login to be turned in again, every login. */
+					if (questController.Quests.TryGetValue(questTemplate.Name, out QuestInstance questInstance))
+					{
+						questInstance.Version = quest.Version;
+					}
 				}
 			}
 

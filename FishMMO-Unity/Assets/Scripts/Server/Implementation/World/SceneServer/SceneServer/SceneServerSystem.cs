@@ -1242,15 +1242,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					DatabaseResult<SceneData> dequeueResult = await sceneService.DequeueAsync();
 					if (!dequeueResult.IsSuccess)
 					{
+						// NotFound is an empty queue, the ordinary end of this loop. Anything else is a fault.
+						if (dequeueResult.ErrorCode != DatabaseErrorCodes.NotFound)
+						{
+							await Log.Warning("SceneServerSystem", $"DequeueAsync DB error (ServerID={serverID}): {dequeueResult.ErrorCode} - {dequeueResult.ErrorMessage}");
+						}
 						break;
 					}
 
 					SceneData pending = dequeueResult.Data;
-					TryEnqueueMainThread(() =>
+					if (!TryEnqueueMainThread(() =>
 					{
 						Log.Debug("SceneServerSystem", $"Scene Server System: Dequeued Pending Scene Load request World:{pending.WorldServerID} Scene:{pending.SceneName}");
 						ProcessSceneLoadRequest(pending);
-					});
+					}))
+					{
+						/* The dequeue already moved the row to Loading under this server, so a request
+						 * dropped here is one nobody will load — the player waits on it until the world
+						 * server's stale sweep gives up. Failed now, the same as any other load this
+						 * server cannot carry out, so they are routed on straight away — and no more are
+						 * taken this pulse, since the next would meet the same full queue. */
+						await Log.Warning("SceneServerSystem", $"Dequeued scene load could not be scheduled; failing it (SceneID={pending.ID}, Scene={pending.SceneName}).");
+						EnqueuePersistence(() => UpdateSceneStatusAsync(pending.ID, SceneStatus.Failed), pending.ID);
+						break;
+					}
 				}
 			}
 			catch (Exception ex)

@@ -312,7 +312,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * is referenced by this request alone. Every read of it happens on the main thread
 				 * after the completion below. */
 				request.Ability.ID = result.Data;
-				QueueGrantCompletion(request, persisted: true);
+				if (!QueueGrantCompletion(request, persisted: true))
+				{
+					/* Nothing on the main thread will settle this grant, so the row must not stand:
+					 * the charge is taken only in CompleteGrant, and a row left behind here would be
+					 * an ability the player owns from their next login without ever paying for it.
+					 * Revoked inline — this worker is already on the character's lane, behind the
+					 * write it undoes. */
+					await RevokeUnsettledGrantAsync(request.CharacterID, request.Ability.ID, "the main-thread queue was saturated before settlement");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -327,7 +335,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="request">The grant.</param>
 		/// <param name="persisted">True when the row was written and only the learn remains.</param>
-		private void QueueGrantCompletion(GrantRequest request, bool persisted)
+		/// <returns>
+		/// False when the outcome could not be marshalled. For a persisted grant the caller then owns
+		/// the row, which nothing has paid for.
+		/// </returns>
+		private bool QueueGrantCompletion(GrantRequest request, bool persisted)
 		{
 			if (TryEnqueueMainThread<IAbilitySystemMainThreadQueueData>(
 					() =>
@@ -342,7 +354,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 					}))
 			{
-				return;
+				return true;
 			}
 
 			/* The queue is at capacity, which means the main thread has stalled long enough for async
@@ -353,17 +365,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (persisted)
 			{
-				/* The honest state: the row exists, so the character owns the ability from their next
-				 * login, but it was never learned in this session and was never announced. Not
-				 * refunded — they do own it. */
+				/* The row exists but was never settled: the charge runs in CompleteGrant, which will
+				 * not run. It used to be left standing on the reasoning that the character "owns it"
+				 * — but nothing had been paid, so the character owned it free from the next login.
+				 * The caller revokes it. Nothing was charged and nothing was learned, so the player
+				 * ends up where they started, unanswered: the panel's own watchdog clears it. */
 				Log.Error("AbilitySystem",
-					$"QueueGrantCompletion: the row for template {request.AbilityData.TemplateID} (CharID={request.CharacterID}) was written but could not be applied because the main-thread queue is saturated. The character owns it from the next login and it is unusable until then.");
+					$"QueueGrantCompletion: the row for template {request.AbilityData.TemplateID} (CharID={request.CharacterID}) was written but could not be settled because the main-thread queue is saturated; it is being revoked. Nothing was charged.");
 			}
 			else
 			{
 				Log.Error("AbilitySystem",
-					$"QueueGrantCompletion: the failure of the grant of template {request.AbilityData.TemplateID} (CharID={request.CharacterID}) could not be reported to the caller, which was never told and never refunded.");
+					$"QueueGrantCompletion: the failure of the grant of template {request.AbilityData.TemplateID} (CharID={request.CharacterID}) could not be reported to the caller, which was never told. Nothing was charged.");
 			}
+			return false;
 		}
 
 		/// <summary>

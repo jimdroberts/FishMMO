@@ -43,6 +43,12 @@ namespace FishMMO.Client
 		/// <summary>Name of the cast label element inside the cast-bar UXML.</summary>
 		private const string LABEL_NAME = "castbar-label";
 
+		/// <summary>Name of the bar element the stylesheet anchors to the bottom.</summary>
+		private const string ROOT_NAME = "castbar-root";
+
+		/// <summary>The bar element the stylesheet anchors to the bottom.</summary>
+		private VisualElement barRoot;
+
 		/// <summary>
 		/// Seconds without an <c>OnUpdate</c> before a visible cast bar hides itself.
 		/// </summary>
@@ -92,7 +98,13 @@ namespace FishMMO.Client
 			{
 				fill = root.Q(FILL_NAME);
 				castLabel = root.Q<Label>(LABEL_NAME);
+				barRoot = root.Q(ROOT_NAME);
 			}
+
+			// Above the hotbar's extra stacked rows, if it has any; see UITKHudLayout.
+			UITKHudLayout.ApplyStackInset(barRoot);
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
+			ClientHotbarSettings.OnChanged += ClientHotbarSettings_OnChanged;
 
 			/* Subscribed with an unsubscribe first. These are STATIC events, and OnStarting runs
 			 * again every time the visual tree is rebuilt (UITKControl.ReinitializeIfTreeReplaced),
@@ -118,9 +130,13 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
 			IPlayerCharacter.OnTeleport -= PlayerCharacter_OnTeleport;
 			SceneManager.activeSceneChanged -= SceneManager_OnActiveSceneChanged;
+			ClientHotbarSettings.OnChanged -= ClientHotbarSettings_OnChanged;
 
 			base.OnDestroying();
 		}
+
+		/// <summary>Moves the bar with the hotbar's stacked rows when the player changes its layout.</summary>
+		private void ClientHotbarSettings_OnChanged() => UITKHudLayout.ApplyStackInset(barRoot);
 
 		/// <summary>
 		/// Subscribes to ability controller cast update, cancel, interrupt, deny and reset events.

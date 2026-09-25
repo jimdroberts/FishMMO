@@ -282,7 +282,22 @@ namespace FishMMO.Server.Implementation
 
 			var result = await svc.FetchForLoginAsync(identifier, isEmail);
 			if (!result.IsSuccess)
+			{
+				/* NotFound, Forbidden (banned) and ValidationError are the answers the core must not
+				 * tell apart, and it does not: all three take the fake-verifier path. Anything else is
+				 * the database failing to answer, which takes the same path today — the lookup result
+				 * has no way to say "server error" — so a correct password is refused as a wrong one
+				 * and counted as one. It is at least recorded here. Answering it with ServerBusy
+				 * instead needs a server-error flag on SrpAccountLookupResult in FishMMO-Auth; that
+				 * answer depends on no account, so it would leak nothing. */
+				if (result.ErrorCode != DatabaseErrorCodes.NotFound &&
+					result.ErrorCode != DatabaseErrorCodes.Forbidden &&
+					result.ErrorCode != DatabaseErrorCodes.ValidationError)
+				{
+					await Log.Warning(LogPrefix, $"FetchForLoginAsync DB error: [{result.ErrorCode}] {result.ErrorMessage}. The sign-in is answered as a wrong password.");
+				}
 				return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult { IsSuccess = false };
+			}
 
 			var d = result.Data;
 
@@ -381,7 +396,15 @@ namespace FishMMO.Server.Implementation
 				return;
 			var r = await svc.IssueAsync(tokenHash, username, loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes));
 			if (!r.IsSuccess)
-				await Log.Warning(LogPrefix, $"IssueAsync token DB error for '{username}': {r.ErrorCode} - {r.ErrorMessage}");
+			{
+				/* Error, not Warning: the token is useless without its row. World and scene servers
+				 * treat a hash they cannot find as revoked (TokenServerAuthenticator's revocation
+				 * check fails closed), so this player is about to be told the login succeeded and
+				 * then be turned away at the world server with TokenRevoked. The hook returns Task,
+				 * so the core cannot hear about it and refuse the sign-in here instead — that needs
+				 * the hook to return the outcome, a FishMMO-Auth change. */
+				await Log.Error(LogPrefix, $"IssueAsync token DB error for '{username}': [{r.ErrorCode}] {r.ErrorMessage}. The issued token will be refused as revoked.");
+			}
 		}
 
 		/// <summary>
@@ -396,8 +419,19 @@ namespace FishMMO.Server.Implementation
 				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
 				return false;
 
+			/* Every database step below answers false when it fails, and the core counts false as a
+			 * wrong code — towards the two-factor lockout and the per-username limit — and tells the
+			 * player TwoFactorInvalid. A correct code refused for a timeout is therefore
+			 * indistinguishable from a wrong one everywhere but here, so each step that failed for a
+			 * reason other than the code being wrong says so. The answer itself cannot change until
+			 * the hook can report a server error (a FishMMO-Auth change). */
 			var accountResult = await accountService.FetchForLoginAsync(username, username.Contains('@'));
-			if (!accountResult.IsSuccess || string.IsNullOrEmpty(accountResult.Data.TotpSecret))
+			if (!accountResult.IsSuccess)
+			{
+				await Log.Warning(LogPrefix, $"Two-factor account fetch failed for '{username}': [{accountResult.ErrorCode}] {accountResult.ErrorMessage}. The code is refused.");
+				return false;
+			}
+			if (string.IsNullOrEmpty(accountResult.Data.TotpSecret))
 				return false;
 
 			/* Shape test lives next to the generator now. This used to be a local copy looking
@@ -411,7 +445,12 @@ namespace FishMMO.Server.Implementation
 				if (!Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var rcSvc))
 					return false;
 				var codesResult = await rcSvc.FetchUnusedByAccountAsync(username);
-				if (!codesResult.IsSuccess || codesResult.Data == null || codesResult.Data.Count == 0)
+				if (!codesResult.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"Recovery code fetch failed for '{username}': [{codesResult.ErrorCode}] {codesResult.ErrorMessage}. The code is refused.");
+					return false;
+				}
+				if (codesResult.Data == null || codesResult.Data.Count == 0)
 					return false;
 				string matchedHash = null;
 				foreach (var code in codesResult.Data)
@@ -427,6 +466,10 @@ namespace FishMMO.Server.Implementation
 				if (consumeResult.IsSuccess)
 				{
 					await CancelPendingTwoFactorResetAsync(accountResult.Data.Name, accountResult.Data.Email);
+				}
+				else if (!IsWrongTwoFactorCodeAnswer(consumeResult.ErrorCode))
+				{
+					await Log.Warning(LogPrefix, $"Recovery code consume failed for '{username}': [{consumeResult.ErrorCode}] {consumeResult.ErrorMessage}. The code is refused.");
 				}
 				return consumeResult.IsSuccess;
 			}
@@ -445,6 +488,10 @@ namespace FishMMO.Server.Implementation
 					{
 						await CancelPendingTwoFactorResetAsync(accountResult.Data.Name, accountResult.Data.Email);
 					}
+					else if (!IsWrongTwoFactorCodeAnswer(persistResult.ErrorCode))
+					{
+						await Log.Warning(LogPrefix, $"TOTP window persist failed for '{username}': [{persistResult.ErrorCode}] {persistResult.ErrorMessage}. The code is refused.");
+					}
 					return persistResult.IsSuccess;
 				}
 				finally
@@ -453,6 +500,15 @@ namespace FishMMO.Server.Implementation
 				}
 			}
 		}
+
+		/// <summary>
+		/// Whether a failed two-factor write is the database saying the code does not count: a
+		/// recovery code already consumed (NotFound), or a TOTP window already used or an
+		/// enrolment already confirmed (ValidationError). Those are the replay and one-use guards
+		/// doing their job; anything else is a fault.
+		/// </summary>
+		private static bool IsWrongTwoFactorCodeAnswer(string errorCode) =>
+			errorCode == DatabaseErrorCodes.NotFound || errorCode == DatabaseErrorCodes.ValidationError;
 
 		/// <summary>
 		/// Cancels the account's pending self-service two-factor reset, if any, and tells the owner.
@@ -873,44 +929,83 @@ namespace FishMMO.Server.Implementation
 				if (verifyCodeExpiresUtc != null && verifyCodeExpiresUtc.Value > DateTime.UtcNow)
 					return false;
 
-				int newCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
-				DateTime newExpires = DateTime.UtcNow.AddHours(24);
-
-				if (outer.Server?.Database?.ServiceRegistry == null) return false;
-				if (!outer.Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService)) return false;
-
-				/* No queue, no new code. Storing a code that nothing will deliver replaces the one the
-				 * player may still hold and gives them nothing in its place. */
-				if (!outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+				/* Fire-and-forget from the core, like the SMS and Discord twins, so it must never throw:
+				 * an exception here became an unobserved task fault that nobody logged. */
+				try
 				{
-					await Log.Warning(outer.LogPrefix, $"IEmailQueueService not registered -- verification email resend skipped for '{username}'.");
+					int newCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
+					DateTime newExpires = DateTime.UtcNow.AddHours(24);
+
+					if (outer.Server?.Database?.ServiceRegistry == null) return false;
+					if (!outer.Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService)) return false;
+
+					/* No queue, no new code. Storing a code that nothing will deliver replaces the one the
+					 * player may still hold and gives them nothing in its place. */
+					if (!outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+					{
+						await Log.Warning(outer.LogPrefix, $"IEmailQueueService not registered -- verification email resend skipped for '{username}'.");
+						return false;
+					}
+
+					/* The address is read BEFORE the code is replaced, for the reason just given. This read
+					 * used to come after the store, and on failure the mail was addressed to the account
+					 * name — not an address — so the player's code was replaced by one that was never
+					 * delivered, and it looked live for a day so no later sign-in resent either. The same
+					 * read re-checks what the verify step saw, as the SMS twin does: a code another login
+					 * server or the Control Panel issued since is live and is not replaced. */
+					var accountResult = await accountService.FetchForLoginAsync(username, false);
+					if (!accountResult.IsSuccess)
+					{
+						await Log.Warning(outer.LogPrefix, $"FetchForLoginAsync DB error for '{username}': [{accountResult.ErrorCode}] {accountResult.ErrorMessage}. Verification email resend skipped.");
+						return false;
+					}
+					var account = accountResult.Data;
+					if (account.Verified ||
+						(account.VerifyCodeExpiresUtc != null && account.VerifyCodeExpiresUtc.Value > DateTime.UtcNow))
+					{
+						return false;
+					}
+					if (string.IsNullOrWhiteSpace(account.Email))
+					{
+						await Log.Warning(outer.LogPrefix, $"Email verification is outstanding for '{username}' but no email address is on record; no email code was re-sent.");
+						return false;
+					}
+
+					var persistResult = await accountService.PersistVerifyCodeAsync(username, newCode, newExpires);
+					if (!persistResult.IsSuccess)
+					{
+						await Log.Warning(outer.LogPrefix, $"PersistVerifyCodeAsync DB error for '{username}': [{persistResult.ErrorCode}] {persistResult.ErrorMessage}. Verification email resend skipped.");
+						return false;
+					}
+
+					/* The new code is always mailed. This used to skip the mail when a verification email was
+					 * already queued — after the new code had been stored — so the queued mail carried the old
+					 * code, which the store had just replaced, and the new code looked valid for a day, so no
+					 * later sign-in resent either: the player was stuck until it lapsed. Any mail still queued
+					 * here carries a code that has already expired (that is why this ran), so it is not worth
+					 * protecting; the cost is at most one extra mail per expiry, and an expiry takes a day. */
+					string subject = "FishMMO - Verify Your Account";
+					string body = outer.BuildLoginVerificationEmailBody(username, newCode);
+					var enqueueResult = await emailQueueService.EnqueueAsync(account.Email, username, subject, body);
+					if (!enqueueResult.IsSuccess)
+					{
+						// Stored but not queued: retire it, or it would sit live and undelivered for the day.
+						await Log.Warning(outer.LogPrefix, $"Failed to enqueue verification email resend for '{username}': [{enqueueResult.ErrorCode}] {enqueueResult.ErrorMessage}");
+						await AccountVerificationPolicy.ExpireUndeliveredCodeAsync(accountService, username, newCode, AccountVerificationChannels.Email, outer.LogPrefix);
+						return false;
+					}
+
+					// VerificationEmailSentAt is deliberately NOT stamped here. Queueing an email
+					// is not sending one: the queue processor stamps it after SMTP confirms
+					// delivery, and staff (and the support ticket opened after three wrong codes)
+					// read it as "a code actually reached this player".
+					return true;
+				}
+				catch (Exception ex)
+				{
+					await Log.Error(outer.LogPrefix, $"Verification email resend for '{username}' failed: {ex}");
 					return false;
 				}
-
-				var persistResult = await accountService.PersistVerifyCodeAsync(username, newCode, newExpires);
-				if (!persistResult.IsSuccess) return false;
-
-				/* The new code is always mailed. This used to skip the mail when a verification email was
-				 * already queued — after the new code had been stored — so the queued mail carried the old
-				 * code, which the store had just replaced, and the new code looked valid for a day, so no
-				 * later sign-in resent either: the player was stuck until it lapsed. Any mail still queued
-				 * here carries a code that has already expired (that is why this ran), so it is not worth
-				 * protecting; the cost is at most one extra mail per expiry, and an expiry takes a day. */
-				var accountResult = await accountService.FetchForLoginAsync(username, false);
-				string recipientEmail = accountResult.IsSuccess ? (accountResult.Data.Email ?? username) : username;
-				string subject = "FishMMO - Verify Your Account";
-				string body = outer.BuildLoginVerificationEmailBody(username, newCode);
-				var enqueueResult = await emailQueueService.EnqueueAsync(recipientEmail, username, subject, body);
-				if (!enqueueResult.IsSuccess)
-				{
-					await Log.Warning(outer.LogPrefix, $"Failed to enqueue verification email resend for '{username}': [{enqueueResult.ErrorCode}] {enqueueResult.ErrorMessage}");
-				}
-
-				// VerificationEmailSentAt is deliberately NOT stamped here. Queueing an email
-				// is not sending one: the queue processor stamps it after SMTP confirms
-				// delivery, and staff (and the support ticket opened after three wrong codes)
-				// read it as "a code actually reached this player".
-				return true;
 			}
 
 			/// <inheritdoc/>
@@ -969,8 +1064,15 @@ namespace FishMMO.Server.Implementation
 					return false;
 				}
 
+				// A pending check that failed answers as though a message were pending: a text costs
+				// money, so an unknown queue state sends nothing rather than risk a duplicate.
 				var pending = await smsQueueService.HasPendingForUserAsync(username, SmsKind.Verification);
-				if (!pending.IsSuccess || pending.Data)
+				if (!pending.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"HasPendingForUserAsync DB error for '{username}': [{pending.ErrorCode}] {pending.ErrorMessage}. Verification SMS resend skipped.");
+					return false;
+				}
+				if (pending.Data)
 				{
 					return false;
 				}
@@ -978,6 +1080,7 @@ namespace FishMMO.Server.Implementation
 				var fetched = await accountService.FetchForLoginAsync(username, false);
 				if (!fetched.IsSuccess)
 				{
+					await Log.Warning(LogPrefix, $"FetchForLoginAsync DB error for '{username}': [{fetched.ErrorCode}] {fetched.ErrorMessage}. Verification SMS resend skipped.");
 					return false;
 				}
 				var account = fetched.Data;
@@ -1004,7 +1107,10 @@ namespace FishMMO.Server.Implementation
 				DatabaseResult enqueueResult = await smsQueueService.EnqueueAsync(account.Phone, account.Name, BuildLoginVerificationSmsBody(newCode), SmsKind.Verification);
 				if (!enqueueResult.IsSuccess)
 				{
+					// Stored but not queued: retire it, or it would sit live and undelivered for the day
+					// and IsSmsCodeResendDue would refuse every sign-in's resend until it lapsed.
 					await Log.Warning(LogPrefix, $"Failed to enqueue verification SMS resend for '{username}': [{enqueueResult.ErrorCode}] {enqueueResult.ErrorMessage}");
+					await AccountVerificationPolicy.ExpireUndeliveredCodeAsync(accountService, account.Name, newCode, AccountVerificationChannels.Sms, LogPrefix);
 					return false;
 				}
 				return true;

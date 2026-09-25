@@ -151,7 +151,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<SupportTicketPage> result = await tickets.SearchAsync(BuildStaffTicketQuery(filter, account, level, 1, MaxTicketsListedInChat));
 				if (!result.IsSuccess || result.Data == null)
 				{
-					return new[] { $"The ticket queue could not be read: {result.ErrorMessage}" };
+					return new[] { $"The ticket queue could not be read: [{result.ErrorCode}] {result.ErrorMessage}" };
 				}
 
 				var items = result.Data.Items ?? Array.Empty<SupportTicketData>();
@@ -189,7 +189,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<SupportTicketData> result = await tickets.FetchAsync(ticketID, includeInternal: true);
 				if (!result.IsSuccess || result.Data == null)
 				{
-					return new[] { $"No ticket #{ticketID}." };
+					return new[] { DescribeLookupFailure(result, $"No ticket #{ticketID}.", $"ticket #{ticketID}") };
 				}
 				if (result.Data.RequiredAccessLevel > level)
 				{
@@ -248,7 +248,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult result = await tickets.AssignAsync(ticketID, claim ? account : null, level);
 				if (!result.IsSuccess)
 				{
-					return $"Ticket #{ticketID} could not be {(claim ? "assigned" : "returned")}: {result.ErrorMessage}";
+					return $"Ticket #{ticketID} could not be {(claim ? "assigned" : "returned")}: [{result.ErrorCode}] {result.ErrorMessage}";
 				}
 
 				await Log.Info("SceneServerSystem", $"Ticket {ticketID} {(claim ? "claimed by" : "returned to the queue by")} '{account}'.");
@@ -281,7 +281,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<long> result = await tickets.AppendMessageAsync(ticketID, account, authorIsStaff: true, internalNote: internalNote, body, level);
 				if (!result.IsSuccess)
 				{
-					return $"Ticket #{ticketID} could not be written to: {result.ErrorMessage}";
+					return $"Ticket #{ticketID} could not be written to: [{result.ErrorCode}] {result.ErrorMessage}";
 				}
 
 				return internalNote
@@ -315,7 +315,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult result = await tickets.SetStatusAsync(ticketID, SupportTicketStatus.Resolved, account, resolution, level);
 				if (!result.IsSuccess)
 				{
-					return $"Ticket #{ticketID} could not be resolved: {result.ErrorMessage}";
+					return $"Ticket #{ticketID} could not be resolved: [{result.ErrorCode}] {result.ErrorMessage}";
 				}
 
 				await Log.Info("SceneServerSystem", $"Ticket {ticketID} resolved by '{account}'.");
@@ -356,7 +356,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult result = await tickets.SetTierAsync(ticketID, (byte)FishMMO.Database.Data.Enums.AccessLevel.Admin, account, reason, level);
 				if (!result.IsSuccess)
 				{
-					return $"Ticket #{ticketID} could not be escalated: {result.ErrorMessage}";
+					return $"Ticket #{ticketID} could not be escalated: [{result.ErrorCode}] {result.ErrorMessage}";
 				}
 
 				await Log.Info("SceneServerSystem", $"Ticket {ticketID} escalated to the administrators by '{account}'.");

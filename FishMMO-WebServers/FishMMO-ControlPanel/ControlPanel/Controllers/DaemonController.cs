@@ -313,15 +313,20 @@ namespace FishMMO.ControlPanel.Controllers
 
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				/* The service refuses a host or application no daemon has reported. That is not
 				 * a lookup convenience — it keeps what a command can name to what some daemon
 				 * already supervises, so the queue cannot be used to invent a target. */
-				return BadRequest(new { error = result.ErrorMessage ?? "That command could not be queued." });
+				return DatabaseReplies.Failure(this, result, log, "That command could not be queued.");
 			}
 
-			log.LogWarning("Daemon command {Verb} queued for '{App}' on '{Host}' by '{Actor}'. Reason: {Reason}",
-				verb, request.AppName, request.HostName, User.Identity?.Name, request.Reason);
+			/* The command's id exists only now, and it is what joins this audit row to the command row
+			 * the Logs page shows and the daemon completes. Without it, "who queued the restart that
+			 * failed at 03:12" meant matching the two by time and host. */
+			audit.Details = new { host = request.HostName, app = request.AppName, verb = verb.ToString(), commandId = result.Data };
+
+			log.LogWarning("Daemon command {Id} ({Verb}) queued for '{App}' on '{Host}' by '{Actor}'. Reason: {Reason}",
+				result.Data, verb, request.AppName, request.HostName, User.Identity?.Name, request.Reason);
 
 			return Ok(new
 			{

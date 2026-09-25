@@ -78,8 +78,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var existing = await accounts.FetchAdminAsync(username, HttpContext.RequestAborted);
 			if (!existing.IsSuccess)
 			{
-				audit.Outcome = "Refused: no such account.";
-				return NotFound(new { error = "No such account." });
+				audit.Outcome = DatabaseReplies.IsNotFound(existing.ErrorCode) ? "Refused: no such account." : DatabaseReplies.Outcome(existing);
+				return DatabaseReplies.Failure(this, existing, log, "That account could not be read.", notFound: "No such account.");
 			}
 
 			var currentLevel = (AccessLevel)existing.Data.AccessLevel;
@@ -102,15 +102,22 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await accounts.PersistAccessLevelAsync(username, (byte)level, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That access level could not be set." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That access level could not be set.");
 			}
 
 			/* The panel's own sessions for that account end here rather than at their next
 			 * request. The authentication handler already revokes a session whose level has
 			 * changed, so this only makes the moment deterministic — but a demotion that waits
-			 * for the demoted operator to click something is a demotion with a window in it. */
-			await webSessions.RevokeAllForAccountAsync(username, HttpContext.RequestAborted);
+			 * for the demoted operator to click something is a demotion with a window in it. A
+			 * failure here is logged rather than refused: the level has already changed, and the
+			 * handler's level check ends those sessions on their next request regardless. */
+			var revoked = await webSessions.RevokeAllForAccountAsync(username, HttpContext.RequestAborted);
+			if (!revoked.IsSuccess)
+			{
+				log.LogWarning("Access level for '{Account}' changed but its panel sessions were not revoked now; they end on their next request: [{Code}] {Message}",
+					username, revoked.ErrorCode, revoked.ErrorMessage);
+			}
 
 			log.LogWarning("Account '{Account}' set from {From} to {To} by '{Actor}'. Reason: {Reason}",
 				username, currentLevel, level, User.Identity?.Name, request.Reason);

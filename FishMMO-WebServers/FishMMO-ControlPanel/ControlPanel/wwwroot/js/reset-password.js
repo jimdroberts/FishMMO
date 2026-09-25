@@ -215,8 +215,8 @@ function renderRedeem(host, ctx, devCode) {
 			const privateKey = await srp.derivePrivateKey(salt, username, values.password);
 			const verifier = await srp.deriveVerifier(privateKey);
 
-			await api.completePasswordReset(code, salt, verifier);
-			renderDone(host, ctx, username);
+			const result = await api.completePasswordReset(code, salt, verifier);
+			renderDone(host, ctx, username, result?.signedOutEverywhere !== false);
 		} catch (err) {
 			setBusy(false);
 			showError(err.message || 'That password could not be changed.');
@@ -228,13 +228,17 @@ function renderRedeem(host, ctx, devCode) {
 
 /* ── Step three: say plainly that two-factor still applies ───────────────── */
 
-function renderDone(host, ctx, username) {
+function renderDone(host, ctx, username, signedOutEverywhere = true) {
+	/* The server says whether the sign-outs all landed; the page repeats it rather than assuming. */
 	host.innerHTML = card('check-circle', 'Password changed', `
 		${ui.banner('ok', `The password for ${username} has been changed.`)}
-		<p class="small" style="margin:var(--sp-4) 0 0">
-			Every other browser session and game client on this account has been signed out, and
-			the code you used has been spent.
-		</p>
+		${signedOutEverywhere
+			? `<p class="small" style="margin:var(--sp-4) 0 0">
+				Every other browser session and game client on this account has been signed out, and
+				the code you used has been spent.
+			</p>`
+			: ui.banner('warn', 'Not everything could be signed out',
+				'Some other browser or game client may still be signed in to this account. Sign in and change the password once more to end every session. The code you used has been spent.')}
 		<p class="small" style="margin:var(--sp-3) 0 0">
 			<strong>You will still need your authenticator to sign in.</strong> A reset changes
 			the password and nothing else — your two-factor enrolment and your recovery codes are

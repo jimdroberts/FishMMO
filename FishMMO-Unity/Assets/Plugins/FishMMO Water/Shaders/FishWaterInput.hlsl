@@ -118,5 +118,6 @@ float _FishWaterWhitecap;
 TEXTURE2D(_FishWaterShore);
 SAMPLER(sampler_FishWaterShore);
 float4 _FishWaterShoreRect;   // xy world minimum, zw size
+float _FishWaterShoreTexel;    // metres per texel of the shore field
 
 #endif

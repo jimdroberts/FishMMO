@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d805fb8bcfd4ec5ac4e0408c8fc6149, type: 3}
+  m_Name: PvP Rank Leaderboard
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.LeaderboardTemplate
+  DisplayName: PvP Rank
+  Description: Lifetime arena rank. Raised by every win, lowered by every loss, never reset.
+  Category: 0
+  SortOrder: 10
+  Source: 2
+  AttributeTemplate: {fileID: 11400000, guid: 20e5bd4e8ce1460eb80fef7bd641e060, type: 2}
+  AchievementTemplate: {fileID: 0}
+  MinimumGames: 10
+  ScoreLabel: Rank

@@ -305,8 +305,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <para>Closing the build session first is deliberate. The session is the tighter lock, and
 		/// leaving it open would move the plot to occupied while still turning every guest away —
 		/// which reads as the state change having silently failed.</para>
+		///
+		/// <para>Answered once the database has the new state, not when the request is accepted. The
+		/// client used to be told it had succeeded before the write ran, so a write that failed left
+		/// a player who had been told their house was open standing in one that was not.</para>
 		/// </remarks>
-		public bool TryFinishBuilding(IPlayerCharacter player, IPlotFoundation foundation)
+		/// <returns>
+		/// False when the request is refused outright, which the caller answers. True when it was
+		/// accepted; the answer then follows from here once the database has replied.
+		/// </returns>
+		public bool TryFinishBuilding(NetworkConnection conn, IPlayerCharacter player, IPlotFoundation foundation)
 		{
 			if (player == null || foundation is not PlotFoundation plot || !IsHousingEnabled)
 			{
@@ -334,6 +342,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (!TryGetDbService(out IPlotService plotService))
 				{
+					Log.Error("HousingSystem", $"Could not finish building on plot {plotID}: IPlotService unavailable.");
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
 					return;
 				}
 
@@ -346,7 +356,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!moved.IsSuccess)
 				{
-					Log.Error("HousingSystem", $"Could not finish building on plot {plotID}: {moved.ErrorMessage}");
+					Log.Error("HousingSystem", $"Could not finish building on plot {plotID}: [{moved.ErrorCode}] {moved.ErrorMessage}");
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
 					return;
 				}
 
@@ -354,12 +365,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					/* The plot moved on underneath the request — reclaimed for unpaid tax, or already
 					 * finished. Either way this is no longer the transition to make. */
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.WrongState);
 					return;
 				}
 
-				if (!TryEnqueueHousingMainThread(() => ApplyStateEverywhere(plotID, PlotState.Occupied)))
+				if (!TryEnqueueHousingMainThread(() =>
 				{
-					Log.Warning("HousingSystem", $"Could not apply the occupied state for plot {plotID} locally.");
+					ApplyStateEverywhere(plotID, PlotState.Occupied);
+					SendHousingResult(conn, plotID, HousingResult.Success);
+				}))
+				{
+					Log.Warning("HousingSystem", $"Could not apply the occupied state for plot {plotID} locally; the plot sync applies it.");
 				}
 
 				MarkPlotChanged(plotID);
@@ -458,13 +474,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private readonly Dictionary<long, List<PlotStructureData>> structuresByPlot = new Dictionary<long, List<PlotStructureData>>();
 
 		/// <summary>
+		/// The volumes claimed by placements that have been accepted and are waiting on the database.
+		/// </summary>
+		/// <remarks>
+		/// Placement is tested against the cache on the main thread and written on the worker, and
+		/// the cache only learns of a piece once its row exists. Without these, two placements sent
+		/// in quick succession were both tested against the same cache, both passed, and both were
+		/// written — two pieces standing in one spot, permanently. A reservation closes that window:
+		/// it takes up room from the moment a placement is accepted until the database answers, and
+		/// gives the room back if the answer is no.
+		/// </remarks>
+		private readonly Dictionary<long, List<Bounds>> reservedPlacements = new Dictionary<long, List<Bounds>>();
+
+		/// <summary>
 		/// The volumes occupied on a plot, for testing a proposed placement against.
 		/// </summary>
 		private List<Bounds> OccupiedBounds(PlotFoundation plot)
 		{
 			List<Bounds> occupied = new List<Bounds>();
 
-			if (plot == null || !structuresByPlot.TryGetValue(plot.PlotID, out List<PlotStructureData> structures))
+			if (plot == null)
+			{
+				return occupied;
+			}
+
+			// Accepted placements still on their way to the database take up room too.
+			if (reservedPlacements.TryGetValue(plot.PlotID, out List<Bounds> reserved))
+			{
+				occupied.AddRange(reserved);
+			}
+
+			if (!structuresByPlot.TryGetValue(plot.PlotID, out List<PlotStructureData> structures))
 			{
 				return occupied;
 			}
@@ -516,6 +556,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* A plot whose contents never loaded is refused, not measured as empty. The cache is the
+			 * only thing placement is tested against, and a plot missing from it used to read as bare
+			 * ground — so a read that failed let a player build straight through a house the
+			 * database still held. */
+			if (!structuresByPlot.ContainsKey(plot.PlotID))
+			{
+				SendHousingResult(conn, plot.PlotID, HousingResult.Failed);
+				return;
+			}
+
 			PlotPlacementResult verdict = EvaluatePlacement(player, plot, template, localPosition, yaw, OccupiedBounds(plot));
 			if (verdict != PlotPlacementResult.Allowed)
 			{
@@ -526,10 +576,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long plotID = plot.PlotID;
 			long characterID = player.ID;
 
+			/* The room is taken now, on the main thread, before anything else can be tested against
+			 * this plot — see reservedPlacements. It is only a reservation: the piece itself joins the
+			 * cache once its row exists, because a piece cached ahead of a write the database then
+			 * refused would be furniture nobody can see, and never goes away. */
+			Bounds reserved = template.GetBounds(PlotPlacement.ToWorld(plot.transform.position, localPosition), yaw);
+			ReservePlacement(plotID, reserved);
+
 			if (!TryEnqueueAsyncWork(async () =>
 			{
 				if (!TryGetDbService(out IPlotStructureService structureService))
 				{
+					Log.Error("HousingSystem", $"Could not place structure {templateID} on plot {plotID}: IPlotStructureService unavailable.");
+					FailPlacementOnMainThread(conn, plotID, reserved);
 					return;
 				}
 
@@ -538,33 +597,81 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!placed.IsSuccess || placed.Data <= 0)
 				{
-					Log.Error("HousingSystem", $"Could not place structure {templateID} on plot {plotID}: {placed.ErrorMessage}");
-					if (!TryEnqueueHousingMainThread(() => SendHousingResult(conn, plotID, HousingResult.Failed)))
-					{
-						Log.Warning("HousingSystem", $"Could not report the failed placement on plot {plotID}.");
-					}
+					Log.Error("HousingSystem", $"Could not place structure {templateID} on plot {plotID}: [{placed.ErrorCode}] {placed.ErrorMessage}");
+					FailPlacementOnMainThread(conn, plotID, reserved);
 					return;
 				}
 
 				PlotStructureData structure = new PlotStructureData(
 					placed.Data, plotID, templateID, localPosition.x, localPosition.y, localPosition.z, yaw);
 
-				/* The cache is updated on the main thread and only after the row exists. Adding it
-				 * optimistically would let a second placement measure itself against a structure the
-				 * database refused, and the player would be told a spot was taken by nothing. */
+				// The reservation becomes the real piece, under the identity the database gave it.
 				if (!TryEnqueueHousingMainThread(() =>
 				{
+					ReleasePlacement(plotID, reserved);
 					CacheStructure(plotID, structure);
 					SendHousingResult(conn, plotID, HousingResult.Success);
 				}))
 				{
+					/* The reservation stays, and that is correct: the piece exists, and the room it
+					 * holds is the room the piece takes up. */
 					Log.Warning("HousingSystem", $"Could not record the placement on plot {plotID}; it will appear on the next resolve.");
 				}
 
 				MarkPlotChanged(plotID);
 			}, characterID))
 			{
+				ReleasePlacement(plotID, reserved);
 				SendHousingResult(conn, plotID, HousingResult.Failed);
+			}
+		}
+
+		/// <summary>
+		/// Takes up room on a plot for a placement the database has not answered yet.
+		/// </summary>
+		private void ReservePlacement(long plotID, Bounds bounds)
+		{
+			if (!reservedPlacements.TryGetValue(plotID, out List<Bounds> reserved))
+			{
+				reserved = new List<Bounds>();
+				reservedPlacements.Add(plotID, reserved);
+			}
+			reserved.Add(bounds);
+		}
+
+		/// <summary>
+		/// Gives back room reserved by <see cref="ReservePlacement"/>.
+		/// </summary>
+		/// <remarks>
+		/// Matched by value. Two reservations on one plot can never be equal, because the second
+		/// would have intersected the first and been refused before it was made.
+		/// </remarks>
+		private void ReleasePlacement(long plotID, Bounds bounds)
+		{
+			if (!reservedPlacements.TryGetValue(plotID, out List<Bounds> reserved))
+			{
+				return;
+			}
+
+			reserved.Remove(bounds);
+			if (reserved.Count < 1)
+			{
+				reservedPlacements.Remove(plotID);
+			}
+		}
+
+		/// <summary>
+		/// Gives back a refused placement's room and tells the player. Callable from the worker.
+		/// </summary>
+		private void FailPlacementOnMainThread(NetworkConnection conn, long plotID, Bounds reserved)
+		{
+			if (!TryEnqueueHousingMainThread(() =>
+			{
+				ReleasePlacement(plotID, reserved);
+				SendHousingResult(conn, plotID, HousingResult.Failed);
+			}))
+			{
+				Log.Warning("HousingSystem", $"Could not report the failed placement on plot {plotID}; its room stays reserved until the plot is next cleared.");
 			}
 		}
 
@@ -597,6 +704,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (!TryGetDbService(out IPlotStructureService structureService))
 				{
+					Log.Error("HousingSystem", $"Could not remove structure {structureID} from plot {plotID}: IPlotStructureService unavailable.");
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
 					return;
 				}
 
@@ -606,13 +715,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<int> removed = await structureService.DemolishAsync(structureID, plotID);
 				if (!removed.IsSuccess)
 				{
-					Log.Error("HousingSystem", $"Could not remove structure {structureID} from plot {plotID}: {removed.ErrorMessage}");
+					Log.Error("HousingSystem", $"Could not remove structure {structureID} from plot {plotID}: [{removed.ErrorCode}] {removed.ErrorMessage}");
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
 					return;
 				}
 
 				if (removed.Data != 1)
 				{
-					// Already gone, or never on this plot.
+					/* Already gone, or never on this plot. Nothing was removed, so the request did
+					 * not succeed — but a piece the database no longer holds on this plot must not
+					 * keep taking up room here either, so the cache lets go of it all the same. */
+					if (!TryEnqueueHousingMainThread(() =>
+					{
+						UncacheStructure(plotID, structureID);
+						SendHousingResult(conn, plotID, HousingResult.Failed);
+					}))
+					{
+						Log.Warning("HousingSystem", $"Could not report the refused removal on plot {plotID}.");
+					}
 					return;
 				}
 
@@ -666,11 +786,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Forgets everything cached about a plot's contents.
+		/// Forgets this server's copies of a plot's guest list and contents, once the database has
+		/// emptied both. Main thread only.
 		/// </summary>
-		private void UncachePlot(long plotID)
+		/// <remarks>
+		/// The contents become an empty list rather than no entry. No entry now means "never
+		/// loaded", which placement refuses; an emptied plot is loaded, and bare. A plot this server
+		/// does not show is left without an entry, since there is nothing here to keep in step.
+		/// </remarks>
+		private void ForgetPlotContents(long plotID)
 		{
-			structuresByPlot.Remove(plotID);
+			ForgetAccessGrants(plotID);
+
+			if (structuresByPlot.ContainsKey(plotID))
+			{
+				structuresByPlot[plotID] = new List<PlotStructureData>();
+			}
+			reservedPlacements.Remove(plotID);
 		}
 
 		/// <summary>
@@ -704,61 +836,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Removes everything built on a plot, and forgets it.
-		/// </summary>
-		/// <remarks>
-		/// Land that changes hands must not arrive with the last owner's house still on it. Called
-		/// on release, and by reclamation when that lands.
-		/// </remarks>
-		public void ClearStructures(long plotID)
-		{
-			if (plotID <= 0)
-			{
-				return;
-			}
-
-			if (!TryEnqueueAsyncWork(async () =>
-			{
-				if (!TryGetDbService(out IPlotStructureService structureService))
-				{
-					return;
-				}
-
-				DatabaseResult<int> removed = await structureService.DemolishAllAsync(plotID);
-				if (!removed.IsSuccess)
-				{
-					Log.Error("HousingSystem", $"Could not clear structures on plot {plotID}: {removed.ErrorMessage}");
-					return;
-				}
-
-				if (removed.Data > 0)
-				{
-					Log.Debug("HousingSystem", $"Cleared {removed.Data} structure(s) from plot {plotID}.");
-				}
-			}))
-			{
-				Log.Warning("HousingSystem", $"Could not enqueue structure clearing for plot {plotID}.");
-			}
-		}
-
-		/// <summary>
 		/// Reads back everything built on a scene's plots.
 		/// </summary>
+		/// <returns>
+		/// The structures keyed by plot, or <c>null</c> when they could not be read. The two are kept
+		/// apart deliberately: an empty dictionary says nothing is built, and a failed read reported
+		/// as one would let the next placement go straight through whatever is standing there.
+		/// </returns>
 		private async Task<Dictionary<long, List<PlotStructureData>>> FetchStructuresAsync(List<long> plotIDs)
 		{
 			Dictionary<long, List<PlotStructureData>> byPlot = new Dictionary<long, List<PlotStructureData>>();
 
-			if (plotIDs == null || plotIDs.Count < 1 ||
-				!TryGetDbService(out IPlotStructureService structureService))
+			if (plotIDs == null || plotIDs.Count < 1)
 			{
 				return byPlot;
+			}
+
+			if (!TryGetDbService(out IPlotStructureService structureService))
+			{
+				Log.Error("HousingSystem", "Could not read plot structures: IPlotStructureService unavailable.");
+				return null;
 			}
 
 			DatabaseResult<List<PlotStructureData>> structures = await structureService.FetchByPlotsAsync(plotIDs);
 			if (!structures.IsSuccess || structures.Data == null)
 			{
-				Log.Error("HousingSystem", $"Could not read plot structures: {structures.ErrorMessage}");
-				return byPlot;
+				Log.Error("HousingSystem", $"Could not read plot structures: [{structures.ErrorCode}] {structures.ErrorMessage}");
+				return null;
 			}
 
 			foreach (PlotStructureData structure in structures.Data)

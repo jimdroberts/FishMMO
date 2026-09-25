@@ -98,6 +98,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private readonly List<KeyValuePair<long, HotkeyData[]>> flushBuffer = new List<KeyValuePair<long, HotkeyData[]>>();
 
 		/// <summary>
+		/// Characters whose bar write failed, reported from the persistence worker and re-staged by
+		/// the next pump on the main thread.
+		/// </summary>
+		/// <remarks>
+		/// A bar is drained from the stage when its write is enqueued, so a write that failed used to
+		/// leave nothing behind to retry it: the rebinding was simply gone until the player changed
+		/// the bar again. The worker cannot re-stage it itself — staging is main-thread state — and
+		/// must not re-stage the snapshot it holds, which may be older than one written since.
+		/// </remarks>
+		private readonly System.Collections.Concurrent.ConcurrentQueue<long> failedBarWrites = new System.Collections.Concurrent.ConcurrentQueue<long>();
+
+		/// <summary>
 		/// Ensures the character hotkey list exists and is initialized to the configured maximum size.
 		/// </summary>
 		/// <param name="playerCharacter">Character whose hotkeys should be initialized.</param>
@@ -517,7 +529,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Seconds since the previous invocation.</param>
 		private void OnPeriodicPersistFlush(float deltaTime)
 		{
+			RestageFailedBarWrites();
 			FlushPendingHotkeyWrites();
+		}
+
+		/// <summary>
+		/// Re-stages the bars of resident characters whose last write failed. Main thread.
+		/// </summary>
+		/// <remarks>
+		/// From the LIVE bar, never the snapshot that failed: every change stages the whole bar, so
+		/// the live one is at least as new as anything written, and restaging an older snapshot would
+		/// stamp it with a newer version and roll back a later binding. A character that has left is
+		/// not re-staged at all — its bar is no longer ours to write, and a late write here would
+		/// carry a newer version than the server that has it now.
+		/// </remarks>
+		private void RestageFailedBarWrites()
+		{
+			if (failedBarWrites.IsEmpty ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> mappingData))
+			{
+				return;
+			}
+
+			while (failedBarWrites.TryDequeue(out long characterID))
+			{
+				if (mappingData.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character) && character != null)
+				{
+					StageHotkeyPersist(character);
+				}
+			}
 		}
 
 		/// <summary>
@@ -774,13 +814,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				/* The bar is written whole, empty slots included, so anything short of a complete
 				 * write leaves a cleared slot still showing its old binding. Reported as a
-				 * discrepancy rather than silently accepted. */
-				await BulkWriteReporting.RequireCompleteAsync("HotkeySystem", "Hotkey bar save",
-					await hotkeyService.PersistAsync(hotkeys), $"{hotkeys.Count} slots");
+				 * discrepancy rather than silently accepted, and handed back to be re-staged. */
+				if (!await BulkWriteReporting.RequireCompleteAsync("HotkeySystem", "Hotkey bar save",
+						await hotkeyService.PersistAsync(hotkeys), $"{hotkeys.Count} slots") &&
+					hotkeys.Count > 0)
+				{
+					failedBarWrites.Enqueue(hotkeys[0].CharacterID);
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("HotkeySystem", $"PersistHotkeysAsync failed: {ex}");
+				if (hotkeys != null && hotkeys.Count > 0)
+				{
+					failedBarWrites.Enqueue(hotkeys[0].CharacterID);
+				}
 			}
 		}
 

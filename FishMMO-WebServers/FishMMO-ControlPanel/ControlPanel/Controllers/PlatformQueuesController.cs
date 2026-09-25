@@ -363,12 +363,12 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await queues.RetryEmailAsync(id, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				if (string.Equals(result.ErrorCode, FishMMO.Database.DatabaseErrorCodes.NotFound, StringComparison.Ordinal))
 				{
 					return NotFound(new { error = "There is no such message in the email queue." });
 				}
-				return BadRequest(new { error = result.ErrorMessage ?? "That message could not be re-queued." });
+				return DatabaseReplies.Failure(this, result, log, "That message could not be re-queued.");
 			}
 
 			var outcome = result.Data;
@@ -430,12 +430,12 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await queues.RetrySmsAsync(id, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
+				audit.Outcome = DatabaseReplies.Outcome(result);
 				if (string.Equals(result.ErrorCode, FishMMO.Database.DatabaseErrorCodes.NotFound, StringComparison.Ordinal))
 				{
 					return NotFound(new { error = "There is no such message in the SMS queue." });
 				}
-				return BadRequest(new { error = result.ErrorMessage ?? "That message could not be re-queued." });
+				return DatabaseReplies.Failure(this, result, log, "That message could not be re-queued.");
 			}
 
 			var outcome = result.Data;

@@ -1104,7 +1104,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				DatabaseResult<CharacterPetData?> fetchResult = await charPetService.FetchSpawnedAsync(characterID);
-				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+				if (!fetchResult.IsSuccess)
+				{
+					// Not restored this session, and said so. The row still says the pet is out,
+					// and nothing overwrites it while no pet is out, so the next login restores it.
+					await Log.Warning("PetSystem", $"Could not read the spawned pet for CharID={characterID}: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}; it is not restored this session.");
+					return;
+				}
+				if (!fetchResult.Data.HasValue)
 				{
 					return;
 				}
@@ -1116,9 +1123,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * carrying an older version belongs to a pet that has since been dismissed — and
 				 * a previous pet may well have known an attribute or carried a buff this one does
 				 * not. Matching on the version is what keeps a hunter's new wolf from inheriting
-				 * the mana pool of the elemental it replaced. */
-				List<PetPersistedAttribute> persistedAttributes = await FetchPersistedPetAttributesAsync(characterID, petData.Version);
-				List<PetPersistedBuff> persistedBuffs = await FetchPersistedPetBuffsAsync(characterID, petData.Version);
+				 * the mana pool of the elemental it replaced.
+				 *
+				 * A failed read of either ends the restore, for the reason a failed sub-entity
+				 * fetch ends a character load. It used to read as "none saved", so the pet came
+				 * back whole and unbuffed — and the next character save stamped that over the
+				 * rows it had failed to read, making the loss permanent. Not restored, the pet
+				 * writes nothing, and the next login reads the rows intact. */
+				(bool attributesRead, List<PetPersistedAttribute> persistedAttributes) = await FetchPersistedPetAttributesAsync(characterID, petData.Version);
+				(bool buffsRead, List<PetPersistedBuff> persistedBuffs) = await FetchPersistedPetBuffsAsync(characterID, petData.Version);
+				if (!attributesRead || !buffsRead)
+				{
+					return;
+				}
 
 				// Marshal pet instantiation back to the main thread
 				TryEnqueueMainThread(() =>
@@ -1190,18 +1207,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="characterID">The owning character.</param>
 		/// <param name="petVersion">The version stamped on the pet row.</param>
-		/// <returns>Attribute values to stage onto the pet, or null when there are none.</returns>
-		private async Task<List<PetPersistedAttribute>> FetchPersistedPetAttributesAsync(long characterID, long petVersion)
+		/// <returns>
+		/// Whether the rows could be read, and the attribute values to stage onto the pet (null when
+		/// there are none). A failed read is reported and returns false: it is not the same as none.
+		/// </returns>
+		private async Task<(bool Read, List<PetPersistedAttribute> Attributes)> FetchPersistedPetAttributesAsync(long characterID, long petVersion)
 		{
 			if (!Server.Database.ServiceRegistry.TryGet<ICharacterPetAttributeService>(out var petAttributeService))
 			{
-				return null;
+				return (true, null);
 			}
 
 			DatabaseResult<IReadOnlyList<CharacterPetAttributeData>> result = await petAttributeService.FetchAsync(characterID);
-			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+			if (!result.IsSuccess)
 			{
-				return null;
+				await Log.Warning("PetSystem", $"Could not read the pet attributes for CharID={characterID}: [{result.ErrorCode}] {result.ErrorMessage}; the pet is not restored this session.");
+				return (false, null);
+			}
+			if (result.Data == null || result.Data.Count < 1)
+			{
+				return (true, null);
 			}
 
 			List<PetPersistedAttribute> attributes = new List<PetPersistedAttribute>(result.Data.Count);
@@ -1221,7 +1246,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				});
 			}
 
-			return attributes.Count > 0 ? attributes : null;
+			return (true, attributes.Count > 0 ? attributes : null);
 		}
 
 		/// <summary>
@@ -1230,18 +1255,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="characterID">The owning character.</param>
 		/// <param name="petVersion">The version stamped on the pet row.</param>
-		/// <returns>Buffs to stage onto the pet, or null when there are none.</returns>
-		private async Task<List<PetPersistedBuff>> FetchPersistedPetBuffsAsync(long characterID, long petVersion)
+		/// <returns>
+		/// Whether the rows could be read, and the buffs to stage onto the pet (null when there are
+		/// none). A failed read is reported and returns false: it is not the same as none.
+		/// </returns>
+		private async Task<(bool Read, List<PetPersistedBuff> Buffs)> FetchPersistedPetBuffsAsync(long characterID, long petVersion)
 		{
 			if (!Server.Database.ServiceRegistry.TryGet<ICharacterPetBuffService>(out var petBuffService))
 			{
-				return null;
+				return (true, null);
 			}
 
 			DatabaseResult<IReadOnlyList<CharacterPetBuffData>> result = await petBuffService.FetchAsync(characterID);
-			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+			if (!result.IsSuccess)
 			{
-				return null;
+				await Log.Warning("PetSystem", $"Could not read the pet buffs for CharID={characterID}: [{result.ErrorCode}] {result.ErrorMessage}; the pet is not restored this session.");
+				return (false, null);
+			}
+			if (result.Data == null || result.Data.Count < 1)
+			{
+				return (true, null);
 			}
 
 			List<PetPersistedBuff> buffs = new List<PetPersistedBuff>(result.Data.Count);
@@ -1263,7 +1296,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				});
 			}
 
-			return buffs.Count > 0 ? buffs : null;
+			return (true, buffs.Count > 0 ? buffs : null);
 		}
 
 		/// <summary>
@@ -1338,8 +1371,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Zero is "no template"; ids are signed hashes, so a negative one is valid.
 			int templateID = pet.PetAbilityTemplate != null ? pet.PetAbilityTemplate.ID : 0;
-			if (templateID <= 0)
+			if (templateID == 0)
 			{
 				Log.Warning("PetSystem", $"Pet for character {owner.ID} was dismissed with no resolvable ability template; the database still lists it as out.");
 				return;

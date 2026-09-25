@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d805fb8bcfd4ec5ac4e0408c8fc6149, type: 3}
+  m_Name: PvP Wins Leaderboard
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.LeaderboardTemplate
+  DisplayName: PvP Wins
+  Description: Arena matches won, all time.
+  Category: 0
+  SortOrder: 20
+  Source: 2
+  AttributeTemplate: {fileID: 11400000, guid: 02cee5ed950c4185983e1ca27784d056, type: 2}
+  AchievementTemplate: {fileID: 0}
+  MinimumGames: 10
+  ScoreLabel: Wins

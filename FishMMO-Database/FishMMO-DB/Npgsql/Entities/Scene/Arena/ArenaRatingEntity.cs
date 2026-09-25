@@ -6,8 +6,10 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// One character's ranked arena rating for one season.
 	/// </summary>
 	/// <remarks>
-	/// Separate from the PvP Rank attribute on purpose: the attribute is a lifetime badge that only
-	/// ever goes up on wins, while this is an Elo-style number that seasons reset and losses lower.
+	/// Separate from the PvP Rank attribute on purpose: the attribute is a lifetime tally that never
+	/// resets — raised by a template's win points, lowered by its loss points, floored at zero —
+	/// while this is an Elo-style number, weighed against the opponents' ratings, that each season
+	/// starts over.
 	/// </remarks>
 	public class ArenaRatingEntity
 	{

@@ -1,0 +1,222 @@
+/*
+    UILeaderboards.uss
+    Layout for the Leaderboards window. Colours come from FishMMO-Theme.uss. Sizes are written
+    against the 1200x800 reference resolution declared by Assets/UI Toolkit/PanelSettings.asset,
+    and follow the arena board's list so the two read as one family.
+*/
+
+.leaderboard-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.leaderboard-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 460px;
+    max-height: 86%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.leaderboard-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.leaderboard-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.leaderboard-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.leaderboard-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.leaderboard-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.leaderboard-close-btn {
+    flex-shrink: 0;
+}
+
+/* ── Tabs ───────────────────────────────────────────────── */
+
+.leaderboard-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    flex-shrink: 0;
+}
+
+.leaderboard-categories {
+    padding-bottom: 2px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--abyss-400);
+}
+
+.leaderboard-category-tab,
+.leaderboard-board-tab {
+    margin-right: 4px;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+/* ── Description and standing strips ────────────────────── */
+
+.leaderboard-about,
+.leaderboard-standing {
+    margin-left: 8px;
+    margin-right: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.leaderboard-about {
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+.leaderboard-standing {
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+.leaderboard-about__text,
+.leaderboard-standing__text {
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.leaderboard-standing--ranked {
+    border-color: var(--brand-500);
+    background-color: var(--brand-lo);
+}
+
+.leaderboard-hidden {
+    display: none;
+}
+
+/* ── The board ──────────────────────────────────────────── */
+
+.leaderboard-list-scroll {
+    flex-grow: 1;
+    min-height: 160px;
+    max-height: 420px;
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-bottom: 6px;
+}
+
+.leaderboard-list {
+    flex-direction: column;
+}
+
+.leaderboard-list__columns {
+    flex-direction: row;
+    align-items: center;
+    height: 16px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.leaderboard-row {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-left-width: 3px;
+    border-left-color: var(--clear);
+    flex-shrink: 0;
+}
+
+/* Marked by rank, not by position: everyone tied into the top three carries it. */
+.leaderboard-row--podium {
+    border-left-color: var(--gold);
+}
+
+.leaderboard-row--mine {
+    background-color: var(--brand-lo);
+}
+
+.leaderboard-col--rank  { width: 40px; flex-shrink: 0; -unity-text-align: middle-center; }
+.leaderboard-col--name  { flex-grow: 1; overflow: hidden; }
+.leaderboard-col--score { width: 76px; flex-shrink: 0; -unity-text-align: middle-right; }
+.leaderboard-col--num   { width: 40px; flex-shrink: 0; -unity-text-align: middle-center; }
+
+.leaderboard-list__empty {
+    margin-top: 18px;
+    margin-bottom: 18px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.leaderboard-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 38px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.leaderboard-footer__hint {
+    flex-shrink: 1;
+    -unity-text-align: middle-left;
+}
+
+.leaderboard-pager {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.leaderboard-pager__btn {
+    height: 22px;
+    min-width: 52px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.leaderboard-pager__label {
+    min-width: 84px;
+    padding: 0;
+    margin: 0 4px;
+    -unity-text-align: middle-center;
+}

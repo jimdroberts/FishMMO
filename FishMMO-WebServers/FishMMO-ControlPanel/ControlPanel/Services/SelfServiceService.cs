@@ -21,6 +21,7 @@ namespace FishMMO.ControlPanel.Services
 		private readonly ITwoFactorRecoveryCodeService recoveryCodes;
 		private readonly IEmailQueueService emailQueue;
 		private readonly IAuthTokenService authTokens;
+		private readonly IUnitOfWorkService unitOfWork;
 		private readonly TotpKeyProvider totpKeys;
 		private readonly ILogger<SelfServiceService> log;
 
@@ -32,6 +33,7 @@ namespace FishMMO.ControlPanel.Services
 			ITwoFactorRecoveryCodeService recoveryCodes,
 			IEmailQueueService emailQueue,
 			IAuthTokenService authTokens,
+			IUnitOfWorkService unitOfWork,
 			TotpKeyProvider totpKeys,
 			ILogger<SelfServiceService> log)
 		{
@@ -39,12 +41,27 @@ namespace FishMMO.ControlPanel.Services
 			this.recoveryCodes = recoveryCodes;
 			this.emailQueue = emailQueue;
 			this.authTokens = authTokens;
+			this.unitOfWork = unitOfWork;
 			this.totpKeys = totpKeys;
 			this.log = log;
 		}
 
 		/// <summary>Outcome of an operation that either worked or did not.</summary>
 		public sealed record Outcome(bool Ok, string Error);
+
+		/// <summary>
+		/// Outcome of a password change: whether the credentials changed, and whether every game
+		/// token went with them.
+		/// </summary>
+		/// <remarks>
+		/// The second half is its own field because it can fail after the first succeeded, and the
+		/// two need different answers: a password that did not change is an error, a password that
+		/// changed while old tokens survived is a success the account holder must be told is partial.
+		/// </remarks>
+		public sealed record PasswordChange(bool Ok, string Error, bool GameTokensRevoked);
+
+		/// <summary>Outcome of an email change, and whether a verification code for the new address was issued.</summary>
+		public sealed record EmailChange(bool Ok, string Error, bool VerificationSent);
 
 		/// <summary>Two-factor enrolment material, returned exactly once.</summary>
 		public sealed record TwoFactorSetup(bool Ok, string Error, string OtpauthUri, IReadOnlyList<string> RecoveryCodes);
@@ -58,7 +75,7 @@ namespace FishMMO.ControlPanel.Services
 		/// Every game token and every panel session is revoked afterwards: a password change that
 		/// leaves the old sessions alive is not a password change.
 		/// </remarks>
-		public async Task<Outcome> ChangePasswordAsync(
+		public async Task<PasswordChange> ChangePasswordAsync(
 			string username,
 			string newSalt,
 			string newVerifier,
@@ -69,11 +86,12 @@ namespace FishMMO.ControlPanel.Services
 			{
 				log.LogWarning("PersistSrpCredentialsAsync failed for '{User}': [{Code}] {Message}",
 					username, result.ErrorCode, result.ErrorMessage);
-				return new Outcome(false, "That password could not be changed.");
+				return new PasswordChange(false, "That password could not be changed.", false);
 			}
 
-			// Best effort, and deliberately not fatal: the credentials have already changed, so
-			// failing the whole call here would leave the caller thinking they had not.
+			// Not fatal: the credentials have already changed, so failing the whole call here would
+			// leave the caller thinking they had not. It is REPORTED, though — the caller tells the
+			// account holder that a game client may still be signed in, rather than that none is.
 			var revoked = await authTokens.RevokeAllForAccountAsync(username, cancellationToken);
 			if (!revoked.IsSuccess)
 			{
@@ -81,7 +99,7 @@ namespace FishMMO.ControlPanel.Services
 					username, revoked.ErrorCode, revoked.ErrorMessage);
 			}
 
-			return new Outcome(true, null);
+			return new PasswordChange(true, null, revoked.IsSuccess);
 		}
 
 		/// <summary>
@@ -92,14 +110,14 @@ namespace FishMMO.ControlPanel.Services
 		/// now has. <c>PersistEmailAsync</c> clears the verified flag and the pending code as one
 		/// statement, then a fresh code is issued and queued.
 		/// </remarks>
-		public async Task<Outcome> ChangeEmailAsync(
+		public async Task<EmailChange> ChangeEmailAsync(
 			string username,
 			string email,
 			CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(email) || !FishMMO.Shared.Authentication.IsAllowedEmailUsername(email))
 			{
-				return new Outcome(false, "That does not look like an email address.");
+				return new EmailChange(false, "That does not look like an email address.", false);
 			}
 
 			var result = await accounts.PersistEmailAsync(username, email, cancellationToken);
@@ -107,16 +125,23 @@ namespace FishMMO.ControlPanel.Services
 			{
 				log.LogWarning("PersistEmailAsync failed for '{User}': [{Code}] {Message}",
 					username, result.ErrorCode, result.ErrorMessage);
-				return new Outcome(false, "That email could not be saved.");
+				return new EmailChange(false, "That email could not be saved.", false);
 			}
 
+			/* The address is changed and the account is unverified from here on, so what is left is
+			 * issuing the code — and a code that was not stored must never be mailed. It used to be:
+			 * the write failed, the mail went out anyway, and the player typed a code that could not
+			 * match into a form that counts wrong codes towards a support ticket, while the pending
+			 * mail also held off the resend that would have fixed it. Now the mail goes only with a
+			 * stored code, and the caller says when none was sent so the player uses Resend. */
 			int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
 			var codeResult = await accounts.PersistVerifyCodeAsync(
 				username, verifyCode, DateTime.UtcNow + VerifyCodeLifetime, cancellationToken);
 			if (!codeResult.IsSuccess)
 			{
-				log.LogWarning("PersistVerifyCodeAsync failed for '{User}': [{Code}] {Message}",
+				log.LogWarning("PersistVerifyCodeAsync failed for '{User}': [{Code}] {Message}. No verification email was queued.",
 					username, codeResult.ErrorCode, codeResult.ErrorMessage);
+				return new EmailChange(true, null, false);
 			}
 
 			var enqueue = await emailQueue.EnqueueAsync(
@@ -126,23 +151,98 @@ namespace FishMMO.ControlPanel.Services
 			{
 				log.LogWarning("Failed to enqueue the verification email for '{User}': [{Code}] {Message}",
 					username, enqueue.ErrorCode, enqueue.ErrorMessage);
+				return new EmailChange(true, null, false);
 			}
 
-			return new Outcome(true, null);
+			return new EmailChange(true, null, true);
 		}
 
 		/// <summary>
-		/// Generates fresh two-factor enrolment material and stores the secret, WITHOUT enabling
-		/// two-factor.
+		/// Generates fresh two-factor enrolment material and stores it, WITHOUT enabling two-factor.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Enabling happens only in <see cref="ConfirmTwoFactorAsync"/>, once the account holder
 		/// has proved their authenticator actually works. Enabling first would let a mistyped
 		/// scan lock somebody out of their own account permanently.
+		/// </para>
+		/// <para>
+		/// That protection covers a FIRST enrolment only. On an account whose two-factor is already
+		/// on, the secret written here is the one sign-in reads from this moment, so re-enrolling
+		/// replaces the live authenticator at once. The account page therefore demands a fresh
+		/// step-up before it calls this for such an account; see
+		/// <c>AccountController.BeginTwoFactorSetup</c>.
+		/// </para>
 		/// </remarks>
-		public async Task<TwoFactorSetup> BeginTwoFactorSetupAsync(
+		public Task<TwoFactorSetup> BeginTwoFactorSetupAsync(
 			string username,
+			CancellationToken cancellationToken = default) =>
+			EnrolAsync(username, enable: false, cancellationToken);
+
+		/// <summary>
+		/// Replaces the account's authenticator secret and recovery codes in ONE transaction, and
+		/// turns two-factor on in the same one when <paramref name="enable"/> is set.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// One transaction because every partial state is worse than none. These writes used to be
+		/// separate, each failing on its own: a delete of the old recovery codes whose result was
+		/// discarded left codes for a discarded authenticator still opening the account, and a failed
+		/// insert of the new ones still handed the player ten codes that existed nowhere. Now the
+		/// account either has the new secret and exactly the new codes, or it has what it had
+		/// before, and the caller is told which.
+		/// </para>
+		/// <para>
+		/// Registration uses this with <paramref name="enable"/> set, so a new account never ends up
+		/// with a stored secret but two-factor off, or two-factor on with codes that were not saved.
+		/// </para>
+		/// </remarks>
+		public async Task<TwoFactorSetup> EnrolAsync(
+			string username,
+			bool enable,
 			CancellationToken cancellationToken = default)
+		{
+			var begun = await unitOfWork.BeginAsync(cancellationToken);
+			if (!begun.IsSuccess)
+			{
+				log.LogWarning("Could not begin two-factor enrolment for '{User}': [{Code}] {Message}",
+					username, begun.ErrorCode, begun.ErrorMessage);
+				return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+			}
+
+			await using (IUnitOfWork uow = begun.Data)
+			{
+				TwoFactorSetup setup = await WriteEnrolmentAsync(username, enable, cancellationToken);
+				if (!setup.Ok)
+				{
+					// Leaving without a commit rolls the unit of work back: nothing it wrote survives.
+					return setup;
+				}
+
+				var committed = await uow.CommitAsync(cancellationToken);
+				if (!committed.IsSuccess)
+				{
+					log.LogWarning("Two-factor enrolment for '{User}' could not be committed; nothing changed: [{Code}] {Message}",
+						username, committed.ErrorCode, committed.ErrorMessage);
+					return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+				}
+				return setup;
+			}
+		}
+
+		/// <summary>
+		/// The enrolment writes, with no transaction of their own.
+		/// </summary>
+		/// <remarks>
+		/// Must run inside a unit of work the caller owns and commits — <see cref="EnrolAsync"/>, or
+		/// the self-service two-factor reset, which completes its request in the same transaction so a
+		/// failed enrolment does not spend the player's waiting period. Every failure here returns
+		/// before anything else is written, and the caller's rollback undoes what came before it.
+		/// </remarks>
+		internal async Task<TwoFactorSetup> WriteEnrolmentAsync(
+			string username,
+			bool enable,
+			CancellationToken cancellationToken)
 		{
 			byte[] masterKek = totpKeys.MasterKek;
 			if (masterKek == null || masterKek.Length != TotpMasterKek.KeyLength)
@@ -157,6 +257,17 @@ namespace FishMMO.ControlPanel.Services
 				secret = CryptoHelper.TwoFactor.GenerateTotpSecret();
 				string encrypted = CryptoHelper.TwoFactor.EncryptTotpSecret(masterKek, username, secret);
 
+				/* Replace the recovery codes with the new secret. Keeping the old ones would let a
+				 * code issued against a discarded authenticator still open the account, so a failed
+				 * delete fails the enrolment rather than being stepped over. */
+				var deleted = await recoveryCodes.DeleteAllForAccountAsync(username, cancellationToken);
+				if (!deleted.IsSuccess)
+				{
+					log.LogError("Could not delete the previous recovery codes for '{User}': [{Code}] {Message}",
+						username, deleted.ErrorCode, deleted.ErrorMessage);
+					return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+				}
+
 				var stored = await accounts.PersistTotpSecretAsync(username, encrypted, cancellationToken);
 				if (!stored.IsSuccess)
 				{
@@ -165,9 +276,16 @@ namespace FishMMO.ControlPanel.Services
 					return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
 				}
 
-				/* Replace the recovery codes with the new secret. Keeping the old ones would let a
-				 * code issued against a discarded authenticator still open the account. */
-				await recoveryCodes.DeleteAllForAccountAsync(username, cancellationToken);
+				if (enable)
+				{
+					var enabled = await accounts.PersistTotpEnabledAsync(username, true, cancellationToken);
+					if (!enabled.IsSuccess)
+					{
+						log.LogWarning("PersistTotpEnabledAsync failed for '{User}': [{Code}] {Message}",
+							username, enabled.ErrorCode, enabled.ErrorMessage);
+						return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
+					}
+				}
 
 				string[] codes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
 				var hashes = new List<string>(codes.Length);
@@ -175,11 +293,13 @@ namespace FishMMO.ControlPanel.Services
 				{
 					hashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
 				}
+				// Codes that were not stored must never be shown: the player would keep them as a way back in.
 				var persisted = await recoveryCodes.PersistManyAsync(username, hashes, cancellationToken);
 				if (!persisted.IsSuccess)
 				{
-					log.LogWarning("Recovery code persistence failed for '{User}': [{Code}] {Message}",
+					log.LogError("Recovery code persistence failed for '{User}': [{Code}] {Message}",
 						username, persisted.ErrorCode, persisted.ErrorMessage);
+					return new TwoFactorSetup(false, "That enrolment could not be started.", null, null);
 				}
 
 				return new TwoFactorSetup(true, null, CryptoHelper.TwoFactor.BuildOtpauthUri(secret, username), codes);
@@ -254,36 +374,60 @@ namespace FishMMO.ControlPanel.Services
 		/// <summary>
 		/// Issues a fresh set of recovery codes, discarding the previous ones.
 		/// </summary>
+		/// <remarks>
+		/// The delete and the insert are one transaction. Apart, a failed insert after a good delete
+		/// left the account with no codes at all while the player was told they "could not be
+		/// replaced" — and so still believed the old ones worked.
+		/// </remarks>
 		public async Task<TwoFactorSetup> RegenerateRecoveryCodesAsync(
 			string username,
 			CancellationToken cancellationToken = default)
 		{
-			var deleted = await recoveryCodes.DeleteAllForAccountAsync(username, cancellationToken);
-			if (!deleted.IsSuccess)
+			var begun = await unitOfWork.BeginAsync(cancellationToken);
+			if (!begun.IsSuccess)
 			{
-				// Not fatal on its own, but leaving the old codes valid alongside new ones would
-				// quietly double the number of ways in.
-				log.LogError("Could not delete the previous recovery codes for '{User}': [{Code}] {Message}",
-					username, deleted.ErrorCode, deleted.ErrorMessage);
+				log.LogWarning("Could not begin replacing the recovery codes for '{User}': [{Code}] {Message}",
+					username, begun.ErrorCode, begun.ErrorMessage);
 				return new TwoFactorSetup(false, "Those codes could not be replaced.", null, null);
 			}
 
-			string[] codes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
-			var hashes = new List<string>(codes.Length);
-			foreach (string code in codes)
+			await using (IUnitOfWork uow = begun.Data)
 			{
-				hashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
-			}
+				var deleted = await recoveryCodes.DeleteAllForAccountAsync(username, cancellationToken);
+				if (!deleted.IsSuccess)
+				{
+					// Leaving the old codes valid alongside new ones would quietly double the number
+					// of ways in. Returning without a commit rolls the unit of work back.
+					log.LogError("Could not delete the previous recovery codes for '{User}': [{Code}] {Message}",
+						username, deleted.ErrorCode, deleted.ErrorMessage);
+					return new TwoFactorSetup(false, "Those codes could not be replaced.", null, null);
+				}
 
-			var persisted = await recoveryCodes.PersistManyAsync(username, hashes, cancellationToken);
-			if (!persisted.IsSuccess)
-			{
-				log.LogError("Recovery code persistence failed for '{User}': [{Code}] {Message}",
-					username, persisted.ErrorCode, persisted.ErrorMessage);
-				return new TwoFactorSetup(false, "Those codes could not be replaced.", null, null);
-			}
+				string[] codes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
+				var hashes = new List<string>(codes.Length);
+				foreach (string code in codes)
+				{
+					hashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
+				}
 
-			return new TwoFactorSetup(true, null, null, codes);
+				var persisted = await recoveryCodes.PersistManyAsync(username, hashes, cancellationToken);
+				if (!persisted.IsSuccess)
+				{
+					log.LogError("Recovery code persistence failed for '{User}': [{Code}] {Message}",
+						username, persisted.ErrorCode, persisted.ErrorMessage);
+					return new TwoFactorSetup(false, "Those codes could not be replaced.", null, null);
+				}
+
+				var committed = await uow.CommitAsync(cancellationToken);
+				if (!committed.IsSuccess)
+				{
+					log.LogError("Replacing the recovery codes for '{User}' could not be committed; the old codes still stand: [{Code}] {Message}",
+						username, committed.ErrorCode, committed.ErrorMessage);
+					return new TwoFactorSetup(false, "Those codes could not be replaced.", null, null);
+				}
+
+				return new TwoFactorSetup(true, null, null, codes);
+			}
 		}
 
 		/// <summary>How many unused recovery codes an account has left.</summary>

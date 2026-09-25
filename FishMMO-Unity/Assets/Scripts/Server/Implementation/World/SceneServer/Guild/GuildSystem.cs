@@ -599,12 +599,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously fetches guild updates from the database and marshals the processing back to the main thread.
 		/// </summary>
 		/// <returns>Asynchronous fetch-and-process task.</returns>
+		/// <remarks>
+		/// <para>
+		/// <b>The high-water mark comes from the rows, not from this server's clock.</b> It used to
+		/// be <c>DateTime.UtcNow</c>, taken on the main thread after every roster and ladder read
+		/// below had come back and the marshal had been drained. Any update written during that
+		/// window — two round trips per updated guild, plus the queue — carried a timestamp older
+		/// than the mark and was never fetched at all: a kick made on another scene server simply
+		/// never arrived, and the kicked member kept a live guild ID, and guild chat, until they
+		/// relogged. The rows already say how far this pass actually read, so the mark is the
+		/// newest <see cref="GuildUpdateData.LastUpdate"/> that was processed, one tick past it so
+		/// the same row is not re-read and re-broadcast every second.
+		/// </para>
+		/// <para>
+		/// <b>It never passes this server's clock as it stood when the query was sent.</b> The
+		/// timestamps are written by whichever scene server made the change, from its own clock; a
+		/// writer running ahead would otherwise drag the mark past updates an accurate writer
+		/// makes a moment later. Capped there, a future-stamped row is merely read again until the
+		/// clocks agree, which costs a re-send, not a lost update.
+		/// </para>
+		/// <para>
+		/// <b>A guild whose snapshot could not be read holds the mark.</b> Its roster or ladder
+		/// fetch failing used to drop it from the pass while the mark moved on regardless, which
+		/// lost the update exactly as above. Now the mark stops at that guild's timestamp, so the
+		/// next pass reads it again — at the cost of re-sending, once, any guild updated after it.
+		/// </para>
+		/// </remarks>
 		private async Task FetchAndProcessGuildUpdatesAsync(List<long> guildIds, DateTime lastFetch)
 		{
 			try
 			{
+				/* The rank service is required, not optional. A roster sent without a ladder has to
+				 * be sent with SOME permission mask, and the only one available is None — which
+				 * used to strip every local member's cached permissions and blank their panel. */
 				if (!TryGetDbService(out IGuildUpdateService guildUpdateService) ||
-					!TryGetDbService(out ICharacterGuildService charGuildService))
+					!TryGetDbService(out ICharacterGuildService charGuildService) ||
+					!TryGetDbService(out IGuildRankService rankService))
 				{
 					return;
 				}
@@ -614,9 +644,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Async DB fetch
+				// Async DB fetch. The clock is read BEFORE the query: see the remarks on the mark's ceiling.
+				DateTime fetchStartUtc = DateTime.UtcNow;
 				DatabaseResult<List<GuildUpdateData>> fetchResult = await guildUpdateService.FetchAsync(guildIds, lastFetch);
-				if (!fetchResult.IsSuccess || fetchResult.Data == null || fetchResult.Data.Count < 1)
+				if (!fetchResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync update fetch failed ({guildIds.Count} guilds since {lastFetch:O}): {fetchResult.ErrorCode} - {fetchResult.ErrorMessage}");
+					return;
+				}
+
+				if (fetchResult.Data == null || fetchResult.Data.Count < 1)
 				{
 					return;
 				}
@@ -631,10 +668,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * below can decide who may see an officer note WITHOUT a database call and
 				 * WITHOUT trusting the rank cached on the character. The membership rows and the
 				 * ladder are read in the same pass, so the filter is applied against the same
-				 * snapshot the roster itself was built from. */
+				 * snapshot the roster itself was built from. A guild enters the pass only with
+				 * BOTH: half a snapshot is not something the main-thread block can act on. */
 				Dictionary<long, IReadOnlyList<GuildRankData>> guildLaddersMap = new Dictionary<long, IReadOnlyList<GuildRankData>>();
 
-				TryGetDbService(out IGuildRankService rankService);
+				// See the remarks: how far this pass read, and the earliest update it could not.
+				DateTime newestProcessed = DateTime.MinValue;
+				DateTime oldestUnread = DateTime.MaxValue;
 
 				foreach (GuildUpdateData update in updates)
 				{
@@ -645,19 +685,53 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					updatedGuilds.Add(update.GuildID);
 
 					DatabaseResult<IReadOnlyList<CharacterGuildData>> membersResult = await charGuildService.FetchManyAsync(update.GuildID);
-					if (membersResult.IsSuccess && membersResult.Data != null)
+					if (!membersResult.IsSuccess || membersResult.Data == null)
 					{
-						guildMembersMap[update.GuildID] = membersResult.Data;
+						await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync roster fetch failed (GuildID={update.GuildID}); held for the next pass: {membersResult.ErrorCode} - {membersResult.ErrorMessage}");
+						if (update.LastUpdate < oldestUnread)
+						{
+							oldestUnread = update.LastUpdate;
+						}
+						continue;
 					}
 
-					if (rankService != null)
+					// FetchOrSeedLadderAsync logs its own failures.
+					IReadOnlyList<GuildRankData> ladder = await FetchOrSeedLadderAsync(update.GuildID, rankService);
+					if (ladder == null)
 					{
-						IReadOnlyList<GuildRankData> ladder = await FetchOrSeedLadderAsync(update.GuildID, rankService);
-						if (ladder != null)
+						if (update.LastUpdate < oldestUnread)
 						{
-							guildLaddersMap[update.GuildID] = ladder;
+							oldestUnread = update.LastUpdate;
 						}
+						continue;
 					}
+
+					guildMembersMap[update.GuildID] = membersResult.Data;
+					guildLaddersMap[update.GuildID] = ladder;
+					if (update.LastUpdate > newestProcessed)
+					{
+						newestProcessed = update.LastUpdate;
+					}
+				}
+
+				DateTime nextFetch = lastFetch;
+				if (newestProcessed > DateTime.MinValue)
+				{
+					nextFetch = DateTime.SpecifyKind(newestProcessed.AddTicks(1), DateTimeKind.Utc);
+				}
+				if (fetchStartUtc < nextFetch)
+				{
+					nextFetch = fetchStartUtc;
+				}
+				if (oldestUnread < nextFetch)
+				{
+					nextFetch = DateTime.SpecifyKind(oldestUnread, DateTimeKind.Utc);
+				}
+
+				if (guildMembersMap.Count == 0)
+				{
+					// Nothing was read, so the mark has not moved and there is nothing to send.
+					return;
 				}
 
 				// Marshal all main-thread state changes + broadcasts
@@ -668,10 +742,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					// Update last fetch time
+					// Advance the mark to what this pass actually read — see the remarks.
 					if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData rtData))
 					{
-						rtData.LastFetchTime = DateTime.UtcNow;
+						rtData.LastFetchTime = nextFetch;
 					}
 
 					if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mapData))
@@ -719,7 +793,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// Cache the guild member IDs
 						mapData.GuildMemberTracker[guildID] = currentMemberIDs;
 
-						guildLaddersMap.TryGetValue(guildID, out IReadOnlyList<GuildRankData> ladder);
+						// Always present: a guild enters guildMembersMap only together with its ladder.
+						IReadOnlyList<GuildRankData> ladder = guildLaddersMap[guildID];
 
 						/* Two projections of the same roster. The officer note is a column a
 						 * client either may read or may never receive — hiding it in the panel
@@ -880,10 +955,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Fire-and-forget async DB persist
 			long characterID = character.ID;
 			long guildID = guildController.ID;
-			byte rank = guildController.RankOrder;
 			string sceneName = character.SceneName;
 
-			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, rank, sceneName), characterID);
+			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, sceneName), characterID);
 		}
 
 		/// <summary>
@@ -920,10 +994,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			/* A kick or a leave deletes the membership row from a background task, and this
 			 * character's controller still carries the old guild ID until that delete lands.
-			 * Persisting from it here would UPSERT the row straight back — putting the player
-			 * into the guild they had just been removed from, permanently, because nothing
-			 * afterwards knows the row is not supposed to exist. Disconnecting inside that
-			 * window is the whole exploit, and it is a window a player can aim for. */
+			 * A persist that starts AFTER the delete finds no row and writes nothing — see
+			 * PersistGuildMemberAsync. One that starts BEFORE it is still harmful: its write
+			 * either lands first and bumps the row's version, so the delete (gated on the version
+			 * it read) fails as stale, or lands second and inserts the row straight back. Either
+			 * way the player stays in the guild they were removed from, and disconnecting inside
+			 * that window is a window a player can aim for, so the location write is skipped
+			 * while a removal on this server is in flight. */
 			if (runtimeData != null && runtimeData.IsMembershipRemovalInFlight(character.ID))
 			{
 				return;
@@ -932,20 +1009,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Fire-and-forget async DB persist with "Offline" location
 			long characterID = character.ID;
 			long guildID = guildController.ID;
-			byte rank = guildController.RankOrder;
 
-			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, rank, "Offline"), characterID);
+			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, "Offline"), characterID);
 		}
 
 		/// <summary>
-		/// Asynchronously persists a guild member's data and triggers a guild update notification.
+		/// Asynchronously persists a guild member's location and triggers a guild update notification.
 		/// </summary>
 		/// <param name="characterID">Character identifier to persist.</param>
-		/// <param name="guildID">Guild identifier associated with the character.</param>
-		/// <param name="rank">Guild rank value to persist.</param>
+		/// <param name="guildID">Guild identifier the server believes the character is in.</param>
 		/// <param name="location">Current member location label.</param>
 		/// <returns>Asynchronous persistence task.</returns>
-		private async Task PersistGuildMemberAsync(long characterID, long guildID, byte rank, string location)
+		/// <remarks>
+		/// <para>
+		/// This is a LOCATION write, and only the location is this method's to decide. Everything
+		/// else on the row — whether it exists at all, which guild it names, the rank it holds —
+		/// is taken from the row as it stands, never from the controller. The controller is a
+		/// cache the update pump refreshes about once a second, and a membership change made on
+		/// another scene server reaches it only on that pump; writing the cache back with a
+		/// version guaranteed to win used to overwrite whatever had happened in between:
+		/// </para>
+		/// <list type="bullet">
+		/// <item>a member kicked elsewhere who logged out or changed zone before the pump ran was
+		/// INSERTED straight back into the guild, permanently;</item>
+		/// <item>a promotion or demotion made elsewhere was reverted;</item>
+		/// <item>a rank inserted below the leader moves the leader up a rung, and a leader who left
+		/// before the pump ran wrote their old order back — leaving the top seat empty and the
+		/// guild with nobody able to administer it.</item>
+		/// </list>
+		/// <para>
+		/// So a missing row, or a row naming a different guild, means this controller is stale and
+		/// nothing is written. The fetch and the UPSERT are still two round trips, and a delete
+		/// landing between them would still be undone by the UPSERT's insert branch; closing that
+		/// needs a location-only UPDATE in the service, which cannot insert at all.
+		/// </para>
+		/// </remarks>
+		private async Task PersistGuildMemberAsync(long characterID, long guildID, string location)
 		{
 			try
 			{
@@ -955,15 +1054,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Fetch existing version for sequence-based optimistic concurrency
-				long version = 1;
 				DatabaseResult<CharacterGuildData?> existingResult = await charGuildService.FetchAsync(characterID);
-				if (existingResult.IsSuccess && existingResult.Data.HasValue)
+				if (!existingResult.IsSuccess)
 				{
-					version = existingResult.Data.Value.Version + 1;
+					/* Nothing is written without the row. Guessing a version used to be the
+					 * fallback, and a guessed version either loses to the real one — a misleading
+					 * STALE_STATE — or, with no row to lose to, inserts one. A location label is
+					 * rewritten on the next connect or disconnect anyway. */
+					await Log.Warning("GuildSystem", $"PersistGuildMemberAsync membership fetch failed (CharID={characterID}, GuildID={guildID}): {existingResult.ErrorCode} - {existingResult.ErrorMessage}");
+					return;
 				}
 
-				CharacterGuildData guildData = new CharacterGuildData(0, version, characterID, guildID, rank, location);
+				if (!existingResult.Data.HasValue || existingResult.Data.Value.GuildID != guildID)
+				{
+					// Removed, or moved to another guild, somewhere this server has not heard about yet.
+					await Log.Debug("GuildSystem", $"PersistGuildMemberAsync skipped: CharID={characterID} no longer holds a membership row in GuildID={guildID}.");
+					return;
+				}
+
+				CharacterGuildData existing = existingResult.Data.Value;
+
+				// Sequence-based optimistic concurrency: the row's own version, one past, and its own rank.
+				CharacterGuildData guildData = new CharacterGuildData(0, existing.Version + 1, characterID, guildID, existing.Rank, location);
 				DatabaseResult persistResult = await charGuildService.PersistAsync(guildData, maxGuildSize);
 				if (!persistResult.IsSuccess)
 				{
@@ -1289,7 +1401,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult record = await ledgerService.RecordAsync(characterID, amount, (int)reason, (int)state);
 				if (!record.IsSuccess)
 				{
-					await Log.Warning("GuildSystem", $"Currency ledger: could not record {amount} ({reason}/{state}) for CharID={characterID}. {record.ErrorMessage}");
+					await Log.Warning("GuildSystem", $"Currency ledger: could not record {amount} ({reason}/{state}) for CharID={characterID}: {record.ErrorCode} - {record.ErrorMessage}");
 				}
 			}, characterID))
 			{
@@ -1329,6 +1441,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<bool> existsResult = await guildService.ExistsAsync(guildName);
 				if (!existsResult.IsSuccess)
 				{
+					await Log.Warning("GuildSystem", $"CreateGuildAsync name check failed (CharID={characterID}, Name='{guildName}'): {existsResult.ErrorCode} - {existsResult.ErrorMessage}");
 					FailCreate(conn, characterID, feeCharged, GuildResultType.Failed);
 					return;
 				}
@@ -1348,6 +1461,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					GuildResultType failure = createResult.ErrorCode == DatabaseErrorCodes.AlreadyExists
 						? GuildResultType.NameAlreadyExists
 						: GuildResultType.Failed;
+
+					// A taken name is the player's answer; anything else is a fault and is logged.
+					if (failure == GuildResultType.Failed)
+					{
+						await Log.Warning("GuildSystem", $"CreateGuildAsync guild insert failed (CharID={characterID}, Name='{guildName}'): {createResult.ErrorCode} - {createResult.ErrorMessage}");
+					}
 
 					FailCreate(conn, characterID, feeCharged, failure);
 					return;
@@ -1430,7 +1549,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					// Hand the founder the (empty) notice and message of the day so the panel's
 					// info band is populated from the moment the guild exists.
-					_ = PublishGuildInfoAsync(newGuildID, characterID);
+					TryEnqueueAsyncWork(() => PublishGuildInfoAsync(newGuildID, characterID), characterID);
 
 					AppendGuildLog(newGuildID, GuildLogEventType.Created, characterID);
 
@@ -1554,7 +1673,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildAuthority inviterAuthority = await ResolveGuildAuthorityAsync(guildID, inviterCharacterID);
 				if (!inviterAuthority.Has(GuildPermissions.Invite))
 				{
-					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					SendGuildResult(conn, AuthorityRefusal(inviterAuthority));
 					return;
 				}
 
@@ -1562,6 +1681,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<int> countResult = await charGuildService.CountAsync(guildID);
 				if (!countResult.IsSuccess)
 				{
+					await Log.Warning("GuildSystem", $"InviteToGuildAsync member count failed (GuildID={guildID}, TargetID={targetCharacterID}): {countResult.ErrorCode} - {countResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
 					return;
 				}
 				if (countResult.Data >= maxGuildSize)
@@ -1573,11 +1694,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* Blocking has existed in the friend table since it was written and nothing has
 				 * ever read the column, so a blocked player could still be invited by whoever
 				 * they blocked. Asked about the TARGET, not the inviter: the question is whether
-				 * the person about to receive a modal has refused contact from the sender. */
+				 * the person about to receive a modal has refused contact from the sender.
+				 *
+				 * A check that could not be MADE refuses. The block is the target's protection
+				 * from exactly this modal, and reading a failed lookup as "not blocked" handed
+				 * that protection to whatever the database was doing at the time. */
 				if (TryGetDbService(out ICharacterFriendService friendService))
 				{
 					DatabaseResult<bool> blockedResult = await friendService.IsBlockedAsync(targetCharacterID, inviterCharacterID);
-					if (blockedResult.IsSuccess && blockedResult.Data)
+					if (!blockedResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"InviteToGuildAsync block check failed (InviterID={inviterCharacterID}, TargetID={targetCharacterID}): {blockedResult.ErrorCode} - {blockedResult.ErrorMessage}");
+						SendGuildResult(conn, GuildResultType.Failed);
+						return;
+					}
+					if (blockedResult.Data)
 					{
 						SendGuildResult(conn, GuildResultType.TargetIsBlocked);
 						return;
@@ -1847,7 +1978,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// True when an invitation is being answered, false when a recruitment application was
 		/// accepted. The only difference it makes is whether a pending invitation is cleared.
 		/// </param>
-		/// <returns>Asynchronous join task.</returns>
+		/// <returns>
+		/// The outcome, which has also been sent to <paramref name="conn"/>. Returned as well
+		/// because the joiner is not always the one who asked: an application is accepted by an
+		/// officer, who is owed the answer too.
+		/// </returns>
 		/// <remarks>
 		/// <para>
 		/// E10 accepts an application by calling THIS, not by writing a membership row of its own.
@@ -1863,15 +1998,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// time, which is what makes "an accept arriving after the guild filled" a refusal rather
 		/// than an overflow.
 		/// </para>
+		/// <para>
+		/// A database that could not ANSWER is never read as a "no". A failed read reports
+		/// <see cref="GuildResultType.Failed"/> and leaves the invitation pending, so the player
+		/// can simply accept again; only a guild that is really gone consumes it.
+		/// </para>
 		/// </remarks>
-		private async Task JoinGuildAsync(NetworkConnection conn, long characterID, long guildID, string sceneName, bool fromInvitation)
+		private async Task<GuildResultType> JoinGuildAsync(NetworkConnection conn, long characterID, long guildID, string sceneName, bool fromInvitation)
 		{
 			try
 			{
 				if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
 					!TryGetDbService(out IGuildUpdateService guildUpdateService))
 				{
-					return;
+					return GuildResultType.Failed;
 				}
 
 				/* The guild can be disbanded between the invite and the accept — the last member
@@ -1882,45 +2022,77 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * and would otherwise sail through the capacity test. */
 				if (!TryGetDbService(out IGuildService guildExistsService))
 				{
-					return;
+					return GuildResultType.Failed;
 				}
 
 				DatabaseResult<GuildData?> guildResult = await guildExistsService.FetchAsync(guildID);
-				if (!guildResult.IsSuccess || !guildResult.Data.HasValue)
+				if (!guildResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"JoinGuildAsync guild fetch failed (CharID={characterID}, GuildID={guildID}): {guildResult.ErrorCode} - {guildResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
+					return GuildResultType.Failed;
+				}
+
+				if (!guildResult.Data.HasValue)
 				{
 					SendGuildResult(conn, GuildResultType.GuildNotFound);
 					if (fromInvitation)
 					{
 						ClearPendingInvitation(characterID);
 					}
-					return;
+					return GuildResultType.GuildNotFound;
 				}
 
 				// Check guild capacity
 				DatabaseResult<int> countResult = await charGuildService.CountAsync(guildID);
 				if (!countResult.IsSuccess)
 				{
-					return;
+					/* A failed count is not a count of zero, and it is not "full" either. The
+					 * persist below enforces the cap again inside its own INSERT, so this read is
+					 * only ever an early answer — which makes Failed the honest one. */
+					await Log.Warning("GuildSystem", $"JoinGuildAsync member count failed (CharID={characterID}, GuildID={guildID}): {countResult.ErrorCode} - {countResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
+					return GuildResultType.Failed;
 				}
 				if (countResult.Data >= maxGuildSize)
 				{
 					SendGuildResult(conn, GuildResultType.GuildFull);
-					return;
+					return GuildResultType.GuildFull;
 				}
 
 				// Persist membership
 				/* New members land on the LOWEST rung the guild actually has, not on a constant.
 				 * A guild that deleted its bottom rank would otherwise admit people into a rank
 				 * with no row, which resolves to no permissions and cannot be promoted out of by
-				 * name. */
-				byte joinRankOrder = await ResolveLowestRankOrderAsync(guildID);
+				 * name. An unreadable ladder is therefore a refusal, not a guess — see
+				 * ResolveLowestRankOrderAsync. */
+				byte? lowestRankOrder = await ResolveLowestRankOrderAsync(guildID);
+				if (!lowestRankOrder.HasValue)
+				{
+					SendGuildResult(conn, GuildResultType.Failed);
+					return GuildResultType.Failed;
+				}
+
+				byte joinRankOrder = lowestRankOrder.Value;
 				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, guildID, joinRankOrder, sceneName);
 				DatabaseResult saveResult = await charGuildService.PersistAsync(memberData, maxGuildSize);
 				if (!saveResult.IsSuccess)
 				{
 					await Log.Warning("GuildSystem", $"JoinGuildAsync membership persist failed (CharID={characterID}, GuildID={guildID}): {saveResult.ErrorCode} - {saveResult.ErrorMessage}");
-					SendGuildResult(conn, GuildResultType.GuildNotFound);
-					return;
+
+					/* The persist is where capacity and existence are finally decided — the reads
+					 * above are a separate round trip and several joins can pass them together —
+					 * so its refusals are the ones that must reach the player as what they are.
+					 * Every one of them used to arrive as "guild not found". A stale version means
+					 * the character already holds a membership row: the version-1 insert cannot
+					 * overwrite it, which is what stops a join moving somebody between guilds. */
+					GuildResultType refusal = saveResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded ? GuildResultType.GuildFull
+						: saveResult.ErrorCode == DatabaseErrorCodes.StaleState ? GuildResultType.AlreadyInGuild
+						: saveResult.ErrorCode == DatabaseErrorCodes.NotFound ? GuildResultType.GuildNotFound
+						: GuildResultType.Failed;
+
+					SendGuildResult(conn, refusal);
+					return refusal;
 				}
 
 				/* Every OTHER application this character has outstanding is dropped the moment
@@ -1975,7 +2147,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					// The new member has no guild text yet; send it alongside the join rather than
 					// making them wait for somebody to edit it.
-					_ = PublishGuildInfoAsync(guildID, characterID);
+					TryEnqueueAsyncWork(() => PublishGuildInfoAsync(guildID, characterID), characterID);
 
 					AppendGuildLog(guildID, GuildLogEventType.Joined, characterID);
 
@@ -1990,10 +2162,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 					}
 				});
+
+				return GuildResultType.Success;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("GuildSystem", $"Error joining guild (CharID={characterID}, GuildID={guildID}, FromInvitation={fromInvitation}): {ex}");
+				return GuildResultType.Failed;
 			}
 		}
 
@@ -2130,24 +2305,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<IReadOnlyList<CharacterGuildData>> membersResult = await charGuildService.FetchManyAsync(guildID);
 				if (!membersResult.IsSuccess || membersResult.Data == null)
 				{
+					await Log.Warning("GuildSystem", $"LeaveGuildAsync roster fetch failed (CharID={characterID}, GuildID={guildID}): {membersResult.ErrorCode} - {membersResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
 					return;
 				}
 
 				IReadOnlyList<CharacterGuildData> members = membersResult.Data;
-				int remainingCount = members.Count - 1;
 
 				// Find the leaving member's version for optimistic concurrency on delete
+				bool leaverFound = false;
 				long leavingMemberVersion = 1;
 				byte leavingRankOrder = 0;
 				foreach (CharacterGuildData member in members)
 				{
 					if (member.CharacterID == characterID)
 					{
+						leaverFound = true;
 						leavingMemberVersion = member.Version + 1;
 						leavingRankOrder = member.Rank;
 						break;
 					}
 				}
+
+				/* The leaver has no row: they were kicked, or the guild disbanded, on another
+				 * scene server, and this one's controller has not been told yet. There is nothing
+				 * left to delete — and everything below counts the leaver among the rows it just
+				 * read. With them missing, "members minus the leaver" undercounted by one, so a
+				 * two-member guild whose other member was still in it read as empty and was
+				 * DELETED, cascading the remaining member's row and releasing the guild's land.
+				 * The only thing still to do is the local half: tell the player they are out. */
+				if (!leaverFound)
+				{
+					await Log.Debug("GuildSystem", $"LeaveGuildAsync: CharID={characterID} has no membership row in GuildID={guildID}; clearing the stale local membership only.");
+					CompleteLocalLeave(conn, characterID, guildID, recordLeft: false);
+					return;
+				}
+
+				int remainingCount = members.Count - 1;
 
 				/* The leader is whichever member sits highest on the ladder, read from the rows
 				 * rather than compared against a constant. A guild that added a rank above the
@@ -2232,7 +2426,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (!leaderResult.IsSuccess)
 					{
 						await Log.Error("GuildSystem", $"LeaveGuildAsync leadership transfer failed (GuildID={guildID}, NewLeader={newLeader.Value.CharacterID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}; refusing the leave rather than leaving the guild leaderless.");
-						SendGuildResult(conn, GuildResultType.InsufficientRank);
+						SendGuildResult(conn, GuildResultType.Failed);
 						return;
 					}
 				}
@@ -2241,7 +2435,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult deleteResult = await charGuildService.DeleteAsync(characterID, leavingMemberVersion);
 				if (!deleteResult.IsSuccess)
 				{
-					await Log.Warning("GuildSystem", $"LeaveGuildAsync member delete failed (CharID={characterID}, GuildID={guildID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+					/* The leave did not happen, so nothing after this line may run. It used to
+					 * carry on regardless: the player was told they had left, their controller was
+					 * cleared and "Left" was logged, while the row stayed — and they were back in
+					 * the guild at their next login. A departing leader was worse off still, because
+					 * the successor had already been promoted into the same seat above.
+					 *
+					 * The promotion is NOT rolled back. Two leaders is the state the transfer path
+					 * already accepts as recoverable, and a second write to undo the first could
+					 * fail in its turn; pressing Leave again resolves it, since the successor now
+					 * sits at the leaver's order and the transfer to them is a no-op re-rank. */
+					bool successorPromoted = leaverIsLeader && remainingCount > 0;
+					string failure = $"LeaveGuildAsync member delete failed (CharID={characterID}, GuildID={guildID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}";
+					if (successorPromoted)
+					{
+						await Log.Error("GuildSystem", $"{failure}. The successor has already been promoted, so the guild now has two members at rank order {leavingRankOrder}.");
+					}
+					else
+					{
+						await Log.Warning("GuildSystem", failure);
+					}
+					SendGuildResult(conn, GuildResultType.Failed);
+					return;
 				}
 
 				if (remainingCount < 1)
@@ -2258,30 +2473,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						await Log.Warning("GuildSystem", $"LeaveGuildAsync guild update delete failed (GuildID={guildID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
 					}
 
-					/* Any land the guild held goes back to the world with it.
-					 *
-					 * Plot ownership carries no foreign key — the owner columns use zero for "none",
-					 * which has nothing to point at — so nothing in the schema notices the guild has
-					 * gone. Left alone, those plots stay owned by an identifier no guild answers to:
-					 * unclaimable because they are owned, and untaxable because guild land is
-					 * deferred rather than charged, which is to say removed from the game
-					 * permanently and silently.
-					 *
-					 * Done here rather than in the housing system because this is where a guild
-					 * stops existing, and a sweep looking for orphans would have to enumerate every
-					 * guild-owned plot in the world to find the few that had been abandoned. */
-					if (Server.Database.ServiceRegistry.TryGet(out IPlotService plotService))
-					{
-						DatabaseResult<int> plotReleaseResult = await plotService.ReleaseAllForGuildAsync(guildID);
-						if (!plotReleaseResult.IsSuccess)
-						{
-							await Log.Warning("GuildSystem", $"LeaveGuildAsync guild plot release failed (GuildID={guildID}): {plotReleaseResult.ErrorCode} - {plotReleaseResult.ErrorMessage}");
-						}
-						else if (plotReleaseResult.Data > 0)
-						{
-							await Log.Debug("GuildSystem", $"Released {plotReleaseResult.Data} plot(s) held by disbanded GuildID={guildID}.");
-						}
-					}
+					// Any land the guild held goes back to the world with it.
+					await ReleaseGuildPlotsAsync(guildID);
 				}
 				else
 				{
@@ -2293,33 +2486,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 
-				TryEnqueueMainThread(() =>
-				{
-					if (conn == null || !conn.IsActive || conn.FirstObject == null)
-					{
-						return;
-					}
-
-					IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
-					if (guildController == null || guildController.Character.ID != characterID || guildController.ID != guildID)
-					{
-						return;
-					}
-
-					guildController.ID = 0;
-					guildController.RankOrder = 0;
-					guildController.Permissions = GuildPermissions.None;
-					guildController.LeaderRankOrder = 0;
-					RemoveGuildCharacterTracker(guildID, characterID);
-
-					Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
-
-					// Skipped when the guild itself has just been deleted — there is no log left.
-					if (remainingCount > 0)
-					{
-						AppendGuildLog(guildID, GuildLogEventType.Left, characterID);
-					}
-				});
+				// Skipped when the guild itself has just been deleted — there is no log left.
+				CompleteLocalLeave(conn, characterID, guildID, recordLeft: remainingCount > 0);
 			}
 			catch (Exception ex)
 			{
@@ -2331,6 +2499,90 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * suppress the disconnect persist for the rest of the session and quietly stop
 				 * recording this character's guild location. */
 				EndMembershipRemoval(characterID);
+			}
+		}
+
+		/// <summary>
+		/// Clears a departed member's guild state on this server and tells their client.
+		/// </summary>
+		/// <param name="conn">The departing member's connection.</param>
+		/// <param name="characterID">The departing member.</param>
+		/// <param name="guildID">The guild they left.</param>
+		/// <param name="recordLeft">Whether to write a "Left" row to the guild's activity log.</param>
+		/// <remarks>
+		/// Marshalled: the controller and the trackers are main-thread state. Called only once the
+		/// membership row is known to be gone — deleted by the leave itself, or found already
+		/// missing — because a controller cleared ahead of the row is a player told they left a
+		/// guild they are still in.
+		/// </remarks>
+		private void CompleteLocalLeave(NetworkConnection conn, long characterID, long guildID, bool recordLeft)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn == null || !conn.IsActive || conn.FirstObject == null)
+				{
+					return;
+				}
+
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (guildController == null || guildController.Character.ID != characterID || guildController.ID != guildID)
+				{
+					return;
+				}
+
+				guildController.ID = 0;
+				guildController.RankOrder = 0;
+				guildController.Permissions = GuildPermissions.None;
+				guildController.LeaderRankOrder = 0;
+				RemoveGuildCharacterTracker(guildID, characterID);
+
+				Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
+
+				if (recordLeft)
+				{
+					AppendGuildLog(guildID, GuildLogEventType.Left, characterID);
+				}
+			});
+		}
+
+		/// <summary>
+		/// Returns every plot a guild owned to the world. Called wherever a guild stops existing.
+		/// </summary>
+		/// <param name="guildID">The guild that no longer exists.</param>
+		/// <returns>Asynchronous release task.</returns>
+		/// <remarks>
+		/// <para>
+		/// Plot ownership carries no foreign key — the owner columns use zero for "none", which has
+		/// nothing to point at — so nothing in the schema notices the guild has gone. Left alone,
+		/// those plots stay owned by an identifier no guild answers to: unclaimable because they
+		/// are owned, and untaxable because guild land is deferred rather than charged, which is
+		/// to say removed from the game permanently and silently.
+		/// </para>
+		/// <para>
+		/// Done in the guild system rather than the housing system because this is where a guild
+		/// stops existing, and a sweep looking for orphans would have to enumerate every
+		/// guild-owned plot in the world to find the few that had been abandoned. It is a helper
+		/// because there are TWO such places — the last member leaving, and a disband — and only
+		/// the first used to release anything: a disbanded guild's land was lost exactly as
+		/// described above.
+		/// </para>
+		/// </remarks>
+		private async Task ReleaseGuildPlotsAsync(long guildID)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet(out IPlotService plotService))
+			{
+				return;
+			}
+
+			DatabaseResult<int> plotReleaseResult = await plotService.ReleaseAllForGuildAsync(guildID);
+			if (!plotReleaseResult.IsSuccess)
+			{
+				await Log.Warning("GuildSystem", $"ReleaseGuildPlotsAsync guild plot release failed (GuildID={guildID}): {plotReleaseResult.ErrorCode} - {plotReleaseResult.ErrorMessage}");
+			}
+			else if (plotReleaseResult.Data > 0)
+			{
+				await Log.Debug("GuildSystem", $"Released {plotReleaseResult.Data} plot(s) held by deleted GuildID={guildID}.");
 			}
 		}
 
@@ -2466,7 +2718,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Verify the target member exists and check rank permission
 				DatabaseResult<CharacterGuildData?> memberResult = await charGuildService.FetchAsync(memberID);
-				if (!memberResult.IsSuccess || !memberResult.Data.HasValue)
+				if (!memberResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"RemoveGuildMemberAsync target fetch failed (GuildID={guildID}, MemberID={memberID}): {memberResult.ErrorCode} - {memberResult.ErrorMessage}");
+					return;
+				}
+
+				if (!memberResult.Data.HasValue)
 				{
 					return;
 				}
@@ -2489,6 +2747,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult deleteResult = await charGuildService.DeleteAsync(memberID, targetMember.Version + 1);
 				if (!deleteResult.IsSuccess)
 				{
+					/* Most often STALE_STATE: the member's row moved between the read and the
+					 * delete — a rank change, or their own location persist. Nothing was removed
+					 * and the kick can simply be issued again. */
+					await Log.Warning("GuildSystem", $"RemoveGuildMemberAsync member delete failed (GuildID={guildID}, MemberID={memberID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
 					return;
 				}
 
@@ -2650,7 +2912,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Fetch the member's current version for optimistic concurrency
 				DatabaseResult<CharacterGuildData?> memberResult = await charGuildService.FetchAsync(memberID);
-				if (!memberResult.IsSuccess || !memberResult.Data.HasValue)
+				if (!memberResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"ChangeGuildRankAsync target fetch failed (GuildID={guildID}, MemberID={memberID}): {memberResult.ErrorCode} - {memberResult.ErrorMessage}");
+					return;
+				}
+
+				if (!memberResult.Data.HasValue)
 				{
 					return;
 				}
@@ -2864,66 +3132,88 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </param>
 		/// <returns>Asynchronous publish task.</returns>
 		/// <remarks>
+		/// <para>
 		/// Sent to the members this scene server hosts, resolved through the guild character
 		/// tracker. Members elsewhere get their copy from their own scene server, which is running
 		/// the same code against the same row.
+		/// </para>
+		/// <para>
+		/// Catches its own exceptions. The create and join paths hand it to the async worker from a
+		/// main-thread block, as a courtesy nothing waits on — they used to discard the task
+		/// outright, running the read on the main thread with any fault unobserved, and a fault
+		/// nobody observes is a fault nobody hears about.
+		/// </para>
 		/// </remarks>
 		private async Task PublishGuildInfoAsync(long guildID, long onlyCharacterID = 0)
 		{
-			if (!TryGetDbService(out IGuildService guildService))
+			try
 			{
-				return;
-			}
-
-			DatabaseResult<GuildData?> guildResult = await guildService.FetchAsync(guildID);
-			if (!guildResult.IsSuccess || !guildResult.Data.HasValue)
-			{
-				return;
-			}
-
-			GuildData guild = guildResult.Data.Value;
-
-			GuildInfoBroadcast broadcast = new GuildInfoBroadcast()
-			{
-				GuildID = guild.ID,
-				Name = guild.Name ?? string.Empty,
-				Notice = guild.Notice ?? string.Empty,
-				MessageOfTheDay = guild.MessageOfTheDay ?? string.Empty,
-			};
-
-			TryEnqueueMainThread(() =>
-			{
-				if (Server == null ||
-					!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+				if (!TryGetDbService(out IGuildService guildService))
 				{
 					return;
 				}
 
-				if (onlyCharacterID > 0)
+				DatabaseResult<GuildData?> guildResult = await guildService.FetchAsync(guildID);
+				if (!guildResult.IsSuccess)
 				{
-					if (characterMappingData.CharactersByID.TryGetValue(onlyCharacterID, out IPlayerCharacter single) &&
-						single?.Owner != null)
+					await Log.Warning("GuildSystem", $"PublishGuildInfoAsync guild fetch failed (GuildID={guildID}): {guildResult.ErrorCode} - {guildResult.ErrorMessage}");
+					return;
+				}
+
+				if (!guildResult.Data.HasValue)
+				{
+					// Disbanded since the caller looked; there is nothing to show.
+					return;
+				}
+
+				GuildData guild = guildResult.Data.Value;
+
+				GuildInfoBroadcast broadcast = new GuildInfoBroadcast()
+				{
+					GuildID = guild.ID,
+					Name = guild.Name ?? string.Empty,
+					Notice = guild.Notice ?? string.Empty,
+					MessageOfTheDay = guild.MessageOfTheDay ?? string.Empty,
+				};
+
+				TryEnqueueMainThread(() =>
+				{
+					if (Server == null ||
+						!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 					{
-						Server.NetworkWrapper.Broadcast(single.Owner, broadcast, true, Channel.Reliable);
+						return;
 					}
-					return;
-				}
 
-				if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
-					!mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs))
-				{
-					return;
-				}
-
-				foreach (long memberID in memberIDs)
-				{
-					if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
-						member?.Owner != null)
+					if (onlyCharacterID > 0)
 					{
-						Server.NetworkWrapper.Broadcast(member.Owner, broadcast, true, Channel.Reliable);
+						if (characterMappingData.CharactersByID.TryGetValue(onlyCharacterID, out IPlayerCharacter single) &&
+							single?.Owner != null)
+						{
+							Server.NetworkWrapper.Broadcast(single.Owner, broadcast, true, Channel.Reliable);
+						}
+						return;
 					}
-				}
-			});
+
+					if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
+						!mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs))
+					{
+						return;
+					}
+
+					foreach (long memberID in memberIDs)
+					{
+						if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
+							member?.Owner != null)
+						{
+							Server.NetworkWrapper.Broadcast(member.Owner, broadcast, true, Channel.Reliable);
+						}
+					}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error publishing guild info (GuildID={guildID}): {ex}");
+			}
 		}
 
 		/// <summary>
@@ -3021,12 +3311,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildAuthority requester = await ResolveGuildAuthorityAsync(guildID, currentLeaderID);
 				if (GuildRules.CanTransferLeadership(requester) != GuildActionResult.Allowed)
 				{
-					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					SendGuildResult(conn, AuthorityRefusal(requester));
 					return;
 				}
 
 				DatabaseResult<CharacterGuildData?> successorResult = await charGuildService.FetchAsync(successorID);
-				if (!successorResult.IsSuccess || !successorResult.Data.HasValue)
+				if (!successorResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"TransferGuildLeadershipAsync successor fetch failed (GuildID={guildID}, Successor={successorID}): {successorResult.ErrorCode} - {successorResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
+					return;
+				}
+
+				if (!successorResult.Data.HasValue)
 				{
 					SendGuildResult(conn, GuildResultType.GuildNotFound);
 					return;
@@ -3053,20 +3350,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!promoteResult.IsSuccess)
 				{
 					await Log.Warning("GuildSystem", $"TransferGuildLeadershipAsync promote failed (GuildID={guildID}, Successor={successorID}): {promoteResult.ErrorCode} - {promoteResult.ErrorMessage}");
-					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					// The requester's standing was just resolved and allows this; what failed was the write.
+					SendGuildResult(conn, GuildResultType.Failed);
 					return;
 				}
 
+				/* Re-read rather than reusing the version the resolve saw: the outgoing leader's own
+				 * connect or disconnect persist can move it in the meantime, and the freshest version
+				 * is the narrowest window for the demote to lose. Every way this second half can fail
+				 * leaves two leaders — the state the remarks accept — so every one of them is logged
+				 * as such. A read failure used to skip the demote in silence and still report
+				 * Success, which made the two-leader state invisible to everyone but the players. */
 				DatabaseResult<CharacterGuildData?> outgoingResult = await charGuildService.FetchAsync(currentLeaderID);
-				if (outgoingResult.IsSuccess && outgoingResult.Data.HasValue)
+				if (!outgoingResult.IsSuccess)
+				{
+					await Log.Error("GuildSystem", $"TransferGuildLeadershipAsync could not read the outgoing leader to demote them (GuildID={guildID}, OutgoingLeader={currentLeaderID}); the guild now has two members at rank order {leaderRankOrder}: {outgoingResult.ErrorCode} - {outgoingResult.ErrorMessage}");
+				}
+				else if (outgoingResult.Data.HasValue && outgoingResult.Data.Value.GuildID == guildID)
 				{
 					CharacterGuildData outgoing = outgoingResult.Data.Value;
 					DatabaseResult demoteResult = await charGuildService.UpdateRankAsync(currentLeaderID, guildID, demotedRankOrder, outgoing.Version + 1);
 					if (!demoteResult.IsSuccess)
 					{
-						await Log.Warning("GuildSystem", $"TransferGuildLeadershipAsync demote failed (GuildID={guildID}, OutgoingLeader={currentLeaderID}): {demoteResult.ErrorCode} - {demoteResult.ErrorMessage}");
+						await Log.Error("GuildSystem", $"TransferGuildLeadershipAsync demote failed (GuildID={guildID}, OutgoingLeader={currentLeaderID}); the guild now has two members at rank order {leaderRankOrder}: {demoteResult.ErrorCode} - {demoteResult.ErrorMessage}");
 					}
 				}
+				// else: the outgoing leader left the guild in between, so the successor is its only leader.
 
 				DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
 				if (!updateResult.IsSuccess)
@@ -3167,12 +3476,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildAuthority requester = await ResolveGuildAuthorityAsync(guildID, requesterCharacterID);
 				if (!requester.Has(GuildPermissions.Disband))
 				{
-					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					SendGuildResult(conn, AuthorityRefusal(requester));
 					return;
 				}
 
 				DatabaseResult<GuildData?> guildResult = await guildService.FetchAsync(guildID);
-				if (!guildResult.IsSuccess || !guildResult.Data.HasValue)
+				if (!guildResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"DisbandGuildAsync guild fetch failed (GuildID={guildID}): {guildResult.ErrorCode} - {guildResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
+					return;
+				}
+
+				if (!guildResult.Data.HasValue)
 				{
 					SendGuildResult(conn, GuildResultType.GuildNotFound);
 					return;
@@ -3191,6 +3507,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!deleteResult.IsSuccess)
 				{
 					await Log.Warning("GuildSystem", $"DisbandGuildAsync guild delete failed (GuildID={guildID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
 					return;
 				}
 
@@ -3199,6 +3516,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					await Log.Warning("GuildSystem", $"DisbandGuildAsync guild update delete failed (GuildID={guildID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
 				}
+
+				// The guild is gone, so its land goes back to the world — see ReleaseGuildPlotsAsync.
+				await ReleaseGuildPlotsAsync(guildID);
 
 				TryEnqueueMainThread(() =>
 				{
@@ -3391,6 +3711,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<IReadOnlyList<GuildLogData>> fetchResult = await logService.FetchRecentAsync(guildID, limit);
 				if (!fetchResult.IsSuccess || fetchResult.Data == null)
 				{
+					await Log.Warning("GuildSystem", $"SendGuildLogAsync fetch failed (GuildID={guildID}): {fetchResult.ErrorCode} - {fetchResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.Failed);
 					return;
 				}
 

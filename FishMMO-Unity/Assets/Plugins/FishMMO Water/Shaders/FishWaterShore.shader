@@ -173,7 +173,7 @@ Shader "FishMMO/Water/Shore"
                 float depthNorth = FishWaterShoreSample(positionWS.xz + float2(0.0, slopeStep)).x;
                 float2 gradient = float2(depthEast - shore.x, depthNorth - shore.x) / slopeStep;
                 float slope = length(gradient);
-                float runUp = FishWaterRunUp(slope);
+                float runUp = FishWaterRunUpHere(slope, positionWS.xz, _FishWaterShoreTexel);
                 float2 alongShore = FishWaterAlongShore(positionWS.xz);
 
                 /* The foam mask is sampled FIRST, because the water's edge itself is perturbed by it.

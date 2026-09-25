@@ -1,0 +1,49 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UILeaderboards.uss" />
+    <ui:VisualElement name="leaderboard-root" class="leaderboard-root">
+        <ui:VisualElement name="leaderboard-panel" class="fish-panel leaderboard-panel">
+
+            <ui:VisualElement name="panel-header" class="fish-panel__header leaderboard-header">
+                <ui:VisualElement class="fish-panel__icon leaderboard-header__icon" />
+                <ui:VisualElement class="leaderboard-header__titles">
+                    <ui:Label text="LEADERBOARDS" class="fish-panel__title" />
+                    <ui:Label name="leaderboard-subtitle" text="" class="fish-panel__subtitle" />
+                </ui:VisualElement>
+                <ui:Button name="leaderboard-close-btn" text="✕" class="fish-close-btn leaderboard-close-btn" />
+            </ui:VisualElement>
+
+            <!-- Player versus player, and player versus environment. -->
+            <ui:VisualElement name="leaderboard-categories" class="leaderboard-tabs leaderboard-categories">
+                <ui:Button name="leaderboard-category-pvp" text="PvP" class="fish-tab fish-tab--active leaderboard-category-tab" />
+                <ui:Button name="leaderboard-category-pve" text="PvE" class="fish-tab leaderboard-category-tab" />
+            </ui:VisualElement>
+
+            <!-- One tab per board in the category. Built at runtime. -->
+            <ui:VisualElement name="leaderboard-boards" class="leaderboard-tabs leaderboard-boards" />
+
+            <ui:VisualElement name="leaderboard-about" class="fish-well leaderboard-about">
+                <ui:Label name="leaderboard-description" text="" class="fish-hint leaderboard-about__text" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="leaderboard-list-scroll" class="fish-scroll leaderboard-list-scroll" horizontal-scroller-visibility="Hidden">
+                <ui:VisualElement name="leaderboard-list" class="leaderboard-list" />
+            </ui:ScrollView>
+
+            <!-- Where the player stands, wherever that is on the board. -->
+            <ui:VisualElement name="leaderboard-standing" class="fish-well leaderboard-standing">
+                <ui:Label name="leaderboard-standing-text" text="" class="fish-hint leaderboard-standing__text" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="panel-footer" class="fish-panel__footer leaderboard-footer">
+                <ui:Label name="leaderboard-age" text="" class="fish-hint leaderboard-footer__hint" />
+                <ui:VisualElement class="leaderboard-pager">
+                    <ui:Button name="leaderboard-prev" text="Prev" class="fish-button leaderboard-pager__btn" />
+                    <ui:Label name="leaderboard-page" text="" class="fish-label--caption leaderboard-pager__label" />
+                    <ui:Button name="leaderboard-next" text="Next" class="fish-button leaderboard-pager__btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

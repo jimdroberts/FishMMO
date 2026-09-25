@@ -1013,7 +1013,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				DatabaseResult record = await ledgerService.RecordAsync(characterID, amount, (int)reason, (int)state);
 				if (!record.IsSuccess)
 				{
-					Log.Warning("InteractableSystem", $"Currency ledger: could not record {amount} ({reason}/{state}) for CharID={characterID}. {record.ErrorMessage}");
+					await Log.Warning("InteractableSystem", $"Currency ledger: could not record {amount} ({reason}/{state}) for CharID={characterID}: [{record.ErrorCode}] {record.ErrorMessage}");
 				}
 			}, characterID))
 			{

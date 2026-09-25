@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Water
 {
@@ -26,7 +27,7 @@ namespace FishMMO.Water
 	[ExecuteAlways]
 	[AddComponentMenu("FishMMO/Water/Water Surface")]
 	[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-	public sealed class WaterSurface : MonoBehaviour
+	public sealed class WaterSurface : MonoBehaviour, SurfaceWater.ISource
 	{
 		// ── Shader globals ────────────────────────────────────────────
 		private static readonly int WaveId = Shader.PropertyToID("_FishWaterWave");
@@ -355,7 +356,7 @@ namespace FishMMO.Water
 				Height = Setting(SurfHeightId, 1.1f),
 				Length = Setting(SurfLengthId, 40f),
 				Break = Setting(ShoreBreakId, 0.62f),
-				Pitch = Setting(SurfPitchId, 0.7f),
+				Pitch = Setting(SurfPitchId, 1.6f),
 				FadeStart = Setting(FadeStartId, 900f),
 				FadeEnd = Setting(FadeEndId, 4000f),
 			};
@@ -395,7 +396,8 @@ namespace FishMMO.Water
 				float depth = meanDepth + TideMetres;
 
 				// Shoaling, then the depth limit that breaks it.
-				float reference = Mathf.Max(1f, (fft != null ? fft.PatchMetres[1] : 118f) * 0.5f);
+				// Green's law from a twentieth of the deep-water wavelength, as the shader has it.
+				float reference = Mathf.Max(0.5f, 0.05f * Mathf.Max(4f, surf.Length));
 				float gain = Mathf.Clamp(Mathf.Pow(reference / Mathf.Max(0.35f, depth), 0.25f), 1f, 2f);
 				float grown = Mathf.Abs(h) * gain;
 				float allowed = Mathf.Max(0f, depth) * surf.Break;
@@ -405,30 +407,57 @@ namespace FishMMO.Water
 				dx *= lateral;
 				dz *= lateral;
 
-				// The surf train, rolling in parallel to the beach.
-				Vector2 shoreward = ShoreGradient(flat);
+				// The surf train, keeping time with the swash (FishWaterSurf.hlsl).
+				float shoreFacing = ShoreFacing(flat, out Vector2 shoreward);
 				if (surf.Height > 0.01f && shoreward.sqrMagnitude > 0.5f)
 				{
-					float wavelength = Mathf.Max(4f, surf.Length);
-					float k = 2f * Mathf.PI / wavelength;
-					float phase = k * edge + Mathf.Sqrt(Mathf.Max(0.05f, Gravity) * k) * (float)clock;
+					if (shore == null)
+					{
+						shore = GetComponent<WaterShore>();
+					}
+					float deepWavelength, wavelength, phase;
+					if (shore != null && shore.isActiveAndEnabled && shore.SurfPeriod > 0.25f)
+					{
+						float period = Mathf.Max(0.5f, shore.SurfPeriod);
+						deepWavelength = Mathf.Max(4f, shore.SurfDeepWavelength);
+						float breakingDepth = Mathf.Max(0.1f, shore.SurfSeaHeight) / 0.78f;
+						wavelength = Mathf.Max(4f, period * Mathf.Sqrt(Mathf.Max(0.05f, Gravity) * breakingDepth));
+						Vector2 waterline = flat + shoreward * Mathf.Max(0f, edge);
+						// As the shader has it, in single precision: the clock goes in as a float.
+						float cycles = (float)shore.SurfClock / period + AlongShore(waterline).x;
+						phase = 2f * Mathf.PI * (cycles + edge / wavelength) + 0.5f * Mathf.PI;
+					}
+					else
+					{
+						deepWavelength = Mathf.Max(4f, surf.Length);
+						wavelength = deepWavelength;
+						float k0 = 2f * Mathf.PI / wavelength;
+						phase = k0 * edge + Mathf.Sqrt(Mathf.Max(0.05f, Gravity) * k0) * (float)clock;
+					}
 					const float Span = 10f;
 					float beachSlope = Mathf.Abs(Depth(flat - shoreward * Span) - Depth(flat + shoreward * Span)) / (2f * Span);
-					// No surf train against a steep bank or a cliff: the waves run into it instead.
-					float reflective = Smoothstep(0.25f, 0.6f, beachSlope);
-					float feel = Mathf.Clamp01(1f - depth / (wavelength * 0.5f));
-					float amplitude = surf.Height * (1f + feel * 1.6f) * feel * (1f - reflective);
-					float limit = Mathf.Max(0f, depth) * 0.78f;
+					// Only a cliff turns the train away; the surging test stops the barrel on a steep bank.
+					float reflective = Smoothstep(0.6f, 1f, beachSlope);
+					float feel = Mathf.Clamp01(1f - depth / (deepWavelength * 0.5f));
+					float exposure = ShoreExposure(shoreward, shoreFacing);
+					float amplitude = surf.Height * (1f + feel * 1.6f) * feel * (1f - reflective) * exposure;
+					// The sea's own breaking index, crest height over depth.
+					float limit = Mathf.Max(0f, depth) * surf.Break;
 					float breaking = Mathf.Clamp01((amplitude - limit) / Mathf.Max(0.05f, amplitude));
 					amplitude = Mathf.Min(amplitude, limit) * Mathf.Clamp01(depth * 1.2f);
 					float sin = Mathf.Sin(phase);
 					float crest = Mathf.Clamp01(sin);
 					h += amplitude * sin;
 
-					float iribarren = beachSlope / Mathf.Sqrt(Mathf.Max(1e-4f, Mathf.Max(0.05f, amplitude * 2f) / wavelength));
-					// Plunging between about 0.5 and 3.3; past that the wave surges up the face unbroken.
+					float iribarren = beachSlope / Mathf.Sqrt(Mathf.Max(1e-4f, Mathf.Max(0.05f, amplitude * 2f) / deepWavelength));
+					// Plunging between about 0.5 and 3.3; spilling below; past 3.3 it surges up the face unbroken.
 					float plunging = Smoothstep(0.35f, 0.9f, iribarren) * (1f - Smoothstep(2.5f, 3.5f, iribarren));
-					float throwMetres = surf.Pitch * plunging * breaking * crest * crest * crest * wavelength * 0.11f;
+					float spilling = 1f - Smoothstep(0.35f, 0.9f, iribarren);
+					// A lean of 1 stands the face exactly vertical (0.1378 of a wavelength).
+					float lean = surf.Pitch * plunging + 0.33f * spilling;
+					float throwMetres = lean * breaking * crest * crest * crest * wavelength * 0.1378f * shoreFacing;
+					// Never past the water's edge, nor more than halfway there.
+					throwMetres = Mathf.Min(throwMetres, 0.5f * Mathf.Max(0f, edge));
 					dx += shoreward.x * throwMetres;
 					dz += shoreward.y * throwMetres;
 				}
@@ -437,20 +466,88 @@ namespace FishMMO.Water
 			moved = new Vector2(dx, dz);
 		}
 
+		private WaterShore shore;
+
+		/// <summary>FishWaterSurfHash, in the same integer arithmetic.</summary>
+		private static float SurfHash(int x, int y)
+		{
+			unchecked
+			{
+				uint h = (uint)x * 73856093u ^ (uint)y * 19349663u;
+				h ^= h >> 16;
+				h *= 0x7feb352du;
+				h ^= h >> 15;
+				h *= 0x846ca68bu;
+				h ^= h >> 16;
+				return (h & 0xFFFFFFu) / 16777216f;
+			}
+		}
+
+		/// <summary>FishWaterSurfNoise: smooth value noise, one feature to a cell this many metres across.</summary>
+		private static float SurfNoise(Vector2 xz, float cellMetres, int salt)
+		{
+			float px = xz.x / cellMetres, pz = xz.y / cellMetres;
+			float ix = Mathf.Floor(px), iz = Mathf.Floor(pz);
+			float fx = px - ix, fz = pz - iz;
+			fx = fx * fx * (3f - 2f * fx);
+			fz = fz * fz * (3f - 2f * fz);
+			int cx = (int)ix + salt, cz = (int)iz + salt * 7;
+			float a = SurfHash(cx, cz), b = SurfHash(cx + 1, cz);
+			float d = SurfHash(cx, cz + 1), e = SurfHash(cx + 1, cz + 1);
+			return Mathf.Lerp(Mathf.Lerp(a, b, fx), Mathf.Lerp(d, e, fx), fz);
+		}
+
+		/// <summary>FishWaterAlongShore: the phase offset along the shore (x, cycles) and the run-up share (y).</summary>
+		private Vector2 AlongShore(Vector2 xz)
+		{
+			float radians = WindDirectionDegrees * Mathf.Deg2Rad;
+			var direction = new Vector2(Mathf.Sin(radians), Mathf.Cos(radians));
+			float wander = SurfNoise(xz, 90f, 11);
+			float cusps = SurfNoise(xz, 35f, 29);
+			float phase = -Vector2.Dot(xz, direction) / 70f + wander * 1.6f;
+			return new Vector2(phase, 0.7f + 0.6f * cusps);
+		}
+
 		/// <summary>Metres of water over the ground now, tide in; open ocean off the field.</summary>
 		private float Depth(Vector2 xz)
 		{
 			return shoreField != null && shoreField.TrySample(xz, out float depth, out _) ? depth + TideMetres : 1000f;
 		}
 
-		/// <summary>Which way the ground falls toward the shore, as the shader measures it: over 14 m, not a texel.</summary>
-		private Vector2 ShoreGradient(Vector2 xz)
+		/// <summary>Signed metres to the water's edge; open ocean off the field.</summary>
+		private float EdgeDistance(Vector2 xz)
 		{
-			const float Step = 14f;
-			float east = Depth(xz + new Vector2(Step, 0f)) - Depth(xz - new Vector2(Step, 0f));
-			float north = Depth(xz + new Vector2(0f, Step)) - Depth(xz - new Vector2(0f, Step));
-			var gradient = new Vector2(-east, -north);
-			return gradient.sqrMagnitude > 1e-8f ? gradient.normalized : Vector2.zero;
+			return shoreField != null && shoreField.TrySample(xz, out _, out float edge) ? edge : 1000f;
+		}
+
+		/// <summary>
+		/// FishWaterShoreFacing: the direction to the nearest shore down the distance field, and how
+		/// sure it is — 0 on a ridge midway between two shores.
+		/// </summary>
+		private float ShoreFacing(Vector2 xz, out Vector2 towardShore)
+		{
+			towardShore = Vector2.zero;
+			float step = Mathf.Max(1f, shoreField != null ? shoreField.TexelMetres : 1f);
+			float east = EdgeDistance(xz + new Vector2(step, 0f)) - EdgeDistance(xz - new Vector2(step, 0f));
+			float north = EdgeDistance(xz + new Vector2(0f, step)) - EdgeDistance(xz - new Vector2(0f, step));
+			var gradient = new Vector2(-east, -north) / (2f * step);
+			float length2 = gradient.sqrMagnitude;
+			if (length2 <= 1e-8f)
+			{
+				return 0f;
+			}
+			float slope = Mathf.Sqrt(length2);
+			towardShore = gradient / slope;
+			return Mathf.Clamp01((slope - 0.35f) / 0.4f);
+		}
+
+		/// <summary>FishWaterShoreExposure: how much of the sea reaches a shore facing this way, 0.25 to 1.</summary>
+		private float ShoreExposure(Vector2 towardShore, float confidence)
+		{
+			float radians = WindDirectionDegrees * Mathf.Deg2Rad;
+			var direction = new Vector2(Mathf.Sin(radians), Mathf.Cos(radians));
+			float facing = Smoothstep(-0.6f, 0.4f, Vector2.Dot(towardShore, direction));
+			return Mathf.Lerp(0.6f, Mathf.Lerp(0.25f, 1f, facing), Mathf.Clamp01(confidence));
 		}
 
 		/// <summary>HLSL's smoothstep. Not Mathf.SmoothStep, which interpolates between its first two arguments.</summary>
@@ -463,6 +560,48 @@ namespace FishMMO.Water
 		/// <summary>True when a world position is under the sea's surface.</summary>
 		public bool IsSubmerged(Vector3 worldPosition) => worldPosition.y < HeightAt(worldPosition);
 
+		/// <summary>
+		/// True when a world position is under the moving surface, asked of the waves only near it.
+		/// </summary>
+		/// <remarks>
+		/// The exact height costs a spectrum sum, and a point higher above the still water than any
+		/// crest could stand — twice the significant height of the sea the wind can raise, and the
+		/// surf on top — is plainly not under it, nor one deeper than any trough plainly over it.
+		/// </remarks>
+		public bool IsUnderSurface(Vector3 worldPosition)
+		{
+			float above = worldPosition.y - SeaLevel;
+			float highestCrest = 2f * 0.21f * WindSpeed * WindSpeed / Mathf.Max(0.05f, Gravity) + 4f;
+			return above < highestCrest && (above < -highestCrest || IsSubmerged(worldPosition));
+		}
+
+		// ── What the weather is told ──────────────────────────────────
+		//
+		// The weather finds where rain and snow land by casting rays at solid ground, and a ray goes
+		// straight through water; the sea tells it where its surface is instead (SurfaceWater).
+
+		float SurfaceWater.ISource.Level => SeaLevel;
+
+		float SurfaceWater.ISource.WaveHeight
+		{
+			get
+			{
+				// The environment's sea state knows the fetch and the swell; without one, the sea a
+				// wind this strong raises when it has blown long enough (Pierson-Moskowitz).
+				if (environment == null)
+				{
+					environment = GetComponent<WaterEnvironment>();
+				}
+				return environment != null && environment.SignificantHeight > 0f
+					? environment.SignificantHeight
+					: 0.21f * WindSpeed * WindSpeed / Mathf.Max(0.05f, Gravity);
+			}
+		}
+
+		bool SurfaceWater.ISource.IsUnder(Vector3 point) => isActiveAndEnabled && IsUnderSurface(point);
+
+		private WaterEnvironment environment;
+
 		private void OnEnable()
 		{
 			meshFilter = GetComponent<MeshFilter>();
@@ -471,10 +610,12 @@ namespace FishMMO.Water
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
 
 			EnsureSpectrum();
+			SurfaceWater.Register(this);
 		}
 
 		private void OnDisable()
 		{
+			SurfaceWater.Unregister(this);
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
 			fft?.Dispose();
 			fft = null;
@@ -834,14 +975,7 @@ namespace FishMMO.Water
 		/// </remarks>
 		private void UpdateUnderwater(Camera camera)
 		{
-			/* Asked of the surface only near it. The exact height costs a spectrum sum, and a camera
-			 * higher above the still water than any crest could stand — twice the significant height of
-			 * the sea the wind can raise, and the surf on top — is plainly not under it. */
-			float cameraHeight = camera.transform.position.y - SeaLevel;
-			float highestCrest = 2f * 0.21f * WindSpeed * WindSpeed / Mathf.Max(0.05f, Gravity) + 4f;
-			bool wanted = UnderwaterEffect && liveWaves > 0
-				&& cameraHeight < highestCrest
-				&& (cameraHeight < -highestCrest || camera.transform.position.y < HeightAt(camera.transform.position));
+			bool wanted = UnderwaterEffect && liveWaves > 0 && IsUnderSurface(camera.transform.position);
 
 			if (!wanted)
 			{

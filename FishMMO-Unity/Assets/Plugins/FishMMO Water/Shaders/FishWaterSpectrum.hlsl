@@ -168,11 +168,20 @@ void FishTimeSpectrum(uint2 id, float4 h0, out float4 spectrumA, out float4 spec
 		omega = floor(omega / base) * base;
 	}
 
-	float phase = omega * _FFTTime;
+	/* The phase runs BACKWARD, and that is what sends the sea downwind.
+	 *
+	 * The transform synthesises Σ h·e^{+ik·x} (Twiddle's sign), so a term h0(k)·e^{-iωt} is a crest
+	 * e^{i(k·x - ωt)} travelling along +k — and h0(k) is the term the wind feeds for k along it.
+	 * Tessendorf's paper writes e^{+iωt} there, which with this transform makes every wave the wind
+	 * raises travel straight back UPWIND: the swell ran against the ripples on top of it and
+	 * against the clouds overhead, both of which move with the wind. Nothing else notices — a
+	 * snapshot of the sea is the same either way; only the motion is reversed. WaterSpectrum.cs
+	 * carries the same sign for anything floating. */
+	float phase = -omega * _FFTTime;
 	float2 forward = float2(cos(phase), sin(phase));
 	float2 backward = float2(forward.x, -forward.y);
 
-	// h(k,t) = h0(k)·e^{iωt} + conj(h0(-k))·e^{-iωt}
+	// h(k,t) = h0(k)·e^{-iωt} + conj(h0(-k))·e^{+iωt}
 	float2 h = ComplexMul(h0.xy, forward) + ComplexMul(float2(h0.z, -h0.w), backward);
 
 	/* Horizontal displacement: D(k) = -i·(k/|k|)·h(k,t). It is what turns round sine humps into

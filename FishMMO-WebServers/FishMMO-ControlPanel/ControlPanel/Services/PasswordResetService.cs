@@ -104,7 +104,11 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>Outcome of an operation that either worked or did not.</summary>
-		public sealed record Outcome(bool Ok, string Error);
+		/// <param name="SignedOutEverywhere">
+		/// For a completed reset: whether every panel session and game token was revoked. The reset
+		/// stands either way; the reply says so when something may still be signed in.
+		/// </param>
+		public sealed record Outcome(bool Ok, string Error, bool SignedOutEverywhere = false);
 
 		/// <summary>
 		/// What a reset request produced. <see cref="DevelopmentCode"/> is null everywhere except
@@ -283,8 +287,9 @@ namespace FishMMO.ControlPanel.Services
 		/// The game tokens are revoked inside <see cref="SelfServiceService.ChangePasswordAsync"/>
 		/// rather than here, which is the one place in this sequence that differs from the
 		/// obvious reading of "credentials, sessions, tokens": reusing the panel's single
-		/// credential write is worth more than the interleaving, and all three are gone before
-		/// this method returns.
+		/// credential write is worth more than the interleaving, and all three are attempted before
+		/// this method returns. A revocation that fails does not undo the reset; it is logged and
+		/// comes back as <see cref="Outcome.SignedOutEverywhere"/> false, so the reply can say so.
 		/// </para>
 		/// </remarks>
 		public async Task<Outcome> CompleteAsync(
@@ -341,7 +346,8 @@ namespace FishMMO.ControlPanel.Services
 			if (!revoked.IsSuccess)
 			{
 				// Not fatal — the credentials have already changed — but loud, because a live
-				// session surviving a reset is the failure this whole step exists to prevent.
+				// session surviving a reset is the failure this whole step exists to prevent. And
+				// reported: the reply no longer claims everything was signed out when it was not.
 				log.LogError("Password reset for '{User}' completed but panel sessions were NOT revoked: [{Code}] {Message}",
 					username, revoked.ErrorCode, revoked.ErrorMessage);
 			}
@@ -354,7 +360,7 @@ namespace FishMMO.ControlPanel.Services
 			}
 
 			log.LogInformation("Password reset completed for '{User}'. Two-factor is unchanged.", username);
-			return new Outcome(true, null);
+			return new Outcome(true, null, revoked.IsSuccess && changed.GameTokensRevoked);
 		}
 
 		/// <summary>

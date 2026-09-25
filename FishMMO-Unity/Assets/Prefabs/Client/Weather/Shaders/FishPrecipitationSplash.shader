@@ -10,7 +10,9 @@ Shader "FishMMO/Weather/Precipitation Splash"
     //
     // That also gets roofs right for free. A drop over a barn lands on the barn, because that is
     // what the heightfield says is up there — no special case, and no splashes appearing on the
-    // floor underneath it.
+    // floor underneath it. And the sea: where the ground is under water the water is the highest
+    // surface (FishSkyOcclusionHeight lays it over the map), so a drop lands on the sea, not on
+    // the sand three metres below it.
     Properties
     {
         _MainTex ("Atlas", 2D) = "white" {}
@@ -32,10 +34,11 @@ Shader "FishMMO/Weather/Precipitation Splash"
             #pragma fragment Frag
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "FishWeather.hlsl"
 
             float4 _FishSplashOrigin;   // xyz camera, w time
-            float4 _FishSplashParams;   // x radius, y density 0..1, z size, w lifetime seconds
+            float4 _FishSplashParams;   // x radius, y density 0..1, z widest ring across (m), w lifetime seconds
             float4 _FishSplashColor;    // rgb tint, a alpha
             float4 _FishSplashHeat;     // x dryness 0..1, y how far a corner may drape, zw unused
 
@@ -82,7 +85,7 @@ Shader "FishMMO/Weather/Precipitation Splash"
                 float distance = sqrt(random.y) * _FishSplashParams.x;
                 float3 at = _FishSplashOrigin.xyz + float3(cos(angle) * distance, 0.0, sin(angle) * distance);
 
-                // The surface a drop falling here would hit: roof, ledge or ground.
+                // The surface a drop falling here would hit: roof, ledge, ground or the sea.
                 float centreGround = FishSkyOcclusionHeight(at);
 
                 /* Thinned by how hard it is raining. Splashes that exist but are invisible still
@@ -90,8 +93,22 @@ Shader "FishMMO/Weather/Precipitation Splash"
                  * the rasteriser throws them away. */
                 float alive = step(Hash11(index * 1.37 + cycle), _FishSplashParams.y);
 
-                // A ring that widens and fades, which is what a drop hitting water looks like.
-                float grow = 0.35 + 1.65 * age;
+                /* On the open sea a ring sits at the STILL level, and the waves carry the real
+                 * surface away from it: above a trough it would hang in the air, and under a crest
+                 * it would show through the water, which writes no depth to hide it. So rings on the
+                 * sea only where it is calm enough for the still level to be where the surface is —
+                 * a millpond, a sheltered cove. Rain on a rough sea is a hiss across the whole
+                 * surface, not rings, anyway. */
+                float onWater = step(FishSkyOcclusionGround(at) + 0.01, centreGround);
+                float calm = 1.0 - smoothstep(0.08, 0.3, _FishOcclusionWater.z);
+                alive *= lerp(1.0, calm, onWater);
+
+                /* A ring that widens and fades, which is what a drop hitting water looks like: from
+                 * a fifth of its width to all of it, the SIZE the profile gives. The quad's half-width
+                 * is half that, since the ring's outer edge is the quad's edge. It used to run the
+                 * half-width from 0.35 to 2.0 times the size, so a ring profiled at 22 cm came out up
+                 * to 1.2 m across — a hoop on the ground, not a raindrop. */
+                float grow = 0.2 + 0.8 * age;
 
                 /* Hot ground takes a splash away quickly — a drop landing on sun-baked stone is
                  * gone almost as soon as it lands, where the same drop on cold ground sits. The
@@ -103,7 +120,7 @@ Shader "FishMMO/Weather/Precipitation Splash"
                 float fadeTo = lerp(1.00, 0.42, dry);
                 float fade = 1.0 - smoothstep(fadeFrom, fadeTo, age);
 
-                float size = _FishSplashParams.z * grow * alive * fade;
+                float size = 0.5 * _FishSplashParams.z * grow * alive * fade;
 
                 /* Camera-facing is wrong for these: a splash lies ON the ground. But a quad that is
                  * FLAT sinks into any ground that is not, and the depth test then clips whichever
@@ -122,9 +139,16 @@ Shader "FishMMO/Weather/Precipitation Splash"
                 corner.y += 0.015 + size * 0.05;
                 float3 world = corner;
 
+                /* Lit like the drops that made it: the sky's light from above and a little of the
+                 * main light, as FishPrecipitation lights them. It was the tint alone, unlit, so at
+                 * night every splash glowed a moonlit blue at full daytime brightness on black
+                 * ground. */
+                Light mainLight = GetMainLight();
+                half3 light = SampleSH(half3(0.0, 1.0, 0.0)) + mainLight.color * 0.35;
+
                 output.positionCS = TransformWorldToHClip(world);
                 output.uv = input.uv;
-                output.tint = float4(_FishSplashColor.rgb, _FishSplashColor.a * fade * alive);
+                output.tint = float4(_FishSplashColor.rgb * light, _FishSplashColor.a * fade * alive);
                 return output;
             }
 

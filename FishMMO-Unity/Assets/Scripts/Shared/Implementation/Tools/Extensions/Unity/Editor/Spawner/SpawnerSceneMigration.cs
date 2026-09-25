@@ -132,7 +132,7 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>Not a guard for addressable scene bundles.</b> The scriptable build pipeline's scene
 	/// dependency pass does not run scene processors (pinned by
-	/// <c>SpawnTableBakeTests.TheDependencyCheck_WouldSeeASpawnerThatReachedTheBuild</c>), so
+	/// <c>SpawnTableBakeTests.TheDependencyCheck_WouldSeeSpawnerDataThatReachedTheBuild</c>), so
 	/// world scenes rely on the tag alone — which is why <c>CustomBuildTool</c> refuses to build
 	/// while any spawner lacks it.
 	/// </para>

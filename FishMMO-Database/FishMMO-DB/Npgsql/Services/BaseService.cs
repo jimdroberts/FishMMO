@@ -1188,6 +1188,59 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
+		/// Executes a raw SQL query and maps every returned row, on the ambient EF Core connection
+		/// and transaction.
+		/// </summary>
+		/// <remarks>
+		/// The multi-row sibling of <see cref="ExecuteReturningAsync{TResult}"/>, for a result-set
+		/// shape no entity describes: a projection joined across tables, or a candidate set locked
+		/// on the transaction it is inside. Written once here rather than as a private copy per
+		/// service; the group finder's former and the leaderboard reads both use it.
+		/// </remarks>
+		/// <typeparam name="TRow">The type produced by the <paramref name="map"/> delegate.</typeparam>
+		/// <param name="dbContext">The active DbContext providing the connection and ambient transaction.</param>
+		/// <param name="sql">
+		/// Parameterized SQL using <c>{0}</c>, <c>{1}</c>, … placeholders. Must never embed
+		/// user-controlled identifiers.
+		/// </param>
+		/// <param name="parameters">Positional parameter values corresponding to the SQL placeholders.</param>
+		/// <param name="map">Reads one row from the <see cref="DbDataReader"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Every row, in the order the statement returned them. Empty when there were none.</returns>
+		protected static async Task<List<TRow>> ReadRowsAsync<TRow>(
+			NpgsqlDbContext dbContext,
+			string sql,
+			object[] parameters,
+			Func<DbDataReader, TRow> map,
+			CancellationToken cancellationToken)
+		{
+			var connection = dbContext.Database.GetDbConnection();
+			if (connection.State != ConnectionState.Open)
+			{
+				await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+			}
+
+			using var command = connection.CreateCommand();
+			command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+			command.CommandText = ParameterPlaceholderRegex.Replace(sql, "@p$1");
+			for (int i = 0; i < parameters.Length; i++)
+			{
+				var param = command.CreateParameter();
+				param.ParameterName = "@p" + i;
+				param.Value = parameters[i] ?? DBNull.Value;
+				command.Parameters.Add(param);
+			}
+
+			var rows = new List<TRow>();
+			using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+			while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+			{
+				rows.Add(map(reader));
+			}
+			return rows;
+		}
+
+		/// <summary>
 		/// How a bulk versioned write should treat rows that lose the version race.
 		/// </summary>
 		/// <remarks>

@@ -334,11 +334,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				string reply;
 				bool filed = false;
+				bool floodLimited = false;
 				long ticketID = 0;
 				try
 				{
 					if (!TryGetDbService(out ISupportTicketService ticketService))
 					{
+						await Log.Warning("ChatSystem", $"Support ticket ({category}) for '{account}' was not filed: the support ticket service is unavailable.");
 						reply = "Support is unavailable right now. Please try again shortly.";
 					}
 					else
@@ -351,6 +353,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							reply = string.IsNullOrWhiteSpace(result.ErrorMessage)
 								? "Your ticket could not be filed. Please try again shortly."
 								: result.ErrorMessage;
+
+							/* The flood limit and a rejected field are the service answering the
+							 * player, and are not faults. Anything else is the database failing,
+							 * which the player is told only as "could not be filed" — so it is the
+							 * operator who has to hear the cause, or an outage of the one channel
+							 * players have for reporting problems goes unnoticed. */
+							floodLimited = result.ErrorCode == DatabaseErrorCodes.CapacityExceeded;
+							if (!floodLimited && result.ErrorCode != DatabaseErrorCodes.ValidationError)
+							{
+								await Log.Warning("ChatSystem", $"Support ticket ({category}) for '{account}' could not be filed: [{result.ErrorCode}] {result.ErrorMessage}");
+							}
 						}
 						else
 						{
@@ -368,8 +381,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				string finalReply = reply;
 				bool finalFiled = filed;
+				bool finalFloodLimited = floodLimited;
 				long finalTicketID = ticketID;
-				if (!TryEnqueueMainThread(() => deliver(characterID, finalFiled, finalTicketID, finalReply)))
+				if (!TryEnqueueMainThread(() => deliver(characterID, finalFiled, finalFloodLimited, finalTicketID, finalReply)))
 				{
 					await Log.Warning("ChatSystem",
 						$"Support ticket ({category}) for '{account}' completed but the reply could not be queued.");
@@ -383,7 +397,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				else
 				{
-					answer(characterID, false, 0, busy);
+					answer(characterID, false, false, 0, busy);
 				}
 				return false;
 			}
@@ -393,12 +407,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Delivers the outcome of a ticket filing to whoever asked for it. Main thread only.</summary>
 		/// <param name="characterID">The reporter, resolved again by id because they may have gone.</param>
 		/// <param name="filed">True when a ticket was created.</param>
+		/// <param name="floodLimited">
+		/// True when the service refused the filing under its own flood limit — the one refusal that
+		/// means the player has filed enough, rather than that nothing reached the database.
+		/// </param>
 		/// <param name="ticketID">The new ticket's number when filed; otherwise 0.</param>
 		/// <param name="message">The player-facing text.</param>
-		private delegate void SupportTicketAnswer(long characterID, bool filed, long ticketID, string message);
+		private delegate void SupportTicketAnswer(long characterID, bool filed, bool floodLimited, long ticketID, string message);
 
 		/// <summary>The chat commands' delivery: the message on the System channel, and nothing else.</summary>
-		private void AnswerSupportInChat(long characterID, bool filed, long ticketID, string message)
+		private void AnswerSupportInChat(long characterID, bool filed, bool floodLimited, long ticketID, string message)
 		{
 			ReplySupportByCharacterID(characterID, message);
 		}
@@ -434,6 +452,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					if (!TryGetDbService(out ISupportTicketService ticketService))
 					{
+						await Log.Warning("ChatSystem", $"Support ticket listing for '{account}' failed: the support ticket service is unavailable.");
 						lines.Add("Support is unavailable right now. Please try again shortly.");
 					}
 					else
@@ -448,6 +467,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 						if (!result.IsSuccess || result.Data == null)
 						{
+							if (!result.IsSuccess && result.ErrorCode != DatabaseErrorCodes.ValidationError)
+							{
+								await Log.Warning("ChatSystem", $"Support ticket listing failed for '{account}': [{result.ErrorCode}] {result.ErrorMessage}");
+							}
+
 							lines.Add(string.IsNullOrWhiteSpace(result.ErrorMessage)
 								? "Your tickets could not be read. Please try again shortly."
 								: result.ErrorMessage);

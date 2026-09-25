@@ -81,7 +81,7 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
                 float depthNorth = FishWaterShoreSample(xz + float2(0.0, slopeStep)).x;
                 float slope = length(float2(depthEast - shore.x, depthNorth - shore.x)) / slopeStep;
 
-                float laid = FishWaterSwashFoamDeposit(rise, FishWaterRunUp(slope), xz) * _FoamMemoryStep.y;
+                float laid = FishWaterSwashFoamDeposit(rise, FishWaterRunUpHere(slope, xz, _FishWaterShoreTexel), xz) * _FoamMemoryStep.y;
                 return float4(max(kept, laid), 0.0, 0.0, 0.0);
             }
             ENDHLSL

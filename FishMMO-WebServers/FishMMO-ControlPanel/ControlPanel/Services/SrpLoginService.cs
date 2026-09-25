@@ -243,7 +243,19 @@ namespace FishMMO.ControlPanel.Services
 			// Unknown and banned names are looked up too, so a real account costs no extra round trip.
 			DateTime now = DateTime.UtcNow;
 			var state = await accounts.FetchAuthLockoutAsync(exchange.Username, cancellationToken);
-			if (state.IsSuccess && state.Data.IsLocked(AuthFailureKind.Password, now))
+			if (!state.IsSuccess)
+			{
+				/* FAIL CLOSED, with the same GenericFailure a wrong password gets. This read failing used
+				 * to count as "not locked", so the proof of a locked account was evaluated anyway — and
+				 * the failure counter shares the database, so that guess usually went uncounted as well.
+				 * Anyone able to load the database could guess past the lock. FetchAuthLockoutAsync
+				 * answers success for unknown and malformed names alike, so only a database fault lands
+				 * here, and the answer is the one every other failed sign-in gets: nothing leaks. */
+				log.LogWarning("Refused a panel sign-in for '{User}': the sign-in lockout could not be read: [{Code}] {Message}",
+					exchange.Username, state.ErrorCode, state.ErrorMessage);
+				return Failed();
+			}
+			if (state.Data.IsLocked(AuthFailureKind.Password, now))
 			{
 				log.LogInformation("Refused a panel sign-in for '{User}': the password step is locked until {Until:o}.",
 					exchange.Username, state.Data.LoginLockedUntilUtc);

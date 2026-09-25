@@ -51,6 +51,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			 * guild_application or scenes: those have no composite starting with character_id, so
 			 * their bare index is the only thing serving the lookup and dropping it means a scan. */
 
+			/* Leaderboards: one attribute template's values, best first (ILeaderboardService). The
+			 * board orders by value DESC within a template and a standing counts the rows above
+			 * one value, so both are a range scan of this index rather than a read of every
+			 * character's every attribute. An update that leaves value alone (a save that only
+			 * moved current_value) changes no indexed column, so it stays eligible for a
+			 * heap-only update and this index costs it nothing. */
+			builder.HasIndex(e => new { e.TemplateID, e.Value });
+
 			// Foreign key relationship
 			builder.HasOne(e => e.Character)
 				.WithMany(c => c.Attributes)

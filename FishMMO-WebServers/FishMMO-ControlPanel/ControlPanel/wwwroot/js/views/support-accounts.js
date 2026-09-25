@@ -15,7 +15,7 @@
  * into a URL.
  */
 
-import { historyBody } from './account-history.js';
+import { historyBody, unreadBanner } from './account-history.js';
 
 export async function render(host, ctx) {
 	if (ctx.param) return renderDetail(host, ctx, ctx.param);
@@ -204,6 +204,7 @@ async function renderDetail(host, ctx, name) {
 					'Level 0 is the ban. It can authenticate nowhere — game client or panel — until somebody lifts it. Unbanning restores Player level and nothing else.')
 				: ''}
 			${isSelf ? ui.banner('info', 'This is your own account', selfHint) : ''}
+			${unreadBanner(ui, account.incomplete)}
 
 			<div class="split">
 				<div class="stack">

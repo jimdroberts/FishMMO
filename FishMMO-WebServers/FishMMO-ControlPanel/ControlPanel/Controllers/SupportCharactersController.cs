@@ -75,7 +75,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await characters.SearchAdminAsync(query, includeDeleted, onlineFilter, page, pageSize, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return BadRequest(new { error = result.ErrorMessage ?? "That search could not be run." });
+				return DatabaseReplies.Failure(this, result, log, "That search could not be run.");
 			}
 
 			var data = result.Data;
@@ -96,7 +96,7 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await characters.FetchAdminAsync(id, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				return NotFound(new { error = "No such character." });
+				return DatabaseReplies.Failure(this, result, log, "That character could not be read.", notFound: "No such character.");
 			}
 			return Ok(Detail(result.Data));
 		}
@@ -139,8 +139,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await characters.LockAsync(id, until, User.Identity?.Name, request.Reason, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That character could not be locked." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That character could not be locked.");
 			}
 
 			/* Kick on the session STATE, not only a live lease: a character between selection and load, or
@@ -188,8 +188,8 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await characters.UnlockAsync(id, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = result.ErrorMessage;
-				return BadRequest(new { error = result.ErrorMessage ?? "That lock could not be released." });
+				audit.Outcome = DatabaseReplies.Outcome(result);
+				return DatabaseReplies.Failure(this, result, log, "That lock could not be released.");
 			}
 			if (!result.Data)
 			{
@@ -215,16 +215,20 @@ namespace FishMMO.ControlPanel.Controllers
 			var result = await characters.FetchAdminAsync(id, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{
-				audit.Outcome = "Refused: no such character.";
-				return (null, NotFound(new { error = "No such character." }));
+				audit.Outcome = DatabaseReplies.IsNotFound(result.ErrorCode) ? "Refused: no such character." : DatabaseReplies.Outcome(result);
+				return (null, DatabaseReplies.Failure(this, result, log, "That character could not be read.", notFound: "No such character."));
 			}
 			audit.TargetName = result.Data.Name;
 
 			var owner = await accounts.FetchAdminAsync(result.Data.Account, HttpContext.RequestAborted);
 			if (!owner.IsSuccess)
 			{
-				audit.Outcome = "Refused: the owning account could not be read.";
-				return (null, NotFound(new { error = "The account that owns this character could not be read." }));
+				audit.Outcome = DatabaseReplies.IsFault(owner.ErrorCode)
+					? DatabaseReplies.Outcome(owner)
+					: "Refused: the owning account could not be read.";
+				return (null, DatabaseReplies.Failure(this, owner, log,
+					"The account that owns this character could not be read.",
+					notFound: "The account that owns this character could not be read."));
 			}
 
 			IActionResult refusal = ModerationGuards.Check(this, owner.Data.Name, (AccessLevel)owner.Data.AccessLevel);

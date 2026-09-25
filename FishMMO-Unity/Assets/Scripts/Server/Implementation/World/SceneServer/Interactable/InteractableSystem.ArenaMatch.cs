@@ -72,6 +72,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>How long a cancelled match's occupants see the notice before being returned.</summary>
 		private const int ArenaCancelledSeconds = 5;
 
+		/// <summary>Seconds between the tick's retries of a failed arena read: the match, its seats, its ratings.</summary>
+		private const double ArenaReadRetrySeconds = 5.0;
+
+		/// <summary>Tick retries of one failed arena read before it is given up on and logged as an error.</summary>
+		private const int ArenaReadMaxRetries = 6;
+
+		/// <summary>Attempts at one idempotent arena write before its failure is logged and left.</summary>
+		private const int ArenaWriteAttempts = 3;
+
+		/// <summary>Backoff step between attempts at an arena write, multiplied by the attempt number.</summary>
+		private const int ArenaWriteRetryDelayMilliseconds = 500;
+
 		/// <summary>Attribute template names the arena adjusts. Authored as CharacterAttributeTemplate assets.</summary>
 		private const string PvPRankAttributeName = "PvP Rank";
 		private const string PvPWinsAttributeName = "PvP Wins";
@@ -115,6 +127,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			/// <summary>Ranked: rating and games before the match.</summary>
 			public int RatingBefore = ArenaRating.DefaultRating;
 			public int GamesBefore;
+			/// <summary>
+			/// Ranked: whether <see cref="RatingBefore"/> and <see cref="GamesBefore"/> came from a
+			/// read that succeeded. Only such a seat is rated at the end — see <see cref="LoadArenaRatings"/>.
+			/// </summary>
+			public bool RatingLoaded;
 			/// <summary>Ranked: written at the end.</summary>
 			public int RatingDelta;
 			public int NewRating;
@@ -163,8 +180,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public int WinnerTeam = -1;
 			public bool Ranked;
 			public long SeasonID;
-			/// <summary>Ranked: whether the ratings have been read. Missing ratings are the default.</summary>
-			public bool RatingsLoaded;
+			/// <summary>Ranked: tick retries spent on seats whose rating read failed, and when the next may run.</summary>
+			public int RatingReadRetries;
+			public DateTime NextRatingReadUtc;
 			/// <summary>Live: until when vacated seats may be filled from the queue.</summary>
 			public DateTime BackfillUntilUtc = DateTime.MinValue;
 			/// <summary>Whether the first kill has happened.</summary>
@@ -175,6 +193,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public readonly HashSet<int> TimeWarningsFired = new HashSet<int>();
 			/// <summary>Whether a seat re-read is in flight for a stranger who might be a backfill.</summary>
 			public bool SeatReloadInFlight;
+			/// <summary>A seat re-read failed and is owed a retry by the tick; how many have run, and when the next may.</summary>
+			public bool SeatReloadDue;
+			public int SeatReloadRetries;
+			public DateTime NextSeatReloadUtc;
 			public readonly Dictionary<long, ArenaSeatState> Seats = new Dictionary<long, ArenaSeatState>();
 			/// <summary>Objectives in the scene, by scene object id. Empty for deathmatch.</summary>
 			public readonly Dictionary<long, ArenaObjectiveState> Objectives = new Dictionary<long, ArenaObjectiveState>();
@@ -191,6 +213,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>Instances whose match rows are being read.</summary>
 		private readonly HashSet<long> arenaMatchesLoading = new HashSet<long>();
 
+		/// <summary>A match read that failed on the database and is owed a retry by the tick.</summary>
+		private struct ArenaMatchLoadRetry
+		{
+			public int SceneHandle;
+			public string SceneName;
+			public int Retries;
+			public DateTime NextUtc;
+		}
+
+		/// <summary>Failed match reads awaiting their retry, by instance row id. Main thread only.</summary>
+		private readonly Dictionary<long, ArenaMatchLoadRetry> arenaMatchLoadRetries = new Dictionary<long, ArenaMatchLoadRetry>();
+
 		/// <summary>Attribute templates by name, resolved once from the cache.</summary>
 		private readonly Dictionary<string, CharacterAttributeTemplate> pvpAttributeTemplates = new Dictionary<string, CharacterAttributeTemplate>(StringComparer.Ordinal);
 
@@ -203,6 +237,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			arenaMatchesByInstance.Clear();
 			arenaInstanceBySceneHandle.Clear();
 			arenaMatchesLoading.Clear();
+			arenaMatchLoadRetries.Clear();
 			pvpAttributeTemplates.Clear();
 			pvpAttributeWarnings.Clear();
 			ArenaTeamRegistry.Clear();
@@ -259,6 +294,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			arenaMatchesByInstance.Clear();
 			arenaInstanceBySceneHandle.Clear();
 			arenaMatchesLoading.Clear();
+			arenaMatchLoadRetries.Clear();
 			ArenaTeamRegistry.Clear();
 		}
 
@@ -315,11 +351,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
+				/* A read that failed is not a read that found nothing.
+				 *
+				 * The two used to share one branch, so a transient error on the arrival that happened
+				 * to trigger the read was logged as "no match row" and the match was never hosted. The
+				 * next arrival would read again — but when the failure landed on the LAST arrival there
+				 * was no next one, and everyone stood in an arena with no coordinator until they left.
+				 * A failure is now owed a retry by the tick; only a successful read that finds no row
+				 * makes this a plain instance. */
 				DatabaseResult<ArenaMatchData?> matchResult = await matchService.FetchByInstanceAsync(instanceID);
-				if (!matchResult.IsSuccess || !matchResult.Data.HasValue)
+				if (!matchResult.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"Arena: could not read the match of instance {instanceID} ('{sceneName}'); retrying: [{matchResult.ErrorCode}] {matchResult.ErrorMessage}");
+					TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName));
+					return;
+				}
+				if (!matchResult.Data.HasValue)
 				{
 					await Log.Warning("InteractableSystem", $"Arena: instance {instanceID} ('{sceneName}') is a PvP scene with no match row; it will run as a plain instance.");
-					TryEnqueueMainThread(() => arenaMatchesLoading.Remove(instanceID));
+					TryEnqueueMainThread(() =>
+					{
+						arenaMatchesLoading.Remove(instanceID);
+						arenaMatchLoadRetries.Remove(instanceID);
+					});
 					return;
 				}
 
@@ -327,8 +381,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				DatabaseResult<IReadOnlyList<ArenaMatchMemberData>> membersResult = await matchService.FetchMembersAsync(match.ID);
 				if (!membersResult.IsSuccess)
 				{
-					await Log.Warning("InteractableSystem", $"Arena: could not read the seats of match {match.ID}: {membersResult.ErrorCode} - {membersResult.ErrorMessage}");
-					TryEnqueueMainThread(() => arenaMatchesLoading.Remove(instanceID));
+					await Log.Warning("InteractableSystem", $"Arena: could not read the seats of match {match.ID}; retrying: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
+					TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName));
 					return;
 				}
 
@@ -338,7 +392,79 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			catch (Exception ex)
 			{
 				await Log.Error("InteractableSystem", $"Error reading arena match for instance {instanceID}: {ex}");
-				TryEnqueueMainThread(() => arenaMatchesLoading.Remove(instanceID));
+				TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName));
+			}
+		}
+
+		/// <summary>
+		/// Schedules the tick's retry of a match read that failed. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Bounded by <see cref="ArenaReadMaxRetries"/>. Past that the instance is left to the
+		/// arrival path, which still reads again whenever somebody else spawns into it.
+		/// </remarks>
+		private void OnArenaMatchLoadFailed(long instanceID, int sceneHandle, string sceneName)
+		{
+			arenaMatchesLoading.Remove(instanceID);
+
+			if (arenaMatchesByInstance.ContainsKey(instanceID))
+			{
+				arenaMatchLoadRetries.Remove(instanceID);
+				return;
+			}
+
+			arenaMatchLoadRetries.TryGetValue(instanceID, out ArenaMatchLoadRetry retry);
+			if (retry.Retries >= ArenaReadMaxRetries)
+			{
+				arenaMatchLoadRetries.Remove(instanceID);
+				Log.Error("InteractableSystem", $"Arena: gave up reading the match of instance {instanceID} ('{sceneName}') after {retry.Retries} retries; it is not hosted until somebody else arrives.");
+				return;
+			}
+
+			retry.SceneHandle = sceneHandle;
+			retry.SceneName = sceneName;
+			retry.NextUtc = DateTime.UtcNow.AddSeconds(ArenaReadRetrySeconds);
+			arenaMatchLoadRetries[instanceID] = retry;
+		}
+
+		/// <summary>Re-issues the match reads that failed, once their retry is due. Main thread only.</summary>
+		private void RetryArenaMatchLoads(DateTime now)
+		{
+			if (arenaMatchLoadRetries.Count == 0)
+			{
+				return;
+			}
+
+			Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData);
+
+			foreach (long instanceID in arenaMatchLoadRetries.Keys.ToList())
+			{
+				ArenaMatchLoadRetry retry = arenaMatchLoadRetries[instanceID];
+
+				// Hosted by an arrival's read in the meantime, or the instance is gone: nothing owed.
+				if (arenaMatchesByInstance.ContainsKey(instanceID) ||
+					mappingData == null ||
+					!mappingData.SceneInstanceByHandle.ContainsKey(retry.SceneHandle))
+				{
+					arenaMatchLoadRetries.Remove(instanceID);
+					continue;
+				}
+
+				if (now < retry.NextUtc || !arenaMatchesLoading.Add(instanceID))
+				{
+					continue;
+				}
+
+				++retry.Retries;
+				retry.NextUtc = DateTime.MaxValue;
+				arenaMatchLoadRetries[instanceID] = retry;
+
+				int sceneHandle = retry.SceneHandle;
+				string sceneName = retry.SceneName;
+				if (!TryEnqueueAsyncWork(() => LoadArenaMatchAsync(instanceID, sceneHandle, sceneName), instanceID))
+				{
+					OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName);
+				}
 			}
 		}
 
@@ -346,6 +472,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private void RegisterArenaMatch(ArenaMatchData match, IReadOnlyList<ArenaMatchMemberData> members, int sceneHandle)
 		{
 			arenaMatchesLoading.Remove(match.InstanceID);
+			arenaMatchLoadRetries.Remove(match.InstanceID);
 
 			if (arenaMatchesByInstance.ContainsKey(match.InstanceID))
 			{
@@ -428,77 +555,132 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Reads the season ratings of the given seats, stamping the match ranked in its season if the
 		/// forming server did not get to it.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>A failed read leaves the seats unread; it never falls back to the default.</b> It used
+		/// to: every seat was given the default rating and no games, and the match was marked as
+		/// read. The end-of-match write replaces the stored rating outright rather than applying a
+		/// change to it, so one transient error here reset every player in the match to the default
+		/// plus or minus a placement-sized swing. The default is still right for a seat the read
+		/// SUCCEEDED for and found no row — that is a first ranked game — and only such a seat is
+		/// marked <see cref="ArenaSeatState.RatingLoaded"/>.
+		/// </para>
+		/// <para>
+		/// A seat left unread is retried by the tick (<see cref="TickArenaReads"/>), and one still
+		/// unread when the match ends is not rated at all.
+		/// </para>
+		/// </remarks>
 		private void LoadArenaRatings(ArenaMatchState state, List<long> characterIDs)
 		{
 			long matchID = state.MatchID;
 			long instanceID = state.InstanceID;
 			long seasonID = state.SeasonID;
 
+			// Gives this read the retry interval to land before the tick tries again.
+			state.NextRatingReadUtc = DateTime.UtcNow.AddSeconds(ArenaReadRetrySeconds);
+
 			EnqueuePersistence(async () =>
 			{
+				long resolvedSeason = seasonID;
+				Dictionary<long, (int rating, int games)> ratings = null;
 				try
 				{
 					if (Server?.Database?.ServiceRegistry == null ||
 						!Server.Database.ServiceRegistry.TryGet<IArenaRatingService>(out var ratingService) ||
 						!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 					{
+						await Log.Warning("InteractableSystem", $"Arena: match {matchID} is ranked but the rating services are unavailable; its seats stay unrated.");
 						return;
 					}
 
-					if (seasonID <= 0)
+					if (resolvedSeason <= 0)
 					{
 						DatabaseResult<ArenaSeasonData> seasonResult = await ratingService.GetOrCreateActiveSeasonAsync();
 						if (!seasonResult.IsSuccess)
 						{
-							await Log.Warning("InteractableSystem", $"Arena: match {matchID} is ranked but no season could be resolved: {seasonResult.ErrorCode} - {seasonResult.ErrorMessage}");
+							await Log.Warning("InteractableSystem", $"Arena: match {matchID} is ranked but no season could be resolved: [{seasonResult.ErrorCode}] {seasonResult.ErrorMessage}");
 							return;
 						}
-						seasonID = seasonResult.Data.ID;
-						await matchService.SetRankedAsync(matchID, seasonID);
-					}
+						resolvedSeason = seasonResult.Data.ID;
 
-					DatabaseResult<IReadOnlyList<ArenaRatingData>> ratingsResult = await ratingService.FetchRatingsAsync(seasonID, characterIDs);
-					var ratings = new Dictionary<long, (int rating, int games)>();
-					if (ratingsResult.IsSuccess)
-					{
-						foreach (ArenaRatingData r in ratingsResult.Data)
+						/* The stamp is what the history and any other reader go by; the ratings
+						 * themselves only need the season this server now holds. */
+						DatabaseResult<bool> stamp = await WriteArenaRowAsync(() => matchService.SetRankedAsync(matchID, resolvedSeason));
+						if (!stamp.IsSuccess)
 						{
-							ratings[r.CharacterID] = (r.Rating, r.Games);
+							await Log.Warning("InteractableSystem", $"Arena: match {matchID} could not be stamped ranked in season {resolvedSeason}: [{stamp.ErrorCode}] {stamp.ErrorMessage}");
 						}
 					}
 
-					long resolvedSeason = seasonID;
-					TryEnqueueMainThread(() =>
+					DatabaseResult<IReadOnlyList<ArenaRatingData>> ratingsResult = await ratingService.FetchRatingsAsync(resolvedSeason, characterIDs);
+					if (!ratingsResult.IsSuccess)
 					{
-						if (!arenaMatchesByInstance.TryGetValue(instanceID, out ArenaMatchState live) || live.MatchID != matchID)
-						{
-							return;
-						}
-						live.SeasonID = resolvedSeason;
-						live.RatingsLoaded = true;
-						foreach (long id in characterIDs)
-						{
-							if (live.Seats.TryGetValue(id, out ArenaSeatState seat))
-							{
-								if (ratings.TryGetValue(id, out var r))
-								{
-									seat.RatingBefore = r.rating;
-									seat.GamesBefore = r.games;
-								}
-								else
-								{
-									seat.RatingBefore = ArenaRating.DefaultRating;
-									seat.GamesBefore = 0;
-								}
-							}
-						}
-					});
+						await Log.Warning("InteractableSystem", $"Arena: could not read the ratings of {characterIDs.Count} seats in match {matchID}; they stay unrated until a retry lands: [{ratingsResult.ErrorCode}] {ratingsResult.ErrorMessage}");
+						return;
+					}
+
+					ratings = new Dictionary<long, (int rating, int games)>();
+					foreach (ArenaRatingData r in ratingsResult.Data)
+					{
+						ratings[r.CharacterID] = (r.Rating, r.Games);
+					}
 				}
 				catch (Exception ex)
 				{
 					await Log.Error("InteractableSystem", $"Error reading ratings for arena match {matchID}: {ex}");
 				}
+				finally
+				{
+					/* Handed back on every route, failures included, so a season resolved before the
+					 * rating read failed is kept and the retry does not create or stamp it again. */
+					long season = resolvedSeason;
+					Dictionary<long, (int rating, int games)> loaded = ratings;
+					TryEnqueueMainThread(() => ApplyArenaRatings(instanceID, matchID, characterIDs, season, loaded));
+				}
 			}, matchID);
+		}
+
+		/// <summary>
+		/// Installs a rating read on the seats it covered. Main thread only.
+		/// </summary>
+		/// <param name="ratings">The rows read, or null when the read failed.</param>
+		private void ApplyArenaRatings(long instanceID, long matchID, List<long> characterIDs, long seasonID, Dictionary<long, (int rating, int games)> ratings)
+		{
+			if (!arenaMatchesByInstance.TryGetValue(instanceID, out ArenaMatchState live) || live.MatchID != matchID)
+			{
+				return;
+			}
+
+			if (seasonID > 0)
+			{
+				live.SeasonID = seasonID;
+			}
+
+			if (ratings == null)
+			{
+				return;
+			}
+
+			foreach (long id in characterIDs)
+			{
+				if (!live.Seats.TryGetValue(id, out ArenaSeatState seat))
+				{
+					continue;
+				}
+
+				// No row after a read that succeeded is a first ranked game: the default is the truth.
+				if (ratings.TryGetValue(id, out var r))
+				{
+					seat.RatingBefore = r.rating;
+					seat.GamesBefore = r.games;
+				}
+				else
+				{
+					seat.RatingBefore = ArenaRating.DefaultRating;
+					seat.GamesBefore = 0;
+				}
+				seat.RatingLoaded = true;
+			}
 		}
 
 		/// <summary>Marks a seat present. A stranger with no seat may be a backfill; the seats are re-read to find out.</summary>
@@ -573,8 +755,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
+				/* A failed read is not an empty one. Treated as empty, it seated nobody — and the
+				 * backfill it was looking for had already taken a seat in the database and been moved
+				 * here, so they stood in the match with no team and no way to score until some other
+				 * stranger's arrival happened to read again. The tick retries it instead. */
 				DatabaseResult<IReadOnlyList<ArenaMatchMemberData>> membersResult = await matchService.FetchMembersAsync(matchID);
-				IReadOnlyList<ArenaMatchMemberData> members = membersResult.IsSuccess ? membersResult.Data : Array.Empty<ArenaMatchMemberData>();
+				if (!membersResult.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"Arena: could not re-read the seats of match {matchID}; retrying: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
+					TryEnqueueMainThread(() => OnArenaSeatReloadFailed(instanceID, matchID));
+					return;
+				}
+				IReadOnlyList<ArenaMatchMemberData> members = membersResult.Data;
 
 				TryEnqueueMainThread(() =>
 				{
@@ -583,6 +775,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						return;
 					}
 					state.SeatReloadInFlight = false;
+					state.SeatReloadDue = false;
 
 					var added = new List<long>();
 					foreach (ArenaMatchMemberData member in members)
@@ -629,7 +822,68 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			catch (Exception ex)
 			{
 				await Log.Error("InteractableSystem", $"Error re-reading seats of arena match {matchID}: {ex}");
-				TryEnqueueMainThread(() => { if (arenaMatchesByInstance.TryGetValue(instanceID, out var s)) s.SeatReloadInFlight = false; });
+				TryEnqueueMainThread(() => OnArenaSeatReloadFailed(instanceID, matchID));
+			}
+		}
+
+		/// <summary>Owes a failed seat re-read a retry from the tick. Main thread only.</summary>
+		private void OnArenaSeatReloadFailed(long instanceID, long matchID)
+		{
+			if (!arenaMatchesByInstance.TryGetValue(instanceID, out ArenaMatchState state) || state.MatchID != matchID)
+			{
+				return;
+			}
+
+			state.SeatReloadInFlight = false;
+			state.SeatReloadDue = true;
+			state.NextSeatReloadUtc = DateTime.UtcNow.AddSeconds(ArenaReadRetrySeconds);
+		}
+
+		/// <summary>
+		/// Retries the reads a match is owed: a seat re-read that failed, and ranked seats whose
+		/// rating read failed. Main thread only; bounded by <see cref="ArenaReadMaxRetries"/> each.
+		/// </summary>
+		private void TickArenaReads(ArenaMatchState state, DateTime now)
+		{
+			if (state.SeatReloadDue && !state.SeatReloadInFlight && now >= state.NextSeatReloadUtc)
+			{
+				if (state.SeatReloadRetries >= ArenaReadMaxRetries)
+				{
+					state.SeatReloadDue = false;
+					Log.Error("InteractableSystem", $"Arena: gave up re-reading the seats of match {state.MatchID} after {state.SeatReloadRetries} retries; a backfill who arrived meanwhile has no seat here.");
+				}
+				else
+				{
+					++state.SeatReloadRetries;
+					state.SeatReloadDue = false;
+					state.SeatReloadInFlight = true;
+					long instanceID = state.InstanceID;
+					long matchID = state.MatchID;
+					if (!TryEnqueueAsyncWork(() => ReloadArenaSeatsAsync(instanceID, matchID, 0), matchID))
+					{
+						OnArenaSeatReloadFailed(instanceID, matchID);
+					}
+				}
+			}
+
+			if (!state.Ranked || now < state.NextRatingReadUtc || state.RatingReadRetries >= ArenaReadMaxRetries)
+			{
+				return;
+			}
+
+			List<long> unread = null;
+			foreach (ArenaSeatState seat in state.Seats.Values)
+			{
+				if (!seat.Dropped && !seat.RatingLoaded)
+				{
+					(unread ??= new List<long>()).Add(seat.CharacterID);
+				}
+			}
+
+			if (unread != null)
+			{
+				++state.RatingReadRetries;
+				LoadArenaRatings(state, unread);
 			}
 		}
 
@@ -736,10 +990,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				try
 				{
-					if (Server?.Database?.ServiceRegistry != null &&
-						Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
+					if (Server?.Database?.ServiceRegistry == null ||
+						!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 					{
-						await matchService.MarkSeatVacatedAsync(matchID, characterID);
+						await Log.Warning("InteractableSystem", $"Arena: IArenaMatchService unavailable; the seat of character {characterID} in match {matchID} was not vacated.");
+						return;
+					}
+
+					/* Unvacated, the seat cannot be backfilled and the leaver's history does not
+					 * show the desertion — nothing else ever writes it. */
+					DatabaseResult<bool> vacated = await WriteArenaRowAsync(() => matchService.MarkSeatVacatedAsync(matchID, characterID));
+					if (!vacated.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"Arena: the seat of character {characterID} in match {matchID} could not be vacated: [{vacated.ErrorCode}] {vacated.ErrorMessage}");
 					}
 				}
 				catch (Exception ex)
@@ -865,12 +1128,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>Advances every hosted match by one second.</summary>
 		private void OnArenaTick(float deltaTime)
 		{
-			if (arenaMatchesByInstance.Count == 0 || Server == null)
+			if (Server == null)
 			{
 				return;
 			}
 
 			DateTime now = DateTime.UtcNow;
+
+			// Before the early out: a match whose read failed is exactly one that is not hosted yet.
+			RetryArenaMatchLoads(now);
+
+			if (arenaMatchesByInstance.Count == 0)
+			{
+				return;
+			}
+
 			List<ArenaMatchState> finished = null;
 
 			foreach (ArenaMatchState state in arenaMatchesByInstance.Values.ToList())
@@ -889,6 +1161,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 					(finished ??= new List<ArenaMatchState>()).Add(state);
 					continue;
+				}
+
+				if (state.Phase < ArenaMatchPhase.Ended)
+				{
+					TickArenaReads(state, now);
 				}
 
 				switch (state.Phase)
@@ -1294,10 +1571,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					try
 					{
-						if (Server?.Database?.ServiceRegistry != null &&
-							Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
+						if (Server?.Database?.ServiceRegistry == null ||
+							!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 						{
-							await matchService.SetBackfillWindowAsync(matchID, until);
+							await Log.Warning("InteractableSystem", $"Arena: IArenaMatchService unavailable; match {matchID} opens no backfill window.");
+							return;
+						}
+
+						// The window is what the queue's backfill reads; without it no vacated seat is ever filled.
+						DatabaseResult<bool> opened = await WriteArenaRowAsync(() => matchService.SetBackfillWindowAsync(matchID, until));
+						if (!opened.IsSuccess)
+						{
+							await Log.Warning("InteractableSystem", $"Arena: the backfill window of match {matchID} could not be opened: [{opened.ErrorCode}] {opened.ErrorMessage}");
 						}
 					}
 					catch (Exception ex)
@@ -1387,17 +1672,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				int placementGames = state.Template != null ? state.Template.PlacementGames : 10;
 				int k = state.Template != null ? state.Template.RatingK : 32;
 				int placementK = state.Template != null ? state.Template.PlacementK : 64;
-				if (!state.RatingsLoaded)
-				{
-					Log.Warning("InteractableSystem", $"Arena: match {state.MatchID} is ranked but its ratings were never read; everyone is rated from the default.");
-				}
 
+				/* Only seats whose rating was actually read are rated, and only they stand in the
+				 * opponent averages.
+				 *
+				 * An unread seat used to be rated from the default, and the write below replaces the
+				 * stored rating rather than applying a change to it — so a read that failed reset the
+				 * player's season rating. Leaving them unrated costs them one match's change; guessing
+				 * cost them their standing. They are kept out of everyone else's opponent average for
+				 * the same reason: their real rating is unknown, and the default is not it. */
 				var fair = new List<(long characterId, int team, int rating, int games)>();
 				var teamRatings = new List<(int team, int rating)>();
+				int unrated = 0;
 				foreach (ArenaSeatState seat in state.Seats.Values)
 				{
 					if (seat.Dropped)
 					{
+						continue;
+					}
+					if (!seat.RatingLoaded)
+					{
+						++unrated;
 						continue;
 					}
 					teamRatings.Add((seat.Team, seat.RatingBefore));
@@ -1405,6 +1700,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					{
 						fair.Add((seat.CharacterID, seat.Team, seat.RatingBefore, seat.GamesBefore));
 					}
+				}
+				if (unrated > 0)
+				{
+					Log.Warning("InteractableSystem", $"Arena: match {state.MatchID} is ranked but {unrated} seats' ratings were never read; those seats are not rated.");
 				}
 
 				foreach (var line in ArenaRating.Resolve(fair, winnerTeam, placementGames, k, placementK))
@@ -1416,7 +1715,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 				foreach (ArenaSeatState seat in state.Seats.Values)
 				{
-					if (seat.Dropped || !seat.Forfeited)
+					if (seat.Dropped || !seat.Forfeited || !seat.RatingLoaded)
 					{
 						continue;
 					}
@@ -1475,6 +1774,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				if (here)
 				{
+					// An unrated seat is shown the match as unranked rather than a rating of 0.
+					bool rated = state.Ranked && seat.RatingLoaded;
 					Server.NetworkWrapper.Broadcast(character.Owner, new ArenaResultsBroadcast
 					{
 						ArenaTemplateID = state.Template != null ? state.Template.ID : 0,
@@ -1483,10 +1784,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						TeamScores = (int[])state.TeamScores.Clone(),
 						Placements = placementEntries,
 						RankDelta = rankDelta,
-						Ranked = state.Ranked,
-						RatingDelta = state.Ranked ? seat.RatingDelta : 0,
-						NewRating = state.Ranked ? seat.NewRating : 0,
-						PlacementGamesRemaining = state.Ranked ? ArenaRating.PlacementGamesRemaining(seat.GamesBefore + 1, placementGamesTotal) : 0,
+						Ranked = rated,
+						RatingDelta = rated ? seat.RatingDelta : 0,
+						NewRating = rated ? seat.NewRating : 0,
+						PlacementGamesRemaining = rated ? ArenaRating.PlacementGamesRemaining(seat.GamesBefore + 1, placementGamesTotal) : 0,
 					}, true, FishNet.Transporting.Channel.Reliable);
 				}
 			}
@@ -1502,7 +1803,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
 				tallies.Add((seat.CharacterID, seat.Kills, seat.Deaths, seat.Score));
-				if (state.Ranked && !seat.Dropped)
+				if (state.Ranked && !seat.Dropped && seat.RatingLoaded)
 				{
 					deltas.Add((seat.CharacterID, seat.RatingDelta));
 				}
@@ -1517,15 +1818,50 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					if (Server?.Database?.ServiceRegistry == null ||
 						!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 					{
+						await Log.Error("InteractableSystem", $"Arena: IArenaMatchService unavailable; the result of match {matchID} was not recorded.");
 						return;
 					}
-					await matchService.UpdateMemberTalliesAsync(matchID, tallies);
-					if (ranked && seasonID > 0 && Server.Database.ServiceRegistry.TryGet<IArenaRatingService>(out var ratingService))
+
+					/* Every write is checked. None of them was, so a failure anywhere here lost the
+					 * result without a trace — and the players had already been shown it. */
+					DatabaseResult<int> talliesResult = await WriteArenaRowAsync(() => matchService.UpdateMemberTalliesAsync(matchID, tallies));
+					if (!talliesResult.IsSuccess)
 					{
-						await ratingService.UpsertRatingsAsync(seasonID, ratingResults);
-						await matchService.UpdateMemberRatingDeltasAsync(matchID, deltas);
+						await Log.Warning("InteractableSystem", $"Arena: the tallies of match {matchID} were not written: [{talliesResult.ErrorCode}] {talliesResult.ErrorMessage}");
 					}
-					await matchService.UpdateStatusAsync(matchID, ArenaMatchStatus.Ended, winnerTeam);
+
+					if (ranked)
+					{
+						if (seasonID <= 0)
+						{
+							await Log.Warning("InteractableSystem", $"Arena: match {matchID} is ranked but no season was ever resolved; its ratings were shown but not written.");
+						}
+						else if (!Server.Database.ServiceRegistry.TryGet<IArenaRatingService>(out var ratingService))
+						{
+							await Log.Error("InteractableSystem", $"Arena: IArenaRatingService unavailable; the ratings of match {matchID} were not written.");
+						}
+						else
+						{
+							/* Not retried. The upsert counts the game — games, wins and losses are
+							 * incremented — so repeating one whose outcome is unknown could count it
+							 * twice. A failure is logged with everything needed to apply it by hand. */
+							DatabaseResult<int> upsert = await ratingService.UpsertRatingsAsync(seasonID, ratingResults);
+							if (!upsert.IsSuccess)
+							{
+								await Log.Error("InteractableSystem",
+									$"Arena: the ratings of match {matchID} (season {seasonID}) were not written: [{upsert.ErrorCode}] {upsert.ErrorMessage}. " +
+									$"Unwritten (character, newRating, won): {string.Join("; ", ratingResults)}");
+							}
+
+							DatabaseResult<int> deltasResult = await WriteArenaRowAsync(() => matchService.UpdateMemberRatingDeltasAsync(matchID, deltas));
+							if (!deltasResult.IsSuccess)
+							{
+								await Log.Warning("InteractableSystem", $"Arena: the rating changes of match {matchID}'s seats were not written: [{deltasResult.ErrorCode}] {deltasResult.ErrorMessage}");
+							}
+						}
+					}
+
+					await WriteArenaStatusAsync(matchService, matchID, ArenaMatchStatus.Ended, winnerTeam);
 				}
 				catch (Exception ex)
 				{
@@ -1973,10 +2309,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				try
 				{
-					if (Server?.Database?.ServiceRegistry != null &&
-						Server.Database.ServiceRegistry.TryGet<IArenaPenaltyService>(out var penaltyService))
+					if (Server?.Database?.ServiceRegistry == null ||
+						!Server.Database.ServiceRegistry.TryGet<IArenaPenaltyService>(out var penaltyService))
 					{
-						await penaltyService.SetAsync(characterID, until, reason);
+						await Log.Warning("InteractableSystem", $"Arena: IArenaPenaltyService unavailable; character {characterID} was not locked out of the queue ({reason}).");
+						return;
+					}
+
+					// A lock that is not written is a penalty that was never applied: the queue reads only the row.
+					DatabaseResult<bool> locked = await WriteArenaRowAsync(() => penaltyService.SetAsync(characterID, until, reason));
+					if (!locked.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"Arena: character {characterID} was not locked out of the queue until {until:u} ({reason}): [{locked.ErrorCode}] {locked.ErrorMessage}");
 					}
 				}
 				catch (Exception ex)
@@ -1996,10 +2340,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				try
 				{
-					if (Server?.Database?.ServiceRegistry != null &&
-						Server.Database.ServiceRegistry.TryGet<IArenaPenaltyService>(out var penaltyService))
+					if (Server?.Database?.ServiceRegistry == null ||
+						!Server.Database.ServiceRegistry.TryGet<IArenaPenaltyService>(out var penaltyService))
 					{
-						await penaltyService.ClearAsync(characterID);
+						await Log.Warning("InteractableSystem", $"Arena: IArenaPenaltyService unavailable; character {characterID}'s queue lock was not lifted.");
+						return;
+					}
+
+					// Left in place, a player who came back inside the grace is still locked out of the queue.
+					DatabaseResult<bool> cleared = await WriteArenaRowAsync(() => penaltyService.ClearAsync(characterID));
+					if (!cleared.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"Arena: character {characterID}'s queue lock was not lifted: [{cleared.ErrorCode}] {cleared.ErrorMessage}");
 					}
 				}
 				catch (Exception ex)
@@ -2234,17 +2586,69 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				try
 				{
-					if (Server?.Database?.ServiceRegistry != null &&
-						Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
+					if (Server?.Database?.ServiceRegistry == null ||
+						!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 					{
-						await matchService.UpdateStatusAsync(matchID, status);
+						await Log.Error("InteractableSystem", $"Arena: IArenaMatchService unavailable; match {matchID} was not moved to {status}.");
+						return;
 					}
+					await WriteArenaStatusAsync(matchService, matchID, status, -1);
 				}
 				catch (Exception ex)
 				{
 					await Log.Error("InteractableSystem", $"Error updating arena match {matchID} to {status}: {ex}");
 				}
 			}, matchID);
+		}
+
+		/// <summary>
+		/// Moves a match's row to a status, retrying a failed write, and logs a failure that stuck.
+		/// </summary>
+		/// <remarks>
+		/// Worth the retry because a match row that never reaches Ended or Cancelled holds every one
+		/// of its seats "in a live match": both finders refuse them until the stale sweep's
+		/// <c>CancelAbandonedAsync</c> reaps the row, which waits for the instance to be gone and
+		/// the match to be ten minutes old. Safe to repeat — the status only ever moves forward, so
+		/// a write that did land and is sent again moves nothing.
+		/// </remarks>
+		private async Task WriteArenaStatusAsync(IArenaMatchService matchService, long matchID, ArenaMatchStatus status, int winnerTeam)
+		{
+			DatabaseResult<bool> result = await WriteArenaRowAsync(() => matchService.UpdateStatusAsync(matchID, status, winnerTeam));
+			if (!result.IsSuccess)
+			{
+				await Log.Error("InteractableSystem", $"Arena: match {matchID} could not be moved to {status}; its seats stay blocked from both finders until the stale sweep cancels it: [{result.ErrorCode}] {result.ErrorMessage}");
+			}
+		}
+
+		/// <summary>
+		/// Runs one idempotent arena write, retrying a failure up to <see cref="ArenaWriteAttempts"/>
+		/// times with a short, growing backoff.
+		/// </summary>
+		/// <remarks>
+		/// The service layer already retries transient errors inside a single call; this spans the
+		/// few seconds a database restart or failover takes, which that does not. Only for writes
+		/// that are safe to repeat when an earlier attempt's outcome is unknown — status moves,
+		/// seat and window stamps, lock upserts, per-seat SETs. Never the rating upsert, which
+		/// counts the game.
+		/// </remarks>
+		/// <returns>The last attempt's result.</returns>
+		private static async Task<DatabaseResult<T>> WriteArenaRowAsync<T>(Func<Task<DatabaseResult<T>>> write)
+		{
+			DatabaseResult<T> result = default;
+			for (int attempt = 1; attempt <= ArenaWriteAttempts; ++attempt)
+			{
+				result = await write();
+				// A request the service refused as invalid will be refused the same way every time.
+				if (result.IsSuccess || result.ErrorCode == DatabaseErrorCodes.ValidationError)
+				{
+					return result;
+				}
+				if (attempt < ArenaWriteAttempts)
+				{
+					await Task.Delay(ArenaWriteRetryDelayMilliseconds * attempt);
+				}
+			}
+			return result;
 		}
 
 		/// <summary>Sends the match state to everyone standing in the arena.</summary>

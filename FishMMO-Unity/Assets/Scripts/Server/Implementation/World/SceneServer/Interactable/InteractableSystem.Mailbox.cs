@@ -94,50 +94,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				var result = await mailService.FetchAsync(characterID);
-				if (!result.IsSuccess || result.Data == null)
-				{
-					TryEnqueueMainThread(() =>
-					{
-						if (conn == null || !conn.IsActive)
-						{
-							return;
-						}
-						Server.NetworkWrapper.Broadcast(conn, new MailListBroadcast()
-						{
-							Entries = System.Array.Empty<MailEntryData>(),
-						}, true, Channel.Reliable);
-					});
-					return;
-				}
-
-				List<MailEntryData> entries = new List<MailEntryData>(result.Data.Count);
-				for (int i = 0; i < result.Data.Count; i++)
-				{
-					var mail = result.Data[i];
-					entries.Add(new MailEntryData()
-					{
-						ID = mail.ID,
-						SenderName = mail.SenderName ?? "",
-						Subject = ChatHelper.Sanitize(mail.Subject) ?? "",
-						Body = ChatHelper.Sanitize(mail.Body) ?? "",
-						Read = mail.Read,
-						ItemTemplateID = mail.ItemAttachmentTemplateID,
-						CurrencyAmount = mail.CurrencyAttachment,
-					});
-				}
-
-				TryEnqueueMainThread(() =>
-				{
-					if (conn == null || !conn.IsActive)
-					{
-						return;
-					}
-					Server.NetworkWrapper.Broadcast(conn, new MailListBroadcast()
-					{
-						Entries = entries.ToArray(),
-					}, true, Channel.Reliable);
-				});
+				await SendMailListAsync(conn, mailService, characterID);
 			}
 			catch (Exception ex)
 			{
@@ -147,6 +104,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				EndIngressGuard(guardKey);
 			}
+		}
+
+		/// <summary>
+		/// Reads a character's mail and sends it to their client as a <see cref="MailListBroadcast"/>.
+		/// </summary>
+		/// <remarks>
+		/// A read that fails sends nothing. It used to send an empty list, which the inbox cannot
+		/// tell from having no mail — a player looking for a letter they were expecting was told,
+		/// in effect, that it had never arrived. Sending nothing leaves the inbox showing what it
+		/// had, which is the truer of the two.
+		/// </remarks>
+		/// <returns>False when the read failed and nothing was sent.</returns>
+		private async Task<bool> SendMailListAsync(NetworkConnection conn, ICharacterMailService mailService, long characterID)
+		{
+			var result = await mailService.FetchAsync(characterID);
+			if (!result.IsSuccess || result.Data == null)
+			{
+				await Log.Warning("InteractableSystem", $"Could not read the mail of CharID={characterID}: [{result.ErrorCode}] {result.ErrorMessage}");
+				return false;
+			}
+
+			List<MailEntryData> entries = new List<MailEntryData>(result.Data.Count);
+			for (int i = 0; i < result.Data.Count; i++)
+			{
+				var mail = result.Data[i];
+				entries.Add(new MailEntryData()
+				{
+					ID = mail.ID,
+					SenderName = mail.SenderName ?? "",
+					Subject = ChatHelper.Sanitize(mail.Subject) ?? "",
+					Body = ChatHelper.Sanitize(mail.Body) ?? "",
+					Read = mail.Read,
+					ItemTemplateID = mail.ItemAttachmentTemplateID,
+					CurrencyAmount = mail.CurrencyAttachment,
+				});
+			}
+
+			TryEnqueueMainThread(() =>
+			{
+				if (conn == null || !conn.IsActive)
+				{
+					return;
+				}
+				Server.NetworkWrapper.Broadcast(conn, new MailListBroadcast()
+				{
+					Entries = entries.ToArray(),
+				}, true, Channel.Reliable);
+			});
+			return true;
 		}
 
 		/// <summary>
@@ -523,8 +529,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
+				/* A lookup that failed is not a recipient that does not exist. Both used to answer
+				 * NoRecipient and log "not found", so a database error told the sender their friend's
+				 * name was wrong. The escrow is returned either way, in the finally below. */
 				DatabaseResult<CharacterData?> recipientResult = await characterService.FetchAsync(recipientName);
-				if (!recipientResult.IsSuccess || recipientResult.Data == null)
+				if (!recipientResult.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"SendMailAsync: could not look up recipient '{recipientName}' (SenderID={senderID}): [{recipientResult.ErrorCode}] {recipientResult.ErrorMessage}");
+					return;
+				}
+				if (recipientResult.Data == null)
 				{
 					await Log.Warning("InteractableSystem", $"SendMailAsync: Recipient '{recipientName}' not found (SenderID={senderID}).");
 					reason = MailFailureReason.NoRecipient;
@@ -547,7 +561,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				);
 				if (!result.IsSuccess)
 				{
-					await Log.Warning("InteractableSystem", $"SendMailAsync DB error (SenderID={senderID}): {result.ErrorCode} - {result.ErrorMessage}");
+					// The recipient was deleted between the lookup and the insert: still "no such recipient".
+					if (result.ErrorCode == DatabaseErrorCodes.NotFound)
+					{
+						reason = MailFailureReason.NoRecipient;
+					}
+					await Log.Warning("InteractableSystem", $"SendMailAsync DB error (SenderID={senderID}): [{result.ErrorCode}] {result.ErrorMessage}");
 					return;
 				}
 
@@ -696,6 +715,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					await mailService.FetchAsync(characterID);
 				if (!listResult.IsSuccess || listResult.Data == null)
 				{
+					await Log.Warning("InteractableSystem", $"ClaimMailAttachmentAsync: could not read the mail of CharID={characterID} (MailID={mailID}): [{listResult.ErrorCode}] {listResult.ErrorMessage}");
 					TryEnqueueMainThread(() => SendMailClaimResult(conn, mailID, false, MailFailureReason.ServerError));
 					return;
 				}
@@ -992,7 +1012,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				long characterID = character.ID;
 				long mailID = msg.MailID;
 
-				if (TryEnqueueAsyncWork(() => DeleteMailAsync(characterID, mailID, guardKey), conn, characterID))
+				if (TryEnqueueAsyncWork(() => DeleteMailAsync(conn, characterID, mailID, guardKey), conn, characterID))
 				{
 					asyncOwnsGuard = true;
 				}
@@ -1007,9 +1027,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Soft-deletes a mail entry via the database asynchronously.
+		/// Soft-deletes a mail entry via the database asynchronously, then answers with the inbox.
 		/// </summary>
-		private async Task DeleteMailAsync(long characterID, long mailID, long guardKey)
+		/// <remarks>
+		/// <para>
+		/// <b>The delete is addressed by the mail's own version.</b> It used to pass a constant 2,
+		/// and the delete is version-gated: it only acts on a row whose version is lower than the
+		/// one it is given. A mail is sent at version 1 and a claim moves it to its version plus
+		/// one, so every mail whose attachment had been claimed sat at 2 and could never be
+		/// deleted — the delete failed as stale, was logged, and the letter stayed. The row is read
+		/// first, as the claim path reads it, and deleted at its version plus one.
+		/// </para>
+		/// <para>
+		/// <b>The answer is the refreshed inbox.</b> The panel asks for a fetch right behind the
+		/// delete and treats the list as its confirmation, but that fetch arrives while this
+		/// request still holds the connection's ingress guard and is refused — so the confirmation
+		/// never came. Sending the list from here is the reply the delete owed.
+		/// </para>
+		/// </remarks>
+		private async Task DeleteMailAsync(NetworkConnection conn, long characterID, long mailID, long guardKey)
 		{
 			try
 			{
@@ -1022,11 +1058,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				DatabaseResult result = await mailService.DeleteAsync(mailID, characterID, 2);
-				if (!result.IsSuccess)
+				DatabaseResult<System.Collections.Generic.IReadOnlyList<CharacterMailData>> listResult =
+					await mailService.FetchAsync(characterID);
+				if (!listResult.IsSuccess || listResult.Data == null)
 				{
-					await Log.Warning("InteractableSystem", $"DeleteMailAsync DB error (MailID={mailID}, CharID={characterID}): {result.ErrorCode} - {result.ErrorMessage}");
+					await Log.Warning("InteractableSystem", $"DeleteMailAsync: could not read the mail of CharID={characterID} (MailID={mailID}): [{listResult.ErrorCode}] {listResult.ErrorMessage}");
+					return;
 				}
+
+				CharacterMailData? found = null;
+				for (int i = 0; i < listResult.Data.Count; ++i)
+				{
+					if (listResult.Data[i].ID == mailID)
+					{
+						found = listResult.Data[i];
+						break;
+					}
+				}
+
+				/* Not in the inbox: already deleted, or never this character's. Nothing to delete,
+				 * and the refreshed list below says so. */
+				if (found.HasValue)
+				{
+					DatabaseResult result = await mailService.DeleteAsync(mailID, characterID, found.Value.Version + 1);
+					if (!result.IsSuccess)
+					{
+						await Log.Warning("InteractableSystem", $"DeleteMailAsync DB error (MailID={mailID}, CharID={characterID}): [{result.ErrorCode}] {result.ErrorMessage}");
+					}
+				}
+
+				await SendMailListAsync(conn, mailService, characterID);
 			}
 			catch (Exception ex)
 			{

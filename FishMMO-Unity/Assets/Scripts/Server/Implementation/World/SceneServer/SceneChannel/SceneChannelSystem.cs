@@ -93,6 +93,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private float sceneServerCacheTtlSeconds = 10.0f;
 
 		/// <summary>
+		/// How long a scene server may go without pulsing before its channels stop being offered.
+		/// </summary>
+		/// <remarks>
+		/// The same threshold the world server routes by (<c>WorldSceneSystem.SceneServerPulseStaleSeconds</c>)
+		/// and reaps a dead server's scene rows at. The two have to agree: offering a channel the
+		/// world server will not route to lets a player spend their switch on a destination they
+		/// are then sent away from.
+		/// </remarks>
+		private const double SceneServerPulseStaleSeconds = 60.0;
+
+		/// <summary>
 		/// Whether every character load pushes an unsolicited channel list to its client.
 		/// </summary>
 		/// <remarks>
@@ -586,11 +597,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						continue;
 					}
 
-					/* Resolve the hosting scene server, but only to prove it is there.
+					/* Resolve the hosting scene server, but only to prove it is alive.
 					 *
 					 * A scene row outlives the process that served it — a crashed scene server
 					 * deletes nothing — so a Ready row is not evidence that the channel behind it
-					 * can be entered. Failing this lookup is what keeps a dead instance out of the
+					 * can be entered. Neither is the scene server's own row, for the same reason:
+					 * only its pulse is. FetchSceneServerAddressAsync refuses a server that has
+					 * stopped pulsing, and that refusal is what keeps a dead instance out of the
 					 * list. Cache-aware, so it costs one query per scene server per TTL rather than
 					 * one per channel per request. */
 					ushort? serverPort = await FetchSceneServerAddressAsync(sceneServerService, runtimeData, sceneData.SceneServerID);
@@ -774,7 +787,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Asynchronously validates that the target channel handle exists in the database
-		/// (is <see cref="SceneType.OpenWorld"/> and has capacity), then marshals back to
+		/// (is <see cref="SceneType.OpenWorld"/>, has capacity, and is hosted by a scene server that is
+		/// still pulsing), then marshals back to
 		/// the main thread to update the character's <see cref="IPlayerCharacter.SceneHandle"/>
 		/// and disconnect the client.
 		/// <para>
@@ -822,7 +836,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				var availableScenes = await FetchAvailableScenesAsync(sceneService, runtimeData, worldServerID, sceneName, maxClients);
 				if (availableScenes == null)
 				{
-					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.DestinationUnavailable));
+					/* Null is the database failing, and only that — an empty list is a real answer
+					 * and falls through to the full-or-gone check below. Told as a server error
+					 * rather than as "unavailable", which would send the player to refresh a list
+					 * the server could not read either. */
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
 					return;
 				}
 
@@ -831,6 +849,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * nothing — the one outcome a channel picker must never produce, because the
 				 * obvious response is to click again, and the cooldown then swallows that too. */
 				bool targetValid = false;
+				long targetSceneServerID = 0;
 				foreach (SceneData sd in availableScenes)
 				{
 					if (sd.ID != targetHandle || (SceneType)sd.SceneType != SceneType.OpenWorld)
@@ -840,6 +859,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (sd.CharacterCount < maxClients)
 					{
 						targetValid = true;
+						targetSceneServerID = sd.SceneServerID;
 					}
 					break;
 				}
@@ -861,6 +881,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						sceneService, targetHandle, worldServerID, sceneName, maxClients);
 
 					TryEnqueueMainThread(() => SendTransferRefused(conn, reason));
+					return;
+				}
+
+				/* The same proof of life the channel list asks for, asked again here: the list the
+				 * player clicked may predate the hosting server's death, and a Ready row on a server
+				 * that has stopped pulsing is exactly what that list used to offer. Refused before
+				 * the cooldown claim below, so a switch to a dead channel costs the player nothing. */
+				if (!Server.Database.ServiceRegistry.TryGet<ISceneServerService>(out var sceneServerService))
+				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
+					return;
+				}
+
+				if (!(await FetchSceneServerAddressAsync(sceneServerService, runtimeData, targetSceneServerID)).HasValue)
+				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.DestinationUnavailable));
 					return;
 				}
 
@@ -1149,7 +1185,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Falls through to <c>ISceneService.FetchAvailableAsync</c> on cache miss or when
 		/// caching is disabled (<see cref="sceneInstanceCacheTtlSeconds"/> = 0).
 		/// </summary>
-		/// <returns>The list of available <see cref="SceneData"/>, or <c>null</c> on failure.</returns>
+		/// <returns>
+		/// The list of available <see cref="SceneData"/> — empty when there is none — or <c>null</c>
+		/// when the database could not be read.
+		/// </returns>
+		/// <remarks>
+		/// The two used to be the same <c>null</c>. A channel switch then answered a database fault
+		/// as "destination unavailable", and answered a scene whose every instance is full the same
+		/// way — skipping the full-or-gone check that exists to tell a player to pick another
+		/// channel rather than to refresh.
+		/// </remarks>
 		private async Task<IReadOnlyList<SceneData>> FetchAvailableScenesAsync(
 			ISceneService sceneService,
 			SceneChannelSystemRuntimeData runtimeData,
@@ -1167,9 +1212,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			var result = await sceneService.FetchAvailableAsync(worldServerID, sceneName, maxClients);
-			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+			if (!result.IsSuccess)
 			{
+				await Log.Warning("SceneChannelSystem", $"Could not read the available instances of {sceneName} (World={worldServerID}): [{result.ErrorCode}] {result.ErrorMessage}");
 				return null;
+			}
+
+			// Not cached when empty, so an instance that comes up is offered on the next request rather than after the TTL.
+			if (result.Data == null || result.Data.Count < 1)
+			{
+				return Array.Empty<SceneData>();
 			}
 
 			if (ttl > TimeSpan.Zero)
@@ -1203,7 +1255,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Falls through to <c>ISceneServerService.FetchAsync</c> on cache miss or when
 		/// caching is disabled (<see cref="sceneServerCacheTtlSeconds"/> = 0).
 		/// </summary>
-		/// <returns>The scene server address and port, or <c>null</c> on failure.</returns>
+		/// <returns>
+		/// The scene server's port, or <c>null</c> when it could not be read or has stopped pulsing.
+		/// </returns>
 		private async Task<ushort?> FetchSceneServerAddressAsync(
 			ISceneServerService sceneServerService,
 			SceneChannelSystemRuntimeData runtimeData,
@@ -1219,7 +1273,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var result = await sceneServerService.FetchAsync(sceneServerID);
 			if (!result.IsSuccess)
 			{
+				/* NOT_FOUND is a server that deregistered on a graceful shutdown — an ordinary
+				 * reason for its channel to be gone. Anything else is a fault, and it hides every
+				 * channel that server hosts, so it is worth a line. */
+				if (result.ErrorCode != DatabaseErrorCodes.NotFound)
+				{
+					await Log.Warning("SceneChannelSystem", $"Could not read scene server {sceneServerID}; its channels are not offered: [{result.ErrorCode}] {result.ErrorMessage}");
+				}
+
 				// Invalidate any stale cached entry so subsequent calls re-fetch immediately
+				runtimeData.SceneServerAddressCache?.Invalidate(sceneServerID);
+				return null;
+			}
+
+			/* The row existing proves nothing: a scene server deletes it only on a graceful
+			 * shutdown, so a crashed one leaves it behind, pulse frozen at the moment it died. The
+			 * row was treated as proof of life anyway, and a dead server's channels were offered —
+			 * and accepted, spending the player's switch cooldown — until the world server's
+			 * stale-row sweep caught up with its scenes. */
+			if ((DateTime.UtcNow - result.Data.LastPulse).TotalSeconds >= SceneServerPulseStaleSeconds)
+			{
 				runtimeData.SceneServerAddressCache?.Invalidate(sceneServerID);
 				return null;
 			}
