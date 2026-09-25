@@ -25,11 +25,11 @@ Add a **FishMMO → Water → Water Surface** component to an empty object. **It
 level, in metres.** Assign `OceanWater.mat`, set the wind, and that is the whole setup — the mesh
 is built for you and follows whichever camera is rendering.
 
-Scenes cut from a planet by the World Atlas get one automatically, at the height the planet's own
-surface function says its water line is: the terrain's `y = 0` is its lowest ground, so the sea
-lands at `-groundAltitudeMetres`. The coastline underfoot is then the coastline on the globe. A
-scene whose lowest ground is above the water line gets no sea at all, and neither does a world with
-no liquid water on it.
+Scenes cut from a planet by the World Atlas get one automatically. In those scenes world Y is
+altitude above the water line: the sea sits at `y = 0` and the terrain stands at its real height
+above and below it, so the coastline underfoot is the coastline on the globe. A scene whose lowest
+ground is above the water line gets no sea at all, and neither does a world with no liquid water on
+it.
 
 ## Floating things on it
 
@@ -38,10 +38,11 @@ float surface = water.HeightAt(transform.position);
 bool submerged = water.IsSubmerged(transform.position);
 ```
 
-`HeightAt` runs the same wave sum the shader draws, so a boat sits in the trough a player can see.
-It is an inverse, not a lookup: a Gerstner wave moves water sideways as well as up, so the piece of
-water that ends up above a given point started somewhere else. Three fixed-point iterations bring
-it within a centimetre.
+`HeightAt` evaluates the same sea the shader draws — the FFT spectrum's strongest components,
+summed on the CPU, with the same shoaling, tide and surf on top — so a boat sits in the trough a
+player can see. It is an inverse, not a lookup: waves move water sideways as well as up, so the
+piece of water that ends up above a given point started somewhere else. Three fixed-point
+iterations bring it within a centimetre.
 
 ## URP settings this actually depends on
 
@@ -51,13 +52,30 @@ refracts the previous frame's buffers and foams in mid-air.
 
 | Feature | Needs | Without it |
 | --- | --- | --- |
-| Refraction | **Opaque Texture** on the URP asset | Falls back to alpha blending. Off in all three of this project's URP assets today. |
+| Refraction | **Opaque Texture** on the URP asset | Falls back to alpha blending. On in `URP-HighFidelity`, off in the other two. |
 | Shore foam, soft edges, depth absorption | **Depth Texture** on the URP asset | Foam and soft shorelines are dropped; the sea is treated as uniformly deep. Off in `URP-Performant`. |
 
 `WaterSurface` reads the running pipeline asset and disables each one that cannot work, through
 **global** shader keywords — not material keywords, which would write the answer into the `.mat`
 and leave it modified in the working tree on whichever machine opened it last. It warns once in the
 log so a missing effect is never silent.
+
+## Under the water
+
+While the camera is below the surface, a full-screen pass (`FishMMO/Water/Underwater`, driven by
+the **Underwater** fields on `WaterSurface`) fogs everything in front of the camera by the water
+between — the sea bed, anything swimming, and the surface overhead, which it draws after. What it
+adds to the view is the light the water scatters toward the eye:
+
+- **Daylight that fades with depth**, per colour, integrated along each ray: looking down falls away
+  into dark blue, looking up brightens toward the surface.
+- **Shafts of sun** (`UnderwaterShafts`): the caustics' own lens, marched in sixteen steps through
+  the nearest 40 m and cut by the main light's shadow map, so a cliff or a hull shadows the water
+  as well as the floor. The dearest part of the pass; 0 skips the march.
+- **Drifting matter** (`UnderwaterMotes`): specks on a world grid, drifting with the current,
+  sinking, and swaying with the swell near the surface.
+
+Looking up, Snell's window shows the actual scene above, bent by the waves when refraction is on.
 
 ## Cost
 

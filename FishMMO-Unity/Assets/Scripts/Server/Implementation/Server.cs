@@ -159,7 +159,7 @@ namespace FishMMO.Server.Implementation
 
 			Log.Debug("Server", "Server is starting...");
 
-			NetworkManager networkManager = FindFirstObjectByType<NetworkManager>();
+			NetworkManager networkManager = FindAnyObjectByType<NetworkManager>();
 			if (networkManager == null)
 				throw new UnityException("Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
 

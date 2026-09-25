@@ -12,10 +12,10 @@ Shader "FishMMO/Water/Shore"
         _FoamColor ("Foam", Color) = (0.97, 0.99, 1.0, 1)
         _SwashColor ("Swash water", Color) = (0.42, 0.58, 0.56, 1)
         _WetColor ("Wet sand", Color) = (0.26, 0.20, 0.13, 1)
-        _WetDistance ("Wet sand reaches (m)", Range(0, 40)) = 12
+        _WetAbove ("Wet above the highest run-up (share)", Range(0, 1)) = 0.15
         _FoamScale ("Foam size (m)", Range(0.5, 40)) = 2.2
-        _EdgeWobble ("Foam edge raggedness (m)", Range(0, 8)) = 3.0
-        _SeawardReach ("Reaches into the water (m)", Range(0, 60)) = 18
+        _EdgeWobble ("Edge raggedness (share of the run-up)", Range(0, 0.6)) = 0.25
+        _Underwater ("Reaches under the water (share of the wave height)", Range(0, 2)) = 0.6
         _FoamSharpness ("Foam sharpness", Range(0.01, 1)) = 0.22
         _EdgeFoam ("Foam at the edge", Range(0, 4)) = 2.6
         _SwashOpacity ("Swash opacity", Range(0, 1)) = 0.20
@@ -58,18 +58,19 @@ Shader "FishMMO/Water/Shore"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "FishWaterShoreCommon.hlsl"
+            #include "FishWaterFog.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _FoamColor;
                 half4 _SwashColor;
                 half4 _WetColor;
-                half _WetDistance;
+                half _WetAbove;
                 half _FoamScale;
                 half _FoamSharpness;
                 half _EdgeFoam;
                 half _SwashOpacity;
                 half _EdgeWobble;
-                half _SeawardReach;
+                half _Underwater;
                 half _Sheen;
                 half _Residual;
                 half _Debug;
@@ -87,7 +88,6 @@ Shader "FishMMO/Water/Shore"
             float _FishWaterLevel;       // the sea's surface now, tide included
             float _FishWaterMeanLevel;   // the level the shore field was built against
             float _FishWaterShoreTexel;  // metres per texel of the shore field
-            float4 _FishWaterWind;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -141,17 +141,21 @@ Shader "FishMMO/Water/Shore"
                 #endif
                 float3 positionWS = ComputeWorldSpacePosition(input.screenUV, ndcDepth, UNITY_MATRIX_I_VP);
 
-                /* Only near the water's height. The band is laid out by horizontal distance, and
-                 * horizontal distance alone would paint a cliff or a hill standing at the shore all
-                 * the way up its face. Swash climbs a beach to about one and a half times the
-                 * height of the waves — Hs is the reach over thirteen, as WaterShore sets it — and
-                 * the wet band a little above that; under water, only the first metre or so of the
-                 * inner surf belongs to the shore. Measured from the sea as it stands now, tide in. */
+                /* EVERYTHING HERE IS A HEIGHT above the sea as it stands now, tide included: the
+                 * swash, its lip and the wet sand. How far up a beach water runs is a height — the
+                 * run-up — and the ground it covers is that height over the slope: sixteen metres of
+                 * a gentle beach, one metre of a steep bank. Laid out by horizontal distance, as the
+                 * band first was, it stood metres up a steep face as a pale sheet; in height it
+                 * follows the ground's own contours, as standing water does, and it follows the tide
+                 * without being told, because it is measured from the water as it is. */
                 float rise = positionWS.y - _FishWaterLevel;
-                float runUp = max(0.75, _FishWaterSwashReach * 0.1);
-                float ceiling = runUp * 1.6;
-                float floorDepth = max(1.0, runUp);
-                if (rise > ceiling || rise < -floorDepth)
+                float waveHeight = max(0.05, _FishWaterSwashSea.x);
+                /* The most anything here can reach: the largest run-up (twice the wave height), the
+                 * biggest wave of a group, the wettest stretch of shore, and the wet sand above it.
+                 * Under the water, the inner surf a fraction of the wave height down. */
+                float highest = 2.0 * waveHeight * 1.35 * 1.3 * (1.0 + _WetAbove) + 0.05;
+                float under = max(0.2, waveHeight * _Underwater);
+                if (rise > highest || rise < -under)
                 {
                     return half4(0, 0, 0, 0);
                 }
@@ -162,106 +166,63 @@ Shader "FishMMO/Water/Shore"
                     return half4(0, 0, 0, 0);
                 }
 
-                /* The field's waterline is the MEAN one; the sea stands higher or lower with the
-                 * tide, and the waterline moves by the rise over the slope of the beach. Left
-                 * where it was, a metre of tide on an ordinary beach put the swash thirty metres
-                 * from the water: drowned at high tide, stranded up the sand at low. The slope is
-                 * taken over a few metres of the field's depth rather than at the texel, so the
-                 * line moves as a line and not as every bump in the sand. */
+                /* The beach's own slope, over a few metres of the shore field rather than at a
+                 * texel: the run-up is set by the shape of the beach, not by each bump in it. */
                 float slopeStep = max(4.0, _FishWaterShoreTexel * 4.0);
                 float depthEast = FishWaterShoreSample(positionWS.xz + float2(slopeStep, 0.0)).x;
                 float depthNorth = FishWaterShoreSample(positionWS.xz + float2(0.0, slopeStep)).x;
-                float slope = max(0.01, length(float2(depthEast - shore.x, depthNorth - shore.x)) / slopeStep);
-                float tide = _FishWaterLevel - _FishWaterMeanLevel;
-                float edgeDistance = shore.y + clamp(tide / slope, -60.0, 60.0);
+                float2 gradient = float2(depthEast - shore.x, depthNorth - shore.x) / slopeStep;
+                float slope = length(gradient);
+                float runUp = FishWaterRunUp(slope);
+                float2 alongShore = FishWaterAlongShore(positionWS.xz);
 
-                /* The band STRADDLES the waterline, and it has to.
-                 *
-                 * Stopping at the water's edge left a dead strip: seaward of the line this pass
-                 * refused to draw, and the ocean there is in a few centimetres of water where its
-                 * own alpha has faded almost to nothing — so neither system owned the shallows and
-                 * the beach and the sea did not appear to touch. The inner surf, where broken
-                 * waves wash back and forth over the sand, belongs to the shore: it is the same
-                 * sheet of water, and it is what joins the two.
-                 */
-                float landward = -edgeDistance;
-                float band = max(_FishWaterSwashReach, _WetDistance);
-                if (landward > band || edgeDistance > _SeawardReach)
-                {
-                    return half4(0, 0, 0, 0);
-                }
-
-                /* The foam mask is sampled FIRST, because the waterline itself is perturbed by it.
-                 *
-                 * A swash edge taken straight from the distance field is a perfect contour of that
-                 * field — a smooth curve carrying the grid's own stair-steps, which is exactly what
-                 * a real foam line never looks like. Wobbling the edge by a couple of metres of
-                 * noise turns the contour into a ragged, fingered front, and costs one sample. */
+                /* The foam mask is sampled FIRST, because the water's edge itself is perturbed by it.
+                 * A front taken straight from the ground is a perfect contour of it — a level line
+                 * drawn along the sand, which a foam line never is. Wobbling it by a share of the
+                 * run-up turns the contour into a ragged, fingered front. */
                 float2 foamUV = positionWS.xz / max(0.5, _FoamScale) - float2(0.0, _FishWaterShoreTime * 0.12);
                 half mask = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV).r * 0.6
                     + SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV * 2.3 + 0.41).r * 0.4;
                 half wobble = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture,
                     positionWS.xz / max(2.0, _FoamScale * 4.0)).r;
+                float ragged = (wobble - 0.5) * _EdgeWobble * runUp;
 
                 float sheet, lip, highWater;
-                FishWaterSwash(edgeDistance + (wobble - 0.5) * _EdgeWobble, sheet, lip, highWater);
+                FishWaterSwash(rise + ragged, runUp, positionWS.xz, sheet, lip, highWater);
 
-                /* NO shadow attenuation here.
-                 *
-                 * This is a full-screen pass: its vertices are three clip-space corners, so the
-                 * shadow coordinate derived for it is meaningless and comes back fully occluded.
-                 * Measured, that took `lit` down to ambient alone and drew the entire beach band
-                 * as a flat dark grey slab — which is what I kept mistaking for a missing foam
-                 * term. The ground under this overlay is already shadowed correctly by its own
-                 * shader; the band only has to tint what is there. */
+                /* A thin sheet is what a GENTLE beach carries: the bore spends itself running up the
+                 * sand as a film. A steep face reflects — the water surges up it and falls back as a
+                 * body, with no film — so there the sheet goes and its lip stays: the foam line riding
+                 * up and down at the water's edge, over rock left wet below it. */
+                sheet *= 1.0 - smoothstep(0.12, 0.35, slope);
+
+                /* NO shadow attenuation on this diffuse tint: the ground under it is already shadowed
+                 * by its own shader, and the band only has to tint what is there. */
                 Light mainLight = GetMainLight();
                 half3 lit = mainLight.color * saturate(mainLight.direction.y) * 0.7
                     + _GlossyEnvironmentColor.rgb * 0.6 + 0.12;
 
-                /* Foam mask drifting SHOREWARD, because foam on a beach is carried by the water
-                 * under it; a mask sliding any other way reads as a texture projected onto the
-                 * sand rather than as something floating on the water. */
+                /* Wet sand is left by the LAST SEVERAL waves, not by this one: sand takes minutes to
+                 * dry and waves arrive every few seconds, so the dark band reaches as high as the
+                 * biggest recent run-up on this stretch, with a clear line at its top and the swash
+                 * moving about well inside it. */
+                float wetLine = max(0.01, runUp * alongShore.y * 1.35 * (1.0 + _WetAbove) + ragged * 0.8);
+                half wet = 1.0 - smoothstep(wetLine * 0.85, wetLine, rise);
+                // Darkest right at the water, and lighter toward its top.
+                wet *= lerp(1.0, 0.55, saturate(rise / wetLine));
+                // Sand under the water is not wet sand: the sheet and the sea cover it.
+                wet *= smoothstep(-0.05 - 0.1 * runUp, 0.0, rise);
 
-                /* Wet sand is left by the LAST SEVERAL waves, not by this one.
-                 *
-                 * Sand takes minutes to dry and waves arrive every few seconds, so at any instant
-                 * the dark band reaches as far as the biggest recent run-up — which is why a real
-                 * beach has a wide wet zone with a clear line at the top of it, and the swash
-                 * moving about well inside that zone. Tying the wet band to the CURRENT wave
-                 * instead made it a thin line that vanished whenever the water happened to be
-                 * drained, which is most of the cycle. */
-                half wetReach = max(_WetDistance, _FishWaterSwashReach * 0.8);
-                /* Wobbled like the swash edge, and for the same reason: an unperturbed band is a
-                 * contour of the distance field, with the grid's stair-steps along its top. */
-                half wetLandward = landward + (wobble - 0.5) * _EdgeWobble * 0.8;
-                half wet = saturate(1.0 - wetLandward / max(0.5, wetReach));
-                // Darkest right at the water and fading up the beach, with a defined top edge.
-                wet = wet * wet * smoothstep(1.0, 0.85, wetLandward / max(0.5, wetReach));
-                // Sand under water is not "wet sand"; the sheet covers it instead.
-                wet *= saturate(landward * 0.5 + 0.5);
-
-                /* The lip carries the foam. The sheet behind it keeps a TRACE — cubed, and at a
-                 * seventh of the weight it had.
-                 *
-                 * At 0.45 the sheet term alone cleared the contrast curve everywhere the water
-                 * reached, so the whole band came out a uniform pale wash and the lip, which was
-                 * computing perfectly all along, had nothing to stand out against. Every earlier
-                 * attempt to find the missing white line was looking in the wrong place: the line
-                 * was there, drowned by the surface it was supposed to be drawn on. */
-                /* The mask is applied to the FINISHED foam, not to its input.
-                 *
-                 * Fed in before the contrast curve it does nothing at all where the lip term
-                 * saturates — which is most of the lip — so the white came out perfectly uniform
-                 * however the weighting was set. Applied after, it breaks the line into the
-                 * patches and holes that foam actually is. */
+                /* The lip carries the foam; the sheet behind it keeps only a trace, or the whole band
+                 * clears the contrast curve and the lip has nothing to stand out against. The mask is
+                 * applied to the FINISHED foam, where it breaks the line into patches and holes. */
                 half foam = smoothstep(_FoamSharpness * 0.35, _FoamSharpness * 0.35 + _FoamSharpness,
                     saturate(lip * _EdgeFoam + sheet * sheet * sheet * 0.05));
                 foam *= 0.42 + 0.58 * mask;
 
                 /* The foam the swash LEFT here, from the memory WaterShore keeps. Thresholded against
                  * the mottle rather than scaled by it, so as a line fades it breaks into lace and
-                 * then into scattered bubbles, the way stranded foam actually goes — scaled, it would
-                 * only dim. Thinned where the next sheet is washing over it. */
+                 * then into scattered bubbles. Thinned where the next sheet is washing over it. */
                 float2 fieldUV = (positionWS.xz - _FishWaterShoreRect.xy) / max(1.0, _FishWaterShoreRect.zw);
                 half left = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamMemory, sampler_FishWaterFoamMemory, fieldUV, 0).r;
                 half stranded = smoothstep(0.12, 0.5, left * _Residual * (0.35 + 0.65 * mask)) * (1.0 - sheet * 0.6);
@@ -276,20 +237,15 @@ Shader "FishMMO/Water/Shore"
                 color = lerp(color, _FoamColor.rgb * lit, foam);
                 alpha = max(alpha, foam);
 
-                /* Feathered at the landward edge of the band. A hard cut-off draws the reach as a
-                 * visible arc across the sand — the contour of the field rather than anything that
-                 * happens on a beach. Edges in ascending order: GLSL leaves smoothstep undefined
-                 * when they are not, and this runs as GLSL on the Linux editor. */
-                half fade = 1.0 - smoothstep(band * 0.55, band, landward);
-
-                /* Handed over to the ocean as the water deepens. The two overlap through the
-                 * shallows so there is no line where one stops and the other starts. */
-                fade *= saturate(1.0 - edgeDistance / max(0.5, _SeawardReach));
-
-                // Feathered at the height limits too, so neither shows as a level line on a slope.
-                fade *= 1.0 - smoothstep(runUp, ceiling, rise);
-                fade *= smoothstep(-floorDepth, -floorDepth * 0.5, rise);
+                // Feathered above the wet line, so it has no hard edge; handed over to the sea below.
+                half fade = 1.0 - smoothstep(wetLine, wetLine * 1.15 + 0.03, rise);
+                fade *= smoothstep(-under, -under * 0.5, rise);
                 alpha = saturate(alpha * fade);
+
+                if (_Debug > 0.5)
+                {
+                    return half4(sheet, lip, wet, 1.0);
+                }
 
                 /* THE SHEEN. A sheet of water a centimetre thick is nearly clear — what makes it read
                  * as water and not as a darker patch of sand is what it reflects: the sky, far more
@@ -305,7 +261,7 @@ Shader "FishMMO/Water/Shore"
                 half gloss = saturate(sheet + wet * 0.35 * (1.0 - sheet)) * (1.0 - foam) * _Sheen;
                 if (gloss > 0.001)
                 {
-                    float3 normalWS = normalize(float3((depthEast - shore.x) / slopeStep, 1.0, (depthNorth - shore.x) / slopeStep));
+                    float3 normalWS = normalize(float3(gradient.x, 1.0, gradient.y));
                     float2 rippleUV = positionWS.xz / 3.5 + _FishWaterWind.xy * (_FishWaterShoreTime * 0.05);
                     half3 ripple = UnpackNormalScale(SAMPLE_TEXTURE2D(_FishWaterNormalTexture, sampler_FishWaterNormalTexture, rippleUV), 0.35 * sheet);
                     normalWS = normalize(normalWS + float3(ripple.x, 0.0, ripple.y));
@@ -321,6 +277,13 @@ Shader "FishMMO/Water/Shore"
 
                     sheen = (sky * fresnel + mainLight.color * glint * sunFresnel * shadow) * gloss * fade;
                 }
+
+                /* Through the weather's fog, which was laid over the frame before this pass: the
+                 * band's own colour is hidden as the ground under it is, and its sheen — light it adds
+                 * — reaches the eye only as far as the fog lets it. */
+                half fogKeep;
+                color = FishWaterAirFog(color, positionWS, input.screenUV, fogKeep);
+                sheen *= fogKeep;
 
                 return half4(color * alpha + sheen, alpha);
                 #endif

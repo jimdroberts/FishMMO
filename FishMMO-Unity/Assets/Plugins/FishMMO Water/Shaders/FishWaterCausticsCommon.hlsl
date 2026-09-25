@@ -45,22 +45,88 @@ float3 FishWaterSceneWorldPosition(float2 screenUV, float rawDepth)
 }
 
 /// <summary>One cascade's curvature at a point: (∂²η/∂x², ∂²η/∂z², ∂²η/∂x∂z).</summary>
+/// <param name="reach">Metres either side the slopes are compared across; a texel at the least.</param>
 /// <remarks>
-/// The slope map's own differences, a texel apart. The chop and the short swell do the focusing at
-/// the depths a caustic is seen through; the long swell's curvature is too gentle to converge
-/// anything within tens of metres, so its cascade is left out.
+/// The slope map's own differences. A difference taken across 2r is exactly the curvature averaged
+/// over those 2r, so a wider reach is a blur that costs nothing: a texel for the caustics, which want
+/// every ripple, and more for the shafts, whose march cannot resolve a ripple finer than its step.
 /// </remarks>
-float3 FishWaterCausticCurvature(TEXTURE2D_PARAM(derivatives, derivativeSampler), float2 xz, float patch)
+float3 FishWaterCausticCurvature(TEXTURE2D_PARAM(derivatives, derivativeSampler), float2 xz, float patch, float reach)
 {
-	float texel = patch / 256.0;
+	float step = max(patch / 256.0, reach);
 	float2 uv = xz / patch;
-	float2 across = float2(1.0 / 256.0, 0.0);
-	float2 along = float2(0.0, 1.0 / 256.0);
+	float2 across = float2(step / patch, 0.0);
+	float2 along = float2(0.0, step / patch);
 	float2 east = SAMPLE_TEXTURE2D_LOD(derivatives, derivativeSampler, uv + across, 0).xy;
 	float2 west = SAMPLE_TEXTURE2D_LOD(derivatives, derivativeSampler, uv - across, 0).xy;
 	float2 north = SAMPLE_TEXTURE2D_LOD(derivatives, derivativeSampler, uv + along, 0).xy;
 	float2 south = SAMPLE_TEXTURE2D_LOD(derivatives, derivativeSampler, uv - along, 0).xy;
-	return float3(east.x - west.x, north.y - south.y, north.x - south.x) / (2.0 * texel);
+	return float3(east.x - west.x, north.y - south.y, north.x - south.x) / (2.0 * step);
+}
+
+/// <summary>
+/// Where the sunlight reaching a point this deep came through the surface: back up the refracted
+/// sun ray. A low sun's light enters well to the sun's side of what it lights.
+/// </summary>
+float2 FishWaterCausticEntry(float3 positionWS, float depth, float3 toSun)
+{
+	float sinIncident = length(toSun.xz);
+	float sinRefracted = sinIncident / FishWaterRefractiveIndex;
+	float tanRefracted = sinRefracted * rsqrt(max(1e-4, 1.0 - sinRefracted * sinRefracted));
+	float2 sunward = sinIncident > 1e-4 ? toSun.xz / sinIncident : float2(0.0, 0.0);
+	return positionWS.xz + sunward * max(0.0, depth) * tanRefracted;
+}
+
+/// <summary>
+/// The lens: how bright the light is this deep under a surface of this curvature, 1 where the
+/// surface is flat.
+/// </summary>
+/// <remarks>
+/// Clamped away from zero: on a focal line the determinant passes through nothing and the brightness
+/// through infinity, which a real caustic never reaches — the sun is a disc, not a point, and it
+/// softens every focus.
+/// </remarks>
+float FishWaterCausticLens(float3 curvature, float depth)
+{
+	float lens = max(0.0, depth) * (1.0 - 1.0 / FishWaterRefractiveIndex);
+	float determinant = (1.0 + lens * curvature.x) * (1.0 + lens * curvature.y) - lens * lens * curvature.z * curvature.z;
+	return 1.0 / max(abs(determinant), 0.12);
+}
+
+/// <summary>
+/// How strongly the waves focus sunlight onto a point this deep: 1 for the light a flat surface
+/// would let through, more on a focal line, less between.
+/// </summary>
+/// <remarks>
+/// The chop and the short swell do the focusing at the depths a caustic is seen through; the long
+/// swell's curvature is too gentle to converge anything within tens of metres, so its cascade is
+/// left out.
+/// </remarks>
+float FishWaterCausticFocus(float3 positionWS, float depth, float3 toSun)
+{
+	float2 entry = FishWaterCausticEntry(positionWS, depth, toSun);
+	float3 curvature =
+		FishWaterCausticCurvature(TEXTURE2D_ARGS(_FishWaterDerivatives1, sampler_linear_repeat), entry, _FishWaterPatch.y, 0.0)
+		+ FishWaterCausticCurvature(TEXTURE2D_ARGS(_FishWaterDerivatives2, sampler_linear_repeat), entry, _FishWaterPatch.z, 0.0);
+	return FishWaterCausticLens(curvature, depth);
+}
+
+/// <summary>
+/// The same focus for a point in the open water rather than on the ground: what makes a shaft.
+/// </summary>
+/// <param name="reach">Metres to blur the surface's curvature over, about the march's step.</param>
+/// <remarks>
+/// A shaft is the light of a caustic seen in the water it passes through on its way down, so it is
+/// the same lens along the same refracted ray. The chop's cascade alone: the swell's focuses a
+/// hundred metres down and changes nothing a diver can see, and each step of the march is already
+/// four taps.
+/// </remarks>
+float FishWaterShaftFocus(float3 positionWS, float depth, float3 toSun, float reach)
+{
+	float2 entry = FishWaterCausticEntry(positionWS, depth, toSun);
+	float3 curvature = FishWaterCausticCurvature(
+		TEXTURE2D_ARGS(_FishWaterDerivatives2, sampler_linear_repeat), entry, _FishWaterPatch.z, reach);
+	return FishWaterCausticLens(curvature, depth);
 }
 
 /// <summary>
@@ -78,24 +144,7 @@ half FishWaterCausticLight(float3 positionWS)
 	float3 toSun = sun.direction;
 	if (_FishWaterCaustics.x > 0.0 && depth > 0.02 && toSun.y > 0.02)
 	{
-		/* Where the light that lands here came through the surface: back up the refracted sun ray.
-		 * A low sun's light enters well to the sun's side of what it lights. */
-		float sinIncident = length(toSun.xz);
-		float sinRefracted = sinIncident / FishWaterRefractiveIndex;
-		float tanRefracted = sinRefracted * rsqrt(max(1e-4, 1.0 - sinRefracted * sinRefracted));
-		float2 sunward = sinIncident > 1e-4 ? toSun.xz / sinIncident : float2(0.0, 0.0);
-		float2 entry = positionWS.xz + sunward * depth * tanRefracted;
-
-		float3 curvature =
-			FishWaterCausticCurvature(TEXTURE2D_ARGS(_FishWaterDerivatives1, sampler_linear_repeat), entry, _FishWaterPatch.y)
-			+ FishWaterCausticCurvature(TEXTURE2D_ARGS(_FishWaterDerivatives2, sampler_linear_repeat), entry, _FishWaterPatch.z);
-
-		/* The lens. Clamped away from zero: on a focal line the determinant passes through nothing
-		 * and the brightness through infinity, which a real caustic never reaches — the sun is a
-		 * disc, not a point, and it softens every focus. */
-		float lens = depth * (1.0 - 1.0 / FishWaterRefractiveIndex);
-		float determinant = (1.0 + lens * curvature.x) * (1.0 + lens * curvature.y) - lens * lens * curvature.z * curvature.z;
-		float focus = 1.0 / max(abs(determinant), 0.12);
+		float focus = FishWaterCausticFocus(positionWS, depth, toSun);
 
 		/* How much of that reaches here to be seen. The light scatters and is absorbed on its way
 		 * down, so the contrast dies with depth; the pattern is finer than a pixel a little way off,

@@ -42,7 +42,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// Every lookup is scoped to this one scene. The rebuild has the scene it is scanning open
 		/// additively alongside whatever else was loaded, so a project-wide
-		/// <c>FindFirstObjectByType</c> would happily answer with a component belonging to another
+		/// <c>FindAnyObjectByType</c> would happily answer with a component belonging to another
 		/// scene and report a scene as configured because its neighbour was.
 		/// </remarks>
 		public static SceneWorldFacts Read(Scene scene)

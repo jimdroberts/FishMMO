@@ -11,6 +11,8 @@
 #endif
 // The light the waves focus onto the sea bed: lit here too, for the sea bed seen by refraction.
 #include "FishWaterCausticsCommon.hlsl"
+// The weather's fog, which the fog passes laid over the frame BEFORE the sea was drawn.
+#include "FishWaterFog.hlsl"
 
 struct Attributes
 {
@@ -295,17 +297,32 @@ half4 WaterFragment(Varyings input) : SV_Target
 	{
 		float3 transmitted = refract(-view, normalWS, 1.333);
 		half3 mirrored = _ShallowColor.rgb * waterLight * 0.45;
+
+		/* How much of the world above comes through: nothing outside the window, where every ray
+		 * is reflected back down, and a Fresnel falloff inside it taken on the WATER's side — the
+		 * transmitted ray's angle, not the eye's — so the window's rim brightens into the mirror the
+		 * way it does from under a real surface, rather than stopping at a hard circle. */
+		half through = 0.0;
 		if (dot(transmitted, transmitted) > 1e-5)
 		{
-			half3 above = GlossyEnvironmentReflection(normalize(transmitted), input.positionWS,
-				perceptualRoughness, 1.0h, screenUV);
-			color = lerp(mirrored, above, 0.92);
+			half cosTransmitted = saturate(dot(normalize(transmitted), -normalWS));
+			through = 1.0 - (0.02 + 0.98 * pow(1.0 - cosTransmitted, 5.0));
 		}
-		else
-		{
+
+		/* What is up there is the actual scene, not the sky's probe. From below, the camera's
+		 * opaque pass has already drawn whatever stands above the water behind this surface — the
+		 * shore, the trees, the sky — so the window shows that: bent by the waves where there is a
+		 * copy of the frame to bend, and simply let through where there is not. It used to be the
+		 * reflection probe on an opaque surface, which is why looking up from below showed a clean
+		 * sky and nothing that was actually there. */
+		#if defined(_WATER_REFRACTION)
+			float2 bent = screenUV + normalWS.xz * _RefractionStrength / max(1.0, surfaceEye);
+			color = lerp(mirrored, SampleSceneColor(bent), through);
+			alpha = 1.0;
+		#else
 			color = mirrored;
-		}
-		alpha = _MaxAlpha;
+			alpha = saturate(1.0 - through * 0.95);
+		#endif
 	}
 
 	// ── Foam ──────────────────────────────────────────────────────────
@@ -386,6 +403,14 @@ half4 WaterFragment(Varyings input) : SV_Target
 	}
 
 	color = MixFog(color, input.surface.z);
+	/* And the weather's fog, which the passes that draw it laid over the frame before the sea was
+	 * drawn: without this the sea stayed bright and clear through the thickest fog on the ground.
+	 * Only from above — from below, what lies between the eye and the surface is water. */
+	if (!underwater)
+	{
+		half fogKeep;
+		color = FishWaterAirFog(color, input.positionWS, screenUV, fogKeep);
+	}
 	return half4(color, alpha);
 }
 

@@ -122,6 +122,16 @@ namespace FishMMO.Client
 			private static readonly int RangeId = Shader.PropertyToID("_FishFogRange");
 			private static readonly int WeatherFogId = Shader.PropertyToID("_FishWeatherFog");
 
+			/* The same fog, published for TRANSPARENT surfaces. This pass fogs what is already in the
+			 * frame, before the transparent queue — so the sea, the shore and anything else drawn
+			 * after it came out perfectly clear through the thickest fog. They apply the same integral
+			 * themselves, at their own depth, from these. Density zero means no fog this frame. */
+			public static readonly int AirParamsId = Shader.PropertyToID("_FishAirFogParams");
+			public static readonly int AirColorId = Shader.PropertyToID("_FishAirFogColor");
+			public static readonly int AirSunId = Shader.PropertyToID("_FishAirFogSun");
+			public static readonly int AirSunColorId = Shader.PropertyToID("_FishAirFogSunColor");
+			public static readonly int AirRangeId = Shader.PropertyToID("_FishAirFogRange");
+
 			private Material material;
 			private FishHeightFogFeature settings;
 
@@ -138,6 +148,8 @@ namespace FishMMO.Client
 
 			public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
 			{
+				// No fog for transparents unless this pass finds some below.
+				Shader.SetGlobalVector(AirParamsId, Vector4.zero);
 				if (material == null || settings == null)
 				{
 					return;
@@ -191,6 +203,21 @@ namespace FishMMO.Client
 				}
 
 				material.SetVector(RangeId, new Vector4(settings.StartDistance, settings.EndDistance, cameraData.worldSpaceCameraPos.y, 0f));
+
+				Shader.SetGlobalVector(AirParamsId, new Vector4(density, falloff, settings.BaseHeight, settings.MaximumOpacity));
+				Shader.SetGlobalVector(AirColorId, RenderSettings.fogColor);
+				if (hasSun)
+				{
+					Vector3 toLight = -sun.transform.forward;
+					Color lit = sun.color * Mathf.Max(0.05f, sun.intensity);
+					Shader.SetGlobalVector(AirSunId, new Vector4(toLight.x, toLight.y, toLight.z, settings.SunInscatter));
+					Shader.SetGlobalVector(AirSunColorId, new Vector4(lit.r, lit.g, lit.b, 0f));
+				}
+				else
+				{
+					Shader.SetGlobalVector(AirSunId, Vector4.zero);
+				}
+				Shader.SetGlobalVector(AirRangeId, new Vector4(settings.StartDistance, settings.EndDistance, 0f, 0f));
 
 				using (var builder = renderGraph.AddRasterRenderPass<FogData>(PassName, out FogData data))
 				{

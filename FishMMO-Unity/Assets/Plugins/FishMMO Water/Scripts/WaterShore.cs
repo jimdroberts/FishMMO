@@ -34,6 +34,7 @@ namespace FishMMO.Water
 	{
 		private static readonly int PeriodId = Shader.PropertyToID("_FishWaterSwashPeriod");
 		private static readonly int ReachId = Shader.PropertyToID("_FishWaterSwashReach");
+		private static readonly int SeaId = Shader.PropertyToID("_FishWaterSwashSea");
 		private static readonly int SkewId = Shader.PropertyToID("_FishWaterSwashSkew");
 		private static readonly int TimeId = Shader.PropertyToID("_FishWaterShoreTime");
 		private static readonly int FoamId = Shader.PropertyToID("_FoamTexture");
@@ -265,11 +266,15 @@ namespace FishMMO.Water
 
 			float period = Period;
 			float reach = Reach;
+			// The sea the swash is made by. Without one to read, the wave that runs a beach up by the
+			// authored reach: about a thirteenth of it, as the reach is set from the sea below.
+			float waveHeight = Reach / 13f;
 			if (DriveFromSea)
 			{
 				environment ??= GetComponent<WaterEnvironment>();
 				if (environment != null && environment.SignificantHeight > 0f)
 				{
+					waveHeight = environment.SignificantHeight;
 					/* From the sea state itself: waves arrive at the sea's peak period, and run up
 					 * a distance that grows with their height. On a beach of ordinary slope the
 					 * run-up travels a dozen or so metres for every metre of wave. */
@@ -281,11 +286,17 @@ namespace FishMMO.Water
 					float wind = Mathf.Clamp(surface.WindSpeed, 0f, 30f);
 					period = Mathf.Lerp(5f, 14f, Mathf.InverseLerp(2f, 22f, wind));
 					reach = Reach * Mathf.Lerp(0.35f, 2.2f, Mathf.InverseLerp(2f, 22f, wind));
+					waveHeight = reach / 13f;
 				}
 			}
 
 			Shader.SetGlobalFloat(PeriodId, Mathf.Max(0.5f, period));
 			Shader.SetGlobalFloat(ReachId, Mathf.Max(0.5f, reach));
+			/* What the run-up is worked out from, per beach, in the shader: the wave height, and the
+			 * deep-water wavelength at the period the waves arrive at, g·T²/2π. */
+			float gravity = surface != null ? Mathf.Max(0.05f, surface.Gravity) : 9.81f;
+			float deepWavelength = gravity * period * period / (2f * Mathf.PI);
+			Shader.SetGlobalVector(SeaId, new Vector4(Mathf.Max(0.05f, waveHeight), deepWavelength, 0f, 0f));
 			Shader.SetGlobalFloat(SkewId, Mathf.Clamp01(Skew));
 			Shader.SetGlobalFloat(TimeId, (float)clock);
 

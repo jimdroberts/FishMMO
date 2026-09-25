@@ -62,23 +62,26 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
                 {
                     return float4(kept, 0.0, 0.0, 0.0);
                 }
-                // Too far from the water for any swash to reach: only fade what is there.
-                if (abs(shore.y) > max(_FishWaterSwashReach * 1.6, 8.0) + 60.0)
+
+                /* The same swash the shore pass draws, in the same terms: a height above the sea as
+                 * it stands now. There is no depth buffer here, but the field has the ground: it is
+                 * the mean level less the depth there, so its height above the water now is minus
+                 * the depth and the tide. */
+                float tide = _FishWaterLevel - _FishWaterMeanLevel;
+                float rise = -(shore.x + tide);
+                float waveHeight = max(0.05, _FishWaterSwashSea.x);
+                // Too high or too deep for any swash to reach: only fade what is there.
+                if (rise > 2.0 * waveHeight * 1.35 * 1.3 + 0.05 || rise < -waveHeight)
                 {
                     return float4(kept, 0.0, 0.0, 0.0);
                 }
 
-                /* The same edge the shore pass draws the swash against: the mean waterline moved by
-                 * the tide over the slope of the beach, or the foam would be laid thirty metres from
-                 * where the water is. */
                 float slopeStep = max(4.0, _FishWaterShoreTexel * 4.0);
                 float depthEast = FishWaterShoreSample(xz + float2(slopeStep, 0.0)).x;
                 float depthNorth = FishWaterShoreSample(xz + float2(0.0, slopeStep)).x;
-                float slope = max(0.01, length(float2(depthEast - shore.x, depthNorth - shore.x)) / slopeStep);
-                float tide = _FishWaterLevel - _FishWaterMeanLevel;
-                float edgeDistance = shore.y + clamp(tide / slope, -60.0, 60.0);
+                float slope = length(float2(depthEast - shore.x, depthNorth - shore.x)) / slopeStep;
 
-                float laid = FishWaterSwashFoamDeposit(edgeDistance) * _FoamMemoryStep.y;
+                float laid = FishWaterSwashFoamDeposit(rise, FishWaterRunUp(slope), xz) * _FoamMemoryStep.y;
                 return float4(max(kept, laid), 0.0, 0.0, 0.0);
             }
             ENDHLSL

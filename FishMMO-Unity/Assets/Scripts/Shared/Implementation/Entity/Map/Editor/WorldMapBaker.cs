@@ -669,7 +669,7 @@ namespace FishMMO.Shared.WorldMaps
 		/// <param name="scene">The scene to search.</param>
 		/// <returns>The component, or null.</returns>
 		/// <remarks>
-		/// Scoped to one scene rather than using <c>FindFirstObjectByType</c>, because the bake
+		/// Scoped to one scene rather than using <c>FindAnyObjectByType</c>, because the bake
 		/// opens scenes additively: a global search would find the previous scene's settings, or
 		/// the editor's own, and write one scene's map into another scene's definition.
 		/// </remarks>

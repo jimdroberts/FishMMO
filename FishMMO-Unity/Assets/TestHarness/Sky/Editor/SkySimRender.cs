@@ -523,7 +523,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 			EditorApplication.update += Pump;
 		}
 
-		private static WorldSimController Controller() => UnityEngine.Object.FindFirstObjectByType<WorldSimController>();
+		private static WorldSimController Controller() => UnityEngine.Object.FindAnyObjectByType<WorldSimController>();
 
 		/// <summary>
 		/// True when <c>FISHMMO_SKY_RENDER_ONLY</c> names other stages: a comma-separated list, for

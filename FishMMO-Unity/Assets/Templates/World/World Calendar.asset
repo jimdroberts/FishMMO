@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 391651b27068457797ecd68706abcccd, type: 3}
   m_Name: World Calendar
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Celestial.CalendarProfile
-  CalendarBody: {fileID: 11400000, guid: 80910aff56aa93e29a031085345ae10b, type: 2}
+  CalendarBody: {fileID: 11400000, guid: 91e514618f54e22e5a302bea6a28acf2, type: 2}
   DaysPerYear: 365
   Months:
   - Name: Month 1

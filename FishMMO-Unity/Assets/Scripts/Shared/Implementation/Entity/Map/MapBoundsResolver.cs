@@ -128,7 +128,7 @@ namespace FishMMO.Shared
 			float maxX = float.MinValue;
 			float maxZ = float.MinValue;
 
-			IBoundary[] boundaries = Object.FindObjectsByType<IBoundary>(FindObjectsSortMode.None);
+			IBoundary[] boundaries = Object.FindObjectsByType<IBoundary>();
 			for (int i = 0; i < boundaries.Length; ++i)
 			{
 				IBoundary boundary = boundaries[i];
@@ -153,7 +153,7 @@ namespace FishMMO.Shared
 				any = true;
 			}
 
-			Terrain[] terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
+			Terrain[] terrains = Object.FindObjectsByType<Terrain>();
 			for (int i = 0; i < terrains.Length; ++i)
 			{
 				Terrain terrain = terrains[i];

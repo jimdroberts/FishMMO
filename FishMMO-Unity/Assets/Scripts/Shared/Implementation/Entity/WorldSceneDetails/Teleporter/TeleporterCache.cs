@@ -176,7 +176,7 @@ namespace FishMMO.Shared
 				Scene currentScene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
 				if (currentScene.IsValid())
 				{
-					TeleporterDestination[] destinations = GameObject.FindObjectsByType<TeleporterDestination>(FindObjectsSortMode.None);
+					TeleporterDestination[] destinations = GameObject.FindObjectsByType<TeleporterDestination>();
 					foreach (TeleporterDestination dest in destinations)
 					{
 						if (dest == null || dest.gameObject.scene != currentScene)
@@ -216,7 +216,7 @@ namespace FishMMO.Shared
 					}
 
 					// Scan for SceneTeleporters and cache them by composite key.
-					SceneTeleporter[] teleporters = GameObject.FindObjectsByType<SceneTeleporter>(FindObjectsSortMode.None);
+					SceneTeleporter[] teleporters = GameObject.FindObjectsByType<SceneTeleporter>();
 					foreach (SceneTeleporter teleporter in teleporters)
 					{
 						if (teleporter == null || teleporter.gameObject.scene != currentScene)

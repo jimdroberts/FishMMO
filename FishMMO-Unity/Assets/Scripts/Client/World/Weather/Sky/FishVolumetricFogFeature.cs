@@ -164,6 +164,13 @@ namespace FishMMO.Client
 			private static readonly int CameraId = Shader.PropertyToID("_FishVolFogCamera");
 			private static readonly int WeatherFogId = Shader.PropertyToID("_FishWeatherFog");
 
+			/* The integrated volume, published for TRANSPARENT surfaces: this pass fogs what is
+			 * already in the frame, before the transparent queue, so the sea drawn after it came out
+			 * clear through the thickest fog. It samples the same volume at its own depth. w is 1 when
+			 * the volume is live this frame, 0 when it is not. */
+			public static readonly int AirVolumeId = Shader.PropertyToID("_FishAirFogVolume");
+			public static readonly int AirVolumeRangeId = Shader.PropertyToID("_FishAirFogVolumeRange");
+
 			private ComputeShader compute;
 			private Material material;
 			private FishVolumetricFogFeature settings;
@@ -211,6 +218,8 @@ namespace FishMMO.Client
 
 			public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
 			{
+				// No volume for transparents unless this pass fills one below.
+				Shader.SetGlobalVector(AirVolumeRangeId, Vector4.zero);
 				if (compute == null || material == null || settings == null)
 				{
 					return;
@@ -280,6 +289,8 @@ namespace FishMMO.Client
 
 				material.SetTexture(VolumeId, integrated);
 				material.SetVector(RangeId, new Vector4(settings.NearDistance, settings.FarDistance, settings.DepthCurve, d));
+				Shader.SetGlobalTexture(AirVolumeId, integrated);
+				Shader.SetGlobalVector(AirVolumeRangeId, new Vector4(settings.NearDistance, settings.FarDistance, settings.DepthCurve, 1f));
 
 				using (var builder = renderGraph.AddRasterRenderPass<ApplyData>(ApplyName, out ApplyData data))
 				{

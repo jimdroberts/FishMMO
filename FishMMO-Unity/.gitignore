@@ -56,6 +56,8 @@ crashlytics-build.properties
 /[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]*
 /[Aa]ssets/Resources/Prefabs/Shared/WorldSceneDetails*
 /[Aa]ssets/[Dd]ependencies*
+/[Aa]ssets/[Tt]emplates/[Ww]orld/[Aa]tlas*
+/[Aa]ssets/[Tt]emplates/[Ww]orld/[Ss]ystems*
 
 # --- Plugin Specific (FishNet, JetBrains) ---
 /[Aa]ssets/Plugins/Editor/JetBrains*

@@ -233,7 +233,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			EditorApplication.update += Pump;
 		}
 
-		private static WorldSimController Controller() => UnityEngine.Object.FindFirstObjectByType<WorldSimController>();
+		private static WorldSimController Controller() => UnityEngine.Object.FindAnyObjectByType<WorldSimController>();
 
 		private static void Pump()
 		{

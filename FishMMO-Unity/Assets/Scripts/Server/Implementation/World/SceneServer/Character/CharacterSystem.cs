@@ -164,7 +164,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			SceneServerAuthenticator loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
+			SceneServerAuthenticator loginAuthenticator = FindAnyObjectByType<SceneServerAuthenticator>();
 			if (loginAuthenticator == null)
 			{
 				Log.Error("CharacterSystem", "Failed to initialize: SceneServerAuthenticator not found");
@@ -267,7 +267,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Authentication events
-			SceneServerAuthenticator loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
+			SceneServerAuthenticator loginAuthenticator = FindAnyObjectByType<SceneServerAuthenticator>();
 			if (loginAuthenticator != null)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;

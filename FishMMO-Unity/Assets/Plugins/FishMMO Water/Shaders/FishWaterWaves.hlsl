@@ -236,10 +236,21 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 		// the edge falls as time runs.
 		float phase = k * distance + sqrt(max(0.05, _FishWaterGravity) * k) * _FishWaterTime;
 
+		/* The beach, measured over twenty metres across the shoreward direction: what decides both
+		 * whether a surf train forms at all and how its waves break. */
+		const float Span = 10.0;
+		float beachSlope = abs(FishWaterSeabedDepth(flatPositionWS.xz - shoreward * Span)
+			- FishWaterSeabedDepth(flatPositionWS.xz + shoreward * Span)) / (2.0 * Span);
+		/* A surf train is a BEACH's: waves shoal across a gentle bottom and arrive as lines of
+		 * breakers. Against a steep bank or a cliff there is no shoaling zone to cross — the waves
+		 * run into the face and are thrown back — so the train fades out on a coast steeper than
+		 * about one in four, and the deep-water sea meets the rock by itself. */
+		float reflective = smoothstep(0.25, 0.6, beachSlope);
+
 		// A wave feels the bottom from about half a wavelength of depth.
 		float feel = saturate(1.0 - surface.depth / (wavelength * 0.5));
 		// Green's law, then the depth limit that breaks it.
-		float amplitude = _ShoreWaveHeight * (1.0 + feel * 1.6) * feel;
+		float amplitude = _ShoreWaveHeight * (1.0 + feel * 1.6) * feel * (1.0 - reflective);
 		float limit = max(0.0, surface.depth) * 0.78;
 		float breaking = saturate((amplitude - limit) / max(0.05, amplitude));
 		amplitude = min(amplitude, limit);
@@ -271,12 +282,13 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 		 * same sea against a 1:10 shelf and ξ rises past 0.5, and the barrels appear by
 		 * themselves.
 		 */
-		const float Span = 10.0;
-		float beachSlope = abs(FishWaterSeabedDepth(flatPositionWS.xz - shoreward * Span)
-			- FishWaterSeabedDepth(flatPositionWS.xz + shoreward * Span)) / (2.0 * Span);
 		float waveHeight = max(0.05, amplitude * 2.0);
 		float iribarren = beachSlope / sqrt(max(1e-4, waveHeight / wavelength));
-		float plunging = smoothstep(0.35, 0.9, iribarren);
+		/* And past about 3.3 it SURGES: the slope is too steep for the wave to break at all, and it
+		 * runs up the face as a swell and slides back. Plunging was left on for every slope
+		 * steeper than a beach, so against a steep bank the Iribarren number of three to six
+		 * threw a barrel of water horizontally into the terrain on every wave. */
+		float plunging = smoothstep(0.35, 0.9, iribarren) * (1.0 - smoothstep(2.5, 3.5, iribarren));
 
 		float throwMetres = _ShoreWavePitch * plunging * breaking * crest * crest * crest * wavelength * 0.11;
 		displacement.xz += shoreward * throwMetres;

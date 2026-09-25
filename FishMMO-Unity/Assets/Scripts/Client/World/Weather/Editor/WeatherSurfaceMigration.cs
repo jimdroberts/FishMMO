@@ -117,7 +117,7 @@ namespace FishMMO.Client
 				{
 					Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
 					int count = 0;
-					foreach (Terrain terrain in UnityEngine.Object.FindObjectsByType<Terrain>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+					foreach (Terrain terrain in UnityEngine.Object.FindObjectsByType<Terrain>(FindObjectsInactive.Include))
 					{
 						if (terrain.materialTemplate == material)
 						{

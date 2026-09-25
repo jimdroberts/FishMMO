@@ -42,6 +42,13 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
             // World position behind a pixel, from the depth buffer.
             float3 WorldAt(float2 uv, float rawDepth)
             {
+                /* OpenGL's clip space runs -1 to 1 in depth where the texture holds 0 to 1. Passed
+                 * straight through, every point came back about twice as far away as it is — so on
+                 * the Linux editor, which is OpenGL Core, the fog was integrated over double the
+                 * distance and came out much thicker than on any other API. */
+                #if !UNITY_REVERSED_Z
+                    rawDepth = lerp(UNITY_NEAR_CLIP_VALUE, 1.0, rawDepth);
+                #endif
                 float4 clip = float4(uv * 2.0 - 1.0, rawDepth, 1.0);
                 #if UNITY_UV_STARTS_AT_TOP
                     clip.y = -clip.y;

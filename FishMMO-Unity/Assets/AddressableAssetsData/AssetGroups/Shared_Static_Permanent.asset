@@ -129,6 +129,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 077e6e9b1283e60cf96c03b42a5b4a7f
+    m_Address: Jorenara System - Jorenara
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0892f64b2462ac94db21d06df7047e06
     m_Address: Armor
     m_ReadOnly: 0
@@ -209,12 +215,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0fbfa8b68911e1c4fa66d6b57fcab6a2
     m_Address: Minor Increase Armor
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0ff9026ac446a9744a7b800f73bb41ef
-    m_Address: Solmar System - Zeleoven
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -369,6 +369,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 178635399d7cfbba7bc7a3e5ff67f9d8
+    m_Address: Jorenara System - Solvar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 18016b10e867b9538b74524afae86d16
     m_Address: Mock Shotgun Projectile
     m_ReadOnly: 0
@@ -489,6 +495,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1e0cd31418f8fe9929d5cc679e956076
+    m_Address: Jorenara System - Rheatha Clouds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ef8b8b1693b44e5a8d5810d1dfe7f37
     m_Address: Draconic Titles
     m_ReadOnly: 0
@@ -579,8 +591,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 22cfc09aaae89e83684bbb17b0511a03
-    m_Address: Solmar System - Elenthis
+  - m_GUID: 231979e43e4134c5a826f410ee273a18
+    m_Address: Jorenara System - Solra
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -687,12 +699,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 28167af512161304b8359d6f6a164b2e
-    m_Address: Solmar System - Moriron Clouds
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 28a165db062c4412a95b2ea214e04fde
     m_Address: Storm Drake
     m_ReadOnly: 0
@@ -749,12 +755,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2ac15b45a48846509472a36a7baad011
     m_Address: Hellhound
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2b1ba552be6c4204d8d6f44f4962b341
-    m_Address: Solmar System - Zelon Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1095,12 +1095,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4973d97c3fc0023ef828fcbd6f217e9b
-    m_Address: Solmar System - Naraeon
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4a7063529ee215d4a915672973d299db
     m_Address: Test Leggings
     m_ReadOnly: 0
@@ -1329,12 +1323,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5cf41da5ad10332bb9d7efaa1a703546
-    m_Address: Solmar System - Zelon
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5d10e1ac3658ab248970a19c84e5eefb
     m_Address: Wind Resistance
     m_ReadOnly: 0
@@ -1415,12 +1403,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 60818e877afe46698935bd68f6c24d74
     m_Address: Hareling
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 60dc64a608fe557ad93c31ac885701d6
-    m_Address: Solmar System
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1659,14 +1641,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7b7f1417f68df95caaafc8259d50735d
-    m_Address: Solmar System - Moriron
+  - m_GUID: 7b96a8c61db3a844ebc4c92b2487b0d1
+    m_Address: Orc
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7b96a8c61db3a844ebc4c92b2487b0d1
-    m_Address: Orc
+  - m_GUID: 7b996205f2d345ee98ca6f714921dab4
+    m_Address: Jorenara System - Galris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1742,12 +1724,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7f3e2d974531e527b90f7cfef56d5fe2
-    m_Address: Leaden Sul Plain
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7fb177e0c9fb8f17ba2452c257f23d4c
     m_Address: Rain
     m_ReadOnly: 0
@@ -1768,12 +1744,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8087c1187c7741ffb3156ae60999e7f9
     m_Address: Mindreaver
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 80910aff56aa93e29a031085345ae10b
-    m_Address: Solmar System - Talra
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1910,12 +1880,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8cd292d13d5a366debb7e01e0cb7848e
-    m_Address: Solmar System - Joraenos
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8d2440cfc6824c6095ab40b8648e5221
     m_Address: Skyfolk
     m_ReadOnly: 0
@@ -1990,6 +1954,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 91a181372c9d49b78fedca7ea6a96ab9
     m_Address: Grave Moth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 91e514618f54e22e5a302bea6a28acf2
+    m_Address: Jorenara System - Nariais
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2144,12 +2114,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9b6e75bd2745e0a82923930465dbb709
-    m_Address: Peloa Meadow
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9c4d74db7c7266cdfb9907debaba310c
     m_Address: Light Rain
     m_ReadOnly: 0
@@ -2234,12 +2198,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a656ec661f28dfb52ad76afeaa950b2f
-    m_Address: Solmar System - Solmar
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a6775076f0e14647a4e2a3a9d8adf3d8
     m_Address: Imp
     m_ReadOnly: 0
@@ -2272,12 +2230,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
     m_Address: an orc mage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a763464ad264641f694731dbcd66363d
-    m_Address: Solmar System - Ulorwyn Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2336,12 +2288,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: aaf10c3f69c9db23b9921d4fb1f6d999
-    m_Address: Solmar System - Valus
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: abbb28ed1b194ad081aa07ccf765a487
     m_Address: Moorfolk
     m_ReadOnly: 0
@@ -2368,12 +2314,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: acd7d4cddc0244d983c9397254bf1d71
     m_Address: Lionfolk
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ad6934ce71a4b53a2a619cd8e0d476f2
-    m_Address: Solmar System - Ulorwyn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2491,12 +2431,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b80d6c4a771ba943e9fa7ab3bdccf402
-    m_Address: Solmar System - Joreon
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b87875a136904711b8349ab3e07dc843
     m_Address: Bone Wyrm
     m_ReadOnly: 0
@@ -2593,6 +2527,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bfc0e86b7348cf526ba5c3ddab39e6db
+    m_Address: Jorenara System
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bfd01c2f15c14cfc864929487fc66908
     m_Address: Wisp
     m_ReadOnly: 0
@@ -2661,12 +2601,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c44327c9e1311ab4289d7debd893f0b6
     m_Address: Test Shield
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c4b740bcdfb7273198953b4cb6bd41a3
-    m_Address: Solmar System - Elithis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2793,24 +2727,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cf6695c0536344e083dd0a871b0c7304
     m_Address: Earth Elemental
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cf838dc4583ac2f53a0e379daf04e2cb
-    m_Address: Solmar System - Naraeon Clouds
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cf8e617cee6a0bb15a51f105447d4044
-    m_Address: Solmar System - Morreth
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cfcc4382e80752683a1167b6962a270f
-    m_Address: Solmar System - Morreth Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2971,12 +2887,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d9b90c9daa961d08791a346b6bd1d933
-    m_Address: Solmar System - Keleis
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: da0784a63e774c6583670b281a304ae3
     m_Address: Undead
     m_ReadOnly: 0
@@ -3019,8 +2929,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd0e37f2246b8fac4b1ce33660cfabfd
+    m_Address: Jorenara System - Solra Clouds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dd7387a2a9a94ae1babebb4559702176
     m_Address: Pixie
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd958c2fc6f830f2dbcb887660b8cce1
+    m_Address: Jorenara System - Rheatha
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3283,12 +3205,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ed89b502a4ce6f65c928cccc8f060c4e
-    m_Address: Solmar System - Naris
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ed8cbeaf068f477ba9e61e1497b66db3
     m_Address: Shade
     m_ReadOnly: 0
@@ -3525,6 +3441,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fc549396680e415088ed30fc3d70c325
     m_Address: Undead Titles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fd61bce8f75f8949ead99e998d2d6da0
+    m_Address: Jorenara System - Valthis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

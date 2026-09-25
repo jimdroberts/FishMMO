@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 					Log.Debug("WorldSceneDetailsCacheReader", $"Scene Loaded[{currentScene.name}]");
 
 					// Ensure the scene has a boundary for safety.
-					IBoundary boundary = GameObject.FindFirstObjectByType<IBoundary>();
+					IBoundary boundary = GameObject.FindAnyObjectByType<IBoundary>();
 					if (boundary == null)
 					{
 						Log.Error("WorldSceneDetailsCacheReader", $"{currentScene.name} has no IBoundary. Boundaries are required for safety purposes. Try adding a SceneBoundary!");
@@ -110,7 +110,7 @@ namespace FishMMO.Shared
 					worldSceneDetailsDictionary.Add(currentScene.name, sceneDetails);
 
 					// Search for scene settings.
-					WorldSceneSettings worldSceneSettings = GameObject.FindFirstObjectByType<WorldSceneSettings>();
+					WorldSceneSettings worldSceneSettings = GameObject.FindAnyObjectByType<WorldSceneSettings>();
 					if (worldSceneSettings != null)
 					{
 						/* Clamped on read, not trusted. The Range attribute only constrains the
@@ -148,7 +148,7 @@ namespace FishMMO.Shared
 					RebuildMapDefinition(sceneDetails.MapDefinition, currentScene);
 
 					// Search for initial spawn positions.
-					CharacterInitialSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsByType<CharacterInitialSpawnPosition>(FindObjectsSortMode.None);
+					CharacterInitialSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsByType<CharacterInitialSpawnPosition>();
 					foreach (CharacterInitialSpawnPosition obj in characterSpawnPositions)
 					{
 						Log.Debug("WorldSceneDetailsCacheReader", $"Found new Initial Spawn Position[{obj.name} Pos:{obj.transform.position} Rot:{obj.transform.rotation}]");
@@ -164,7 +164,7 @@ namespace FishMMO.Shared
 					}
 
 					// Search for respawn positions.
-					CharacterRespawnPosition[] respawnPositions = GameObject.FindObjectsByType<CharacterRespawnPosition>(FindObjectsSortMode.None);
+					CharacterRespawnPosition[] respawnPositions = GameObject.FindObjectsByType<CharacterRespawnPosition>();
 					foreach (CharacterRespawnPosition obj in respawnPositions)
 					{
 						Log.Debug("WorldSceneDetailsCacheReader", $"Found new Respawn Position[{obj.name} {obj.transform}]");
@@ -177,7 +177,7 @@ namespace FishMMO.Shared
 					}
 
 					// Search for world boundaries.
-					IBoundary[] sceneBoundaries = GameObject.FindObjectsByType<IBoundary>(FindObjectsSortMode.None);
+					IBoundary[] sceneBoundaries = GameObject.FindObjectsByType<IBoundary>();
 					foreach (IBoundary obj in sceneBoundaries)
 					{
 						Log.Debug($"WorldSceneDetailsCacheReader", $"Found new Boundary[Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
@@ -190,7 +190,7 @@ namespace FishMMO.Shared
 					}
 
 					// Search for scene teleporters and validate against TeleporterCache.
-					SceneTeleporter[] teleports = GameObject.FindObjectsByType<SceneTeleporter>(FindObjectsSortMode.None);
+					SceneTeleporter[] teleports = GameObject.FindObjectsByType<SceneTeleporter>();
 					foreach (SceneTeleporter obj in teleports)
 					{
 						// The same spelling the runtime sends — see TeleporterKey.
@@ -229,7 +229,7 @@ namespace FishMMO.Shared
 
 					// Harvest waypoints. The index is the bit a character's unlock record stores, so a
 					// duplicate is not a cosmetic slip: discovering one would unlock the other.
-					Waypoint[] waypoints = GameObject.FindObjectsByType<Waypoint>(FindObjectsSortMode.None);
+					Waypoint[] waypoints = GameObject.FindObjectsByType<Waypoint>();
 					foreach (Waypoint obj in waypoints)
 					{
 						if (!WaypointUnlockMask.IsValidIndex(obj.WaypointIndex))
@@ -249,7 +249,7 @@ namespace FishMMO.Shared
 					}
 
 					// Search for interactable teleporters and validate against TeleporterCache.
-					Teleporter[] interactableTeleporters = GameObject.FindObjectsByType<Teleporter>(FindObjectsSortMode.None);
+					Teleporter[] interactableTeleporters = GameObject.FindObjectsByType<Teleporter>();
 					foreach (Teleporter obj in interactableTeleporters)
 					{
 						// The same spelling the runtime sends — see TeleporterKey.
@@ -344,7 +344,7 @@ namespace FishMMO.Shared
 			definition.SceneName = sceneName;
 
 			definition.RegionLabels.Clear();
-			MapRegionLabel[] regions = GameObject.FindObjectsByType<MapRegionLabel>(FindObjectsSortMode.None);
+			MapRegionLabel[] regions = GameObject.FindObjectsByType<MapRegionLabel>();
 			foreach (MapRegionLabel region in regions)
 			{
 				Log.Debug("WorldSceneDetailsCacheReader", $"Found Map Region[{region.ResolvedName} r={region.Radius}]");
@@ -352,7 +352,7 @@ namespace FishMMO.Shared
 			}
 
 			definition.PointsOfInterest.Clear();
-			MapPointOfInterest[] landmarks = GameObject.FindObjectsByType<MapPointOfInterest>(FindObjectsSortMode.None);
+			MapPointOfInterest[] landmarks = GameObject.FindObjectsByType<MapPointOfInterest>();
 			foreach (MapPointOfInterest landmark in landmarks)
 			{
 				Log.Debug("WorldSceneDetailsCacheReader", $"Found Map Landmark[{landmark.ResolvedName} {landmark.Type}]");

@@ -43,9 +43,8 @@ namespace FishMMO.Shared
 		/// lands when the server says so. See <see cref="TargetSelector.ResolvesTargetsLocally"/>.
 		/// </para>
 		/// <para>
-		/// <b>Ordered.</b> <c>FindObjectsByType</c> is called with <c>FindObjectsSortMode.None</c>,
-		/// which returns whatever order the scene's object registry happens to hold — not the
-		/// hierarchy order, and not the same order twice. Anything downstream that caps the set,
+		/// <b>Ordered.</b> <c>FindObjectsByType</c> returns whatever order the scene's object
+		/// registry happens to hold — not the hierarchy order, and not the same order twice. Anything downstream that caps the set,
 		/// stops at the first match, or rolls against it was choosing arbitrarily. Sorting by network
 		/// identity costs one pass and makes the fan-out reproducible.
 		/// </para>
@@ -98,8 +97,7 @@ namespace FishMMO.Shared
 		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
 		{
 			MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(
-				IncludeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude,
-				FindObjectsSortMode.None);
+				IncludeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude);
 
 			List<GameObject> candidates = new List<GameObject>();
 			List<TargetRank> ranks = new List<TargetRank>();

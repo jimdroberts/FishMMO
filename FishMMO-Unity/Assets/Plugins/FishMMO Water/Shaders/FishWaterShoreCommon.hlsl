@@ -30,42 +30,105 @@ float2 FishWaterShoreSample(float2 xz)
 	return SAMPLE_TEXTURE2D_LOD(_FishWaterShore, sampler_FishWaterShore, uv, 0).rg;
 }
 
-// ── The wave train ────────────────────────────────────────────────────
+// ── The swash ─────────────────────────────────────────────────────────
+//
+// IN HEIGHT, NOT DISTANCE. How far up a beach the water runs is a HEIGHT: the run-up, which on an
+// ordinary sandy beach is about half the wave height and on a steep bank a wave height or two. The
+// distance it covers is that height over the slope — sixteen metres of a 1:30 beach, one metre of a
+// steep bank. The swash was laid out by horizontal distance first, a fixed dozen metres from the
+// waterline whatever the ground did, which is right on a gentle beach and wrong everywhere else:
+// on a steep bank it stood several metres up the face as a pale sheet. Measured in height it takes
+// the slope from the ground itself, follows the terrain's contours as standing water does, and
+// follows the tide for nothing, because it is measured from the sea as it stands now.
 
 float _FishWaterSwashPeriod;     // seconds between arriving waves
-float _FishWaterSwashReach;      // metres the swash runs up the beach at full strength
 float _FishWaterSwashSkew;       // 0 symmetric, 1 a fast rush and a long drain
 float _FishWaterShoreTime;
+float4 _FishWaterSwashSea;       // x significant wave height (m), y deep-water wavelength at the peak period (m)
+float4 _FishWaterWind;           // xy the direction the wind and the sea run toward
+
+// The sea's foam texture, published by WaterSurface: its G channel is a smooth, tiling field.
+TEXTURE2D(_FishWaterFoamTexture);
+SAMPLER(sampler_FishWaterFoamTexture);
 
 /// <summary>
-/// Where the water's edge is right now, as a distance from the still waterline in metres.
+/// How the swash at a point differs from the swash along the rest of the shore: x a phase offset in
+/// cycles, y a share of the beach's run-up.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Waves arrive as fronts parallel to the shore</b>, because refraction has already turned
-/// them; so the phase is a function of distance to the water's edge and nothing else. That is
-/// what makes the lines ROLL in rather than slide sideways past the beach.
+/// <b>Every beach ran up in lockstep.</b> With the swash a function of height alone, every point of
+/// every shore at the same height did the same thing at the same moment — the whole coastline
+/// breathing in and out as one line. A real swash is nothing like that. Swell arrives at an angle,
+/// so each wave reaches one end of a beach before the other and its run-up zips along the sand;
+/// wave groups hit one stretch while the next is draining; and a beach carves itself into cusps, a
+/// few tens of metres apart, where the water runs up the horns and not the bays.
 /// </para>
 /// <para>
-/// <b>The cycle is deliberately asymmetric.</b> A real swash rushes up in a second or two and
-/// drains for several — a sine looks like breathing, not like water. The skew is what makes the
-/// difference between a sheet of water being thrown up a beach and a tide going in and out.
-/// </para>
-/// <para>
-/// <b>No two waves run up the same distance.</b> Swell arrives in groups, so the run-up swings
-/// between waves — some barely wet the sand the last one left, some go well past it. Every wave
-/// reaching exactly the same line drew the swash as a machine, and left its foam in one ruled
-/// stripe; varied, each wave strands its foam at its own height and the beach carries several.
+/// So the phase leans along the direction the sea is running — about seventy metres of shore per
+/// wave, a fast oblique zip — and wanders over a smooth field ninety metres across, and the run-up
+/// swells and shrinks over another thirty-five across. All three from the smooth channel of the
+/// foam texture, which already tiles without a seam.
 /// </para>
 /// </remarks>
-float FishWaterSwashEdge(float alongShorePhase)
+float2 FishWaterAlongShore(float2 xz)
+{
+	float2 wind = _FishWaterWind.xy;
+	float2 direction = dot(wind, wind) > 1e-4 ? normalize(wind) : float2(0.0, 1.0);
+	float wander = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamTexture, sampler_FishWaterFoamTexture, xz / 90.0, 0).g;
+	float cusps = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamTexture, sampler_FishWaterFoamTexture, xz / 35.0 + 0.37, 0).g;
+	float phase = dot(xz, direction) / 70.0 + wander * 1.6;
+	return float2(phase, 0.7 + 0.6 * cusps);
+}
+
+/// <summary>
+/// How high the swash runs above the still water on a beach of this slope (rise over run), in metres.
+/// </summary>
+/// <remarks>
+/// Stockdon et al. (2006), the run-up exceeded by 2% of waves: 1.1 × (setup + swash/2), setup
+/// 0.35·β·√(H·L) and swash √(H·L·(0.563·β² + 0.004)) for deep-water height H and wavelength L. On a
+/// 1:30 beach under a metre of sea at eight seconds that is half a metre; on 1:10, nearly one. It is
+/// fitted on beaches, so the slope is capped where a beach stops and a wall starts, and the run-up
+/// at twice the wave height: a surge up a wall reaches about that and no further.
+/// </remarks>
+float FishWaterRunUp(float slope)
+{
+	float height = max(0.05, _FishWaterSwashSea.x);
+	float wavelength = max(1.0, _FishWaterSwashSea.y);
+	float beta = min(slope, 0.5);
+	float scale = sqrt(height * wavelength);
+	float setup = 0.35 * beta * scale;
+	float swash = sqrt(height * wavelength * (0.563 * beta * beta + 0.004));
+	return min(1.1 * (setup + 0.5 * swash), 2.0 * height);
+}
+
+/// <summary>
+/// Where the swash front stands right now, in metres above the still water.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>The cycle is deliberately asymmetric.</b> A real swash rushes up in a second or two and
+/// drains for several — a sine looks like breathing, not like water.
+/// </para>
+/// <para>
+/// <b>No two waves run up the same height.</b> Swell arrives in groups, so the run-up swings
+/// between waves — some barely wet the sand the last one left, some go well past it. Every wave
+/// reaching one line drew the swash as a machine and left its foam in one ruled stripe.
+/// </para>
+/// </remarks>
+/// <param name="runUp">This beach's run-up, from <see cref="FishWaterRunUp"/>.</param>
+/// <param name="along">A phase offset, in cycles: along the shore, and up the beach.</param>
+/// <param name="stretch">Which stretch of shore this is, so the waves of a group differ along it.</param>
+float FishWaterSwashFront(float runUp, float along, float stretch)
 {
 	float period = max(0.5, _FishWaterSwashPeriod);
-	float cycles = _FishWaterShoreTime / period + alongShorePhase;
+	float cycles = _FishWaterShoreTime / period + along;
 	float t = frac(cycles);
-	// This wave's share of the full reach: two thirds to four thirds, fixed for the whole wave.
+	/* This wave's share of the full run-up: two thirds to four thirds, fixed for the whole wave —
+	 * and different on different stretches of shore, so one wave of a group floods this stretch
+	 * while the next one along barely wets its sand. */
 	float wave = floor(cycles);
-	float reach = 0.65 + 0.7 * frac(sin(wave * 12.9898 + 78.233) * 43758.5453);
+	float share = 0.65 + 0.7 * frac(sin(wave * 12.9898 + stretch * 4.1414 + 78.233) * 43758.5453);
 
 	// Rush up over the first part of the cycle, drain over the rest.
 	float rush = saturate(_FishWaterSwashSkew) * 0.5 + 0.12;
@@ -73,57 +136,46 @@ float FishWaterSwashEdge(float alongShorePhase)
 	float drain = 1.0 - smoothstep(rush, 1.0, t);
 	float height = min(climb, drain);
 	// Squared on the way out: water drains fastest when the sheet is thickest.
-	return height * height * _FishWaterSwashReach * reach;
+	return height * height * runUp * share;
 }
 
 /// <summary>
-/// The state of the swash at a point on the beach.
+/// The state of the swash at a point, from how high it stands above the still water.
 /// </summary>
-/// <param name="edgeDistance">Signed metres to the still waterline; negative on dry land.</param>
+/// <param name="rise">Metres above the sea as it stands now; negative under it.</param>
+/// <param name="runUp">This beach's run-up, from <see cref="FishWaterRunUp"/>.</param>
+/// <param name="xz">Where on the shore, for how this stretch differs from the rest.</param>
 /// <param name="sheet">How much water is over this point, 0 dry to 1 the thick part of the rush.</param>
 /// <param name="lip">1 right at the leading edge of the rush, falling away behind it.</param>
-/// <param name="highWater">How far up the beach this wave reached, 0 … 1 of the full reach.</param>
+/// <param name="highWater">How high this wave has reached, 0 … 1 of the beach's run-up.</param>
 /// <remarks>
 /// <para>
-/// <b>Returned as three separate things on purpose.</b> A swash is not one value: there is the
-/// sheet of water, the white lip at its leading edge, and the wet sand it leaves behind when it
-/// drains. Collapsing them into a single "wetness" is what produced a flat wash of colour over
-/// the whole band instead of a wave running up a beach.
+/// <b>Three separate things on purpose.</b> A swash is the sheet of water, the white lip at its
+/// leading edge, and the wet sand it leaves behind. Collapsing them into one "wetness" drew a flat
+/// wash of colour instead of a wave running up a beach.
 /// </para>
 /// <para>
-/// The lip is the important one. It is the brightest thing on any beach and the feature whose
-/// absence made every earlier attempt read as a plane meeting sand at a hard line.
+/// The lip is a band a sixteenth of the run-up TALL, so it is as wide as the slope makes it: a
+/// metre across a gentle beach, a few centimetres of a steep face — where, since a steep face
+/// carries no sheet, it is the foam line surging up and down at the water's edge.
 /// </para>
 /// </remarks>
-void FishWaterSwash(float edgeDistance, out float sheet, out float lip, out float highWater)
+void FishWaterSwash(float rise, float runUp, float2 xz, out float sheet, out float lip, out float highWater)
 {
-	float reach = max(0.5, _FishWaterSwashReach);
-	float landward = -edgeDistance;
+	float2 alongShore = FishWaterAlongShore(xz);
+	float span = max(0.03, runUp * alongShore.y);
+	// The phase a point sees depends on where it is along the shore, and on how high up the beach:
+	// the top of a run-up is reached later than the bottom, which is what a swash looks like from
+	// the side.
+	float along = alongShore.x + saturate(rise / span) * 0.22;
+	float front = FishWaterSwashFront(span, along, floor(alongShore.x * 0.5));
+	highWater = front / span;
 
-	/* The phase a point sees depends on how far up the beach it is: the far end of a run-up is
-	 * reached later than the near end, which is what a swash looks like from the side. Small,
-	 * because the whole sheet must still move as one body of water. */
-	float alongShore = saturate(landward / reach) * 0.22;
-	highWater = FishWaterSwashEdge(alongShore) / reach;
-
-	float front = highWater * reach;
-	// Behind the front, in metres. Negative means the water has not arrived here yet.
-	float behind = front - landward;
-
-	// Not reached, or only just: nothing here.
-	sheet = saturate(behind / max(0.35, reach * 0.35));
-	/* The lip is the band of white at the leading edge, and its width scales with the reach so a
-	 * gentle lap and a storm surge both get a lip of a sensible size on screen.
-	 *
-	 * 0.18, not 0.06. At a fourteen-metre reach the narrower figure is a strip 1.7 m wide on the
-	 * ground — a handful of pixels from anywhere a player stands, which is why the beach kept
-	 * rendering as a flat wash with no white line on it at all. */
-	/* 0.09, not 0.18. At 0.18 the lip is a band nearly six metres across, and since the foam
-	 * term saturates through most of it the result is a flat white slab rather than a line —
-	 * which reads as a bleached beach, not as surf. A real swash lip is a metre or two. */
-	float lipWidth = max(0.5, reach * 0.09);
-	lip = saturate(1.0 - abs(behind) / lipWidth);
-	lip *= step(0.0, front - 0.05);
+	// Metres of water standing above this point.
+	float behind = front - rise;
+	sheet = saturate(behind / (span * 0.35));
+	float lipHeight = max(0.015, span * 0.06);
+	lip = saturate(1.0 - abs(behind) / lipHeight) * step(0.0, front - 0.005);
 }
 
 /// <summary>
@@ -134,10 +186,10 @@ void FishWaterSwash(float edgeDistance, out float sheet, out float lip, out floa
 /// lip leaves where it stalls — the lacy line at the top of each run-up — so the lip lays foam in
 /// the upper part of its run and hardly at all low down, where the next wave washes it off anyway.
 /// </remarks>
-float FishWaterSwashFoamDeposit(float edgeDistance)
+float FishWaterSwashFoamDeposit(float rise, float runUp, float2 xz)
 {
 	float sheet, lip, highWater;
-	FishWaterSwash(edgeDistance, sheet, lip, highWater);
+	FishWaterSwash(rise, runUp, xz, sheet, lip, highWater);
 	return lip * smoothstep(0.35, 0.9, highWater);
 }
 

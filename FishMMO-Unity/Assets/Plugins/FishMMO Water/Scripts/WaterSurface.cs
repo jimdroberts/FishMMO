@@ -46,6 +46,8 @@ namespace FishMMO.Water
 			{ "_FishWaterDerivatives0", "_FishWaterDerivatives1", "_FishWaterDerivatives2" };
 		private static readonly int UnderwaterTintId = Shader.PropertyToID("_UnderwaterTint");
 		private static readonly int UnderwaterDepthId = Shader.PropertyToID("_UnderwaterDepth");
+		private static readonly int UnderwaterShaftsId = Shader.PropertyToID("_Shafts");
+		private static readonly int UnderwaterMotesId = Shader.PropertyToID("_Motes");
 
 		private const string DepthKeyword = "_WATER_DEPTH";
 		private const string RefractionKeyword = "_WATER_REFRACTION";
@@ -131,6 +133,13 @@ namespace FishMMO.Water
 		public Color UnderwaterTint = new Color(0.05f, 0.28f, 0.36f);
 		[Tooltip("Roughly how far a diver can see, in metres.")]
 		[Range(1f, 200f)] public float UnderwaterVisibility = 22f;
+		[Tooltip("Shafts of sunlight through the water, focused by the waves overhead and cut by the " +
+			"shadows of whatever stands in the sun. The dearest part of the underwater pass — sixteen " +
+			"steps a pixel — and 0 skips it.")]
+		[Range(0f, 2f)] public float UnderwaterShafts = 1f;
+		[Tooltip("Silt and plankton hanging in the water, drifting with the current. What tells the " +
+			"eye it is moving through water rather than fog. 0 leaves the water empty.")]
+		[Range(0f, 2f)] public float UnderwaterMotes = 1f;
 		[Tooltip("The underwater pass. Referenced so a build includes it; found by name otherwise.")]
 		public Shader UnderwaterShader;
 
@@ -403,8 +412,12 @@ namespace FishMMO.Water
 					float wavelength = Mathf.Max(4f, surf.Length);
 					float k = 2f * Mathf.PI / wavelength;
 					float phase = k * edge + Mathf.Sqrt(Mathf.Max(0.05f, Gravity) * k) * (float)clock;
+					const float Span = 10f;
+					float beachSlope = Mathf.Abs(Depth(flat - shoreward * Span) - Depth(flat + shoreward * Span)) / (2f * Span);
+					// No surf train against a steep bank or a cliff: the waves run into it instead.
+					float reflective = Smoothstep(0.25f, 0.6f, beachSlope);
 					float feel = Mathf.Clamp01(1f - depth / (wavelength * 0.5f));
-					float amplitude = surf.Height * (1f + feel * 1.6f) * feel;
+					float amplitude = surf.Height * (1f + feel * 1.6f) * feel * (1f - reflective);
 					float limit = Mathf.Max(0f, depth) * 0.78f;
 					float breaking = Mathf.Clamp01((amplitude - limit) / Mathf.Max(0.05f, amplitude));
 					amplitude = Mathf.Min(amplitude, limit) * Mathf.Clamp01(depth * 1.2f);
@@ -412,10 +425,9 @@ namespace FishMMO.Water
 					float crest = Mathf.Clamp01(sin);
 					h += amplitude * sin;
 
-					const float Span = 10f;
-					float beachSlope = Mathf.Abs(Depth(flat - shoreward * Span) - Depth(flat + shoreward * Span)) / (2f * Span);
 					float iribarren = beachSlope / Mathf.Sqrt(Mathf.Max(1e-4f, Mathf.Max(0.05f, amplitude * 2f) / wavelength));
-					float plunging = Smoothstep(0.35f, 0.9f, iribarren);
+					// Plunging between about 0.5 and 3.3; past that the wave surges up the face unbroken.
+					float plunging = Smoothstep(0.35f, 0.9f, iribarren) * (1f - Smoothstep(2.5f, 3.5f, iribarren));
 					float throwMetres = surf.Pitch * plunging * breaking * crest * crest * crest * wavelength * 0.11f;
 					dx += shoreward.x * throwMetres;
 					dz += shoreward.y * throwMetres;
@@ -662,6 +674,12 @@ namespace FishMMO.Water
 				return;
 			}
 
+			/* The weather's fog passes publish their fog for the water every camera they run for, and
+			 * this runs before any of them. Cleared here, a pass that is switched off or missing from
+			 * this renderer leaves the water unfogged rather than fogged by some other camera's. */
+			Shader.SetGlobalVector(AirFogId, Vector4.zero);
+			Shader.SetGlobalVector(AirFogVolumeId, Vector4.zero);
+
 			Advance();
 			ApplyQuality();
 			UpdateUnderwater(camera);
@@ -860,8 +878,14 @@ namespace FishMMO.Water
 
 			underwaterMaterial.SetColor(UnderwaterTintId, UnderwaterTint);
 			underwaterMaterial.SetFloat(UnderwaterDepthId, UnderwaterVisibility);
+			underwaterMaterial.SetFloat(UnderwaterShaftsId, UnderwaterShafts);
+			underwaterMaterial.SetFloat(UnderwaterMotesId, UnderwaterMotes);
 			underwaterHost.SetActive(true);
 		}
+
+		private static readonly int CausticsId = Shader.PropertyToID("_FishWaterCaustics");
+		private static readonly int AirFogId = Shader.PropertyToID("_FishAirFogParams");
+		private static readonly int AirFogVolumeId = Shader.PropertyToID("_FishAirFogVolumeRange");
 
 		/// <summary>
 		/// Keeps the caustics pass alive while there is a sea to cast them: it needs the FFT's slope
@@ -870,13 +894,11 @@ namespace FishMMO.Water
 		/// <remarks>
 		/// A full-screen triangle on its own child, for the reason the underwater pass is one: a
 		/// renderer feature would have to be added to every URP renderer asset by hand. It draws
-		/// before the shore and the sea, so they go over what it lights. With the pipeline's opaque
-		/// texture on, the sea refracts a copy of the scene taken before this pass runs, so seen
-		/// from above through refracting water the caustics are not in it; from below, and through
-		/// blended water, they are.
+		/// before the shore, the sea and the underwater pass, so they go over what it lights and the
+		/// water's fog dims it with everything else. Water that refracts shows a copy of the frame
+		/// taken before this pass runs, and lights the sea bed in that copy itself, with the same
+		/// function, so the caustics look the same whether the opaque texture is on or not.
 		/// </remarks>
-		private static readonly int CausticsId = Shader.PropertyToID("_FishWaterCaustics");
-
 		private void UpdateCaustics()
 		{
 			bool wanted = Caustics && fft != null;

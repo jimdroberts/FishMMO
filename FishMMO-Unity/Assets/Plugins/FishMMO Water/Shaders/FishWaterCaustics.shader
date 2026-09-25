@@ -49,6 +49,7 @@ Shader "FishMMO/Water/Caustics"
             float _FishWaterCloudShadow;    // 1 under open sky, 0 under cloud
 
             #include "FishWaterCausticsCommon.hlsl"
+            #include "FishWaterFog.hlsl"
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -83,7 +84,14 @@ Shader "FishMMO/Water/Caustics"
                     #endif
                     if (!sky)
                     {
-                        light = FishWaterCausticLight(FishWaterSceneWorldPosition(input.screenUV, rawDepth));
+                        float3 positionWS = FishWaterSceneWorldPosition(input.screenUV, rawDepth);
+                        light = FishWaterCausticLight(positionWS);
+                        /* This multiplies the frame as it stands, and the fog has already been laid
+                         * over it: scaled whole, the caustics would brighten the fog as well as the
+                         * sea bed under it. They fade by what the fog lets through instead. */
+                        half fogKeep;
+                        FishWaterAirFog(half3(0.0, 0.0, 0.0), positionWS, input.screenUV, fogKeep);
+                        light = 1.0 + (light - 1.0) * fogKeep;
                     }
                 #endif
                 return half4(light, light, light, 1.0);

@@ -495,8 +495,8 @@ namespace FishMMO.Client
 		private bool TryInitializeNetworkManager()
 		{
 			// TODO: For production, assign NetworkManager via the Inspector (SerializeField)
-			// to avoid the FindFirstObjectByType scan in Awake.
-			if (NetworkManager == null) NetworkManager = FindFirstObjectByType<NetworkManager>();
+			// to avoid the FindAnyObjectByType scan in Awake.
+			if (NetworkManager == null) NetworkManager = FindAnyObjectByType<NetworkManager>();
 			if (NetworkManager == null) { Log.Error("Client", "NetworkManager not found."); return false; }
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnWorldSceneConnect);
 			NetworkManager.ClientManager.RegisterBroadcast<ConnectionTokenBroadcast>(OnConnectionTokenReceived);
@@ -520,8 +520,8 @@ namespace FishMMO.Client
 		private bool TryInitializeAuthenticator()
 		{
 			// TODO: For production, assign loginAuthenticator via the Inspector to avoid
-			// the FindFirstObjectByType scan in Awake.
-			if (this.loginAuthenticator == null) this.loginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
+			// the FindAnyObjectByType scan in Awake.
+			if (this.loginAuthenticator == null) this.loginAuthenticator = FindAnyObjectByType<ClientLoginAuthenticator>();
 			if (this.loginAuthenticator == null) { Log.Error("Client", "LoginAuthenticator not found."); return false; }
 			this.loginAuthenticator.SetClient(this);
 			this.loginAuthenticator.OnClientAuthenticationResult += OnAuthResult;

@@ -237,7 +237,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
-			runtimeData.LoginAuthenticator = FindFirstObjectByType<WorldServerAuthenticator>();
+			runtimeData.LoginAuthenticator = FindAnyObjectByType<WorldServerAuthenticator>();
 			if (runtimeData.LoginAuthenticator == null)
 			{
 				Log.Error("WorldSceneSystem", "Failed to initialize: WorldServerAuthenticator not found");
